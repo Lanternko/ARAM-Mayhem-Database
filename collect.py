@@ -1,19 +1,11 @@
 """One-command Mayhem data collector.
 
-Runs a BFS snowball crawl against the local League client, then exports
-the collected games to a parquet file ready for contribution.
-
-Usage
------
-    python collect.py                        # default: 4 workers, out=my_games.parquet
-    python collect.py --workers 8            # more parallel workers (benchmark: 8 is fastest on most machines)
-    python collect.py --out jerry_tw.parquet # custom output filename
-
-Requirements
-------------
-  - League of Legends client must be running and logged in before you run this.
-  - pip install -r requirements.txt
+This is the user-facing convenience wrapper around the newer
+`scripts/lcu_collector.py` stack. It runs the tuned `snowball-workers`
+strategy, waits for the frontier to drain, then exports a parquet file.
 """
+
+from __future__ import annotations
 
 import argparse
 import sqlite3
@@ -27,7 +19,6 @@ DB_PATH = Path("data/lcu/games.db")
 
 
 def _frontier_active() -> bool:
-    """Return True if any worker is still running (in_progress > 0 or pending > 0)."""
     if not DB_PATH.exists():
         return False
     try:
@@ -46,32 +37,40 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=4, help="Parallel crawl workers (default: 4)")
     parser.add_argument("--out", default="my_games.parquet", help="Output parquet filename (default: my_games.parquet)")
     parser.add_argument("--platform", default="", help="Your server tag, e.g. TW2, KR, EUW1 (optional, metadata only)")
+    parser.add_argument("--seed-file", default="data/seeds/opgg_tw.txt", help="Optional Riot ID seed file")
     args = parser.parse_args()
 
     out = Path(args.out)
+    seed_file = Path(args.seed_file)
     platform_args = ["--platform", args.platform] if args.platform else []
 
     print(f"[collect] Starting {args.workers}-worker snowball crawl. Make sure League client is open.")
     print(f"[collect] Output will be saved to: {out}")
+    if seed_file.exists():
+        print(f"[collect] Using seed file: {seed_file}")
+    else:
+        print(f"[collect] Seed file not found -> fallback to self/friends only: {seed_file}")
     print()
 
-    subprocess.run(
-        [
-            sys.executable, "lcu_collector.py", "snowball-workers",
-            "--workers", str(args.workers),
-            "--target-games", "20000",
-            "--max-players", "20000",
-            "--games-per-player", "20",
-            "--max-depth", "6",
-            "--seed-ladder", "--seed-apex",
-        ],
-        check=True,
-    )
+    cmd = [
+        sys.executable, "lcu_collector.py", "snowball-workers",
+        "--workers", str(args.workers),
+        "--target-games", "50000",
+        "--max-players", "50000",
+        "--games-per-player", "4",
+        "--max-depth", "3",
+        "--manual-seed-pending-cap", "40",
+        "--log-dir", ".codex\\logs\\live_prefilter_cap40_main",
+        "--seed-self", "--seed-friends",
+        "--no-seed-ladder", "--no-seed-apex", "--no-seed-riot-tier",
+    ]
+    if seed_file.exists():
+        cmd += ["--seed-riot-id-file", str(seed_file)]
 
-    # snowball-workers exits immediately after spawning child processes.
-    # Wait until all children finish (frontier empty).
-    print("[collect] Workers running in background — waiting for them to finish...")
-    last_total = 0
+    subprocess.run(cmd, check=True)
+
+    print("[collect] Workers running in background, waiting for frontier to drain...")
+    last_total = -1
     while _frontier_active():
         try:
             con = sqlite3.connect(str(DB_PATH))
@@ -90,7 +89,6 @@ def main() -> None:
             pass
         time.sleep(10)
 
-    print()
     con = sqlite3.connect(str(DB_PATH))
     final_total = con.execute(
         "SELECT COUNT(*) FROM games WHERE queue_id=2400"
@@ -98,10 +96,10 @@ def main() -> None:
     con.close()
     print(f"[collect] Crawl complete. {final_total} Mayhem games in database.")
 
-    print(f"[collect] Exporting to {out} ...")
     subprocess.run(
         [
             sys.executable, "lcu_collector.py", "export",
+            "--db", str(DB_PATH),
             "--queue", "2400",
             "--out", str(out),
             *platform_args,
@@ -110,10 +108,9 @@ def main() -> None:
     )
 
     print()
-    print(f"[collect] Done!  ->  {out}  ({final_total} games)")
-    print()
-    print(f"  上傳到這裡: https://github.com/Lanternko/ARAM-mayhem-collector/discussions/1")
-    print(f"  留言格式: 伺服器：{args.platform or 'TW2'}  場次數：{final_total}")
+    print(f"[collect] Done! -> {out} ({final_total} Mayhem games)")
+    print("  GitHub: https://github.com/Lanternko/ARAM-mayhem-collector")
+    print(f"  platform: {args.platform or 'TW2'}  mayhem_games={final_total}")
 
 
 if __name__ == "__main__":

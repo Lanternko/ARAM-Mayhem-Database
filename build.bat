@@ -1,39 +1,40 @@
 @echo off
 chcp 65001 >nul
 echo ================================================
-echo   Build ARAM-collector.exe (maintainer tool)
+echo   Build ARAM-collector.exe (new collector core)
 echo ================================================
 echo.
 
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [錯誤] 找不到 Python！
+    echo [error] Python not found.
     pause
     exit /b 1
 )
 
-echo [1/3] 安裝 pyinstaller 和依賴...
+echo [1/3] Install build dependencies...
 pip install pyinstaller -q
-pip install -r requirements.txt -q
+python -m pip install -e . -q
 if errorlevel 1 (
-    echo [錯誤] 安裝失敗
+    echo [error] Failed to install dependencies.
     pause
     exit /b 1
 )
 
-echo [2/3] 打包 exe...
+echo [2/3] Build exe...
 pyinstaller ARAM-collector.spec --noconfirm
 if errorlevel 1 (
-    echo [錯誤] 打包失敗
+    echo [error] Build failed.
     pause
     exit /b 1
 )
 
-echo [3/3] 完成！
+echo [3/3] Done
 echo.
-echo   輸出: dist\ARAM-collector.exe
+echo   Output: dist\ARAM-collector.exe
 echo.
-echo   測試: dist\ARAM-collector.exe --help
-echo   收集: dist\ARAM-collector.exe run --platform TW2
+echo   Help:   dist\ARAM-collector.exe --help
+echo   Status: dist\ARAM-collector.exe status
+echo   Crawl:  dist\ARAM-collector.exe snowball-workers --workers 4 --target-games 50000 --max-players 50000 --games-per-player 4 --manual-seed-pending-cap 40
 echo.
 pause

@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from .client import (
     LCUClient,
@@ -28,9 +31,12 @@ from .client import (
     get_game_detail,
     get_league_ladders,
     get_match_history,
+    lookup_summoners_by_riot_ids,
 )
 from .poller import DEFAULT_QUEUES, _parse_game_detail
 from .process import get_credentials
+
+_EMPTY_QUEUE_GRACE_SEC = 30.0
 
 _CREATE_GAMES_SQL = """
 CREATE TABLE IF NOT EXISTS games (
@@ -105,6 +111,16 @@ CREATE TABLE IF NOT EXISTS crawl_game_claims (
 );
 """
 
+_CREATE_RIOT_ID_BRIDGE_SQL = """
+CREATE TABLE IF NOT EXISTS riot_id_bridge (
+    public_puuid   TEXT PRIMARY KEY,
+    riot_id        TEXT NOT NULL,
+    lcu_puuid      TEXT,
+    resolved_at    TEXT NOT NULL,
+    resolve_status TEXT NOT NULL
+);
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_crawl_game_claims_status
 ON crawl_game_claims(status, claimed_at_ms, updated_at, game_id);
@@ -114,10 +130,16 @@ _MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450}
 _SOURCE_PRIORITY = {
     "self": 0,
     "match": 10,
-    "apex": 20,
-    "ladder": 30,
-    "friend": 40,
+    # Leaderboard / manual seeds should only open new communities; once a seed
+    # produces real matches, we want those fresher match-derived nodes first.
+    "friend": 20,
+    "apex": 30,
+    "ladder": 40,
+    "manual_riot_id": 60,
+    "riot_tier": 70,
 }
+_LCU_RIOT_ID_LOOKUP_BATCH = 10
+_RIOT_TIER_HYDRATION_DELAY_MS = 90_000
 
 
 @dataclass
@@ -138,6 +160,16 @@ def _utc_now() -> str:
 
 def _now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _get_current_summoner_with_retry(lcu: LCUClient, attempts: int = 5, sleep_sec: float = 1.0) -> dict | None:
+    for idx in range(max(1, attempts)):
+        data = get_current_summoner(lcu)
+        if data and data.get("puuid"):
+            return data
+        if idx + 1 < attempts:
+            time.sleep(sleep_sec)
+    return None
 
 
 def _connect_db(db_path: Path) -> sqlite3.Connection:
@@ -181,6 +213,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CRAWL_SEEN_SQL)
     con.execute(_CREATE_CRAWL_QUEUE_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_SQL)
+    con.execute(_CREATE_RIOT_ID_BRIDGE_SQL)
 
     _ensure_column(
         con,
@@ -288,6 +321,64 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.commit()
 
 
+def _purge_invalid_riot_tier_rows(con: sqlite3.Connection) -> int:
+    rows = con.execute(
+        """
+        SELECT COUNT(*)
+        FROM crawl_seen
+        WHERE source = 'riot_tier'
+          AND length(puuid) != 36
+        """
+    ).fetchone()
+    removed = int(rows[0]) if rows else 0
+    if removed <= 0:
+        return 0
+    con.execute(
+        """
+        DELETE FROM crawl_queue
+        WHERE source = 'riot_tier'
+          AND length(puuid) != 36
+        """
+    )
+    con.execute(
+        """
+        DELETE FROM crawl_seen
+        WHERE source = 'riot_tier'
+          AND length(puuid) != 36
+        """
+    )
+    con.commit()
+    return removed
+
+
+def _sync_source_priorities(con: sqlite3.Connection) -> int:
+    updated = 0
+    for source, priority in _SOURCE_PRIORITY.items():
+        before = con.total_changes
+        con.execute(
+            """
+            UPDATE crawl_seen
+            SET priority = ?
+            WHERE source = ?
+              AND priority != ?
+            """,
+            (priority, source, priority),
+        )
+        con.execute(
+            """
+            UPDATE crawl_queue
+            SET priority = ?
+            WHERE source = ?
+              AND priority != ?
+            """,
+            (priority, source, priority),
+        )
+        updated += con.total_changes - before
+    if updated:
+        con.commit()
+    return updated
+
+
 def _migrate_legacy_crawl_players(con: sqlite3.Connection) -> int:
     """One-time migration from the older crawl_players frontier schema."""
     if not _table_exists(con, "crawl_players"):
@@ -384,6 +475,18 @@ def _extract_target_game_ids(history: list[dict], target_queues: set[int]) -> li
         if queue_id in target_queues and game_id is not None:
             game_ids.append(str(game_id))
     return game_ids
+
+
+def _latest_target_match_created_ms(history: list[dict], target_queues: set[int]) -> int:
+    latest = 0
+    for game in history:
+        queue_id = _queue_id_from_meta(game)
+        if queue_id not in target_queues:
+            continue
+        created_ms = int(game.get("gameCreation") or 0)
+        if created_ms > latest:
+            latest = created_ms
+    return latest
 
 
 def _extract_participant_puuids(detail: dict) -> list[str]:
@@ -673,6 +776,7 @@ def _enqueue_player(
     discovered_from_game_id: str | None = None,
     discovered_match_created_ms: int = 0,
     requeue_cooldown_ms: int = 0,
+    initial_delay_ms: int = 0,
 ) -> str:
     """Add puuid to seen-set and queue when needed.
 
@@ -726,7 +830,7 @@ def _enqueue_player(
             discovered_from_game_id,
             discovered_match_created_ms,
             requeue=True,
-            eligible_at_ms=0,
+            eligible_at_ms=_now_ms() + max(0, initial_delay_ms),
         )
         return "new"
 
@@ -885,6 +989,33 @@ def _pending_player_count(con: sqlite3.Connection) -> int:
     )
 
 
+def _open_queue_source_count(con: sqlite3.Connection, source: str) -> int:
+    return int(
+        con.execute(
+            """
+            SELECT COUNT(*)
+            FROM crawl_queue
+            WHERE source = ?
+              AND status IN ('pending', 'in_progress')
+            """,
+            (source,),
+        ).fetchone()[0]
+    )
+
+
+def _next_pending_wait_ms(con: sqlite3.Connection) -> int | None:
+    row = con.execute(
+        """
+        SELECT MIN(eligible_at_ms)
+        FROM crawl_queue
+        WHERE status = 'pending'
+        """
+    ).fetchone()
+    if row is None or row[0] is None:
+        return None
+    return max(0, int(row[0]) - _now_ms())
+
+
 def _mark_player_done(
     con: sqlite3.Connection,
     puuid: str,
@@ -1013,6 +1144,328 @@ def _seed_apex_players(
     return added
 
 
+def _iter_chunks(items: list[tuple[str, str]], size: int) -> list[list[tuple[str, str]]]:
+    chunk_size = max(1, size)
+    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+
+
+def _normalize_riot_id_seed(raw: str) -> str | None:
+    value = raw.strip()
+    if not value or value.startswith("#"):
+        return None
+
+    candidate = value
+    if "op.gg/" in candidate.lower():
+        parsed = urlparse(candidate)
+        path_parts = [part for part in parsed.path.split("/") if part]
+        if path_parts:
+            candidate = unquote(path_parts[-1]).strip()
+
+    candidate = candidate.strip().strip("/")
+    if not candidate:
+        return None
+
+    if "#" in candidate:
+        game_name, tag_line = candidate.split("#", 1)
+        game_name = game_name.strip()
+        tag_line = tag_line.strip()
+        if game_name and tag_line:
+            return f"{game_name}#{tag_line}"
+        return None
+
+    if "-" in candidate:
+        game_name, tag_line = candidate.rsplit("-", 1)
+        game_name = game_name.strip()
+        tag_line = tag_line.strip()
+        if game_name and re.fullmatch(r"[A-Za-z0-9]{2,5}", tag_line):
+            return f"{game_name}#{tag_line}"
+    return None
+
+
+def _load_riot_id_seeds(
+    *,
+    riot_ids: tuple[str, ...] = (),
+    riot_id_files: tuple[Path, ...] = (),
+) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    def add_candidate(raw: str) -> None:
+        normalized = _normalize_riot_id_seed(raw)
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        ordered.append(normalized)
+
+    for riot_id in riot_ids:
+        add_candidate(str(riot_id))
+
+    for path in riot_id_files:
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            add_candidate(line)
+
+    return ordered
+
+
+def _get_riot_bridge(con: sqlite3.Connection, public_puuid: str) -> tuple[str, str | None] | None:
+    row = con.execute(
+        """
+        SELECT riot_id, lcu_puuid
+        FROM riot_id_bridge
+        WHERE public_puuid = ?
+        """,
+        (public_puuid,),
+    ).fetchone()
+    if not row:
+        return None
+    return (str(row[0]), str(row[1]) if row[1] else None)
+
+
+def _upsert_riot_bridge(
+    con: sqlite3.Connection,
+    *,
+    public_puuid: str,
+    riot_id: str,
+    lcu_puuid: str | None,
+    resolve_status: str,
+) -> None:
+    con.execute(
+        """
+        INSERT INTO riot_id_bridge(public_puuid, riot_id, lcu_puuid, resolved_at, resolve_status)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(public_puuid) DO UPDATE SET
+            riot_id = excluded.riot_id,
+            lcu_puuid = excluded.lcu_puuid,
+            resolved_at = excluded.resolved_at,
+            resolve_status = excluded.resolve_status
+        """,
+        (public_puuid, riot_id, lcu_puuid, _utc_now(), resolve_status),
+    )
+    con.commit()
+
+
+def _seed_riot_tier_players(
+    con: sqlite3.Connection,
+    lcu: LCUClient,
+    *,
+    region: str,
+    riot_queues: tuple[str, ...],
+    riot_tiers: tuple[str, ...],
+    riot_divisions: tuple[str, ...],
+    riot_page_limit: int,
+    riot_cap: int,
+) -> int:
+    from aram_nn.ingest.riot_client import RiotClient, RiotKeyExpired
+
+    added = 0
+    page_limit = max(1, riot_page_limit)
+    tiers = tuple(str(t).upper() for t in riot_tiers)
+    divisions = tuple(str(d).upper() for d in riot_divisions)
+    apex_like = {"CHALLENGER", "GRANDMASTER", "MASTER"}
+
+    def _enqueue_lcu_puuid(lcu_puuid: str) -> bool:
+        nonlocal added
+        result = _enqueue_player(
+            con,
+            lcu_puuid,
+            depth=0,
+            source="riot_tier",
+            initial_delay_ms=_RIOT_TIER_HYDRATION_DELAY_MS,
+        )
+        if result == "new":
+            added += 1
+            return True
+        return False
+
+    try:
+        with RiotClient(region=region) as client:
+            pending_aliases: list[tuple[str, str]] = []
+            for queue_type in riot_queues:
+                for tier in tiers:
+                    tier_divisions = ("I",) if tier in apex_like else divisions
+                    for division in tier_divisions:
+                        for page in range(1, page_limit + 1):
+                            entries = client.league_entries(
+                                tier=tier,
+                                division=division,
+                                queue=queue_type,
+                                page=page,
+                            )
+                            if not entries:
+                                break
+                            for entry in entries:
+                                public_puuid = str(entry.get("puuid") or "")
+                                if not public_puuid:
+                                    continue
+
+                                cached = _get_riot_bridge(con, public_puuid)
+                                if cached is not None:
+                                    riot_id, lcu_puuid = cached
+                                    if lcu_puuid:
+                                        _enqueue_lcu_puuid(lcu_puuid)
+                                    if added >= riot_cap:
+                                        return added
+                                    continue
+
+                                account = client.account_by_puuid(public_puuid)
+                                game_name = str(account.get("gameName") or "").strip()
+                                tag_line = str(account.get("tagLine") or "").strip()
+                                if not game_name or not tag_line:
+                                    _upsert_riot_bridge(
+                                        con,
+                                        public_puuid=public_puuid,
+                                        riot_id="",
+                                        lcu_puuid=None,
+                                        resolve_status="missing_riot_alias",
+                                    )
+                                    continue
+                                riot_id = f"{game_name}#{tag_line}"
+                                pending_aliases.append((public_puuid, riot_id))
+
+                                if len(pending_aliases) >= _LCU_RIOT_ID_LOOKUP_BATCH:
+                                    for chunk in _iter_chunks(pending_aliases, _LCU_RIOT_ID_LOOKUP_BATCH):
+                                        resolved = lookup_summoners_by_riot_ids(
+                                            lcu,
+                                            [riot_id for _, riot_id in chunk],
+                                        )
+                                        by_alias = {
+                                            f"{str(item.get('gameName') or '').strip()}#{str(item.get('tagLine') or '').strip()}": item
+                                            for item in resolved
+                                        }
+                                        for pending_public_puuid, pending_riot_id in chunk:
+                                            match = by_alias.get(pending_riot_id)
+                                            lcu_puuid = str(match.get("puuid") or "").strip() if match else ""
+                                            _upsert_riot_bridge(
+                                                con,
+                                                public_puuid=pending_public_puuid,
+                                                riot_id=pending_riot_id,
+                                                lcu_puuid=(lcu_puuid or None),
+                                                resolve_status=("resolved" if lcu_puuid else "lcu_lookup_empty"),
+                                            )
+                                            if lcu_puuid:
+                                                _enqueue_lcu_puuid(lcu_puuid)
+                                            if added >= riot_cap:
+                                                return added
+                                    pending_aliases.clear()
+
+                            if len(entries) < 200:
+                                break
+
+            if pending_aliases:
+                for chunk in _iter_chunks(pending_aliases, _LCU_RIOT_ID_LOOKUP_BATCH):
+                    resolved = lookup_summoners_by_riot_ids(
+                        lcu,
+                        [riot_id for _, riot_id in chunk],
+                    )
+                    by_alias = {
+                        f"{str(item.get('gameName') or '').strip()}#{str(item.get('tagLine') or '').strip()}": item
+                        for item in resolved
+                    }
+                    for pending_public_puuid, pending_riot_id in chunk:
+                        match = by_alias.get(pending_riot_id)
+                        lcu_puuid = str(match.get("puuid") or "").strip() if match else ""
+                        _upsert_riot_bridge(
+                            con,
+                            public_puuid=pending_public_puuid,
+                            riot_id=pending_riot_id,
+                            lcu_puuid=(lcu_puuid or None),
+                            resolve_status=("resolved" if lcu_puuid else "lcu_lookup_empty"),
+                        )
+                        if lcu_puuid:
+                            _enqueue_lcu_puuid(lcu_puuid)
+                        if added >= riot_cap:
+                            return added
+    except RiotKeyExpired as exc:
+        raise RuntimeError(str(exc)) from exc
+    except RuntimeError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive wrapper around external API
+        raise RuntimeError(f"riot-tier seeding failed: {exc}") from exc
+
+    return added
+
+
+def _seed_manual_riot_ids(
+    con: sqlite3.Connection,
+    lcu: LCUClient,
+    *,
+    riot_ids: tuple[str, ...],
+    target_queues: set[int],
+    history_window: int,
+    games_per_player: int | None,
+    pending_cap: int = 0,
+) -> int:
+    added = 0
+    normalized_ids = _load_riot_id_seeds(riot_ids=riot_ids)
+    if not normalized_ids:
+        return 0
+
+    existing_open = _open_queue_source_count(con, "manual_riot_id")
+    remaining_budget = max(0, pending_cap - existing_open) if pending_cap > 0 else None
+    if remaining_budget == 0:
+        print(
+            f"[snowball] manual_riot_id seed skipped  "
+            f"open_manual_queue={existing_open}  pending_cap={pending_cap}",
+            flush=True,
+        )
+        return 0
+
+    total_chunks = (len(normalized_ids) + _LCU_RIOT_ID_LOOKUP_BATCH - 1) // _LCU_RIOT_ID_LOOKUP_BATCH
+    resolved_total = 0
+    for chunk_idx, chunk in enumerate(
+        _iter_chunks([("", riot_id) for riot_id in normalized_ids], _LCU_RIOT_ID_LOOKUP_BATCH),
+        start=1,
+    ):
+        resolved = lookup_summoners_by_riot_ids(lcu, [riot_id for _, riot_id in chunk])
+        by_alias = {
+            f"{str(item.get('gameName') or '').strip()}#{str(item.get('tagLine') or '').strip()}": item
+            for item in resolved
+        }
+        resolved_total += len(by_alias)
+        for _, riot_id in chunk:
+            match = by_alias.get(riot_id)
+            lcu_puuid = str(match.get("puuid") or "").strip() if match else ""
+            if not lcu_puuid:
+                continue
+            history = get_match_history(lcu, lcu_puuid, begin=0, end=history_window)
+            game_ids = _extract_target_game_ids(history, target_queues)
+            if games_per_player is not None and games_per_player > 0:
+                game_ids = game_ids[:games_per_player]
+            if not game_ids:
+                continue
+            latest_match_ms = _latest_target_match_created_ms(history, target_queues)
+            result = _enqueue_player(
+                con,
+                lcu_puuid,
+                depth=0,
+                source="manual_riot_id",
+                discovered_match_created_ms=latest_match_ms,
+                initial_delay_ms=0,
+            )
+            if result == "new":
+                added += 1
+                if remaining_budget is not None:
+                    remaining_budget -= 1
+                    if remaining_budget <= 0:
+                        print(
+                            f"[snowball] manual_riot_id pending cap reached  "
+                            f"added={added}  pending_cap={pending_cap}",
+                            flush=True,
+                        )
+                        return added
+        if chunk_idx == 1 or chunk_idx == total_chunks or chunk_idx % 5 == 0:
+            print(
+                f"[snowball] manual_riot_id seed progress  chunks={chunk_idx}/{total_chunks}  "
+                f"resolved={resolved_total}  enqueued={added}",
+                flush=True,
+            )
+    return added
+
+
 def run_snowball(
     db_path: Path,
     target_games: int = 500,
@@ -1031,6 +1484,16 @@ def run_snowball(
     apex_queues: tuple[str, ...] = ("RANKED_SOLO_5x5", "RANKED_FLEX_SR"),
     apex_tiers: tuple[str, ...] = ("CHALLENGER", "GRANDMASTER", "MASTER"),
     apex_cap: int = 300,
+    include_riot_tier: bool = False,
+    riot_region: str = "tw",
+    riot_queues: tuple[str, ...] = ("RANKED_SOLO_5x5",),
+    riot_tiers: tuple[str, ...] = ("GOLD",),
+    riot_divisions: tuple[str, ...] = ("I", "II", "III", "IV"),
+    riot_page_limit: int = 2,
+    riot_cap: int = 400,
+    seed_riot_ids: tuple[str, ...] = (),
+    seed_riot_id_files: tuple[Path, ...] = (),
+    manual_seed_pending_cap: int = 40,
     max_depth: int = 3,
 ) -> CrawlStats:
     """Expand the LCU-visible player graph and save unseen target-queue matches."""
@@ -1045,6 +1508,8 @@ def run_snowball(
     con = _connect_db(db_path)
     _ensure_schema(con)
     migrated = _migrate_legacy_crawl_players(con)
+    purged_riot_tier = _purge_invalid_riot_tier_rows(con)
+    synced_priorities = _sync_source_priorities(con)
     claim_timeout_ms = max(1, claim_timeout_sec) * 1000
     player_requeue_cooldown_ms = max(0, player_requeue_cooldown_sec) * 1000
     worker_id = worker_id or f"pid-{os.getpid()}"
@@ -1055,12 +1520,12 @@ def run_snowball(
     stats = CrawlStats()
 
     with LCUClient(creds) as lcu:
-        me = get_current_summoner(lcu)
+        me = _get_current_summoner_with_retry(lcu)
         if not me or not me.get("puuid"):
             raise RuntimeError("Could not resolve current summoner")
 
         my_puuid = str(me["puuid"])
-        my_name = "[connected]"
+        my_name = me.get("gameName") or me.get("displayName") or "?"
 
         if include_self:
             result = _enqueue_player(con, my_puuid, depth=0, source="self")
@@ -1088,6 +1553,41 @@ def run_snowball(
                 con, lcu, apex_queues=apex_queues, apex_tiers=apex_tiers, apex_cap=apex_cap
             )
 
+        if include_riot_tier:
+            stats.seeded_players += _seed_riot_tier_players(
+                con,
+                lcu,
+                region=riot_region,
+                riot_queues=riot_queues,
+                riot_tiers=riot_tiers,
+                riot_divisions=riot_divisions,
+                riot_page_limit=riot_page_limit,
+                riot_cap=riot_cap,
+            )
+
+        manual_riot_ids = _load_riot_id_seeds(
+            riot_ids=seed_riot_ids,
+            riot_id_files=seed_riot_id_files,
+        )
+        if manual_riot_ids:
+            print(
+                f"[snowball] preparing manual_riot_id seeds  count={len(manual_riot_ids)}  worker={worker_id}",
+                flush=True,
+            )
+            stats.seeded_players += _seed_manual_riot_ids(
+                con,
+                lcu,
+                riot_ids=tuple(manual_riot_ids),
+                target_queues=target_queues,
+                history_window=history_window,
+                games_per_player=games_per_player,
+                pending_cap=max(0, manual_seed_pending_cap),
+            )
+            print(
+                f"[snowball] finished manual_riot_id seeds  enqueued={stats.seeded_players}  worker={worker_id}",
+                flush=True,
+            )
+
         pending = _pending_player_count(con)
         print(
             f"[snowball] connected as {my_name}  pending={pending}  "
@@ -1096,17 +1596,48 @@ def run_snowball(
         )
         if migrated:
             print(f"[snowball] migrated legacy crawl_players -> seen+priority-queue  rows={migrated}")
+        if purged_riot_tier:
+            print(f"[snowball] purged invalid riot_tier public-puuid rows={purged_riot_tier}")
+        if synced_priorities:
+            print(f"[snowball] synced source priorities  rows={synced_priorities}")
         reclaimed = _requeue_stale_claims(con, claim_timeout_ms)
         if reclaimed:
             print(f"[snowball] reclaimed stale claims={reclaimed}")
 
+        waiting_logged = False
+        empty_queue_wait_started_at: float | None = None
         while stats.saved_games < target_games and stats.processed_players < max_players:
             next_player = _claim_next_player(con, worker_id=worker_id, claim_timeout_ms=claim_timeout_ms)
             if next_player is None:
-                break
+                wait_ms = _next_pending_wait_ms(con)
+                if wait_ms is None:
+                    now_monotonic = time.monotonic()
+                    if empty_queue_wait_started_at is None:
+                        empty_queue_wait_started_at = now_monotonic
+                        print(
+                            f"[snowball] queue empty, waiting briefly for new seeds  "
+                            f"grace={_EMPTY_QUEUE_GRACE_SEC:.0f}s  worker={worker_id}"
+                        )
+                    elif now_monotonic - empty_queue_wait_started_at >= _EMPTY_QUEUE_GRACE_SEC:
+                        break
+                    time.sleep(1.0)
+                    continue
+                empty_queue_wait_started_at = None
+                sleep_sec = min(max(wait_ms / 1000.0, 0.25), 5.0)
+                if not waiting_logged:
+                    print(
+                        f"[snowball] waiting for eligible queue items  "
+                        f"pending={_pending_player_count(con)}  sleep={sleep_sec:.2f}s  "
+                        f"worker={worker_id}"
+                    )
+                    waiting_logged = True
+                time.sleep(sleep_sec)
+                continue
 
             puuid, depth, source, claimed_match_created_ms = next_player
             stats.processed_players += 1
+            waiting_logged = False
+            empty_queue_wait_started_at = None
 
             history = get_match_history(lcu, puuid, begin=0, end=history_window)
             game_ids = _extract_target_game_ids(history, target_queues)
@@ -1114,7 +1645,7 @@ def run_snowball(
                 game_ids = game_ids[:games_per_player]
             print(
                 f"[snowball] player {stats.processed_players}/{max_players}  "
-                f"depth={depth}  source={source:<6}  "
+                f"depth={depth}  source={source:<6}  puuid={puuid[:12]}  "
                 f"target_games={len(game_ids)}  pending={max(0, _pending_player_count(con) - 1)}  "
                 f"worker={worker_id}"
             )

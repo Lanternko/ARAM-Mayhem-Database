@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for ARAM-collector.exe
+"""PyInstaller spec for ARAM-collector.exe.
 
-Build with:
-    pyinstaller ARAM-collector.spec
+This packages the advanced CLI entrypoint (`lcu_collector.py`), which forwards
+to `scripts.lcu_collector`.
 """
 from pathlib import Path
 
@@ -14,6 +14,8 @@ a = Analysis(
     binaries=[],
     datas=[],
     hiddenimports=[
+        "scripts",
+        "scripts.lcu_collector",
         "aram_nn",
         "aram_nn.lcu",
         "aram_nn.lcu.client",
@@ -26,6 +28,7 @@ a = Analysis(
         "httpx",
         "psutil",
         "psutil._pswindows",
+        "tqdm",
     ],
     hookspath=[],
     hooksconfig={},

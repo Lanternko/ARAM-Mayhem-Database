@@ -37,6 +37,16 @@ class LCUClient:
             pass
         return None
 
+    def post(self, path: str, payload: Any = None, **params: Any) -> Any:
+        """POST path with JSON payload, return parsed JSON or None on any error / non-200."""
+        try:
+            r = self._client.post(path, params=params or None, json=payload)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        return None
+
     def close(self) -> None:
         self._client.close()
 
@@ -69,6 +79,18 @@ def get_friends(client: LCUClient) -> list[dict]:
 def get_summoner_by_puuid_cached(client: LCUClient, puuid: str) -> dict | None:
     """Return cached summoner profile data for a known puuid, if available."""
     return client.get(f"/lol-summoner/v1/summoners-by-puuid-cached/{puuid}")
+
+
+def lookup_summoners_by_riot_ids(client: LCUClient, summoner_names: list[str]) -> list[dict]:
+    """Resolve Riot IDs like 'GameName#TagLine' to LCU summoner payloads.
+
+    The LCU uses a 36-char UUID-style puuid, which differs from Riot's public API puuid.
+    This endpoint bridges from Riot alias -> local LCU summoner identity.
+    """
+    if not summoner_names:
+        return []
+    data = client.post("/lol-summoner/v2/summoners/names", payload=summoner_names)
+    return data if isinstance(data, list) else []
 
 
 def get_match_history(client: LCUClient, puuid: str, begin: int = 0, end: int = 20) -> list[dict]:

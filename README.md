@@ -1,97 +1,91 @@
-# ARAM Mayhem 資料收集器
+# ARAM Mayhem Collector / Winrate NN
 
-幫助訓練「**看到這 10 隻，你有多少機率贏？**」的 AI 模型。  
-只需三步，10–30 分鐘，不需要任何程式知識。
+這個 repo 已經從早期的「單純 LCU collector 工具」升級成完整的：
 
----
+- `Mayhem / ARAM` 本機 LCU 收集器
+- `priority snowball crawler`
+- `OPGG seed` 自動擴散
+- `SQLite -> parquet` 匯出流程
+- `NN / LR` 訓練與評估 pipeline
+- `auto_train` 與 crawl metrics 監控
 
-## 步驟一：下載執行檔
+目前主線內容以 `D:/Projects/CODING/aram-winrate-nn` 為基礎，這個 repo 保留既有 GitHub 歷史與發佈位置。
 
-前往 **[Releases 頁面](https://github.com/Lanternko/ARAM-mayhem-collector/releases/latest)** 下載 `ARAM-collector.exe`
+## 你要用哪一種模式？
 
----
+### 1. 只想收集資料
 
-## 步驟二：執行收集
+最簡單的入口是：
 
-1. **開啟 League of Legends 客戶端並登入帳號**
-2. **雙擊 `ARAM-collector.exe`**
-3. 等待視窗自動完成（10–30 分鐘）
-
-執行時你會看到這樣的輸出，代表正在收集中：
-
-```
-[collect] Starting 4-worker snowball crawl...
-  games=100  pending=500  in_progress=8
-  games=200  pending=450  in_progress=8
-  ...
-[collect] Done!  ->  my_games.parquet
-按任意鍵關閉視窗...
+```powershell
+python collect.py
 ```
 
-完成後，`my_games.parquet` 會出現在**和執行檔同一個資料夾**。
+它會：
 
----
+1. 使用目前調過的 `snowball-workers` 參數啟動 crawler
+2. 等待 crawler 把 frontier 跑完
+3. 匯出 `my_games.parquet`
 
-## 步驟三：上傳資料
+如果你想直接用底層 CLI：
 
-前往 **[📦 上傳資料在這裡](https://github.com/Lanternko/ARAM-mayhem-collector/discussions/1)**，把 `my_games.parquet` **直接拖進留言框**，然後送出。
-
-建議留言格式：
-```
-伺服器：TW2
-場次數：3200
-```
-
-> 需要 GitHub 帳號才能上傳。[免費註冊](https://github.com/signup)，不需要信用卡。
-
----
-
-## 常見問題
-
-**Q：my_games.parquet 在哪裡？**  
-在 `ARAM-collector.exe` 同一個資料夾裡。
-
-**Q：程式卡住了怎麼辦？**  
-直接關掉視窗，下次重跑會從上次繼續（資料不會遺失）。
-
-**Q：我不在 TW2 伺服器怎麼辦？**  
-用命令提示字元（cmd）執行：  
-```
-ARAM-collector.exe run --platform KR
-```
-把 `KR` 換成你的伺服器代碼（`EUW1` / `NA1` / `JP1` / `SG2`）。
-
-**Q：我的資料安全嗎？**  
-`my_games.parquet` 裡只有**英雄 ID、勝負、遊戲時長、版本號**，完全不含帳號名稱或 ID。
-
----
-
-## 進階用法（熟悉 Python 的使用者）
-
-如果你不想用 exe，可以直接用 Python：
-
-```bash
-# 下載 ZIP 解壓縮後，進入資料夾
-pip install -r requirements.txt
-
-# 一鍵收集（等同雙擊 exe）
-python lcu_collector.py run --platform TW2
-
-# 收集完後查看狀態
+```powershell
 python lcu_collector.py status
+python lcu_collector.py snowball-workers --workers 4 --target-games 50000 --max-players 50000 --games-per-player 4 --manual-seed-pending-cap 40
+python lcu_collector.py export --queue 2400 --out data/raw/mayhem_games.parquet
 ```
 
----
+### 2. 想跑研究 / 訓練
 
-## 資料格式
+安裝 editable package：
 
-| 欄位 | 說明 |
-|------|------|
-| `match_id` | 全球唯一比賽 ID |
-| `queue_id` | 2400 = Mayhem |
-| `patch` | 版本，例如 `16.9.772` |
-| `platform` | 伺服器，例如 `TW2` |
-| `blue_champions` | 藍方英雄 ID 列表 |
-| `red_champions` | 紅方英雄 ID 列表 |
-| `blue_wins` | 藍方是否獲勝 |
-| `duration_sec` | 遊戲時長（秒）|
+```powershell
+python -m pip install -e .
+```
+
+訓練與評估入口：
+
+```powershell
+python -m aram_nn.train --data data/raw/mayhem_games.parquet --out models/run1
+python -m aram_nn.eval --help
+python auto_train.py
+```
+
+## 目前 crawler 主策略
+
+- `match` 來源高 priority
+- `manual_riot_id` 先做 `recent history` 預篩選，沒有 `2400/450` 就不 enqueue
+- `--manual-seed-pending-cap 40`
+- `OPGG later-page resume cursor`
+- `metrics` 追蹤每小時成長、目前 patch 成長、frontier 效率
+
+## 重要路徑
+
+- 主 DB：`data/lcu/games.db`
+- OPGG seed state：`data/seeds/opgg_tw_state.json`
+- OPGG seed history：`data/seeds/opgg_tw_history.jsonl`
+- Crawl metrics：`data/monitor/crawl_metrics.jsonl`
+- 主 CLI：`scripts/lcu_collector.py`
+
+## 常用指令
+
+```powershell
+python scripts/lcu_collector.py status
+python scripts/lcu_collector.py metrics --record
+python scripts/lcu_collector.py seed-opgg-plan --resume --start-page 81 --state-file data\seeds\opgg_tw_state.json --history-file data\seeds\opgg_tw_history.jsonl --region tw --tier diamond --tier emerald --tier platinum --tier gold --pages-per-tier 1 --topn-total 200 --out data\seeds\opgg_tw.txt
+python scripts/lcu_collector.py snowball-workers --workers 4 --seed-riot-id-file data\seeds\opgg_tw.txt --manual-seed-pending-cap 40 --target-games 50000 --max-players 50000 --games-per-player 4
+```
+
+## Repo 說明
+
+- `src/aram_nn/lcu/`：LCU / snowball crawler
+- `src/aram_nn/ingest/`：Riot API snowball / extract
+- `src/aram_nn/models/`：LR / DeepSets
+- `scripts/`：collector、probe、backfill、smoke test
+- `auto_train.py`：定期檢查 DB 增量並自動訓練
+
+## 注意
+
+- `data/`、`logs/`、`models/` 預設都不應提交
+- Mayhem `queueId=2400` 無法靠公開 Riot API 直接抓整場，只能走本機 LCU
+- `auto_train.py` 現在預設讀的是本 repo 的 `data/lcu/games.db`

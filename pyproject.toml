@@ -1,0 +1,29 @@
+[project]
+name = "aram-mayhem-nn"
+version = "0.1.0"
+description = "Win-rate prediction for LoL ARAM: Mayhem (queueId=2400)"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "polars>=1.0",
+    "pyarrow>=15",
+    "numpy>=1.26",
+    "scikit-learn>=1.4",
+    "torch>=2.2",
+    "tqdm>=4.66",
+    "click>=8.1",
+    "psutil>=5.9",
+]
+
+[project.scripts]
+aram-ingest = "aram_nn.ingest.cli:main"
+aram-snowball = "aram_nn.ingest.snowball:main"
+aram-train = "aram_nn.train:main"
+aram-eval = "aram_nn.eval:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

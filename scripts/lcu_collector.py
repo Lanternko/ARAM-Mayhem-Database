@@ -1,0 +1,2203 @@
+"""Local LCU collector: captures ARAM / Mayhem comps from the running League client.
+
+Sub-commands
+------------
+collect  Run the background collector (blocks until Ctrl-C).
+export   Convert the SQLite database to a Parquet file for training.
+status   Show what's in the database.
+
+Examples
+--------
+# Start collecting (run this before you play; leave it open)
+python scripts/lcu_collector.py collect
+
+# Snowball crawl recent visible match history across self / friends / strangers
+python scripts/lcu_collector.py snowball --target-games 500 --max-players 200
+
+# Store different clients into separate SQLite DBs, then merge by game_id
+python scripts/lcu_collector.py snowball --db data/lcu/games_account_a.db
+python scripts/lcu_collector.py merge-db --out-db data/lcu/games_merged.db data/lcu/games_account_a.db data/lcu/games_account_b.db
+
+# Export everything to parquet (same schema as snowball output)
+python scripts/lcu_collector.py export --out data/raw/lcu_games.parquet
+
+# Export Mayhem only
+python scripts/lcu_collector.py export --queue 2400 --out data/raw/mayhem_games.parquet
+
+# See how many games you've captured
+python scripts/lcu_collector.py status
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import sqlite3
+import subprocess
+import sys
+import time
+from collections import Counter
+from pathlib import Path
+from urllib.parse import unquote
+
+import click
+import httpx
+import polars as pl
+try:
+    import psutil
+except Exception:  # pragma: no cover - optional dependency in local runtime
+    psutil = None
+
+
+DEFAULT_DB = Path("data/lcu/games.db")
+_OPGG_LEADERBOARD_URL = "https://op.gg/zh-tw/lol/leaderboards/tier"
+DEFAULT_OPGG_STATE = Path("data/seeds/opgg_tw_state.json")
+DEFAULT_OPGG_HISTORY = Path("data/seeds/opgg_tw_history.jsonl")
+DEFAULT_METRICS_HISTORY = Path("data/monitor/crawl_metrics.jsonl")
+_GAMES_CREATE_SQL = """
+CREATE TABLE IF NOT EXISTS games (
+    game_id      TEXT PRIMARY KEY,
+    queue_id     INTEGER NOT NULL,
+    patch        TEXT NOT NULL,
+    blue_champs  TEXT NOT NULL,
+    red_champs   TEXT NOT NULL,
+    blue_wins    INTEGER NOT NULL,
+    duration_sec INTEGER NOT NULL,
+    created_ms   INTEGER NOT NULL,
+    captured_at  TEXT NOT NULL,
+    participants_json TEXT
+);
+"""
+_GAMES_INSERT_SQL = """
+INSERT OR IGNORE INTO games (
+    game_id, queue_id, patch, blue_champs, red_champs,
+    blue_wins, duration_sec, created_ms, captured_at, participants_json
+) VALUES (?,?,?,?,?,?,?,?,?,?)
+"""
+
+
+@click.group()
+def cli() -> None:
+    """LCU local game-data collector for ARAM / Mayhem."""
+
+
+def _write_csv_rows(path: Path, rows: list[dict], schema: dict[str, pl.DataType], sort_by: list[str]) -> None:
+    if rows:
+        pl.DataFrame(rows).sort(sort_by, descending=[True] * len(sort_by)).write_csv(path)
+    else:
+        pl.DataFrame(schema=schema).write_csv(path)
+
+
+def _table_exists(con: sqlite3.Connection, table_name: str) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(con: sqlite3.Connection, table_name: str) -> set[str]:
+    return {str(row[1]) for row in con.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def _ensure_games_schema(con: sqlite3.Connection) -> None:
+    con.execute(_GAMES_CREATE_SQL)
+    columns = _table_columns(con, "games")
+    if "participants_json" not in columns:
+        con.execute("ALTER TABLE games ADD COLUMN participants_json TEXT")
+    con.commit()
+
+
+def _iter_game_rows(con: sqlite3.Connection, chunk_size: int = 2000):
+    columns = _table_columns(con, "games")
+    has_participants = "participants_json" in columns
+    cursor = con.execute(
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs,
+               blue_wins, duration_sec, created_ms, captured_at, participants_json
+        FROM games
+        ORDER BY created_ms, game_id
+        """
+        if has_participants
+        else
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs,
+               blue_wins, duration_sec, created_ms, captured_at, NULL as participants_json
+        FROM games
+        ORDER BY created_ms, game_id
+        """
+    )
+    while True:
+        rows = cursor.fetchmany(chunk_size)
+        if not rows:
+            break
+        yield rows
+
+
+def _normalize_opgg_profile_to_riot_id(url_or_slug: str) -> str | None:
+    value = url_or_slug.strip().strip("/")
+    if not value:
+        return None
+
+    if "/lol/summoners/" in value:
+        value = value.rsplit("/", 1)[-1]
+
+    value = unquote(value)
+    if "#" in value:
+        game_name, tag_line = value.split("#", 1)
+        game_name = game_name.strip()
+        tag_line = tag_line.strip()
+        if game_name and tag_line:
+            return f"{game_name}#{tag_line}"
+        return None
+
+    if "-" not in value:
+        return None
+    game_name, tag_line = value.rsplit("-", 1)
+    game_name = game_name.strip()
+    tag_line = tag_line.strip()
+    if not game_name or not tag_line:
+        return None
+    return f"{game_name}#{tag_line}"
+
+
+def _fetch_opgg_leaderboard_riot_ids(
+    *,
+    region: str,
+    tier: str,
+    pages: int,
+    topn: int,
+) -> list[str]:
+    headers = {"User-Agent": "Mozilla/5.0"}
+    riot_ids: list[str] = []
+    seen: set[str] = set()
+
+    with httpx.Client(headers=headers, timeout=20.0, follow_redirects=True) as client:
+        for page in range(1, max(1, pages) + 1):
+            matches = _fetch_opgg_leaderboard_page_slugs(
+                client=client,
+                region=region,
+                tier=tier,
+                page=page,
+            )
+
+            if not matches:
+                break
+
+            added_this_page = 0
+            for match in sorted(matches):
+                riot_id = _normalize_opgg_profile_to_riot_id(match)
+                if not riot_id or riot_id in seen:
+                    continue
+                seen.add(riot_id)
+                riot_ids.append(riot_id)
+                added_this_page += 1
+                if topn > 0 and len(riot_ids) >= topn:
+                    return riot_ids
+
+            if added_this_page == 0:
+                break
+
+    return riot_ids
+
+
+def _fetch_opgg_leaderboard_page_slugs(
+    *,
+    client: httpx.Client,
+    region: str,
+    tier: str,
+    page: int,
+) -> set[str]:
+    params = {"tier": tier.lower(), "region": region.lower(), "page": page}
+    resp = client.get(_OPGG_LEADERBOARD_URL, params=params)
+    resp.raise_for_status()
+    html = resp.text
+    patterns = [
+        rf'/zh-tw/lol/summoners/{re.escape(region.lower())}/([^"<\\]+)',
+        rf'/lol/summoners/{re.escape(region.lower())}/([^"<\\]+)',
+    ]
+    matches: set[str] = set()
+    for pattern in patterns:
+        matches.update(re.findall(pattern, html))
+    return matches
+
+
+def _write_seed_file(path: Path, riot_ids: list[str], append: bool) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = "a" if append else "w"
+    with path.open(mode, encoding="utf-8", newline="\n") as fh:
+        if append and path.stat().st_size > 0:
+            fh.write("\n")
+        for riot_id in riot_ids:
+            fh.write(f"{riot_id}\n")
+
+
+def _console_safe(text: str) -> str:
+    return text.encode("cp950", errors="backslashreplace").decode("cp950")
+
+
+def _default_opgg_state(region: str, tiers: tuple[str, ...], start_page: int) -> dict:
+    normalized_tiers = [str(t).strip().lower() for t in tiers if str(t).strip()]
+    return {
+        "region": str(region).strip().lower(),
+        "tiers": {
+            tier: {"next_page": max(1, int(start_page)), "exhausted": False}
+            for tier in normalized_tiers
+        },
+    }
+
+
+def _load_opgg_state(path: Path, region: str, tiers: tuple[str, ...], start_page: int) -> dict:
+    if not path.exists():
+        return _default_opgg_state(region=region, tiers=tiers, start_page=start_page)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return _default_opgg_state(region=region, tiers=tiers, start_page=start_page)
+
+    state = _default_opgg_state(region=region, tiers=tiers, start_page=start_page)
+    if not isinstance(payload, dict):
+        return state
+
+    state["region"] = str(payload.get("region") or state["region"]).strip().lower()
+    tiers_payload = payload.get("tiers")
+    if isinstance(tiers_payload, dict):
+        for tier in list(state["tiers"].keys()):
+            raw = tiers_payload.get(tier)
+            if not isinstance(raw, dict):
+                continue
+            next_page = raw.get("next_page", state["tiers"][tier]["next_page"])
+            exhausted = raw.get("exhausted", state["tiers"][tier]["exhausted"])
+            try:
+                next_page = max(1, int(next_page))
+            except Exception:
+                next_page = state["tiers"][tier]["next_page"]
+            state["tiers"][tier] = {
+                "next_page": next_page,
+                "exhausted": bool(exhausted),
+            }
+    return state
+
+
+def _save_opgg_state(path: Path, state: dict) -> None:
+    payload = dict(state)
+    payload["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _append_opgg_history(path: Path, event: dict) -> None:
+    payload = dict(event)
+    payload["logged_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _load_jsonl_tail(path: Path, limit: int = 5) -> list[dict]:
+    if not path.exists():
+        return []
+    lines = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    payloads: list[dict] = []
+    for raw in lines[-limit:]:
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            payloads.append(parsed)
+    return payloads
+
+
+def _append_metrics_history(path: Path, snapshot: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(snapshot, ensure_ascii=False) + "\n")
+
+
+def _find_active_snowball_workers() -> list[dict]:
+    workers: list[dict] = []
+    if psutil is not None:
+        for proc in psutil.process_iter(["pid", "name", "cmdline", "create_time"]):
+            try:
+                name = str(proc.info.get("name") or "")
+                if "python" not in name.lower():
+                    continue
+                cmdline = [str(part) for part in (proc.info.get("cmdline") or [])]
+                if not cmdline:
+                    continue
+                joined = " ".join(cmdline)
+                lower = joined.lower()
+                if "lcu_collector.py" not in lower or "snowball" not in lower:
+                    continue
+                workers.append(
+                    {
+                        "pid": int(proc.info["pid"]),
+                        "create_time": float(proc.info.get("create_time") or 0.0),
+                        "cmdline": joined,
+                    }
+                )
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+    else:
+        probe = """
+$rows = Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -eq 'python.exe' -and $_.CommandLine -like '*lcu_collector.py*' -and $_.CommandLine -like '*snowball*'
+} | Select-Object ProcessId, CommandLine, CreationDate
+$rows | ConvertTo-Json -Compress
+"""
+        try:
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", probe],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            raw = (result.stdout or "").strip()
+            if raw:
+                payload = json.loads(raw)
+                rows = payload if isinstance(payload, list) else [payload]
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    workers.append(
+                        {
+                            "pid": int(row.get("ProcessId") or 0),
+                            "create_time": 0.0,
+                            "cmdline": str(row.get("CommandLine") or ""),
+                        }
+                    )
+        except Exception:
+            workers = []
+    workers.sort(key=lambda row: row["pid"])
+    return workers
+
+
+def _collect_status_snapshot(
+    db: Path,
+    *,
+    seed_state_file: Path = DEFAULT_OPGG_STATE,
+    seed_history_file: Path = DEFAULT_OPGG_HISTORY,
+) -> dict:
+    snapshot = {
+        "captured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "captured_at_unix": time.time(),
+        "db": str(db),
+        "db_exists": db.exists(),
+        "total": 0,
+        "queues": {},
+        "mayhem": {
+            "total": 0,
+            "latest_patch": None,
+            "latest_patch_games": 0,
+            "latest_game_created_ms": None,
+            "latest_game_captured_at": None,
+        },
+        "recent": [],
+        "crawl_frontier": {},
+        "crawl_sources": {},
+        "active_workers": [],
+        "seed_state_file": str(seed_state_file),
+        "seed_history_file": str(seed_history_file),
+        "seed_state": None,
+        "latest_seed_refresh": None,
+    }
+
+    if not db.exists():
+        snapshot["active_workers"] = _find_active_snowball_workers()
+        if seed_state_file.exists():
+            try:
+                snapshot["seed_state"] = json.loads(seed_state_file.read_text(encoding="utf-8"))
+            except Exception:
+                snapshot["seed_state"] = None
+        history_tail = _load_jsonl_tail(seed_history_file, limit=1)
+        if history_tail:
+            snapshot["latest_seed_refresh"] = history_tail[-1]
+        return snapshot
+
+    con = sqlite3.connect(str(db))
+    try:
+        snapshot["total"] = int(con.execute("SELECT COUNT(*) FROM games").fetchone()[0])
+        queue_rows = con.execute(
+            "SELECT queue_id, COUNT(*), AVG(blue_wins), MIN(patch), MAX(patch), MAX(created_ms) "
+            "FROM games GROUP BY queue_id"
+        ).fetchall()
+        snapshot["queues"] = {
+            str(queue_id): {
+                "games": int(count),
+                "blue_wr": float(wr or 0.0),
+                "min_patch": min_patch,
+                "max_patch": max_patch,
+                "latest_created_ms": int(latest_created_ms or 0),
+            }
+            for queue_id, count, wr, min_patch, max_patch, latest_created_ms in queue_rows
+        }
+        recent_rows = con.execute(
+            "SELECT game_id, queue_id, patch, blue_wins, duration_sec, created_ms, captured_at "
+            "FROM games ORDER BY created_ms DESC LIMIT 5"
+        ).fetchall()
+        snapshot["recent"] = [
+            {
+                "game_id": str(game_id),
+                "queue_id": int(queue_id),
+                "patch": patch,
+                "blue_wins": bool(blue_wins),
+                "duration_sec": int(duration_sec),
+                "created_ms": int(created_ms),
+                "captured_at": captured_at,
+            }
+            for game_id, queue_id, patch, blue_wins, duration_sec, created_ms, captured_at in recent_rows
+        ]
+        latest_mayhem = con.execute(
+            """
+            SELECT patch, COUNT(*), MAX(created_ms), MAX(captured_at)
+            FROM games
+            WHERE queue_id = 2400
+            GROUP BY patch
+            ORDER BY MAX(created_ms) DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        mayhem_total = int(snapshot["queues"].get("2400", {}).get("games", 0))
+        if latest_mayhem:
+            latest_patch, latest_patch_games, latest_created_ms, latest_captured_at = latest_mayhem
+            snapshot["mayhem"] = {
+                "total": mayhem_total,
+                "latest_patch": latest_patch,
+                "latest_patch_games": int(latest_patch_games or 0),
+                "latest_game_created_ms": int(latest_created_ms or 0),
+                "latest_game_captured_at": latest_captured_at,
+            }
+        else:
+            snapshot["mayhem"]["total"] = mayhem_total
+
+        has_crawl_queue = _table_exists(con, "crawl_queue")
+        has_crawl_seen = _table_exists(con, "crawl_seen")
+        has_crawl_players = _table_exists(con, "crawl_players")
+        if has_crawl_queue and has_crawl_seen:
+            snapshot["crawl_frontier"] = {
+                str(status): int(count)
+                for status, count in con.execute(
+                    "SELECT status, COUNT(*) FROM crawl_queue GROUP BY status"
+                ).fetchall()
+            }
+            snapshot["crawl_sources"] = {
+                str(source): int(count)
+                for source, count in con.execute(
+                    "SELECT source, COUNT(*) FROM crawl_seen GROUP BY source"
+                ).fetchall()
+            }
+        elif has_crawl_players:
+            snapshot["crawl_frontier"] = {
+                str(status): int(count)
+                for status, count in con.execute(
+                    "SELECT status, COUNT(*) FROM crawl_players GROUP BY status"
+                ).fetchall()
+            }
+            snapshot["crawl_sources"] = {
+                str(source): int(count)
+                for source, count in con.execute(
+                    "SELECT source, COUNT(*) FROM crawl_players GROUP BY source"
+                ).fetchall()
+            }
+    finally:
+        con.close()
+
+    snapshot["active_workers"] = _find_active_snowball_workers()
+    if seed_state_file.exists():
+        try:
+            snapshot["seed_state"] = json.loads(seed_state_file.read_text(encoding="utf-8"))
+        except Exception:
+            snapshot["seed_state"] = None
+    history_tail = _load_jsonl_tail(seed_history_file, limit=1)
+    if history_tail:
+        snapshot["latest_seed_refresh"] = history_tail[-1]
+    return snapshot
+
+
+def _format_rate(delta: int, elapsed_sec: float) -> str:
+    if elapsed_sec <= 0:
+        return "n/a"
+    per_hour = delta * 3600.0 / elapsed_sec
+    per_min = delta * 60.0 / elapsed_sec
+    return f"{per_hour:.1f}/h ({per_min:.2f}/min)"
+
+
+def _merge_games_from_source(
+    dst_con: sqlite3.Connection,
+    src_db: Path,
+    *,
+    chunk_size: int = 2000,
+) -> dict[str, int]:
+    if not src_db.exists():
+        raise click.ClickException(f"source database not found: {src_db}")
+
+    src_con = sqlite3.connect(str(src_db), timeout=30.0)
+    try:
+        if not _table_exists(src_con, "games"):
+            raise click.ClickException(f"source database has no games table: {src_db}")
+
+        rows_read = 0
+        inserted = 0
+        participants_backfilled = 0
+        for rows in _iter_game_rows(src_con, chunk_size=chunk_size):
+            rows_read += len(rows)
+
+            before_insert = dst_con.total_changes
+            dst_con.executemany(_GAMES_INSERT_SQL, rows)
+            inserted += dst_con.total_changes - before_insert
+
+            backfill_rows = [(row[9], row[0]) for row in rows if row[9]]
+            if backfill_rows:
+                before_backfill = dst_con.total_changes
+                dst_con.executemany(
+                    """
+                    UPDATE games
+                    SET participants_json = ?
+                    WHERE game_id = ?
+                      AND COALESCE(participants_json, '') = ''
+                    """,
+                    backfill_rows,
+                )
+                participants_backfilled += dst_con.total_changes - before_backfill
+
+        dst_con.commit()
+        return {
+            "rows_read": rows_read,
+            "inserted": inserted,
+            "participants_backfilled": participants_backfilled,
+        }
+    finally:
+        src_con.close()
+
+
+def _load_game_rows(db: Path) -> tuple[list[tuple], bool]:
+    con = sqlite3.connect(str(db))
+    columns = {str(row[1]) for row in con.execute("PRAGMA table_info(games)").fetchall()}
+    has_participants = "participants_json" in columns
+    rows = con.execute(
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs, blue_wins, participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+        if has_participants
+        else
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs, blue_wins, NULL as participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+    ).fetchall()
+    con.close()
+    return rows, has_participants
+
+
+def _aggregate_stats(
+    rows: list[tuple],
+    queue: tuple[int, ...],
+    patch_prefix: tuple[str, ...],
+) -> tuple[int, int, list[dict], list[dict], list[dict]]:
+    queue_filter = set(queue)
+    hero_games: Counter[int] = Counter()
+    hero_wins: Counter[int] = Counter()
+    augment_games: Counter[int] = Counter()
+    augment_wins: Counter[int] = Counter()
+    hero_augment_games: Counter[tuple[int, int]] = Counter()
+    hero_augment_wins: Counter[tuple[int, int]] = Counter()
+
+    kept_games = 0
+    participant_games = 0
+    for _, queue_id, patch, blue_json, red_json, blue_wins, participants_json in rows:
+        if queue_filter and queue_id not in queue_filter:
+            continue
+        if patch_prefix and not any(str(patch).startswith(prefix) for prefix in patch_prefix):
+            continue
+
+        kept_games += 1
+        blue_ids = json.loads(blue_json)
+        red_ids = json.loads(red_json)
+        blue_win_int = int(bool(blue_wins))
+
+        for champion_id in blue_ids:
+            hero_games[int(champion_id)] += 1
+            hero_wins[int(champion_id)] += blue_win_int
+        for champion_id in red_ids:
+            hero_games[int(champion_id)] += 1
+            hero_wins[int(champion_id)] += 1 - blue_win_int
+
+        payload = json.loads(participants_json or "[]")
+        if not payload:
+            continue
+        participant_games += 1
+        for participant in payload:
+            champion_id = int(participant.get("championId", 0) or 0)
+            team_id = int(participant.get("teamId", 0) or 0)
+            if champion_id <= 0 or team_id not in (100, 200):
+                continue
+            player_win = blue_win_int if team_id == 100 else (1 - blue_win_int)
+            for augment_id in participant.get("augments") or []:
+                augment_id = int(augment_id)
+                if augment_id <= 0:
+                    continue
+                augment_games[augment_id] += 1
+                augment_wins[augment_id] += player_win
+                hero_augment_games[(champion_id, augment_id)] += 1
+                hero_augment_wins[(champion_id, augment_id)] += player_win
+
+    total_player_games = sum(hero_games.values())
+    total_player_wins = sum(hero_wins.values())
+    global_wr = (total_player_wins / total_player_games) if total_player_games > 0 else 0.5
+    prior_strength = 50.0
+
+    hero_rows_raw = []
+    for champion_id, games_played in hero_games.items():
+        wins = hero_wins[champion_id]
+        hero_rows_raw.append(
+            {
+                "champion_id": champion_id,
+                "games": games_played,
+                "wins": wins,
+            }
+        )
+    hero_rows = _decorate_rate_rows(
+        hero_rows_raw, key_field="champion_id", global_wr=global_wr, prior_strength=prior_strength
+    )
+
+    augment_rows_raw = []
+    for augment_id, games_played in augment_games.items():
+        wins = augment_wins[augment_id]
+        augment_rows_raw.append(
+            {
+                "augment_id": augment_id,
+                "games": games_played,
+                "wins": wins,
+            }
+        )
+    augment_rows = _decorate_rate_rows(
+        augment_rows_raw, key_field="augment_id", global_wr=global_wr, prior_strength=prior_strength
+    )
+
+    hero_augment_rows_raw = []
+    for (champion_id, augment_id), games_played in hero_augment_games.items():
+        wins = hero_augment_wins[(champion_id, augment_id)]
+        hero_augment_rows_raw.append(
+            {
+                "champion_id": champion_id,
+                "augment_id": augment_id,
+                "games": games_played,
+                "wins": wins,
+            }
+        )
+    hero_augment_rows = []
+    for row in hero_augment_rows_raw:
+        wins = int(row["wins"])
+        games = int(row["games"])
+        hero_augment_rows.append(
+            {
+                "champion_id": row["champion_id"],
+                "augment_id": row["augment_id"],
+                "games": games,
+                "wins": wins,
+                "win_rate": wins / games if games > 0 else global_wr,
+                "bayes_win_rate": _bayes_win_rate(wins, games, global_wr, prior_strength),
+                "wilson_lb": _wilson_lower_bound(wins, games),
+            }
+        )
+
+    return kept_games, participant_games, hero_rows, augment_rows, hero_augment_rows
+
+
+def _load_champion_name_map() -> dict[int, str]:
+    try:
+        from aram_nn.lcu.client import LCUClient, get_champion_summary
+        from aram_nn.lcu.process import get_credentials
+    except Exception:
+        return {}
+
+    creds = get_credentials()
+    if creds is None:
+        return {}
+
+    try:
+        with LCUClient(creds) as lcu:
+            summary = get_champion_summary(lcu)
+    except Exception:
+        return {}
+
+    mapping: dict[int, str] = {}
+    for row in summary:
+        champion_id = row.get("id")
+        name = row.get("name") or row.get("alias")
+        if champion_id is None or not name:
+            continue
+        mapping[int(champion_id)] = str(name)
+    return mapping
+
+
+def _load_augment_name_map() -> dict[int, str]:
+    try:
+        from aram_nn.lcu.client import LCUClient
+        from aram_nn.lcu.process import get_credentials
+    except Exception:
+        return {}
+
+    creds = get_credentials()
+    if creds is None:
+        return {}
+
+    try:
+        with LCUClient(creds) as lcu:
+            data = lcu.get("/lol-game-data/assets/v1/cherry-augments.json") or []
+    except Exception:
+        return {}
+
+    mapping: dict[int, str] = {}
+    for row in data:
+        augment_id = row.get("id")
+        name = row.get("nameTRA") or row.get("simpleNameTRA") or row.get("name")
+        if augment_id is None or not name:
+            continue
+        mapping[int(augment_id)] = str(name)
+    return mapping
+
+
+def _bayes_win_rate(wins: int, games: int, global_wr: float, prior_strength: float) -> float:
+    if games <= 0:
+        return global_wr
+    return (wins + prior_strength * global_wr) / (games + prior_strength)
+
+
+def _wilson_lower_bound(wins: int, games: int, z: float = 1.96) -> float:
+    if games <= 0:
+        return 0.0
+    phat = wins / games
+    denom = 1.0 + (z * z) / games
+    centre = phat + (z * z) / (2.0 * games)
+    margin = z * math.sqrt((phat * (1.0 - phat) + (z * z) / (4.0 * games)) / games)
+    return (centre - margin) / denom
+
+
+def _decorate_rate_rows(
+    rows: list[dict],
+    *,
+    key_field: str,
+    global_wr: float,
+    prior_strength: float,
+) -> list[dict]:
+    decorated: list[dict] = []
+    for row in rows:
+        wins = int(row["wins"])
+        games = int(row["games"])
+        decorated.append(
+            {
+                key_field: row[key_field],
+                "games": games,
+                "wins": wins,
+                "win_rate": wins / games if games > 0 else global_wr,
+                "bayes_win_rate": _bayes_win_rate(wins, games, global_wr, prior_strength),
+                "wilson_lb": _wilson_lower_bound(wins, games),
+            }
+        )
+    return decorated
+
+
+def _build_snowball_subprocess_args(
+    *,
+    db: Path,
+    target_games: int,
+    max_players: int,
+    history_window: int,
+    games_per_player: int,
+    worker_id: str,
+    claim_timeout_sec: int,
+    player_requeue_cooldown_sec: int,
+    queue: tuple[int, ...],
+    seed_self: bool,
+    seed_friends: bool,
+    seed_ladder: bool,
+    ladder_cap: int,
+    seed_apex: bool,
+    apex_queue: tuple[str, ...],
+    apex_tier: tuple[str, ...],
+    apex_cap: int,
+    seed_riot_tier: bool,
+    riot_region: str,
+    riot_queue: tuple[str, ...],
+    riot_tier: tuple[str, ...],
+    riot_division: tuple[str, ...],
+    riot_page_limit: int,
+    riot_cap: int,
+    seed_riot_ids: tuple[str, ...],
+    seed_riot_id_files: tuple[Path, ...],
+    manual_seed_pending_cap: int,
+    max_depth: int,
+) -> list[str]:
+    args = [
+        sys.executable,
+        "-u",
+        str(Path(__file__).resolve()),
+        "snowball",
+        "--db",
+        str(db),
+        "--target-games",
+        str(target_games),
+        "--max-players",
+        str(max_players),
+        "--history-window",
+        str(history_window),
+        "--games-per-player",
+        str(games_per_player),
+        "--worker-id",
+        worker_id,
+        "--claim-timeout-sec",
+        str(claim_timeout_sec),
+        "--player-requeue-cooldown-sec",
+        str(player_requeue_cooldown_sec),
+        "--ladder-cap",
+        str(ladder_cap),
+        "--apex-cap",
+        str(apex_cap),
+        "--riot-region",
+        str(riot_region),
+        "--riot-page-limit",
+        str(riot_page_limit),
+        "--riot-cap",
+        str(riot_cap),
+        "--manual-seed-pending-cap",
+        str(manual_seed_pending_cap),
+        "--max-depth",
+        str(max_depth),
+    ]
+
+    for qid in queue:
+        args.extend(["--queue", str(qid)])
+    for queue_type in apex_queue:
+        args.extend(["--apex-queue", str(queue_type)])
+    for tier in apex_tier:
+        args.extend(["--apex-tier", str(tier)])
+    for queue_type in riot_queue:
+        args.extend(["--riot-queue", str(queue_type)])
+    for tier in riot_tier:
+        args.extend(["--riot-tier", str(tier)])
+    for division in riot_division:
+        args.extend(["--riot-division", str(division)])
+    for riot_id in seed_riot_ids:
+        args.extend(["--seed-riot-id", str(riot_id)])
+    for riot_id_file in seed_riot_id_files:
+        args.extend(["--seed-riot-id-file", str(riot_id_file)])
+
+    args.append("--seed-self" if seed_self else "--no-seed-self")
+    args.append("--seed-friends" if seed_friends else "--no-seed-friends")
+    args.append("--seed-ladder" if seed_ladder else "--no-seed-ladder")
+    args.append("--seed-apex" if seed_apex else "--no-seed-apex")
+    args.append("--seed-riot-tier" if seed_riot_tier else "--no-seed-riot-tier")
+    return args
+
+
+# ------------------------------------------------------------------ collect --
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True, help="SQLite database path")
+@click.option("--interval", default=30, show_default=True, type=int,
+              help="Poll interval in seconds")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400),
+              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
+    """Run the collector — blocks until Ctrl-C.
+
+    Polls the League Client every INTERVAL seconds and saves any new ARAM or
+    Mayhem games to the SQLite database.  Safe to restart; already-saved games
+    are skipped automatically.
+    """
+    try:
+        from aram_nn.lcu.poller import run_collector
+    except ImportError as exc:
+        click.echo(f"[error] import failed: {exc}\n  Run: pip install -e .", err=True)
+        sys.exit(1)
+    run_collector(db, poll_interval=interval, target_queues=set(queue))
+
+
+# ---------------------------------------------------------------- snowball --
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True, help="SQLite database path")
+@click.option("--target-games", default=500, show_default=True, type=int,
+              help="Stop after saving this many new games")
+@click.option("--max-players", default=250, show_default=True, type=int,
+              help="Stop after processing this many distinct player nodes")
+@click.option("--history-window", default=20, show_default=True, type=int,
+              help="How many recent games to inspect per player")
+@click.option("--games-per-player", default=8, show_default=True, type=int,
+              help="Cap how many target-queue games to expand per player for wider diffusion")
+@click.option("--worker-id", default="", show_default=False,
+              help="Optional logical worker id for parallel crawlers (default: pid-<process>)")
+@click.option("--claim-timeout-sec", default=300, show_default=True, type=int,
+              help="Reclaim an in-progress queue item if a worker disappears for this long")
+@click.option("--player-requeue-cooldown-sec", default=45, show_default=True, type=int,
+              help="Cooldown before a newer rediscovery can requeue the same processed player")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400),
+              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+@click.option("--seed-self/--no-seed-self", default=True, show_default=True,
+              help="Seed the crawl with the current summoner")
+@click.option("--seed-friends/--no-seed-friends", default=True, show_default=True,
+              help="Seed the crawl with friend-list puuids")
+@click.option("--seed-ladder/--no-seed-ladder", default=False, show_default=True,
+              help="Seed the crawl with current ranked ladder neighbors")
+@click.option("--ladder-cap", default=100, show_default=True, type=int,
+              help="Maximum ladder players to enqueue when --seed-ladder is on")
+@click.option("--seed-apex/--no-seed-apex", default=False, show_default=True,
+              help="Seed the crawl with TW apex ladders (Challenger / GM / Master)")
+@click.option("--apex-queue", multiple=True, default=("RANKED_SOLO_5x5", "RANKED_FLEX_SR"),
+              show_default=True, help="Apex ladder queue types to seed from")
+@click.option("--apex-tier", multiple=True, default=("CHALLENGER", "GRANDMASTER", "MASTER"),
+              show_default=True, help="Apex ladder tiers to seed from")
+@click.option("--apex-cap", default=300, show_default=True, type=int,
+              help="Maximum apex-ladder players to enqueue when --seed-apex is on")
+@click.option("--seed-riot-tier/--no-seed-riot-tier", default=False, show_default=True,
+              help="Seed the crawl with Riot league-exp tiers such as GOLD / PLATINUM / DIAMOND")
+@click.option("--riot-region", default="tw", show_default=True,
+              help="Riot API region for league-exp tier seeds")
+@click.option("--riot-queue", multiple=True, default=("RANKED_SOLO_5x5",),
+              show_default=True, help="Riot league-exp queue types to seed from")
+@click.option("--riot-tier", multiple=True, default=("GOLD",),
+              show_default=True, help="Riot league-exp tiers to seed from")
+@click.option("--riot-division", multiple=True, default=("I", "II", "III", "IV"),
+              show_default=True, help="Riot league-exp divisions to seed from")
+@click.option("--riot-page-limit", default=2, show_default=True, type=int,
+              help="Maximum Riot league-exp pages to scan per tier/division")
+@click.option("--riot-cap", default=400, show_default=True, type=int,
+              help="Maximum Riot league-exp players to enqueue when --seed-riot-tier is on")
+@click.option("--seed-riot-id", "seed_riot_ids", multiple=True, default=(),
+              show_default=False, help="Manual Riot IDs to enqueue, e.g. Name#TAG")
+@click.option("--seed-riot-id-file", "seed_riot_id_files", multiple=True,
+              type=click.Path(path_type=Path, exists=True, dir_okay=False),
+              show_default=False, help="Text file with one Riot ID or OPGG summoner URL per line")
+@click.option("--manual-seed-pending-cap", default=40, show_default=True, type=int,
+              help="Maximum pending/in-progress manual_riot_id queue items to keep open at once (0 = unlimited)")
+@click.option("--max-depth", default=3, show_default=True, type=int,
+              help="Maximum BFS depth for discovered participant puuids")
+def snowball(
+    db: Path,
+    target_games: int,
+    max_players: int,
+    history_window: int,
+    games_per_player: int,
+    worker_id: str,
+    claim_timeout_sec: int,
+    player_requeue_cooldown_sec: int,
+    queue: tuple[int, ...],
+    seed_self: bool,
+    seed_friends: bool,
+    seed_ladder: bool,
+    ladder_cap: int,
+    seed_apex: bool,
+    apex_queue: tuple[str, ...],
+    apex_tier: tuple[str, ...],
+    apex_cap: int,
+    seed_riot_tier: bool,
+    riot_region: str,
+    riot_queue: tuple[str, ...],
+    riot_tier: tuple[str, ...],
+    riot_division: tuple[str, ...],
+    riot_page_limit: int,
+    riot_cap: int,
+    seed_riot_ids: tuple[str, ...],
+    seed_riot_id_files: tuple[Path, ...],
+    manual_seed_pending_cap: int,
+    max_depth: int,
+) -> None:
+    """Expand recent LCU-visible match history through discovered player IDs."""
+    try:
+        from aram_nn.lcu.snowball import run_snowball
+    except ImportError as exc:
+        click.echo(f"[error] import failed: {exc}\n  Run: pip install -e .", err=True)
+        sys.exit(1)
+
+    try:
+        run_snowball(
+            db_path=db,
+            target_games=target_games,
+            max_players=max_players,
+            history_window=history_window,
+            games_per_player=games_per_player,
+            worker_id=(worker_id or None),
+            claim_timeout_sec=claim_timeout_sec,
+            player_requeue_cooldown_sec=player_requeue_cooldown_sec,
+            target_queues=set(queue),
+            include_self=seed_self,
+            include_friends=seed_friends,
+            include_ladder=seed_ladder,
+            ladder_cap=ladder_cap,
+            include_apex=seed_apex,
+            apex_queues=apex_queue,
+            apex_tiers=apex_tier,
+            apex_cap=apex_cap,
+            include_riot_tier=seed_riot_tier,
+            riot_region=riot_region,
+            riot_queues=riot_queue,
+            riot_tiers=riot_tier,
+            riot_divisions=riot_division,
+            riot_page_limit=riot_page_limit,
+            riot_cap=riot_cap,
+            seed_riot_ids=seed_riot_ids,
+            seed_riot_id_files=seed_riot_id_files,
+            manual_seed_pending_cap=manual_seed_pending_cap,
+            max_depth=max_depth,
+        )
+    except RuntimeError as exc:
+        click.echo(f"[error] {exc}", err=True)
+        sys.exit(1)
+
+
+@cli.command("snowball-workers")
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True, help="SQLite database path")
+@click.option("--workers", default=2, show_default=True, type=int,
+              help="How many parallel snowball worker processes to launch")
+@click.option("--log-dir", default=Path(".codex/logs"), type=click.Path(path_type=Path),
+              show_default=True, help="Directory for per-worker stdout/stderr logs")
+@click.option("--worker-prefix", default="W", show_default=True,
+              help="Worker id prefix; workers become W01 / W02 / ...")
+@click.option("--stagger-sec", default=0.75, show_default=True, type=float,
+              help="Delay between worker launches to reduce startup contention")
+@click.option("--seed-on-first-only/--seed-on-all", default=True, show_default=True,
+              help="Only the first worker seeds self/friends/ladders; later workers consume the saved queue")
+@click.option("--target-games", default=500, show_default=True, type=int,
+              help="Per-worker stop condition: stop after saving this many new games")
+@click.option("--max-players", default=250, show_default=True, type=int,
+              help="Per-worker stop condition: stop after processing this many player nodes")
+@click.option("--history-window", default=20, show_default=True, type=int,
+              help="How many recent games to inspect per player")
+@click.option("--games-per-player", default=8, show_default=True, type=int,
+              help="Cap how many target-queue games to expand per player for wider diffusion")
+@click.option("--claim-timeout-sec", default=300, show_default=True, type=int,
+              help="Reclaim an in-progress queue item if a worker disappears for this long")
+@click.option("--player-requeue-cooldown-sec", default=45, show_default=True, type=int,
+              help="Cooldown before a newer rediscovery can requeue the same processed player")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400),
+              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+@click.option("--seed-self/--no-seed-self", default=True, show_default=True,
+              help="Seed the crawl with the current summoner")
+@click.option("--seed-friends/--no-seed-friends", default=True, show_default=True,
+              help="Seed the crawl with friend-list puuids")
+@click.option("--seed-ladder/--no-seed-ladder", default=False, show_default=True,
+              help="Seed the crawl with current ranked ladder neighbors")
+@click.option("--ladder-cap", default=100, show_default=True, type=int,
+              help="Maximum ladder players to enqueue when --seed-ladder is on")
+@click.option("--seed-apex/--no-seed-apex", default=False, show_default=True,
+              help="Seed the crawl with TW apex ladders (Challenger / GM / Master)")
+@click.option("--apex-queue", multiple=True, default=("RANKED_SOLO_5x5", "RANKED_FLEX_SR"),
+              show_default=True, help="Apex ladder queue types to seed from")
+@click.option("--apex-tier", multiple=True, default=("CHALLENGER", "GRANDMASTER", "MASTER"),
+              show_default=True, help="Apex ladder tiers to seed from")
+@click.option("--apex-cap", default=300, show_default=True, type=int,
+              help="Maximum apex-ladder players to enqueue when --seed-apex is on")
+@click.option("--seed-riot-tier/--no-seed-riot-tier", default=False, show_default=True,
+              help="Seed the crawl with Riot league-exp tiers such as GOLD / PLATINUM / DIAMOND")
+@click.option("--riot-region", default="tw", show_default=True,
+              help="Riot API region for league-exp tier seeds")
+@click.option("--riot-queue", multiple=True, default=("RANKED_SOLO_5x5",),
+              show_default=True, help="Riot league-exp queue types to seed from")
+@click.option("--riot-tier", multiple=True, default=("GOLD",),
+              show_default=True, help="Riot league-exp tiers to seed from")
+@click.option("--riot-division", multiple=True, default=("I", "II", "III", "IV"),
+              show_default=True, help="Riot league-exp divisions to seed from")
+@click.option("--riot-page-limit", default=2, show_default=True, type=int,
+              help="Maximum Riot league-exp pages to scan per tier/division")
+@click.option("--riot-cap", default=400, show_default=True, type=int,
+              help="Maximum Riot league-exp players to enqueue when --seed-riot-tier is on")
+@click.option("--seed-riot-id", "seed_riot_ids", multiple=True, default=(),
+              show_default=False, help="Manual Riot IDs to enqueue, e.g. Name#TAG")
+@click.option("--seed-riot-id-file", "seed_riot_id_files", multiple=True,
+              type=click.Path(path_type=Path, exists=True, dir_okay=False),
+              show_default=False, help="Text file with one Riot ID or OPGG summoner URL per line")
+@click.option("--manual-seed-pending-cap", default=40, show_default=True, type=int,
+              help="Maximum pending/in-progress manual_riot_id queue items to keep open at once (0 = unlimited)")
+@click.option("--max-depth", default=3, show_default=True, type=int,
+              help="Maximum BFS depth for discovered participant puuids")
+def snowball_workers(
+    db: Path,
+    workers: int,
+    log_dir: Path,
+    worker_prefix: str,
+    stagger_sec: float,
+    seed_on_first_only: bool,
+    target_games: int,
+    max_players: int,
+    history_window: int,
+    games_per_player: int,
+    claim_timeout_sec: int,
+    player_requeue_cooldown_sec: int,
+    queue: tuple[int, ...],
+    seed_self: bool,
+    seed_friends: bool,
+    seed_ladder: bool,
+    ladder_cap: int,
+    seed_apex: bool,
+    apex_queue: tuple[str, ...],
+    apex_tier: tuple[str, ...],
+    apex_cap: int,
+    seed_riot_tier: bool,
+    riot_region: str,
+    riot_queue: tuple[str, ...],
+    riot_tier: tuple[str, ...],
+    riot_division: tuple[str, ...],
+    riot_page_limit: int,
+    riot_cap: int,
+    seed_riot_ids: tuple[str, ...],
+    seed_riot_id_files: tuple[Path, ...],
+    manual_seed_pending_cap: int,
+    max_depth: int,
+) -> None:
+    """Launch multiple background snowball workers against the same SQLite frontier."""
+    if workers < 1:
+        click.echo("[error] --workers must be >= 1", err=True)
+        sys.exit(1)
+
+    db.parent.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    launched: list[tuple[str, int, Path, Path, bool]] = []
+
+    for idx in range(workers):
+        worker_id = f"{worker_prefix}{idx + 1:02d}"
+        should_seed = (idx == 0) or (not seed_on_first_only)
+        cmd = _build_snowball_subprocess_args(
+            db=db,
+            target_games=target_games,
+            max_players=max_players,
+            history_window=history_window,
+            games_per_player=games_per_player,
+            worker_id=worker_id,
+            claim_timeout_sec=claim_timeout_sec,
+            player_requeue_cooldown_sec=player_requeue_cooldown_sec,
+            queue=queue,
+            seed_self=(seed_self and should_seed),
+            seed_friends=(seed_friends and should_seed),
+            seed_ladder=(seed_ladder and should_seed),
+            ladder_cap=ladder_cap,
+            seed_apex=(seed_apex and should_seed),
+            apex_queue=apex_queue,
+            apex_tier=apex_tier,
+            apex_cap=apex_cap,
+            seed_riot_tier=(seed_riot_tier and should_seed),
+            riot_region=riot_region,
+            riot_queue=riot_queue,
+            riot_tier=riot_tier,
+            riot_division=riot_division,
+            riot_page_limit=riot_page_limit,
+            riot_cap=riot_cap,
+            seed_riot_ids=(seed_riot_ids if should_seed else ()),
+            seed_riot_id_files=(seed_riot_id_files if should_seed else ()),
+            manual_seed_pending_cap=manual_seed_pending_cap,
+            max_depth=max_depth,
+        )
+
+        stdout_path = log_dir / f"snowball_{worker_id}.log"
+        stderr_path = log_dir / f"snowball_{worker_id}.err"
+        with stdout_path.open("ab") as stdout_file, stderr_path.open("ab") as stderr_file:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(Path.cwd()),
+                stdout=stdout_file,
+                stderr=stderr_file,
+                creationflags=creationflags,
+            )
+        launched.append((worker_id, proc.pid, stdout_path, stderr_path, should_seed))
+        if stagger_sec > 0 and idx + 1 < workers:
+            time.sleep(stagger_sec)
+
+    click.echo(
+        f"[workers] launched {len(launched)} snowball workers against {db}  "
+        f"pid={os.getpid()}"
+    )
+    for worker_id, pid, stdout_path, stderr_path, should_seed in launched:
+        seed_mode = "seed" if should_seed else "consume"
+        click.echo(
+            f"  {worker_id}: child_pid={pid}  mode={seed_mode}  "
+            f"log={stdout_path}  err={stderr_path}"
+        )
+    click.echo("  monitor: python scripts/lcu_collector.py status")
+    click.echo("  stop:    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -like '*lcu_collector.py*snowball*' } | ForEach-Object { Stop-Process -Id $_.ProcessId }")
+
+
+# ------------------------------------------------------------------ export ---
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--out", required=True, type=click.Path(path_type=Path),
+              help="Output .parquet path")
+@click.option("--queue", multiple=True, type=int, default=(),
+              help="Filter to these queue IDs (omit for all queues)")
+@click.option("--platform", default="TW2", show_default=True,
+              help="Platform tag written to the parquet 'platform' column "
+                   "(e.g. TW2, KR, EUW1).  Metadata only — not used by train.py.")
+def export(db: Path, out: Path, queue: tuple[int, ...], platform: str) -> None:
+    """Export captured games to Parquet (same schema as snowball output).
+
+    The parquet file can be passed directly to `python -m aram_nn.train --data`.
+    Champion IDs from LCU are integers, same as Riot match-v5.
+    """
+    if not db.exists():
+        click.echo(f"[error] database not found: {db}", err=True)
+        sys.exit(1)
+
+    con = sqlite3.connect(str(db))
+    columns = {str(row[1]) for row in con.execute("PRAGMA table_info(games)").fetchall()}
+    has_participants = "participants_json" in columns
+    rows = con.execute(
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs,
+               blue_wins, duration_sec, created_ms, captured_at,
+               participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+        if has_participants
+        else
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs,
+               blue_wins, duration_sec, created_ms, captured_at,
+               NULL as participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+    ).fetchall()
+    con.close()
+
+    if not rows:
+        click.echo("[export] no games in database")
+        return
+
+    records = []
+    skipped = 0
+    for game_id, queue_id, patch, blue_json, red_json, blue_wins, duration_sec, created_ms, _, participants_json in rows:
+        if queue and queue_id not in set(queue):
+            skipped += 1
+            continue
+        records.append({
+            "match_id":          f"LCU_{game_id}",
+            "patch":             patch,
+            "queue_id":          queue_id,
+            "platform":          platform,
+            "duration_sec":      duration_sec,
+            "blue_champions":    sorted(json.loads(blue_json)),
+            "red_champions":     sorted(json.loads(red_json)),
+            "blue_wins":         bool(blue_wins),
+            "game_creation_ms":  created_ms,
+            "game_end_ms":       created_ms + duration_sec * 1000,
+            "max_leaver_gap_sec": 0,  # LCU doesn't expose this
+            "participants_json": participants_json or "[]",
+        })
+
+    if not records:
+        click.echo(f"[export] 0 records match the queue filter (skipped {skipped})")
+        return
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    df = pl.DataFrame(records)
+    df.write_parquet(out, compression="zstd")
+
+    click.echo(f"[export] {len(records)} games → {out}")
+    by_q = df.group_by("queue_id").agg(pl.len().alias("count")).sort("queue_id")
+    for row in by_q.iter_rows():
+        label = "Mayhem" if row[0] == 2400 else ("ARAM" if row[0] == 450 else f"q{row[0]}")
+        click.echo(f"  {label} ({row[0]}): {row[1]}")
+    click.echo(f"  blue_win_rate: {df['blue_wins'].mean():.3f}")
+    if skipped:
+        click.echo(f"  (skipped {skipped} games not matching queue filter)")
+
+
+@cli.command("merge-db")
+@click.option("--out-db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True, help="Destination merged SQLite database")
+@click.option("--glob", "globs", multiple=True,
+              help="Optional glob(s) for source DBs, e.g. data/lcu/games_*.db")
+@click.option("--vacuum/--no-vacuum", default=False, show_default=True,
+              help="Run VACUUM on the merged DB after importing")
+@click.argument("sources", nargs=-1, type=click.Path(path_type=Path))
+def merge_db(out_db: Path, globs: tuple[str, ...], vacuum: bool, sources: tuple[Path, ...]) -> None:
+    """Merge per-client SQLite DBs into one games DB using exact game_id de-dup."""
+    source_paths: list[Path] = []
+    seen_paths: set[Path] = set()
+
+    def add_source(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved in seen_paths:
+            return
+        seen_paths.add(resolved)
+        source_paths.append(path)
+
+    for path in sources:
+        add_source(path)
+    for pattern in globs:
+        for path in sorted(Path().glob(pattern)):
+            add_source(path)
+
+    if not source_paths:
+        raise click.ClickException("provide at least one source DB path or --glob pattern")
+
+    out_db.parent.mkdir(parents=True, exist_ok=True)
+    out_resolved = out_db.resolve()
+    filtered_sources = [path for path in source_paths if path.resolve() != out_resolved]
+    skipped_self = len(source_paths) - len(filtered_sources)
+    if not filtered_sources:
+        raise click.ClickException("all sources resolve to the destination DB; nothing to merge")
+
+    dst_con = sqlite3.connect(str(out_db), timeout=30.0)
+    try:
+        _ensure_games_schema(dst_con)
+        before_total = dst_con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+        click.echo(
+            f"[merge-db] destination={out_db}  existing_games={before_total}  "
+            f"sources={len(filtered_sources)}"
+        )
+        if skipped_self:
+            click.echo(f"[merge-db] skipped destination path from sources x{skipped_self}")
+
+        read_total = 0
+        inserted_total = 0
+        backfilled_total = 0
+        for src_db in filtered_sources:
+            stats = _merge_games_from_source(dst_con, src_db)
+            read_total += stats["rows_read"]
+            inserted_total += stats["inserted"]
+            backfilled_total += stats["participants_backfilled"]
+            click.echo(
+                f"  [source] {src_db}  rows={stats['rows_read']}  "
+                f"inserted={stats['inserted']}  participants_backfilled={stats['participants_backfilled']}"
+            )
+
+        if vacuum:
+            dst_con.execute("VACUUM")
+
+        after_total = dst_con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+        click.echo(
+            f"[merge-db] done  total={after_total}  added={after_total - before_total}  "
+            f"rows_read={read_total}  participants_backfilled={backfilled_total}"
+        )
+    finally:
+        dst_con.close()
+
+
+@cli.command("seed-opgg")
+@click.option("--tier", default="diamond", show_default=True,
+              help="Leaderboard tier to scrape from OPGG, e.g. gold / platinum / diamond")
+@click.option("--region", default="tw", show_default=True,
+              help="OPGG region slug, e.g. tw / kr / na")
+@click.option("--pages", default=1, show_default=True, type=int,
+              help="How many leaderboard pages to scrape")
+@click.option("--topn", default=100, show_default=True, type=int,
+              help="Stop after collecting this many Riot IDs (0 = no explicit cap)")
+@click.option("--out", default=Path("data/seeds/opgg_tw.txt"), type=click.Path(path_type=Path),
+              show_default=True, help="Output seed file path")
+@click.option("--append/--overwrite", default=False, show_default=True,
+              help="Append to the existing seed file instead of replacing it")
+def seed_opgg(tier: str, region: str, pages: int, topn: int, out: Path, append: bool) -> None:
+    """Scrape OPGG leaderboard profile links into a Riot-ID seed file."""
+    try:
+        riot_ids = _fetch_opgg_leaderboard_riot_ids(
+            region=region,
+            tier=tier,
+            pages=pages,
+            topn=topn,
+        )
+    except Exception as exc:
+        raise click.ClickException(f"OPGG scrape failed: {exc}") from exc
+
+    if not riot_ids:
+        raise click.ClickException("OPGG returned no summoner profile links for the requested leaderboard")
+
+    _write_seed_file(out, riot_ids, append=append)
+    click.echo(
+        f"[seed-opgg] wrote {len(riot_ids)} Riot IDs to {out}  "
+        f"region={region}  tier={tier}  pages={pages}"
+    )
+    for riot_id in riot_ids[:10]:
+        click.echo(f"  {_console_safe(riot_id)}")
+
+
+@cli.command("seed-opgg-plan")
+@click.option("--region", default="tw", show_default=True,
+              help="OPGG region slug, e.g. tw / kr / na")
+@click.option("--tier", "tiers", multiple=True,
+              default=("diamond", "emerald", "platinum", "gold"),
+              show_default=True,
+              help="Tier order to walk when refreshing seeds")
+@click.option("--pages-per-tier", default=80, show_default=True, type=int,
+              help="Walk sequential pages 1..N for each tier before moving to the next tier")
+@click.option("--topn-total", default=400, show_default=True, type=int,
+              help="Stop after collecting this many total Riot IDs across all tiers; use 0 for exhaustive paging")
+@click.option("--state-file", default=DEFAULT_OPGG_STATE, type=click.Path(path_type=Path),
+              show_default=True, help="JSON cursor file used to resume from the next leaderboard pages")
+@click.option("--history-file", default=DEFAULT_OPGG_HISTORY, type=click.Path(path_type=Path),
+              show_default=True, help="Append-only JSONL audit log for OPGG seed refresh runs")
+@click.option("--resume/--restart", default=False, show_default=True,
+              help="Resume from saved per-tier next-page cursors instead of starting from --start-page")
+@click.option("--start-page", default=1, show_default=True, type=int,
+              help="Starting page for each tier when not using --resume")
+@click.option("--out", default=Path("data/seeds/opgg_tw.txt"), type=click.Path(path_type=Path),
+              show_default=True, help="Output seed file path")
+@click.option("--append/--overwrite", default=False, show_default=True,
+              help="Append to the existing seed file instead of replacing it")
+def seed_opgg_plan(
+    region: str,
+    tiers: tuple[str, ...],
+    pages_per_tier: int,
+    topn_total: int,
+    state_file: Path,
+    history_file: Path,
+    resume: bool,
+    start_page: int,
+    out: Path,
+    append: bool,
+) -> None:
+    """Refresh seeds by walking leaderboard pages 1..N within each tier in priority order."""
+    headers = {"User-Agent": "Mozilla/5.0"}
+    riot_ids: list[str] = []
+    seen: set[str] = set()
+    page_hits: list[tuple[str, int, int]] = []
+    state = _load_opgg_state(
+        path=state_file,
+        region=region,
+        tiers=tiers,
+        start_page=max(1, start_page),
+    ) if resume else _default_opgg_state(region=region, tiers=tiers, start_page=max(1, start_page))
+
+    try:
+        with httpx.Client(headers=headers, timeout=20.0, follow_redirects=True) as client:
+            for tier in tiers:
+                normalized_tier = str(tier).strip().lower()
+                if not normalized_tier:
+                    continue
+                tier_state = state["tiers"].setdefault(
+                    normalized_tier,
+                    {"next_page": max(1, start_page), "exhausted": False},
+                )
+                if tier_state.get("exhausted"):
+                    continue
+
+                page_start = max(1, int(tier_state.get("next_page", max(1, start_page))))
+                page_stop = page_start + max(1, pages_per_tier)
+                exhausted = False
+                for page in range(page_start, page_stop):
+                    slugs = _fetch_opgg_leaderboard_page_slugs(
+                        client=client,
+                        region=region,
+                        tier=normalized_tier,
+                        page=page,
+                    )
+                    if not slugs:
+                        exhausted = True
+                        break
+
+                    added_this_page = 0
+                    for slug in sorted(slugs):
+                        riot_id = _normalize_opgg_profile_to_riot_id(slug)
+                        if not riot_id or riot_id in seen:
+                            continue
+                        seen.add(riot_id)
+                        riot_ids.append(riot_id)
+                        added_this_page += 1
+
+                    page_hits.append((normalized_tier, page, added_this_page))
+                    if added_this_page == 0:
+                        exhausted = True
+                        break
+                    tier_state["next_page"] = page + 1
+                    if topn_total > 0 and len(riot_ids) >= topn_total:
+                        break
+
+                tier_state["exhausted"] = exhausted
+                if topn_total > 0 and len(riot_ids) >= topn_total:
+                    break
+    except Exception as exc:
+        raise click.ClickException(f"OPGG plan scrape failed: {exc}") from exc
+
+    if not riot_ids:
+        _save_opgg_state(state_file, state)
+        _append_opgg_history(history_file, {
+            "region": region,
+            "tiers": list(tiers),
+            "pages_per_tier": pages_per_tier,
+            "topn_total": topn_total,
+            "resume": resume,
+            "state_file": str(state_file),
+            "out": str(out),
+            "written": 0,
+            "page_hits": page_hits,
+            "note": "no_riot_ids",
+        })
+        raise click.ClickException("OPGG plan returned no summoner profile links for the requested tiers/pages")
+
+    _write_seed_file(out, riot_ids, append=append)
+    _save_opgg_state(state_file, state)
+    _append_opgg_history(history_file, {
+        "region": region,
+        "tiers": list(tiers),
+        "pages_per_tier": pages_per_tier,
+        "topn_total": topn_total,
+        "resume": resume,
+        "state_file": str(state_file),
+        "out": str(out),
+        "written": len(riot_ids),
+        "page_hits": page_hits,
+        "cursor_after": state.get("tiers", {}),
+    })
+    click.echo(
+        f"[seed-opgg-plan] wrote {len(riot_ids)} Riot IDs to {out}  "
+        f"region={region}  tiers={list(tiers)}  pages_per_tier={pages_per_tier}  "
+        f"resume={resume}  state_file={state_file}  history_file={history_file}"
+    )
+    for page_tier, page_no, page_added in page_hits:
+        click.echo(f"  [{page_tier} page {page_no}] added={page_added}")
+    for riot_id in riot_ids[:10]:
+        click.echo(f"  {_console_safe(riot_id)}")
+
+
+@cli.command("seed-opgg-state")
+@click.option("--state-file", default=DEFAULT_OPGG_STATE, type=click.Path(path_type=Path),
+              show_default=True, help="JSON cursor file used by seed-opgg-plan --resume")
+@click.option("--history-file", default=DEFAULT_OPGG_HISTORY, type=click.Path(path_type=Path),
+              show_default=True, help="Append-only JSONL audit log for prior refresh runs")
+@click.option("--tail", default=5, show_default=True, type=int,
+              help="How many recent history entries to print")
+def seed_opgg_state(state_file: Path, history_file: Path, tail: int) -> None:
+    """Show the current OPGG page cursors and recent refresh history."""
+    if state_file.exists():
+        try:
+            payload = json.loads(state_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise click.ClickException(f"failed to read state file {state_file}: {exc}") from exc
+        click.echo(f"[seed-opgg-state] state_file={state_file}")
+        click.echo(f"  region={payload.get('region')}")
+        tiers = payload.get("tiers") or {}
+        for tier, tier_state in tiers.items():
+            if not isinstance(tier_state, dict):
+                continue
+            click.echo(
+                f"  {tier}: next_page={tier_state.get('next_page')}  exhausted={bool(tier_state.get('exhausted'))}"
+            )
+        if payload.get("updated_at"):
+            click.echo(f"  updated_at={payload.get('updated_at')}")
+    else:
+        click.echo(f"[seed-opgg-state] no state file at {state_file}")
+
+    if history_file.exists():
+        lines = history_file.read_text(encoding="utf-8").splitlines()
+        recent = lines[-max(0, tail):] if tail > 0 else []
+        click.echo(f"[seed-opgg-state] history_file={history_file}  entries={len(lines)}")
+        for line in recent:
+            try:
+                item = json.loads(line)
+            except Exception:
+                click.echo(f"  raw={line}")
+                continue
+            click.echo(
+                f"  {item.get('logged_at')}  written={item.get('written')}  "
+                f"resume={item.get('resume')}  pages_per_tier={item.get('pages_per_tier')}"
+            )
+    else:
+        click.echo(f"[seed-opgg-state] no history file at {history_file}")
+
+
+# ----------------------------------------------------------------- metrics ---
+
+@cli.command("metrics")
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--seed-state-file", default=DEFAULT_OPGG_STATE, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--seed-history-file", default=DEFAULT_OPGG_HISTORY, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--history-file", default=DEFAULT_METRICS_HISTORY, type=click.Path(path_type=Path),
+              show_default=True, help="Append-only JSONL history of crawler metrics snapshots")
+@click.option("--record/--no-record", default=True, show_default=True,
+              help="Append the current snapshot to --history-file")
+@click.option("--tail", default=3, show_default=True, type=int,
+              help="How many previous snapshots to summarize")
+def metrics(
+    db: Path,
+    seed_state_file: Path,
+    seed_history_file: Path,
+    history_file: Path,
+    record: bool,
+    tail: int,
+) -> None:
+    """Show crawler growth, speed, and seed-efficiency metrics."""
+    snapshot = _collect_status_snapshot(
+        db,
+        seed_state_file=seed_state_file,
+        seed_history_file=seed_history_file,
+    )
+    previous_entries = _load_jsonl_tail(history_file, limit=max(1, tail))
+    previous = previous_entries[-1] if previous_entries else None
+
+    if record:
+        _append_metrics_history(history_file, snapshot)
+
+    click.echo(
+        f"[metrics] {db}  total={snapshot['total']}  mayhem={snapshot['mayhem']['total']}  "
+        f"latest_patch={snapshot['mayhem']['latest_patch'] or '-'}  "
+        f"latest_patch_games={snapshot['mayhem']['latest_patch_games']}  "
+        f"active_workers={len(snapshot['active_workers'])}"
+    )
+
+    frontier = snapshot.get("crawl_frontier") or {}
+    if frontier:
+        ordered = [
+            f"{name}={frontier.get(name, 0)}"
+            for name in ("pending", "in_progress", "done")
+            if name in frontier
+        ]
+        click.echo("  frontier  " + "  ".join(ordered))
+
+    seed_state = snapshot.get("seed_state")
+    if isinstance(seed_state, dict) and isinstance(seed_state.get("tiers"), dict):
+        tier_bits = []
+        for tier, payload in seed_state["tiers"].items():
+            if not isinstance(payload, dict):
+                continue
+            tier_bits.append(
+                f"{tier}:{payload.get('next_page', '?')}"
+                f"{'x' if payload.get('exhausted') else ''}"
+            )
+        if tier_bits:
+            click.echo("  seed_cursor  " + "  ".join(tier_bits))
+
+    latest_seed_refresh = snapshot.get("latest_seed_refresh")
+    if isinstance(latest_seed_refresh, dict):
+        click.echo(
+            f"  latest_seed_refresh  @{latest_seed_refresh.get('logged_at', '?')}  "
+            f"written={latest_seed_refresh.get('written', 0)}  "
+            f"{'resume' if latest_seed_refresh.get('resume') else 'restart'}"
+        )
+
+    if previous:
+        elapsed_sec = max(
+            0.0,
+            float(snapshot["captured_at_unix"]) - float(previous.get("captured_at_unix", 0.0)),
+        )
+        total_delta = int(snapshot["total"]) - int(previous.get("total", 0))
+        mayhem_delta = int(snapshot["mayhem"]["total"]) - int(previous.get("mayhem", {}).get("total", 0))
+        previous_patch = previous.get("mayhem", {}).get("latest_patch")
+        current_patch = snapshot["mayhem"]["latest_patch"]
+        if previous_patch == current_patch and current_patch:
+            current_patch_delta = (
+                int(snapshot["mayhem"]["latest_patch_games"])
+                - int(previous.get("mayhem", {}).get("latest_patch_games", 0))
+            )
+        else:
+            current_patch_delta = None
+        done_delta = (
+            int(frontier.get("done", 0))
+            - int((previous.get("crawl_frontier") or {}).get("done", 0))
+        )
+        click.echo(
+            f"  since_prev  dt={elapsed_sec / 60.0:.1f}m  "
+            f"total={total_delta:+d} [{_format_rate(total_delta, elapsed_sec)}]  "
+            f"mayhem={mayhem_delta:+d} [{_format_rate(mayhem_delta, elapsed_sec)}]"
+        )
+        if current_patch_delta is None:
+            click.echo("  current_patch_delta  n/a (patch rolled or no prior comparable snapshot)")
+        else:
+            click.echo(
+                f"  current_patch_delta  {current_patch} {current_patch_delta:+d}  "
+                f"[{_format_rate(current_patch_delta, elapsed_sec)}]"
+            )
+        if done_delta > 0:
+            mayhem_per_100_done = 100.0 * mayhem_delta / done_delta
+            click.echo(
+                f"  frontier_efficiency  done_delta={done_delta:+d}  "
+                f"mayhem_per_100_done={mayhem_per_100_done:.2f}"
+            )
+        else:
+            click.echo("  frontier_efficiency  n/a (done count did not advance)")
+    else:
+        click.echo("  since_prev  no previous metrics snapshot yet; baseline recorded now")
+
+    if previous_entries:
+        click.echo(
+            f"  recent_snapshots  showing last {min(len(previous_entries), tail)} before this run"
+        )
+        for entry in previous_entries[-tail:]:
+            mayhem = entry.get("mayhem") or {}
+            click.echo(
+                f"    @{entry.get('captured_at', '?')}  total={entry.get('total', 0)}  "
+                f"mayhem={mayhem.get('total', 0)}  patch={mayhem.get('latest_patch') or '-'}  "
+                f"patch_games={mayhem.get('latest_patch_games', 0)}"
+            )
+
+
+# ------------------------------------------------------------------- stats ---
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--out-dir", default=Path("data/stats"), type=click.Path(path_type=Path),
+              show_default=True, help="Directory for generated CSV summaries")
+@click.option("--queue", multiple=True, type=int, default=(2400,),
+              show_default=True, help="Queue IDs to include (repeatable)")
+@click.option("--patch-prefix", multiple=True, default=(), show_default=True,
+              help="Optional patch prefix filters such as 16.9 or 16.9.772")
+def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[str, ...]) -> None:
+    """Generate useful summary tables: hero winrate, augment winrate, and hero x augment."""
+    if not db.exists():
+        click.echo(f"[error] database not found: {db}", err=True)
+        sys.exit(1)
+
+    con = sqlite3.connect(str(db))
+    columns = {str(row[1]) for row in con.execute("PRAGMA table_info(games)").fetchall()}
+    has_participants = "participants_json" in columns
+    rows = con.execute(
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs, blue_wins, participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+        if has_participants
+        else
+        """
+        SELECT game_id, queue_id, patch, blue_champs, red_champs, blue_wins, NULL as participants_json
+        FROM games
+        ORDER BY created_ms
+        """
+    ).fetchall()
+    con.close()
+
+    queue_filter = set(queue)
+    hero_games: Counter[int] = Counter()
+    hero_wins: Counter[int] = Counter()
+    augment_games: Counter[int] = Counter()
+    augment_wins: Counter[int] = Counter()
+    hero_augment_games: Counter[tuple[int, int]] = Counter()
+    hero_augment_wins: Counter[tuple[int, int]] = Counter()
+
+    kept_games = 0
+    participant_games = 0
+    for _, queue_id, patch, blue_json, red_json, blue_wins, participants_json in rows:
+        if queue_filter and queue_id not in queue_filter:
+            continue
+        if patch_prefix and not any(str(patch).startswith(prefix) for prefix in patch_prefix):
+            continue
+
+        kept_games += 1
+        blue_ids = json.loads(blue_json)
+        red_ids = json.loads(red_json)
+        blue_win_int = int(bool(blue_wins))
+
+        for champion_id in blue_ids:
+            hero_games[int(champion_id)] += 1
+            hero_wins[int(champion_id)] += blue_win_int
+        for champion_id in red_ids:
+            hero_games[int(champion_id)] += 1
+            hero_wins[int(champion_id)] += 1 - blue_win_int
+
+        payload = json.loads(participants_json or "[]")
+        if not payload:
+            continue
+        participant_games += 1
+        for participant in payload:
+            champion_id = int(participant.get("championId", 0) or 0)
+            team_id = int(participant.get("teamId", 0) or 0)
+            if champion_id <= 0 or team_id not in (100, 200):
+                continue
+            player_win = blue_win_int if team_id == 100 else (1 - blue_win_int)
+            for augment_id in participant.get("augments") or []:
+                augment_id = int(augment_id)
+                if augment_id <= 0:
+                    continue
+                augment_games[augment_id] += 1
+                augment_wins[augment_id] += player_win
+                hero_augment_games[(champion_id, augment_id)] += 1
+                hero_augment_wins[(champion_id, augment_id)] += player_win
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    hero_rows = []
+    for champion_id, games_played in hero_games.items():
+        wins = hero_wins[champion_id]
+        hero_rows.append(
+            {
+                "champion_id": champion_id,
+                "games": games_played,
+                "wins": wins,
+                "win_rate": wins / games_played,
+                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
+            }
+        )
+    _write_csv_rows(
+        out_dir / "hero_winrates.csv",
+        hero_rows,
+        {
+            "champion_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        },
+        ["games", "bayes_win_rate"],
+    )
+
+    augment_rows = []
+    for augment_id, games_played in augment_games.items():
+        wins = augment_wins[augment_id]
+        augment_rows.append(
+            {
+                "augment_id": augment_id,
+                "games": games_played,
+                "wins": wins,
+                "win_rate": wins / games_played,
+                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
+            }
+        )
+    _write_csv_rows(
+        out_dir / "augment_winrates.csv",
+        augment_rows,
+        {
+            "augment_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        },
+        ["games", "bayes_win_rate"],
+    )
+
+    hero_augment_rows = []
+    for (champion_id, augment_id), games_played in hero_augment_games.items():
+        wins = hero_augment_wins[(champion_id, augment_id)]
+        hero_augment_rows.append(
+            {
+                "champion_id": champion_id,
+                "augment_id": augment_id,
+                "games": games_played,
+                "wins": wins,
+                "win_rate": wins / games_played,
+                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
+            }
+        )
+    _write_csv_rows(
+        out_dir / "hero_augment_winrates.csv",
+        hero_augment_rows,
+        {
+            "champion_id": pl.Int64,
+            "augment_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        },
+        ["games", "bayes_win_rate"],
+    )
+
+    click.echo(
+        f"[stats] wrote {out_dir}  games={kept_games}  "
+        f"games_with_participants={participant_games}  "
+        f"heroes={len(hero_rows)}  augments={len(augment_rows)}  "
+        f"hero_x_augment={len(hero_augment_rows)}"
+    )
+
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--queue", multiple=True, type=int, default=(2400,),
+              show_default=True, help="Queue IDs to include (repeatable)")
+@click.option("--patch-prefix", multiple=True, default=(), show_default=True,
+              help="Optional patch prefix filters such as 16.9 or 16.9.772")
+@click.option("--topn", default=20, show_default=True, type=int,
+              help="How many ranking rows to print")
+@click.option("--bottomn", default=10, show_default=True, type=int,
+              help="How many bottom-ranking rows to print")
+@click.option("--min-games", default=30, show_default=True, type=int,
+              help="Minimum games threshold for hero ranking")
+@click.option("--prior-strength", default=50.0, show_default=True, type=float,
+              help="Empirical-Bayes prior strength k for Bayes win-rate shrinkage")
+@click.option("--show-augments/--hide-augments", default=False, show_default=True,
+              help="Also print top augment rankings when participants_json is available")
+@click.option("--show-hero-augments/--hide-hero-augments", default=False, show_default=True,
+              help="Also print top hero x augment pair rankings when participants_json is available")
+@click.option("--show-hero-augment-bottom/--hide-hero-augment-bottom", default=False, show_default=True,
+              help="Also print bottom hero x augment pair rankings when participants_json is available")
+@click.option("--pair-min-games", default=10, show_default=True, type=int,
+              help="Minimum games threshold for hero x augment pair ranking")
+def dataset(
+    db: Path,
+    queue: tuple[int, ...],
+    patch_prefix: tuple[str, ...],
+    topn: int,
+    bottomn: int,
+    min_games: int,
+    prior_strength: float,
+    show_augments: bool,
+    show_hero_augments: bool,
+    show_hero_augment_bottom: bool,
+    pair_min_games: int,
+) -> None:
+    """Print dataset summary and current hero winrate rankings."""
+    if not db.exists():
+        click.echo(f"[error] database not found: {db}", err=True)
+        sys.exit(1)
+
+    rows, _ = _load_game_rows(db)
+    kept_games, participant_games, hero_rows, augment_rows, hero_augment_rows = _aggregate_stats(
+        rows, queue=queue, patch_prefix=patch_prefix
+    )
+    champion_names = _load_champion_name_map()
+    augment_names = _load_augment_name_map()
+
+    total_player_games = sum(int(row["games"]) for row in hero_rows)
+    total_player_wins = sum(int(row["wins"]) for row in hero_rows)
+    global_wr = (total_player_wins / total_player_games) if total_player_games > 0 else 0.5
+    hero_rows = _decorate_rate_rows(
+        [{"champion_id": row["champion_id"], "games": row["games"], "wins": row["wins"]} for row in hero_rows],
+        key_field="champion_id",
+        global_wr=global_wr,
+        prior_strength=prior_strength,
+    )
+    augment_rows = _decorate_rate_rows(
+        [{"augment_id": row["augment_id"], "games": row["games"], "wins": row["wins"]} for row in augment_rows],
+        key_field="augment_id",
+        global_wr=global_wr,
+        prior_strength=prior_strength,
+    )
+
+    hero_df = pl.DataFrame(hero_rows) if hero_rows else pl.DataFrame(
+        schema={
+            "champion_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        }
+    )
+    ranked_df = (
+        hero_df
+        .filter(pl.col("games") >= min_games)
+        .sort(["bayes_win_rate", "games"], descending=[True, True])
+        .head(topn)
+    )
+    bottom_df = (
+        hero_df
+        .filter(pl.col("games") >= min_games)
+        .sort(["bayes_win_rate", "games"], descending=[False, True])
+        .head(bottomn)
+    )
+
+    click.echo(
+        f"[dataset] games={kept_games}  games_with_participants={participant_games}  "
+        f"heroes={len(hero_rows)}  augments={len(augment_rows)}  "
+        f"hero_x_augment={len(hero_augment_rows)}  queues={list(queue)}  "
+        f"patches={list(patch_prefix) if patch_prefix else ['all']}  "
+        f"global_wr={global_wr:.4f}  prior_k={prior_strength:.1f}"
+    )
+    click.echo(f"[dataset] hero ranking  top={topn}  min_games={min_games}")
+    if ranked_df.height == 0:
+        click.echo("  no heroes pass the min-games threshold")
+    else:
+        click.echo("  rank  champion_id  champion_name         games  wins  win_rate  bayes_wr  wilson_lb")
+        for idx, row in enumerate(ranked_df.iter_rows(named=True), start=1):
+            champion_name = champion_names.get(int(row["champion_id"]), "?")
+            click.echo(
+                f"  {idx:>4}  {row['champion_id']:>11}  {champion_name:<20.20}  "
+                f"{row['games']:>5}  {row['wins']:>4}  {row['win_rate']:.4f}  "
+                f"{row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+            )
+    click.echo(f"[dataset] hero bottom  bottom={bottomn}  min_games={min_games}")
+    if bottom_df.height == 0:
+        click.echo("  no heroes pass the min-games threshold")
+    else:
+        click.echo("  rank  champion_id  champion_name         games  wins  win_rate  bayes_wr  wilson_lb")
+        for idx, row in enumerate(bottom_df.iter_rows(named=True), start=1):
+            champion_name = champion_names.get(int(row["champion_id"]), "?")
+            click.echo(
+                f"  {idx:>4}  {row['champion_id']:>11}  {champion_name:<20.20}  "
+                f"{row['games']:>5}  {row['wins']:>4}  {row['win_rate']:.4f}  "
+                f"{row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+            )
+
+    if show_augments:
+        augment_df = pl.DataFrame(augment_rows) if augment_rows else pl.DataFrame(
+            schema={
+                "augment_id": pl.Int64,
+                "games": pl.Int64,
+                "wins": pl.Int64,
+                "win_rate": pl.Float64,
+                "bayes_win_rate": pl.Float64,
+                "wilson_lb": pl.Float64,
+            }
+        )
+        augment_ranked = (
+            augment_df
+            .filter(pl.col("games") >= min_games)
+            .sort(["bayes_win_rate", "games"], descending=[True, True])
+            .head(topn)
+        )
+        augment_bottom = (
+            augment_df
+            .filter(pl.col("games") >= min_games)
+            .sort(["bayes_win_rate", "games"], descending=[False, True])
+            .head(bottomn)
+        )
+        click.echo(f"[dataset] augment top  top={topn}  min_games={min_games}")
+        if augment_ranked.height == 0:
+            click.echo("  no augments pass the min-games threshold")
+        else:
+            click.echo("  rank  augment_id  augment_name           games  wins  win_rate  bayes_wr  wilson_lb")
+            for idx, row in enumerate(augment_ranked.iter_rows(named=True), start=1):
+                augment_name = augment_names.get(int(row["augment_id"]), "?")
+                click.echo(
+                    f"  {idx:>4}  {row['augment_id']:>10}  {augment_name:<20.20}  {row['games']:>5}  "
+                    f"{row['wins']:>4}  {row['win_rate']:.4f}  "
+                    f"{row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+                )
+        click.echo(f"[dataset] augment bottom  bottom={bottomn}  min_games={min_games}")
+        if augment_bottom.height == 0:
+            click.echo("  no augments pass the min-games threshold")
+        else:
+            click.echo("  rank  augment_id  augment_name           games  wins  win_rate  bayes_wr  wilson_lb")
+            for idx, row in enumerate(augment_bottom.iter_rows(named=True), start=1):
+                augment_name = augment_names.get(int(row["augment_id"]), "?")
+                click.echo(
+                    f"  {idx:>4}  {row['augment_id']:>10}  {augment_name:<20.20}  {row['games']:>5}  "
+                    f"{row['wins']:>4}  {row['win_rate']:.4f}  "
+                    f"{row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+                )
+
+    if show_hero_augments:
+        pair_df = pl.DataFrame(hero_augment_rows) if hero_augment_rows else pl.DataFrame(
+            schema={
+                "champion_id": pl.Int64,
+                "augment_id": pl.Int64,
+                "games": pl.Int64,
+                "wins": pl.Int64,
+                "win_rate": pl.Float64,
+                "bayes_win_rate": pl.Float64,
+                "wilson_lb": pl.Float64,
+            }
+        )
+        pair_ranked = (
+            pair_df
+            .filter(pl.col("games") >= pair_min_games)
+            .sort(["bayes_win_rate", "games"], descending=[True, True])
+            .head(topn)
+        )
+        pair_bottom = (
+            pair_df
+            .filter(pl.col("games") >= pair_min_games)
+            .sort(["bayes_win_rate", "games"], descending=[False, True])
+            .head(bottomn)
+        )
+        click.echo(f"[dataset] hero x augment top  top={topn}  min_games={pair_min_games}")
+        if pair_ranked.height == 0:
+            click.echo("  no hero x augment pairs pass the min-games threshold")
+        else:
+            click.echo("  rank  champion_name         augment_name           games  wins  win_rate  bayes_wr  wilson_lb")
+            for idx, row in enumerate(pair_ranked.iter_rows(named=True), start=1):
+                champion_name = champion_names.get(int(row["champion_id"]), "?")
+                augment_name = augment_names.get(int(row["augment_id"]), "?")
+                click.echo(
+                    f"  {idx:>4}  {champion_name:<20.20}  {augment_name:<20.20}  {row['games']:>5}  "
+                    f"{row['wins']:>4}  {row['win_rate']:.4f}  {row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+                )
+        if show_hero_augment_bottom:
+            click.echo(f"[dataset] hero x augment bottom  bottom={bottomn}  min_games={pair_min_games}")
+            if pair_bottom.height == 0:
+                click.echo("  no hero x augment pairs pass the min-games threshold")
+            else:
+                click.echo("  rank  champion_name         augment_name           games  wins  win_rate  bayes_wr  wilson_lb")
+                for idx, row in enumerate(pair_bottom.iter_rows(named=True), start=1):
+                    champion_name = champion_names.get(int(row["champion_id"]), "?")
+                    augment_name = augment_names.get(int(row["augment_id"]), "?")
+                    click.echo(
+                        f"  {idx:>4}  {champion_name:<20.20}  {augment_name:<20.20}  {row['games']:>5}  "
+                        f"{row['wins']:>4}  {row['win_rate']:.4f}  {row['bayes_win_rate']:.4f}  {row['wilson_lb']:.4f}"
+                    )
+
+
+# ------------------------------------------------------------------ status ---
+
+@cli.command()
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+def status(db: Path) -> None:
+    """Show a summary of what's been captured so far."""
+    if not db.exists():
+        click.echo(f"[status] no database at {db}")
+        return
+
+    con = sqlite3.connect(str(db))
+    total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+    by_q = con.execute(
+        "SELECT queue_id, COUNT(*), AVG(blue_wins), MIN(patch), MAX(patch) "
+        "FROM games GROUP BY queue_id"
+    ).fetchall()
+    recent = con.execute(
+        "SELECT game_id, queue_id, patch, blue_wins, duration_sec, captured_at "
+        "FROM games ORDER BY created_ms DESC LIMIT 5"
+    ).fetchall()
+    has_crawl_queue = con.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='crawl_queue'"
+    ).fetchone()[0] > 0
+    has_crawl_seen = con.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='crawl_seen'"
+    ).fetchone()[0] > 0
+    has_crawl_players = con.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='crawl_players'"
+    ).fetchone()[0] > 0
+    crawl_status = []
+    crawl_sources = []
+    if has_crawl_queue and has_crawl_seen:
+        crawl_status = con.execute(
+            "SELECT status, COUNT(*) FROM crawl_queue GROUP BY status ORDER BY status"
+        ).fetchall()
+        crawl_sources = con.execute(
+            "SELECT source, COUNT(*) FROM crawl_seen GROUP BY source ORDER BY MIN(priority), source"
+        ).fetchall()
+    elif has_crawl_players:
+        crawl_status = con.execute(
+            "SELECT status, COUNT(*) FROM crawl_players GROUP BY status ORDER BY status"
+        ).fetchall()
+        crawl_sources = con.execute(
+            "SELECT source, COUNT(*) FROM crawl_players GROUP BY source ORDER BY MIN(priority), source"
+        ).fetchall()
+    con.close()
+
+    click.echo(f"[status] {db}  total={total}")
+    for queue_id, count, wr, min_p, max_p in by_q:
+        label = "Mayhem" if queue_id == 2400 else ("ARAM" if queue_id == 450 else f"q{queue_id}")
+        click.echo(f"  {label:8s} ({queue_id}): {count:4d} games  "
+                   f"blue_wr={wr:.3f}  patches {min_p}…{max_p}")
+    if recent:
+        click.echo("\n  5 most recent:")
+        for gid, qid, patch, bw, dur, cap in recent:
+            label = "Mayhem" if qid == 2400 else "ARAM"
+            click.echo(f"    {gid}  {label:<6}  {patch}  {'win' if bw else 'loss'}  "
+                       f"{dur}s  @{cap[:16]}")
+    if crawl_status:
+        click.echo("\n  crawl frontier:")
+        for status_name, count in crawl_status:
+            click.echo(f"    {status_name:<7} {count}")
+        click.echo("  crawl sources:")
+        for source, count in crawl_sources:
+            click.echo(f"    {source:<7} {count}")
+
+
+if __name__ == "__main__":
+    cli()

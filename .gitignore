@@ -1,15 +1,14 @@
-# Database — contains PUUIDs (crawl tables), never commit
+# Data / DB
 data/
 *.db
 *.db-shm
 *.db-wal
-
-# Logs — may contain summoner names / PUUID prefixes
-.codex/logs/
-logs/
-
-# Exports — commit only if you intend to share
 *.parquet
+
+# Logs / monitoring
+.codex/
+logs/
+models/
 
 # Python
 __pycache__/
@@ -18,6 +17,9 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+.pytest_cache/
+
+# Build artifacts
 dist/
 build/
 
