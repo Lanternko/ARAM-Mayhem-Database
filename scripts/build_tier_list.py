@@ -652,26 +652,37 @@ def render_html(
     }
     .tier-pill > span { position: relative; z-index: 2; }
     .tier-count { color: #9aa0a6; font-size: 12px; font-weight: 400; }
-    /* Prismatic / pearl shine for the OP tier — animated highlight sweep +
-       outer halo glow, matching the iridescent augment-card look. */
+    /* OP tier = "棱彩飾框" — Prismatic decorative frame instead of a filled
+       pill.  Trick: two-background trick paints an iridescent gradient on
+       the border-box (the full element including border) and a dark solid
+       on the padding-box (inside the border), so the only visible gradient
+       is the 2.5px outline.  The gradient still animates (prismShift) and
+       a soft shine sweep glints across the dark interior; an outer halo
+       (box-shadow) sells the "glowing" feel like a real Prismatic augment
+       card. */
     .tier-block[data-tier="OP"] .tier-pill {
-        background-size: 200% 200%;
+        background:
+            linear-gradient(#1b1424, #1b1424) padding-box,
+            linear-gradient(135deg,
+                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+        background-size: auto, 220% 220%;
         animation: prismShift 6s ease-in-out infinite;
+        border: 2.5px solid transparent;
+        color: #f5e8ff;
+        text-shadow: 0 0 6px rgba(255,220,255,0.6);
         box-shadow:
             0 0 12px rgba(220,180,255,0.55),
-            0 0 28px rgba(170,210,255,0.30),
-            inset 0 0 0 1px rgba(255,255,255,0.55);
-        color: #2a1a4a;
-        text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+            0 0 28px rgba(170,210,255,0.30);
     }
     .tier-block[data-tier="OP"] .tier-pill::before {
         content: "";
         position: absolute;
         inset: 0;
         background: linear-gradient(115deg,
-            transparent 35%,
-            rgba(255,255,255,0.75) 50%,
-            transparent 65%);
+            transparent 40%,
+            rgba(255,255,255,0.22) 50%,
+            transparent 60%);
         background-size: 220% 100%;
         animation: shineSweep 3.2s linear infinite;
         z-index: 1;
