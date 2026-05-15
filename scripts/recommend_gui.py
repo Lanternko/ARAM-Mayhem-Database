@@ -186,12 +186,28 @@ class RecommenderApp:
 
         root.title("ARAM Recommender")
         root.attributes("-topmost", True)
-        root.attributes("-alpha", 0.93)
-        # Sized for: header + subheader + "your team" section (5 rows) +
-        # "bench" section (header + up to 10 rows).  Resizable downward.
-        root.geometry("420x660+40+40")
+        # 0.98 keeps a hair of see-through (so a window underneath isn't a
+        # hard rectangle behind the UI), but stops the terminal text from
+        # reading through as ghosted noise the way 0.93 did.
+        root.attributes("-alpha", 0.98)
+        # Sized for: header + subheader + "your team" (5 rows) + divider
+        # + "bench" (up to 10 rows).  Resizable downward.
+        root.geometry("440x640+40+40")
         root.configure(bg=BG)
-        root.minsize(380, 280)
+        root.minsize(400, 280)
+
+        # Pixel-perfect column geometry, applied identically to every row
+        # frame downstream so columns line up across the team section, the
+        # bench section, and the (no-longer-present) column-header row.
+        # Tk widget `width=N` is in font-average chars; mixing FONT_SECTION
+        # (Segoe UI proportional) with FONT_NUM (Consolas mono) at the same
+        # `width=N` produced visibly different pixel widths — that was the
+        # source of the misalignment in v1.  Pinning to minsize fixes it
+        # regardless of font.
+        self.COL_ICON   = 44   # 40px icon + 4px gutter
+        self.COL_DELTA  = 64
+        self.COL_Z      = 56
+        self.COL_NAME   = 1    # weight=1 — flex to fill remaining width
 
         # Tk widget constructors only accept a single int for padx/pady
         # (internal padding).  Asymmetric padding goes on the geometry
@@ -261,10 +277,11 @@ class RecommenderApp:
 
     def _render(self, parsed, suggestions) -> None:
         cur_name = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
-        self.header.config(text=f"Cell {parsed.my_cell_id} · {cur_name}", fg=FG)
+        self.header.config(text=f"Cell {parsed.my_cell_id}  ·  {cur_name}", fg=FG)
+        # Compressed legend.  v1 split this across "opponent unknown" and
+        # the column meanings; one line reads faster during a 30s timer.
         self.subheader.config(
-            text="Δ swap win-rate change   z σ from meta mean   "
-                 "opponent: unknown (avg)"
+            text="Δ  win-rate change if you swap     z  champion meta strength"
         )
 
         self._clear_body()
@@ -273,15 +290,29 @@ class RecommenderApp:
         # appearing immediately after the team rows.  Generous vertical
         # padding makes the two sections feel like distinct surfaces
         # without needing borders.
-        tk.Frame(self.body, bg=DIVIDER, height=1).pack(fill="x", pady=(12, 14))
+        tk.Frame(self.body, bg=DIVIDER, height=1).pack(fill="x", pady=(14, 14))
         self._render_bench_section(suggestions)
+
+    def _configure_row_columns(self, row: tk.Frame) -> None:
+        """Apply the shared column geometry to a row frame.
+
+        Pinning minsize on the icon / Δ / z columns guarantees that
+        rows in the team section, the bench section, and any future
+        sections line up at the same x positions, regardless of which
+        font the cell's content uses.  The name column flexes.
+        """
+        row.grid_columnconfigure(0, minsize=self.COL_ICON)
+        row.grid_columnconfigure(1, minsize=self.COL_DELTA)
+        row.grid_columnconfigure(2, minsize=self.COL_Z)
+        row.grid_columnconfigure(3, weight=1)
 
     def _render_team_section(self, parsed, suggestions) -> None:
         """Show all 5 blue-team champions; mark which one is the local player.
 
         Teammates are dimmed (you can't swap them, they're context).  Your
-        own row gets a gold name + ⊙ marker and the z-score so you can
-        compare current strength to bench candidates below.
+        own row gets a gold name + ⊙ marker and the z-score in the same
+        z column the bench section uses, so a quick glance compares your
+        current strength against the candidates below.
         """
         own_z = next(
             (s.z_score for s in suggestions if s.source == "keep" and s.is_known),
@@ -293,31 +324,37 @@ class RecommenderApp:
         tk.Label(
             section, text="YOUR TEAM",
             bg=BG, fg=DIM, anchor="w", font=FONT_SECTION,
-        ).pack(fill="x", pady=(0, 6))
+        ).pack(fill="x", pady=(0, 8))
 
         for cid in parsed.my_team_ids:
             is_me = (cid == parsed.my_current_id)
             row = tk.Frame(section, bg=BG)
-            row.pack(fill="x", pady=1)
+            row.pack(fill="x", pady=2)
+            self._configure_row_columns(row)
 
             self._icon_cell(row, cid, bg=BG)
 
             name = self.id_to_name.get(cid, f"#{cid}")
             if is_me:
-                tk.Label(
-                    row, text=f"⊙ {name}", bg=BG, fg=GOLD,
-                    font=FONT_NAME_B, anchor="w",
-                ).grid(row=0, column=1, sticky="w", padx=(6, 0))
+                # Empty column 1 (where Δ would be) keeps the grid aligned
+                # with the bench rows below.
+                tk.Label(row, text="", bg=BG).grid(row=0, column=1)
                 if own_z is not None:
                     tk.Label(
                         row, text=_fmt_signed_z(own_z), bg=BG, fg=GOLD,
                         font=FONT_NUM, anchor="w",
-                    ).grid(row=0, column=2, sticky="w", padx=(12, 0))
+                    ).grid(row=0, column=2, sticky="w")
+                tk.Label(
+                    row, text=f"⊙ {name}", bg=BG, fg=GOLD,
+                    font=FONT_NAME_B, anchor="w",
+                ).grid(row=0, column=3, sticky="w")
             else:
+                tk.Label(row, text="", bg=BG).grid(row=0, column=1)
+                tk.Label(row, text="", bg=BG).grid(row=0, column=2)
                 tk.Label(
                     row, text=name, bg=BG, fg=DIM,
                     font=FONT_NAME, anchor="w",
-                ).grid(row=0, column=1, sticky="w", padx=(6, 0))
+                ).grid(row=0, column=3, sticky="w")
 
     def _render_bench_section(self, suggestions) -> None:
         """Show bench swap candidates with Δ% + z, sorted by Δ descending.
@@ -326,26 +363,19 @@ class RecommenderApp:
         in the team section.  Best pick gets a full-row warm-tint background
         (no side stripe — that's a hard ban) and a gold ★ marker; remaining
         rows fall back to BG.
+
+        Column headers from v2 are removed: the subheader already explains
+        Δ + z, and the previous row used different font metrics from the
+        data rows which broke visual alignment.
         """
         bench = [s for s in suggestions if s.source == "bench"]
 
         section = tk.Frame(self.body, bg=BG)
         section.pack(fill="x")
         tk.Label(
-            section, text=f"BENCH   {len(bench)} OPTIONS",
+            section, text=f"BENCH   ·   {len(bench)} OPTIONS",
             bg=BG, fg=DIM, anchor="w", font=FONT_SECTION,
-        ).pack(fill="x", pady=(0, 6))
-
-        # Column headers — columns: [icon] [Δ] [z] [name].  Widths picked
-        # so Consolas numerals line up across all rows.
-        hdr = tk.Frame(section, bg=BG)
-        hdr.pack(fill="x", pady=(0, 4))
-        tk.Label(hdr, text="", bg=BG, width=4).grid(row=0, column=0)
-        for col, text, width in [(1, "Δ", 7), (2, "z", 6), (3, "champion", 16)]:
-            tk.Label(
-                hdr, text=text, bg=BG, fg=DIM,
-                font=FONT_SECTION, width=width, anchor="w",
-            ).grid(row=0, column=col, sticky="w", padx=(6, 0))
+        ).pack(fill="x", pady=(0, 8))
 
         # First known bench entry is the best swap (suggestions sorted desc by Δ).
         best_idx = next((i for i, s in enumerate(bench) if s.is_known), None)
@@ -356,14 +386,15 @@ class RecommenderApp:
 
             name = self.id_to_name.get(s.champion_id, f"#{s.champion_id}")
             row = tk.Frame(section, bg=row_bg)
-            row.pack(fill="x", pady=1, ipady=2)
+            row.pack(fill="x", pady=1, ipady=3)
+            self._configure_row_columns(row)
             self._icon_cell(row, s.champion_id, bg=row_bg)
 
             if not s.is_known:
-                self._cell(row, 1, " n/a", MUTED, 7, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 2, " n/a", MUTED, 6, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 3, f"{name}  (not in vocab)",
-                           MUTED, 18, bg=row_bg, font=FONT_NAME)
+                self._cell(row, 1, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
+                self._cell(row, 2, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
+                self._cell(row, 3, f"{name}   (not in vocab)",
+                           MUTED, bg=row_bg, font=FONT_NAME)
                 continue
 
             delta_pp = s.delta * 100
@@ -376,11 +407,11 @@ class RecommenderApp:
 
             name_color = GOLD if is_best else FG
             name_font = FONT_NAME_B if is_best else FONT_NAME
-            marker = "★ " if is_best else "   "
+            marker = "★  " if is_best else "    "
 
-            self._cell(row, 1, delta_text, delta_color, 7, bg=row_bg, font=delta_font)
-            self._cell(row, 2, z_text, z_color, 6, bg=row_bg, font=FONT_NUM)
-            self._cell(row, 3, f"{marker}{name}", name_color, 18, bg=row_bg, font=name_font)
+            self._cell(row, 1, delta_text, delta_color, bg=row_bg, font=delta_font)
+            self._cell(row, 2, z_text, z_color, bg=row_bg, font=FONT_NUM)
+            self._cell(row, 3, f"{marker}{name}", name_color, bg=row_bg, font=name_font)
 
     def _icon_cell(self, parent: tk.Frame, champion_id: int, bg: str = BG) -> None:
         """Place the champion icon in column 0 of `parent`.
@@ -404,14 +435,20 @@ class RecommenderApp:
 
     @staticmethod
     def _cell(
-        parent: tk.Frame, col: int, text: str, fg: str, width: int,
+        parent: tk.Frame, col: int, text: str, fg: str,
         bg: str = BG, font: tuple = FONT_NUM,
     ) -> None:
-        # padx=(6,0) matches the header row so columns line up across frames.
+        """Place a left-aligned label at `col` in the row's shared grid.
+
+        Width is no longer passed explicitly: column widths come from
+        the row's grid_columnconfigure(minsize=...) so every row pins
+        to the same x positions regardless of which font the content
+        is set in.
+        """
         tk.Label(
             parent, text=text, bg=bg, fg=fg,
-            font=font, width=width, anchor="w",
-        ).grid(row=0, column=col, sticky="w", padx=(6, 0))
+            font=font, anchor="w",
+        ).grid(row=0, column=col, sticky="w")
 
 
 # ---------- Entry point ----------
