@@ -143,19 +143,22 @@ class RecommenderApp:
         root.configure(bg=BG)
         root.minsize(320, 200)
 
+        # Tk widget constructors only accept a single int for padx/pady
+        # (internal padding).  Asymmetric padding goes on the geometry
+        # manager call (.pack / .grid).
         self.header = tk.Label(
             root, text="Loading model & LCU...",
             bg=BG, fg=FG, font=("Consolas", 12, "bold"),
-            anchor="w", padx=12, pady=(10, 2),
+            anchor="w", padx=12,
         )
-        self.header.pack(fill="x")
+        self.header.pack(fill="x", pady=(10, 2))
 
         self.subheader = tk.Label(
             root, text="",
             bg=BG, fg=DIM, font=("Consolas", 9),
-            anchor="w", padx=12, pady=(0, 8),
+            anchor="w", padx=12,
         )
-        self.subheader.pack(fill="x")
+        self.subheader.pack(fill="x", pady=(0, 8))
 
         self.body = tk.Frame(root, bg=BG)
         self.body.pack(fill="both", expand=True, padx=12, pady=(0, 12))
