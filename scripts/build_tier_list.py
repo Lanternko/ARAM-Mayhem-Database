@@ -215,6 +215,18 @@ def load_augment_descriptions(cache_dir: Path) -> dict[int, str]:
     return out
 
 
+# CommunityDragon `zh_tw` augment names don't always match Garena's live
+# Traditional Chinese client.  Drop manual TW overrides here as users
+# report mistranslations.  Key = augment ID (== `AugmentPlatformId`).
+#
+# Format: aid -> TW name as it actually appears in the game client.
+AUGMENT_NAME_OVERRIDES: dict[int, str] = {
+    # Internal: Kiwi_UltimateAwakening; icon ZeroHour_small.png.
+    # CommunityDragon zh_tw: 「大絕覺醒」, but Garena ships it as 「最終形態」.
+    1349: "最終形態",
+}
+
+
 def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     # Try zh-TW first; fall back to default (English) if the field is empty.
     try:
@@ -230,6 +242,7 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     rows = r.json()
 
     by_id: dict[int, dict] = {}
+    name_overrides_applied: list[tuple[int, str, str]] = []
     for entry in rows:
         aug_id = entry.get("id")
         if aug_id is None:
@@ -239,6 +252,12 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
         tw_name = tw_entry.get("nameTRA") or tw_entry.get("name")
         en_name = entry.get("nameTRA") or entry.get("name") or entry.get("simpleNameTRA")
         name = tw_name if tw_name and tw_name.strip() else en_name
+        # Apply manual TW translation override if we have one.
+        if aug_id in AUGMENT_NAME_OVERRIDES:
+            override = AUGMENT_NAME_OVERRIDES[aug_id]
+            if name != override:
+                name_overrides_applied.append((aug_id, name or "?", override))
+                name = override
         icon_path = (
             entry.get("augmentSmallIconPath")
             or entry.get("augmentLargeIconPath")
@@ -249,6 +268,13 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             "rarity": entry.get("rarity", ""),
             "desc": "",
         }
+    if name_overrides_applied:
+        click.echo(
+            f"[tierlist] applied {len(name_overrides_applied)} "
+            "AUGMENT_NAME_OVERRIDES (CDragon zh_tw -> Garena TW):"
+        )
+        for aid, before, after in name_overrides_applied:
+            click.echo(f"  {aid:5d}  {before}  ->  {after}")
 
     if cache_dir is not None:
         try:
