@@ -1,5 +1,7 @@
 import sqlite3
-db = 'D:/Projects/CODING/aram-winrate-nn/data/lcu/games.db'
+from pathlib import Path
+
+db = Path(__file__).resolve().parent / 'data' / 'lcu' / 'games.db'
 con = sqlite3.connect(db)
 total = con.execute('SELECT COUNT(*) FROM games').fetchone()[0]
 mayhem = con.execute('SELECT COUNT(*) FROM games WHERE queue_id=2400').fetchone()[0]
