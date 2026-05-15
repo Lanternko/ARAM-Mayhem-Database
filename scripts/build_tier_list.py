@@ -726,6 +726,24 @@ def render_html(
         animation: prismShift 6s ease-in-out infinite;
         box-shadow: 0 0 8px rgba(220,180,255,0.45);
     }
+    /* T1 = "premium red" — solid red would just look like a flat tier band,
+       so promote it with a hot-coal gradient (orange-red → deep crimson →
+       warm highlight), a slow shimmer (slower than OP so the hierarchy is
+       legible), and a subtle red halo.  Reads as "valuable but not OP". */
+    .tier-block[data-tier="T1"] .champ {
+        border-color: transparent;
+        background:
+            linear-gradient(#1f2530, #1f2530) padding-box,
+            linear-gradient(135deg,
+                #ffb380 0%,   /* hot orange highlight */
+                #ff5a3c 32%,  /* main red-orange */
+                #c8262c 62%,  /* deep crimson */
+                #ff8050 100%  /* warm trailing highlight */
+            ) border-box;
+        background-size: auto, 220% 220%;
+        animation: prismShift 9s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(255,90,60,0.42);
+    }
     .champ img {
         width: 100%;
         height: 100%;
