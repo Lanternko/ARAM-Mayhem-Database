@@ -33,30 +33,137 @@ import numpy as np
 
 @dataclass
 class LRModel:
-    clf: object  # sklearn.linear_model.LogisticRegression
+    """Logistic Regression weights + champion vocab.
+
+    Stores plain numpy arrays so inference doesn't touch sklearn at runtime.
+    This matters because pulling in sklearn -> scipy can crash during import
+    on Python 3.13 (scipy.spatial.distance fails inside @dataclass
+    construction with MemoryError) and even when it succeeds it adds 30+s
+    of cold-start latency.
+    """
+    coef: np.ndarray             # shape (n_champs,)
+    intercept: float
     champ_to_idx: dict[int, int]
     n_champs: int
 
 
-def load_lr(lr_pickle: Path, vocab_source: Path) -> LRModel:
-    """Load LR pickle + champ_to_idx vocab.
+def _sigmoid(x: float | np.ndarray) -> float | np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))
 
-    vocab_source can be either:
-      - a .pt checkpoint file (torch.load → dict with 'champ_to_idx' key), or
-      - a .json file mapping str(championId) → int index.
+
+def _vocab_sidecar_path(pt_path: Path) -> Path:
+    """Return the JSON sidecar path for a given .pt vocab source.
+
+    e.g. models/tier2_mayhem/tier2_checkpoint.pt
+       -> models/tier2_mayhem/tier2_checkpoint.champ_to_idx.json
     """
-    clf = pickle.loads(Path(lr_pickle).read_bytes())
+    return pt_path.with_name(pt_path.stem + ".champ_to_idx.json")
 
-    if str(vocab_source).endswith(".json"):
-        raw = json.loads(Path(vocab_source).read_text())
-        champ_to_idx = {int(k): int(v) for k, v in raw.items()}
+
+def _load_vocab(vocab_source: Path) -> dict[int, int]:
+    """Load champion-id -> index vocab.
+
+    Path is tried in order:
+      1. If the file is a .json, parse directly.
+      2. If a .pt was passed but a JSON sidecar exists next to it, use the
+         sidecar — avoids the slow `import torch` (30+s on Windows cold start
+         with antivirus scanning, which is most of the recommender's boot
+         time on this machine).
+      3. Otherwise import torch, load the .pt, AND write a JSON sidecar
+         next to it so the next startup hits the fast path.
+    """
+    vocab_source = Path(vocab_source)
+    if vocab_source.suffix == ".json":
+        raw = json.loads(vocab_source.read_text())
+        return {int(k): int(v) for k, v in raw.items()}
+
+    sidecar = _vocab_sidecar_path(vocab_source)
+    if sidecar.exists():
+        raw = json.loads(sidecar.read_text())
+        return {int(k): int(v) for k, v in raw.items()}
+
+    # Cold path — needs torch, writes sidecar for next time.
+    import torch
+    ckpt = torch.load(vocab_source, map_location="cpu", weights_only=False)
+    vocab = {int(k): int(v) for k, v in ckpt["champ_to_idx"].items()}
+    try:
+        sidecar.write_text(json.dumps({str(k): v for k, v in vocab.items()}))
+    except Exception:
+        # Sidecar caching is best-effort; failures here shouldn't break loading.
+        pass
+    return vocab
+
+
+# ---------- sklearn-free pickle loading ----------
+
+class _LRStub:
+    """Pickle stub for sklearn estimators.
+
+    sklearn's pickle format calls __setstate__(dict) with the instance's
+    attribute dictionary.  We only need 'coef_' and 'intercept_' off that
+    dict, so the stub stores everything and the caller pulls what it needs.
+    Crucially, no sklearn classes are imported during unpickling.
+    """
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+
+
+class _NoSklearnUnpickler(pickle.Unpickler):
+    """Unpickler that swaps sklearn class references for _LRStub.
+
+    Numpy classes still resolve normally — they're needed to materialize
+    the coef_/intercept_ arrays.
+    """
+    def find_class(self, module: str, name: str):
+        if module.startswith("sklearn"):
+            return _LRStub
+        return super().find_class(module, name)
+
+
+def _load_pickle_no_sklearn(pkl_path: Path) -> tuple[np.ndarray, float]:
+    with open(pkl_path, "rb") as f:
+        obj = _NoSklearnUnpickler(f).load()
+    if not hasattr(obj, "coef_") or not hasattr(obj, "intercept_"):
+        raise ValueError(
+            f"Pickle at {pkl_path} has no coef_/intercept_ — not a fitted LR model?"
+        )
+    coef = np.asarray(obj.coef_, dtype=np.float64).reshape(-1)
+    intercept = float(np.asarray(obj.intercept_).reshape(-1)[0])
+    return coef, intercept
+
+
+def load_lr(lr_path: Path, vocab_source: Path) -> LRModel:
+    """Load LR coefficients + champ_to_idx vocab without importing sklearn.
+
+    lr_path can be either:
+      - lr_weights.json — bare {coef, intercept} JSON; fastest.
+      - lr_model.pkl — sklearn LogisticRegression pickle; loaded via a
+        custom Unpickler that stubs out sklearn classes so scipy/sklearn
+        are never imported.  Still slightly slower than the JSON path
+        because numpy unpacks the pickled array buffers.
+
+    vocab_source can be a .pt checkpoint or a champ_to_idx.json file.
+    """
+    champ_to_idx = _load_vocab(vocab_source)
+
+    lr_path = Path(lr_path)
+    if lr_path.suffix == ".json":
+        payload = json.loads(lr_path.read_text())
+        coef = np.asarray(payload["coef"], dtype=np.float64)
+        intercept = float(payload["intercept"])
     else:
-        # Defer torch import — only needed when reading a .pt checkpoint.
-        import torch
-        ckpt = torch.load(vocab_source, map_location="cpu", weights_only=False)
-        champ_to_idx = {int(k): int(v) for k, v in ckpt["champ_to_idx"].items()}
+        coef, intercept = _load_pickle_no_sklearn(lr_path)
 
-    return LRModel(clf=clf, champ_to_idx=champ_to_idx, n_champs=len(champ_to_idx))
+    if coef.shape[0] != len(champ_to_idx):
+        raise ValueError(
+            f"LR coef length ({coef.shape[0]}) != vocab size ({len(champ_to_idx)}); "
+            "model and vocab were trained on different splits."
+        )
+
+    return LRModel(
+        coef=coef, intercept=intercept,
+        champ_to_idx=champ_to_idx, n_champs=len(champ_to_idx),
+    )
 
 
 def _build_feature_vector(
@@ -67,7 +174,7 @@ def _build_feature_vector(
 
     Returns (X, unknown_ids) where unknown_ids lists championIds not in vocab.
     """
-    X = np.zeros(model.n_champs, dtype=np.float32)
+    X = np.zeros(model.n_champs, dtype=np.float64)
     unknown: list[int] = []
     for cid in my_team_ids:
         idx = model.champ_to_idx.get(int(cid))
@@ -87,7 +194,8 @@ def predict_blue_prob(
     Red contribution is set to 0 — see module docstring on 'average opponent'.
     """
     X, _ = _build_feature_vector(my_team_ids, model)
-    return float(model.clf.predict_proba(X.reshape(1, -1))[0, 1])
+    logit = float(X @ model.coef + model.intercept)
+    return float(_sigmoid(logit))
 
 
 @dataclass
