@@ -31,12 +31,28 @@ from .client import (
     get_game_detail,
     get_league_ladders,
     get_match_history,
+    get_summoner_by_id,
+    get_suggested_players,
     lookup_summoners_by_riot_ids,
 )
 from .poller import DEFAULT_QUEUES, _parse_game_detail
 from .process import get_credentials
 
 _EMPTY_QUEUE_GRACE_SEC = 30.0
+_EMPTY_QUEUE_IDLE_POLL_SEC = 60.0
+_SUGGESTED_RESEED_REQUEUE_COOLDOWN_SEC = 10 * 60
+_RECENT_ACTIVE_RESEED_CAP = 80
+_RECENT_ACTIVE_RESEED_COOLDOWN_SEC = 10 * 60
+_RECENT_ACTIVE_BACKOFF_ZERO_STREAK = 25
+_RECENT_ACTIVE_BACKOFF_SEC = 45 * 60
+_SOURCE_FAMILY_RESEED_CAP = 120
+_SOURCE_FAMILY_RESEED_COOLDOWN_SEC = 20 * 60
+_SOURCE_FAMILY_BACKOFF_ZERO_STREAK = 25
+_SOURCE_FAMILY_BACKOFF_SEC = 45 * 60
+_MANUAL_SEED_HOT_WINDOW_HOURS = 24
+_MANUAL_SEED_WARM_WINDOW_HOURS = 72
+_SCHEMA_INIT_RETRY_ATTEMPTS = 12
+_SCHEMA_INIT_RETRY_SLEEP_SEC = 2.0
 
 _CREATE_GAMES_SQL = """
 CREATE TABLE IF NOT EXISTS games (
@@ -121,6 +137,14 @@ CREATE TABLE IF NOT EXISTS riot_id_bridge (
 );
 """
 
+_CREATE_CRAWL_RUNTIME_STATE_SQL = """
+CREATE TABLE IF NOT EXISTS crawl_runtime_state (
+    state_key   TEXT PRIMARY KEY,
+    state_value TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_crawl_game_claims_status
 ON crawl_game_claims(status, claimed_at_ms, updated_at, game_id);
@@ -130,6 +154,7 @@ _MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450}
 _SOURCE_PRIORITY = {
     "self": 0,
     "match": 10,
+    "suggested": 15,
     # Leaderboard / manual seeds should only open new communities; once a seed
     # produces real matches, we want those fresher match-derived nodes first.
     "friend": 20,
@@ -138,6 +163,16 @@ _SOURCE_PRIORITY = {
     "manual_riot_id": 60,
     "riot_tier": 70,
 }
+# Sources that are *root entry points* into the player graph. Anything else
+# (currently only "match") inherits its seed_family from the parent node that
+# discovered it, so the family represents transitive attribution.
+_SEED_FAMILY_ROOTS = frozenset(
+    {"self", "friend", "ladder", "apex", "manual_riot_id", "riot_tier", "suggested"}
+)
+# Used during schema backfill for legacy match-source rows whose parent chain
+# is unknown — they neither credit nor debit any active source family.
+_LEGACY_MATCH_FAMILY = "legacy_match"
+_UNKNOWN_FAMILY = "unknown"
 _LCU_RIOT_ID_LOOKUP_BATCH = 10
 _RIOT_TIER_HYDRATION_DELAY_MS = 90_000
 
@@ -214,6 +249,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CRAWL_QUEUE_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_SQL)
     con.execute(_CREATE_RIOT_ID_BRIDGE_SQL)
+    con.execute(_CREATE_CRAWL_RUNTIME_STATE_SQL)
 
     _ensure_column(
         con,
@@ -264,9 +300,68 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         "eligible_at_ms",
         "eligible_at_ms INTEGER NOT NULL DEFAULT 0",
     )
+    _ensure_column(
+        con,
+        "crawl_seen",
+        "seed_family",
+        "seed_family TEXT NOT NULL DEFAULT ''",
+    )
+    _ensure_column(
+        con,
+        "crawl_queue",
+        "seed_family",
+        "seed_family TEXT NOT NULL DEFAULT ''",
+    )
+    _ensure_column(
+        con,
+        "games",
+        "seed_family",
+        "seed_family TEXT NOT NULL DEFAULT ''",
+    )
 
     con.execute(_CREATE_CRAWL_QUEUE_INDEX_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL)
+
+    # Backfill seed_family for any rows pre-dating the column.
+    # Root sources self-attribute; match-source rows with no traceable parent
+    # become 'legacy_match' (excluded from backoff accounting).
+    if _table_exists(con, "crawl_seen"):
+        con.execute(
+            f"""
+            UPDATE crawl_seen
+            SET seed_family = CASE
+                WHEN source IN ({",".join("?" * len(_SEED_FAMILY_ROOTS))}) THEN source
+                WHEN source = 'match' THEN ?
+                ELSE ?
+            END
+            WHERE seed_family = ''
+            """,
+            (*sorted(_SEED_FAMILY_ROOTS), _LEGACY_MATCH_FAMILY, _UNKNOWN_FAMILY),
+        )
+    if _table_exists(con, "crawl_queue"):
+        con.execute(
+            f"""
+            UPDATE crawl_queue
+            SET seed_family = COALESCE(
+                (SELECT seed_family FROM crawl_seen
+                 WHERE crawl_seen.puuid = crawl_queue.puuid),
+                CASE
+                    WHEN source IN ({",".join("?" * len(_SEED_FAMILY_ROOTS))}) THEN source
+                    WHEN source = 'match' THEN ?
+                    ELSE ?
+                END
+            )
+            WHERE seed_family = ''
+            """,
+            (*sorted(_SEED_FAMILY_ROOTS), _LEGACY_MATCH_FAMILY, _UNKNOWN_FAMILY),
+        )
+    if _table_exists(con, "games"):
+        # Pre-attribution rows: every captured game came from the legacy match
+        # subgraph; later inserts populate seed_family from the processing loop.
+        con.execute(
+            "UPDATE games SET seed_family = ? WHERE seed_family = ''",
+            (_LEGACY_MATCH_FAMILY,),
+        )
 
     if _table_exists(con, "crawl_queue"):
         con.execute(
@@ -318,6 +413,69 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
             WHERE processed = 1 AND last_crawled_match_created_ms = 0
             """
         )
+    con.commit()
+
+
+def _ensure_schema_with_retry(
+    con: sqlite3.Connection,
+    *,
+    worker_id: str | None = None,
+    attempts: int = _SCHEMA_INIT_RETRY_ATTEMPTS,
+    sleep_sec: float = _SCHEMA_INIT_RETRY_SLEEP_SEC,
+) -> None:
+    """Initialize / migrate schema with retries for concurrent worker startup.
+
+    Multiple workers can launch at nearly the same time.  The first worker may
+    briefly hold a write lock while running CREATE/ALTER/UPDATE migration work.
+    Treat transient SQLITE_BUSY / database-locked failures here as recoverable
+    instead of crashing the whole worker before it even starts consuming queue.
+    """
+    last_error: sqlite3.OperationalError | None = None
+    for attempt in range(1, max(1, attempts) + 1):
+        try:
+            _ensure_schema(con)
+            return
+        except sqlite3.OperationalError as exc:
+            message = str(exc).lower()
+            if "database is locked" not in message and "database table is locked" not in message:
+                raise
+            last_error = exc
+            if attempt >= max(1, attempts):
+                break
+            print(
+                f"[snowball] schema init locked  attempt={attempt}/{max(1, attempts)}  "
+                f"sleep={sleep_sec:.1f}s  worker={worker_id or '?'}",
+                flush=True,
+            )
+            time.sleep(max(0.0, sleep_sec))
+    if last_error is not None:
+        raise last_error
+
+
+def _get_runtime_state_text(con: sqlite3.Connection, key: str) -> str | None:
+    row = con.execute(
+        "SELECT state_value FROM crawl_runtime_state WHERE state_key = ?",
+        (str(key),),
+    ).fetchone()
+    return str(row[0]) if row and row[0] is not None else None
+
+
+def _set_runtime_state_text(con: sqlite3.Connection, key: str, value: str) -> None:
+    con.execute(
+        """
+        INSERT INTO crawl_runtime_state(state_key, state_value, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(state_key) DO UPDATE SET
+            state_value = excluded.state_value,
+            updated_at = excluded.updated_at
+        """,
+        (str(key), str(value), _utc_now()),
+    )
+    con.commit()
+
+
+def _delete_runtime_state(con: sqlite3.Connection, key: str) -> None:
+    con.execute("DELETE FROM crawl_runtime_state WHERE state_key = ?", (str(key),))
     con.commit()
 
 
@@ -489,6 +647,24 @@ def _latest_target_match_created_ms(history: list[dict], target_queues: set[int]
     return latest
 
 
+def _latest_any_match_created_ms(history: list[dict]) -> int:
+    latest = 0
+    for game in history:
+        created_ms = int(game.get("gameCreation") or 0)
+        if created_ms > latest:
+            latest = created_ms
+    return latest
+
+
+def _count_recent_matches(history: list[dict], cutoff_ms: int) -> int:
+    count = 0
+    for game in history:
+        created_ms = int(game.get("gameCreation") or 0)
+        if created_ms >= cutoff_ms:
+            count += 1
+    return count
+
+
 def _extract_participant_puuids(detail: dict) -> list[str]:
     puuids: list[str] = []
     for ident in detail.get("participantIdentities") or []:
@@ -609,8 +785,9 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
         """
         INSERT OR IGNORE INTO games (
             game_id, queue_id, patch, blue_champs, red_champs,
-            blue_wins, duration_sec, created_ms, captured_at, participants_json
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            blue_wins, duration_sec, created_ms, captured_at, participants_json,
+            seed_family
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             record["game_id"],
@@ -623,6 +800,7 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
             record["created_ms"],
             record["captured_at"],
             json.dumps(record.get("participants", []), separators=(",", ":")),
+            str(record.get("seed_family") or _UNKNOWN_FAMILY),
         ),
     )
     con.commit()
@@ -680,12 +858,18 @@ def _upsert_queue_row(
     discovered_match_created_ms: int,
     requeue: bool,
     eligible_at_ms: int = 0,
+    seed_family: str = _UNKNOWN_FAMILY,
 ) -> bool:
-    """Insert or refresh a queue row. Returns True if it became pending now."""
+    """Insert or refresh a queue row. Returns True if it became pending now.
+
+    seed_family is set on insert and only upgraded over an unresolved value
+    ('', _UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY) so the first known root family
+    sticks across re-discovery.
+    """
     now = _utc_now()
     row = con.execute(
         """
-        SELECT status, priority, depth, discovered_match_created_ms
+        SELECT status, priority, depth, discovered_match_created_ms, seed_family
         FROM crawl_queue
         WHERE puuid = ?
         """,
@@ -698,8 +882,8 @@ def _upsert_queue_row(
             INSERT INTO crawl_queue (
                 puuid, depth, source, priority, discovered_from_game_id,
                 discovered_match_created_ms, enqueued_at, updated_at,
-                claimed_by, claimed_at_ms, eligible_at_ms, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, 'pending')
+                claimed_by, claimed_at_ms, eligible_at_ms, status, seed_family
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, 'pending', ?)
             """,
             (
                 puuid,
@@ -711,12 +895,14 @@ def _upsert_queue_row(
                 now,
                 now,
                 eligible_at_ms,
+                seed_family,
             ),
         )
         con.commit()
         return True
 
-    queue_status, queue_priority, queue_depth, queue_match_ms = row
+    queue_status, queue_priority, queue_depth, queue_match_ms, queue_seed_family = row
+    effective_family = _resolve_seed_family_update(str(queue_seed_family or ""), seed_family)
     became_pending = False
     if str(queue_status) != "pending" and requeue:
         con.execute(
@@ -724,7 +910,8 @@ def _upsert_queue_row(
             UPDATE crawl_queue
             SET depth = ?, source = ?, priority = ?, discovered_from_game_id = ?,
                 discovered_match_created_ms = ?, updated_at = ?, eligible_at_ms = ?,
-                claimed_by = NULL, claimed_at_ms = 0, status = 'pending'
+                claimed_by = NULL, claimed_at_ms = 0, status = 'pending',
+                seed_family = ?
             WHERE puuid = ?
             """,
             (
@@ -735,6 +922,7 @@ def _upsert_queue_row(
                 discovered_match_created_ms,
                 now,
                 eligible_at_ms,
+                effective_family,
                 puuid,
             ),
         )
@@ -744,13 +932,14 @@ def _upsert_queue_row(
             discovered_match_created_ms > int(queue_match_ms)
             or priority < int(queue_priority)
             or depth < int(queue_depth)
+            or effective_family != str(queue_seed_family or "")
         )
         if should_update:
             con.execute(
                 f"""
                 UPDATE crawl_queue
                 SET depth = ?, source = ?, priority = ?, discovered_from_game_id = ?,
-                    discovered_match_created_ms = ?, updated_at = ?
+                    discovered_match_created_ms = ?, updated_at = ?, seed_family = ?
                     {", claimed_by = NULL, claimed_at_ms = 0" if str(queue_status) == "pending" else ""}
                 WHERE puuid = ?
                 """,
@@ -761,11 +950,40 @@ def _upsert_queue_row(
                     discovered_from_game_id,
                     discovered_match_created_ms,
                     now,
+                    effective_family,
                     puuid,
                 ),
             )
     con.commit()
     return became_pending
+
+
+def _resolve_seed_family_update(existing: str, incoming: str) -> str:
+    """Decide which seed_family value to keep: first known root wins.
+
+    Unresolved values ('', _UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY) can be
+    overwritten by any incoming value. Otherwise existing wins to avoid
+    re-attribution ping-pong when the same puuid is re-discovered through a
+    different root.
+    """
+    incoming = incoming or ""
+    if not existing or existing in (_UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY):
+        return incoming or existing or _UNKNOWN_FAMILY
+    if not incoming or incoming in (_UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY):
+        return existing
+    return existing
+
+
+def _derive_seed_family(source: str, explicit: str | None) -> str:
+    """Pick the seed_family to write. Callers may pass an explicit family
+    (e.g., propagated from a parent puuid for match-source children); for
+    root sources we default to the source itself.
+    """
+    if explicit:
+        return explicit
+    if source in _SEED_FAMILY_ROOTS:
+        return source
+    return _UNKNOWN_FAMILY
 
 
 def _enqueue_player(
@@ -777,8 +995,14 @@ def _enqueue_player(
     discovered_match_created_ms: int = 0,
     requeue_cooldown_ms: int = 0,
     initial_delay_ms: int = 0,
+    seed_family: str | None = None,
 ) -> str:
     """Add puuid to seen-set and queue when needed.
+
+    seed_family records the original *root* entry point (manual_riot_id, apex,
+    friend, ...) for transitive yield attribution. Callers must pass it when
+    enqueueing a match-source child — otherwise children would default to
+    _UNKNOWN_FAMILY and break backoff accounting.
 
     Returns:
       - 'new' if the puuid was unseen and newly queued
@@ -791,10 +1015,12 @@ def _enqueue_player(
 
     now = _utc_now()
     priority = _SOURCE_PRIORITY.get(source, 99)
+    derived_family = _derive_seed_family(source, seed_family)
     row = con.execute(
         """
         SELECT source, priority, min_depth, discovered_from_game_id,
-               latest_seen_match_created_ms, last_crawled_match_created_ms, processed
+               latest_seen_match_created_ms, last_crawled_match_created_ms,
+               processed, seed_family
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -807,8 +1033,8 @@ def _enqueue_player(
             INSERT INTO crawl_seen (
                 puuid, source, priority, min_depth, discovered_from_game_id,
                 first_seen_at, latest_seen_match_created_ms,
-                last_crawled_match_created_ms, processed
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)
+                last_crawled_match_created_ms, processed, seed_family
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
             """,
             (
                 puuid,
@@ -818,6 +1044,7 @@ def _enqueue_player(
                 discovered_from_game_id,
                 now,
                 discovered_match_created_ms,
+                derived_family,
             ),
         )
         con.commit()
@@ -831,6 +1058,7 @@ def _enqueue_player(
             discovered_match_created_ms,
             requeue=True,
             eligible_at_ms=_now_ms() + max(0, initial_delay_ms),
+            seed_family=derived_family,
         )
         return "new"
 
@@ -842,6 +1070,7 @@ def _enqueue_player(
         old_latest_match_ms,
         last_crawled_match_ms,
         processed,
+        old_seed_family,
     ) = row
     best_source, best_priority, best_depth = _pick_best_metadata(
         str(old_source),
@@ -851,6 +1080,7 @@ def _enqueue_player(
         priority,
         depth,
     )
+    effective_family = _resolve_seed_family_update(str(old_seed_family or ""), derived_family)
     latest_match_ms = max(int(old_latest_match_ms), int(discovered_match_created_ms))
     best_game_id = old_discovered_game_id
     if discovered_match_created_ms >= int(old_latest_match_ms) and discovered_from_game_id:
@@ -860,7 +1090,7 @@ def _enqueue_player(
         """
         UPDATE crawl_seen
         SET source = ?, priority = ?, min_depth = ?, discovered_from_game_id = ?,
-            latest_seen_match_created_ms = ?
+            latest_seen_match_created_ms = ?, seed_family = ?
         WHERE puuid = ?
         """,
         (
@@ -869,6 +1099,7 @@ def _enqueue_player(
             best_depth,
             best_game_id,
             latest_match_ms,
+            effective_family,
             puuid,
         ),
     )
@@ -885,6 +1116,7 @@ def _enqueue_player(
         latest_match_ms,
         requeue=should_requeue,
         eligible_at_ms=_now_ms() + requeue_cooldown_ms if should_requeue else 0,
+        seed_family=effective_family,
     )
     if should_requeue and became_pending:
         con.execute(
@@ -922,8 +1154,11 @@ def _claim_next_player(
     con: sqlite3.Connection,
     worker_id: str,
     claim_timeout_ms: int,
-) -> tuple[str, int, str, int] | None:
-    """Atomically claim one pending queue item for this worker."""
+) -> tuple[str, int, str, int, str] | None:
+    """Atomically claim one pending queue item for this worker.
+
+    Returns (puuid, depth, source, claimed_match_ms, seed_family).
+    """
     now_text = _utc_now()
     now_ms = _now_ms()
     cutoff_ms = now_ms - claim_timeout_ms
@@ -944,7 +1179,8 @@ def _claim_next_player(
     )
     row = con.execute(
         """
-        SELECT queue_idx, puuid, depth, source, discovered_match_created_ms
+        SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
+               seed_family
         FROM crawl_queue
         WHERE status = 'pending'
           AND eligible_at_ms <= ?
@@ -960,7 +1196,7 @@ def _claim_next_player(
         con.commit()
         return None
 
-    queue_idx, puuid, depth, source, claimed_match_ms = row
+    queue_idx, puuid, depth, source, claimed_match_ms, seed_family = row
     before = con.total_changes
     con.execute(
         """
@@ -978,7 +1214,13 @@ def _claim_next_player(
     con.commit()
     if not claimed:
         return None
-    return str(puuid), int(depth), str(source), int(claimed_match_ms)
+    return (
+        str(puuid),
+        int(depth),
+        str(source),
+        int(claimed_match_ms),
+        str(seed_family or "") or _UNKNOWN_FAMILY,
+    )
 
 
 def _pending_player_count(con: sqlite3.Connection) -> int:
@@ -1115,6 +1357,82 @@ def _seed_ladder_neighbors(
                     added += 1
                 if added >= ladder_cap:
                     return added
+    return added
+
+
+def _seed_suggested_players(
+    con: sqlite3.Connection,
+    lcu: LCUClient,
+    suggested_cap: int,
+) -> int:
+    added = 0
+    if suggested_cap <= 0:
+        return 0
+    for item in get_suggested_players(lcu):
+        puuid = (
+            item.get("puuid")
+            or (item.get("player") or {}).get("puuid")
+            or (item.get("summoner") or {}).get("puuid")
+        )
+        if not puuid:
+            summoner_id = item.get("summonerId") or (item.get("summoner") or {}).get("summonerId")
+            if summoner_id:
+                summoner = get_summoner_by_id(lcu, summoner_id)
+                if isinstance(summoner, dict):
+                    puuid = summoner.get("puuid")
+        if not puuid:
+            continue
+        result = _enqueue_player(con, str(puuid), depth=0, source="suggested")
+        if result in ("new", "requeued"):
+            added += 1
+        elif result == "noop":
+            cutoff_text = datetime.fromtimestamp(
+                max(0.0, time.time() - _SUGGESTED_RESEED_REQUEUE_COOLDOWN_SEC),
+                tz=timezone.utc,
+            ).isoformat()
+            row = con.execute(
+                """
+                SELECT source, priority, min_depth, discovered_from_game_id,
+                       latest_seen_match_created_ms, last_crawled_at, processed,
+                       seed_family
+                FROM crawl_seen
+                WHERE puuid = ?
+                """,
+                (str(puuid),),
+            ).fetchone()
+            if row is not None:
+                (
+                    seen_source,
+                    seen_priority,
+                    seen_depth,
+                    seen_game_id,
+                    latest_seen_match_ms,
+                    last_crawled_at,
+                    processed,
+                    seen_seed_family,
+                ) = row
+                if int(processed) == 1 and (last_crawled_at is None or str(last_crawled_at) <= cutoff_text):
+                    became_pending = _upsert_queue_row(
+                        con,
+                        str(puuid),
+                        int(seen_depth),
+                        str(seen_source),
+                        int(seen_priority),
+                        str(seen_game_id) if seen_game_id else None,
+                        int(latest_seen_match_ms),
+                        requeue=True,
+                        eligible_at_ms=0,
+                        seed_family=str(seen_seed_family or "") or _UNKNOWN_FAMILY,
+                    )
+                    if became_pending:
+                        con.execute(
+                            "UPDATE crawl_seen SET processed = 0 WHERE puuid = ?",
+                            (str(puuid),),
+                        )
+                        con.commit()
+                        added += 1
+        if added >= suggested_cap:
+            return added
     return added
 
 
@@ -1404,6 +1722,10 @@ def _seed_manual_riot_ids(
     if not normalized_ids:
         return 0
 
+    now_ms = _now_ms()
+    hot_cutoff_ms = now_ms - (_MANUAL_SEED_HOT_WINDOW_HOURS * 60 * 60 * 1000)
+    warm_cutoff_ms = now_ms - (_MANUAL_SEED_WARM_WINDOW_HOURS * 60 * 60 * 1000)
+
     existing_open = _open_queue_source_count(con, "manual_riot_id")
     remaining_budget = max(0, pending_cap - existing_open) if pending_cap > 0 else None
     if remaining_budget == 0:
@@ -1416,6 +1738,12 @@ def _seed_manual_riot_ids(
 
     total_chunks = (len(normalized_ids) + _LCU_RIOT_ID_LOOKUP_BATCH - 1) // _LCU_RIOT_ID_LOOKUP_BATCH
     resolved_total = 0
+    target_ready_total = 0
+    hot_total = 0
+    warm_total = 0
+    cold_total = 0
+    hot_candidates: list[tuple[int, int, int, str]] = []
+    warm_candidates: list[tuple[int, int, int, str]] = []
     for chunk_idx, chunk in enumerate(
         _iter_chunks([("", riot_id) for riot_id in normalized_ids], _LCU_RIOT_ID_LOOKUP_BATCH),
         start=1,
@@ -1432,37 +1760,215 @@ def _seed_manual_riot_ids(
             if not lcu_puuid:
                 continue
             history = get_match_history(lcu, lcu_puuid, begin=0, end=history_window)
-            game_ids = _extract_target_game_ids(history, target_queues)
-            if games_per_player is not None and games_per_player > 0:
-                game_ids = game_ids[:games_per_player]
-            if not game_ids:
+            target_game_ids = _extract_target_game_ids(history, target_queues)
+            target_game_count = len(target_game_ids)
+            if target_game_count == 0:
                 continue
+            target_ready_total += 1
+
+            latest_any_match_ms = _latest_any_match_created_ms(history)
             latest_match_ms = _latest_target_match_created_ms(history, target_queues)
-            result = _enqueue_player(
-                con,
-                lcu_puuid,
-                depth=0,
-                source="manual_riot_id",
-                discovered_match_created_ms=latest_match_ms,
-                initial_delay_ms=0,
-            )
-            if result == "new":
-                added += 1
-                if remaining_budget is not None:
-                    remaining_budget -= 1
-                    if remaining_budget <= 0:
-                        print(
-                            f"[snowball] manual_riot_id pending cap reached  "
-                            f"added={added}  pending_cap={pending_cap}",
-                            flush=True,
-                        )
-                        return added
+            recent_any_24h = _count_recent_matches(history, hot_cutoff_ms)
+            recent_any_72h = _count_recent_matches(history, warm_cutoff_ms)
+
+            if recent_any_24h > 0:
+                hot_total += 1
+                hot_candidates.append(
+                    (recent_any_24h, target_game_count, max(latest_match_ms, latest_any_match_ms), lcu_puuid)
+                )
+            elif recent_any_72h > 0:
+                warm_total += 1
+                warm_candidates.append(
+                    (recent_any_72h, target_game_count, max(latest_match_ms, latest_any_match_ms), lcu_puuid)
+                )
+            else:
+                cold_total += 1
         if chunk_idx == 1 or chunk_idx == total_chunks or chunk_idx % 5 == 0:
             print(
                 f"[snowball] manual_riot_id seed progress  chunks={chunk_idx}/{total_chunks}  "
-                f"resolved={resolved_total}  enqueued={added}",
+                f"resolved={resolved_total}  target_ready={target_ready_total}  "
+                f"hot={hot_total}  warm={warm_total}  cold={cold_total}",
                 flush=True,
             )
+
+    ranked_candidates = sorted(hot_candidates, reverse=True) + sorted(warm_candidates, reverse=True)
+    for _, _, latest_match_ms, lcu_puuid in ranked_candidates:
+        result = _enqueue_player(
+            con,
+            lcu_puuid,
+            depth=0,
+            source="manual_riot_id",
+            discovered_match_created_ms=latest_match_ms,
+            initial_delay_ms=0,
+        )
+        if result != "new":
+            continue
+        added += 1
+        if remaining_budget is not None:
+            remaining_budget -= 1
+            if remaining_budget <= 0:
+                print(
+                    f"[snowball] manual_riot_id pending cap reached  "
+                    f"added={added}  pending_cap={pending_cap}",
+                    flush=True,
+                )
+                break
+
+    print(
+        f"[snowball] manual_riot_id activity  "
+        f"resolved={resolved_total}  target_ready={target_ready_total}  "
+        f"hot={hot_total}  warm={warm_total}  cold={cold_total}  enqueued={added}",
+        flush=True,
+    )
+    return added
+
+
+def _reseed_recent_active_players(
+    con: sqlite3.Connection,
+    *,
+    cap: int = _RECENT_ACTIVE_RESEED_CAP,
+    cooldown_sec: int = _RECENT_ACTIVE_RESEED_COOLDOWN_SEC,
+) -> int:
+    """Requeue recently productive players when external seed windows dry up.
+
+    These players already yielded unseen target-queue games before, so they are
+    a better fallback than continuing to sweep low-yield leaderboard pages.
+    """
+    if cap <= 0:
+        return 0
+
+    cutoff_text = datetime.fromtimestamp(
+        max(0.0, time.time() - max(0, cooldown_sec)),
+        tz=timezone.utc,
+    ).isoformat()
+    rows = con.execute(
+        """
+        SELECT puuid, source, priority, min_depth, discovered_from_game_id,
+               latest_seen_match_created_ms, seed_family
+        FROM crawl_seen
+        WHERE new_games_found > 0
+          AND latest_seen_match_created_ms > 0
+          AND (last_crawled_at IS NULL OR last_crawled_at <= ?)
+        ORDER BY latest_seen_match_created_ms DESC,
+                 new_games_found DESC,
+                 priority ASC,
+                 min_depth ASC,
+                 first_seen_at DESC
+        LIMIT ?
+        """,
+        (cutoff_text, cap),
+    ).fetchall()
+    if not rows:
+        return 0
+
+    added = 0
+    for (
+        puuid,
+        source,
+        priority,
+        depth,
+        discovered_from_game_id,
+        latest_seen_match_ms,
+        seed_family,
+    ) in rows:
+        became_pending = _upsert_queue_row(
+            con,
+            str(puuid),
+            int(depth),
+            str(source),
+            int(priority),
+            str(discovered_from_game_id) if discovered_from_game_id else None,
+            int(latest_seen_match_ms),
+            requeue=True,
+            eligible_at_ms=0,
+            seed_family=str(seed_family or "") or _UNKNOWN_FAMILY,
+        )
+        if became_pending:
+            con.execute(
+                "UPDATE crawl_seen SET processed = 0 WHERE puuid = ?",
+                (str(puuid),),
+            )
+            added += 1
+    con.commit()
+    return added
+
+
+def _reseed_source_family_players(
+    con: sqlite3.Connection,
+    *,
+    sources: tuple[str, ...] = ("self", "friend", "ladder", "apex", "manual_riot_id", "riot_tier"),
+    cap: int = _SOURCE_FAMILY_RESEED_CAP,
+    cooldown_sec: int = _SOURCE_FAMILY_RESEED_COOLDOWN_SEC,
+) -> int:
+    """Requeue older source-family players so static seed pools can be revisited later.
+
+    This is weaker than recent-active reseed, but it lets the overnight crawler
+    revisit known social-graph entry points after enough time has passed for new
+    matches to appear in the local LCU history window. We only requeue source
+    families that have previously produced at least one unseen target-queue
+    game; otherwise the worker can spend the whole night replaying zero-yield
+    seed families.
+    """
+    if cap <= 0 or not sources:
+        return 0
+
+    normalized_sources = tuple(str(source) for source in sources if str(source))
+    if not normalized_sources:
+        return 0
+
+    cutoff_text = datetime.fromtimestamp(
+        max(0.0, time.time() - max(0, cooldown_sec)),
+        tz=timezone.utc,
+    ).isoformat()
+    placeholders = ",".join("?" for _ in normalized_sources)
+    rows = con.execute(
+        f"""
+        SELECT puuid, source, priority, min_depth, discovered_from_game_id,
+               latest_seen_match_created_ms, seed_family
+        FROM crawl_seen
+        WHERE source IN ({placeholders})
+          AND new_games_found > 0
+          AND (last_crawled_at IS NULL OR last_crawled_at <= ?)
+        ORDER BY priority ASC,
+                 latest_seen_match_created_ms DESC,
+                 process_count ASC,
+                 first_seen_at DESC
+        LIMIT ?
+        """,
+        (*normalized_sources, cutoff_text, cap),
+    ).fetchall()
+    if not rows:
+        return 0
+
+    added = 0
+    for (
+        puuid,
+        source,
+        priority,
+        depth,
+        discovered_from_game_id,
+        latest_seen_match_ms,
+        seed_family,
+    ) in rows:
+        became_pending = _upsert_queue_row(
+            con,
+            str(puuid),
+            int(depth),
+            str(source),
+            int(priority),
+            str(discovered_from_game_id) if discovered_from_game_id else None,
+            int(latest_seen_match_ms),
+            requeue=True,
+            eligible_at_ms=0,
+            seed_family=str(seed_family or "") or _UNKNOWN_FAMILY,
+        )
+        if became_pending:
+            con.execute(
+                "UPDATE crawl_seen SET processed = 0 WHERE puuid = ?",
+                (str(puuid),),
+            )
+            added += 1
+    con.commit()
     return added
 
 
@@ -1480,6 +1986,7 @@ def run_snowball(
     include_friends: bool = True,
     include_ladder: bool = False,
     ladder_cap: int = 100,
+    suggested_cap: int = 100,
     include_apex: bool = False,
     apex_queues: tuple[str, ...] = ("RANKED_SOLO_5x5", "RANKED_FLEX_SR"),
     apex_tiers: tuple[str, ...] = ("CHALLENGER", "GRANDMASTER", "MASTER"),
@@ -1506,7 +2013,7 @@ def run_snowball(
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     con = _connect_db(db_path)
-    _ensure_schema(con)
+    _ensure_schema_with_retry(con, worker_id=worker_id)
     migrated = _migrate_legacy_crawl_players(con)
     purged_riot_tier = _purge_invalid_riot_tier_rows(con)
     synced_priorities = _sync_source_priorities(con)
@@ -1518,23 +2025,175 @@ def run_snowball(
     expanded_game_ids: set[str] = set()
     local_puuid_latest_ms: dict[str, int] = {}
     stats = CrawlStats()
+    # The keys here are seed_family names, not immediate sources. A match-source
+    # puuid discovered through a manual_riot_id seed has seed_family
+    # "manual_riot_id", so any games it (or its descendants) yield credit the
+    # manual_riot_id family — not "match". This is the core of transitive
+    # attribution: cold seeds get credit for the games their downstream subgraph
+    # produces, not just the (usually zero) games their immediate puuid yields.
+    source_family_sources = ("self", "friend", "ladder", "apex", "manual_riot_id", "riot_tier")
+    source_family_zero_streaks: dict[str, int] = {source: 0 for source in source_family_sources}
+    source_family_run_yield: dict[str, int] = {source: 0 for source in source_family_sources}
+    source_family_backoff_until: dict[str, float] = {}
+    for source in source_family_sources:
+        state_text = _get_runtime_state_text(con, f"backoff:source-family:{source}")
+        if state_text:
+            try:
+                source_family_backoff_until[source] = float(state_text)
+            except ValueError:
+                source_family_backoff_until[source] = 0.0
+    recent_active_zero_streak = 0
+    recent_active_state = _get_runtime_state_text(con, "backoff:recent-active")
+    try:
+        recent_active_backoff_until = float(recent_active_state) if recent_active_state else 0.0
+    except ValueError:
+        recent_active_backoff_until = 0.0
+    active_reseed_mode: str | None = None
+
+    def _available_source_family_sources() -> tuple[str, ...]:
+        now = time.time()
+        return tuple(
+            source
+            for source in source_family_sources
+            if source_family_backoff_until.get(source, 0.0) <= now
+        )
+
+    def _source_family_available(source: str) -> bool:
+        return source_family_backoff_until.get(source, 0.0) <= time.time()
+
+    def _record_source_family_result(
+        seed_family: str,
+        *,
+        target_games_found: int,
+        new_games_found: int,
+    ) -> None:
+        """Update the per-family backoff streak using *transitive* yield.
+
+        seed_family is the root entry point that owns this puuid (e.g.
+        manual_riot_id), not the immediate source (which may be 'match').
+        We back off only when no descendant of this family has produced
+        a captured game in this run after _SOURCE_FAMILY_BACKOFF_ZERO_STREAK
+        consecutive processed players — which is the right signal for cold
+        seeds whose value is to open the frontier rather than yield directly.
+        """
+        if seed_family not in source_family_zero_streaks:
+            return
+        if new_games_found > 0:
+            source_family_zero_streaks[seed_family] = 0
+            source_family_run_yield[seed_family] = (
+                source_family_run_yield.get(seed_family, 0) + new_games_found
+            )
+            source_family_backoff_until.pop(seed_family, None)
+            _delete_runtime_state(con, f"backoff:source-family:{seed_family}")
+            print(
+                f"[snowball] seed-family yield  fam={seed_family}  "
+                f"+{new_games_found}  run_total={source_family_run_yield[seed_family]}  "
+                f"worker={worker_id}",
+                flush=True,
+            )
+            return
+
+        streak = source_family_zero_streaks.get(seed_family, 0) + 1
+        source_family_zero_streaks[seed_family] = streak
+        if streak < _SOURCE_FAMILY_BACKOFF_ZERO_STREAK:
+            return
+        # If the family has produced anything (transitive) in this run, don't
+        # back off — the streak is just a local dry patch within a productive
+        # subgraph. Reset and keep going.
+        if source_family_run_yield.get(seed_family, 0) > 0:
+            source_family_zero_streaks[seed_family] = 0
+            print(
+                f"[snowball] seed-family backoff prevented (transitive yield)  "
+                f"fam={seed_family}  streak={streak}  "
+                f"run_yield={source_family_run_yield[seed_family]}  worker={worker_id}",
+                flush=True,
+            )
+            return
+
+        source_family_zero_streaks[seed_family] = 0
+        backoff_until = time.time() + _SOURCE_FAMILY_BACKOFF_SEC
+        source_family_backoff_until[seed_family] = backoff_until
+        _set_runtime_state_text(
+            con,
+            f"backoff:source-family:{seed_family}",
+            str(backoff_until),
+        )
+        print(
+            f"[snowball] source-family backoff  seed_family={seed_family}  "
+            f"cooldown={_SOURCE_FAMILY_BACKOFF_SEC:.0f}s  worker={worker_id}",
+            flush=True,
+        )
+
+    def _recent_active_available() -> bool:
+        return time.time() >= recent_active_backoff_until
+
+    def _set_active_reseed_mode(mode: str | None) -> None:
+        nonlocal active_reseed_mode, recent_active_zero_streak
+        active_reseed_mode = mode
+        if mode != "recent-active":
+            recent_active_zero_streak = 0
+
+    def _record_recent_active_result(
+        *,
+        target_games_found: int,
+        new_games_found: int,
+    ) -> None:
+        nonlocal active_reseed_mode, recent_active_zero_streak, recent_active_backoff_until
+        if active_reseed_mode != "recent-active":
+            return
+        if new_games_found > 0:
+            recent_active_zero_streak = 0
+            if recent_active_backoff_until > 0.0:
+                recent_active_backoff_until = 0.0
+                _delete_runtime_state(con, "backoff:recent-active")
+            return
+
+        recent_active_zero_streak += 1
+        if recent_active_zero_streak < _RECENT_ACTIVE_BACKOFF_ZERO_STREAK:
+            return
+
+        recent_active_zero_streak = 0
+        active_reseed_mode = None
+        recent_active_backoff_until = time.time() + _RECENT_ACTIVE_BACKOFF_SEC
+        _set_runtime_state_text(
+            con,
+            "backoff:recent-active",
+            str(recent_active_backoff_until),
+        )
+        print(
+            f"[snowball] recent-active backoff  "
+            f"cooldown={_RECENT_ACTIVE_BACKOFF_SEC:.0f}s  worker={worker_id}",
+            flush=True,
+        )
 
     with LCUClient(creds) as lcu:
         me = _get_current_summoner_with_retry(lcu)
-        if not me or not me.get("puuid"):
-            raise RuntimeError("Could not resolve current summoner")
+        my_puuid = str(me["puuid"]) if me and me.get("puuid") else ""
+        my_name = (me or {}).get("gameName") or (me or {}).get("displayName") or "?"
+        has_current_summoner = bool(my_puuid)
+        if not has_current_summoner:
+            print(
+                f"[snowball] startup warning  current_summoner_unavailable  "
+                f"worker={worker_id}  mode=degraded",
+                flush=True,
+            )
 
-        my_puuid = str(me["puuid"])
-        my_name = me.get("gameName") or me.get("displayName") or "?"
-
-        if include_self:
+        if include_self and has_current_summoner and _source_family_available("self"):
             result = _enqueue_player(con, my_puuid, depth=0, source="self")
             if result == "new":
                 stats.seeded_players += 1
             elif result == "requeued":
                 stats.requeued_players += 1
+        elif include_self and not has_current_summoner:
+            print(
+                f"[snowball] startup skip  source=self  "
+                f"reason=current_summoner_unavailable  worker={worker_id}",
+                flush=True,
+            )
+        elif include_self:
+            print(f"[snowball] startup skip  source=self  reason=backoff  worker={worker_id}", flush=True)
 
-        if include_friends:
+        if include_friends and has_current_summoner and _source_family_available("friend"):
             for friend in get_friends(lcu):
                 friend_puuid = friend.get("puuid")
                 if not friend_puuid:
@@ -1544,16 +2203,36 @@ def run_snowball(
                     stats.seeded_players += 1
                 elif result == "requeued":
                     stats.requeued_players += 1
+        elif include_friends and not has_current_summoner:
+            print(
+                f"[snowball] startup skip  source=friend  "
+                f"reason=current_summoner_unavailable  worker={worker_id}",
+                flush=True,
+            )
+        elif include_friends:
+            print(f"[snowball] startup skip  source=friend  reason=backoff  worker={worker_id}", flush=True)
 
-        if include_ladder:
+        if include_ladder and has_current_summoner and _source_family_available("ladder"):
             stats.seeded_players += _seed_ladder_neighbors(con, lcu, my_puuid, ladder_cap)
+        elif include_ladder and not has_current_summoner:
+            print(
+                f"[snowball] startup skip  source=ladder  "
+                f"reason=current_summoner_unavailable  worker={worker_id}",
+                flush=True,
+            )
+        elif include_ladder:
+            print(f"[snowball] startup skip  source=ladder  reason=backoff  worker={worker_id}", flush=True)
 
-        if include_apex:
+        stats.seeded_players += _seed_suggested_players(con, lcu, suggested_cap)
+
+        if include_apex and _source_family_available("apex"):
             stats.seeded_players += _seed_apex_players(
                 con, lcu, apex_queues=apex_queues, apex_tiers=apex_tiers, apex_cap=apex_cap
             )
+        elif include_apex:
+            print(f"[snowball] startup skip  source=apex  reason=backoff  worker={worker_id}", flush=True)
 
-        if include_riot_tier:
+        if include_riot_tier and _source_family_available("riot_tier"):
             stats.seeded_players += _seed_riot_tier_players(
                 con,
                 lcu,
@@ -1564,12 +2243,14 @@ def run_snowball(
                 riot_page_limit=riot_page_limit,
                 riot_cap=riot_cap,
             )
+        elif include_riot_tier:
+            print(f"[snowball] startup skip  source=riot_tier  reason=backoff  worker={worker_id}", flush=True)
 
         manual_riot_ids = _load_riot_id_seeds(
             riot_ids=seed_riot_ids,
             riot_id_files=seed_riot_id_files,
         )
-        if manual_riot_ids:
+        if manual_riot_ids and _source_family_available("manual_riot_id"):
             print(
                 f"[snowball] preparing manual_riot_id seeds  count={len(manual_riot_ids)}  worker={worker_id}",
                 flush=True,
@@ -1587,8 +2268,49 @@ def run_snowball(
                 f"[snowball] finished manual_riot_id seeds  enqueued={stats.seeded_players}  worker={worker_id}",
                 flush=True,
             )
+        elif manual_riot_ids:
+            print(
+                f"[snowball] startup skip  source=manual_riot_id  reason=backoff  worker={worker_id}",
+                flush=True,
+            )
 
         pending = _pending_player_count(con)
+        if pending == 0:
+            suggested_reseeded = _seed_suggested_players(con, lcu, suggested_cap)
+            if suggested_reseeded:
+                stats.seeded_players += suggested_reseeded
+                pending = _pending_player_count(con)
+                _set_active_reseed_mode("suggested")
+                print(
+                    f"[snowball] suggested-player reseed  "
+                    f"enqueued={suggested_reseeded}  pending={pending}  worker={worker_id}",
+                    flush=True,
+                )
+        if pending == 0:
+            source_reseeded = _reseed_source_family_players(
+                con,
+                sources=_available_source_family_sources(),
+            )
+            if source_reseeded:
+                stats.requeued_players += source_reseeded
+                pending = _pending_player_count(con)
+                _set_active_reseed_mode("source-family")
+                print(
+                    f"[snowball] source-family reseed  "
+                    f"requeued={source_reseeded}  pending={pending}  worker={worker_id}",
+                    flush=True,
+                )
+        if pending == 0:
+            recent_reseeded = _reseed_recent_active_players(con) if _recent_active_available() else 0
+            if recent_reseeded:
+                stats.requeued_players += recent_reseeded
+                pending = _pending_player_count(con)
+                _set_active_reseed_mode("recent-active")
+                print(
+                    f"[snowball] recent-active reseed  "
+                    f"requeued={recent_reseeded}  pending={pending}  worker={worker_id}",
+                    flush=True,
+                )
         print(
             f"[snowball] connected as {my_name}  pending={pending}  "
             f"newly_seeded={stats.seeded_players}  requeued={stats.requeued_players}  "
@@ -1619,7 +2341,58 @@ def run_snowball(
                             f"grace={_EMPTY_QUEUE_GRACE_SEC:.0f}s  worker={worker_id}"
                         )
                     elif now_monotonic - empty_queue_wait_started_at >= _EMPTY_QUEUE_GRACE_SEC:
-                        break
+                        suggested_reseeded = _seed_suggested_players(con, lcu, suggested_cap)
+                        if suggested_reseeded:
+                            stats.seeded_players += suggested_reseeded
+                            empty_queue_wait_started_at = None
+                            waiting_logged = False
+                            _set_active_reseed_mode("suggested")
+                            print(
+                                f"[snowball] suggested-player reseed  "
+                                f"enqueued={suggested_reseeded}  worker={worker_id}",
+                                flush=True,
+                            )
+                            continue
+                        source_reseeded = _reseed_source_family_players(
+                            con,
+                            sources=_available_source_family_sources(),
+                        )
+                        if source_reseeded:
+                            stats.requeued_players += source_reseeded
+                            empty_queue_wait_started_at = None
+                            waiting_logged = False
+                            _set_active_reseed_mode("source-family")
+                            print(
+                                f"[snowball] source-family reseed  "
+                                f"requeued={source_reseeded}  worker={worker_id}",
+                                flush=True,
+                            )
+                            continue
+                        recent_reseeded = (
+                            _reseed_recent_active_players(con)
+                            if _recent_active_available()
+                            else 0
+                        )
+                        if recent_reseeded:
+                            stats.requeued_players += recent_reseeded
+                            empty_queue_wait_started_at = None
+                            waiting_logged = False
+                            _set_active_reseed_mode("recent-active")
+                            print(
+                                f"[snowball] recent-active reseed  "
+                                f"requeued={recent_reseeded}  worker={worker_id}",
+                                flush=True,
+                            )
+                            continue
+                        empty_queue_wait_started_at = None
+                        waiting_logged = False
+                        print(
+                            f"[snowball] idle: no reseed candidates, sleeping  "
+                            f"{_EMPTY_QUEUE_IDLE_POLL_SEC:.0f}s  worker={worker_id}",
+                            flush=True,
+                        )
+                        time.sleep(_EMPTY_QUEUE_IDLE_POLL_SEC)
+                        continue
                     time.sleep(1.0)
                     continue
                 empty_queue_wait_started_at = None
@@ -1634,7 +2407,7 @@ def run_snowball(
                 time.sleep(sleep_sec)
                 continue
 
-            puuid, depth, source, claimed_match_created_ms = next_player
+            puuid, depth, source, claimed_match_created_ms, claimed_seed_family = next_player
             stats.processed_players += 1
             waiting_logged = False
             empty_queue_wait_started_at = None
@@ -1680,6 +2453,7 @@ def run_snowball(
                     stats.existing_games += 1
                 else:
                     record["captured_at"] = _utc_now()
+                    record["seed_family"] = claimed_seed_family
                     if _insert_game(con, record):
                         existing_game_ids.add(record["game_id"])
                         _mark_game_done(con, record["game_id"])
@@ -1712,12 +2486,22 @@ def run_snowball(
                         discovered_from_game_id=record["game_id"],
                         discovered_match_created_ms=int(record["created_ms"]),
                         requeue_cooldown_ms=player_requeue_cooldown_ms,
+                        seed_family=claimed_seed_family,
                     )
                     if result == "new":
                         stats.seeded_players += 1
                     elif result == "requeued":
                         stats.requeued_players += 1
 
+            _record_source_family_result(
+                claimed_seed_family,
+                target_games_found=len(game_ids),
+                new_games_found=new_games_for_player,
+            )
+            _record_recent_active_result(
+                target_games_found=len(game_ids),
+                new_games_found=new_games_for_player,
+            )
             requeued_on_finish = _mark_player_done(
                 con,
                 puuid,

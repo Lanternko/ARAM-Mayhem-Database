@@ -2199,5 +2199,112 @@ def status(db: Path) -> None:
             click.echo(f"    {source:<7} {count}")
 
 
+@cli.command("family-stats")
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--queue", multiple=True, type=int, default=(),
+              help="Restrict captured-game tally to these queueIds (default: all)")
+def family_stats(db: Path, queue: tuple[int, ...]) -> None:
+    """Per-seed_family ROI: transitive frontier footprint vs captured-game yield.
+
+    Compares two complementary lenses: (1) crawl_seen — how many puuids the
+    family pulled in and how much downstream new_games_found credit those
+    puuids accumulated; (2) games — how many distinct captured games the
+    family is responsible for, with blue_wr.
+
+    'legacy_match' rows are pre-attribution captures (no parent linkage); they
+    are reported but excluded from comparison decisions about live seeds.
+    """
+    if not db.exists():
+        click.echo(f"[family-stats] no database at {db}")
+        return
+
+    con = sqlite3.connect(str(db))
+    cols = {r[1] for r in con.execute("PRAGMA table_info(crawl_seen)").fetchall()}
+    if "seed_family" not in cols:
+        click.echo(
+            "[family-stats] crawl_seen.seed_family missing — run snowball once "
+            "to trigger the migration."
+        )
+        con.close()
+        return
+
+    seen_rows = con.execute(
+        """
+        SELECT seed_family,
+               COUNT(*) AS puuids,
+               SUM(CASE WHEN processed=1 THEN 1 ELSE 0 END) AS done_puuids,
+               SUM(CASE WHEN new_games_found > 0 THEN 1 ELSE 0 END) AS productive,
+               COALESCE(SUM(new_games_found), 0) AS total_new_games
+        FROM crawl_seen
+        GROUP BY seed_family
+        """
+    ).fetchall()
+
+    queue_filter_sql = ""
+    queue_params: tuple = ()
+    if queue:
+        placeholders = ",".join("?" for _ in queue)
+        queue_filter_sql = f"WHERE queue_id IN ({placeholders})"
+        queue_params = tuple(int(q) for q in queue)
+    games_rows = con.execute(
+        f"""
+        SELECT seed_family,
+               COUNT(*) AS games,
+               ROUND(AVG(blue_wins), 3) AS blue_wr
+        FROM games
+        {queue_filter_sql}
+        GROUP BY seed_family
+        """,
+        queue_params,
+    ).fetchall()
+    games_by_q = con.execute(
+        f"""
+        SELECT seed_family, queue_id, COUNT(*) AS games,
+               ROUND(AVG(blue_wins), 3) AS blue_wr
+        FROM games
+        {queue_filter_sql}
+        GROUP BY seed_family, queue_id
+        """,
+        queue_params,
+    ).fetchall()
+    con.close()
+
+    seen_by_fam = {row[0]: row for row in seen_rows}
+    games_by_fam = {row[0]: row for row in games_rows}
+    families = sorted(
+        set(seen_by_fam) | set(games_by_fam),
+        key=lambda f: -((games_by_fam.get(f) or (None, 0, None))[1]),
+    )
+    queue_label = (
+        f"queue={','.join(str(q) for q in queue)}" if queue else "queue=all"
+    )
+    click.echo(f"[family-stats] {db}  {queue_label}")
+    click.echo(
+        f"  {'family':<18s} {'puuids':>7s} {'done':>6s} {'productive':>10s} "
+        f"{'transitive_yield':>17s} {'captured':>8s} {'blue_wr':>8s}"
+    )
+    for fam in families:
+        s = seen_by_fam.get(fam, (fam, 0, 0, 0, 0))
+        g = games_by_fam.get(fam, (fam, 0, None))
+        _, puuids, done_puuids, productive, total_new = s
+        _, captured, blue_wr = g
+        wr_text = f"{blue_wr:.3f}" if blue_wr is not None else "-"
+        click.echo(
+            f"  {fam:<18s} {puuids:>7d} {done_puuids or 0:>6d} {productive or 0:>10d} "
+            f"{total_new or 0:>17d} {captured or 0:>8d} {wr_text:>8s}"
+        )
+
+    if games_by_q:
+        click.echo("\n  per-queue captured-game breakdown:")
+        last_fam = ""
+        for fam, qid, games, wr in sorted(games_by_q, key=lambda r: (-r[2], r[0])):
+            label = "Mayhem" if qid == 2400 else ("ARAM" if qid == 450 else f"q{qid}")
+            wr_text = f"{wr:.3f}" if wr is not None else "-"
+            prefix = fam if fam != last_fam else ""
+            click.echo(f"    {prefix:<18s} {label:<6s} ({qid}): {games:>5d} games  blue_wr={wr_text}")
+            last_fam = fam
+
+
 if __name__ == "__main__":
     cli()

@@ -79,6 +79,15 @@ LCU retains only the **last ~20 games**.  Run the collector every session or you
 `dataset` 會直接在 terminal 印出目前資料集摘要與英雄勝率排行，英雄名稱優先從 LCU static data 解析。
 Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 
+## Stall Playbook
+
+- `metrics` 若出現 `Mayhem +0`、`current_patch +0`，但 `done_delta` 持續增加，代表 crawler 活著但目前 seed family 已低產值，不要只看 worker 是否存在。
+- `recent-active reseed` 若能短暫把 queue 打開、但 log 幾乎整排都是 `source=match` + `target_games=0`，代表目前 active subgraph 已吃乾，應換 seed family 而不是重複 recent-active。
+- `seed-opgg-plan --resume` 只有在 `data/seeds/opgg_tw_state.json` 與 `data/seeds/opgg_tw_history.jsonl` 都前進時，才算成功 refresh；若 `manual_riot_id seed progress` 反覆出現 `resolved=0 / enqueued=0`，視為目前 OPGG page window 已耗盡。
+- `apex` / `ladder` 即使能灌回很多 LCU puuid，也可能是低價值 seed；若 log 長時間是 `source=apex` + `target_games=0`，不要把它誤判成 frontier 重新活化。
+- `suggested players` 是下一個高價值 seed family，但只在 `gameflow phase=Lobby` 時存在；若 phase=`None` 且 `suggested_players=0`，下一個最有價值的 move 是使用者先進 lobby。
+- LCU 所謂「憑證過期」通常不是 cert 真過期，而是 League 重啟後 `port/token` 換掉或 `/lol-*` 尚未 ready；先重抓 credentials 與 `current_summoner`，不要先怪 cert。
+
 ## NEVER
 
 - **Never filter queue inside `extract_row`** — 它只驗結構（10 人、雙方各 5 人、有 win flag）；queue 過濾由 caller (snowball.py) 負責。違反此原則曾導致全部場次被誤判為 parse error。

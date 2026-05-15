@@ -63,6 +63,7 @@ python scripts/lcu_collector.py snowball --db data/lcu/games_account_b.db --targ
 python scripts/lcu_collector.py merge-db --out-db data/lcu/games_merged.db data/lcu/games_account_a.db data/lcu/games_account_b.db
 python scripts/lcu_collector.py dataset --queue 2400 --patch-prefix 16.9 --topn 20 --min-games 30
 python scripts/lcu_collector.py stats --queue 2400 --patch-prefix 16.9 --out-dir data/stats/mayhem_16_9
+python scripts/lcu_collector.py family-stats --queue 2400
 python scripts/lcu_collector.py export --out data/raw/lcu_games.parquet
 python scripts/lcu_collector.py export --queue 2400 --out data/raw/mayhem_games.parquet
 ```
@@ -78,6 +79,16 @@ LCU retains only the **last ~20 games**.  Run the collector every session or you
 `games.participants_json` 會保留 10 位玩家的 `teamId / championId / augments`；`stats` 會輸出英雄勝率、augment 勝率、英雄×augment 勝率 CSV。
 `dataset` 會直接在 terminal 印出目前資料集摘要與英雄勝率排行，英雄名稱優先從 LCU static data 解析。
 Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
+
+## Stall Playbook
+
+- `metrics` 若出現 `Mayhem +0`、`current_patch +0`，但 `done_delta` 持續增加，代表 crawler 活著但目前 seed family 已低產值，不要只看 worker 是否存在。
+- `recent-active reseed` 若能短暫把 queue 打開、但 log 幾乎整排都是 `source=match` + `target_games=0`，代表目前 active subgraph 已吃乾，應換 seed family 而不是重複 recent-active。
+- `seed-opgg-plan --resume` 只有在 `data/seeds/opgg_tw_state.json` 與 `data/seeds/opgg_tw_history.jsonl` 都前進時，才算成功 refresh；若 `manual_riot_id seed progress` 反覆出現 `resolved=0 / enqueued=0`，視為目前 OPGG page window 已耗盡。
+- `apex` / `ladder` / `riot_tier` 是 TW Mayhem 上**已驗證的 dead seed family**（2026-05-15 量測：合計 2,890 done puuids、0 transitive captures）；`snowball` 別再花 LCU bandwidth 跑這幾個 root，除非換 region 或大版本後再重驗。用 `python scripts/lcu_collector.py family-stats --queue 2400` 隨時看當前 per-family ROI。
+- `manual_riot_id`（OPGG）**是** productive seed family — 同一次量測 199 captures / 2,385 puuids、blue_wr=0.528。**舊** log 看到的「manual yield=0」其實是 attribution bug（transitive captures 被歸到 immediate `match` source 而非 root family），已於 `crawl_seen.seed_family` 修；別根據舊結論判 OPGG seed 沒用。
+- `suggested players` 是下一個高價值 seed family，但只在 `gameflow phase=Lobby` 時存在；若 phase=`None` 且 `suggested_players=0`，下一個最有價值的 move 是使用者先進 lobby。
+- LCU 所謂「憑證過期」通常不是 cert 真過期，而是 League 重啟後 `port/token` 換掉或 `/lol-*` 尚未 ready；先重抓 credentials 與 `current_summoner`，不要先怪 cert。
 
 ## NEVER
 

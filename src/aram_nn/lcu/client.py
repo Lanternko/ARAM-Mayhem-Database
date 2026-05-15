@@ -70,10 +70,32 @@ def get_current_summoner(client: LCUClient) -> dict | None:
     return client.get("/lol-summoner/v1/current-summoner")
 
 
+def get_summoner_by_id(client: LCUClient, summoner_id: int | str) -> dict | None:
+    """Return a summoner profile by numeric LCU summoner/account id when available."""
+    return client.get(f"/lol-summoner/v1/summoners/{summoner_id}")
+
+
 def get_friends(client: LCUClient) -> list[dict]:
     """Return the current friend list from the League client."""
     data = client.get("/lol-chat/v1/friends")
     return data if isinstance(data, list) else []
+
+
+def get_suggested_players(client: LCUClient) -> list[dict]:
+    """Return lobby suggested-player payloads when available.
+
+    The endpoint is only active while the user is in a lobby; otherwise the LCU
+    returns a non-200 RPC error and this helper falls back to an empty list.
+    """
+    data = client.get("/lol-suggested-players/v1/suggested-players")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for key in ("players", "suggestedPlayers", "suggestions"):
+            value = data.get(key)
+            if isinstance(value, list):
+                return value
+    return []
 
 
 def get_summoner_by_puuid_cached(client: LCUClient, puuid: str) -> dict | None:
