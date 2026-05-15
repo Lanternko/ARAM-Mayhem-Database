@@ -2328,7 +2328,9 @@ def family_stats(db: Path, queue: tuple[int, ...]) -> None:
 @click.option("--rate-min-saves", default=3, show_default=True, type=int,
               help="If saves in --rate-window-sec falls below this AFTER warmup, abort the round and refresh")
 @click.option("--warmup-sec", default=120, show_default=True, type=int,
-              help="Skip throughput-collapse detection for this long after each round starts")
+              help="Skip throughput-collapse detection for this long AFTER the first capture in the round (so OPGG bridge time doesn't trigger abort)")
+@click.option("--bridge-timeout-sec", default=1200, show_default=True, type=int,
+              help="If the round produces no captures within this long after launch, abort and refresh (bridge stalled / seeds exhausted)")
 def auto_collect(
     rounds: int,
     target_games: int,
@@ -2342,17 +2344,25 @@ def auto_collect(
     rate_window_sec: int,
     rate_min_saves: int,
     warmup_sec: int,
+    bridge_timeout_sec: int,
 ) -> None:
     """Loop: refresh OPGG seeds -> snowball; auto-abort the round and refresh on
-    throughput collapse or `source-family backoff` (the documented stall signals).
+    throughput collapse or stalled bridging.
 
-    Each round is bounded by --target-games and --max-players. The inner snowball
-    is killed early when more than --warmup-sec elapsed AND saves in the last
-    --rate-window-sec fall below --rate-min-saves (frontier saturated or seeds
-    dead). 'source-family backoff' lines are logged for visibility but do NOT
-    abort the round — backoff only blocks fresh seeding from that family;
-    match-source descendants already in the queue keep producing. The next
-    round's backoff-state clear lets fresh seeds in again.
+    Each round is bounded by --target-games and --max-players. Two abort signals:
+      - **Bridge stall**: --bridge-timeout-sec elapses since round start without
+        a single capture (OPGG bridge slow / seeds all dedup'd).
+      - **Throughput collapse**: --warmup-sec elapses since the *first* capture,
+        AND saves in the last --rate-window-sec fall below --rate-min-saves
+        (frontier saturated mid-round).
+
+    The warmup clock starts at the first capture, NOT at round launch — so OPGG
+    bridge time (often 5-10 min) is not counted against the round; it's the
+    bridge_timeout that catches truly seedless rounds.
+
+    'source-family backoff' lines are logged for visibility but do NOT abort the
+    round — backoff only blocks fresh seeding from that family; match-source
+    descendants already in the queue keep producing.
 
     Between rounds, OPGG seed plan is advanced by --opgg-pages-per-round per
     tier so each restart gets fresh entry points.
@@ -2367,22 +2377,24 @@ def auto_collect(
     for round_idx in range(1, rounds + 1):
         click.echo(f"\n[auto-collect] === round {round_idx}/{rounds} ===", err=False)
 
-        # 0) Clear any persisted source-family backoff so the next snowball can
-        #    re-seed productive families that were temporarily backed off in a
-        #    prior run/worker. Without this, a stale backoff entry can suppress
-        #    OPGG seeding at startup ('startup skip ... reason=backoff') and
-        #    leave the round chewing on already-saturated leaves.
+        # 0) Clear any persisted source-family backoff AND family_yield counters.
+        #    Backoff: stale rows from prior workers / sessions can suppress
+        #    OPGG seeding at startup ('startup skip ... reason=backoff').
+        #    family_yield: persisted across snowball runs so multi-worker
+        #    sister processes share transitive credit; reset between rounds
+        #    so each round's accounting is clean.
         try:
             con = sqlite3.connect(str(db), timeout=30.0)
             cleared = con.execute(
-                "DELETE FROM crawl_runtime_state WHERE state_key LIKE 'backoff:%'"
+                "DELETE FROM crawl_runtime_state "
+                "WHERE state_key LIKE 'backoff:%' OR state_key LIKE 'family_yield:%'"
             ).rowcount
             con.commit()
             con.close()
             if cleared:
-                click.echo(f"[auto-collect] cleared {cleared} stale backoff state row(s)")
+                click.echo(f"[auto-collect] cleared {cleared} stale backoff/family_yield row(s)")
         except sqlite3.OperationalError as exc:
-            click.echo(f"[auto-collect] backoff clear skipped: {exc}")
+            click.echo(f"[auto-collect] runtime-state clear skipped: {exc}")
 
         # 1) Refresh OPGG seeds
         refresh_args = [
@@ -2421,6 +2433,7 @@ def auto_collect(
         )
         save_times: deque[float] = deque()
         round_start = time.time()
+        first_save_time: float | None = None
         round_saves = 0
         abort_reason: str | None = None
         try:
@@ -2429,17 +2442,33 @@ def auto_collect(
                 click.echo(line, nl=False)
                 now = time.time()
                 if "[saved]" in line:
+                    if first_save_time is None:
+                        first_save_time = now
                     save_times.append(now)
                     round_saves += 1
                 # Backoff is informational only — don't abort. Match-source
                 # descendants of that family keep producing; only true throughput
                 # collapse (checked below) signals "round is dead, restart".
-                # Logging is left to snowball's own [snowball] line.
-                # trim window
                 while save_times and now - save_times[0] > rate_window_sec:
                     save_times.popleft()
-                # collapse check after warmup
-                if (now - round_start) > warmup_sec and len(save_times) < rate_min_saves:
+                # bridge stalled: never produced a capture within bridge timeout
+                if first_save_time is None and (now - round_start) > bridge_timeout_sec:
+                    abort_reason = (
+                        f"bridge stalled: 0 captures in first {bridge_timeout_sec}s "
+                        f"(seeds exhausted or LCU misbehaving)"
+                    )
+                    break
+                # Throughput collapse: meaningful rate measurement requires both
+                # (a) the warmup grace period since first save AND (b) at least
+                # one full rate_window_sec of data after first save (otherwise
+                # `save_times` length compared against rate_min_saves is a
+                # units mismatch — a 125s-old round can't have 60 saves in
+                # "last 180s" even at a healthy 25/min).
+                if (
+                    first_save_time is not None
+                    and (now - first_save_time) >= max(warmup_sec, rate_window_sec)
+                    and len(save_times) < rate_min_saves
+                ):
                     abort_reason = (
                         f"throughput collapse: {len(save_times)} saves in last "
                         f"{rate_window_sec}s (< {rate_min_saves})"

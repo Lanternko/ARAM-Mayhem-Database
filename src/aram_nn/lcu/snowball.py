@@ -479,6 +479,48 @@ def _delete_runtime_state(con: sqlite3.Connection, key: str) -> None:
     con.commit()
 
 
+def _family_yield_key(seed_family: str) -> str:
+    return f"family_yield:{seed_family}"
+
+
+def _increment_persisted_family_yield(
+    con: sqlite3.Connection, seed_family: str, delta: int
+) -> None:
+    """Atomically add `delta` to the per-family run yield counter.
+
+    Used to share transitive-yield credit across workers: when one worker
+    captures a game for a family, all workers see the bumped counter and
+    can avoid spuriously backing the family off based on their own local
+    zero-streaks. SQLite serializes concurrent INSERT...ON CONFLICT DO
+    UPDATE so the arithmetic is atomic.
+    """
+    if delta <= 0:
+        return
+    con.execute(
+        """
+        INSERT INTO crawl_runtime_state(state_key, state_value, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(state_key) DO UPDATE SET
+            state_value = CAST(
+                CAST(crawl_runtime_state.state_value AS INTEGER) + ? AS TEXT
+            ),
+            updated_at = excluded.updated_at
+        """,
+        (_family_yield_key(seed_family), str(int(delta)), _utc_now(), int(delta)),
+    )
+    con.commit()
+
+
+def _read_persisted_family_yield(con: sqlite3.Connection, seed_family: str) -> int:
+    raw = _get_runtime_state_text(con, _family_yield_key(seed_family))
+    if raw is None:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
 def _purge_invalid_riot_tier_rows(con: sqlite3.Connection) -> int:
     rows = con.execute(
         """
@@ -2083,6 +2125,8 @@ def run_snowball(
             source_family_run_yield[seed_family] = (
                 source_family_run_yield.get(seed_family, 0) + new_games_found
             )
+            # Mirror to persisted state so sister workers see the credit.
+            _increment_persisted_family_yield(con, seed_family, new_games_found)
             source_family_backoff_until.pop(seed_family, None)
             _delete_runtime_state(con, f"backoff:source-family:{seed_family}")
             print(
@@ -2099,13 +2143,18 @@ def run_snowball(
             return
         # If the family has produced anything (transitive) in this run, don't
         # back off — the streak is just a local dry patch within a productive
-        # subgraph. Reset and keep going.
-        if source_family_run_yield.get(seed_family, 0) > 0:
+        # subgraph. Pull from BOTH local and persisted yield so a sibling
+        # worker that captured games can rescue this worker's streak.
+        local_yield = source_family_run_yield.get(seed_family, 0)
+        persisted_yield = _read_persisted_family_yield(con, seed_family)
+        effective_yield = max(local_yield, persisted_yield)
+        if effective_yield > 0:
             source_family_zero_streaks[seed_family] = 0
             print(
                 f"[snowball] seed-family backoff prevented (transitive yield)  "
                 f"fam={seed_family}  streak={streak}  "
-                f"run_yield={source_family_run_yield[seed_family]}  worker={worker_id}",
+                f"local_yield={local_yield}  persisted_yield={persisted_yield}  "
+                f"worker={worker_id}",
                 flush=True,
             )
             return
