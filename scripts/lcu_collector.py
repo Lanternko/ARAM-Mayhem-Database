@@ -2306,5 +2306,279 @@ def family_stats(db: Path, queue: tuple[int, ...]) -> None:
             last_fam = fam
 
 
+@cli.command("auto-collect")
+@click.option("--rounds", default=20, show_default=True, type=int,
+              help="Maximum number of (refresh -> snowball) rounds before stopping")
+@click.option("--target-games", default=500, show_default=True, type=int,
+              help="Snowball --target-games per round")
+@click.option("--max-players", default=1000, show_default=True, type=int,
+              help="Snowball --max-players per round")
+@click.option("--games-per-player", default=4, show_default=True, type=int)
+@click.option("--seed-file", default=Path("data/seeds/opgg_tw.txt"),
+              type=click.Path(path_type=Path), show_default=True)
+@click.option("--opgg-region", default="tw", show_default=True)
+@click.option("--opgg-tier", "opgg_tiers", multiple=True, default=("platinum", "gold"),
+              show_default=True, help="OPGG tiers to pull seeds from each round")
+@click.option("--opgg-pages-per-round", default=2, show_default=True, type=int,
+              help="OPGG pages per tier to fetch each round")
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--rate-window-sec", default=180, show_default=True, type=int,
+              help="Sliding window over which to measure recent saves/min")
+@click.option("--rate-min-saves", default=3, show_default=True, type=int,
+              help="If saves in --rate-window-sec falls below this AFTER warmup, abort the round and refresh")
+@click.option("--warmup-sec", default=120, show_default=True, type=int,
+              help="Skip throughput-collapse detection for this long after each round starts")
+def auto_collect(
+    rounds: int,
+    target_games: int,
+    max_players: int,
+    games_per_player: int,
+    seed_file: Path,
+    opgg_region: str,
+    opgg_tiers: tuple[str, ...],
+    opgg_pages_per_round: int,
+    db: Path,
+    rate_window_sec: int,
+    rate_min_saves: int,
+    warmup_sec: int,
+) -> None:
+    """Loop: refresh OPGG seeds -> snowball; auto-abort the round and refresh on
+    throughput collapse or `source-family backoff` (the documented stall signals).
+
+    Each round is bounded by --target-games and --max-players. The inner snowball
+    is killed early when more than --warmup-sec elapsed AND saves in the last
+    --rate-window-sec fall below --rate-min-saves (frontier saturated or seeds
+    dead). 'source-family backoff' lines are logged for visibility but do NOT
+    abort the round — backoff only blocks fresh seeding from that family;
+    match-source descendants already in the queue keep producing. The next
+    round's backoff-state clear lets fresh seeds in again.
+
+    Between rounds, OPGG seed plan is advanced by --opgg-pages-per-round per
+    tier so each restart gets fresh entry points.
+    """
+    from collections import deque
+
+    self_path = Path(__file__).resolve()
+    py = sys.executable
+    seed_file = Path(seed_file)
+    seed_file.parent.mkdir(parents=True, exist_ok=True)
+
+    for round_idx in range(1, rounds + 1):
+        click.echo(f"\n[auto-collect] === round {round_idx}/{rounds} ===", err=False)
+
+        # 0) Clear any persisted source-family backoff so the next snowball can
+        #    re-seed productive families that were temporarily backed off in a
+        #    prior run/worker. Without this, a stale backoff entry can suppress
+        #    OPGG seeding at startup ('startup skip ... reason=backoff') and
+        #    leave the round chewing on already-saturated leaves.
+        try:
+            con = sqlite3.connect(str(db), timeout=30.0)
+            cleared = con.execute(
+                "DELETE FROM crawl_runtime_state WHERE state_key LIKE 'backoff:%'"
+            ).rowcount
+            con.commit()
+            con.close()
+            if cleared:
+                click.echo(f"[auto-collect] cleared {cleared} stale backoff state row(s)")
+        except sqlite3.OperationalError as exc:
+            click.echo(f"[auto-collect] backoff clear skipped: {exc}")
+
+        # 1) Refresh OPGG seeds
+        refresh_args = [
+            py, str(self_path), "seed-opgg-plan",
+            "--region", opgg_region,
+            "--pages-per-tier", str(opgg_pages_per_round),
+            "--topn-total", "0",
+            "--resume",
+            "--out", str(seed_file),
+        ]
+        for tier in opgg_tiers:
+            refresh_args.extend(["--tier", tier])
+        refresh_rc = subprocess.run(refresh_args).returncode
+        if refresh_rc != 0:
+            click.echo(f"[auto-collect] seed-opgg-plan failed (rc={refresh_rc}); aborting auto-collect")
+            return
+
+        # 2) Run snowball with stdout streaming
+        snowball_args = [
+            py, "-u", str(self_path), "snowball",
+            "--db", str(db),
+            "--seed-riot-id-file", str(seed_file),
+            "--target-games", str(target_games),
+            "--max-players", str(max_players),
+            "--games-per-player", str(games_per_player),
+        ]
+        click.echo(f"[auto-collect] launching: {' '.join(snowball_args)}")
+        proc = subprocess.Popen(
+            snowball_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        save_times: deque[float] = deque()
+        round_start = time.time()
+        round_saves = 0
+        abort_reason: str | None = None
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                click.echo(line, nl=False)
+                now = time.time()
+                if "[saved]" in line:
+                    save_times.append(now)
+                    round_saves += 1
+                # Backoff is informational only — don't abort. Match-source
+                # descendants of that family keep producing; only true throughput
+                # collapse (checked below) signals "round is dead, restart".
+                # Logging is left to snowball's own [snowball] line.
+                # trim window
+                while save_times and now - save_times[0] > rate_window_sec:
+                    save_times.popleft()
+                # collapse check after warmup
+                if (now - round_start) > warmup_sec and len(save_times) < rate_min_saves:
+                    abort_reason = (
+                        f"throughput collapse: {len(save_times)} saves in last "
+                        f"{rate_window_sec}s (< {rate_min_saves})"
+                    )
+                    break
+        finally:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+
+        elapsed = int(time.time() - round_start)
+        if abort_reason:
+            click.echo(
+                f"\n[auto-collect] round {round_idx} aborted after {elapsed}s, "
+                f"saves={round_saves}, reason={abort_reason}"
+            )
+        else:
+            click.echo(
+                f"\n[auto-collect] round {round_idx} finished after {elapsed}s, "
+                f"saves={round_saves}, snowball_rc={proc.returncode}"
+            )
+
+    click.echo(f"\n[auto-collect] all {rounds} rounds done")
+
+
+@cli.command()
+@click.option("--lr-model", required=True,
+              type=click.Path(exists=True, path_type=Path, dir_okay=False),
+              help="Path to lr_model.pkl (sklearn LogisticRegression).")
+@click.option("--vocab", required=True,
+              type=click.Path(exists=True, path_type=Path, dir_okay=False),
+              help="Path to tier2_checkpoint.pt or champ_to_idx.json — used for champion vocab.")
+@click.option("--poll-interval", default=1.0, show_default=True, type=float,
+              help="Seconds between LCU polls while in ChampSelect.")
+@click.option("--verbose", is_flag=True, default=False,
+              help="Print per-poll diagnostic info (phase + session presence).")
+def recommend(lr_model: Path, vocab: Path, poll_interval: float, verbose: bool) -> None:
+    """Real-time bench-swap recommendations during ARAM champ select.
+
+    Uses the LR baseline (strongest classifier at current data scale, see
+    aram_nn.recommend module docstring).  Opponent is unobservable in ARAM
+    champ select; ranking is opponent-invariant by construction.  Absolute
+    win probabilities are point estimates assuming an "average" opponent.
+
+    Run BEFORE you queue:
+        python scripts/lcu_collector.py recommend \\
+            --lr-model models/tier2_mayhem/lr_model.pkl \\
+            --vocab    models/tier2_mayhem/tier2_checkpoint.pt
+    """
+    # Lazy imports keep the CLI startup fast for other subcommands.
+    from aram_nn.lcu.client import (
+        LCUClient, get_champion_summary, get_champ_select_session, get_gameflow_phase,
+    )
+    from aram_nn.lcu.process import get_credentials
+    from aram_nn.recommend import (
+        load_lr, parse_session, session_state_hash, suggest_for_cell,
+    )
+
+    creds = get_credentials()
+    if not creds:
+        click.echo("[error] League client not running (no LCU credentials).")
+        raise SystemExit(1)
+
+    click.echo(f"[recommend] loading model from {lr_model}")
+    model = load_lr(lr_model, vocab)
+    click.echo(f"[recommend] vocab covers {model.n_champs} champions")
+
+    last_hash: tuple | None = None
+    last_phase: str | None = None
+    id_to_name: dict[int, str] = {}
+
+    try:
+        with LCUClient(creds) as lcu:
+            # Build the championId → name lookup once.  LCU static data is stable
+            # across the session; no need to re-fetch on every poll.
+            for entry in get_champion_summary(lcu):
+                cid = entry.get("id")
+                name = entry.get("name") or entry.get("alias")
+                if isinstance(cid, int) and isinstance(name, str) and cid > 0:
+                    id_to_name[cid] = name
+
+            # Gate directly on the champ-select session endpoint rather than
+            # /lol-gameflow/v1/phase.  Some League client versions don't report
+            # "ChampSelect" for ARAM via the gameflow phase string, but the
+            # session endpoint always returns a payload during champ select
+            # and 404s outside it — making it the more reliable signal.
+            while True:
+                session = get_champ_select_session(lcu)
+                parsed = parse_session(session) if session else None
+
+                if parsed is None:
+                    phase = get_gameflow_phase(lcu)
+                    if verbose or phase != last_phase:
+                        click.echo(
+                            f"[recommend] idle  phase={phase}  "
+                            f"session={'yes(incomplete)' if session else 'no'}"
+                        )
+                        last_phase = phase
+                        last_hash = None
+                    time.sleep(max(poll_interval, 2.0))
+                    continue
+                last_phase = "ChampSelect"
+
+                state = session_state_hash(parsed)
+                if state == last_hash:
+                    time.sleep(poll_interval)
+                    continue
+                last_hash = state
+
+                suggestions = suggest_for_cell(
+                    parsed.my_team_ids, parsed.my_current_id, parsed.bench_ids, model,
+                )
+
+                # Clear screen + home cursor for in-place refresh.
+                click.echo("\033[2J\033[H", nl=False)
+                cur_name = id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
+                click.echo(f"[champ select] cell {parsed.my_cell_id}   current: {cur_name}")
+                click.echo("               (P(win) assumes average opponent)\n")
+                click.echo(f"  {'Δ%':>7}  {'P(win)':>7}  candidate")
+                click.echo("  " + "-" * 36)
+                for s in suggestions:
+                    name = id_to_name.get(s.champion_id, f"#{s.champion_id}")
+                    tag = "keep" if s.source == "keep" else "bench"
+                    if not s.is_known:
+                        click.echo(f"  {'  n/a':>7}  {'  n/a':>7}  {name} ({tag}, not in vocab)")
+                        continue
+                    delta_pp = s.delta * 100.0
+                    prob_pp = s.win_prob * 100.0
+                    delta_str = f"{delta_pp:+.1f}%" if s.source != "keep" else "  —  "
+                    click.echo(f"  {delta_str:>7}  {prob_pp:5.1f}%   {name} ({tag})")
+
+                time.sleep(poll_interval)
+    except KeyboardInterrupt:
+        click.echo("\n[recommend] stopped.")
+
+
 if __name__ == "__main__":
     cli()
