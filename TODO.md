@@ -55,20 +55,28 @@ All 6 sanity tests PASS (see `scripts/sanity_tests.py`):
 
 ## Productization
 
-### 7. LR-solo as pick-advisor function
-- Input: 5 champion IDs (your rolled candidates + reroll options).
-- Output: P(win | random opponent), per-champ marginal value for swap decisions.
-- Bundle: `models/pick_advisor.pkl` + `scripts/pick_advisor.py` CLI.
+### 7. Pick advisor (done — `scripts/pick_advisor.py`, `scripts/synergy_lift.py`)
+- **`pick_advisor.py --team "Alias1,Alias2,Alias3,Alias4"`**: ranks candidates by universal lr_w AND hybrid (lr_w + 0.5 × avg_synergy). Shows per-anchor breakdown with Wilson CIs.
+- **`synergy_lift.py --team "..."`**: ranks by 95% lower bound of synergy lift = `(expected_wr_with_team - solo_wr_baseline) - 1.96 × SE`. Surfaces "fun picks" (medium universal strength + high comp-specific synergy) over OP-only ranking.
+- Runtime: ~1s end-to-end on 30k data; ~500ms after parquet load. Fast enough for in-game champ-select integration.
+- Output: significant lift candidates (z > 1.96) AND negative-synergy avoid list.
+- Validated: 6 champs (Kindred, Ambessa, Aurora, Khazix, Ryze, Aphelios) pass z > 1.96 for a sample 4-comp; positive results match domain intuition (e.g. Xin Zhao + Volibear front-line synergy).
 
 ### 8. Tier-list cron / weekly refresh
 - `scripts/tier_list.py` already works.
 - Schedule: when DB grows by ≥1k games, regenerate `models/tier_list_solo_latest.csv` + diff vs last week.
 
+### 9. In-game champ-select integration (next)
+- LCU poller → on champ-select phase change → call `pick_advisor.py` for current 4 known team members → display top-3 picks with lift + confidence.
+- Daemon mode: pre-load parquet once, serve queries via stdin/socket → <100ms latency per query.
+- Output to overlay HUD or stdout for OBS capture.
+
 ## Verified DEAD ENDS (don't redo without new context)
 
 - **Tier 1 DeepSets (default params)** — overfits; reg version is the only useful one.
 - **Patch embedding at 2 patches** — adds noise > signal. Revisit at 4+ patches.
-- **Pairwise LR (172 + 14,706 features)** — best C collapses all pair weights to 0; no acc gain. Revisit at 50k+.
+- **Pairwise LR (172 + 14,706 features) for full-corpus prediction acc** — best C collapses all pair weights to 0; no acc gain. Revisit at 50k+.
+  - **BUT** anchor-conditional synergy (`scripts/synergy_lift.py`) DOES surface significant pair effects for specific team queries — the trick is to ask the *narrow* question (given THIS team, which pair is best) instead of the *broad* one (rank all pairs in corpus).
 - **Token-masking SSL** — pretext task ("predict masked champion") learns co-occurrence ≠ win signal. Target misaligned.
 - **Apex / ladder / riot-tier seed families** — verified dead (per CLAUDE.md, 0 transitive captures).
 
