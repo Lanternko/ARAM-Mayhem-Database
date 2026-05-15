@@ -737,6 +737,18 @@ def render_html(
         grid-column: 1 / -1;
     }
     .detail-host:empty { display: none; }
+    /* Visually hidden but kept in the DOM as text — so browser Find on Page
+       (Ctrl+F / Cmd+F) can still match English aliases like "Aatrox" while
+       only the localized zh-TW name is visually drawn. */
+    .sr-only {
+        position: absolute;
+        width: 1px; height: 1px;
+        padding: 0; margin: -1px;
+        overflow: hidden;
+        clip: rect(0,0,0,0);
+        white-space: nowrap;
+        border: 0;
+    }
     .detail {
         margin: 6px 0 4px;
         background: #1b2030;
@@ -1065,7 +1077,7 @@ def render_html(
     parts.append("<div class='filter-tools'>")
     parts.append(
         '<input class="search" id="champ-search" type="search" '
-        'placeholder="搜尋英雄（中 / 英 / 角色）…" autocomplete="off" '
+        'placeholder="搜尋英雄（中 / 英 / 角色）  Ctrl+F" autocomplete="off" '
         'aria-label="搜尋英雄">'
     )
     parts.append(
@@ -1112,6 +1124,10 @@ def render_html(
                 f"data-tags='{tag_str}' data-search=\"{search_blob}\" "
                 f"title=\"{title}\">"
                 f"<img loading='lazy' src='{r['image']}' alt='{r['name']}'>"
+                # The English alias is rendered as screen-reader-only text so
+                # Ctrl+F / Cmd+F can find e.g. "Aatrox" even though only the
+                # zh-TW name is drawn.
+                f"<span class='sr-only'>{alias}</span>"
                 f"<span class='badge'>{tier}</span>"
                 f"<span class='wr'>{wr_pct}</span>"
                 f"<span class='name'>{r['name']}</span>"
@@ -1360,7 +1376,39 @@ def render_html(
             filterState.q = searchEl.value || '';
             applyFilters();
         });
+        // Esc inside the search clears the filter and unfocuses, so the
+        // typical "open, search, escape back to grid" flow works.
+        searchEl.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                searchEl.value = '';
+                filterState.q = '';
+                applyFilters();
+                searchEl.blur();
+            }
+        });
     }
+
+    // Ctrl+F / Cmd+F shortcut → focus our search input.
+    //
+    // Rationale: our search already understands zh-TW name + English alias +
+    // role keywords (gua-Liang in one go).  Native browser find can also
+    // discover champions thanks to the .sr-only English alias spans, but
+    // the in-page search additionally filters out non-matches — usually
+    // what the user wants.
+    //
+    // If the user is already inside the search box, fall through to the
+    // browser's native find dialog (no preventDefault) so they retain that
+    // escape hatch.
+    document.addEventListener('keydown', (ev) => {
+        const isFind = (ev.ctrlKey || ev.metaKey) && ev.key && ev.key.toLowerCase() === 'f';
+        if (!isFind) return;
+        const sEl = document.getElementById('champ-search');
+        if (!sEl) return;
+        if (document.activeElement === sEl) return;  // let browser take over on 2nd press
+        ev.preventDefault();
+        sEl.focus();
+        sEl.select();
+    });
     """
     js = js.replace("__PAYLOAD__", payload_json)
     parts.append(f"<script>{js}</script>")
