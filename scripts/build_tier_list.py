@@ -1688,7 +1688,7 @@ def render_html(
         "<label class='search-wrap'>"
         f"{search_icon}"
         '<input class="search" id="champ-search" type="search" '
-        'placeholder="搜尋英雄（中 / 英 / 角色）   Ctrl+F" autocomplete="off" '
+        'placeholder="搜尋英雄（中 / 英）   Ctrl+F" autocomplete="off" '
         'aria-label="搜尋英雄">'
         "</label>"
     )
