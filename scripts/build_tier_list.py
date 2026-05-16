@@ -73,17 +73,94 @@ def assign_tier(bayes_wr: float) -> str:
 # doesn't always match how ARAM/Mayhem players think about a champion.
 # These overrides REPLACE the DDragon tag list for the listed aliases.
 #
-# Codex audit (2026-05-15) identified 10 mismatches:
-#   - Nilah: critical (Marksman missing — players can't find her under 射手)
-#   - 9× mage-supports / multi-role residue: DDragon tags pollute Support /
-#     Fighter / Marksman filters with champions no Mayhem player would
-#     search for under those roles.
+# Codex audit #1 (2026-05-15): 10 entries — mage-supports + Nilah.
+# Codex audit #2 (2026-05-17): ~50 entries — full role-chip noise cleanup.
+#   Dominant patterns: Fighter↔Tank cross-pollution, Marksman mislabeled Mage,
+#   Mage/Support & Support/Mage chip bleed. User-reviewed per-champion.
 TAG_OVERRIDES: dict[str, list[str]] = {
-    # Nilah is officially Fighter/Assassin but is universally picked as a
-    # melee Marksman in ARAM/Mayhem; the filter has to surface her.
-    "Nilah":        ["Marksman", "Fighter"],
-    # Mage-supports — they're played as mages in this mode; their Support
-    # tag was making the 輔助 chip noisy.
+    # --- Assassin ---
+    # Pure burst assassins whose Fighter secondary pollutes 戰士 chip.
+    "Akali":    ["Assassin"],
+    "Diana":    ["Assassin"],   # AP diver; Fighter tag is a relic
+    "Ekko":     ["Assassin"],
+    "Fizz":     ["Assassin"],
+    "Nocturne": ["Assassin"],
+    "Qiyana":   ["Assassin"],
+    "Rengar":   ["Assassin"],
+
+    # --- Fighter ---
+    # Duelists/skirmishers tagged Fighter+Assassin — Assassin chip is noisy.
+    "Briar":   ["Fighter"],
+    "Fiora":   ["Fighter"],
+    "Irelia":  ["Fighter"],
+    "Jax":     ["Fighter"],
+    "Pantheon":["Fighter"],
+    "Riven":   ["Fighter"],
+    "Vi":      ["Fighter"],
+    "XinZhao": ["Fighter"],
+    "Yasuo":   ["Fighter"],
+    "Yone":    ["Fighter"],
+    # Bruisers tagged Fighter+Tank — Tank chip is noisy for these.
+    "Aatrox":   ["Fighter"],
+    "Camille":  ["Fighter"],
+    "Darius":   ["Fighter"],
+    "Garen":    ["Fighter"],
+    "Hecarim":  ["Fighter"],
+    "Kled":     ["Fighter"],
+    "Olaf":     ["Fighter"],
+    "Renekton": ["Fighter"],
+    "Sett":     ["Fighter"],
+    "Trundle":  ["Fighter"],
+    "Warwick":  ["Fighter"],
+    "Yorick":   ["Fighter"],
+    # Tank/Fighter — primary identity is Fighter in Mayhem.
+    "Poppy":    ["Fighter"],
+
+    # --- Tank ---
+    # True frontline tanks whose Fighter secondary pollutes 戰士 chip.
+    "Malphite": ["Tank"],
+    "Maokai":   ["Tank"],
+    "Ornn":     ["Tank"],
+    "Rammus":   ["Tank"],
+    "Sejuani":  ["Tank"],
+    "Sion":     ["Tank"],
+    "Zac":      ["Tank"],
+    # AP tanks — Mage tag is misleading for role filter purposes.
+    "Amumu":    ["Tank"],
+    "Chogath":  ["Tank"],
+    "Galio":    ["Tank"],
+    # Fighter/Tank — these play as frontline tanks in Mayhem.
+    "Nasus":    ["Tank"],
+    "Volibear": ["Tank"],
+
+    # --- Support + Tank (engage supports) ---
+    "TahmKench": ["Tank", "Support"],
+    "Taric":     ["Tank", "Support"],
+    "Thresh":    ["Support", "Tank"],
+
+    # --- Marksman ---
+    # ADCs with AP builds — Mage tag causes them to appear under 法師.
+    "Ezreal":  ["Marksman"],
+    "Kaisa":   ["Marksman"],
+    "Kayle":   ["Marksman"],   # Fighter/Support tags are completely wrong
+    "KogMaw":  ["Marksman"],
+    "Nilah":   ["Marksman"],   # Officially Fighter/Assassin; melee ADC in practice
+    "Smolder": ["Marksman"],
+    "Twitch":  ["Marksman"],
+    "Varus":   ["Marksman"],
+
+    # --- Mage ---
+    # Poke/control mages with Support secondary — pollutes 輔助 chip.
+    "Karma":    ["Mage"],
+    "Lux":      ["Mage"],
+    "Morgana":  ["Mage"],
+    "Orianna":  ["Mage"],
+    "Seraphine":["Mage"],
+    "Swain":    ["Mage"],      # Fighter secondary is noisy
+    "Teemo":    ["Mage"],      # Marksman/Assassin tags; trap mage in practice
+    "Zoe":      ["Mage"],
+    "Zyra":     ["Mage"],
+    # Mage-supports — already present from audit #1; Support tag was noisy.
     "Annie":        ["Mage"],
     "Brand":        ["Mage"],
     "Heimerdinger": ["Mage"],
@@ -91,10 +168,19 @@ TAG_OVERRIDES: dict[str, list[str]] = {
     "Neeko":        ["Mage"],
     "Velkoz":       ["Mage"],
     "Xerath":       ["Mage"],
-    # Twisted Fate's Marksman tag is a relic; he's played as a Mage.
-    "TwistedFate":  ["Mage"],
-    # Vladimir's Fighter tag is misleading — he's a sustain Mage in ARAM.
-    "Vladimir":     ["Mage"],
+    "TwistedFate":  ["Mage"],  # Marksman tag is a relic
+    "Vladimir":     ["Mage"],  # Fighter tag is misleading
+
+    # --- Support ---
+    # Enchanters with Mage secondary — pollutes 法師 chip.
+    "Bard":    ["Support"],
+    "Janna":   ["Support"],
+    "Lulu":    ["Support"],
+    "Nami":    ["Support"],
+    "Sona":    ["Support"],
+    "Soraka":  ["Support"],
+    "Yuumi":   ["Support"],
+    "Zilean":  ["Support"],
 }
 
 
