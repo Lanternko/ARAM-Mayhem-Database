@@ -39,13 +39,24 @@ from aram_nn.recommend import (
 
 # ---------- Polling thread ----------
 
-def poll_loop(stop_event: threading.Event, q: queue.Queue, model, creds, poll_interval: float) -> None:
+def poll_loop(
+    stop_event: threading.Event, q: queue.Queue, model, creds,
+    poll_interval: float, verbose: bool = False,
+) -> None:
     """Run in background thread.  Pushes messages onto `q`:
       ("static", id_to_name)         — once, after LCU static data loads
       ("idle", phase)                — when not in (or about to leave) champ select
       ("suggestions", parsed, sugs)  — when champ select state changes
       ("error", message)             — on unrecoverable failure
+
+    When verbose, also prints a status line to stdout on every poll so the
+    user can see what the LCU is returning (phase + session presence)
+    while watching the terminal during a real game.
     """
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg, flush=True)
+
     try:
         with LCUClient(creds) as lcu:
             id_to_name: dict[int, str] = {}
@@ -55,6 +66,7 @@ def poll_loop(stop_event: threading.Event, q: queue.Queue, model, creds, poll_in
                 if isinstance(cid, int) and isinstance(name, str) and cid > 0:
                     id_to_name[cid] = name
             q.put(("static", id_to_name))
+            log(f"[poll] loaded {len(id_to_name)} champion names from LCU")
 
             last_hash: tuple | None = None
             last_phase: str | None = None
@@ -65,6 +77,9 @@ def poll_loop(stop_event: threading.Event, q: queue.Queue, model, creds, poll_in
 
                 if parsed is None:
                     phase = get_gameflow_phase(lcu)
+                    if verbose or phase != last_phase:
+                        log(f"[poll] idle  phase={phase}  "
+                            f"session={'yes(incomplete)' if session else 'no'}")
                     if phase != last_phase:
                         q.put(("idle", phase))
                         last_phase = phase
@@ -80,10 +95,13 @@ def poll_loop(stop_event: threading.Event, q: queue.Queue, model, creds, poll_in
                     )
                     q.put(("suggestions", parsed, suggestions))
                     last_hash = state
+                    log(f"[poll] champ-select update  cell={parsed.my_cell_id}  "
+                        f"current={parsed.my_current_id}  bench={len(parsed.bench_ids)}")
 
                 stop_event.wait(poll_interval)
     except Exception as exc:  # pragma: no cover — surfaced to GUI
         q.put(("error", repr(exc)))
+        log(f"[poll] error: {exc!r}")
 
 
 def fake_poll_loop(stop_event: threading.Event, q: queue.Queue, model, interval: float = 3.0) -> None:
@@ -469,7 +487,10 @@ class RecommenderApp:
 @click.option("--fake", is_flag=True, default=False,
               help="Demo mode: skip LCU, generate random champ-select states every 3s. "
                    "Useful to verify the GUI works without launching League.")
-def main(lr_model: Path, vocab: Path, poll_interval: float, fake: bool) -> None:
+@click.option("--verbose", is_flag=True, default=False,
+              help="Print per-poll status (phase + session presence) to stdout. "
+                   "Useful for diagnosing why a champ-select isn't being detected.")
+def main(lr_model: Path, vocab: Path, poll_interval: float, fake: bool, verbose: bool) -> None:
     """Tk GUI for the ARAM champ-select recommender."""
     print(f"[gui] loading model from {lr_model}")
     model = load_lr(lr_model, vocab)
@@ -512,7 +533,7 @@ def main(lr_model: Path, vocab: Path, poll_interval: float, fake: bool) -> None:
             sys.exit(1)
         thread = threading.Thread(
             target=poll_loop,
-            args=(stop_event, q, model, creds, poll_interval),
+            args=(stop_event, q, model, creds, poll_interval, verbose),
             daemon=True,
         )
 
