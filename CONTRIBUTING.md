@@ -43,11 +43,19 @@ python scripts/lcu_collector.py auto-collect --rounds 50 --target-games 500 --ma
 python scripts/lcu_collector.py status
 ```
 
-### 3. 匯出 PUUID-free 的分享檔
+### 3. 匯出 + 自動開 Issue（推薦）
 ```powershell
-python scripts/lcu_collector.py export-share --queue 2400
+python scripts/lcu_collector.py export-share --queue 2400 --auto-issue
 ```
-產出 `data/share/share_<時間戳>.db`，終端會印一份摘要：
+這一行會：
+1. 產出 `data/share/share_<時間戳>.db`（無 PUUID）
+2. **自動開瀏覽器**到 [Lanternko/ARAM-Mayhem-Database 的 Issue 頁](https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new?template=contribute-data.md)，title / 摘要 / 隱私 checklist 全部 pre-fill 好
+
+你只需要在瀏覽器分頁裡：
+- **把剛產出的 `.db` 檔拖進留言框**
+- 按 **Submit new issue**
+
+終端會印：
 ```
 [export-share] wrote data/share/share_2026-05-16T12-30-00Z.db
   games    : 500 (filtered from 38484)
@@ -56,15 +64,25 @@ python scripts/lcu_collector.py export-share --queue 2400
   patches  : 16.10.776=500
   file size: 142.3KB
   contents : games table only - no PUUIDs, no crawl frontier
+
+Pre-filled GitHub Issue ready:
+  title : [data] 16.10 - 500 games
+  repo  : Lanternko/ARAM-Mayhem-Database
+  URL   : https://github.com/Lanternko/.../issues/new?template=...
+Opening in your default browser...
 ```
+
+> 為什麼還是要手動拖檔？GitHub REST API 沒有「附檔到 Issue」的 endpoint，drag-drop 是唯一的途徑。
 
 可選參數：
 - `--patch-prefix 16.10` — 只匯出特定 patch（檔案太大時用）
 - `--queue 450 --queue 2400` — 同時匯出 ARAM 和 Mayhem
 - `--out my_share.db` — 自訂輸出路徑
+- `--no-auto-issue` — 不想開瀏覽器（預設行為，省略 `--auto-issue` 即可）
+- `--print-issue-url` — 只印 URL 不開瀏覽器（給 server / CI 環境用）
 
-### 4. 開 Issue 附檔
-到 [Issues 頁面](https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new/choose) → 選 **"Contribute Match Data"** template → 拖曳 `share_<時間戳>.db` 到留言框 → 把上面那段摘要貼到 issue body → Submit。
+### 4. （手動 fallback）只想自己開 Issue
+若不加 `--auto-issue`，產完 `.db` 後自己到 [Issues 頁面](https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new/choose) → 選 **"Contribute Match Data"** template → 拖檔 + 貼摘要 + Submit。
 
 > ⚠ GitHub Issue 附件**上限 25 MB**。一般 500-5000 場應該都遠低於此。如果超過，用 `--patch-prefix` 分多檔案多 Issue 提交。
 

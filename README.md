@@ -60,11 +60,12 @@ python scripts/lcu_collector.py status
 
 ### 想把自己收的資料貢獻到公開 tier list？
 
-跑完 collector 後一行匯出 PUUID-free 的分享檔，到 [Issues 頁面](https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new/choose) 選 "Contribute Match Data" template 附檔即可：
+跑完 collector 後一行匯出 PUUID-free 分享檔 + 自動開好 pre-fill 的 Issue 頁面，你只要拖檔按 Submit：
 
 ```powershell
-python scripts/lcu_collector.py export-share --queue 2400
+python scripts/lcu_collector.py export-share --queue 2400 --auto-issue
 # → data/share/share_<時間戳>.db （只含 games 表，無 PUUID）
+# → 瀏覽器自動跳到 pre-fill 好的 GitHub Issue
 ```
 
 完整貢獻流程、為什麼這樣設計、維護者怎麼合資料：見 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
