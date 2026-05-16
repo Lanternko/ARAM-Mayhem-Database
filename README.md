@@ -49,9 +49,13 @@ python -m pip install -e .
 
 # 2. 打開 League 客戶端（不需要在玩，只要客戶端在線即可）
 
-# 3. 啟動 collector（最簡單一行）
-python scripts/lcu_collector.py auto-collect --rounds 50 --target-games 500 \
-    --max-players 1000 --opgg-tier platinum --opgg-tier gold
+# 3. 啟動 collector（手動 snowball）
+python scripts/lcu_collector.py snowball \
+    --target-games 500 \
+    --max-players 1000 \
+    --games-per-player 4 \
+    --seed-ladder \
+    --seed-apex
 
 # 4. 查目前蒐集多少場
 python scripts/lcu_collector.py status
