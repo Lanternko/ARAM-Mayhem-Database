@@ -21,7 +21,7 @@ Riot 公開 API 從 patch 14.x 開始**整場移除 Mayhem (queueId 2400)**，de
 2. 把每場 大亂鬥 對局的 10 位玩家英雄 + augment + 勝負存進 SQLite
 3. 每隔幾天合併資料、產生新版 tier list 推上 GitHub Pages
 
-目前資料量 > 20,000 場 Mayhem 對局（patch 16.10）。
+目前資料量 ~38,000 場 Mayhem 對局（其中 patch 16.10 ~28,000 場）。
 
 ---
 
@@ -37,39 +37,54 @@ Riot 公開 API 從 patch 14.x 開始**整場移除 Mayhem (queueId 2400)**，de
 
 ---
 
-## 資料如何蒐集（想貢獻資料看這）
+## 怎麼貢獻 Mayhem 對局資料
 
-**最常見情況：你一個人用一個帳號**，跑 collector 累積到 `data/lcu/games.db`。
+整個流程設計成**只送出無 PUUID 的安全檔**、**全程在 GitHub Issue 公開稽核**。多人貢獻同場會自動以 Riot `game_id` 去重，所以不用擔心重複。
+
+### 一次性安裝
 
 ```powershell
-# 1. 安裝（一次性）
 git clone https://github.com/Lanternko/ARAM-Mayhem-Database.git
 cd ARAM-Mayhem-Database
-python -m pip install -e .
+python -m pip install -e .   # 需要 Python 3.13+
+```
 
-# 2. 打開 League 客戶端（不需要在玩，只要客戶端在線即可）
+### 每次貢獻（2 步）
 
-# 3. 跑 collector（整段貼成一行，不要按 Enter 分行）
+**步驟 1 — 跑 collector**
+
+打開 League 客戶端（**不需要在玩**，登入在線即可），再開一個 PowerShell 視窗整段貼一行：
+
+```powershell
 python scripts/lcu_collector.py auto-collect --rounds 50 --target-games 500 --max-players 1000 --opgg-tier platinum --opgg-tier gold
+```
 
-# 4. 查目前蒐集多少場
+跑越久收越多場。任何時候 `Ctrl+C` 中斷都可以，下次再跑會從上次的進度續傳。想看現在累積到幾場：
+
+```powershell
 python scripts/lcu_collector.py status
 ```
 
-> **PowerShell 注意**：不能用 bash 的 `\` 換行。要嘛整段貼成一行，要嘛把 `\` 換成 backtick `` ` ``（且行尾不能有空白）。
-
-### 想把自己收的資料貢獻到公開 tier list？
-
-跑完 collector 後一行匯出 PUUID-free 分享檔 + 自動開好 pre-fill 的 Issue 頁面，你只要拖檔按 Submit：
+**步驟 2 — 匯出 + 自動開 Issue**
 
 ```powershell
 python scripts/lcu_collector.py export-share --queue 2400 --auto-issue
-# → data/share/share_<時間戳>.db （只含 games 表，無 PUUID）
-# → 瀏覽器自動跳到 pre-fill 好的 GitHub Issue
 ```
 
-完整貢獻流程、為什麼這樣設計、維護者怎麼合資料：見 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-詳細 collector 文件見 [`CLAUDE.md`](CLAUDE.md) 的 LCU Collector 節。
+這一行會：
+1. 產出 `data/share/share_<時間戳>.db`（**只含 games 表，無 PUUID**）
+2. **自動開瀏覽器**到 GitHub Issue 頁，title 和摘要全部 pre-fill 好
+
+接下來在瀏覽器分頁裡 **把 `.db` 檔拖進留言框** → 按 **Submit new issue** 就完成了。
+
+> ⚠ **PowerShell 注意**：不能用 bash 的 `\` 換行。要嘛整段貼成一行，要嘛把 `\` 換成 backtick `` ` ``（且行尾不能有空白）。
+>
+> ⚠ **GitHub Issue 附件上限 25 MB**。一般 500–5,000 場都遠低於此；如果超過，加 `--patch-prefix 16.10` 分多檔提交。
+
+---
+
+完整流程、為什麼這樣設計、維護者怎麼接收與合併：見 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+詳細 collector 文件（snowball / merge-db / 各種 flag）見 [`CLAUDE.md`](CLAUDE.md) 的 LCU Collector 節。
 
 ---
 

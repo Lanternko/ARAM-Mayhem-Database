@@ -1515,7 +1515,10 @@ def export_share(
     else:
         size_str = f"{size_bytes / (1024 * 1024):.2f}MB"
 
-    click.echo(f"[export-share] wrote {out_path}")
+    abs_out_path = out_path.resolve()
+    folder_uri = abs_out_path.parent.as_uri()
+
+    click.echo(f"[export-share] wrote {abs_out_path}")
     click.echo(f"  games    : {total_out} (filtered from {total_in})")
     queue_summary = ", ".join(f"{q}={n}" for q, n in queues_seen.most_common())
     click.echo(f"  queues   : {queue_summary}")
@@ -1529,6 +1532,7 @@ def export_share(
         click.echo(f"  patches  : {patch_str}")
     click.echo(f"  file size: {size_str}")
     click.echo("  contents : games table only - no PUUIDs, no crawl frontier")
+    click.echo(f"  open dir : {folder_uri}   (Ctrl+click in most terminals)")
     click.echo("")
     if size_bytes > 24 * 1024 * 1024:
         click.echo(f"WARNING: file is {size_str}; GitHub Issue attachments cap at 25MB.")
@@ -1560,9 +1564,9 @@ def export_share(
             "",
             "## Attach your file",
             "",
-            f"**Drag-and-drop `{out_path.name}` into this comment box** before submitting.",
+            f"**Drag-and-drop `{abs_out_path.name}` into this comment box** before submitting.",
             "",
-            f"File location on your machine: `{out_path}`",
+            f"File location on your machine: `{abs_out_path}`",
             "",
             "## Collection notes (optional)",
             "",
