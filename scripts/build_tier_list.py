@@ -1875,10 +1875,10 @@ def render_html(
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
-    og_title = f"{header_title}｜{patch_label} 勝率資料庫"
+    og_title = f"{header_title}資料庫"
     og_desc = (
-        f"{total_games:,} 場 {queue_label} LCU 樣本，整理英雄勝率、"
-        "augment、同隊搭檔與 1~4 人 residual 推薦。"
+        f"{patch_label} · {total_games:,} 場 LCU 樣本。"
+        "英雄勝率、augment、搭檔與組隊推薦。"
     )
 
     meta_lines: list[str] = []
