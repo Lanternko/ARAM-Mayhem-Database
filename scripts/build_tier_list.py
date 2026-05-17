@@ -56,6 +56,112 @@ TIER_LABEL_BG = {
 CDRAGON_BASE = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default"
 
 
+def _queue_copy(queue_id: int) -> tuple[str, str]:
+    # queue 2400 was Mayhem's queueId during the 16.x cycle.
+    if queue_id == 2400:
+        return "ARAM 大亂鬥", "ARAM Mayhem (queueId 2400)"
+    if queue_id == 450:
+        return "ARAM 勝率 Tier List", "ARAM (queueId 450)"
+    return f"Tier List (queueId {queue_id})", f"queueId {queue_id}"
+
+
+def _load_font(size: int, *, bold: bool = False):
+    from PIL import ImageFont
+
+    candidates = [
+        Path("C:/Windows/Fonts/msjhbd.ttc" if bold else "C:/Windows/Fonts/msjh.ttc"),
+        Path("C:/Windows/Fonts/NotoSansTC-Bold.otf" if bold else "C:/Windows/Fonts/NotoSansTC-Regular.otf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    ]
+    for path in candidates:
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+    return ImageFont.load_default()
+
+
+def _draw_text_fit(draw, xy: tuple[int, int], text: str, font, fill: str, max_width: int) -> None:
+    # Pillow can hang measuring some CJK fonts on Windows, so keep this
+    # deliberately simple for the fixed-size OG canvas.
+    char_budget = max(8, max_width // 20)
+    if len(text) > char_budget:
+        text = text[: char_budget - 3].rstrip() + "..."
+    draw.text(xy, text, font=font, fill=fill)
+
+
+def write_og_image(
+    out_path: Path,
+    records: list[dict],
+    champ_meta: dict[int, dict],
+    *,
+    queue_id: int,
+    patch_prefix: str | None,
+    total_games: int,
+) -> None:
+    """Write a 1200x630 social preview image for Open Graph cards."""
+    from PIL import Image, ImageDraw
+
+    title, _queue_label = _queue_copy(queue_id)
+    patch_label = f"patch {patch_prefix}.*" if patch_prefix else "all patches"
+
+    img = Image.new("RGB", (1200, 630), "#0f1117")
+    draw = ImageDraw.Draw(img)
+    title_font = _load_font(74, bold=True)
+    body_font = _load_font(34)
+    meta_font = _load_font(28, bold=True)
+    small_font = _load_font(22)
+
+    # Layered blocks keep the preview readable in small chat cards.
+    draw.rectangle((0, 0, 1200, 630), fill="#0f1117")
+    draw.rectangle((0, 0, 1200, 112), fill="#141824")
+    draw.rectangle((0, 562, 1200, 630), fill="#151923")
+    draw.rounded_rectangle((64, 150, 1136, 494), radius=28, fill="#191d28", outline="#2b3240", width=2)
+    draw.line((64, 112, 1136, 112), fill="#57a6ff", width=4)
+
+    draw.text((72, 42), "ARAM Mayhem Database", font=meta_font, fill="#65b2ff")
+    draw.text((72, 188), title, font=title_font, fill="#f4f7ff")
+    _draw_text_fit(
+        draw,
+        (76, 290),
+        f"{patch_label} · {total_games:,} 場 LCU 樣本",
+        body_font,
+        "#d6d8de",
+        820,
+    )
+    _draw_text_fit(
+        draw,
+        (76, 346),
+        "英雄勝率、augment、同隊搭檔與組隊推薦",
+        body_font,
+        "#b7beca",
+        820,
+    )
+    draw.text((76, 580), "lanternko.github.io/ARAM-Mayhem-Database", font=small_font, fill="#8f98aa")
+
+    icon_records = [r for r in records[:5] if champ_meta.get(r["champion_id"])]
+    x0 = 782
+    swatches = ["#8ec5ff", "#d8b8ff", "#f5c518", "#74d99f", "#ff8c6a"]
+    for i, rec in enumerate(icon_records):
+        meta = champ_meta[rec["champion_id"]]
+        x = x0 + (i % 3) * 112
+        y = 182 + (i // 3) * 126
+        draw.rounded_rectangle(
+            (x - 6, y - 6, x + 98, y + 98),
+            radius=18,
+            fill="#0c0f15",
+            outline="#394457",
+            width=2,
+        )
+        draw.rounded_rectangle((x, y, x + 92, y + 92), radius=14, fill="#232b3a")
+        draw.ellipse((x + 22, y + 16, x + 70, y + 64), fill=swatches[i % len(swatches)])
+        draw.text((x + 31, y + 25), str(i + 1), font=meta_font, fill="#11141c")
+        name = str(meta.get("name", ""))
+        _draw_text_fit(draw, (x, y + 102), name, small_font, "#dce4f2", 100)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, "PNG", optimize=True)
+
+
 def assign_tier(bayes_wr: float) -> str:
     if bayes_wr >= 0.55:
         return "OP"
@@ -704,18 +810,7 @@ def render_html(
             continue
         by_tier[tier].append({**r, **meta})
 
-    # ARAM tier list is unambiguous in zh-Hant; queue 2400 was Mayhem's queueId
-    # during the 16.x cycle.  Make the header explicit so people don't think
-    # the data is for queue 450.
-    if queue_id == 2400:
-        header_title = "ARAM 大亂鬥"
-        queue_label = "ARAM Mayhem (queueId 2400)"
-    elif queue_id == 450:
-        header_title = "ARAM 勝率 Tier List"
-        queue_label = "ARAM (queueId 450)"
-    else:
-        header_title = f"Tier List (queueId {queue_id})"
-        queue_label = f"queueId {queue_id}"
+    header_title, queue_label = _queue_copy(queue_id)
     patch_label = f"patch {patch_prefix}.*" if patch_prefix else "all patches"
 
     # Build the JS data payload. Keep it slim: only champs we render + their
@@ -1780,18 +1875,10 @@ def render_html(
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
 
-    # Pick a default OG image: highest-WR champion's icon — gives Discord /
-    # Twitter / LINE a recognizable preview without us hosting an image.
-    if not og_image and records:
-        top_meta = champ_meta.get(records[0]["champion_id"])
-        if top_meta:
-            og_image = top_meta["image"]
-
-    og_title = f"{header_title} ({patch_label}, {total_games:,} 場樣本)"
+    og_title = f"{header_title}｜{patch_label} 勝率資料庫"
     og_desc = (
-        f"基於 {total_games:,} 場 LCU 抓取的 {queue_label} 對戰，"
-        "每位英雄分別給出最佳 / 最差的 augment、同隊搭檔組合，"
-        "並支援 1~4 英雄的 residual 相性推薦。"
+        f"{total_games:,} 場 {queue_label} LCU 樣本，整理英雄勝率、"
+        "augment、同隊搭檔與 1~4 人 residual 推薦。"
     )
 
     meta_lines: list[str] = []
@@ -1809,8 +1896,12 @@ def render_html(
     meta_lines.append(f"<meta property='og:description' content=\"{og_desc}\">")
     if og_image:
         meta_lines.append(f"<meta property='og:image' content='{og_image}'>")
+        meta_lines.append("<meta property='og:image:width' content='1200'>")
+        meta_lines.append("<meta property='og:image:height' content='630'>")
+        meta_lines.append("<meta property='og:image:alt' content='ARAM Mayhem Database preview'>")
         meta_lines.append("<meta name='twitter:card' content='summary_large_image'>")
         meta_lines.append(f"<meta name='twitter:image' content='{og_image}'>")
+        meta_lines.append("<meta name='twitter:image:alt' content='ARAM Mayhem Database preview'>")
     else:
         meta_lines.append("<meta name='twitter:card' content='summary'>")
     meta_lines.append(f"<meta name='twitter:title' content=\"{og_title}\">")
@@ -1858,7 +1949,7 @@ def render_html(
     parts.append(
         f"<div class='subtitle'>"
         f"{short_patch} · {date_str} ({total_games:,} games)<br>"
-        "點擊英雄看 augment / 搭檔；右側可選 1~4 隻英雄看推薦"
+        "點擊英雄看 augment / 搭檔；開啟「選擇你的隊友」後，可選 1~4 隻英雄看推薦"
         f"</div>"
     )
     parts.append("</div>")
@@ -2017,9 +2108,9 @@ def render_html(
         "<div>"
         "<h2>推薦組合排行</h2>"
         "<div class='side-sub'>"
-        "Residual：實際同隊勝率減掉兩隻英雄單體強度的預期勝率。<br>"
+        "Residual：兩隻英雄同隊的實際勝率 - 預期勝率。<br>"
         "z：residual 除以標準誤，數值越高代表訊號越不像樣本雜訊。<br>"
-        "先開啟「選擇你的隊友」，再從左側選 1~4 隻英雄。"
+        "排行依排序分排列：平均 residual × 覆蓋率。"
         "</div>"
         "</div>"
         "<button class='side-close' id='side-close' type='button' aria-label='關閉推薦組合'>×</button>"
@@ -2293,7 +2384,7 @@ def render_html(
         if (pickNotice) {
             note.textContent = pickNotice;
         } else if (!teamPicks.length) {
-            note.textContent = `最多選 ${MAX_TEAM_PICKS} 隻；推薦優先看平均 residual 相性，並考慮 coverage。`;
+            note.textContent = `最多選 ${MAX_TEAM_PICKS} 隻；排序分 = 平均 residual × 覆蓋率，未覆蓋的 pair 視為 0。`;
         } else if (want > 1 && !hasFull) {
             note.textContent = `目前沒有 ${want}/${want} 全覆蓋候選，以下改用部分 pair 資料排序。`;
         } else {
@@ -2301,7 +2392,7 @@ def render_html(
         }
 
         if (!teamPicks.length) {
-            recList.innerHTML = `<div class="panel-empty">先開啟「選角推薦」，再從左側點 1~4 隻英雄。右邊會排出最適合補進來的英雄。</div>`;
+            recList.innerHTML = `<div class="panel-empty">先開啟「選擇你的隊友」，再從英雄列表點 1~4 隻英雄。系統會排出最適合補進來的英雄。</div>`;
             return;
         }
         if (!recs.length) {
@@ -2314,9 +2405,9 @@ def render_html(
             const name = info ? info.name : ('#' + row.id);
             const image = info && info.image ? info.image : '';
             const coverage = `${row.coverage}/${want}`;
-            const meta = `${signed(row.liftAvg)} residual · z <span class="z">${zFmt(row.zAvg)}</span> · min ${row.minGames}場（${coverage}）`;
+            const meta = `排序 ${signed(row.fitScore)} · ${signed(row.liftAvg)} residual · z <span class="z">${zFmt(row.zAvg)}</span> · min ${row.minGames}場（${coverage}）`;
             return `
-                <button class="rec-row" type="button" data-cid="${row.id}" title="${escHtml(name)} · 平均 residual ${signed(row.liftAvg)}">
+                <button class="rec-row" type="button" data-cid="${row.id}" title="${escHtml(name)} · 排序分 ${signed(row.fitScore)} · 平均 residual ${signed(row.liftAvg)}">
                     <span class="rec-rank">${idx + 1}</span>
                     ${image ? `<img loading="lazy" src="${image}" alt="">` : '<div style="width:40px;height:40px;border-radius:8px;background:#2a3142"></div>'}
                     <span class="rec-main">
@@ -2621,7 +2712,7 @@ def render_html(
 @click.option("--site-url", default="",
               help="Canonical URL (used for OG og:url + <link rel=canonical>), e.g. https://user.github.io/repo/")
 @click.option("--og-image", default="",
-              help="Override the og:image URL (default: top champion's icon)")
+              help="Override the og:image URL (default: generated og-image.png under --site-url)")
 @click.option("--build-date", default="",
               help="Date stamp shown in footer (default: today, YYYY-MM-DD)")
 def main(
@@ -2681,6 +2772,23 @@ def main(
 
     if not build_date:
         build_date = _dt.date.today().isoformat()
+
+    if not og_image:
+        og_asset_path = out_path.parent / "og-image.png"
+        try:
+            write_og_image(
+                og_asset_path,
+                champ_records,
+                champ_meta,
+                queue_id=queue_id,
+                patch_prefix=patch_prefix,
+                total_games=total_games,
+            )
+            click.echo(f"[tierlist] wrote {og_asset_path}  ({og_asset_path.stat().st_size:,} bytes)")
+            if site_url:
+                og_image = site_url.rstrip("/") + "/" + og_asset_path.name
+        except Exception as exc:
+            click.echo(f"[tierlist] WARN: og image generation failed: {exc}")
 
     html = render_html(
         champ_records,
