@@ -2733,7 +2733,7 @@ def render_html(
                      "Microsoft JhengHei", "PingFang TC", sans-serif;
         padding: 32px 24px 64px;
     }
-    h1 { margin: 0 0 4px; font-weight: 600; font-size: 22px; }
+    h1 { margin: 0; font-weight: 600; font-size: 22px; line-height: 1.1; }
     /* Mincho-only captions — opt-in serif for the three small metadata
        lines the user picked out: page subtitle, detail-panel sub-heading,
        and augment card's lift/games row. */
@@ -2743,6 +2743,15 @@ def render_html(
                      "PingFang TC", "PMingLiU", "Songti TC", serif;
     }
     .subtitle { color: #9aa0a6; font-size: 13px; }
+    .title-patch {
+        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
+                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        white-space: nowrap;
+        color: #8d96a0;
+    }
     /* Top header row — title on the left, GitHub star CTA on the right. */
     .page-header {
         display: grid;
@@ -2754,10 +2763,10 @@ def render_html(
     .page-header > div:first-child { min-width: 0; }
     .title-meta {
         display: flex;
-        align-items: center;
-        gap: 8px;
+        align-items: baseline;
+        gap: 10px;
         flex-wrap: wrap;
-        margin-top: 4px;
+        margin-top: 0;
     }
     .page-actions {
         display: inline-flex;
@@ -4073,13 +4082,14 @@ def render_html(
         body.detail-modal-open { overflow: hidden; }
         h1 { font-size: 18px; }
         .subtitle { font-size: 12px; }
+        .title-patch { font-size: 12px; }
         /* Keep the header compact: title + patch/update chip on the left,
            utility actions on the right. */
         .page-header {
             gap: 6px 8px;
             margin-bottom: 10px;
         }
-        .title-meta { gap: 6px; margin-top: 2px; }
+        .title-meta { gap: 6px; margin-top: 0; }
         .page-actions {
             gap: 6px;
             flex-wrap: wrap;
@@ -4368,7 +4378,7 @@ def render_html(
     # The repo name is the canonical project URL; if the user later forks /
     # renames, update REPO_URL below.
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
-    short_patch = f"patch {patch_prefix}" if patch_prefix else "全 patch"
+    short_patch = patch_prefix if patch_prefix else "all patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -4393,14 +4403,10 @@ def render_html(
         "Z'></path></svg>"
     )
     parts.append("<div class='page-header'>")
-    parts.append("<div>")
+    parts.append("<div><div class='title-meta'>")
     parts.append(f"<h1 id='site-title'>{header_title}</h1>")
-    parts.append(
-        "<div class='title-meta'>"
-        f"<div class='subtitle' id='site-subtitle'>{short_patch}</div>"
-        "</div>"
-    )
-    parts.append("</div>")
+    parts.append(f"<div class='subtitle title-patch' id='site-subtitle'>{short_patch}</div>")
+    parts.append("</div></div>")
     parts.append("<div class='page-actions'>")
     parts.append(
         '<button class="tool-btn update-tab header-update-tab" id="updates-toggle" type="button" '
@@ -4710,7 +4716,7 @@ def render_html(
         },
         en: {
             htmlLang: 'en',
-            subtitle: () => `${PATCH_LABEL}`,
+            subtitle: () => `${SHORT_PATCH_ZH}`,
             searchPlaceholderDesktop: 'Search champions (ZH / EN)   Ctrl+F',
             searchPlaceholderMobile: 'Search champions (ZH / EN)',
             searchAria: 'Search champions',
