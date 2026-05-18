@@ -4432,7 +4432,7 @@ def render_html(
         "<h2 class='updates-title' id='updates-title'>餈????湔</h2>"
         "</div>"
         "<button class='updates-close' id='updates-close' type='button' "
-        "aria-label='??餈??湔'>?</button>"
+        "aria-label='關閉近期更新'>&times;</button>"
         "</div>"
         "<ul class='updates-list' id='updates-list'>"
         "<li>???拚??支? pair ??嚗?其?????蝯?靽格迤嚗??怠??D/AP?oke??蝺??啁???捆蝻箏??/li>"
@@ -4706,8 +4706,7 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 最不適配 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}，tier ${tier}，勝率 ${wr}`,
-            secondaryRoleBadgeTitle: (role, pick, wr, style) => `這隻也常拿來補 ${role}：此玩法約佔 ${pick}，WR ${wr}${style ? '，常見出裝偏 ' + style : ''}`,
-            secondaryRoleBadgeFallback: (role, wr) => `這隻也能補 ${role}，但目前還沒有穩定的獨立玩法占比；英雄整體 WR ${wr}`,
+            secondaryRoleBadgeTitle: (style, pick, wr) => `${style} 選取率 ${pick}，勝率 ${wr}`,
         },
         en: {
             htmlLang: 'en',
@@ -4780,8 +4779,7 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · least fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}, tier ${tier}, win rate ${wr}`,
-            secondaryRoleBadgeTitle: (role, pick, wr, style) => `This champion is also played as ${role}: about ${pick} of games, WR ${wr}${style ? ', usually built toward ' + style : ''}`,
-            secondaryRoleBadgeFallback: (role, wr) => `This champion can also cover ${role}, but there is no stable standalone playstyle share yet; overall WR ${wr}`,
+            secondaryRoleBadgeTitle: (style, pick, wr) => `${style} pick ${pick}, WR ${wr}`,
         }
     };
     let currentLang = 'zh';
@@ -4806,11 +4804,8 @@ def render_html(
 
     function secondaryRoleBadgeTitle(info, role) {
         const copy = tr();
-        const label = roleLabel(role);
-        if (info && typeof info.pick === 'number') {
-            return copy.secondaryRoleBadgeTitle(label, pct(info.pick), pct(info.wr || 0), styleLabel(info));
-        }
-        return copy.secondaryRoleBadgeFallback(label, pct((info && info.wr) || 0));
+        const style = styleLabel(info) || roleLabel(role);
+        return copy.secondaryRoleBadgeTitle(style, pct(info.pick || 0), pct(info.wr || 0));
     }
 
     function refreshSecondaryRoleBadges() {
@@ -4823,15 +4818,26 @@ def render_html(
             const tags = info.tags || [];
             const secondaryRole = tags[1] || '';
             const show = Boolean(role) && secondaryRole === role;
-            champ.classList.toggle('secondary-role-match', show);
             if (!show) {
+                champ.classList.remove('secondary-role-match');
                 badge.setAttribute('hidden', '');
                 badge.removeAttribute('title');
                 badge.setAttribute('aria-label', '');
                 return;
             }
-            const overallWr = parseFloat((champ.getAttribute('data-wr') || '0').replace('%', '')) / 100;
-            const roleInfo = ((info.roleMeta || {})[secondaryRole]) || { wr: overallWr };
+            const roleInfo = ((info.roleMeta || {})[secondaryRole]) || null;
+            const hasDataBadge = Boolean(
+                roleInfo &&
+                roleInfo.source === 'data' &&
+                typeof roleInfo.pick === 'number'
+            );
+            champ.classList.toggle('secondary-role-match', show && hasDataBadge);
+            if (!hasDataBadge) {
+                badge.setAttribute('hidden', '');
+                badge.removeAttribute('title');
+                badge.setAttribute('aria-label', '');
+                return;
+            }
             const title = secondaryRoleBadgeTitle(roleInfo, secondaryRole);
             badge.removeAttribute('hidden');
             badge.setAttribute('data-alt-role', secondaryRole);
