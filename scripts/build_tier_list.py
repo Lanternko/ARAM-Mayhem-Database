@@ -39,7 +39,6 @@ except Exception:  # pragma: no cover - scipy is installed through sklearn local
     betaln = None
     betaincinv = None
 
-
 TIER_ORDER = ["OP", "T1", "T2", "T3", "T4", "T5"]
 TIER_COLOR = {
     "OP": "#d8b8ff",
@@ -68,7 +67,7 @@ CDRAGON_BASE = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-d
 AUGMENT_PRIOR_DEFAULT = 350.0
 AUGMENT_POSTERIOR_Q = 0.10
 AUGMENT_LCB_Z = 1.2815515655446004
-AUGMENT_PICK_LIFT_WEIGHT = 0.0
+AUGMENT_PICK_LIFT_WEIGHT = 0.003
 AUGMENT_PICK_LIFT_CAP = 3.0
 EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.csv")
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
@@ -88,6 +87,7 @@ ITEM_STYLE_LABELS = {
     "ad_poke": {"zh": "AD poke", "en": "AD poke"},
     "crit": {"zh": "暴擊", "en": "Crit"},
     "onhit": {"zh": "攻速命中", "en": "AS / on-hit"},
+    "heartsteel": {"zh": "心之鋼", "en": "Heartsteel"},
     "tank": {"zh": "坦克", "en": "Tank"},
     "support": {"zh": "輔助", "en": "Support"},
 }
@@ -229,6 +229,17 @@ AD_BRUISER_ITEM_KEYWORDS = (
     "trinity force",
 )
 
+HEARTSTEEL_ITEM_IDS = {3084, 223084, 323084}
+ROLE_RANGED_ALIAS_OVERRIDES = {"Kayle"}
+HEARTSTEEL_TANK_FOLLOWUP_STYLES = {"tank"}
+HEARTSTEEL_BRUISER_FOLLOWUP_STYLES = {
+    "ad_bruiser",
+    "ap_bruiser",
+    "ap_burn",
+    "ap_onhit",
+    "onhit",
+}
+
 AUGMENT_TYPE_LABELS = {
     "damage": {"zh": "傷害", "en": "Damage"},
     "spell": {"zh": "技能 / AP", "en": "Spell / AP"},
@@ -342,6 +353,41 @@ RECOMMENDATION_COMPOSITION_TABLES = {
     },
 }
 
+def _mean(values: list[float]) -> float:
+    return (sum(values) / len(values)) if values else 0.0
+
+_FRONTLINE_ROLE_DELTA = (
+    RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS["ad_front"] * _mean([
+        RECOMMENDATION_COMPOSITION_TABLES["ad_front"][f"1 front|{ad_bin}"]
+        - RECOMMENDATION_COMPOSITION_TABLES["ad_front"][f"0 front|{ad_bin}"]
+        for ad_bin in ("<35% AD", "35-45% AD", "45-55% AD", "55-65% AD", ">=65% AD")
+    ])
+    + RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS["poke_front"] * _mean([
+        RECOMMENDATION_COMPOSITION_TABLES["poke_front"][f"1 front|{state}"]
+        - RECOMMENDATION_COMPOSITION_TABLES["poke_front"][f"0 front|{state}"]
+        for state in ("poke lack", "poke ok")
+    ])
+)
+_MARKSMAN_ROLE_DELTA = RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS["marksman_ad"] * _mean([
+    RECOMMENDATION_COMPOSITION_TABLES["marksman_ad"][f"1|{ad_bin}"]
+    - RECOMMENDATION_COMPOSITION_TABLES["marksman_ad"][f"0|{ad_bin}"]
+    for ad_bin in ("<35% AD", "35-45% AD", "45-55% AD", "55-65% AD")
+])
+_MAGE_ROLE_DELTA = RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS["mage_ad"] * _mean([
+    RECOMMENDATION_COMPOSITION_TABLES["mage_ad"][f"1|{ad_bin}"]
+    - RECOMMENDATION_COMPOSITION_TABLES["mage_ad"].get(
+        f"0|{ad_bin}",
+        RECOMMENDATION_COMPOSITION_TABLES["mage_ad"].get("0|>=65% AD", 0.0),
+    )
+    for ad_bin in ("35-45% AD", "45-55% AD", "55-65% AD", ">=65% AD")
+])
+ROLE_NEED_CREDITS = {
+    "Tank": RECOMMENDATION_COMPOSITION_WEIGHT * _FRONTLINE_ROLE_DELTA,
+    "Marksman": RECOMMENDATION_COMPOSITION_WEIGHT * _MARKSMAN_ROLE_DELTA,
+    "Mage": RECOMMENDATION_COMPOSITION_WEIGHT * _MAGE_ROLE_DELTA,
+    "Support": 0.0,
+}
+
 MAYHEM_AUGMENT_SETS = {
     "Archmage": [
         "Buff Buddies",
@@ -433,7 +479,6 @@ MAYHEM_AUGMENT_SET_LABELS = {
     "Wee Woo Wee Woo": {"zh": "警笛大響", "en": "Wee Woo Wee Woo"},
 }
 
-
 def render_analytics_tags(
     *,
     cloudflare_token: str = "",
@@ -465,14 +510,11 @@ def render_analytics_tags(
 
     return tags
 
-
 def _slugify_set_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
-
 def _normalize_augment_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", name.lower())
-
 
 def _augment_set_lookup() -> dict[str, list[dict[str, str]]]:
     lookup: dict[str, list[dict[str, str]]] = {}
@@ -497,7 +539,6 @@ def _augment_set_lookup() -> dict[str, list[dict[str, str]]]:
                 ).append(info)
     return lookup
 
-
 def _queue_copy(queue_id: int) -> tuple[str, str]:
     # queue 2400 was Mayhem's queueId during the 16.x cycle.
     if queue_id == 2400:
@@ -505,7 +546,6 @@ def _queue_copy(queue_id: int) -> tuple[str, str]:
     if queue_id == 450:
         return "ARAM 勝率 Tier List", "ARAM (queueId 450)"
     return f"Tier List (queueId {queue_id})", f"queueId {queue_id}"
-
 
 def _load_font(size: int, *, bold: bool = False):
     from PIL import ImageFont
@@ -521,7 +561,6 @@ def _load_font(size: int, *, bold: bool = False):
             return ImageFont.truetype(str(path), size)
     return ImageFont.load_default()
 
-
 def _draw_text_fit(draw, xy: tuple[int, int], text: str, font, fill: str, max_width: int) -> None:
     # Pillow can hang measuring some CJK fonts on Windows, so keep this
     # deliberately simple for the fixed-size OG canvas.
@@ -529,7 +568,6 @@ def _draw_text_fit(draw, xy: tuple[int, int], text: str, font, fill: str, max_wi
     if len(text) > char_budget:
         text = text[: char_budget - 3].rstrip() + "..."
     draw.text(xy, text, font=font, fill=fill)
-
 
 def _draw_prismatic_frame(img, box: tuple[int, int, int, int], radius: int) -> None:
     from PIL import Image, ImageDraw, ImageFilter
@@ -596,7 +634,6 @@ def _draw_prismatic_frame(img, box: tuple[int, int, int, int], radius: int) -> N
         width=4,
     )
 
-
 def write_og_image(
     out_path: Path,
     records: list[dict],
@@ -645,7 +682,6 @@ def write_og_image(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(out_path, "PNG", optimize=True)
 
-
 def assign_tier(bayes_wr: float) -> str:
     if bayes_wr >= 0.55:
         return "OP"
@@ -658,7 +694,6 @@ def assign_tier(bayes_wr: float) -> str:
     if bayes_wr >= 0.46:
         return "T4"
     return "T5"
-
 
 # Data Dragon's `tags` field is Riot's *SR / general* classification, which
 # doesn't always match how ARAM/Mayhem players think about a champion.
@@ -727,8 +762,9 @@ TAG_OVERRIDES: dict[str, list[str]] = {
     "Urgot":    ["Fighter"],
     "Warwick":  ["Fighter"],
     "Yorick":   ["Fighter"],
-    # Tank/Fighter — primary identity is Fighter in Mayhem.
-    "Poppy":    ["Fighter"],
+    # Poppy is still a tank-facing champion in Mayhem, even when her best
+    # builds overlap bruiser play. Keep both chips for draft/filter use.
+    "Poppy":    ["Tank", "Fighter"],
 
     # --- Tank ---
     # True frontline tanks whose Fighter secondary pollutes 戰士 chip.
@@ -743,11 +779,11 @@ TAG_OVERRIDES: dict[str, list[str]] = {
     "Sion":     ["Tank"],
     "Skarner":  ["Tank"],
     "Zac":      ["Tank"],
-    # AP tanks — Mage tag is misleading for role filter purposes.
+    # AP tanks / AP bruisers — Mage tag is misleading for role filter purposes.
     "Amumu":    ["Tank"],
     "Chogath":  ["Tank"],
     "Galio":    ["Tank"],
-    "Singed":   ["Tank"],
+    "Singed":   ["Fighter", "Tank"],
     # Fighter/Tank — these play as frontline tanks in Mayhem.
     "Nasus":    ["Tank"],
     "Volibear": ["Tank"],
@@ -822,11 +858,35 @@ TAG_OVERRIDES: dict[str, list[str]] = {
     "Renata":  ["Support"],
 }
 
+ROLE_FROM_ITEM_STYLE: dict[str, str] = {
+    "ap_bruiser": "Fighter",
+    "ad_bruiser": "Fighter",
+    "tank": "Tank",
+    "heartsteel": "Tank",
+    "support": "Support",
+}
+ROLE_LABELS = {
+    "Assassin": {"zh": "刺客", "en": "Assassin"},
+    "Fighter": {"zh": "戰士", "en": "Fighter"},
+    "Mage": {"zh": "法師", "en": "Mage"},
+    "Marksman": {"zh": "射手", "en": "Marksman"},
+    "Support": {"zh": "輔助", "en": "Support"},
+    "Tank": {"zh": "坦克", "en": "Tank"},
+}
+MARKSMAN_ITEM_STYLES = {"crit", "onhit", "ad_poke", "ap_onhit"}
+RANGED_ATTACK_RANGE_MIN = 400
+ROLE_SCORE_CLOSE_GAP = 0.012
+ROLE_MIN_PICK_RATE = 0.06
+SECONDARY_ROLE_MIN_PICK_RATE = 0.08
+ROLE_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
+ROLE_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
+ROLE_ORDER = ("Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank")
+ROLE_SORT_PRIORITY = {role: idx for idx, role in enumerate(ROLE_ORDER)}
+PRESERVE_BASE_ROLES = {"Assassin", "Fighter", "Mage", "Support", "Tank"}
 
 CHAMPION_NAME_OVERRIDES: dict[str, dict[str, str]] = {
     "Renata": {"name_zh": "睿娜妲", "name_en": "Renata"},
 }
-
 
 def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
     if version is None:
@@ -849,6 +909,7 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
         entry_en = raw_en.get(alias, base_entry)
         entry_zh = raw_zh.get(alias, base_entry)
         tags = entry_en.get("tags") or entry_zh.get("tags") or []
+        original_tags = list(tags)
         if alias in TAG_OVERRIDES:
             applied.append((alias, list(tags), list(TAG_OVERRIDES[alias])))
             tags = list(TAG_OVERRIDES[alias])
@@ -864,6 +925,8 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
             "name_en": name_en,
             "alias": alias,
             "tags": tags,
+            "original_tags": original_tags,
+            "attack_range": int((entry_en.get("stats") or entry_zh.get("stats") or {}).get("attackrange") or 0),
             "image": f"https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{alias}.png",
         }
     if applied:
@@ -872,12 +935,10 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
             click.echo(f"  {alias:14s} {before} -> {after}")
     return version, by_id
 
-
 def _icon_url(lcu_path: str) -> str:
     """Convert an LCU asset path to a CommunityDragon URL."""
     stripped = lcu_path.replace("/lol-game-data/assets/", "", 1).lower()
     return f"{CDRAGON_BASE}/{stripped}"
-
 
 def _cached_get_json(url: str, cache_path: Path, timeout: float = 60) -> dict | list:
     """Fetch JSON with on-disk caching (the kiwi.bin.json + stringtable are large)."""
@@ -892,7 +953,6 @@ def _cached_get_json(url: str, cache_path: Path, timeout: float = 60) -> dict | 
     cache_path.write_text(r.text, encoding="utf-8")
     return r.json()
 
-
 # Strips Riot's inline markup so an augment description can be shown as plain
 # text in a hover tooltip:
 #   * `<speed>跑速</speed>`     -> `跑速`            (keep inner text)
@@ -903,7 +963,6 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _PLACEHOLDER_RE = re.compile(r"@[A-Za-z0-9_*+\-./]+@%?")
 _ICON_REF_RE = re.compile(r"%i:[A-Za-z0-9_]+%")
 
-
 def _clean_desc(text: str) -> str:
     if not text:
         return ""
@@ -913,7 +972,6 @@ def _clean_desc(text: str) -> str:
     s = _TAG_RE.sub("", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
-
 
 def load_augment_descriptions(
     cache_dir: Path,
@@ -963,7 +1021,6 @@ def load_augment_descriptions(
             out[pid] = cleaned
     return out
 
-
 # CommunityDragon `zh_tw` augment names don't always match Garena's live
 # Traditional Chinese client.  Drop manual TW overrides here as users
 # report mistranslations.  Key = augment ID (== `AugmentPlatformId`).
@@ -987,7 +1044,6 @@ AUGMENT_DESC_OVERRIDES: dict[int, str] = {
     1150: "你的第二個基礎技能（W）獲得[數值]技能加速。",
     1151: "你的第三個基礎技能（E）獲得[數值]技能加速。",
 }
-
 
 def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     # Try zh-TW first; fall back to default (English) if the field is empty.
@@ -1085,7 +1141,6 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
 
     return by_id
 
-
 def load_item_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     rows_default = _cached_get_json(
         f"{CDRAGON_BASE}/v1/items.json",
@@ -1122,7 +1177,6 @@ def load_item_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             "icon": _icon_url(icon_path) if icon_path else "",
         }
     return out
-
 
 def compute_winrates(
     db_path: Path,
@@ -1291,9 +1345,7 @@ def compute_winrates(
 
     return champ_records, champ_aug_records, champ_pair_records
 
-
 RARITY_ORDER = ["kPrismatic", "kGold", "kSilver"]
-
 
 def estimate_augment_prior_strength(champ_aug: list[dict]) -> float:
     """Estimate beta-binomial prior strength for champ x augment WRs.
@@ -1353,7 +1405,6 @@ def estimate_augment_prior_strength(champ_aug: list[dict]) -> float:
         return AUGMENT_PRIOR_DEFAULT
     return max(5.0, min(5000.0, (1.0 / rho) - 1.0))
 
-
 def beta_posterior_quantile(q: float, alpha: float, beta: float) -> float:
     if betaincinv is not None:
         try:
@@ -1365,7 +1416,6 @@ def beta_posterior_quantile(q: float, alpha: float, beta: float) -> float:
     direction = -1.0 if q <= 0.5 else 1.0
     return min(max(mean + direction * AUGMENT_LCB_Z * math.sqrt(max(var, 0.0)), 0.0), 1.0)
 
-
 def posterior_wr_summary(wins: int, games: int, baseline: float, prior_strength: float) -> tuple[float, float]:
     baseline = min(max(baseline, 1e-4), 1.0 - 1e-4)
     alpha = baseline * prior_strength + wins
@@ -1374,13 +1424,11 @@ def posterior_wr_summary(wins: int, games: int, baseline: float, prior_strength:
     lower = beta_posterior_quantile(AUGMENT_POSTERIOR_Q, alpha, beta)
     return mean, lower
 
-
 def _safe_float(value: object, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return default
-
 
 def _damage_bucket(row: dict[str, str] | None, role: str) -> str:
     if row:
@@ -1395,7 +1443,6 @@ def _damage_bucket(row: dict[str, str] | None, role: str) -> str:
     if role in {"Mage", "Support"}:
         return "magic"
     return "mixed"
-
 
 def load_champion_pick_profiles(
     champ_meta: dict[int, dict],
@@ -1447,7 +1494,6 @@ def load_champion_pick_profiles(
         }
     return profiles
 
-
 _DAMAGE_PROFILE_KEYWORDS = (
     "ability power",
     "adaptive force",
@@ -1468,7 +1514,6 @@ _DAMAGE_PROFILE_KEYWORDS = (
     "convert",
 )
 
-
 def augment_peer_scope(meta: dict | None) -> str:
     if not meta:
         return "role"
@@ -1480,14 +1525,12 @@ def augment_peer_scope(meta: dict | None) -> str:
         return "role_damage"
     return "role"
 
-
 def _profile_group(cid: int, profiles: dict[int, dict[str, object]], scope: str) -> str:
     profile = profiles.get(cid, {})
     role = profile.get("role") or "Unknown"
     if scope == "role_damage":
         return f"{role}|{profile.get('damage') or 'mixed'}"
     return role
-
 
 def build_pick_lift_index(
     champ_aug: list[dict],
@@ -1562,7 +1605,6 @@ def build_pick_lift_index(
         }
     return out
 
-
 def _label_entry(labels: dict[str, dict[str, str]], slug: str) -> dict[str, str]:
     info = labels.get(slug, {})
     name_en = info.get("en") or slug
@@ -1574,12 +1616,13 @@ def _label_entry(labels: dict[str, dict[str, str]], slug: str) -> dict[str, str]
         "slug": slug,
     }
 
-
 def item_style_infos(item: dict | None) -> list[dict[str, str]]:
     if not item:
         return []
     if int(item.get("price_total") or 0) < ITEM_MIN_TOTAL_GOLD:
         return []
+    if int(item.get("id") or 0) in HEARTSTEEL_ITEM_IDS:
+        return [_label_entry(ITEM_STYLE_LABELS, "heartsteel")]
     categories = set(str(c) for c in item.get("categories") or [])
     name = f"{item.get('name_en', '')} {item.get('name', '')}".lower()
     is_spell_item = "SpellDamage" in categories or "ability power" in name
@@ -1638,6 +1681,70 @@ def item_style_infos(item: dict | None) -> list[dict[str, str]]:
         return []
     return [_label_entry(ITEM_STYLE_LABELS, slug)]
 
+def _dominant_style_slug(style_weights: Counter[str]) -> str | None:
+    if not style_weights:
+        return None
+    return sorted(style_weights, key=lambda slug: (-style_weights[slug], slug))[0]
+
+def _heartsteel_followup_slug(non_heartsteel_weights: Counter[str]) -> str | None:
+    if not non_heartsteel_weights:
+        return None
+    tank_weight = sum(
+        non_heartsteel_weights.get(slug, 0)
+        for slug in HEARTSTEEL_TANK_FOLLOWUP_STYLES
+    )
+    bruiser_weight = sum(
+        non_heartsteel_weights.get(slug, 0)
+        for slug in HEARTSTEEL_BRUISER_FOLLOWUP_STYLES
+    )
+    if tank_weight >= max(bruiser_weight, ITEM_MIN_TOTAL_GOLD):
+        return "tank"
+    leader = _dominant_style_slug(non_heartsteel_weights)
+    if not leader:
+        return None
+    if leader == "ap_burn":
+        return "ap_bruiser"
+    if leader in HEARTSTEEL_BRUISER_FOLLOWUP_STYLES:
+        return leader
+    return None
+
+def _participant_item_infos(item_ids: list[int], item_meta: dict[int, dict]) -> list[dict[str, str]]:
+    item_style_weights: Counter[str] = Counter()
+    item_style_by_slug: dict[str, dict[str, str]] = {}
+    for item_id in item_ids:
+        item = item_meta.get(int(item_id))
+        for info in item_style_infos(item):
+            slug = str(info.get("slug") or "")
+            if not slug:
+                continue
+            item_style_weights[slug] += max(int((item or {}).get("price_total") or 0), 1)
+            item_style_by_slug[slug] = info
+    if not item_style_weights:
+        return []
+
+    non_heartsteel_weights = Counter({
+        slug: weight
+        for slug, weight in item_style_weights.items()
+        if slug != "heartsteel"
+    })
+    primary_slug = _dominant_style_slug(item_style_weights)
+    if primary_slug is None:
+        return []
+    heartsteel_followup = _heartsteel_followup_slug(non_heartsteel_weights)
+    if primary_slug == "heartsteel" and non_heartsteel_weights:
+        primary_slug = heartsteel_followup or _dominant_style_slug(non_heartsteel_weights) or primary_slug
+
+    item_infos: list[dict[str, str]] = []
+    primary_info = item_style_by_slug.get(primary_slug)
+    if primary_info:
+        item_infos.append(primary_info)
+    if (
+        "heartsteel" in item_style_by_slug
+        and heartsteel_followup == "tank"
+        and primary_slug != "heartsteel"
+    ):
+        item_infos.append(item_style_by_slug["heartsteel"])
+    return item_infos
 
 _AUGMENT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "damage": (
@@ -1684,7 +1791,6 @@ _AUGMENT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-
 _SET_TO_AUGMENT_TYPES = {
     "archmage": {"spell", "utility"},
     "dive-bomb": {"mobility", "damage"},
@@ -1696,7 +1802,6 @@ _SET_TO_AUGMENT_TYPES = {
     "stackosaurus-rex": {"stacking", "tank"},
     "wee-woo-wee-woo": {"sustain", "utility"},
 }
-
 
 def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
     if not meta:
@@ -1712,7 +1817,6 @@ def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
         if any(keyword in text for keyword in keywords):
             slugs.add(slug)
     return [_label_entry(AUGMENT_TYPE_LABELS, slug) for slug in sorted(slugs)]
-
 
 def estimate_category_prior_strength(rows: list[dict]) -> float:
     usable = [
@@ -1749,11 +1853,11 @@ def estimate_category_prior_strength(rows: list[dict]) -> float:
         pass
     return CATEGORY_PRIOR_DEFAULT
 
-
 def _finalize_category_affinity(
     cs_games: Counter[tuple[int, str]],
     cs_wins: Counter[tuple[int, str]],
     cs_baseline_games: Counter[tuple[int, str]],
+    champ_total_games: Counter[int],
     category_games: Counter[str],
     category_wins: Counter[str],
     category_baseline_games: Counter[str],
@@ -1764,6 +1868,7 @@ def _finalize_category_affinity(
     top_n: int = 4,
     bot_n: int = 4,
 ) -> dict[int, dict]:
+    global_total_games = sum(champ_total_games.values())
     category_avg_lift: dict[str, float] = {}
     for slug, games in category_games.items():
         if games > 0:
@@ -1795,12 +1900,19 @@ def _finalize_category_affinity(
         games = int(row["games"])
         wins = int(row["wins"])
         prior_wr = float(row["prior_wr"])
+        champ_total = max(int(champ_total_games.get(int(row["champion_id"]), 0)), 1)
         alpha = wins + prior_wr * prior_strength
         beta = games - wins + (1.0 - prior_wr) * prior_strength
         mean_wr = alpha / (alpha + beta)
         lower_wr = beta_posterior_quantile(AUGMENT_POSTERIOR_Q, alpha, beta)
         upper_wr = beta_posterior_quantile(1.0 - AUGMENT_POSTERIOR_Q, alpha, beta)
         slug = str(row["slug"])
+        pick_rate = games / champ_total
+        global_pick_rate = (
+            category_games[slug] / global_total_games
+            if global_total_games > 0 else 0.0
+        )
+        pick_lift = math.log(max(pick_rate, 1e-9) / max(global_pick_rate, 1e-9))
         name_info = category_names.get(slug, _label_entry({}, slug))
         lift = mean_wr - float(row["baseline_wr"])
         residual = mean_wr - prior_wr
@@ -1819,6 +1931,9 @@ def _finalize_category_affinity(
             "residual": residual,
             "lcb_residual": lower_wr - prior_wr,
             "ucb_residual": upper_wr - prior_wr,
+            "pick_rate": pick_rate,
+            "global_pick_rate": global_pick_rate,
+            "pick_lift": pick_lift,
             "prior_strength": prior_strength,
             "primary_sample": bool(row.get("primary_sample")),
         })
@@ -1832,7 +1947,6 @@ def _finalize_category_affinity(
         bot_rows = sorted(eligible, key=lambda r: (r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
         out[cid] = {"top": eligible[:top_n], "bot": bot_rows[:bot_n], "prior_strength": prior_strength}
     return out
-
 
 def compute_champ_category_affinities(
     db_path: Path,
@@ -1873,6 +1987,7 @@ def compute_champ_category_affinities(
     cs_games = {dim: Counter() for dim in dims}
     cs_wins = {dim: Counter() for dim in dims}
     cs_baseline_games = {dim: Counter() for dim in dims}
+    champ_total_games = Counter()
     category_games = {dim: Counter() for dim in dims}
     category_wins = {dim: Counter() for dim in dims}
     category_baseline_games = {dim: Counter() for dim in dims}
@@ -1903,6 +2018,7 @@ def compute_champ_category_affinities(
             team_id = int(participant.get("teamId", 0) or 0)
             if cid <= 0 or team_id not in (100, 200):
                 continue
+            champ_total_games[cid] += 1
             baseline = baseline_by_champ.get(cid, 0.5)
             player_won = 1 if (team_id == 100) == blue_won else 0
             set_infos: list[dict[str, str]] = []
@@ -1913,45 +2029,186 @@ def compute_champ_category_affinities(
                     continue
                 set_infos.extend(meta.get("sets") or [])
                 aug_type_infos.extend(augment_type_infos(meta))
-            item_style_weights: Counter[str] = Counter()
-            item_style_by_slug: dict[str, dict[str, str]] = {}
-            for item_id in participant.get("items") or participant.get("itemSlots") or []:
-                item = item_meta.get(int(item_id))
-                for info in item_style_infos(item):
-                    slug = str(info.get("slug") or "")
-                    if not slug:
-                        continue
-                    item_style_weights[slug] += max(int((item or {}).get("price_total") or 0), 1)
-                    item_style_by_slug[slug] = info
-            item_infos: list[dict[str, str]] = []
-            if item_style_weights:
-                primary_slug = sorted(
-                    item_style_weights,
-                    key=lambda slug: (-item_style_weights[slug], slug),
-                )[0]
-                item_infos = [item_style_by_slug[primary_slug]]
+            item_infos = _participant_item_infos(
+                participant.get("items") or participant.get("itemSlots") or [],
+                item_meta,
+            )
             add("sets", cid, player_won, baseline, set_infos)
             add("items", cid, player_won, baseline, item_infos)
             add("augtypes", cid, player_won, baseline, aug_type_infos)
 
     return (
         _finalize_category_affinity(
-            cs_games["sets"], cs_wins["sets"], cs_baseline_games["sets"],
+            cs_games["sets"], cs_wins["sets"], cs_baseline_games["sets"], champ_total_games,
             category_games["sets"], category_wins["sets"], category_baseline_games["sets"],
             category_names["sets"], min_games=min_set_games,
         ),
         _finalize_category_affinity(
-            cs_games["items"], cs_wins["items"], cs_baseline_games["items"],
+            cs_games["items"], cs_wins["items"], cs_baseline_games["items"], champ_total_games,
             category_games["items"], category_wins["items"], category_baseline_games["items"],
             category_names["items"], min_games=min_item_games, fallback_min_games=ITEM_STYLE_FALLBACK_MIN_GAMES,
         ),
         _finalize_category_affinity(
-            cs_games["augtypes"], cs_wins["augtypes"], cs_baseline_games["augtypes"],
+            cs_games["augtypes"], cs_wins["augtypes"], cs_baseline_games["augtypes"], champ_total_games,
             category_games["augtypes"], category_wins["augtypes"], category_baseline_games["augtypes"],
             category_names["augtypes"], min_games=min_augtype_games,
         ),
     )
 
+def _is_ranged_champion(meta: dict) -> bool:
+    if str(meta.get("alias") or "") in ROLE_RANGED_ALIAS_OVERRIDES:
+        return True
+    return int(meta.get("attack_range") or 0) >= RANGED_ATTACK_RANGE_MIN
+
+def _role_from_item_style(slug: str, meta: dict) -> str | None:
+    if slug in MARKSMAN_ITEM_STYLES:
+        return "Marksman" if _is_ranged_champion(meta) else "Fighter"
+    return ROLE_FROM_ITEM_STYLE.get(slug)
+
+def _style_role_need_credit(slug: str, role: str) -> float:
+    tank_credit = ROLE_NEED_CREDITS["Tank"]
+    marksman_credit = ROLE_NEED_CREDITS["Marksman"]
+    mage_credit = ROLE_NEED_CREDITS["Mage"]
+    if slug in {"tank", "heartsteel"}:
+        return tank_credit
+    if slug in {"crit", "ad_poke"}:
+        return marksman_credit
+    if slug == "ad_bruiser":
+        return 0.5 * (tank_credit + marksman_credit)
+    if slug == "ap_bruiser":
+        return 0.5 * (tank_credit + mage_credit)
+    if slug == "onhit":
+        return marksman_credit if role == "Marksman" else 0.5 * (tank_credit + marksman_credit)
+    if slug == "ap_onhit":
+        return marksman_credit if role == "Marksman" else 0.5 * (tank_credit + mage_credit)
+    return ROLE_NEED_CREDITS.get(role, 0.0)
+
+def apply_usage_based_roles(
+    champ_meta: dict[int, dict],
+    champ_records: list[dict],
+    item_style_affinity: dict[int, dict],
+) -> list[tuple[str, list[str], list[str]]]:
+    """Rewrite site role tags from real Mayhem item-style fit.
+
+    Item-style rows are already built from real participant item usage and
+    win/loss residuals.  Role inference keeps that signal conservative: usage
+    breaks close WR ties, and a second role appears only when it is near the
+    first role by score.
+    """
+    games_by_champ = {
+        int(row["champion_id"]): max(int(row.get("games", 0) or 0), 1)
+        for row in champ_records
+    }
+    wr_by_champ = {
+        int(row["champion_id"]): float(row.get("bayes_wr", row.get("raw_wr", 0.5)) or 0.5)
+        for row in champ_records
+    }
+    changes: list[tuple[str, list[str], list[str]]] = []
+
+    for cid, affinity in item_style_affinity.items():
+        meta = champ_meta.get(int(cid))
+        if not meta:
+            continue
+        champ_games = games_by_champ.get(int(cid), 1)
+        champ_wr = wr_by_champ.get(int(cid), 0.5)
+        role_rows: dict[str, dict[str, object]] = {}
+        for row in affinity.get("top", []):
+            slug = str(row.get("slug") or "")
+            role = _role_from_item_style(slug, meta)
+            if not role:
+                continue
+            pick_rate = float(row.get("pick_rate", 0.0) or 0.0)
+            if pick_rate < ROLE_MIN_PICK_RATE:
+                continue
+            conservative = float(row.get("lcb_residual", row.get("residual", 0.0)) or 0.0)
+            residual = float(row.get("residual", 0.0) or 0.0)
+            lift = float(row.get("lift", 0.0) or 0.0)
+            pick_lift = float(row.get("pick_lift", 0.0) or 0.0)
+            clamped_pick_lift = max(-ROLE_PICK_LIFT_CAP, min(ROLE_PICK_LIFT_CAP, pick_lift))
+            score = conservative + _style_role_need_credit(slug, role) + ROLE_PICK_LIFT_WEIGHT * clamped_pick_lift
+            if score <= 0.0:
+                continue
+            current = role_rows.get(role)
+            if current is None or score > current["score"]:
+                role_rows[role] = {
+                    "score": score,
+                    "residual": residual,
+                    "lift": lift,
+                    "pick_rate": pick_rate,
+                    "pick_lift": pick_lift,
+                    "wr": float(row.get("smoothed_wr", 0.0) or 0.0),
+                    "games": int(row.get("games", 0) or 0),
+                    "style_slug": slug,
+                    "style_name": str(row.get("name") or slug),
+                    "style_name_zh": str(row.get("name_zh") or row.get("name") or slug),
+                    "style_name_en": str(row.get("name_en") or row.get("name") or slug),
+                    "source": "data",
+                }
+
+        before = list(meta.get("tags") or [])
+        inferred = list(before)
+        if role_rows:
+            ranked = sorted(
+                role_rows.items(),
+                key=lambda item: (
+                    -item[1]["score"],
+                    -item[1]["pick_rate"],
+                    ROLE_SORT_PRIORITY.get(item[0], 99),
+                ),
+            )
+            primary_role, primary_info = ranked[0]
+            inferred = [primary_role]
+            for role, info in ranked[1:]:
+                if len(inferred) >= 2:
+                    break
+                if info["pick_rate"] < SECONDARY_ROLE_MIN_PICK_RATE:
+                    continue
+                if primary_info["score"] - info["score"] <= ROLE_SCORE_CLOSE_GAP:
+                    inferred.append(role)
+
+            for base_role in before:
+                if base_role in inferred or base_role not in PRESERVE_BASE_ROLES:
+                    continue
+                if base_role == "Support" and before and before[0] == "Support":
+                    inferred.insert(0, base_role)
+                elif len(inferred) < 2:
+                    inferred.append(base_role)
+                if len(inferred) >= 2:
+                    break
+
+        role_meta: dict[str, dict[str, object]] = {}
+        for idx, role in enumerate(inferred[:2]):
+            info = dict(role_rows.get(role) or {})
+            if not info:
+                info = {
+                    "score": None,
+                    "residual": None,
+                    "lift": None,
+                    "pick_rate": None,
+                    "pick_lift": None,
+                    "wr": champ_wr,
+                    "games": champ_games,
+                    "style_slug": "",
+                    "style_name": "",
+                    "style_name_zh": "",
+                    "style_name_en": "",
+                    "source": "base",
+                }
+            info["role"] = role
+            info["slot"] = "primary" if idx == 0 else "secondary"
+            info["role_label_zh"] = ROLE_LABELS.get(role, {}).get("zh", role)
+            info["role_label_en"] = ROLE_LABELS.get(role, {}).get("en", role)
+            role_meta[role] = info
+        if role_meta:
+            meta["role_meta"] = role_meta
+        elif "role_meta" in meta:
+            del meta["role_meta"]
+
+        if inferred and inferred != before:
+            meta["tags"] = inferred
+            changes.append((str(meta.get("alias") or cid), before, inferred))
+
+    return changes
 
 def build_champ_augment_picks(
     champ_aug: list[dict],
@@ -1966,8 +2223,9 @@ def build_champ_augment_picks(
     """For each champion, pick top-N best and bot-N worst augments by fit score.
 
     Displayed WR remains the posterior mean.  Ranking uses a conservative
-    posterior lower-bound lift.  Peer-relative pick-rate is packed for
-    diagnostics and future labeling, but does not rewrite WR.
+    posterior lower-bound lift with a small peer-relative pick-rate weight.
+    The pick-rate term nudges stable, repeatedly chosen fits without rewriting
+    the displayed WR.
     """
     pick_lift_index = build_pick_lift_index(champ_aug, aug_meta, profiles)
     by_champ_rarity: dict[int, dict[str, list[dict]]] = {}
@@ -2019,7 +2277,6 @@ def build_champ_augment_picks(
             )[:bot_n]
         out[cid] = {"top": top, "bot": bot}
     return out
-
 
 def build_champ_set_affinity(
     champ_aug: list[dict],
@@ -2117,7 +2374,6 @@ def build_champ_set_affinity(
             "bot": sorted(rows, key=lambda r: (r["residual"], r["games"], r["set"]))[:bot_n],
         }
     return out
-
 
 def compute_champ_set_affinity(
     db_path: Path,
@@ -2248,7 +2504,6 @@ def compute_champ_set_affinity(
         }
     return out
 
-
 def build_champ_synergy_index(
     champ_pairs: list[dict],
     *,
@@ -2276,7 +2531,6 @@ def build_champ_synergy_index(
             )
         )
     return by_champ
-
 
 def render_html(
     records: list[dict],
@@ -2362,6 +2616,36 @@ def render_html(
             "front": round(float(profile.get("front") or 0.0), 3),
         }
 
+    def _pack_role_meta(role_meta: dict[str, dict[str, object]] | None) -> dict[str, dict[str, object]]:
+        out: dict[str, dict[str, object]] = {}
+        for role, info in (role_meta or {}).items():
+            out[role] = {
+                "role": role,
+                "slot": info.get("slot", ""),
+                "source": info.get("source", ""),
+                "wr": round(float(info.get("wr", 0.0) or 0.0), 4),
+                "games": int(info.get("games", 0) or 0),
+                "pick": (
+                    round(float(info.get("pick_rate", 0.0) or 0.0), 4)
+                    if info.get("pick_rate") is not None else None
+                ),
+                "lift": (
+                    round(float(info.get("lift", 0.0) or 0.0), 4)
+                    if info.get("lift") is not None else None
+                ),
+                "score": (
+                    round(float(info.get("score", 0.0) or 0.0), 4)
+                    if info.get("score") is not None else None
+                ),
+                "styleSlug": info.get("style_slug", ""),
+                "styleName": info.get("style_name", ""),
+                "styleNameZh": info.get("style_name_zh", ""),
+                "styleNameEn": info.get("style_name_en", ""),
+                "roleLabelZh": info.get("role_label_zh", role),
+                "roleLabelEn": info.get("role_label_en", role),
+            }
+        return out
+
     visible_cids = [int(r["champion_id"]) for r in records]
     visible_cid_set = set(visible_cids)
     for cid in visible_cids:
@@ -2413,6 +2697,7 @@ def render_html(
             },
             "pairs": pairs,
             "comp": _pack_comp(champ_profiles.get(cid, {})),
+            "roleMeta": _pack_role_meta(meta.get("role_meta")),
         }
     js_augs = {
         str(aid): {
@@ -2460,17 +2745,53 @@ def render_html(
     .subtitle { color: #9aa0a6; font-size: 13px; }
     /* Top header row — title on the left, GitHub star CTA on the right. */
     .page-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+        gap: 10px 12px;
+        margin-bottom: 14px;
+    }
+    .page-header > div:first-child { min-width: 0; }
+    .title-meta {
         display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 16px;
-        margin-bottom: 16px;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 4px;
     }
     .page-actions {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        justify-self: end;
+        align-self: start;
+    }
+    .page-actions .icon-btn,
+    .page-actions .gh-star {
+        min-height: auto;
+        padding: 0 0 2px;
+        background: transparent;
+        border: 0;
+        border-radius: 0;
+    }
+    .page-actions .icon-btn:hover,
+    .page-actions .gh-star:hover {
+        background: transparent;
+        border-color: transparent;
+        color: #e6e8eb;
+    }
+    .tool-btn.header-update-tab {
+        min-height: auto;
+        padding: 0 0 2px;
+        font-size: 11px;
+        font-weight: 600;
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid #f5d780;
+        border-radius: 0;
+        color: #f5d780;
+        line-height: 1.2;
     }
     .app-shell {
         display: grid;
@@ -2506,7 +2827,15 @@ def render_html(
     .gh-star:hover { background: #30363d; border-color: #58606b; }
     .icon-btn svg,
     .gh-star svg { flex-shrink: 0; }
-    .gh-star-mobile-label { display: none; }
+    .gh-star {
+        width: 36px;
+        justify-content: center;
+        padding: 6px 0;
+    }
+    .page-actions .gh-star {
+        width: auto;
+        justify-content: flex-start;
+    }
     .lang-toggle { min-width: 56px; justify-content: center; }
     .lang-toggle span { font-size: 12px; letter-spacing: 0; }
     /* Filter bar: role chips + free-text search + live count. */
@@ -2520,7 +2849,11 @@ def render_html(
         background: #161a22;
         border-radius: 10px;
     }
-    .role-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .role-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
     .chip {
         padding: 5px 12px;
         background: #1f2530;
@@ -2583,11 +2916,100 @@ def render_html(
     .tool-btn.ghost:hover {
         background: rgba(255,255,255,0.04);
     }
+    .tool-btn.update-tab {
+        position: relative;
+        border-color: #f5d780;
+        color: #f5d780;
+    }
+    .tool-btn.update-tab[aria-expanded="true"] {
+        background: transparent;
+        color: #f8e39f;
+    }
+    .tool-btn.header-update-tab:hover {
+        background: transparent;
+        border-color: #f8e39f;
+        color: #f8e39f;
+    }
+    .search-row { display: contents; }
+    .updates-panel {
+        margin: 0 0 18px;
+        padding: 14px 16px 16px;
+        background: #11151d;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+    }
+    .updates-panel.is-hidden { display: none; }
+    .updates-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 10px;
+    }
+    .updates-kicker {
+        display: block;
+        margin-bottom: 2px;
+        color: #f5d780;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0;
+    }
+    .updates-title {
+        margin: 0;
+        color: #e6e8eb;
+        font-size: 15px;
+        font-weight: 700;
+    }
+    .updates-close {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        border: 1px solid #30363d;
+        border-radius: 999px;
+        background: #1b2030;
+        color: #c5cad3;
+        font: inherit;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .updates-close:hover {
+        background: #2a3142;
+        border-color: #58606b;
+    }
+    .updates-list {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .updates-list li {
+        position: relative;
+        padding-left: 14px;
+        color: #c5cad3;
+        font-size: 12px;
+        line-height: 1.6;
+    }
+    .updates-list li::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.72em;
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: #f5d780;
+    }
     .search-wrap {
         position: relative;
-        flex: 1;
-        max-width: 300px;
-        min-width: 160px;
+        max-width: none;
+        min-width: 0;
     }
     .search-wrap svg {
         position: absolute;
@@ -2600,21 +3022,28 @@ def render_html(
     .search-wrap:focus-within svg { color: #9aa0a6; }
     .search {
         width: 100%;
-        padding: 7px 12px 7px 30px;
-        background: #0b0e13;
+        height: 40px;
+        padding: 0 12px 0 30px;
+        background: rgba(2, 6, 23, 0.72);
         color: #e6e8eb;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        font-size: 13px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        font-size: 14px;
         font-family: inherit;
         outline: none;
         transition: border-color .12s, box-shadow .12s;
     }
     .search:focus {
-        border-color: #58606b;
-        box-shadow: 0 0 0 3px rgba(88,96,107,0.18);
+        border-color: rgba(148, 163, 184, 0.4);
+        box-shadow: 0 0 0 3px rgba(88,96,107,0.16);
     }
-    .shown-count { color: #6b7280; font-size: 12px; white-space: nowrap; }
+    .shown-count {
+        color: #9fb3d9;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
     .shown-count #shown-n {
         color: #e6e8eb;
         font-weight: 600;
@@ -3072,6 +3501,50 @@ def render_html(
         height: 100%;
         object-fit: cover;
         display: block;
+    }
+    .alt-role-badge {
+        --badge-color: #f5d780;
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 16px;
+        height: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        border: 1px solid color-mix(in oklab, var(--badge-color) 62%, rgba(11,14,19,0.9));
+        background: color-mix(in oklab, var(--badge-color) 18%, rgba(11,14,19,0.94));
+        box-shadow: 0 2px 8px rgba(0,0,0,0.32);
+        opacity: 0;
+        transform: translateY(-1px) scale(0.96);
+        transition: opacity 0.12s ease-out, transform 0.12s ease-out, background 0.12s ease-out;
+        pointer-events: auto;
+        z-index: 4;
+        cursor: help;
+    }
+    .alt-role-badge::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 2px;
+        background: var(--badge-color);
+        transform: rotate(45deg);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22);
+    }
+    .alt-role-badge[data-alt-role="Assassin"] { --badge-color: #ef4444; }
+    .alt-role-badge[data-alt-role="Fighter"] { --badge-color: #f97316; }
+    .alt-role-badge[data-alt-role="Mage"] { --badge-color: #3b82f6; }
+    .alt-role-badge[data-alt-role="Marksman"] { --badge-color: #22c55e; }
+    .alt-role-badge[data-alt-role="Support"] { --badge-color: #ec4899; }
+    .alt-role-badge[data-alt-role="Tank"] { --badge-color: #a855f7; }
+    .champ.secondary-role-match .alt-role-badge {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    .champ.secondary-role-match:hover .alt-role-badge,
+    .champ.secondary-role-match:focus-visible .alt-role-badge {
+        background: color-mix(in oklab, var(--badge-color) 26%, rgba(11,14,19,0.92));
     }
     .champ.hidden { display: none; }
     .champ .wr {
@@ -3600,21 +4073,25 @@ def render_html(
         body.detail-modal-open { overflow: hidden; }
         h1 { font-size: 18px; }
         .subtitle { font-size: 12px; }
-        /* Keep title/subtitle on the left and utility actions pinned to the
-           top-right corner, so the header doesn't burn a full extra row. */
+        /* Keep the header compact: title + patch/update chip on the left,
+           utility actions on the right. */
         .page-header {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) auto;
-            align-items: start;
-            gap: 8px 10px;
-            margin-bottom: 12px;
+            gap: 6px 8px;
+            margin-bottom: 10px;
         }
-        .page-header > div:first-child { min-width: 0; }
+        .title-meta { gap: 6px; margin-top: 2px; }
         .page-actions {
-            justify-self: end;
-            align-self: start;
-            flex-wrap: nowrap;
+            gap: 6px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
         }
+        .page-actions .icon-btn,
+        .page-actions .gh-star,
+        .tool-btn.header-update-tab {
+            min-height: auto;
+            padding: 0 0 2px;
+        }
+        .page-actions .gh-star { width: auto; }
         /* Filter bar wraps tighter; search input becomes full-width on
            its own row. */
         .filter-bar { padding: 8px; gap: 8px; }
@@ -3623,10 +4100,19 @@ def render_html(
         .filter-tools {
             margin-left: 0;
             width: 100%;
-            justify-content: space-between;
-            flex-wrap: wrap;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 8px 10px;
+            align-items: center;
         }
+        #recommend-mode { grid-column: 1 / -1; width: 100%; }
         .tool-btn { min-height: 36px; }
+        .updates-panel {
+            margin: 0 0 14px;
+            padding: 12px;
+        }
+        .updates-title { font-size: 14px; }
+        .updates-list li { font-size: 11px; }
         .side-panel {
             position: fixed;
             z-index: 60;
@@ -3655,8 +4141,7 @@ def render_html(
             gap: 6px;
         }
         .rec-name { flex: 1 1 86px; }
-        .rec-score,
-        .rec-badge { justify-self: auto; }
+        .rec-score { justify-self: auto; }
         .rec-detail {
             display: flex;
             flex-wrap: wrap;
@@ -3685,7 +4170,9 @@ def render_html(
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
         .pick-slots { gap: 6px; }
+        .search-wrap { max-width: none; min-width: 0; }
         .search { max-width: none; min-width: 0; }
+        .shown-count { justify-self: end; font-size: 12px; }
         /* Tier heading slimmer; pill stays inline. */
         .tier-heading { margin: 6px 0; gap: 6px; }
         .tier-pill { padding: 3px 12px; font-size: 14px; }
@@ -3760,12 +4247,10 @@ def render_html(
         /* Touch-target floor (WCAG 2.5.5).  Chips were 4×10 padding on 11px
            font ≈ 32 px tall.  Bump to a real 44 px tap area without growing
            the visual pill, by adding transparent vertical padding. */
-        .chip { padding: 8px 12px; font-size: 11px; min-height: 36px; }
+        .chip { min-height: 34px; }
         .icon-btn,
-        .gh-star { padding: 8px 14px; min-height: 36px; }
-        .gh-star svg,
-        .gh-star-full-label { display: none; }
-        .gh-star-mobile-label { display: inline; }
+        .gh-star { min-height: 36px; }
+        .gh-star { width: 36px; padding: 8px 0; }
         .lang-toggle { min-width: 0; }
     }
     @media (min-width: 320px) and (max-width: 359px) {
@@ -3911,12 +4396,16 @@ def render_html(
     parts.append("<div>")
     parts.append(f"<h1 id='site-title'>{header_title}</h1>")
     parts.append(
-        f"<div class='subtitle' id='site-subtitle'>"
-        f"{short_patch}"
-        f"</div>"
+        "<div class='title-meta'>"
+        f"<div class='subtitle' id='site-subtitle'>{short_patch}</div>"
+        "</div>"
     )
     parts.append("</div>")
     parts.append("<div class='page-actions'>")
+    parts.append(
+        '<button class="tool-btn update-tab header-update-tab" id="updates-toggle" type="button" '
+        'aria-expanded="false" aria-controls="updates-panel">近期更新</button>'
+    )
     parts.append(
         "<button class='icon-btn lang-toggle' id='lang-toggle' type='button' "
         "title='Switch to English' aria-label='切換語言'>"
@@ -3925,15 +4414,33 @@ def render_html(
     )
     parts.append(
         f"<a class='gh-star' href='{REPO_URL}' target='_blank' rel='noopener' "
+        "aria-label='GitHub' "
         f"title='覺得有用請幫忙按 Star ⭐'>"
-        f"{gh_icon}<span class='gh-star-full-label'>Star on GitHub</span>"
-        "<span class='gh-star-mobile-label'>⭐ GitHub</span>"
+        f"{gh_icon}"
         f"</a>"
     )
     parts.append("</div>")
     parts.append("</div>")  # /page-header
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
+    parts.append(
+        "<section class='updates-panel is-hidden' id='updates-panel' "
+        "aria-labelledby='updates-title'>"
+        "<div class='updates-head'>"
+        "<div>"
+        "<span class='updates-kicker' id='updates-kicker'>?祉???</span>"
+        "<h2 class='updates-title' id='updates-title'>餈????湔</h2>"
+        "</div>"
+        "<button class='updates-close' id='updates-close' type='button' "
+        "aria-label='??餈??湔'>?</button>"
+        "</div>"
+        "<ul class='updates-list' id='updates-list'>"
+        "<li>???拚??支? pair ??嚗?其?????蝯?靽格迤嚗??怠??D/AP?oke??蝺??啁???捆蝻箏??/li>"
+        "<li>憓?鋆蔭??撠?蝝?詨?????雿??擃????港?摰?敺?/li>"
+        "<li>?啣??箄?憸冽??撟???扼?/li>"
+        "</ul>"
+        "</section>"
+    )
 
     # Filter bar: role chips + free-text search + live "N shown" counter.
     parts.append("<div class='filter-bar'>")
@@ -3950,15 +4457,12 @@ def render_html(
         parts.append(
             f'<button class="chip" data-role="{role_en}" data-label-zh="{role_zh}" '
             f'data-label-en="{role_en}">{role_zh}</button>'
-        )
+    )
     parts.append("</div>")  # /role-chips
     parts.append("<div class='filter-tools'>")
     parts.append(
         '<button class="tool-btn" id="recommend-mode" type="button" '
         'aria-pressed="false">選擇你的隊友：關</button>'
-    )
-    parts.append(
-        '<button class="tool-btn ghost" id="clear-picks" type="button">清空選取</button>'
     )
     # Search input wrapped in a label with an inline magnifier SVG sitting
     # in the input's left padding (the wrapper is positioned, the input
@@ -4011,7 +4515,10 @@ def render_html(
         for r in entries:
             wr_pct = f"{r['bayes_wr'] * 100:.1f}%"
             meta = champ_meta.get(r["champion_id"], {})
-            tag_str = " ".join(meta.get("tags") or [])
+            tags = list(meta.get("tags") or [])
+            tag_str = " ".join(tags)
+            primary_role = tags[0] if tags else ""
+            secondary_role = tags[1] if len(tags) > 1 else ""
             alias = meta.get("alias", "")
             search_blob = f"{r['name']} {alias} {tag_str}".lower()
             title = (
@@ -4023,13 +4530,17 @@ def render_html(
                 f"<div class='champ' data-cid='{r['champion_id']}' "
                 f"data-name-zh=\"{html.escape(r['name'])}\" "
                 f"data-name-en=\"{html.escape(meta.get('name_en', alias or r['name']))}\" "
-                f"data-tags='{tag_str}' data-search=\"{search_blob}\" "
+                f"data-tags='{tag_str}' data-primary-role='{html.escape(primary_role)}' "
+                f"data-secondary-role='{html.escape(secondary_role)}' "
+                f"data-search=\"{search_blob}\" "
                 f"data-tier='{tier}' data-wr='{wr_pct}' data-games='{r['games']}' "
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"role='button' tabindex='0' "
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
                 f"<img loading='lazy' src='{r['image']}' alt=''>"
+                f"<span class='alt-role-badge' data-alt-role='{html.escape(secondary_role)}' "
+                "title='' aria-label='' hidden></span>"
                 # The English alias is rendered as screen-reader-only text so
                 # Ctrl+F / Cmd+F can find e.g. "Aatrox" even though only the
                 # zh-TW name is drawn.  (aria-label already announces it for
@@ -4105,6 +4616,10 @@ def render_html(
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const ROLE_LABELS = {
+        zh: { Assassin: '刺客', Fighter: '戰士', Mage: '法師', Marksman: '射手', Support: '輔助', Tank: '坦克' },
+        en: { Assassin: 'Assassin', Fighter: 'Fighter', Mage: 'Mage', Marksman: 'Marksman', Support: 'Support', Tank: 'Tank' },
+    };
     const HEADER_TITLE_ZH = __HEADER_TITLE_ZH__;
     const HEADER_TITLE_EN = __HEADER_TITLE_EN__;
     const SHORT_PATCH_ZH = __SHORT_PATCH_ZH__;
@@ -4128,9 +4643,17 @@ def render_html(
             searchAria: '搜尋英雄',
             shownUnit: '隻',
             tierUnit: '隻',
+            updatesButton: '近期更新',
+            updatesKicker: '本版重點',
+            updatesTitle: '近期重要更新',
+            updatesClose: '關閉近期更新',
+            updatesItems: [
+                '隊友適配除了 pair 勝率，現在也會做隊伍組成修正，包含前排、AD/AP、poke、清線、開戰等陣容缺口。',
+                '增幅裝置排序小幅納入選取率訊號，低選取率高勝率會更保守看待。',
+                '新增出裝風格與增幅類型相性。',
+            ],
             recModeOn: '選擇你的隊友：開',
             recModeOff: '選擇你的隊友：關',
-            clearPicks: '清空選取',
             emptyTitle: '沒有符合條件的英雄',
             emptyCopy: '換個角色篩選，或試試英雄中／英文名。',
             freshness: () => `${DATE_STR_ZH}（${TOTAL_GAMES} 場） · ${PATCH_LABEL}`,
@@ -4183,6 +4706,8 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 最不適配 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}，tier ${tier}，勝率 ${wr}`,
+            secondaryRoleBadgeTitle: (role, pick, wr, style) => `副職業：${role} · 出場率 ${pick} · WR ${wr}${style ? ' · 主要出裝：' + style : ''}`,
+            secondaryRoleBadgeFallback: (role, wr) => `副職業：${role} · 目前缺少穩定的獨立出裝占比 · 英雄整體 WR ${wr}`,
         },
         en: {
             htmlLang: 'en',
@@ -4192,9 +4717,17 @@ def render_html(
             searchAria: 'Search champions',
             shownUnit: 'shown',
             tierUnit: 'shown',
+            updatesButton: 'Updates',
+            updatesKicker: 'This build',
+            updatesTitle: 'Recent important changes',
+            updatesClose: 'Close recent updates',
+            updatesItems: [
+                'Teammate fit now goes beyond pair win rate and adds team-composition correction, including frontline, AD/AP mix, poke, waveclear, and engage gaps.',
+                'Augment ranking now uses a small pick-rate signal, so low-pick high-win results are treated more conservatively.',
+                'Added item-style and augment-type affinity.',
+            ],
             recModeOn: 'Teammate mode: On',
             recModeOff: 'Teammate mode: Off',
-            clearPicks: 'Clear picks',
             emptyTitle: 'No champions match the current filters',
             emptyCopy: 'Try a different role, or search by Chinese / English champion name.',
             freshness: () => `Updated ${BUILD_DATE} (${TOTAL_GAMES} games) · ${PATCH_LABEL}`,
@@ -4247,12 +4780,64 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · least fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}, tier ${tier}, win rate ${wr}`,
+            secondaryRoleBadgeTitle: (role, pick, wr, style) => `Secondary role: ${role} · pick ${pick} · WR ${wr}${style ? ' · build signal: ' + style : ''}`,
+            secondaryRoleBadgeFallback: (role, wr) => `Secondary role: ${role} · no stable standalone build share yet · overall WR ${wr}`,
         }
     };
     let currentLang = 'zh';
+    let updatesOpen = false;
+    let filterState = { role: '', q: '' };
 
     function tr() {
         return COPY[currentLang] || COPY.zh;
+    }
+
+    function roleLabel(role) {
+        const labels = ROLE_LABELS[currentLang] || ROLE_LABELS.zh;
+        return labels[role] || role || '';
+    }
+
+    function styleLabel(info) {
+        if (!info) return '';
+        return currentLang === 'en'
+            ? (info.styleNameEn || info.styleName || '')
+            : (info.styleNameZh || info.styleName || info.styleNameEn || '');
+    }
+
+    function secondaryRoleBadgeTitle(info, role) {
+        const copy = tr();
+        const label = roleLabel(role);
+        if (info && typeof info.pick === 'number') {
+            return copy.secondaryRoleBadgeTitle(label, pct(info.pick), pct(info.wr || 0), styleLabel(info));
+        }
+        return copy.secondaryRoleBadgeFallback(label, pct((info && info.wr) || 0));
+    }
+
+    function refreshSecondaryRoleBadges() {
+        const role = filterState.role;
+        document.querySelectorAll('.champ').forEach(champ => {
+            const badge = champ.querySelector('.alt-role-badge');
+            if (!badge) return;
+            const cid = champ.getAttribute('data-cid');
+            const info = DATA.champs[cid] || {};
+            const tags = info.tags || [];
+            const secondaryRole = tags[1] || '';
+            const show = Boolean(role) && secondaryRole === role;
+            champ.classList.toggle('secondary-role-match', show);
+            if (!show) {
+                badge.setAttribute('hidden', '');
+                badge.removeAttribute('title');
+                badge.setAttribute('aria-label', '');
+                return;
+            }
+            const overallWr = parseFloat((champ.getAttribute('data-wr') || '0').replace('%', '')) / 100;
+            const roleInfo = ((info.roleMeta || {})[secondaryRole]) || { wr: overallWr };
+            const title = secondaryRoleBadgeTitle(roleInfo, secondaryRole);
+            badge.removeAttribute('hidden');
+            badge.setAttribute('data-alt-role', secondaryRole);
+            badge.setAttribute('title', title);
+            badge.setAttribute('aria-label', title);
+        });
     }
 
     function isMobileViewport() {
@@ -4728,17 +5313,12 @@ def render_html(
             );
     }
 
-    function recStrengthLabel(score) {
-        if (currentLang === 'en') {
-            if (score >= 0.05) return 'Excellent fit';
-            if (score >= 0.03) return 'Good fit';
-            if (score >= 0.01) return 'Playable fit';
-            return 'Low edge';
-        }
-        if (score >= 0.05) return '強烈推薦';
-        if (score >= 0.03) return '推薦';
-        if (score >= 0.01) return '可考慮';
-        return '優勢較小';
+    function recScoreClass(score) {
+        if (score >= 0.09) return 'fit-top';
+        if (score >= 0.07) return 'fit-strong';
+        if (score >= 0.05) return 'fit-solid';
+        if (score >= 0.02) return 'fit-soft';
+        return 'fit-floor';
     }
 
     function confidenceLabel(row) {
@@ -4791,8 +5371,7 @@ def render_html(
 
     function recMetaHtml(row, name) {
         const copy = tr();
-        const strength = row.leastFit ? copy.leastFitLabel : recStrengthLabel(row.fitScore);
-        const scoreClass = row.leastFit ? 'fit-worst' : '';
+        const scoreClass = row.leastFit ? 'fit-worst' : recScoreClass(row.fitScore);
         const scoreLabel = row.leastFit
             ? copy.leastFitLabel
             : (currentLang === 'en' ? 'Fit' : '推薦度');
@@ -4806,7 +5385,6 @@ def render_html(
             <span class="rec-titleline">
                 <span class="rec-name">${escHtml(name)}</span>
                 <span class="rec-score ${scoreClass}">${scoreLabel} ${signed(row.fitScore)}</span>
-                <span class="rec-badge">${escHtml(strength)}</span>
             </span>
             <span class="rec-detail">
                 <span class="${pairClass}">${escHtml(pairLabel)}</span>
@@ -4931,6 +5509,27 @@ def render_html(
         });
     }
 
+    function renderUpdatesPanel() {
+        const copy = tr();
+        const button = document.getElementById('updates-toggle');
+        const panel = document.getElementById('updates-panel');
+        const kicker = document.getElementById('updates-kicker');
+        const title = document.getElementById('updates-title');
+        const close = document.getElementById('updates-close');
+        const list = document.getElementById('updates-list');
+        if (button) {
+            button.textContent = copy.updatesButton;
+            button.setAttribute('aria-expanded', updatesOpen ? 'true' : 'false');
+        }
+        if (panel) panel.classList.toggle('is-hidden', !updatesOpen);
+        if (kicker) kicker.textContent = copy.updatesKicker;
+        if (title) title.textContent = copy.updatesTitle;
+        if (close) close.setAttribute('aria-label', copy.updatesClose);
+        if (list) {
+            list.innerHTML = copy.updatesItems.map(item => `<li>${escHtml(item)}</li>`).join('');
+        }
+    }
+
     function applyLanguage(nextLang) {
         currentLang = nextLang === 'en' ? 'en' : 'zh';
         const copy = tr();
@@ -4952,8 +5551,6 @@ def render_html(
                 ? (chip.getAttribute('data-label-en') || chip.textContent || '')
                 : (chip.getAttribute('data-label-zh') || chip.textContent || '');
         });
-        const clearBtn = document.getElementById('clear-picks');
-        if (clearBtn) clearBtn.textContent = copy.clearPicks;
         const emptyTitle = document.getElementById('empty-title');
         if (emptyTitle) emptyTitle.textContent = copy.emptyTitle;
         const emptyCopy = document.getElementById('empty-copy');
@@ -4975,6 +5572,8 @@ def render_html(
         if (toggleLabel) toggleLabel.textContent = copy.langToggleLabel;
 
         updateChampCardCopy();
+        refreshSecondaryRoleBadges();
+        renderUpdatesPanel();
         setRecommendMode(recommendMode);
         renderSidePanel();
         if (detailSelected) {
@@ -5106,6 +5705,20 @@ def render_html(
             closeDetail();
             return;
         }
+        const updatesBtn = ev.target.closest('#updates-toggle');
+        if (updatesBtn) {
+            updatesOpen = !updatesOpen;
+            renderUpdatesPanel();
+            trackEvent('updates_toggle', { open: updatesOpen });
+            return;
+        }
+        const updatesClose = ev.target.closest('#updates-close');
+        if (updatesClose) {
+            updatesOpen = false;
+            renderUpdatesPanel();
+            trackEvent('updates_close', {});
+            return;
+        }
         const modeBtn = ev.target.closest('#recommend-mode');
         if (modeBtn) {
             const nextMode = !recommendMode;
@@ -5113,16 +5726,6 @@ def render_html(
             pickNotice = '';
             renderSidePanel();
             trackEvent('recommend_mode_toggle', { enabled: nextMode });
-            return;
-        }
-        const clearBtn = ev.target.closest('#clear-picks');
-        if (clearBtn) {
-            const previousCount = teamPicks.length;
-            teamPicks = [];
-            pickNotice = '';
-            syncPickDecorations();
-            renderSidePanel();
-            trackEvent('team_picks_clear', { previous_count: previousCount });
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');
@@ -5186,8 +5789,6 @@ def render_html(
 
     /* -----  Filter / search  --------------------------------------- */
 
-    const filterState = { role: '', q: '' };
-
     function applyFilters() {
         const role = filterState.role;
         const q = filterState.q.trim().toLowerCase();
@@ -5224,6 +5825,7 @@ def render_html(
                 closeDetail();
             }
         }
+        refreshSecondaryRoleBadges();
     }
 
     function setActiveChip(role) {
@@ -5256,6 +5858,11 @@ def render_html(
             if (recModalOpen) {
                 recModalOpen = false;
                 renderSidePanel();
+                return;
+            }
+            if (updatesOpen) {
+                updatesOpen = false;
+                renderUpdatesPanel();
                 return;
             }
         }
@@ -5334,7 +5941,6 @@ def render_html(
     parts.append("</body></html>")
     return "".join(parts)
 
-
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"))
 @click.option("--queue", "queue_id", type=int, default=2400, help="450=ARAM, 2400=Mayhem")
@@ -5402,20 +6008,6 @@ def main(
         f"[tierlist] augment EB prior strength k={aug_prior_strength:.1f} "
         f"(posterior q={AUGMENT_POSTERIOR_Q:.2f}, pick_weight={AUGMENT_PICK_LIFT_WEIGHT:g})"
     )
-    champ_profiles = load_champion_pick_profiles(champ_meta)
-    picks = build_champ_augment_picks(
-        champ_aug,
-        aug_meta,
-        champ_profiles,
-        min_games_per_pair=min_pair_games,
-        top_n=top_n,
-        bot_n=bot_n,
-        prior_strength=aug_prior_strength,
-    )
-    click.echo(
-        f"[tierlist] {len(picks)} champions have >= 1 rarity-bucketed pair "
-        f"(games >= {min_pair_games})"
-    )
     affinity_min_games = max(min_pair_games * 3, 45)
     item_style_min_games = max(affinity_min_games, ITEM_STYLE_MIN_GAMES)
     augment_type_min_games = max(affinity_min_games, AUGMENT_TYPE_MIN_GAMES)
@@ -5441,6 +6033,30 @@ def main(
     click.echo(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
         f"(games >= {augment_type_min_games})"
+    )
+    role_changes = apply_usage_based_roles(champ_meta, champ_records, item_style_affinity)
+    click.echo(
+        f"[tierlist] applied {len(role_changes)} usage-based role tag updates "
+        f"(item style usage + WR fit)"
+    )
+    for alias, before, after in role_changes[:24]:
+        click.echo(f"  {alias:14s} {before} -> {after}")
+    if len(role_changes) > 24:
+        click.echo(f"  ... {len(role_changes) - 24} more")
+
+    champ_profiles = load_champion_pick_profiles(champ_meta)
+    picks = build_champ_augment_picks(
+        champ_aug,
+        aug_meta,
+        champ_profiles,
+        min_games_per_pair=min_pair_games,
+        top_n=top_n,
+        bot_n=bot_n,
+        prior_strength=aug_prior_strength,
+    )
+    click.echo(
+        f"[tierlist] {len(picks)} champions have >= 1 rarity-bucketed pair "
+        f"(games >= {min_pair_games})"
     )
     synergy = build_champ_synergy_index(
         champ_pairs,
@@ -5510,7 +6126,6 @@ def main(
     if not nojekyll.exists():
         nojekyll.write_text("", encoding="utf-8")
         click.echo(f"[tierlist] wrote {nojekyll}")
-
 
 if __name__ == "__main__":
     main()
