@@ -4706,8 +4706,8 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 最不適配 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}，tier ${tier}，勝率 ${wr}`,
-            secondaryRoleBadgeTitle: (role, pick, wr, style) => `副職業：${role} · 出場率 ${pick} · WR ${wr}${style ? ' · 主要出裝：' + style : ''}`,
-            secondaryRoleBadgeFallback: (role, wr) => `副職業：${role} · 目前缺少穩定的獨立出裝占比 · 英雄整體 WR ${wr}`,
+            secondaryRoleBadgeTitle: (role, pick, wr, style) => `這隻也常拿來補 ${role}：此玩法約佔 ${pick}，WR ${wr}${style ? '，常見出裝偏 ' + style : ''}`,
+            secondaryRoleBadgeFallback: (role, wr) => `這隻也能補 ${role}，但目前還沒有穩定的獨立玩法占比；英雄整體 WR ${wr}`,
         },
         en: {
             htmlLang: 'en',
@@ -4780,8 +4780,8 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · least fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}, tier ${tier}, win rate ${wr}`,
-            secondaryRoleBadgeTitle: (role, pick, wr, style) => `Secondary role: ${role} · pick ${pick} · WR ${wr}${style ? ' · build signal: ' + style : ''}`,
-            secondaryRoleBadgeFallback: (role, wr) => `Secondary role: ${role} · no stable standalone build share yet · overall WR ${wr}`,
+            secondaryRoleBadgeTitle: (role, pick, wr, style) => `This champion is also played as ${role}: about ${pick} of games, WR ${wr}${style ? ', usually built toward ' + style : ''}`,
+            secondaryRoleBadgeFallback: (role, wr) => `This champion can also cover ${role}, but there is no stable standalone playstyle share yet; overall WR ${wr}`,
         }
     };
     let currentLang = 'zh';
