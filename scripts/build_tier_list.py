@@ -64,6 +64,7 @@ TIER_LABEL_BG = {
 }
 
 CDRAGON_BASE = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default"
+SITE_ICON_SOURCE = Path("docs/favicon-source.png")
 AUGMENT_PRIOR_DEFAULT = 350.0
 AUGMENT_POSTERIOR_Q = 0.10
 AUGMENT_LCB_Z = 1.2815515655446004
@@ -681,6 +682,106 @@ def write_og_image(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.convert("RGB").save(out_path, "PNG", optimize=True)
+
+def write_favicon_svg(out_path: Path) -> None:
+    """Write a compact site favicon inspired by the Mayhem prismatic dice mark."""
+    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
+  <defs>
+    <linearGradient id='bg' x1='32' y1='24' x2='224' y2='232' gradientUnits='userSpaceOnUse'>
+      <stop offset='0' stop-color='#0d1122'/>
+      <stop offset='0.55' stop-color='#090d1d'/>
+      <stop offset='1' stop-color='#05070f'/>
+    </linearGradient>
+    <linearGradient id='sheen' x1='58' y1='62' x2='194' y2='192' gradientUnits='userSpaceOnUse'>
+      <stop offset='0' stop-color='#fbf7ff'/>
+      <stop offset='0.22' stop-color='#8ef2ff'/>
+      <stop offset='0.48' stop-color='#f5b6ff'/>
+      <stop offset='0.72' stop-color='#ffe8ad'/>
+      <stop offset='1' stop-color='#7ddfff'/>
+    </linearGradient>
+    <linearGradient id='orbit' x1='30' y1='188' x2='228' y2='110' gradientUnits='userSpaceOnUse'>
+      <stop offset='0' stop-color='#f180ff'/>
+      <stop offset='0.45' stop-color='#fff7ef'/>
+      <stop offset='1' stop-color='#9f78ff'/>
+    </linearGradient>
+    <filter id='softGlow' x='-40%' y='-40%' width='180%' height='180%'>
+      <feGaussianBlur stdDeviation='4' result='blur'/>
+      <feMerge>
+        <feMergeNode in='blur'/>
+        <feMergeNode in='SourceGraphic'/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x='8' y='8' width='240' height='240' rx='34' fill='url(#bg)'/>
+  <rect x='8' y='8' width='240' height='240' rx='34' fill='none' stroke='rgba(255,255,255,0.18)' stroke-width='3'/>
+  <g filter='url(#softGlow)' stroke='url(#sheen)' stroke-width='3.5' stroke-linejoin='round'>
+    <path d='M128 56 69 94l59 34 59-34-59-38Z' fill='rgba(255,248,255,0.88)'/>
+    <path d='M69 94v69l59 35v-70L69 94Z' fill='rgba(232,220,255,0.78)'/>
+    <path d='M187 94v69l-59 35v-70l59-34Z' fill='rgba(244,205,255,0.8)'/>
+  </g>
+  <g fill='#090d1d'>
+    <ellipse cx='128' cy='101' rx='11' ry='8'/>
+    <ellipse cx='91' cy='122' rx='10' ry='14' transform='rotate(-24 91 122)'/>
+    <ellipse cx='108' cy='164' rx='10' ry='14' transform='rotate(-24 108 164)'/>
+    <ellipse cx='153' cy='142' rx='10' ry='14' transform='rotate(24 153 142)'/>
+    <ellipse cx='171' cy='122' rx='10' ry='14' transform='rotate(24 171 122)'/>
+  </g>
+  <path d='M31 181c26 21 59 29 95 27 38-2 72-15 101-49' fill='none' stroke='#05070f' stroke-width='18' stroke-linecap='round'/>
+  <path d='M27 177c26 21 59 29 95 27 38-2 72-15 101-49' fill='none' stroke='url(#orbit)' stroke-width='11' stroke-linecap='round' filter='url(#softGlow)'/>
+  <path d='M191 64l5 14 14 5-14 5-5 14-5-14-14-5 14-5 5-14Z' fill='#fff3d5' filter='url(#softGlow)'/>
+</svg>
+"""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(svg, encoding="utf-8")
+
+def favicon_asset_version() -> str:
+    """Use the checked-in icon source mtime so browser cache updates on icon swaps."""
+    if SITE_ICON_SOURCE.exists():
+        stamp = _dt.datetime.fromtimestamp(SITE_ICON_SOURCE.stat().st_mtime)
+        return stamp.strftime("%Y%m%d%H%M%S")
+    return (_dt.date.today().isoformat()).replace("-", "")
+
+def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) -> list[Path]:
+    """Generate favicon PNG/ICO assets from the checked-in transparent source image."""
+    from PIL import Image, ImageChops, ImageDraw
+
+    if not source_path.exists():
+        return []
+
+    img = Image.open(source_path).convert("RGBA")
+    width, height = img.size
+    inset = max(0, round(min(width, height) * 0.035))
+    if inset:
+        img = img.crop((inset, inset, width - inset, height - inset))
+
+    def _rounded(img_rgba: "Image.Image", size: tuple[int, int]) -> "Image.Image":
+        resized = img_rgba.resize(size, Image.LANCZOS)
+        radius = max(4, round(min(size) * 0.22))
+        mask = Image.new("L", size, 0)
+        mask_draw = ImageDraw.Draw(mask)
+        mask_draw.rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius=radius, fill=255)
+        alpha = resized.getchannel("A")
+        resized.putalpha(ImageChops.multiply(alpha, mask))
+        return resized
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    outputs: list[Path] = []
+    raster_targets = {
+        "favicon-32.png": (32, 32),
+        "apple-touch-icon.png": (180, 180),
+    }
+    for name, size in raster_targets.items():
+        target = out_dir / name
+        rounded = _rounded(img, size)
+        rounded.save(target, "PNG", optimize=True)
+        outputs.append(target)
+
+    ico_path = out_dir / "favicon.ico"
+    ico_master = _rounded(img, (256, 256))
+    ico_master.save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    outputs.append(ico_path)
+    return outputs
 
 def assign_tier(bayes_wr: float) -> str:
     if bayes_wr >= 0.55:
@@ -2088,12 +2189,11 @@ def apply_usage_based_roles(
     champ_records: list[dict],
     item_style_affinity: dict[int, dict],
 ) -> list[tuple[str, list[str], list[str]]]:
-    """Rewrite site role tags from real Mayhem item-style fit.
+    """Keep base primary roles stable; add only data-backed alternate roles.
 
-    Item-style rows are already built from real participant item usage and
-    win/loss residuals.  Role inference keeps that signal conservative: usage
-    breaks close WR ties, and a second role appears only when it is near the
-    first role by score.
+    Primary role stays aligned with the site's curated Mayhem mental model
+    (TAG_OVERRIDES / metadata order). Secondary role only appears when a
+    distinct item-style branch earns it from real usage + WR fit.
     """
     games_by_champ = {
         int(row["champion_id"]): max(int(row.get("games", 0) or 0), 1)
@@ -2146,35 +2246,25 @@ def apply_usage_based_roles(
                 }
 
         before = list(meta.get("tags") or [])
-        inferred = list(before)
-        if role_rows:
-            ranked = sorted(
-                role_rows.items(),
-                key=lambda item: (
-                    -item[1]["score"],
-                    -item[1]["pick_rate"],
-                    ROLE_SORT_PRIORITY.get(item[0], 99),
-                ),
-            )
-            primary_role, primary_info = ranked[0]
-            inferred = [primary_role]
-            for role, info in ranked[1:]:
-                if len(inferred) >= 2:
-                    break
-                if info["pick_rate"] < SECONDARY_ROLE_MIN_PICK_RATE:
-                    continue
-                if primary_info["score"] - info["score"] <= ROLE_SCORE_CLOSE_GAP:
-                    inferred.append(role)
-
-            for base_role in before:
-                if base_role in inferred or base_role not in PRESERVE_BASE_ROLES:
-                    continue
-                if base_role == "Support" and before and before[0] == "Support":
-                    inferred.insert(0, base_role)
-                elif len(inferred) < 2:
-                    inferred.append(base_role)
-                if len(inferred) >= 2:
-                    break
+        ranked = sorted(
+            role_rows.items(),
+            key=lambda item: (
+                -item[1]["score"],
+                -item[1]["pick_rate"],
+                ROLE_SORT_PRIORITY.get(item[0], 99),
+            ),
+        )
+        primary_role = before[0] if before else (ranked[0][0] if ranked else "")
+        inferred = [primary_role] if primary_role else []
+        secondary_role = ""
+        for role, info in ranked:
+            if role == primary_role:
+                continue
+            if info["pick_rate"] < SECONDARY_ROLE_MIN_PICK_RATE:
+                continue
+            secondary_role = role
+            inferred.append(role)
+            break
 
         role_meta: dict[str, dict[str, object]] = {}
         for idx, role in enumerate(inferred[:2]):
@@ -3432,7 +3522,7 @@ def render_html(
         position: relative;
         aspect-ratio: 1 / 1;
         border-radius: 8px;
-        overflow: hidden;
+        overflow: visible;
         background: #1f2530;
         /* Champion thumbnail wears its tier's colour as a 2px frame.
            Non-OP tiers use a solid border; OP gets a prismatic gradient
@@ -3510,51 +3600,126 @@ def render_html(
         height: 100%;
         object-fit: cover;
         display: block;
+        border-radius: 6px;
     }
     .alt-role-badge {
         --badge-color: #f5d780;
         position: absolute;
         top: 4px;
         right: 4px;
-        width: 16px;
-        height: 16px;
+        width: 18px;
+        height: 18px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: 5px;
-        border: 1px solid color-mix(in oklab, var(--badge-color) 62%, rgba(11,14,19,0.9));
-        background: color-mix(in oklab, var(--badge-color) 18%, rgba(11,14,19,0.94));
-        box-shadow: 0 2px 8px rgba(0,0,0,0.32);
+        border-radius: 999px;
+        border: 1px solid var(--badge-color);
+        background: rgba(9, 14, 22, 0.9);
+        box-shadow:
+            0 0 0 1px rgba(0,0,0,0.18),
+            0 2px 8px rgba(0,0,0,0.34);
         opacity: 0;
         transform: translateY(-1px) scale(0.96);
-        transition: opacity 0.12s ease-out, transform 0.12s ease-out, background 0.12s ease-out;
+        transition: opacity 0.12s ease-out, transform 0.12s ease-out, box-shadow 0.12s ease-out, border-color 0.12s ease-out;
         pointer-events: auto;
         z-index: 4;
         cursor: help;
     }
-    .alt-role-badge::before {
-        content: "";
-        width: 7px;
-        height: 7px;
-        border-radius: 2px;
-        background: var(--badge-color);
-        transform: rotate(45deg);
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.22);
+    .alt-role-badge svg {
+        width: 10px;
+        height: 10px;
+        display: block;
+        color: var(--badge-color);
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.22));
     }
-    .alt-role-badge[data-alt-role="Assassin"] { --badge-color: #ef4444; }
-    .alt-role-badge[data-alt-role="Fighter"] { --badge-color: #f97316; }
-    .alt-role-badge[data-alt-role="Mage"] { --badge-color: #3b82f6; }
-    .alt-role-badge[data-alt-role="Marksman"] { --badge-color: #22c55e; }
-    .alt-role-badge[data-alt-role="Support"] { --badge-color: #ec4899; }
-    .alt-role-badge[data-alt-role="Tank"] { --badge-color: #a855f7; }
+    .alt-role-badge[data-alt-role="Assassin"] { --badge-color: #D94A5F; }
+    .alt-role-badge[data-alt-role="Fighter"] { --badge-color: #D9822B; }
+    .alt-role-badge[data-alt-role="Mage"] { --badge-color: #9B7CF6; }
+    .alt-role-badge[data-alt-role="Marksman"] { --badge-color: #4FB06D; }
+    .alt-role-badge[data-alt-role="Support"] { --badge-color: #D96BAA; }
+    .alt-role-badge[data-alt-role="Tank"] { --badge-color: #5B8DEF; }
     .champ.secondary-role-match .alt-role-badge {
         opacity: 1;
         transform: translateY(0) scale(1);
     }
     .champ.secondary-role-match:hover .alt-role-badge,
     .champ.secondary-role-match:focus-visible .alt-role-badge {
-        background: color-mix(in oklab, var(--badge-color) 26%, rgba(11,14,19,0.92));
+        box-shadow:
+            0 0 0 1px rgba(0,0,0,0.18),
+            0 0 10px color-mix(in srgb, var(--badge-color) 28%, transparent),
+            0 2px 8px rgba(0,0,0,0.34);
     }
+    .alt-role-tooltip {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 8px);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: max-content;
+        max-width: min(260px, calc(100vw - 28px));
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: #0b0e13;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+        color: #c5cad3;
+        font-size: 11px;
+        line-height: 1.35;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(2px);
+        transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+        z-index: 56;
+    }
+    .alt-role-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        right: 10px;
+        border: 6px solid transparent;
+        border-top-color: #0b0e13;
+    }
+    .alt-role-badge.tip-right .alt-role-tooltip {
+        left: 0;
+        right: auto;
+    }
+    .alt-role-badge.tip-right .alt-role-tooltip::after {
+        left: 10px;
+        right: auto;
+    }
+    .alt-role-badge.tip-below .alt-role-tooltip {
+        top: calc(100% + 8px);
+        bottom: auto;
+    }
+    .alt-role-badge.tip-below .alt-role-tooltip::after {
+        top: auto;
+        bottom: 100%;
+        border-top-color: transparent;
+        border-bottom-color: #0b0e13;
+    }
+    .champ.secondary-role-match:hover .alt-role-tooltip,
+    .champ.secondary-role-match:focus-visible .alt-role-tooltip,
+    .alt-role-badge:hover .alt-role-tooltip {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .alt-role-tooltip-style {
+        color: #e6e8eb;
+        font-weight: 600;
+    }
+    .alt-role-tooltip-pick {
+        color: #9aa0a6;
+        font-variant-numeric: tabular-nums;
+    }
+    .alt-role-tooltip-lift {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .alt-role-tooltip-lift.is-good { color: #6bd16b; }
+    .alt-role-tooltip-lift.is-bad { color: #ff8a8a; }
+    .alt-role-tooltip-lift.is-even { color: #d7dde7; }
     .champ.hidden { display: none; }
     .champ .wr {
         position: absolute;
@@ -3575,6 +3740,8 @@ def render_html(
         text-align: center;
         background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
         color: #e6e8eb;
+        border-bottom-left-radius: 6px;
+        border-bottom-right-radius: 6px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -4253,7 +4420,8 @@ def render_html(
         /* Hide the lift% / games count on mobile - keep cards compact.
            Numbers still available on hover (tooltip) and via the title attr. */
         .aug .alift { display: none; }
-        .aug-tip { display: none; }
+        .aug-tip,
+        .alt-role-tooltip { display: none; }
         /* Touch-target floor (WCAG 2.5.5).  Chips were 4×10 padding on 11px
            font ≈ 32 px tall.  Bump to a real 44 px tap area without growing
            the visual pill, by adding transparent vertical padding. */
@@ -4331,6 +4499,19 @@ def render_html(
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     )
     meta_lines.append(f"<title>{og_title}</title>")
+    favicon_version = favicon_asset_version()
+    meta_lines.append(
+        f"<link rel='icon' type='image/png' sizes='32x32' href='favicon-32.png?v={favicon_version}'>"
+    )
+    meta_lines.append(
+        f"<link rel='icon' href='favicon.ico?v={favicon_version}'>"
+    )
+    meta_lines.append(
+        f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
+    )
+    meta_lines.append(
+        f"<link rel='icon' type='image/svg+xml' href='favicon.svg?v={favicon_version}'>"
+    )
     meta_lines.append(f"<meta name='description' content=\"{og_desc}\">")
     if site_url:
         meta_lines.append(f"<link rel='canonical' href='{site_url}'>")
@@ -4545,7 +4726,7 @@ def render_html(
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
                 f"<img loading='lazy' src='{r['image']}' alt=''>"
-                f"<span class='alt-role-badge' data-alt-role='{html.escape(secondary_role)}' "
+                f"<span class='alt-role-badge' data-alt-role='{html.escape(primary_role)}' "
                 "title='' aria-label='' hidden></span>"
                 # The English alias is rendered as screen-reader-only text so
                 # Ctrl+F / Cmd+F can find e.g. "Aatrox" even though only the
@@ -4625,6 +4806,39 @@ def render_html(
     const ROLE_LABELS = {
         zh: { Assassin: '刺客', Fighter: '戰士', Mage: '法師', Marksman: '射手', Support: '輔助', Tank: '坦克' },
         en: { Assassin: 'Assassin', Fighter: 'Fighter', Mage: 'Mage', Marksman: 'Marksman', Support: 'Support', Tank: 'Tank' },
+    };
+    const ROLE_BADGE_ICONS = {
+        Assassin: `
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M8 1.7c1.1 1.72 3.46 4.16 3.46 6.62A3.46 3.46 0 1 1 4.54 8.32C4.54 5.86 6.9 3.42 8 1.7Z"/>
+            </svg>
+        `,
+        Fighter: `
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="10.3" y="4" width="3.4" height="16" rx="1.2" transform="rotate(-45 12 12)" fill="currentColor"/>
+                <rect x="10.3" y="4" width="3.4" height="16" rx="1.2" transform="rotate(45 12 12)" fill="currentColor"/>
+            </svg>
+        `,
+        Mage: `
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M8 1.7 9.28 6.72 14.3 8l-5.02 1.28L8 14.3 6.72 9.28 1.7 8l5.02-1.28L8 1.7Z"/>
+            </svg>
+        `,
+        Marksman: `
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="m4.05 11.95 1.1-3.1 2 2 4.52-4.52.95.95-4.52 4.52 1.99 1.99-3.09 1.11-3.22 1.1 1.12-3.05Z"/>
+            </svg>
+        `,
+        Support: `
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M6.75 2.75h2.5v4h4v2.5h-4v4h-2.5v-4h-4v-2.5h4v-4Z"/>
+            </svg>
+        `,
+        Tank: `
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path fill="currentColor" d="M8 1.65 12.55 3v3.46c0 2.86-1.7 5.44-4.31 6.53L8 13.08l-.24-.09C5.15 11.9 3.45 9.32 3.45 6.46V3L8 1.65Zm0 1.52L4.95 4.08v2.38c0 2.16 1.23 4.11 3.05 5.06 1.82-.95 3.05-2.9 3.05-5.06V4.08L8 3.17Z"/>
+            </svg>
+        `,
     };
     const HEADER_TITLE_ZH = __HEADER_TITLE_ZH__;
     const HEADER_TITLE_EN = __HEADER_TITLE_EN__;
@@ -4712,7 +4926,9 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 最不適配 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}，tier ${tier}，勝率 ${wr}`,
-            secondaryRoleBadgeTitle: (style, pick, wr) => `${style} 選取率 ${pick}，勝率 ${wr}`,
+            secondaryRoleBadgeTitle: (style, pick, lift) => `${style} 選取率 ${pick}，勝率${lift}`,
+            secondaryRoleBadgePick: pick => `選取率 ${pick}`,
+            secondaryRoleBadgeLift: lift => `勝率${lift}`,
         },
         en: {
             htmlLang: 'en',
@@ -4785,7 +5001,9 @@ def render_html(
             leastFitRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · least fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             champCardTitle: (name, wr, games, raw) => `${name} · WR ${wr} · games ${games} · raw ${raw}`,
             champCardAria: (name, alias, tier, wr) => `${name} ${alias}, tier ${tier}, win rate ${wr}`,
-            secondaryRoleBadgeTitle: (style, pick, wr) => `${style} pick ${pick}, WR ${wr}`,
+            secondaryRoleBadgeTitle: (style, pick, lift) => `${style} pick ${pick}, WR ${lift}`,
+            secondaryRoleBadgePick: pick => `pick ${pick}`,
+            secondaryRoleBadgeLift: lift => `WR ${lift}`,
         }
     };
     let currentLang = 'zh';
@@ -4808,10 +5026,35 @@ def render_html(
             : (info.styleNameZh || info.styleName || info.styleNameEn || '');
     }
 
-    function secondaryRoleBadgeTitle(info, role) {
+    function secondaryRoleBadgeSummary(info, role) {
         const copy = tr();
         const style = styleLabel(info) || roleLabel(role);
-        return copy.secondaryRoleBadgeTitle(style, pct(info.pick || 0), pct(info.wr || 0));
+        const pick = pct(info.pick || 0);
+        const liftValue = Number(info.lift || 0);
+        const lift = signed(liftValue);
+        return {
+            style,
+            pick,
+            lift,
+            title: copy.secondaryRoleBadgeTitle(style, pick, lift),
+            pickLabel: copy.secondaryRoleBadgePick(pick),
+            liftLabel: copy.secondaryRoleBadgeLift(lift),
+            toneClass: liftValue > 0.0005 ? 'is-good' : (liftValue < -0.0005 ? 'is-bad' : 'is-even'),
+        };
+    }
+
+    function secondaryRoleBadgeTooltipHtml(summary) {
+        return `
+            <span class="alt-role-tooltip" role="tooltip">
+                <span class="alt-role-tooltip-style">${escHtml(summary.style)}</span>
+                <span class="alt-role-tooltip-pick">${escHtml(summary.pickLabel)}</span>
+                <span class="alt-role-tooltip-lift ${summary.toneClass}">${escHtml(summary.liftLabel)}</span>
+            </span>
+        `;
+    }
+
+    function secondaryRoleBadgeIconHtml(role) {
+        return ROLE_BADGE_ICONS[role] || '';
     }
 
     function refreshSecondaryRoleBadges() {
@@ -4823,12 +5066,13 @@ def render_html(
             const info = DATA.champs[cid] || {};
             const tags = info.tags || [];
             const secondaryRole = tags[1] || '';
+            const primaryRole = tags[0] || secondaryRole || '';
             const show = Boolean(role) && secondaryRole === role;
             if (!show) {
                 champ.classList.remove('secondary-role-match');
                 badge.setAttribute('hidden', '');
-                badge.removeAttribute('title');
                 badge.setAttribute('aria-label', '');
+                badge.innerHTML = '';
                 return;
             }
             const roleInfo = ((info.roleMeta || {})[secondaryRole]) || null;
@@ -4840,16 +5084,37 @@ def render_html(
             champ.classList.toggle('secondary-role-match', show && hasDataBadge);
             if (!hasDataBadge) {
                 badge.setAttribute('hidden', '');
-                badge.removeAttribute('title');
                 badge.setAttribute('aria-label', '');
+                badge.innerHTML = '';
                 return;
             }
-            const title = secondaryRoleBadgeTitle(roleInfo, secondaryRole);
+            const summary = secondaryRoleBadgeSummary(roleInfo, secondaryRole);
             badge.removeAttribute('hidden');
-            badge.setAttribute('data-alt-role', secondaryRole);
-            badge.setAttribute('title', title);
-            badge.setAttribute('aria-label', title);
+            badge.setAttribute('data-alt-role', primaryRole);
+            badge.setAttribute('aria-label', summary.title);
+            badge.innerHTML = secondaryRoleBadgeIconHtml(primaryRole) + secondaryRoleBadgeTooltipHtml(summary);
         });
+    }
+
+    function positionSecondaryRoleTooltip(badge) {
+        if (!badge || badge.hasAttribute('hidden')) return;
+        const tooltip = badge.querySelector('.alt-role-tooltip');
+        if (!tooltip) return;
+        badge.classList.remove('tip-right', 'tip-below');
+        const viewportPad = 12;
+        let rect = tooltip.getBoundingClientRect();
+        if (rect.left < viewportPad) {
+            badge.classList.add('tip-right');
+            rect = tooltip.getBoundingClientRect();
+        }
+        if (rect.right > window.innerWidth - viewportPad) {
+            badge.classList.remove('tip-right');
+        }
+        const champ = badge.closest('.champ');
+        const champRect = champ ? champ.getBoundingClientRect() : null;
+        if (champRect && champRect.top < 96) {
+            badge.classList.add('tip-below');
+        }
     }
 
     function isMobileViewport() {
@@ -5900,6 +6165,28 @@ def render_html(
         aug.classList.toggle('flip-tip', rect.top < 160);
     }, { passive: true });
 
+    document.addEventListener('mouseover', (ev) => {
+        const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
+        if (badge) {
+            positionSecondaryRoleTooltip(badge);
+            return;
+        }
+        const champ = ev.target.closest && ev.target.closest('.champ.secondary-role-match');
+        if (!champ) return;
+        positionSecondaryRoleTooltip(champ.querySelector('.alt-role-badge'));
+    }, { passive: true });
+
+    document.addEventListener('focusin', (ev) => {
+        const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
+        if (badge) {
+            positionSecondaryRoleTooltip(badge);
+            return;
+        }
+        const champ = ev.target.closest && ev.target.closest('.champ.secondary-role-match');
+        if (!champ) return;
+        positionSecondaryRoleTooltip(champ.querySelector('.alt-role-badge'));
+    });
+
     // Live search.
     const searchEl = document.getElementById('champ-search');
     if (searchEl) {
@@ -6104,6 +6391,17 @@ def main(
                 og_image = site_url.rstrip("/") + "/" + og_asset_path.name + f"?v={og_version}-thumb"
         except Exception as exc:
             click.echo(f"[tierlist] WARN: og image generation failed: {exc}")
+
+    favicon_outputs = write_favicon_assets(out_path.parent)
+    for asset_path in favicon_outputs:
+        click.echo(f"[tierlist] wrote {asset_path}  ({asset_path.stat().st_size:,} bytes)")
+
+    favicon_asset_path = out_path.parent / "favicon.svg"
+    try:
+        write_favicon_svg(favicon_asset_path)
+        click.echo(f"[tierlist] wrote {favicon_asset_path}  ({favicon_asset_path.stat().st_size:,} bytes)")
+    except Exception as exc:
+        click.echo(f"[tierlist] WARN: favicon generation failed: {exc}")
 
     html = render_html(
         champ_records,
