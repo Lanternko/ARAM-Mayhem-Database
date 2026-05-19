@@ -4,7 +4,7 @@
 
 🔗 **Tier List 網站**: **<https://lanternko.github.io/ARAM-Mayhem-Database/>**
 
-⭐ **覺得有用請按 Star ↗ 讓更多人看到** — 搜集資料花費大量時間，按星星就是支持。
+⭐ **覺得有用請按 Star ↗ 讓更多人看到**。
 
 <img width="2491" height="1021" alt="image" src="https://github.com/user-attachments/assets/f112994c-6bdb-4878-84ba-88873ab34e1c" />
 
@@ -18,10 +18,8 @@ Riot 公開 API 從 patch 14.x 開始**整場移除 Mayhem (queueId 2400)**，de
 但 League 客戶端的本機 LCU API 還能查到自己 + 最近對手的 match 詳細資料（類似戰績稽查）。本專案：
 
 1. 跑一個本機 collector 從你的 LCU snowball 擴張（self → 好友 → 對手 → 對手的對手 …）（橫向搜索BFS）
-2. 把每場 大亂鬥 對局的 10 位玩家英雄 + augment + 勝負存進 SQLite
-3. 每隔幾天合併資料、產生新版 tier list 推上 GitHub Pages
+2. 把每場 大亂鬥 對局的 10 位玩家英雄 + augment + 勝負存進 Database
 
-目前資料量 ~38,000 場 Mayhem 對局（其中 patch 16.10 ~28,000 場）。
 
 ---
 
@@ -152,10 +150,3 @@ This project isn't endorsed by Riot Games and doesn't reflect the views or opini
 MIT
 
 ---
-
-## 支持這個專案
-
-- ⭐ **Star** 是最直接的鼓勵
-- 🐛 **Issue** 回報 bug / 提建議
-- 🎮 **跑 collector** 一起累積資料
-- 📣 **分享給朋友** — 越多人玩 Mayhem，這份 tier list 越準
