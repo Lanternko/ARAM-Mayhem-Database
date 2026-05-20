@@ -76,6 +76,10 @@ ITEM_MIN_TOTAL_GOLD = 1800
 CATEGORY_PRIOR_DEFAULT = AUGMENT_PRIOR_DEFAULT
 ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
+ITEM_PAIR_MIN_GAMES = 30
+ITEM_PAIR_FALLBACK_MIN_GAMES = 20
+ITEM_PAIR_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
+ITEM_PAIR_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
 AUGMENT_TYPE_MIN_GAMES = 100
 
 ITEM_STYLE_LABELS = {
@@ -735,27 +739,31 @@ def write_favicon_svg(out_path: Path) -> None:
     out_path.write_text(svg, encoding="utf-8")
 
 def favicon_asset_version() -> str:
-    """Use the checked-in icon source mtime so browser cache updates on icon swaps."""
+    """Use icon-source or generator mtime so browser cache updates on asset tweaks."""
+    candidates = [Path(__file__)]
     if SITE_ICON_SOURCE.exists():
-        stamp = _dt.datetime.fromtimestamp(SITE_ICON_SOURCE.stat().st_mtime)
+        candidates.append(SITE_ICON_SOURCE)
+    existing = [path for path in candidates if path.exists()]
+    if existing:
+        latest = max(path.stat().st_mtime for path in existing)
+        stamp = _dt.datetime.fromtimestamp(latest)
         return stamp.strftime("%Y%m%d%H%M%S")
     return (_dt.date.today().isoformat()).replace("-", "")
 
 def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) -> list[Path]:
-    """Generate favicon PNG/ICO assets from the checked-in transparent source image."""
+    """Generate favicon PNG/ICO assets by directly downscaling the checked-in icon."""
     from PIL import Image, ImageChops, ImageDraw
 
     if not source_path.exists():
         return []
 
-    img = Image.open(source_path).convert("RGBA")
-    width, height = img.size
-    inset = max(0, round(min(width, height) * 0.035))
-    if inset:
-        img = img.crop((inset, inset, width - inset, height - inset))
+    img_master = Image.open(source_path).convert("RGBA")
+    source_has_alpha = img_master.getchannel("A").getextrema()[0] < 255
 
-    def _rounded(img_rgba: "Image.Image", size: tuple[int, int]) -> "Image.Image":
+    def _resized(img_rgba: "Image.Image", size: tuple[int, int]) -> "Image.Image":
         resized = img_rgba.resize(size, Image.LANCZOS)
+        if source_has_alpha:
+            return resized
         radius = max(4, round(min(size) * 0.22))
         mask = Image.new("L", size, 0)
         mask_draw = ImageDraw.Draw(mask)
@@ -768,17 +776,19 @@ def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) ->
 
     outputs: list[Path] = []
     raster_targets = {
+        "mayhem-single-die-icon.png": (180, 180),
+        "mayhem-tab-icon.png": (180, 180),
         "favicon-32.png": (32, 32),
         "apple-touch-icon.png": (180, 180),
     }
     for name, size in raster_targets.items():
         target = out_dir / name
-        rounded = _rounded(img, size)
-        rounded.save(target, "PNG", optimize=True)
+        resized = _resized(img_master, size)
+        resized.save(target, "PNG", optimize=True)
         outputs.append(target)
 
     ico_path = out_dir / "favicon.ico"
-    ico_master = _rounded(img, (256, 256))
+    ico_master = _resized(img_master, (256, 256))
     ico_master.save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
     outputs.append(ico_path)
     return outputs
@@ -796,170 +806,152 @@ def assign_tier(bayes_wr: float) -> str:
         return "T4"
     return "T5"
 
-# Data Dragon's `tags` field is Riot's *SR / general* classification, which
-# doesn't always match how ARAM/Mayhem players think about a champion.
-# These overrides REPLACE the DDragon tag list for the listed aliases.
-#
-# Codex audit #1 (2026-05-15): 10 entries — mage-supports + Nilah.
-# Codex audit #2 (2026-05-17): ~50 entries — full role-chip noise cleanup.
-#   Dominant patterns: Fighter↔Tank cross-pollution, Marksman mislabeled Mage,
-#   Mage/Support & Support/Mage chip bleed. User-reviewed per-champion.
-# Codex audit #3 (2026-05-17): narrow remaining broad DDragon secondary tags.
-TAG_OVERRIDES: dict[str, list[str]] = {
+# Data Dragon tags are Riot general/SR labels, so we keep one curated
+# Mayhem primary role per champion. Secondary roles are inferred later
+# from current-patch item-style usage and win-rate fit.
+PRIMARY_ROLE_OVERRIDES: dict[str, str] = {
     # --- Assassin ---
-    # Pure burst assassins whose Fighter secondary pollutes 戰士 chip.
-    "Akali":    ["Assassin"],
-    "Diana":    ["Assassin"],   # AP diver; Fighter tag is a relic
-    "Ekko":     ["Assassin"],
-    "Evelynn":  ["Assassin"],
-    "Fizz":     ["Assassin"],
-    "Kassadin": ["Assassin"],
-    "Katarina": ["Assassin"],
-    "Leblanc":  ["Assassin"],
-    "Naafiri":  ["Assassin"],
-    "Nocturne": ["Assassin"],
-    "Qiyana":   ["Assassin"],
-    "Rengar":   ["Assassin"],
+    'Akali'   : 'Assassin',
+    'Diana'   : 'Assassin',
+    'Ekko'    : 'Assassin',
+    'Evelynn' : 'Assassin',
+    'Fizz'    : 'Assassin',
+    'Kassadin': 'Assassin',
+    'Katarina': 'Assassin',
+    'Leblanc' : 'Assassin',
+    'Naafiri' : 'Assassin',
+    'Nocturne': 'Assassin',
+    'Qiyana'  : 'Assassin',
+    'Rengar'  : 'Assassin',
 
     # --- Fighter ---
-    # Duelists/skirmishers tagged Fighter+Assassin — Assassin chip is noisy.
-    "Briar":   ["Fighter"],
-    "Fiora":   ["Fighter"],
-    "Irelia":  ["Fighter"],
-    "Jax":     ["Fighter"],
-    "Kayn":    ["Fighter"],
-    "LeeSin":  ["Fighter"],
-    "MasterYi":["Fighter"],
-    "Pantheon":["Fighter"],
-    "Riven":   ["Fighter"],
-    "Tryndamere":["Fighter"],
-    "Vi":      ["Fighter"],
-    "Viego":   ["Fighter"],
-    "XinZhao": ["Fighter"],
-    "Yasuo":   ["Fighter"],
-    "Yone":    ["Fighter"],
-    "Zaahen":  ["Fighter"],
-    # Bruisers tagged Fighter+Tank — Tank chip is noisy for these.
-    "Aatrox":   ["Fighter"],
-    "Ambessa":  ["Fighter"],
-    "Camille":  ["Fighter"],
-    "Darius":   ["Fighter"],
-    "Garen":    ["Fighter"],
-    "Gnar":     ["Fighter"],
-    "Hecarim":  ["Fighter"],
-    "Illaoi":   ["Fighter"],
-    "JarvanIV": ["Fighter"],
-    "Jayce":    ["Fighter"],
-    "Kled":     ["Fighter"],
-    "MonkeyKing":["Fighter"],
-    "Mordekaiser":["Fighter"],
-    "Olaf":     ["Fighter"],
-    "RekSai":   ["Fighter"],
-    "Renekton": ["Fighter"],
-    "Sett":     ["Fighter"],
-    "Shyvana":  ["Fighter"],
-    "Trundle":  ["Fighter"],
-    "Udyr":     ["Fighter"],
-    "Urgot":    ["Fighter"],
-    "Warwick":  ["Fighter"],
-    "Yorick":   ["Fighter"],
-    # Poppy is still a tank-facing champion in Mayhem, even when her best
-    # builds overlap bruiser play. Keep both chips for draft/filter use.
-    "Poppy":    ["Tank", "Fighter"],
+    'Briar'      : 'Fighter',
+    'Fiora'      : 'Fighter',
+    'Irelia'     : 'Fighter',
+    'Jax'        : 'Fighter',
+    'Kayn'       : 'Fighter',
+    'LeeSin'     : 'Fighter',
+    'MasterYi'   : 'Fighter',
+    'Pantheon'   : 'Fighter',
+    'Riven'      : 'Fighter',
+    'Tryndamere' : 'Fighter',
+    'Vi'         : 'Fighter',
+    'Viego'      : 'Fighter',
+    'XinZhao'    : 'Fighter',
+    'Yasuo'      : 'Fighter',
+    'Yone'       : 'Fighter',
+    'Zaahen'     : 'Fighter',
+    'Aatrox'     : 'Fighter',
+    'Ambessa'    : 'Fighter',
+    'Camille'    : 'Fighter',
+    'Darius'     : 'Fighter',
+    'Garen'      : 'Fighter',
+    'Gnar'       : 'Fighter',
+    'Hecarim'    : 'Fighter',
+    'Illaoi'     : 'Fighter',
+    'JarvanIV'   : 'Fighter',
+    'Jayce'      : 'Fighter',
+    'Kled'       : 'Fighter',
+    'MonkeyKing' : 'Fighter',
+    'Mordekaiser': 'Fighter',
+    'Olaf'       : 'Fighter',
+    'RekSai'     : 'Fighter',
+    'Renekton'   : 'Fighter',
+    'Sett'       : 'Fighter',
+    'Shyvana'    : 'Fighter',
+    'Trundle'    : 'Fighter',
+    'Udyr'       : 'Fighter',
+    'Urgot'      : 'Fighter',
+    'Warwick'    : 'Fighter',
+    'Yorick'     : 'Fighter',
+    'Singed'     : 'Fighter',
 
     # --- Tank ---
-    # True frontline tanks whose Fighter secondary pollutes 戰士 chip.
-    "Malphite": ["Tank"],
-    "Maokai":   ["Tank"],
-    "DrMundo":  ["Tank"],
-    "KSante":   ["Tank"],
-    "Nunu":     ["Tank"],
-    "Ornn":     ["Tank"],
-    "Rammus":   ["Tank"],
-    "Sejuani":  ["Tank"],
-    "Sion":     ["Tank"],
-    "Skarner":  ["Tank"],
-    "Zac":      ["Tank"],
-    # AP tanks / AP bruisers — Mage tag is misleading for role filter purposes.
-    "Amumu":    ["Tank"],
-    "Chogath":  ["Tank"],
-    "Galio":    ["Tank"],
-    "Singed":   ["Fighter", "Tank"],
-    # Fighter/Tank — these play as frontline tanks in Mayhem.
-    "Nasus":    ["Tank"],
-    "Volibear": ["Tank"],
-
-    # --- Support + Tank (engage supports) ---
-    "TahmKench": ["Tank", "Support"],
-    "Taric":     ["Tank", "Support"],
-    "Thresh":    ["Support", "Tank"],
+    'Poppy'    : 'Tank',
+    'Malphite' : 'Tank',
+    'Maokai'   : 'Tank',
+    'DrMundo'  : 'Tank',
+    'KSante'   : 'Tank',
+    'Nunu'     : 'Tank',
+    'Ornn'     : 'Tank',
+    'Rammus'   : 'Tank',
+    'Sejuani'  : 'Tank',
+    'Sion'     : 'Tank',
+    'Skarner'  : 'Tank',
+    'Zac'      : 'Tank',
+    'Amumu'    : 'Tank',
+    'Chogath'  : 'Tank',
+    'Galio'    : 'Tank',
+    'Nasus'    : 'Tank',
+    'Volibear' : 'Tank',
+    'TahmKench': 'Tank',
+    'Taric'    : 'Tank',
 
     # --- Marksman ---
-    # ADCs with AP builds — Mage tag causes them to appear under 法師.
-    "Akshan":  ["Marksman"],
-    "Ashe":    ["Marksman"],
-    "Corki":   ["Marksman"],
-    "Ezreal":  ["Marksman"],
-    "Jhin":    ["Marksman"],
-    "Kaisa":   ["Marksman"],
-    "Kayle":   ["Marksman"],   # Fighter/Support tags are completely wrong
-    "KogMaw":  ["Marksman"],
-    "Lucian":  ["Marksman"],
-    "MissFortune":["Marksman"],
-    "Nilah":   ["Marksman"],   # Officially Fighter/Assassin; melee ADC in practice
-    "Quinn":   ["Marksman"],
-    "Samira":  ["Marksman"],
-    "Smolder": ["Marksman"],
-    "Tristana":["Marksman"],
-    "Twitch":  ["Marksman"],
-    "Varus":   ["Marksman"],
-    "Vayne":   ["Marksman"],
+    'Akshan'     : 'Marksman',
+    'Ashe'       : 'Marksman',
+    'Corki'      : 'Marksman',
+    'Ezreal'     : 'Marksman',
+    'Jhin'       : 'Marksman',
+    'Kaisa'      : 'Marksman',
+    'Kayle'      : 'Marksman',
+    'KogMaw'     : 'Marksman',
+    'Lucian'     : 'Marksman',
+    'MissFortune': 'Marksman',
+    'Nilah'      : 'Marksman',
+    'Quinn'      : 'Marksman',
+    'Samira'     : 'Marksman',
+    'Smolder'    : 'Marksman',
+    'Tristana'   : 'Marksman',
+    'Twitch'     : 'Marksman',
+    'Varus'      : 'Marksman',
+    'Vayne'      : 'Marksman',
 
     # --- Mage ---
-    # Poke/control mages with Support secondary — pollutes 輔助 chip.
-    "Azir":     ["Mage"],
-    "Aurora":   ["Mage"],
-    "Fiddlesticks":["Mage"],
-    "Karma":    ["Mage"],
-    "Lux":      ["Mage"],
-    "Mel":      ["Mage"],
-    "Morgana":  ["Mage"],
-    "Nidalee":  ["Mage"],
-    "Orianna":  ["Mage"],
-    "Rumble":   ["Mage"],
-    "Seraphine":["Mage"],
-    "Swain":    ["Mage"],      # Fighter secondary is noisy
-    "Taliyah":  ["Mage"],
-    "Teemo":    ["Mage"],      # Marksman/Assassin tags; trap mage in practice
-    "Zoe":      ["Mage"],
-    "Zyra":     ["Mage"],
-    # Mage-supports — already present from audit #1; Support tag was noisy.
-    "Annie":        ["Mage"],
-    "Brand":        ["Mage"],
-    "Heimerdinger": ["Mage"],
-    "Hwei":         ["Mage"],
-    "Neeko":        ["Mage"],
-    "Velkoz":       ["Mage"],
-    "Xerath":       ["Mage"],
-    "TwistedFate":  ["Mage"],  # Marksman tag is a relic
-    "Vladimir":     ["Mage"],  # Fighter tag is misleading
+    'Azir'        : 'Mage',
+    'Aurora'      : 'Mage',
+    'Fiddlesticks': 'Mage',
+    'Karma'       : 'Mage',
+    'Lux'         : 'Mage',
+    'Mel'         : 'Mage',
+    'Nidalee'     : 'Mage',
+    'Orianna'     : 'Mage',
+    'Rumble'      : 'Mage',
+    'Seraphine'   : 'Mage',
+    'Swain'       : 'Mage',
+    'Taliyah'     : 'Mage',
+    'Teemo'       : 'Mage',
+    'Zoe'         : 'Mage',
+    'Zyra'        : 'Mage',
+    'Annie'       : 'Mage',
+    'Brand'       : 'Mage',
+    'Heimerdinger': 'Mage',
+    'Hwei'        : 'Mage',
+    'Neeko'       : 'Mage',
+    'Velkoz'      : 'Mage',
+    'Xerath'      : 'Mage',
+    'TwistedFate' : 'Mage',
+    'Vladimir'    : 'Mage',
 
     # --- Support ---
-    # Enchanters with Mage secondary — pollutes 法師 chip.
-    "Bard":    ["Support"],
-    "Janna":   ["Support"],
-    "Lulu":    ["Support"],
-    "Nami":    ["Support"],
-    "Sona":    ["Support"],
-    "Soraka":  ["Support"],
-    "Yuumi":   ["Support"],
-    "Zilean":  ["Support"],
-    "Ivern":   ["Support"],
-    "Milio":   ["Support"],
-    "Renata":  ["Support"],
+    'Thresh' : 'Support',
+    'Morgana': 'Support',
+    'Bard'   : 'Support',
+    'Janna'  : 'Support',
+    'Lulu'   : 'Support',
+    'Nami'   : 'Support',
+    'Sona'   : 'Support',
+    'Soraka' : 'Support',
+    'Yuumi'  : 'Support',
+    'Zilean' : 'Support',
+    'Ivern'  : 'Support',
+    'Milio'  : 'Support',
+    'Renata' : 'Support',
 }
 
 ROLE_FROM_ITEM_STYLE: dict[str, str] = {
+    "ap_burn": "Mage",
+    "ap_burst": "Mage",
     "ap_bruiser": "Fighter",
     "ad_bruiser": "Fighter",
     "tank": "Tank",
@@ -983,8 +975,6 @@ ROLE_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
 ROLE_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
 ROLE_ORDER = ("Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank")
 ROLE_SORT_PRIORITY = {role: idx for idx, role in enumerate(ROLE_ORDER)}
-PRESERVE_BASE_ROLES = {"Assassin", "Fighter", "Mage", "Support", "Tank"}
-
 CHAMPION_NAME_OVERRIDES: dict[str, dict[str, str]] = {
     "Renata": {"name_zh": "睿娜妲", "name_en": "Renata"},
 }
@@ -1011,9 +1001,10 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
         entry_zh = raw_zh.get(alias, base_entry)
         tags = entry_en.get("tags") or entry_zh.get("tags") or []
         original_tags = list(tags)
-        if alias in TAG_OVERRIDES:
-            applied.append((alias, list(tags), list(TAG_OVERRIDES[alias])))
-            tags = list(TAG_OVERRIDES[alias])
+        primary_role = str(PRIMARY_ROLE_OVERRIDES.get(alias) or (tags[0] if tags else ""))
+        if primary_role and ([primary_role] != list(tags)):
+            applied.append((alias, list(tags), [primary_role]))
+        tags = [primary_role] if primary_role else list(tags[:1])
         name_zh = entry_zh.get("name") or entry_en.get("name") or alias
         name_en = entry_en.get("name") or alias
         if alias in CHAMPION_NAME_OVERRIDES:
@@ -1025,13 +1016,14 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
             "name_zh": name_zh,
             "name_en": name_en,
             "alias": alias,
+            "primary_role": primary_role,
             "tags": tags,
             "original_tags": original_tags,
             "attack_range": int((entry_en.get("stats") or entry_zh.get("stats") or {}).get("attackrange") or 0),
             "image": f"https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{alias}.png",
         }
     if applied:
-        click.echo(f"[tierlist] applied {len(applied)} TAG_OVERRIDES (DDragon -> Mayhem mental model):")
+        click.echo(f"[tierlist] applied {len(applied)} PRIMARY_ROLE_OVERRIDES (DDragon -> Mayhem primary role):")
         for alias, before, after in applied:
             click.echo(f"  {alias:14s} {before} -> {after}")
     return version, by_id
@@ -1297,22 +1289,17 @@ def compute_winrates(
     """
     con = sqlite3.connect(str(db_path))
     if patch_prefix:
-        rows = list(
-            con.execute(
-                "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-                "WHERE queue_id=? AND patch LIKE ?",
-                (queue_id, f"{patch_prefix}%"),
-            )
+        rows = con.execute(
+            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ?",
+            (queue_id, f"{patch_prefix}%"),
         )
     else:
-        rows = list(
-            con.execute(
-                "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-                "WHERE queue_id=?",
-                (queue_id,),
-            )
+        rows = con.execute(
+            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
+            "WHERE queue_id=?",
+            (queue_id,),
         )
-    con.close()
 
     games: Counter[int] = Counter()
     wins: Counter[int] = Counter()
@@ -1321,39 +1308,42 @@ def compute_winrates(
     cp_games: Counter[tuple[int, int]] = Counter()
     cp_wins: Counter[tuple[int, int]] = Counter()
 
-    for blue, red, bw, pj in rows:
-        bw_bool = bool(bw)
-        blue_team = json.loads(blue)
-        red_team = json.loads(red)
-        for team, team_won in ((blue_team, bw_bool), (red_team, not bw_bool)):
-            for c in team:
-                games[c] += 1
-                if team_won:
-                    wins[c] += 1
-            # Ordered anchor -> teammate rows: recommendation is conditioned on
-            # the already-picked champions, so we preserve "given anchor A,
-            # how much does teammate B help?" rather than collapsing to an
-            # undirected pair too early.
-            for c in team:
-                for teammate in team:
-                    if teammate == c:
-                        continue
-                    cp_games[(c, teammate)] += 1
+    try:
+        for blue, red, bw, pj in rows:
+            bw_bool = bool(bw)
+            blue_team = json.loads(blue)
+            red_team = json.loads(red)
+            for team, team_won in ((blue_team, bw_bool), (red_team, not bw_bool)):
+                for c in team:
+                    games[c] += 1
                     if team_won:
-                        cp_wins[(c, teammate)] += 1
-        if not pj:
-            continue
-        for p in json.loads(pj):
-            cid = int(p.get("championId", 0))
-            if cid <= 0:
+                        wins[c] += 1
+                # Ordered anchor -> teammate rows: recommendation is conditioned on
+                # the already-picked champions, so we preserve "given anchor A,
+                # how much does teammate B help?" rather than collapsing to an
+                # undirected pair too early.
+                for c in team:
+                    for teammate in team:
+                        if teammate == c:
+                            continue
+                        cp_games[(c, teammate)] += 1
+                        if team_won:
+                            cp_wins[(c, teammate)] += 1
+            if not pj:
                 continue
-            player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
-            for a in p.get("augments") or []:
-                a = int(a)
-                if a <= 0:
+            for p in json.loads(pj):
+                cid = int(p.get("championId", 0))
+                if cid <= 0:
                     continue
-                ca_games[(cid, a)] += 1
-                ca_wins[(cid, a)] += player_won
+                player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
+                for a in p.get("augments") or []:
+                    a = int(a)
+                    if a <= 0:
+                        continue
+                    ca_games[(cid, a)] += 1
+                    ca_wins[(cid, a)] += player_won
+    finally:
+        con.close()
 
     champ_records = []
     for cid, g in games.items():
@@ -1847,6 +1837,50 @@ def _participant_item_infos(item_ids: list[int], item_meta: dict[int, dict]) -> 
         item_infos.append(item_style_by_slug["heartsteel"])
     return item_infos
 
+def _is_recommendable_core_item(item: dict | None) -> bool:
+    if not item:
+        return False
+    if int(item.get("price_total") or 0) < ITEM_MIN_TOTAL_GOLD:
+        return False
+    categories = set(str(c) for c in item.get("categories") or [])
+    return "Boots" not in categories
+
+def _item_pair_payload(item_ids: list[int], item_meta: dict[int, dict]) -> list[dict[str, object]]:
+    payload: list[dict[str, object]] = []
+    for item_id in item_ids:
+        item = item_meta.get(int(item_id))
+        if not item:
+            continue
+        payload.append({
+            "id": int(item_id),
+            "name": str(item.get("name") or f"#{item_id}"),
+            "name_zh": str(item.get("name_zh") or item.get("name") or f"#{item_id}"),
+            "name_en": str(item.get("name_en") or item.get("name") or f"#{item_id}"),
+            "icon": str(item.get("icon") or ""),
+        })
+    return payload
+
+def _participant_core_item_ids(item_ids: list[int], item_meta: dict[int, dict]) -> list[int]:
+    core_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_id in item_ids:
+        try:
+            item_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0 or item_id in seen:
+            continue
+        if not _is_recommendable_core_item(item_meta.get(item_id)):
+            continue
+        core_ids.append(item_id)
+        seen.add(item_id)
+        if len(core_ids) >= 2:
+            break
+    return core_ids
+
+def _item_pair_name(item_payload: list[dict[str, object]], key: str) -> str:
+    return " + ".join(str(item.get(key) or item.get("name") or item.get("id")) for item in item_payload)
+
 _AUGMENT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "damage": (
         "damage", "burn", "missile", "fire", "lightning", "execute", "explosion",
@@ -1962,12 +1996,14 @@ def _finalize_category_affinity(
     category_games: Counter[str],
     category_wins: Counter[str],
     category_baseline_games: Counter[str],
-    category_names: dict[str, dict[str, str]],
+    category_names: dict[str, dict[str, object]],
     *,
     min_games: int,
     fallback_min_games: int | None = None,
     top_n: int = 4,
     bot_n: int = 4,
+    pick_lift_weight: float = 0.0,
+    pick_lift_cap: float = AUGMENT_PICK_LIFT_CAP,
 ) -> dict[int, dict]:
     global_total_games = sum(champ_total_games.values())
     category_avg_lift: dict[str, float] = {}
@@ -2014,10 +2050,13 @@ def _finalize_category_affinity(
             if global_total_games > 0 else 0.0
         )
         pick_lift = math.log(max(pick_rate, 1e-9) / max(global_pick_rate, 1e-9))
+        clamped_pick_lift = max(-pick_lift_cap, min(pick_lift_cap, pick_lift))
         name_info = category_names.get(slug, _label_entry({}, slug))
         lift = mean_wr - float(row["baseline_wr"])
         residual = mean_wr - prior_wr
-        by_champ.setdefault(int(row["champion_id"]), []).append({
+        lcb_residual = lower_wr - prior_wr
+        ucb_residual = upper_wr - prior_wr
+        packed_row = {
             "name": name_info["name"],
             "name_zh": name_info["name_zh"],
             "name_en": name_info["name_en"],
@@ -2030,22 +2069,27 @@ def _finalize_category_affinity(
             "avg_lift": float(row["avg_lift"]),
             "lift": lift,
             "residual": residual,
-            "lcb_residual": lower_wr - prior_wr,
-            "ucb_residual": upper_wr - prior_wr,
+            "lcb_residual": lcb_residual,
+            "ucb_residual": ucb_residual,
+            "rank_score": lcb_residual + pick_lift_weight * clamped_pick_lift,
+            "rank_bad_score": ucb_residual + pick_lift_weight * clamped_pick_lift,
             "pick_rate": pick_rate,
             "global_pick_rate": global_pick_rate,
             "pick_lift": pick_lift,
             "prior_strength": prior_strength,
             "primary_sample": bool(row.get("primary_sample")),
-        })
+        }
+        if "items" in name_info:
+            packed_row["items"] = name_info["items"]
+        by_champ.setdefault(int(row["champion_id"]), []).append(packed_row)
 
     out: dict[int, dict] = {}
     for cid, rows in by_champ.items():
-        rows.sort(key=lambda r: (-r["lcb_residual"], -r["residual"], -r["games"], r["name_en"]))
+        rows.sort(key=lambda r: (-r["rank_score"], -r["lcb_residual"], -r["residual"], -r["games"], r["name_en"]))
         eligible = [r for r in rows if r.get("primary_sample")]
         if not eligible:
             eligible = rows
-        bot_rows = sorted(eligible, key=lambda r: (r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
+        bot_rows = sorted(eligible, key=lambda r: (r["rank_bad_score"], r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
         out[cid] = {"top": eligible[:top_n], "bot": bot_rows[:bot_n], "prior_strength": prior_strength}
     return out
 
@@ -2067,22 +2111,17 @@ def compute_champ_category_affinities(
     }
     con = sqlite3.connect(str(db_path))
     if patch_prefix:
-        rows = list(
-            con.execute(
-                "SELECT blue_wins, participants_json FROM games "
-                "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
-                (queue_id, f"{patch_prefix}%"),
-            )
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
+            (queue_id, f"{patch_prefix}%"),
         )
     else:
-        rows = list(
-            con.execute(
-                "SELECT blue_wins, participants_json FROM games "
-                "WHERE queue_id=? AND participants_json IS NOT NULL",
-                (queue_id,),
-            )
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND participants_json IS NOT NULL",
+            (queue_id,),
         )
-    con.close()
 
     dims = ("sets", "items", "augtypes")
     cs_games = {dim: Counter() for dim in dims}
@@ -2110,33 +2149,36 @@ def compute_champ_category_affinities(
                 "name_en": str(info.get("name_en") or info.get("name") or slug),
             }
 
-    for blue_wins, participants_json in rows:
-        if not participants_json:
-            continue
-        blue_won = bool(blue_wins)
-        for participant in json.loads(participants_json):
-            cid = int(participant.get("championId", 0) or 0)
-            team_id = int(participant.get("teamId", 0) or 0)
-            if cid <= 0 or team_id not in (100, 200):
+    try:
+        for blue_wins, participants_json in rows:
+            if not participants_json:
                 continue
-            champ_total_games[cid] += 1
-            baseline = baseline_by_champ.get(cid, 0.5)
-            player_won = 1 if (team_id == 100) == blue_won else 0
-            set_infos: list[dict[str, str]] = []
-            aug_type_infos: list[dict[str, str]] = []
-            for augment_id in participant.get("augments") or []:
-                meta = aug_meta.get(int(augment_id))
-                if not meta:
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
                     continue
-                set_infos.extend(meta.get("sets") or [])
-                aug_type_infos.extend(augment_type_infos(meta))
-            item_infos = _participant_item_infos(
-                participant.get("items") or participant.get("itemSlots") or [],
-                item_meta,
-            )
-            add("sets", cid, player_won, baseline, set_infos)
-            add("items", cid, player_won, baseline, item_infos)
-            add("augtypes", cid, player_won, baseline, aug_type_infos)
+                champ_total_games[cid] += 1
+                baseline = baseline_by_champ.get(cid, 0.5)
+                player_won = 1 if (team_id == 100) == blue_won else 0
+                set_infos: list[dict[str, str]] = []
+                aug_type_infos: list[dict[str, str]] = []
+                for augment_id in participant.get("augments") or []:
+                    meta = aug_meta.get(int(augment_id))
+                    if not meta:
+                        continue
+                    set_infos.extend(meta.get("sets") or [])
+                    aug_type_infos.extend(augment_type_infos(meta))
+                item_infos = _participant_item_infos(
+                    participant.get("items") or participant.get("itemSlots") or [],
+                    item_meta,
+                )
+                add("sets", cid, player_won, baseline, set_infos)
+                add("items", cid, player_won, baseline, item_infos)
+                add("augtypes", cid, player_won, baseline, aug_type_infos)
+    finally:
+        con.close()
 
     return (
         _finalize_category_affinity(
@@ -2154,6 +2196,95 @@ def compute_champ_category_affinities(
             category_games["augtypes"], category_wins["augtypes"], category_baseline_games["augtypes"],
             category_names["augtypes"], min_games=min_augtype_games,
         ),
+    )
+
+def compute_champ_item_pair_affinities(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+    *,
+    min_games: int,
+) -> dict[int, dict]:
+    baseline_by_champ = {
+        int(row["champion_id"]): float(row.get("raw_wr", 0.5))
+        for row in champ_records
+    }
+    con = sqlite3.connect(str(db_path))
+    if patch_prefix:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
+            (queue_id, f"{patch_prefix}%"),
+        )
+    else:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND participants_json IS NOT NULL",
+            (queue_id,),
+        )
+
+    cs_games: Counter[tuple[int, str]] = Counter()
+    cs_wins: Counter[tuple[int, str]] = Counter()
+    cs_baseline_games: Counter[tuple[int, str]] = Counter()
+    champ_total_games = Counter()
+    category_games: Counter[str] = Counter()
+    category_wins: Counter[str] = Counter()
+    category_baseline_games: Counter[str] = Counter()
+    category_names: dict[str, dict[str, object]] = {}
+
+    try:
+        for blue_wins, participants_json in rows:
+            if not participants_json:
+                continue
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
+                    continue
+                champ_total_games[cid] += 1
+                core_ids = _participant_core_item_ids(
+                    participant.get("items") or participant.get("itemSlots") or [],
+                    item_meta,
+                )
+                if len(core_ids) < 2:
+                    continue
+                slug = "+".join(str(item_id) for item_id in core_ids)
+                baseline = baseline_by_champ.get(cid, 0.5)
+                player_won = 1 if (team_id == 100) == blue_won else 0
+                key = (cid, slug)
+                cs_games[key] += 1
+                cs_wins[key] += player_won
+                cs_baseline_games[key] += baseline
+                category_games[slug] += 1
+                category_wins[slug] += player_won
+                category_baseline_games[slug] += baseline
+                if slug not in category_names:
+                    items = _item_pair_payload(core_ids, item_meta)
+                    category_names[slug] = {
+                        "name": _item_pair_name(items, "name_zh"),
+                        "name_zh": _item_pair_name(items, "name_zh"),
+                        "name_en": _item_pair_name(items, "name_en"),
+                        "items": items,
+                    }
+    finally:
+        con.close()
+
+    return _finalize_category_affinity(
+        cs_games,
+        cs_wins,
+        cs_baseline_games,
+        champ_total_games,
+        category_games,
+        category_wins,
+        category_baseline_games,
+        category_names,
+        min_games=min_games,
+        fallback_min_games=ITEM_PAIR_FALLBACK_MIN_GAMES,
+        pick_lift_weight=ITEM_PAIR_PICK_LIFT_WEIGHT,
+        pick_lift_cap=ITEM_PAIR_PICK_LIFT_CAP,
     )
 
 def _is_ranged_champion(meta: dict) -> bool:
@@ -2184,16 +2315,16 @@ def _style_role_need_credit(slug: str, role: str) -> float:
         return marksman_credit if role == "Marksman" else 0.5 * (tank_credit + mage_credit)
     return ROLE_NEED_CREDITS.get(role, 0.0)
 
-def apply_usage_based_roles(
+def infer_secondary_roles_from_data(
     champ_meta: dict[int, dict],
     champ_records: list[dict],
     item_style_affinity: dict[int, dict],
 ) -> list[tuple[str, list[str], list[str]]]:
     """Keep base primary roles stable; add only data-backed alternate roles.
 
-    Primary role stays aligned with the site's curated Mayhem mental model
-    (TAG_OVERRIDES / metadata order). Secondary role only appears when a
-    distinct item-style branch earns it from real usage + WR fit.
+    Primary role stays aligned with the site's curated primary-role map.
+    Secondary role only appears when a distinct item-style branch earns it
+    from real usage + win-rate fit in the current patch.
     """
     games_by_champ = {
         int(row["champion_id"]): max(int(row.get("games", 0) or 0), 1)
@@ -2245,7 +2376,8 @@ def apply_usage_based_roles(
                     "source": "data",
                 }
 
-        before = list(meta.get("tags") or [])
+        primary_role = str(meta.get("primary_role") or "")
+        before = [primary_role] if primary_role else list(meta.get("tags") or [])
         ranked = sorted(
             role_rows.items(),
             key=lambda item: (
@@ -2254,7 +2386,7 @@ def apply_usage_based_roles(
                 ROLE_SORT_PRIORITY.get(item[0], 99),
             ),
         )
-        primary_role = before[0] if before else (ranked[0][0] if ranked else "")
+        primary_role = primary_role or (before[0] if before else (ranked[0][0] if ranked else ""))
         inferred = [primary_role] if primary_role else []
         secondary_role = ""
         for role, info in ranked:
@@ -2628,7 +2760,7 @@ def render_html(
     champ_profiles: dict[int, dict[str, object]],
     champ_picks: dict[int, dict],
     champ_sets: dict[int, dict],
-    champ_item_styles: dict[int, dict],
+    champ_item_builds: dict[int, dict],
     champ_augment_types: dict[int, dict],
     champ_synergy: dict[int, list[dict]],
     aug_meta: dict[int, dict],
@@ -2678,7 +2810,7 @@ def render_html(
         }
 
     def _pack_set(r: dict) -> dict:
-        return {
+        packed = {
             "name": r.get("set", r.get("name", r["slug"])),
             "name_zh": r.get("set_zh", r.get("name_zh", r.get("set", r.get("name", r["slug"])))),
             "name_en": r.get("set_en", r.get("name_en", r.get("set", r.get("name", r["slug"])))),
@@ -2686,11 +2818,17 @@ def render_html(
             "g": r["games"],
             "wr": round(r["smoothed_wr"], 4),
             "lift": round(r["lift"], 4),
-            "avg": round(r["avg_lift"], 4),
-            "res": round(r["residual"], 4),
-            "score": round(r.get("lcb_residual", r["residual"]), 4),
-            "badScore": round(r.get("ucb_residual", r["residual"]), 4),
-        }
+        "avg": round(r["avg_lift"], 4),
+        "res": round(r["residual"], 4),
+        "score": round(r.get("rank_score", r.get("lcb_residual", r["residual"])), 4),
+        "badScore": round(r.get("rank_bad_score", r.get("ucb_residual", r["residual"])), 4),
+        "pick": round(r.get("pick_rate", 0.0), 4),
+        "globalPick": round(r.get("global_pick_rate", 0.0), 4),
+        "pickLift": round(r.get("pick_lift", 0.0), 3),
+    }
+        if r.get("items"):
+            packed["items"] = r["items"]
+        return packed
 
     def _pack_comp(profile: dict[str, object]) -> dict:
         return {
@@ -2778,8 +2916,8 @@ def render_html(
                 "bot": [_pack_set(r) for r in champ_sets.get(cid, {}).get("bot", [])],
             },
             "items": {
-                "top": [_pack_set(r) for r in champ_item_styles.get(cid, {}).get("top", [])],
-                "bot": [_pack_set(r) for r in champ_item_styles.get(cid, {}).get("bot", [])],
+                "top": [_pack_set(r) for r in champ_item_builds.get(cid, {}).get("top", [])],
+                "bot": [_pack_set(r) for r in champ_item_builds.get(cid, {}).get("bot", [])],
             },
             "augTypes": {
                 "top": [_pack_set(r) for r in champ_augment_types.get(cid, {}).get("top", [])],
@@ -3926,9 +4064,20 @@ def render_html(
         gap: 6px;
         min-height: 24px;
     }
+    .fit-chip-wrap {
+        position: relative;
+        display: inline-flex;
+        max-width: 100%;
+        border-radius: 999px;
+        outline: none;
+    }
+    .fit-chip-wrap:focus-visible .fit-chip {
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.32);
+    }
     .fit-chip {
         display: inline-flex;
         align-items: center;
+        gap: 6px;
         max-width: 100%;
         padding: 3px 9px;
         border-radius: 999px;
@@ -3941,6 +4090,110 @@ def render_html(
         overflow: hidden;
         text-overflow: ellipsis;
         cursor: help;
+    }
+    .fit-chip.item-build-chip {
+        padding: 4px 9px 4px 5px;
+    }
+    .fit-chip-tooltip {
+        position: absolute;
+        left: 0;
+        bottom: calc(100% + 8px);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: max-content;
+        max-width: min(300px, calc(100vw - 28px));
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: #0b0e13;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+        color: #c5cad3;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: nowrap;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(2px);
+        transition: opacity 0.12s ease-out, transform 0.12s ease-out;
+        z-index: 62;
+    }
+    .fit-chip-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 18px;
+        border: 6px solid transparent;
+        border-top-color: #0b0e13;
+    }
+    .fit-chip-wrap.tip-left .fit-chip-tooltip {
+        left: auto;
+        right: 0;
+    }
+    .fit-chip-wrap.tip-left .fit-chip-tooltip::after {
+        left: auto;
+        right: 18px;
+    }
+    .fit-chip-wrap.tip-below .fit-chip-tooltip {
+        top: calc(100% + 8px);
+        bottom: auto;
+    }
+    .fit-chip-wrap.tip-below .fit-chip-tooltip::after {
+        top: auto;
+        bottom: 100%;
+        border-top-color: transparent;
+        border-bottom-color: #0b0e13;
+    }
+    .fit-chip-wrap:hover .fit-chip-tooltip,
+    .fit-chip-wrap:focus-within .fit-chip-tooltip {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .fit-tip-name {
+        color: #e6e8eb;
+        font-weight: 600;
+    }
+    .fit-tip-pick {
+        color: #9aa0a6;
+        font-variant-numeric: tabular-nums;
+    }
+    .fit-tip-lift {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .fit-tip-lift.is-good { color: #6bd16b; }
+    .fit-tip-lift.is-bad { color: #ff8a8a; }
+    .fit-tip-lift.is-even { color: #d7dde7; }
+    .item-pair-icons {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+    }
+    .item-pair-icon-wrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.16);
+        background: #0f131b;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    }
+    .item-pair-icon-wrap + .item-pair-icon-wrap {
+        margin-left: -4px;
+    }
+    .item-pair-icon-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .fit-chip-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .fit-list {
         display: grid;
@@ -4421,7 +4674,8 @@ def render_html(
            Numbers still available on hover (tooltip) and via the title attr. */
         .aug .alift { display: none; }
         .aug-tip,
-        .alt-role-tooltip { display: none; }
+        .alt-role-tooltip,
+        .fit-chip-tooltip { display: none; }
         /* Touch-target floor (WCAG 2.5.5).  Chips were 4×10 padding on 11px
            font ≈ 32 px tall.  Bump to a real 44 px tap area without growing
            the visual pill, by adding transparent vertical padding. */
@@ -4501,16 +4755,10 @@ def render_html(
     meta_lines.append(f"<title>{og_title}</title>")
     favicon_version = favicon_asset_version()
     meta_lines.append(
-        f"<link rel='icon' type='image/png' sizes='32x32' href='favicon-32.png?v={favicon_version}'>"
-    )
-    meta_lines.append(
-        f"<link rel='icon' href='favicon.ico?v={favicon_version}'>"
+        f"<link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v={favicon_version}'>"
     )
     meta_lines.append(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
-    )
-    meta_lines.append(
-        f"<link rel='icon' type='image/svg+xml' href='favicon.svg?v={favicon_version}'>"
     )
     meta_lines.append(f"<meta name='description' content=\"{og_desc}\">")
     if site_url:
@@ -4870,7 +5118,7 @@ def render_html(
             updatesItems: [
                 '隊友適配除了 pair 勝率，現在也會做隊伍組成修正，包含前排、AD/AP、poke、清線、開戰等陣容缺口。',
                 '增幅裝置排序小幅納入選取率訊號，低選取率高勝率會更保守看待。',
-                '新增出裝風格與增幅類型相性。',
+                '新增前兩件核心出裝與增幅類型相性。',
             ],
             recModeOn: '選擇你的隊友：開',
             recModeOff: '選擇你的隊友：關',
@@ -4898,8 +5146,8 @@ def render_html(
             pairSectionMeta: '適配度為主，勝率為輔',
             setSectionTitle: '增幅裝置系列相性',
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
-            itemSectionTitle: '推薦出裝',
-            itemSectionMeta: '',
+            itemSectionTitle: '最強前兩件出裝',
+            itemSectionMeta: '不含鞋子',
             augTypeSectionTitle: '推薦增幅裝置類型',
             augTypeSectionMeta: '',
             relativeBest: '相對最佳',
@@ -4920,6 +5168,7 @@ def render_html(
             mateMetaHtml: (lift, zText, games) => `${lift}<span class="mmeta-label"> residual</span><span class="mmeta-z"> · z ${zText}</span><span class="mmeta-games"> · ${games}場</span>`,
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · 英雄 lift ${lift} · 全體平均 ${avg} · WR ${wr} · ${games}場`,
             setMeta: (lift, avg, wr, games) => `英雄 ${lift} · 全體 ${avg} · WR ${wr} · ${games}場`,
+            itemBuildTitle: (name, pick, lift) => `${name} 選取率 ${pick} 勝率${lift}`,
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             leastFitLabel: '最不適配',
@@ -4945,7 +5194,7 @@ def render_html(
             updatesItems: [
                 'Teammate fit now goes beyond pair win rate and adds team-composition correction, including frontline, AD/AP mix, poke, waveclear, and engage gaps.',
                 'Augment ranking now uses a small pick-rate signal, so low-pick high-win results are treated more conservatively.',
-                'Added item-style and augment-type affinity.',
+                'Added two-item core builds and augment-type affinity.',
             ],
             recModeOn: 'Teammate mode: On',
             recModeOff: 'Teammate mode: Off',
@@ -4973,8 +5222,8 @@ def render_html(
             pairSectionMeta: 'Fit first, win rate second',
             setSectionTitle: 'Augment Sets',
             setSectionMeta: 'Conservative score; negative can still be relative-best',
-            itemSectionTitle: 'Recommended Items',
-            itemSectionMeta: '',
+            itemSectionTitle: 'Best First Two Items',
+            itemSectionMeta: 'boots excluded',
             augTypeSectionTitle: 'Recommended Augment Types',
             augTypeSectionMeta: '',
             relativeBest: 'Relative Best',
@@ -4995,6 +5244,7 @@ def render_html(
             mateMetaHtml: (lift, zText, games) => `${lift}<span class="mmeta-label"> residual</span><span class="mmeta-z"> · z ${zText}</span><span class="mmeta-games"> · ${games} games</span>`,
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · champion lift ${lift} · global average ${avg} · WR ${wr} · ${games} games`,
             setMeta: (lift, avg, wr, games) => `champ ${lift} · global ${avg} · WR ${wr} · ${games} games`,
+            itemBuildTitle: (name, pick, lift) => `${name} pick ${pick}, WR ${lift}`,
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             leastFitLabel: 'Least fit',
@@ -5114,6 +5364,22 @@ def render_html(
         const champRect = champ ? champ.getBoundingClientRect() : null;
         if (champRect && champRect.top < 96) {
             badge.classList.add('tip-below');
+        }
+    }
+
+    function positionFitChipTooltip(wrap) {
+        if (!wrap) return;
+        const tooltip = wrap.querySelector('.fit-chip-tooltip');
+        if (!tooltip) return;
+        wrap.classList.remove('tip-left', 'tip-below');
+        const viewportPad = 12;
+        const rect = tooltip.getBoundingClientRect();
+        if (rect.right > window.innerWidth - viewportPad) {
+            wrap.classList.add('tip-left');
+        }
+        const wrapRect = wrap.getBoundingClientRect();
+        if (wrapRect.top < 96) {
+            wrap.classList.add('tip-below');
         }
     }
 
@@ -5283,8 +5549,35 @@ def render_html(
             const name = setEntryName(entry);
             const score = kind === 'bad' ? (entry.badScore ?? entry.res) : (entry.score ?? entry.res);
             const titleAttr = copy.setTitle(name, signed(entry.res), signed(entry.lift), signed(entry.avg), pct(entry.wr), entry.g);
+            const pairItems = Array.isArray(entry.items) ? entry.items : [];
+            const liftValue = Number(entry.lift ?? entry.res ?? 0);
+            const liftClass = liftValue > 0.0005 ? 'is-good' : (liftValue < -0.0005 ? 'is-bad' : 'is-even');
+            const itemTitle = copy.itemBuildTitle(name, pct(entry.pick || 0), signed(liftValue));
+            const itemIcons = pairItems.length
+                ? `<span class="item-pair-icons">${pairItems.map(item => `
+                    <span class="item-pair-icon-wrap">
+                        ${item.icon ? `<img src="${escHtml(item.icon)}" alt="" loading="lazy">` : ''}
+                    </span>
+                `).join('')}</span>`
+                : '';
+            if (pairItems.length) {
+                return `
+                    <span class="fit-chip-wrap" tabindex="0" aria-label="${escHtml(itemTitle)}">
+                        <span class="fit-chip ${kind} item-build-chip">
+                            ${itemIcons}<span class="fit-chip-label">${escHtml(name)}</span>
+                        </span>
+                        <span class="fit-chip-tooltip" role="tooltip">
+                            <span class="fit-tip-name">${escHtml(name)}</span>
+                            <span class="fit-tip-pick">${escHtml(copy.secondaryRoleBadgePick(pct(entry.pick || 0)))}</span>
+                            <span class="fit-tip-lift ${liftClass}">${escHtml(copy.secondaryRoleBadgeLift(signed(liftValue)))}</span>
+                        </span>
+                    </span>
+                `;
+            }
             return `
-                <span class="fit-chip ${kind}" title="${escHtml(`${name} ${signed(score)} · ${titleAttr}`)}">${escHtml(name)}</span>
+                <span class="fit-chip ${kind}" title="${escHtml(`${name} ${signed(score)} · ${titleAttr}`)}">
+                    ${itemIcons}<span class="fit-chip-label">${escHtml(name)}</span>
+                </span>
             `;
         };
         const buildFitList = (rows, kind) => {
@@ -6166,6 +6459,11 @@ def render_html(
     }, { passive: true });
 
     document.addEventListener('mouseover', (ev) => {
+        const fitChip = ev.target.closest && ev.target.closest('.fit-chip-wrap');
+        if (fitChip) {
+            positionFitChipTooltip(fitChip);
+            return;
+        }
         const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
         if (badge) {
             positionSecondaryRoleTooltip(badge);
@@ -6177,6 +6475,11 @@ def render_html(
     }, { passive: true });
 
     document.addEventListener('focusin', (ev) => {
+        const fitChip = ev.target.closest && ev.target.closest('.fit-chip-wrap');
+        if (fitChip) {
+            positionFitChipTooltip(fitChip);
+            return;
+        }
         const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
         if (badge) {
             positionSecondaryRoleTooltip(badge);
@@ -6329,11 +6632,23 @@ def main(
         f"[tierlist] {len(item_style_affinity)} champions have >= 1 item-style affinity row "
         f"(games >= {item_style_min_games})"
     )
+    item_pair_affinity = compute_champ_item_pair_affinities(
+        db,
+        queue_id,
+        patch_prefix,
+        item_meta,
+        champ_records,
+        min_games=ITEM_PAIR_MIN_GAMES,
+    )
+    click.echo(
+        f"[tierlist] {len(item_pair_affinity)} champions have >= 1 core item-pair row "
+        f"(games >= {ITEM_PAIR_MIN_GAMES}, pick_weight={ITEM_PAIR_PICK_LIFT_WEIGHT:g})"
+    )
     click.echo(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
         f"(games >= {augment_type_min_games})"
     )
-    role_changes = apply_usage_based_roles(champ_meta, champ_records, item_style_affinity)
+    role_changes = infer_secondary_roles_from_data(champ_meta, champ_records, item_style_affinity)
     click.echo(
         f"[tierlist] applied {len(role_changes)} usage-based role tag updates "
         f"(item style usage + WR fit)"
@@ -6396,20 +6711,13 @@ def main(
     for asset_path in favicon_outputs:
         click.echo(f"[tierlist] wrote {asset_path}  ({asset_path.stat().st_size:,} bytes)")
 
-    favicon_asset_path = out_path.parent / "favicon.svg"
-    try:
-        write_favicon_svg(favicon_asset_path)
-        click.echo(f"[tierlist] wrote {favicon_asset_path}  ({favicon_asset_path.stat().st_size:,} bytes)")
-    except Exception as exc:
-        click.echo(f"[tierlist] WARN: favicon generation failed: {exc}")
-
     html = render_html(
         champ_records,
         champ_meta,
         champ_profiles,
         picks,
         set_affinity,
-        item_style_affinity,
+        item_pair_affinity,
         augment_type_affinity,
         synergy,
         aug_meta,
