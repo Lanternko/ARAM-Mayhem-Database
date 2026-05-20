@@ -78,8 +78,14 @@ ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
 ITEM_PAIR_MIN_GAMES = 30
 ITEM_PAIR_FALLBACK_MIN_GAMES = 20
-ITEM_PAIR_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
+ITEM_PAIR_TOP_MIN_PICK_RATE = 0.002
+ITEM_PAIR_TOP_MIN_LIFT = -0.02
+ITEM_PAIR_PICK_LIFT_WEIGHT = 0.0
 ITEM_PAIR_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
+ITEM_PAIR_PICK_RATE_WEIGHT = 0.006
+ITEM_PAIR_PICK_RATE_REF = 0.002
+ITEM_PAIR_PICK_RATE_CAP = 0.012
+ITEM_PAIR_ORDER_PRIOR_GAMES = 20
 AUGMENT_TYPE_MIN_GAMES = 100
 
 ITEM_STYLE_LABELS = {
@@ -1881,6 +1887,10 @@ def _participant_core_item_ids(item_ids: list[int], item_meta: dict[int, dict]) 
 def _item_pair_name(item_payload: list[dict[str, object]], key: str) -> str:
     return " + ".join(str(item.get(key) or item.get("name") or item.get("id")) for item in item_payload)
 
+def _item_pair_slug(item_ids: list[int], *, ordered: bool) -> str:
+    ids = item_ids if ordered else sorted(item_ids)
+    return "+".join(str(item_id) for item_id in ids)
+
 _AUGMENT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     "damage": (
         "damage", "burn", "missile", "fire", "lightning", "execute", "explosion",
@@ -2004,6 +2014,13 @@ def _finalize_category_affinity(
     bot_n: int = 4,
     pick_lift_weight: float = 0.0,
     pick_lift_cap: float = AUGMENT_PICK_LIFT_CAP,
+    pick_rate_weight: float = 0.0,
+    pick_rate_ref: float = 0.002,
+    pick_rate_cap: float | None = None,
+    rank_mode: str = "residual",
+    top_min_lift: float | None = None,
+    top_min_pick_rate: float = 0.0,
+    top_pick_guarantee: bool = False,
 ) -> dict[int, dict]:
     global_total_games = sum(champ_total_games.values())
     category_avg_lift: dict[str, float] = {}
@@ -2051,11 +2068,26 @@ def _finalize_category_affinity(
         )
         pick_lift = math.log(max(pick_rate, 1e-9) / max(global_pick_rate, 1e-9))
         clamped_pick_lift = max(-pick_lift_cap, min(pick_lift_cap, pick_lift))
+        pick_rate_credit = 0.0
+        if pick_rate_weight > 0:
+            pick_rate_credit = pick_rate_weight * math.log1p(
+                pick_rate / max(pick_rate_ref, 1e-9)
+            )
+            if pick_rate_cap is not None:
+                pick_rate_credit = min(pick_rate_cap, pick_rate_credit)
         name_info = category_names.get(slug, _label_entry({}, slug))
         lift = mean_wr - float(row["baseline_wr"])
+        lcb_lift = lower_wr - float(row["baseline_wr"])
+        ucb_lift = upper_wr - float(row["baseline_wr"])
         residual = mean_wr - prior_wr
         lcb_residual = lower_wr - prior_wr
         ucb_residual = upper_wr - prior_wr
+        if rank_mode == "lift":
+            rank_score = lcb_lift + pick_lift_weight * clamped_pick_lift + pick_rate_credit
+            rank_bad_score = ucb_lift + pick_lift_weight * clamped_pick_lift
+        else:
+            rank_score = lcb_residual + pick_lift_weight * clamped_pick_lift + pick_rate_credit
+            rank_bad_score = ucb_residual + pick_lift_weight * clamped_pick_lift
         packed_row = {
             "name": name_info["name"],
             "name_zh": name_info["name_zh"],
@@ -2068,14 +2100,17 @@ def _finalize_category_affinity(
             "baseline_wr": float(row["baseline_wr"]),
             "avg_lift": float(row["avg_lift"]),
             "lift": lift,
+            "lcb_lift": lcb_lift,
+            "ucb_lift": ucb_lift,
             "residual": residual,
             "lcb_residual": lcb_residual,
             "ucb_residual": ucb_residual,
-            "rank_score": lcb_residual + pick_lift_weight * clamped_pick_lift,
-            "rank_bad_score": ucb_residual + pick_lift_weight * clamped_pick_lift,
+            "rank_score": rank_score,
+            "rank_bad_score": rank_bad_score,
             "pick_rate": pick_rate,
             "global_pick_rate": global_pick_rate,
             "pick_lift": pick_lift,
+            "pick_rate_credit": pick_rate_credit,
             "prior_strength": prior_strength,
             "primary_sample": bool(row.get("primary_sample")),
         }
@@ -2085,12 +2120,52 @@ def _finalize_category_affinity(
 
     out: dict[int, dict] = {}
     for cid, rows in by_champ.items():
-        rows.sort(key=lambda r: (-r["rank_score"], -r["lcb_residual"], -r["residual"], -r["games"], r["name_en"]))
+        if rank_mode == "lift":
+            rows.sort(
+                key=lambda r: (
+                    -r["rank_score"],
+                    -r["lcb_lift"],
+                    -r["lift"],
+                    -r["pick_rate"],
+                    -r["games"],
+                    r["name_en"],
+                )
+            )
+        else:
+            rows.sort(key=lambda r: (-r["rank_score"], -r["lcb_residual"], -r["residual"], -r["games"], r["name_en"]))
         eligible = [r for r in rows if r.get("primary_sample")]
         if not eligible:
             eligible = rows
-        bot_rows = sorted(eligible, key=lambda r: (r["rank_bad_score"], r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
-        out[cid] = {"top": eligible[:top_n], "bot": bot_rows[:bot_n], "prior_strength": prior_strength}
+        top_rows = eligible
+        if top_min_lift is not None:
+            top_rows = [r for r in top_rows if float(r.get("lift", 0.0)) >= top_min_lift]
+        if top_min_pick_rate > 0:
+            top_rows = [r for r in top_rows if float(r.get("pick_rate", 0.0)) >= top_min_pick_rate]
+        if top_pick_guarantee and top_rows:
+            top_pick_row = max(
+                top_rows,
+                key=lambda r: (
+                    float(r.get("pick_rate", 0.0)),
+                    int(r.get("games", 0)),
+                    float(r.get("rank_score", 0.0)),
+                    str(r.get("name_en", "")),
+                ),
+            )
+            selected_top_rows = top_rows[:top_n]
+            selected_slugs = {str(r.get("slug") or "") for r in selected_top_rows}
+            if str(top_pick_row.get("slug") or "") not in selected_slugs:
+                if len(selected_top_rows) < top_n:
+                    selected_top_rows.append(top_pick_row)
+                elif selected_top_rows:
+                    selected_top_rows[-1] = top_pick_row
+            top_rows = selected_top_rows
+        else:
+            top_rows = top_rows[:top_n]
+        if rank_mode == "lift":
+            bot_rows = sorted(eligible, key=lambda r: (r["rank_bad_score"], r["ucb_lift"], r["lift"], r["games"], r["name_en"]))
+        else:
+            bot_rows = sorted(eligible, key=lambda r: (r["rank_bad_score"], r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
+        out[cid] = {"top": top_rows, "bot": bot_rows[:bot_n], "prior_strength": prior_strength}
     return out
 
 def compute_champ_category_affinities(
@@ -2233,6 +2308,9 @@ def compute_champ_item_pair_affinities(
     category_wins: Counter[str] = Counter()
     category_baseline_games: Counter[str] = Counter()
     category_names: dict[str, dict[str, object]] = {}
+    ordered_games: Counter[tuple[int, str, str]] = Counter()
+    ordered_wins: Counter[tuple[int, str, str]] = Counter()
+    ordered_baseline_games: Counter[tuple[int, str, str]] = Counter()
 
     try:
         for blue_wins, participants_json in rows:
@@ -2251,18 +2329,23 @@ def compute_champ_item_pair_affinities(
                 )
                 if len(core_ids) < 2:
                     continue
-                slug = "+".join(str(item_id) for item_id in core_ids)
+                slug = _item_pair_slug(core_ids, ordered=False)
+                ordered_slug = _item_pair_slug(core_ids, ordered=True)
                 baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 key = (cid, slug)
                 cs_games[key] += 1
                 cs_wins[key] += player_won
                 cs_baseline_games[key] += baseline
+                order_key = (cid, slug, ordered_slug)
+                ordered_games[order_key] += 1
+                ordered_wins[order_key] += player_won
+                ordered_baseline_games[order_key] += baseline
                 category_games[slug] += 1
                 category_wins[slug] += player_won
                 category_baseline_games[slug] += baseline
                 if slug not in category_names:
-                    items = _item_pair_payload(core_ids, item_meta)
+                    items = _item_pair_payload(sorted(core_ids), item_meta)
                     category_names[slug] = {
                         "name": _item_pair_name(items, "name_zh"),
                         "name_zh": _item_pair_name(items, "name_zh"),
@@ -2272,7 +2355,20 @@ def compute_champ_item_pair_affinities(
     finally:
         con.close()
 
-    return _finalize_category_affinity(
+    best_order_by_pair: dict[tuple[int, str], list[int]] = {}
+    order_candidates: dict[tuple[int, str], list[tuple[float, int, str]]] = defaultdict(list)
+    for (cid, slug, ordered_slug), games in ordered_games.items():
+        baseline = ordered_baseline_games[(cid, slug, ordered_slug)] / games
+        wins = ordered_wins[(cid, slug, ordered_slug)]
+        smoothed_wr = (
+            wins + baseline * ITEM_PAIR_ORDER_PRIOR_GAMES
+        ) / (games + ITEM_PAIR_ORDER_PRIOR_GAMES)
+        order_candidates[(cid, slug)].append((smoothed_wr - baseline, games, ordered_slug))
+    for key, candidates in order_candidates.items():
+        _, _, ordered_slug = max(candidates, key=lambda item: (item[0], item[1], item[2]))
+        best_order_by_pair[key] = [int(part) for part in ordered_slug.split("+")]
+
+    affinity = _finalize_category_affinity(
         cs_games,
         cs_wins,
         cs_baseline_games,
@@ -2285,7 +2381,25 @@ def compute_champ_item_pair_affinities(
         fallback_min_games=ITEM_PAIR_FALLBACK_MIN_GAMES,
         pick_lift_weight=ITEM_PAIR_PICK_LIFT_WEIGHT,
         pick_lift_cap=ITEM_PAIR_PICK_LIFT_CAP,
+        pick_rate_weight=ITEM_PAIR_PICK_RATE_WEIGHT,
+        pick_rate_ref=ITEM_PAIR_PICK_RATE_REF,
+        pick_rate_cap=ITEM_PAIR_PICK_RATE_CAP,
+        rank_mode="lift",
+        top_min_lift=ITEM_PAIR_TOP_MIN_LIFT,
+        top_min_pick_rate=ITEM_PAIR_TOP_MIN_PICK_RATE,
+        top_pick_guarantee=True,
     )
+    for cid, payload in affinity.items():
+        for row in [*(payload.get("top") or []), *(payload.get("bot") or [])]:
+            item_ids = best_order_by_pair.get((int(cid), str(row.get("slug") or "")))
+            if not item_ids:
+                continue
+            items = _item_pair_payload(item_ids, item_meta)
+            row["name"] = _item_pair_name(items, "name_zh")
+            row["name_zh"] = _item_pair_name(items, "name_zh")
+            row["name_en"] = _item_pair_name(items, "name_en")
+            row["items"] = items
+    return affinity
 
 def _is_ranged_champion(meta: dict) -> bool:
     if str(meta.get("alias") or "") in ROLE_RANGED_ALIAS_OVERRIDES:
@@ -2825,6 +2939,7 @@ def render_html(
         "pick": round(r.get("pick_rate", 0.0), 4),
         "globalPick": round(r.get("global_pick_rate", 0.0), 4),
         "pickLift": round(r.get("pick_lift", 0.0), 3),
+        "pickCredit": round(r.get("pick_rate_credit", 0.0), 4),
     }
         if r.get("items"):
             packed["items"] = r["items"]
@@ -5584,18 +5699,67 @@ def render_html(
             if (!rows || !rows.length) return `<div class="mate-list empty-list">${copy.insufficient}</div>`;
             return `<div class="fit-chip-list">${rows.slice(0, 3).map(entry => buildFitChip(entry, kind)).join('')}</div>`;
         };
-        const closeFitRows = rows => {
+        const closeFitRows = (rows, minRows = 1, maxRows = 3, options = {}) => {
             if (!rows || !rows.length) return [];
             const topScore = rows[0].score ?? rows[0].res ?? 0;
             const closeGap = 0.004;
-            return rows.filter((entry, idx) => {
-                if (idx === 0) return true;
+            const selected = [];
+            const rowKey = (entry) => String(
+                entry.slug ?? entry.name_zh ?? entry.name_en ?? entry.name ?? selected.length
+            );
+            const selectedSlugs = new Set();
+            const addSelected = (entry) => {
+                const key = rowKey(entry);
+                if (selectedSlugs.has(key)) return false;
+                selected.push(entry);
+                selectedSlugs.add(key);
+                return true;
+            };
+            rows.forEach((entry, idx) => {
+                if (selected.length >= maxRows) return;
                 const score = entry.score ?? entry.res ?? topScore;
-                return (topScore - score) <= closeGap;
-            }).slice(0, 3);
+                if (idx === 0 || (topScore - score) <= closeGap) {
+                    addSelected(entry);
+                }
+            });
+            if (options.includeHighestPick) {
+                const highestPickRow = rows.reduce((best, entry) => {
+                    const entryPick = Number(entry.pick ?? entry.pick_rate ?? 0);
+                    const bestPick = Number(best.pick ?? best.pick_rate ?? 0);
+                    if (entryPick !== bestPick) return entryPick > bestPick ? entry : best;
+                    const entryGames = Number(entry.g ?? entry.games ?? 0);
+                    const bestGames = Number(best.g ?? best.games ?? 0);
+                    if (entryGames !== bestGames) return entryGames > bestGames ? entry : best;
+                    const entryScore = Number(entry.score ?? entry.res ?? 0);
+                    const bestScore = Number(best.score ?? best.res ?? 0);
+                    return entryScore > bestScore ? entry : best;
+                }, rows[0]);
+                const highestPickKey = rowKey(highestPickRow);
+                if (!selectedSlugs.has(highestPickKey)) {
+                    if (selected.length < maxRows) {
+                        addSelected(highestPickRow);
+                    } else if (selected.length) {
+                        selected[selected.length - 1] = highestPickRow;
+                        selectedSlugs.clear();
+                        selected.forEach(entry => selectedSlugs.add(rowKey(entry)));
+                    }
+                }
+            }
+            if (selected.length < minRows) {
+                for (const entry of rows) {
+                    if (selected.length >= minRows || selected.length >= maxRows) break;
+                    addSelected(entry);
+                }
+            }
+            return selected;
         };
-        const buildAffinitySection = (title, meta, payload) => {
-            const bestRows = closeFitRows((payload && payload.top) || []);
+        const buildAffinitySection = (title, meta, payload, options = {}) => {
+            const bestRows = closeFitRows(
+                (payload && payload.top) || [],
+                options.minRows || 1,
+                options.maxRows || 3,
+                { includeHighestPick: Boolean(options.includeHighestPick) },
+            );
             if (!bestRows.length) return '';
             const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
             return `
@@ -5614,6 +5778,7 @@ def render_html(
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
                 <span class="cname" id="detail-title-${cid}">${escHtml(champName(info))}</span>
             </div>
+            ${buildAffinitySection(copy.itemSectionTitle, copy.itemSectionMeta, itemInfo, { minRows: 2, includeHighestPick: true })}
             <div class="detail-section">
                 <span class="section-meta augment-strength-meta">
                     ${copy.augmentStrengthMeta}
@@ -5639,7 +5804,6 @@ def render_html(
                     </div>
                 </div>
             </div>
-            ${buildAffinitySection(copy.itemSectionTitle, copy.itemSectionMeta, itemInfo)}
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
             <div class="detail-section">
                 <div class="detail-section-head">
@@ -6642,7 +6806,8 @@ def main(
     )
     click.echo(
         f"[tierlist] {len(item_pair_affinity)} champions have >= 1 core item-pair row "
-        f"(games >= {ITEM_PAIR_MIN_GAMES}, pick_weight={ITEM_PAIR_PICK_LIFT_WEIGHT:g})"
+        f"(games >= {ITEM_PAIR_MIN_GAMES}, top_pick >= {ITEM_PAIR_TOP_MIN_PICK_RATE:.1%}, "
+        f"top_lift >= {ITEM_PAIR_TOP_MIN_LIFT:.1%})"
     )
     click.echo(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
