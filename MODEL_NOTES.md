@@ -43,6 +43,12 @@ The newest score-based NN improves accuracy over LR slightly, but LR still has
 better log-loss.  In plain terms: the NN is starting to rank winners better, but
 its probabilities are not as cleanly calibrated yet.
 
+The strongest stable gain so far is not a bigger NN.  It is adding explicit
+composition signals on top of champion identity: damage mix, frontline, role
+mix, poke/frontline interaction, and a few deficit indicators.  Treat these as
+small but real corrections around the champion baseline, not as a replacement
+for champion identity.
+
 ## Data And Leakage Rules
 
 Use time split only.  Never use random split.
@@ -85,6 +91,29 @@ absent        = 0
 
 Built from public Data Dragon ability text plus manual review corrections.
 These features are subjective, but useful as priors.
+
+As of 2026-05-19, `scripts/build_semantic_ability_scores.py` moved
+`engage_score` and `wave_clear_score` away from pure keyword sums toward a
+formula-style pipeline:
+
+- per-skill metadata / reviewed overrides
+- normalized subcomponents
+- weighted aggregation
+- champion-level top-skill combination
+
+This is still heuristic, but it is much easier to audit than the earlier
+"keyword count plus a few champion overrides" draft.
+
+As of 2026-05-19, the repo also has an explicit intermediate table:
+
+- `data/cache/skill_semantic_features.json`
+- `data/cache/skill_semantic_features.csv`
+
+Built by `scripts/build_skill_semantic_features.py`, this is the intended
+"skill_semantic_features" layer between raw Data Dragon ability payloads and the
+final champion-level semantic scores.  The scoring script now prefers this
+table first and only falls back to local heuristics / reviewed overrides when a
+field is still missing there.
 
 Current score columns:
 
@@ -129,6 +158,18 @@ Damage profile features:
 
 These let the model recognize AD/AP/true-damage balance instead of forcing it
 to infer damage type only from champion identity.
+
+Current interpretation from the 2026-05-18 residual study:
+
+- raw AD/AP ratios are useful, but only after controlling for champion identity
+- best observed region is roughly `35-45%` team AD share among expected AD+AP
+  damage
+- very AP-heavy teams (`<35%` AD) and very AD-heavy teams (`>=65%` AD) both
+  underperform after champion-baseline correction
+- the AP-heavy raw win-rate bump is partly champion baseline; do not conclude
+  "more AP is always better"
+- true-damage share did not show a useful aggregate signal in this dataset; keep
+  it as a feature candidate, but do not build site heuristics around it yet
 
 ### 4. Riot Role Tags
 
@@ -226,24 +267,29 @@ capture them if the client endpoint returns them.
 
 ## Current Experiments
 
-Dataset used for the latest score NN run:
+Dataset used for the latest live-snapshot comparison:
 
-- `data/raw/mayhem_lcu_latest.parquet`
+- `data/raw/mayhem_lcu_ml_compare_2026_05_20_live.parquet`
 - queue: Mayhem `2400`
 - patch prefix: `16.10`
-- train rows: `35,646`
-- validation rows: `7,638`
-- test rows: `7,638`
+- total Mayhem rows exported: `218,969`
+- patch `16.10.*` rows used by split: `190,808`
+- train rows: `133,566`
+- validation rows: `28,621`
+- test rows: `28,621`
 
 Latest test results:
 
-| Model | Test Acc | Test Log Loss | Notes |
-|---|---:|---:|---|
-| Constant base rate | 52.57% | 0.6920 | baseline |
-| LR champion identity | 57.08% | 0.6755 | still best log-loss |
-| DeepSets embedding-only | 55.01% | 0.6844 | overfits / underuses signal |
-| DeepSets + 7 scores | 57.12% | 0.6783 | scores help |
-| DeepSets + 17 score/role/profile features | 57.33% | 0.6771 | best accuracy so far |
+| Model | Val Log Loss | Test Acc | Test Log Loss | Notes |
+|---|---:|---:|---:|---|
+| Constant base rate | 0.6922 | 51.76% | 0.6925 | baseline |
+| LR champion identity | 0.6754 | 57.56% | 0.6754 | reference baseline |
+| LR + all composition features | 0.6727 | 58.02% | 0.6740 | strongest stable test log-loss |
+| DeepSets embedding-only | 0.6766 | 57.22% | 0.6766 | still trails LR |
+| DeepSets + 17 score/role/profile features calibrated | 0.6738 | 57.96% | 0.6746 | improved with more data, still below composition LR |
+| LightGBM semantic calibrated | 0.6724 | 57.74% | 0.6742 | best validation log-loss; close to composition LR |
+| XGBoost semantic calibrated | 0.6785 | 56.65% | 0.6792 | not competitive |
+| RandomForest semantic calibrated | 0.6816 | 55.69% | 0.6828 | slow and not competitive |
 
 The 17 static features are:
 
@@ -254,18 +300,85 @@ The 17 static features are:
 
 Interpretation:
 
-- Explicit capability features help the NN.
-- Role and damage-profile features add a small improvement.
-- Accuracy can slightly beat LR.
-- Log-loss still trails LR, so calibration and overfit remain issues.
+- Explicit composition features now clearly beat champion-only LR on validation
+  calibrated log-loss.
+- The strongest current tabular model is `LR + all composition features`, but
+  the lean `selected core signals` bundle captures almost all of the gain. The
+  core signal family is damage mix, frontline, roles, AD/frontline,
+  poke/frontline, and role-by-AD interactions.
+- Score features still help DeepSets substantially, but the NN probabilities
+  remain worse than composition LR on log-loss.
+- LightGBM is now the closest tree candidate by validation log-loss, but its
+  test log-loss remains slightly behind composition LR on the 2026-05-20 split.
+  Treat it as worth retesting, not promoted.
 
 Tree experiments:
 
 - semantic-only features are too weak alone
 - LightGBM/XGBoost with champion identity plus semantic/empirical scores are
   close to LR but have not clearly beaten it
+- RandomForest with the same champion identity plus semantic/empirical score
+  frame is not competitive and is slow enough that it should not be part of the
+  routine benchmark unless there is a specific bagging hypothesis
 - tree models are still worth revisiting with better cross-validation and more
   mature empirical fields
+
+Tree benchmark on the 2026-05-20 live `16.10` snapshot:
+
+| Model | Val Log Loss | Val Acc | Test Log Loss | Test Acc | Notes |
+|---|---:|---:|---:|---:|---|
+| LR champion identity | 0.6754 | 57.71% | 0.6754 | 57.55% | reference baseline |
+| LightGBM semantic calibrated | 0.6724 | 58.42% | 0.6742 | 57.74% | close to composition LR; needs more validation |
+| XGBoost semantic calibrated | 0.6785 | 56.69% | 0.6792 | 56.65% | not competitive |
+| RandomForest semantic calibrated | 0.6816 | 55.83% | 0.6828 | 55.69% | slow and clearly worse than boosted trees |
+
+RandomForest was tested in
+`models/semantic_tree_16_10_2026_05_20_live_empirical_rf` with the same feature
+matrix, swap augmentation, time split, and Platt calibration as LightGBM and
+XGBoost.  The calibrated probabilities improved ECE but remained far behind on
+log-loss, so this is a deprioritized branch.
+
+Composition LR experiments on the 2026-05-20 live `16.10` snapshot:
+
+| Model | Val Log Loss | Test Acc | Test Log Loss | Notes |
+|---|---:|---:|---:|---|
+| LR champion identity | 0.6754 | 57.56% | 0.6754 | baseline to beat |
+| LR + all composition features | 0.6727 | 58.02% | 0.6740 | best stable tabular gain |
+
+Use validation calibrated log-loss as the primary selection metric.  Test
+metrics are only final confirmation; do not pick a candidate because it happened
+to improve test accuracy on one split.
+
+Subjective/composition feature takeaways:
+
+- useful core: AD/AP damage mix, frontline count/score, role mix,
+  AD/frontline interaction, poke/frontline interaction, role-by-AD interaction
+- weak or noisy alone: wave and engage main effects; adding wave to the selected
+  core bundle did not improve validation log-loss on the 2026-05-18 live
+  snapshot
+- still worth testing as interactions: wave with poke, engage with follow-up
+  damage, sustain with poke/disengage
+- when testing subjective features, add them one family at a time and compare
+  validation log-loss; do not ship a large subjective bundle without ablation
+
+## Fresh Benchmark Protocol
+
+When the user asks for a new ML round ("機器學習", "新一輪 ML", "benchmark"),
+do not run only the currently strongest NN.  Use this protocol:
+
+1. Run `python scripts/lcu_collector.py metrics`, then export a fresh Mayhem
+   queue-2400 parquet from `data/lcu/games.db`.
+2. Use one frozen snapshot, one patch prefix, and one `game_creation_ms` time
+   split for every model in the comparison.
+3. Always include these horizontal baselines: LR champion identity, LR with all
+   composition features, score NN, LightGBM, and XGBoost.
+4. Pick candidates by validation calibrated log-loss first; use validation
+   accuracy/ECE and test calibrated log-loss/accuracy as secondary confirmation.
+5. Signal candidates should start from the useful core signal family above
+   rather than trying every subjective signal permutation. Add one candidate
+   family at a time only when there is a specific hypothesis.
+6. Save each run under a new output directory so old model artifacts and fresh
+   live-snapshot results cannot overwrite each other.
 
 ## Current Scripts
 
@@ -281,16 +394,23 @@ Training:
 
 ```powershell
 python scripts/train_score_nn.py `
-  --data data/raw/mayhem_lcu_latest.parquet `
+  --data data/raw/mayhem_lcu_ml_compare_2026_05_20_live.parquet `
   --score-csv data/cache/champion_semantic_scores.csv `
   --patch-prefix 16.10 `
-  --out models/score_nn_16_10_empirical_roles_profile_sustain_weighted `
+  --out models/score_nn_16_10_2026_05_20_live_empirical_roles_profile_sustain_weighted `
   --embed-dim 16 `
   --score-dim 8 `
   --hidden 64 `
   --dropout 0.35 `
   --lr 0.0015 `
   --weight-decay 0.02
+
+python scripts/train_composition_lr.py `
+  --data data/raw/mayhem_lcu_ml_compare_2026_05_20_live.parquet `
+  --score-csv data/cache/champion_semantic_scores.csv `
+  --patch-prefix 16.10 `
+  --out models/composition_lr_16_10_2026_05_20_live `
+  --feature-set all_composition
 ```
 
 ## Modeling Direction
@@ -321,6 +441,18 @@ high_sustain AND high_poke
 ```
 
 These are interpretable, cheap, and may help both tree models and NN.
+
+Current production recommendation formula should stay conservative:
+
+```text
+recommendation = pair residual fit + small composition correction
+```
+
+The composition correction should be capped and explainable.  As of 2026-05-18,
+the site uses it for damage mix and lineup deficits, especially AD/AP balance
+around the `35-45%` AD target region.  This is intentionally a small correction:
+pair history remains the main score, and composition only nudges candidates
+when the current 1-4 picked champions are visibly skewed.
 
 ## Recommended Experiment Order
 
