@@ -981,6 +981,19 @@ ROLE_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
 ROLE_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
 ROLE_ORDER = ("Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank")
 ROLE_SORT_PRIORITY = {role: idx for idx, role in enumerate(ROLE_ORDER)}
+from champion_roles import (  # noqa: E402
+    PRIMARY_ROLE_OVERRIDES as SHARED_PRIMARY_ROLE_OVERRIDES,
+    ROLE_LABELS as SHARED_ROLE_LABELS,
+    ROLE_ORDER as SHARED_ROLE_ORDER,
+    ROLE_SORT_PRIORITY as SHARED_ROLE_SORT_PRIORITY,
+    role_definitions_payload,
+    role_tags_for_alias,
+)
+
+PRIMARY_ROLE_OVERRIDES = SHARED_PRIMARY_ROLE_OVERRIDES
+ROLE_LABELS = SHARED_ROLE_LABELS
+ROLE_ORDER = SHARED_ROLE_ORDER
+ROLE_SORT_PRIORITY = SHARED_ROLE_SORT_PRIORITY
 CHAMPION_NAME_OVERRIDES: dict[str, dict[str, str]] = {
     "Renata": {"name_zh": "睿娜妲", "name_en": "Renata"},
 }
@@ -1007,10 +1020,10 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
         entry_zh = raw_zh.get(alias, base_entry)
         tags = entry_en.get("tags") or entry_zh.get("tags") or []
         original_tags = list(tags)
-        primary_role = str(PRIMARY_ROLE_OVERRIDES.get(alias) or (tags[0] if tags else ""))
-        if primary_role and ([primary_role] != list(tags)):
-            applied.append((alias, list(tags), [primary_role]))
-        tags = [primary_role] if primary_role else list(tags[:1])
+        tags = role_tags_for_alias(alias, tags)
+        primary_role = tags[0] if tags else ""
+        if tags and (tags != list(original_tags)):
+            applied.append((alias, list(original_tags), tags))
         name_zh = entry_zh.get("name") or entry_en.get("name") or alias
         name_en = entry_en.get("name") or alias
         if alias in CHAMPION_NAME_OVERRIDES:
@@ -1033,6 +1046,39 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
         for alias, before, after in applied:
             click.echo(f"  {alias:14s} {before} -> {after}")
     return version, by_id
+
+
+def write_role_definitions_json(
+    out_path: Path,
+    *,
+    champ_meta: dict[int, dict] | None = None,
+    data_dragon_version: str | None = None,
+    patch_prefix: str | None = None,
+) -> None:
+    payload = role_definitions_payload()
+    payload["generated_at"] = _dt.datetime.now(_dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    payload["data_dragon_version"] = data_dragon_version
+    payload["patch_prefix"] = patch_prefix
+    if champ_meta:
+        current_roles: dict[str, dict[str, object]] = {}
+        secondary_roles: dict[str, dict[str, object]] = {}
+        for meta in champ_meta.values():
+            alias = str(meta.get("alias") or "")
+            if not alias:
+                continue
+            tags = list(meta.get("tags") or [])
+            primary = str(tags[0]) if tags else ""
+            secondary = str(tags[1]) if len(tags) > 1 else ""
+            current_roles[alias] = {
+                "primary": primary,
+                "secondary": secondary,
+                "tags": tags,
+            }
+            if secondary:
+                secondary_roles[alias] = {"role": secondary}
+        payload["current_roles"] = dict(sorted(current_roles.items()))
+        payload["secondary_roles"] = dict(sorted(secondary_roles.items()))
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
 def _icon_url(lcu_path: str) -> str:
     """Convert an LCU asset path to a CommunityDragon URL."""
@@ -3231,6 +3277,18 @@ def render_html(
     .chip[data-role="Marksman"]      { --role-color: #22c55e; }
     .chip[data-role="Support"]       { --role-color: #ec4899; }
     .chip[data-role="Tank"]          { --role-color: #a855f7; }
+    .role-spec-link {
+        align-self: center;
+        color: #9fb4d8;
+        font-size: 12px;
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(159, 180, 216, 0.65);
+        padding: 4px 2px;
+    }
+    .role-spec-link:hover {
+        color: #d7e6ff;
+        border-bottom-color: #d7e6ff;
+    }
     .filter-tools {
         display: flex;
         align-items: center;
@@ -4978,16 +5036,16 @@ def render_html(
         "aria-labelledby='updates-title'>"
         "<div class='updates-head'>"
         "<div>"
-        "<span class='updates-kicker' id='updates-kicker'>?祉???</span>"
-        "<h2 class='updates-title' id='updates-title'>餈????湔</h2>"
+        "<span class='updates-kicker' id='updates-kicker'>本版重點</span>"
+        "<h2 class='updates-title' id='updates-title'>近期重要更新</h2>"
         "</div>"
         "<button class='updates-close' id='updates-close' type='button' "
         "aria-label='關閉近期更新'>&times;</button>"
         "</div>"
         "<ul class='updates-list' id='updates-list'>"
-        "<li>???拚??支? pair ??嚗?其?????蝯?靽格迤嚗??怠??D/AP?oke??蝺??啁???捆蝻箏??/li>"
-        "<li>憓?鋆蔭??撠?蝝?詨?????雿??擃????港?摰?敺?/li>"
-        "<li>?啣??箄?憸冽??撟???扼?/li>"
+        "<li>隊友適配除了 pair 勝率，現在也會做隊伍組成修正，包含前排、AD/AP、poke、清線、開戰等陣容缺口。</li>"
+        "<li>增幅裝置排序小幅納入選取率訊號，低選取率高勝率會更保守看待。</li>"
+        "<li>推薦面板與搜尋互動持續優化，讓手機版更容易快速查英雄。</li>"
         "</ul>"
         "</section>"
     )
@@ -4996,17 +5054,17 @@ def render_html(
     parts.append("<div class='filter-bar'>")
     parts.append("<div class='role-chips'>")
     parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
-    for role_en, role_zh in [
-        ("Assassin", "刺客"),
-        ("Fighter", "戰士"),
-        ("Mage", "法師"),
-        ("Marksman", "射手"),
-        ("Support", "輔助"),
-        ("Tank", "坦克"),
-    ]:
+    for role_en in ROLE_ORDER:
+        labels = ROLE_LABELS.get(role_en, {})
+        role_zh = labels.get("zh", role_en)
+        role_label_en = labels.get("en", role_en)
         parts.append(
-            f'<button class="chip" data-role="{role_en}" data-label-zh="{role_zh}" '
-            f'data-label-en="{role_en}">{role_zh}</button>'
+            f'<button class="chip" data-role="{html.escape(role_en)}" data-label-zh="{html.escape(role_zh)}" '
+            f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
+    )
+    parts.append(
+        '<a class="role-spec-link" href="champion-roles.json" target="_blank" rel="noopener" '
+        'title="主職業與副職業固定於 scripts/champion_roles.py">職業定義</a>'
     )
     parts.append("</div>")  # /role-chips
     parts.append("<div class='filter-tools'>")
@@ -6813,15 +6871,19 @@ def main(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
         f"(games >= {augment_type_min_games})"
     )
-    role_changes = infer_secondary_roles_from_data(champ_meta, champ_records, item_style_affinity)
+    dual_role_count = sum(1 for meta in champ_meta.values() if len(meta.get("tags") or []) > 1)
     click.echo(
-        f"[tierlist] applied {len(role_changes)} usage-based role tag updates "
-        f"(item style usage + WR fit)"
+        f"[tierlist] using fixed site role tags from scripts/champion_roles.py "
+        f"({dual_role_count} dual-role champions)"
     )
-    for alias, before, after in role_changes[:24]:
-        click.echo(f"  {alias:14s} {before} -> {after}")
-    if len(role_changes) > 24:
-        click.echo(f"  ... {len(role_changes) - 24} more")
+    role_spec_path = out_path.parent / "champion-roles.json"
+    write_role_definitions_json(
+        role_spec_path,
+        champ_meta=champ_meta,
+        data_dragon_version=version,
+        patch_prefix=patch_prefix,
+    )
+    click.echo(f"[tierlist] wrote {role_spec_path}")
 
     champ_profiles = load_champion_pick_profiles(champ_meta)
     picks = build_champ_augment_picks(
