@@ -147,6 +147,7 @@ CHAMPION_BUILD_ARCHETYPE = {
 
 FORMULA_VERSION = "v4_top3_itemized_scaling"
 EMPIRICAL_SCORE_CSV = Path("data/cache/champion_scores_empirical_merged.csv")
+SKILL_SEMANTIC_FEATURES_JSON = Path("data/cache/skill_semantic_features.json")
 
 HARD_CC_WORDS = (
     "stun",
@@ -1069,6 +1070,7 @@ def clamp_score(value: float) -> float:
 
 _EMPIRICAL_FLOOR_CACHE: dict[str, tuple[float, float]] | None = None
 _EMPIRICAL_DAMAGE_MIX_CACHE: dict[str, tuple[float, float, float]] | None = None
+_SKILL_FEATURE_CACHE: dict[tuple[str, str], dict[str, Any]] | None = None
 
 
 def empirical_floor_map() -> dict[str, tuple[float, float]]:
@@ -1117,6 +1119,30 @@ def empirical_damage_mix_map() -> dict[str, tuple[float, float, float]]:
         true = clamp01(float(row.get("empirical_true_damage_ratio") or 0.0))
         out[alias] = (physical, magic, true)
     _EMPIRICAL_DAMAGE_MIX_CACHE = out
+    return out
+
+
+def skill_feature_map() -> dict[tuple[str, str], dict[str, Any]]:
+    global _SKILL_FEATURE_CACHE
+    if _SKILL_FEATURE_CACHE is not None:
+        return _SKILL_FEATURE_CACHE
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    if not SKILL_SEMANTIC_FEATURES_JSON.exists():
+        _SKILL_FEATURE_CACHE = out
+        return out
+    raw = json.loads(SKILL_SEMANTIC_FEATURES_JSON.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        _SKILL_FEATURE_CACHE = out
+        return out
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        alias = str(row.get("champion_alias") or "")
+        slot = str(row.get("spell_slot") or "")
+        if not alias or not slot:
+            continue
+        out[(alias, slot)] = row
+    _SKILL_FEATURE_CACHE = out
     return out
 
 
@@ -1979,6 +2005,10 @@ def build_stat_budget(alias: str, tags: set[str]) -> tuple[float, float, float]:
     return ap, bonus_ad, max(ap_norm, ad_norm)
 
 
+def skill_feature_row(alias: str, slot: str) -> dict[str, Any]:
+    return skill_feature_map().get((alias, slot), {})
+
+
 def infer_scaling_mix(
     alias: str,
     slot: str,
@@ -2020,7 +2050,13 @@ def infer_scaling_mix(
     return clamp01(ap_weight / total), clamp01(ad_weight / total)
 
 
-def base_damage_component(ability: dict[str, Any]) -> float:
+def base_damage_component(alias: str, slot: str, ability: dict[str, Any]) -> float:
+    feature_row = skill_feature_row(alias, slot)
+    series = feature_row.get("base_damage_by_rank")
+    if isinstance(series, list) and series:
+        nums = [float(x) for x in series if isinstance(x, (int, float))]
+        if nums:
+            return clamp01(norm(max(nums), 60.0, 320.0))
     eff_nums = [x for x in effect_numbers(ability) if 30.0 <= x <= 350.0]
     eff_peak = max(eff_nums) if eff_nums else 0.0
     return clamp01(norm(eff_peak, 60.0, 280.0))
@@ -2038,6 +2074,50 @@ def scaling_proxy(
     override = ability_stat_override(alias, slot, "scaling_proxy")
     if isinstance(override, (int, float)):
         return float(override)
+    feature_row = skill_feature_row(alias, slot)
+    coeff_rows = feature_row.get("scaling_coeff_by_rank")
+    if isinstance(coeff_rows, list) and coeff_rows:
+        ap, bonus_ad, _stat_norm = build_stat_budget(alias, tags)
+        ap_norm = norm(ap, 0.0, 320.0) if ap > 0.0 else 0.0
+        ad_norm = norm(bonus_ad, 0.0, 180.0) if bonus_ad > 0.0 else 0.0
+        total = 0.0
+        for row in coeff_rows:
+            if not isinstance(row, dict):
+                continue
+            stat = str(row.get("stat") or "")
+            values = row.get("values") or []
+            coeff = max((float(v) for v in values if isinstance(v, (int, float))), default=0.0)
+            if stat == "ap":
+                total += coeff * ap_norm
+            elif stat in {"bonus_ad", "total_ad"}:
+                total += coeff * ad_norm
+            elif stat in {"max_hp", "armor", "mr"}:
+                total += coeff * 0.35
+        if total > 0.0:
+            value = 0.15 + 0.6 * clamp01(total)
+            if aoe:
+                value += 0.08
+            if shape in {"line", "circle", "cone"}:
+                value += 0.05
+            if "per second" in text or "for up to" in text or "on the way back" in text:
+                value += 0.08
+            if contains_any(text, AUTO_ATTACK_WORDS):
+                value += 0.06
+            if cast_state == "recast":
+                value -= 0.08
+            elif cast_state == "third_cast":
+                value -= 0.04
+            elif cast_state == "conditional_transform":
+                value -= 0.1
+            elif cast_state == "conditional_trigger":
+                value -= 0.06
+            elif cast_state == "attack_window":
+                value -= 0.08
+            elif cast_state == "form_branch":
+                value -= 0.06
+            elif cast_state == "resource_gated":
+                value -= 0.12
+            return clamp01(value)
     ap, bonus_ad, _stat_norm = build_stat_budget(alias, tags)
     ap_weight, ad_weight = infer_scaling_mix(alias, slot, text, tags)
     ap_norm = norm(ap, 0.0, 320.0) if ap > 0.0 else 0.0
@@ -2094,7 +2174,7 @@ def damage_proxy(
         if contains_any(text, AUTO_ATTACK_WORDS):
             return 0.38
         return 0.0
-    base_damage = base_damage_component(ability)
+    base_damage = base_damage_component(alias, slot, ability)
     scaling = scaling_proxy(alias, slot, text, tags, shape, aoe, cast_state)
     value = 0.16 + 0.36 * base_damage + 0.26 * scaling
     if aoe:
