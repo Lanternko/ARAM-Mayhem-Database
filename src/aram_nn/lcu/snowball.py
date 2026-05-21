@@ -1027,6 +1027,8 @@ def _resolve_seed_family_update(existing: str, incoming: str) -> str:
     incoming = incoming or ""
     if not existing or existing in (_UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY):
         return incoming or existing or _UNKNOWN_FAMILY
+    if existing == "manual_riot_id" and incoming.startswith("opgg_"):
+        return incoming
     if not incoming or incoming in (_UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY):
         return existing
     return existing
@@ -1630,20 +1632,44 @@ def _normalize_riot_id_seed(raw: str) -> str | None:
     return None
 
 
-def _load_riot_id_seeds(
+def _normalize_seed_family_label(raw: str) -> str | None:
+    value = raw.strip()
+    if not value:
+        return None
+    value = re.sub(r"[^A-Za-z0-9_.:-]+", "_", value)
+    value = value.strip("_")
+    return value[:120] if value else None
+
+
+def _parse_riot_id_seed_record(raw: str) -> tuple[str, str] | None:
+    if "\t" in raw:
+        seed_text, family_text = raw.split("\t", 1)
+    else:
+        seed_text, family_text = raw, ""
+    normalized = _normalize_riot_id_seed(seed_text)
+    if not normalized:
+        return None
+    seed_family = _normalize_seed_family_label(family_text) or "manual_riot_id"
+    return normalized, seed_family
+
+
+def _load_riot_id_seed_records(
     *,
     riot_ids: tuple[str, ...] = (),
     riot_id_files: tuple[Path, ...] = (),
-) -> list[str]:
-    ordered: list[str] = []
+) -> list[tuple[str, str]]:
+    ordered: list[tuple[str, str]] = []
     seen: set[str] = set()
 
     def add_candidate(raw: str) -> None:
-        normalized = _normalize_riot_id_seed(raw)
-        if not normalized or normalized in seen:
+        parsed = _parse_riot_id_seed_record(raw)
+        if not parsed:
+            return
+        normalized, seed_family = parsed
+        if normalized in seen:
             return
         seen.add(normalized)
-        ordered.append(normalized)
+        ordered.append((normalized, seed_family))
 
     for riot_id in riot_ids:
         add_candidate(str(riot_id))
@@ -1657,6 +1683,20 @@ def _load_riot_id_seeds(
             add_candidate(line)
 
     return ordered
+
+
+def _load_riot_id_seeds(
+    *,
+    riot_ids: tuple[str, ...] = (),
+    riot_id_files: tuple[Path, ...] = (),
+) -> list[str]:
+    return [
+        riot_id
+        for riot_id, _ in _load_riot_id_seed_records(
+            riot_ids=riot_ids,
+            riot_id_files=riot_id_files,
+        )
+    ]
 
 
 def _get_riot_bridge(con: sqlite3.Connection, public_puuid: str) -> tuple[str, str | None] | None:
@@ -1848,8 +1888,8 @@ def _seed_manual_riot_ids(
     pending_cap: int = 0,
 ) -> int:
     added = 0
-    normalized_ids = _load_riot_id_seeds(riot_ids=riot_ids)
-    if not normalized_ids:
+    seed_records = _load_riot_id_seed_records(riot_ids=riot_ids)
+    if not seed_records:
         return 0
 
     now_ms = _now_ms()
@@ -1866,11 +1906,11 @@ def _seed_manual_riot_ids(
         )
         return 0
 
-    total_chunks = (len(normalized_ids) + _LCU_RIOT_ID_LOOKUP_BATCH - 1) // _LCU_RIOT_ID_LOOKUP_BATCH
+    total_chunks = (len(seed_records) + _LCU_RIOT_ID_LOOKUP_BATCH - 1) // _LCU_RIOT_ID_LOOKUP_BATCH
     resolved_total = 0
     target_ready_total = 0
     for chunk_idx, chunk in enumerate(
-        _iter_chunks([("", riot_id) for riot_id in normalized_ids], _LCU_RIOT_ID_LOOKUP_BATCH),
+        _iter_chunks([(seed_family, riot_id) for riot_id, seed_family in seed_records], _LCU_RIOT_ID_LOOKUP_BATCH),
         start=1,
     ):
         resolved = lookup_summoners_by_riot_ids(lcu, [riot_id for _, riot_id in chunk])
@@ -1879,7 +1919,7 @@ def _seed_manual_riot_ids(
             for item in resolved
         }
         resolved_total += len(by_alias)
-        for _, riot_id in chunk:
+        for seed_family, riot_id in chunk:
             match = by_alias.get(riot_id)
             lcu_puuid = str(match.get("puuid") or "").strip() if match else ""
             if not lcu_puuid:
@@ -1892,8 +1932,12 @@ def _seed_manual_riot_ids(
                 lcu_puuid,
                 depth=0,
                 source="manual_riot_id",
-                discovered_match_created_ms=0,
+                # Keep freshly refreshed OPGG/manual roots ahead of stale match
+                # backlog; their own history fetch will establish the true
+                # newest match timestamp before descendants are enqueued.
+                discovered_match_created_ms=now_ms,
                 initial_delay_ms=_MANUAL_SEED_HYDRATION_DELAY_MS,
+                seed_family=seed_family,
             )
             if result not in {"new", "requeued"}:
                 continue
@@ -2353,19 +2397,22 @@ def run_snowball(
         elif include_riot_tier:
             print(f"[snowball] startup skip  source=riot_tier  reason=backoff  worker={worker_id}", flush=True)
 
-        manual_riot_ids = _load_riot_id_seeds(
+        manual_riot_id_records = _load_riot_id_seed_records(
             riot_ids=seed_riot_ids,
             riot_id_files=seed_riot_id_files,
         )
-        if manual_riot_ids and _source_family_available("manual_riot_id"):
+        if manual_riot_id_records and _source_family_available("manual_riot_id"):
             print(
-                f"[snowball] preparing manual_riot_id seeds  count={len(manual_riot_ids)}  worker={worker_id}",
+                f"[snowball] preparing manual_riot_id seeds  count={len(manual_riot_id_records)}  worker={worker_id}",
                 flush=True,
             )
             stats.seeded_players += _seed_manual_riot_ids(
                 con,
                 lcu,
-                riot_ids=tuple(manual_riot_ids),
+                riot_ids=tuple(
+                    f"{riot_id}\t{seed_family}"
+                    for riot_id, seed_family in manual_riot_id_records
+                ),
                 target_queues=target_queues,
                 history_window=history_window,
                 games_per_player=games_per_player,
@@ -2375,7 +2422,7 @@ def run_snowball(
                 f"[snowball] finished manual_riot_id seeds  enqueued={stats.seeded_players}  worker={worker_id}",
                 flush=True,
             )
-        elif manual_riot_ids:
+        elif manual_riot_id_records:
             print(
                 f"[snowball] startup skip  source=manual_riot_id  reason=backoff  worker={worker_id}",
                 flush=True,
