@@ -1,4 +1,4 @@
-"""Real-time ARAM champion recommendation from LR + pair synergy stats.
+"""Real-time ARAM champion recommendation from composition LR swap deltas.
 
 Why LR and not DeepSets:
   At current data scale (~18k games, 2 patches) the LR baseline outperforms
@@ -32,6 +32,37 @@ import numpy as np
 
 from aram_nn.pair_synergy import PairSynergyStats
 
+try:
+    from scripts.champion_roles import ROLE_ORDER
+except ImportError:  # pragma: no cover - packaged runtime fallback.
+    ROLE_ORDER = ("Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank")
+
+SCORE_COLUMNS = (
+    "wave_clear_score",
+    "cc_score",
+    "engage_score",
+    "damage_score",
+    "poke_score",
+    "sustain_score",
+    "frontline_score",
+)
+CORE_COLUMNS = ("wave_clear_score", "cc_score", "engage_score", "damage_score")
+LACK_THRESHOLDS = {
+    "wave_clear_score": 3.0,
+    "cc_score": 3.0,
+    "engage_score": 2.2,
+    "damage_score": 5.5,
+    "poke_score": 2.0,
+    "sustain_score": 1.5,
+    "frontline_score": 1.8,
+}
+ROLE_COLUMNS = tuple(ROLE_ORDER)
+AD_BINS = ("<35% AD", "35-45% AD", "45-55% AD", "55-65% AD", ">=65% AD")
+FRONT_GROUPS = ("0 front", "1 front", "2+ front")
+ENGAGE_GROUPS = ("engage lack", "engage ok")
+WAVE_GROUPS = ("wave lack", "wave ok")
+POKE_GROUPS = ("poke lack", "poke ok")
+
 
 @dataclass
 class LRModel:
@@ -62,8 +93,138 @@ class LRModel:
         return float((self.coef[champ_idx] - self.coef_mean) / self.coef_std)
 
 
+@dataclass(frozen=True)
+class ChampionProfile:
+    cid: int
+    scores: dict[str, float]
+    roles: dict[str, float]
+    physical_dpm: float
+    magic_dpm: float
+    true_dpm: float
+
+
+@dataclass(frozen=True)
+class TeamProfile:
+    ad_share: float
+    true_share: float
+    ad_ap_balance: float
+    front_count: int
+    front_sum: float
+    score_sums: dict[str, float]
+    lacks: dict[str, float]
+    roles: dict[str, float]
+    core_lacks_count: float
+    all_lacks_count: float
+
+
+@dataclass
+class CompositionLRModel:
+    """Champion-identity + team-composition LR used for live swap deltas."""
+
+    coef: np.ndarray
+    intercept: float
+    feature_names: list[str]
+    champ_to_idx: dict[int, int]
+    profiles: dict[int, ChampionProfile]
+
+    def __post_init__(self) -> None:
+        self.feature_to_idx = {name: idx for idx, name in enumerate(self.feature_names)}
+
+    def predict_team_prob(self, team_ids: Iterable[int]) -> tuple[float, list[int]]:
+        contribution, unknown = self.team_logit_contribution(team_ids)
+        if unknown:
+            return float("nan"), unknown
+        logit = float(contribution + self.intercept)
+        return float(_sigmoid(logit)), []
+
+    def team_logit_contribution(self, team_ids: Iterable[int]) -> tuple[float, list[int]]:
+        x, unknown = _build_composition_feature_vector(team_ids, self)
+        if unknown:
+            return float("nan"), unknown
+        return float(x @ self.coef), []
+
+
 def _sigmoid(x: float | np.ndarray) -> float | np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
+
+
+def _logit_prob(p: float) -> float:
+    p = min(max(float(p), 1e-6), 1.0 - 1e-6)
+    return math.log(p / (1.0 - p))
+
+
+def _ad_bin_index(ad_share: float) -> int:
+    if ad_share < 0.35:
+        return 0
+    if ad_share < 0.45:
+        return 1
+    if ad_share < 0.55:
+        return 2
+    if ad_share < 0.65:
+        return 3
+    return 4
+
+
+def _count_group_index(count: float) -> int:
+    if count <= 0:
+        return 0
+    if count == 1:
+        return 1
+    return 2
+
+
+def _team_profile_from_ids(
+    team_ids: Iterable[int],
+    profiles: dict[int, ChampionProfile],
+) -> tuple[TeamProfile | None, list[int]]:
+    physical = magic = true = 0.0
+    score_sums = {name: 0.0 for name in SCORE_COLUMNS}
+    roles = {role: 0.0 for role in ROLE_COLUMNS}
+    unknown: list[int] = []
+    team_profile_rows: list[ChampionProfile] = []
+
+    for cid_raw in team_ids:
+        cid = int(cid_raw)
+        profile = profiles.get(cid)
+        if profile is None:
+            unknown.append(cid)
+            continue
+        team_profile_rows.append(profile)
+        physical += profile.physical_dpm
+        magic += profile.magic_dpm
+        true += profile.true_dpm
+        for name in SCORE_COLUMNS:
+            score_sums[name] += profile.scores[name]
+        for role in ROLE_COLUMNS:
+            roles[role] += profile.roles[role]
+
+    if unknown:
+        return None, unknown
+
+    ad_ap_den = max(physical + magic, 1e-9)
+    all_den = max(physical + magic + true, 1e-9)
+    ad_share = physical / ad_ap_den
+    true_share = true / all_den
+    lacks = {
+        name: 1.0 if score_sums[name] < LACK_THRESHOLDS[name] else 0.0
+        for name in SCORE_COLUMNS
+    }
+    front_count = sum(
+        1 for profile in team_profile_rows
+        if profile.scores["frontline_score"] >= 2.0
+    )
+    return TeamProfile(
+        ad_share=ad_share,
+        true_share=true_share,
+        ad_ap_balance=1.0 - abs(ad_share - (magic / ad_ap_den)),
+        front_count=front_count,
+        front_sum=score_sums["frontline_score"],
+        score_sums=score_sums,
+        lacks=lacks,
+        roles=roles,
+        core_lacks_count=sum(lacks[name] for name in CORE_COLUMNS),
+        all_lacks_count=sum(lacks.values()),
+    ), []
 
 
 def _vocab_sidecar_path(pt_path: Path) -> Path:
@@ -147,6 +308,46 @@ def _load_pickle_no_sklearn(pkl_path: Path) -> tuple[np.ndarray, float]:
     return coef, intercept
 
 
+def _as_champion_profile(payload: dict) -> ChampionProfile:
+    return ChampionProfile(
+        cid=int(payload["cid"]),
+        scores={name: float(value) for name, value in payload["scores"].items()},
+        roles={name: float(value) for name, value in payload["roles"].items()},
+        physical_dpm=float(payload.get("physical_dpm", 0.0)),
+        magic_dpm=float(payload.get("magic_dpm", 0.0)),
+        true_dpm=float(payload.get("true_dpm", 0.0)),
+    )
+
+
+def load_composition_lr(path: Path) -> CompositionLRModel:
+    """Load the saved composition LR without importing sklearn."""
+    path = Path(path)
+    if path.is_dir():
+        path = path / "model.pkl"
+    with path.open("rb") as f:
+        payload = _NoSklearnUnpickler(f).load()
+
+    model = payload["model"]
+    coef = np.asarray(model.coef_, dtype=np.float64).reshape(-1)
+    intercept = float(np.asarray(model.intercept_, dtype=np.float64).reshape(-1)[0])
+    feature_names = [str(name) for name in payload["feature_names"]]
+    if coef.shape[0] != len(feature_names):
+        raise ValueError(
+            f"Composition LR coef length ({coef.shape[0]}) != feature count ({len(feature_names)})"
+        )
+    profiles = {
+        int(cid): _as_champion_profile(profile)
+        for cid, profile in payload["champion_profiles"].items()
+    }
+    return CompositionLRModel(
+        coef=coef,
+        intercept=intercept,
+        feature_names=feature_names,
+        champ_to_idx={int(k): int(v) for k, v in payload["champ_to_idx"].items()},
+        profiles=profiles,
+    )
+
+
 def load_lr(lr_path: Path, vocab_source: Path) -> LRModel:
     """Load LR coefficients + champ_to_idx vocab without importing sklearn.
 
@@ -202,6 +403,63 @@ def _build_feature_vector(
     return X, unknown
 
 
+def _set_feature(x: np.ndarray, model: CompositionLRModel, name: str, value: float) -> None:
+    idx = model.feature_to_idx.get(name)
+    if idx is not None:
+        x[idx] = value
+
+
+def _build_composition_feature_vector(
+    my_team_ids: Iterable[int],
+    model: CompositionLRModel,
+) -> tuple[np.ndarray, list[int]]:
+    team_ids = [int(cid) for cid in my_team_ids]
+    x = np.zeros(len(model.feature_names), dtype=np.float64)
+    unknown = []
+    for cid in team_ids:
+        idx = model.champ_to_idx.get(cid)
+        if idx is None:
+            unknown.append(cid)
+            continue
+        _set_feature(x, model, f"champion:{cid}", 1.0)
+
+    team, profile_unknown = _team_profile_from_ids(team_ids, model.profiles)
+    unknown.extend(profile_unknown)
+    if unknown or team is None:
+        return x, sorted(set(unknown))
+
+    linear_values = {
+        "ad_share": team.ad_share,
+        "ad_ap_balance": team.ad_ap_balance,
+        "true_share": team.true_share,
+        "front_count": float(team.front_count),
+        "front_sum": team.front_sum,
+        "core_lacks_count": team.core_lacks_count,
+        "all_lacks_count": team.all_lacks_count,
+    }
+    for name in SCORE_COLUMNS:
+        linear_values[f"sum_{name}"] = team.score_sums[name]
+        linear_values[f"lack_{name}"] = team.lacks[name]
+    for role in ROLE_COLUMNS:
+        linear_values[f"role_{role.lower()}"] = team.roles[role]
+    for name, value in linear_values.items():
+        _set_feature(x, model, name, float(value))
+
+    ad_bin = AD_BINS[_ad_bin_index(team.ad_share)]
+    front_group = FRONT_GROUPS[_count_group_index(float(team.front_count))]
+    wave_group = WAVE_GROUPS[int(team.lacks["wave_clear_score"] == 0.0)]
+    engage_group = ENGAGE_GROUPS[int(team.lacks["engage_score"] == 0.0)]
+    poke_group = POKE_GROUPS[int(team.lacks["poke_score"] == 0.0)]
+
+    _set_feature(x, model, f"ad_front:{front_group}:{ad_bin}", 1.0)
+    _set_feature(x, model, f"wave_engage:{wave_group}:{engage_group}", 1.0)
+    _set_feature(x, model, f"poke_front:{front_group}:{poke_group}", 1.0)
+    for role in ROLE_COLUMNS:
+        _set_feature(x, model, f"role_ad:{ad_bin}:{role.lower()}", team.roles[role])
+
+    return x, []
+
+
 def predict_blue_prob(
     my_team_ids: Iterable[int],
     model: LRModel,
@@ -219,13 +477,13 @@ def predict_blue_prob(
 class Suggestion:
     champion_id: int
     source: str            # "keep" or "bench"
-    win_prob: float        # absolute P(blue wins) under "average opponent"
-    delta: float           # legacy display alias for score
+    win_prob: float        # absolute P(blue wins) under unknown/zeroed opponent
+    delta: float           # display alias for score
     prob_delta_lr: float   # LR win_prob - baseline
     synergy_delta: float   # candidate anchor synergy minus current anchor synergy
     synergy_se: float      # combined SE for the synergy estimate
     anchors_covered: int   # number of teammate anchors with usable pair stats
-    score: float           # 70% synergy + 30% LR prob delta
+    score: float           # ML swap delta, or old synergy/LR blend fallback
     z_score: float         # standardized champion strength in the current meta:
                            #   (coef[champ] - mean(coef)) / std(coef)
                            # ~ +1 means roughly top 16%, ~ +2 means top 2.5%.
@@ -278,12 +536,13 @@ def suggest_for_cell(
     bench_ids: list[int],
     model: LRModel,
     pair_stats: PairSynergyStats | None = None,
+    composition_model: CompositionLRModel | None = None,
 ) -> list[Suggestion]:
     """Rank candidates for the local player's cell.
 
-    Candidates = {my_current} ∪ bench.  For each, swap that champion into the
-    local cell, compute ally-anchor synergy, blend it with the LR probability
-    delta, and sort by descending score.
+    Candidates are the current champion plus the reroll bench.  If the
+    composition model is available, the score is its direct probability delta.
+    Otherwise the old anchor-synergy/LR blend is used as a fallback.
 
     Args:
       my_team_ids : list of 5 championIds currently locked into the blue team
@@ -298,6 +557,12 @@ def suggest_for_cell(
         )
 
     baseline = predict_blue_prob(my_team_ids, model)
+    baseline_logit = _logit_prob(baseline)
+    ml_baseline_logit = float("nan")
+    use_ml_delta = False
+    if composition_model is not None:
+        ml_baseline_logit, ml_unknown = composition_model.team_logit_contribution(my_team_ids)
+        use_ml_delta = not ml_unknown and not math.isnan(ml_baseline_logit)
     anchors = [int(c) for c in my_team_ids if int(c) != int(my_current_id)]
     current_synergy, _, _ = _combine_synergy(anchors, int(my_current_id), pair_stats)
 
@@ -321,8 +586,9 @@ def suggest_for_cell(
             continue
 
         swapped = [c if c != my_current_id else cid for c in my_team_ids]
-        prob = predict_blue_prob(swapped, model)
-        prob_delta_lr = prob - baseline
+        lr_prob = predict_blue_prob(swapped, model)
+        prob_delta_lr = lr_prob - baseline
+        prob = lr_prob
         candidate_synergy, synergy_se, anchors_covered = _combine_synergy(
             anchors, int(cid), pair_stats
         )
@@ -330,7 +596,15 @@ def suggest_for_cell(
             candidate_synergy - current_synergy
             if anchors_covered > 0 else 0.0
         )
-        score = 0.7 * synergy_delta + 0.3 * prob_delta_lr
+        if use_ml_delta and composition_model is not None:
+            ml_logit, ml_unknown = composition_model.team_logit_contribution(swapped)
+            if not ml_unknown and not math.isnan(ml_logit):
+                prob = float(_sigmoid(baseline_logit + ml_logit - ml_baseline_logit))
+                score = prob - baseline
+            else:
+                score = 0.7 * synergy_delta + 0.3 * prob_delta_lr
+        else:
+            score = 0.7 * synergy_delta + 0.3 * prob_delta_lr
         out.append(Suggestion(
             champion_id=int(cid), source=source,
             win_prob=prob, delta=score,
