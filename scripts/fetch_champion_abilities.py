@@ -225,6 +225,7 @@ def build_catalogue(
                 "title_en": entry.get("title", ""),
                 "title_zh": localized.get("title", ""),
                 "tags": entry.get("tags") or [],
+                "stats": entry.get("stats") or {},
                 "partype_en": entry.get("partype", ""),
                 "partype_zh": localized.get("partype", ""),
                 "passive": {
