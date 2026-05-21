@@ -392,60 +392,134 @@
       color: var(--ink);
       font: inherit;
     }
-    .skill-rank-list {
-      max-height: min(64vh, 42rem);
-      overflow: auto;
+    .skill-filter-bar {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .45rem;
+      align-items: center;
+      padding: .65rem;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(255,255,255,.56);
+      background: rgba(255,255,255,.48);
     }
-    .skill-rank-row {
+    .skill-filter-btn {
+      padding: .42rem .62rem;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 800;
+      background: rgba(255,255,255,.7);
+    }
+    .skill-filter-btn.active {
+      border-color: #0f766e;
+      background: #0f766e;
+      color: #fff;
+    }
+    .skill-grid {
+      grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: 3rem 2.25rem minmax(0, 1.05fr) minmax(0, 1fr) auto auto;
-      gap: .65rem;
-      align-items: center;
-      padding: .55rem .7rem;
-      border-bottom: 1px solid rgba(215,208,194,.72);
-      font-size: .86rem;
+      grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+      gap: .58rem;
+      align-items: stretch;
     }
-    .skill-rank-row:last-child {
-      border-bottom: 0;
-    }
-    .skill-rank-row strong,
-    .skill-rank-row span {
+    .skill-card {
+      aspect-ratio: 1 / 1;
       min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: .38rem;
+      padding: .52rem;
+      border: 1px solid rgba(215,208,194,.86);
+      border-radius: 8px;
+      background: rgba(255,255,255,.66);
+      box-shadow: 0 8px 18px rgba(34,31,24,.06);
+      cursor: grab;
+      user-select: none;
     }
-    .skill-rank-row small {
-      color: var(--muted);
+    .skill-card:hover {
+      border-color: rgba(15,118,110,.45);
+    }
+    .skill-card.dragging {
+      opacity: .42;
+    }
+    .skill-card.drop-target {
+      outline: 3px solid rgba(15,118,110,.32);
+      outline-offset: 2px;
+    }
+    .skill-card-head {
+      display: flex;
+      align-items: center;
+      gap: .42rem;
+      min-width: 0;
     }
     .skill-rank-icon {
-      width: 2.15rem;
-      height: 2.15rem;
+      width: 2.4rem;
+      height: 2.4rem;
       border-radius: 7px;
       border: 1px solid rgba(32,35,31,.14);
       object-fit: cover;
       background: rgba(255,255,255,.72);
+      flex: 0 0 auto;
     }
-    .skill-rank-actions {
-      display: inline-flex;
-      gap: .25rem;
-      justify-self: end;
+    .skill-card-name {
+      min-width: 0;
+      flex: 1 1 auto;
+      font-weight: 850;
+      line-height: 1;
+      font-size: 1.45rem;
+      text-align: center;
+      letter-spacing: 0;
     }
-    .skill-rank-actions button {
-      min-width: 2rem;
-      min-height: 2rem;
-      padding: .25rem .42rem;
+    .skill-card-score {
+      align-self: center;
+      justify-self: center;
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: .28rem;
+      align-items: center;
+    }
+    .skill-score-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .28rem;
+    }
+    .skill-score-input {
+      width: 100%;
+      min-height: 2.05rem;
+      padding: .22rem .35rem;
+      border: 1px solid var(--line);
       border-radius: 7px;
-      font-size: .78rem;
+      background: rgba(255,255,255,.76);
+      color: var(--ink);
+      font-size: .92rem;
       font-weight: 800;
       line-height: 1;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .skill-inline-step {
+      min-width: 0;
+      min-height: 1.5rem;
+      padding: 0;
+      border-radius: 7px;
+      font-size: .78rem;
+      font-weight: 850;
+      line-height: 1;
+    }
+    .skill-score-input.manual {
+      border-color: rgba(15,118,110,.45);
+      background: rgba(15,118,110,.09);
+      color: #075f59;
+    }
+    .skill-score-input:focus {
+      outline: 2px solid rgba(15,118,110,.28);
+      outline-offset: 1px;
     }
     .skill-board {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: .9rem;
       padding: .75rem;
     }
@@ -517,8 +591,27 @@
     }
     .spell-review-list {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(8.2rem, 1fr));
       gap: .5rem;
+    }
+    .score-formula {
+      display: none;
+      margin-top: .55rem;
+      padding: .55rem .65rem;
+      border: 1px solid rgba(215,208,194,.86);
+      border-radius: 8px;
+      background: rgba(255,255,255,.5);
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.45;
+    }
+    .score-formula.visible { display: block; }
+    .score-formula strong {
+      color: var(--ink);
+      font-weight: 800;
+    }
+    .score-formula .formula-text {
+      min-width: 0;
     }
     .spell-card {
       border: 1px solid var(--line);
@@ -705,6 +798,7 @@
           <span id="spellReviewHint">Click a spell, then use ↑ / ↓ to tune it.</span>
         </div>
         <div id="spellReviewList" class="spell-review-list"></div>
+        <div id="scoreFormula" class="score-formula"></div>
         <div class="spell-review-controls">
           <span id="spellReviewStatus">No manual spell adjustment.</span>
           <div class="buttons">
@@ -732,14 +826,40 @@
       wave: [0.55, 0.30, 0.15],
       engage: [0.60, 0.24, 0.10],
     };
+    const BASIC_ATTACK_SPELL = "AA";
+    const SKILL_DROP_SCORE_DELTA = 0.01;
     const SKILL_RANK_CATEGORIES = [
-      { key: "aoe_control", label: "群體控制", hint: "AOE hard CC / displacement" },
-      { key: "aoe_slow", label: "群體緩速", hint: "AOE soft slow" },
-      { key: "single_control", label: "單體控制", hint: "single-target hard CC / hook" },
-      { key: "single_slow", label: "單體緩速", hint: "single-target soft slow" },
+      { key: "aoe_control", label: "群控", hint: "AOE hard CC / displacement" },
+      { key: "single_control", label: "單體控", hint: "single-target hard CC / hook" },
+      { key: "aoe_slow", label: "緩速", hint: "AOE soft slow" },
+      { key: "single_slow", label: "緩速", hint: "single-target soft slow" },
       { key: "mobility", label: "位移", hint: "pure dash / no CC" },
       { key: "damage", label: "傷害", hint: "damage pressure without CC" },
     ];
+    const SKILL_FILTERS = [
+      { key: "", label: "全部" },
+      { key: "aoe_control", label: "群控" },
+      { key: "single_control", label: "單體控" },
+      { key: "slow", label: "緩速" },
+      { key: "mobility", label: "位移" },
+      { key: "damage", label: "傷害" },
+    ];
+    const SKILL_FILTER_KEYS = new Set(SKILL_FILTERS.map(filter => filter.key));
+    const SKILL_CATEGORY_OVERRIDES = {
+      "Amumu:R": "aoe_control",
+      "Azir:R": "aoe_control",
+      "Cassiopeia:R": "aoe_control",
+      "Fizz:R": "aoe_control",
+      "Gragas:R": "aoe_control",
+      "Jayce:Q": "damage",
+      "Maokai:R": "aoe_control",
+      "Rengar:R": "aoe_control",
+      "Sett:R": "single_control",
+      "Sona:R": "aoe_control",
+      "Sylas:E": "single_control",
+      "Veigar:R": "aoe_control",
+      "Zyra:R": "aoe_control",
+    };
     const ROLE_FILTERS = DATA.role_order || ["Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank"];
     const ROLE_LABELS = DATA.role_labels || {};
     const stateKey = `semantic-score-review:${DATA.semantic_formula_version || "v1"}`;
@@ -752,8 +872,10 @@
     let lastPointer = { x: 0, y: 0 };
     let activeMetric = localStorage.getItem("semantic-score-review:active-tab") || "wave";
     let activeRole = localStorage.getItem("semantic-score-review:role-filter") || "";
+    let activeSkillFilter = localStorage.getItem("semantic-score-review:skill-filter") || "";
+    if (!SKILL_FILTER_KEYS.has(activeSkillFilter)) activeSkillFilter = "";
     let noteTarget = null;
-    let activeSpellIndex = 0;
+    let activeSpellKey = "";
 
     function loadState() {
       try {
@@ -872,6 +994,7 @@
         P: "被動",
         Passive: "被動",
         passive: "被動",
+        AA: "普攻",
       };
       return String(raw || "")
         .split(",")
@@ -905,11 +1028,20 @@
           baseScore: score,
         });
       });
+      if (metricKey === "wave") {
+        bySpell.set(BASIC_ATTACK_SPELL, {
+          spell: BASIC_ATTACK_SPELL,
+          shape: "basic_attack",
+          condition: "always",
+          baseScore: clampScoreFloor(c.st_floor || 0),
+        });
+      }
       const topSpells = String(c[metric.spellKey] || "")
         .split(",")
         .map(part => part.trim())
         .filter(Boolean)
         .slice(0, 3);
+      const rowLimit = metricKey === "wave" ? Number.POSITIVE_INFINITY : 3;
       const rows = topSpells.map(spell => bySpell.get(spell) || {
         spell,
         shape: "",
@@ -917,10 +1049,10 @@
         baseScore: 0,
       });
       for (const item of bySpell.values()) {
-        if (rows.length >= 3) break;
+        if (rows.length >= rowLimit) break;
         if (!rows.some(row => row.spell === item.spell)) rows.push(item);
       }
-      return rows.slice(0, 3);
+      return rows.slice(0, rowLimit);
     }
 
     function adjustedAbilityRows(c, metricKey) {
@@ -935,28 +1067,58 @@
         .sort((a, b) => b.adjustedScore - a.adjustedScore || a.spell.localeCompare(b.spell));
     }
 
+    function baseAbilityRows(c, metricKey) {
+      return parseAbilityBreakdown(c, metricKey)
+        .map(row => ({
+          ...row,
+          adjustment: 0,
+          adjustedScore: row.baseScore,
+        }))
+        .sort((a, b) => b.baseScore - a.baseScore || a.spell.localeCompare(b.spell));
+    }
+
+    function weightedAbilityScore(rows, scoreField, metricKey) {
+      const weights = TOP3_WEIGHTS[metricKey] || [1, 0, 0];
+      return rows.reduce((sum, row, idx) => sum + (weights[idx] || 0) * Number(row[scoreField] || 0), 0);
+    }
+
+    function metricFormula(c, metricKey) {
+      const baseRows = baseAbilityRows(c, metricKey);
+      const adjustedRows = adjustedAbilityRows(c, metricKey);
+      const baseWeighted = weightedAbilityScore(baseRows, "baseScore", metricKey);
+      const adjustedWeighted = weightedAbilityScore(adjustedRows, "adjustedScore", metricKey);
+      const storedBaseScore = Number(c[metricKey] || baseWeighted);
+      const hasSpellAdjustment = adjustedRows.some(row => row.adjustment);
+      return {
+        baseRows,
+        adjustedRows,
+        baseWeighted,
+        adjustedWeighted,
+        storedBaseScore,
+        hasAdjustment: hasSpellAdjustment,
+      };
+    }
+
     function adjustedSpellChain(c, metricKey) {
       return adjustedAbilityRows(c, metricKey).map(row => row.spell).join(",");
     }
 
     function metricScoreAdjustment(c, metricKey) {
       if (!c) return 0;
-      const rows = parseAbilityBreakdown(c, metricKey);
-      const weights = TOP3_WEIGHTS[metricKey] || [1, 0, 0];
-      const baseWeighted = rows.reduce(
-        (sum, row, idx) => sum + (weights[idx] || 0) * row.baseScore,
-        0
-      );
-      const adjustedRows = adjustedAbilityRows(c, metricKey);
-      const adjustedWeighted = adjustedRows.reduce(
-        (sum, row, idx) => sum + (weights[idx] || 0) * row.adjustedScore,
-        0
-      );
-      return adjustedWeighted - baseWeighted;
+      const formula = metricFormula(c, metricKey);
+      if (!formula.hasAdjustment) return 0;
+      return formula.adjustedWeighted - formula.baseWeighted;
     }
 
     function adjustedMetricScore(c, metricKey) {
+      const formula = metricFormula(c, metricKey);
+      if (metricKey === "wave") return formula.adjustedWeighted;
       return Number(c[metricKey] || 0) + metricScoreAdjustment(c, metricKey);
+    }
+
+    function metricBaseScore(c, metricKey) {
+      const formula = metricFormula(c, metricKey);
+      return metricKey === "wave" ? formula.baseWeighted : Number(c[metricKey] || 0);
     }
 
     function clampScoreFloor(value) {
@@ -1234,7 +1396,7 @@
     function openNoteDialog(metric, alias) {
       const c = champion(alias);
       noteTarget = { metric, alias };
-      activeSpellIndex = 0;
+      activeSpellKey = "";
       document.getElementById("noteTitle").textContent = `${c.name_en} - ${metric.toUpperCase()} note`;
       document.getElementById("noteSubtitle").textContent =
         `${c.name_zh || c.alias} - ↑/↓ tune selected skill, Enter saves, Shift+Enter adds a new line`;
@@ -1249,15 +1411,18 @@
       if (!noteTarget) return;
       const c = champion(noteTarget.alias);
       const rows = adjustedAbilityRows(c, noteTarget.metric);
-      activeSpellIndex = Math.max(0, Math.min(rows.length - 1, activeSpellIndex));
+      if (!rows.some(row => row.spell === activeSpellKey)) {
+        activeSpellKey = rows[0]?.spell || "";
+      }
       const list = document.getElementById("spellReviewList");
       list.innerHTML = rows.map((row, idx) => {
         const adjust = row.adjustment || 0;
         const finalScore = row.adjustedScore;
         const meta = [row.shape, row.condition].filter(Boolean).join(" / ") || "manual review";
+        const active = row.spell === activeSpellKey;
         return `
-          <button class="spell-card ${idx === activeSpellIndex ? "active" : ""} ${adjust ? "manual" : ""}"
-            type="button" data-spell-index="${idx}" aria-pressed="${idx === activeSpellIndex ? "true" : "false"}">
+          <button class="spell-card ${active ? "active" : ""} ${adjust ? "manual" : ""}"
+            type="button" data-spell="${row.spell}" aria-pressed="${active ? "true" : "false"}">
             <div class="spell-key">${row.spell}</div>
             <div class="spell-meta">${meta}</div>
             <div class="spell-score-line">
@@ -1269,23 +1434,49 @@
       }).join("");
       list.querySelectorAll(".spell-card").forEach(button => {
         button.addEventListener("click", () => {
-          activeSpellIndex = Number(button.dataset.spellIndex || 0);
+          activeSpellKey = button.dataset.spell || "";
           renderSpellReview();
         });
       });
-      const active = rows[activeSpellIndex];
+      renderScoreFormula(c, rows);
+      const active = rows.find(row => row.spell === activeSpellKey);
       const totalAdjust = metricScoreAdjustment(c, noteTarget.metric);
       document.getElementById("spellReviewStatus").textContent = active
-        ? `Selected ${active.spell} · weighted score delta ${signedScore(totalAdjust) || "0.00"}`
+        ? `Selected ${active.spell} · score delta ${signedScore(totalAdjust) || "0.00"}`
         : "No spell score data.";
+    }
+
+    function renderScoreFormula(c, rows) {
+      const host = document.getElementById("scoreFormula");
+      if (!host) return;
+      if (!noteTarget || noteTarget.metric !== "wave") {
+        host.classList.remove("visible");
+        host.innerHTML = "";
+        return;
+      }
+      const formula = metricFormula(c, "wave");
+      const topRows = formula.adjustedRows.slice(0, 3).map((row, idx) => {
+        const weights = TOP3_WEIGHTS.wave || [];
+        return `${row.spell} ${formatScore(row.adjustedScore)}×${formatScore(weights[idx] || 0)}`;
+      }).join(" + ");
+      const aa = formula.adjustedRows.find(row => row.spell === BASIC_ATTACK_SPELL);
+      host.classList.add("visible");
+      host.innerHTML = `
+        <div class="formula-text">
+          <strong>Wave formula</strong><br>
+          AA 是每位英雄都有的第四個技能，基礎值 ${formatScore(aa?.baseScore || 0)}。目前取前三名：
+          ${topRows || "no weighted skills"} = ${formatScore(formula.adjustedWeighted)}
+        </div>
+      `;
     }
 
     function adjustActiveSpell(step) {
       if (!noteTarget) return;
       const c = champion(noteTarget.alias);
       const rows = adjustedAbilityRows(c, noteTarget.metric);
-      const active = rows[activeSpellIndex];
+      const active = rows.find(row => row.spell === activeSpellKey) || rows[0];
       if (!active) return;
+      activeSpellKey = active.spell;
       const current = getSpellAdjustment(noteTarget.metric, noteTarget.alias, active.spell);
       setSpellAdjustment(noteTarget.metric, noteTarget.alias, active.spell, current + step);
       renderSpellReview();
@@ -1298,8 +1489,9 @@
       if (!noteTarget) return;
       const c = champion(noteTarget.alias);
       const rows = adjustedAbilityRows(c, noteTarget.metric);
-      const active = rows[activeSpellIndex];
+      const active = rows.find(row => row.spell === activeSpellKey) || rows[0];
       if (!active) return;
+      activeSpellKey = active.spell;
       setSpellAdjustment(noteTarget.metric, noteTarget.alias, active.spell, 0);
       renderSpellReview();
       renderList(metricConfig(noteTarget.metric));
@@ -1328,75 +1520,46 @@
 
     function exportPayload() {
       const out = {
-        type: "semantic_score_manual_ranking",
+        type: "semantic_score_manual_changes",
+        schema_version: 2,
         generated_at: new Date().toISOString(),
         source_data_generated_at: DATA.generated_at,
         data_dragon_version: DATA.data_dragon_version,
-        rankings: {},
-        ranking_details: {},
-        notes: {},
-        changes: {},
       };
       for (const metric of METRICS) {
-        const order = scoreOrder(metric.key);
-        const modelRanks = rankMap(modelOrder[metric.key]);
-        out.rankings[metric.key] = order;
-        const rows = order.map((alias, idx) => {
-          const c = champion(alias);
-          const manualRank = idx + 1;
-          const modelRank = modelRanks.get(alias);
-          const note = getNote(metric.key, alias);
-          const adjustedRows = adjustedAbilityRows(c, metric.key);
-          const topSpells = adjustedRows.map(row => row.spell).join(",");
-          const spellScores = adjustedRows.map(row => {
-            const adjustment = row.adjustment || 0;
-            return {
-              spell: row.spell,
-              base_score: row.baseScore,
-              manual_adjustment: adjustment,
-              adjusted_score: Number(row.adjustedScore.toFixed(2)),
-              detail: [row.shape, row.condition].filter(Boolean).join(" / "),
-            };
-          });
-          const hasSpellAdjustment = spellScores.some(row => row.manual_adjustment);
-          const scoreAdjustment = metricScoreAdjustment(c, metric.key);
-          return {
-            champion_alias: alias,
-            champion_name_en: c.name_en,
-            champion_name_zh: c.name_zh,
-            score: c[metric.key],
-            score_adjustment: Number(scoreAdjustment.toFixed(2)),
-            adjusted_score: Number((c[metric.key] + scoreAdjustment).toFixed(2)),
-            model_rank: modelRank,
-            manual_rank: manualRank,
-            delta_rank: modelRank - manualRank,
-            top_spells: topSpells,
-            top_spells_display: formatSpellChain(topSpells),
-            spell_scores: spellScores,
-            note,
-            has_spell_adjustment: hasSpellAdjustment,
-          };
-        });
-        out.ranking_details[metric.key] = rows;
-        out.notes[metric.key] = Object.fromEntries(
-          rows.filter(row => row.note).map(row => [row.champion_alias, row.note])
-        );
-        out.spell_adjustments = out.spell_adjustments || {};
-        out.spell_adjustments[metric.key] = Object.fromEntries(
-          rows
-            .filter(row => row.has_spell_adjustment)
-            .map(row => [
-              row.champion_alias,
-              Object.fromEntries(
-                row.spell_scores
-                  .filter(score => score.manual_adjustment)
-                  .map(score => [score.spell, score.manual_adjustment])
-              ),
-            ])
-        );
-        out.changes[metric.key] = rows.filter(row => row.delta_rank !== 0 || row.note || row.has_spell_adjustment);
+        const notes = compactNotes(metric.key);
+        const spellAdjustments = compactSpellAdjustments(metric.key);
+        if (Object.keys(notes).length) {
+          out.notes = out.notes || {};
+          out.notes[metric.key] = notes;
+        }
+        if (Object.keys(spellAdjustments).length) {
+          out.spell_adjustments = out.spell_adjustments || {};
+          out.spell_adjustments[metric.key] = spellAdjustments;
+        }
       }
       return out;
+    }
+
+    function compactNotes(metric) {
+      return Object.fromEntries(
+        Object.entries(((state.notes || {})[metric]) || {})
+          .filter(([, note]) => String(note || "").trim())
+      );
+    }
+
+    function compactSpellAdjustments(metric) {
+      return Object.fromEntries(
+        Object.entries(((state.spellAdjustments || {})[metric]) || {})
+          .map(([alias, spells]) => [
+            alias,
+            Object.fromEntries(
+              Object.entries(spells || {})
+                .filter(([, adjustment]) => Number(adjustment || 0))
+            ),
+          ])
+          .filter(([, spells]) => Object.keys(spells).length)
+      );
     }
 
     function updateExport() {
@@ -1412,28 +1575,30 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `semantic-score-review-${stamp}.json`;
+      link.download = `semantic-score-changes-${stamp}.json`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    function skillRankingRows(metricKey, categoryKey = "") {
+    function skillRankingRows(metricKey, filterKey = "") {
       const scoreKey = metricKey === "wave" ? "wave_score" : "engage_score";
       return (DATA.skills || [])
         .map(row => {
           const baseScore = Number(row[scoreKey] || 0);
           const adjustment = getSpellAdjustment(metricKey, row.champion_alias, row.spell);
+          const category = skillCategory(row);
           return {
             ...row,
             baseScore,
             adjustment,
             adjustedScore: clampScoreFloor(baseScore + adjustment),
+            category,
           };
         })
         .filter(row => row.adjustedScore > 0)
-        .filter(row => !categoryKey || skillCategory(row) === categoryKey)
+        .filter(row => skillFilterMatches(row, filterKey))
         .filter(row => {
           const c = champion(row.champion_alias);
           if (!c || !matchesRole(c)) return false;
@@ -1448,6 +1613,13 @@
         );
     }
 
+    function skillFilterMatches(row, filterKey) {
+      if (!filterKey) return true;
+      const category = row.category || skillCategory(row);
+      if (filterKey === "slow") return category === "aoe_slow" || category === "single_slow";
+      return category === filterKey;
+    }
+
     function isGroupSkill(row) {
       return row.cc_type === "aoe_hard" ||
         row.shape === "circle" ||
@@ -1456,6 +1628,8 @@
     }
 
     function skillCategory(row) {
+      const override = SKILL_CATEGORY_OVERRIDES[`${row.champion_alias}:${row.spell}`];
+      if (override) return override;
       const ccType = row.cc_type || "none";
       const gate = row.engage_gate || "none";
       if (ccType === "soft_slow") return isGroupSkill(row) ? "aoe_slow" : "single_slow";
@@ -1466,64 +1640,177 @@
       return "utility";
     }
 
-    function skillRankRowHtml(row, idx) {
+    function skillCardHtml(row) {
       const c = champion(row.champion_alias) || {};
       const imageUrl = row.image_url || c.image_url || "";
-      const detail = [row.cc_type, row.engage_gate].filter(Boolean).join(" / ") ||
-        [row.shape, row.condition].filter(Boolean).join(" / ");
-      const scoreClass = row.adjustment < 0 ? "negative" : "";
+      const title = `${row.champion_name_en} ${row.spell} · ${row.spell_name_en || ""}`;
       return `
-        <div class="skill-rank-row">
-          <strong>${String(idx + 1).padStart(2, "0")}</strong>
-          ${imageUrl ? `<img class="skill-rank-icon" src="${imageUrl}" alt="" loading="lazy" />` : `<span></span>`}
-          <span title="${row.champion_name_en} ${row.spell}">${row.champion_name_en} ${row.spell}</span>
-          <span title="${row.spell_name_en}">${row.spell_name_en || ""}<br><small>${detail || "none"}</small></span>
-          <span class="score ${row.adjustment ? "manual" : ""}">
-            ${formatScore(row.adjustedScore)}${row.adjustment ? `<span class="score-adjust ${scoreClass}">${signedScore(row.adjustment)}</span>` : ""}
-          </span>
-          <span class="skill-rank-actions">
-            <button type="button" data-skill-adjust="-1" data-alias="${row.champion_alias}" data-spell="${row.spell}" title="Decrease score">−</button>
-            <button type="button" data-skill-adjust="0" data-alias="${row.champion_alias}" data-spell="${row.spell}" title="Reset score">0</button>
-            <button type="button" data-skill-adjust="1" data-alias="${row.champion_alias}" data-spell="${row.spell}" title="Increase score">+</button>
-          </span>
+        <div class="skill-card" draggable="true" data-skill-card="1"
+          data-alias="${row.champion_alias}" data-spell="${row.spell}" data-base-score="${row.baseScore}"
+          data-score="${row.adjustedScore}" title="${title}">
+          <div class="skill-card-head">
+            ${imageUrl ? `<img class="skill-rank-icon" src="${imageUrl}" alt="" loading="lazy" />` : ""}
+            <span class="skill-card-name">${row.spell}</span>
+          </div>
+          <div class="skill-card-score">
+            <input class="skill-score-input ${row.adjustment ? "manual" : ""}" type="text" inputmode="decimal"
+              value="${formatScore(row.adjustedScore)}" data-score-input="1"
+              data-alias="${row.champion_alias}" data-spell="${row.spell}" data-base-score="${row.baseScore}"
+              aria-label="Set ${row.champion_name_en} ${row.spell} score" title="輸入最終分數；留空後 Enter 可重置" />
+            <div class="skill-score-actions">
+              <button class="skill-inline-step" type="button" data-score-step="-1"
+                data-alias="${row.champion_alias}" data-spell="${row.spell}" data-base-score="${row.baseScore}"
+                data-current-score="${row.adjustedScore}" aria-label="${row.champion_name_en} ${row.spell} decrease">−</button>
+              <button class="skill-inline-step" type="button" data-score-step="1"
+                data-alias="${row.champion_alias}" data-spell="${row.spell}" data-base-score="${row.baseScore}"
+                data-current-score="${row.adjustedScore}" aria-label="${row.champion_name_en} ${row.spell} increase">+</button>
+            </div>
+          </div>
         </div>
       `;
     }
 
-    function adjustRankedSkill(alias, spell, direction, event) {
-      const current = getSpellAdjustment("engage", alias, spell);
-      const next = direction === 0 ? 0 : current + spellStep(direction, event);
-      setSpellAdjustment("engage", alias, spell, next);
+    function setRankedSkillScore(alias, spell, baseScore, rawValue, options = {}) {
+      const text = String(rawValue || "").trim();
+      if (!text) {
+        setSpellAdjustment("engage", alias, spell, 0);
+      } else {
+        const parsed = Number(text);
+        if (!Number.isFinite(parsed)) return false;
+        setSpellAdjustment("engage", alias, spell, clampScoreFloor(parsed) - Number(baseScore || 0));
+      }
       renderSkillRankingPage();
+      if (options.focusInput) focusRankedSkillInput(alias, spell);
       renderList(metricConfig("engage"));
       if (noteTarget && noteTarget.metric === "engage" && noteTarget.alias === alias) {
         renderSpellReview();
       }
       updateExport();
+      return true;
+    }
+
+    function focusRankedSkillInput(alias, spell) {
+      requestAnimationFrame(() => {
+        const input = Array.from(document.querySelectorAll("[data-score-input]"))
+          .find(item => item.dataset.alias === alias && item.dataset.spell === spell);
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        input.select();
+      });
     }
 
     function renderSkillRankingPage() {
       const board = document.getElementById("skillRankingBoard");
       if (!board) return;
-      board.innerHTML = SKILL_RANK_CATEGORIES.map(category => {
-        const rows = skillRankingRows("engage", category.key).slice(0, 50);
-        return `
-          <section class="skill-category">
-            <div class="skill-category-head">
-              <strong>${category.label}</strong>
-              <span>${category.hint}</span>
-            </div>
-            <div class="skill-category-list">
-              ${rows.map(skillRankRowHtml).join("") || `<div class="empty-state">No matching skills.</div>`}
-            </div>
-          </section>
-        `;
-      }).join("");
-      board.querySelectorAll("[data-skill-adjust]").forEach(button => {
+      const rows = skillRankingRows("engage", activeSkillFilter);
+      board.innerHTML = `
+        <div class="skill-filter-bar">
+          ${SKILL_FILTERS.map(filter => `
+            <button class="skill-filter-btn ${activeSkillFilter === filter.key ? "active" : ""}"
+              type="button" data-skill-filter="${filter.key}">${filter.label}</button>
+          `).join("")}
+        </div>
+        <div class="skill-grid">
+          ${rows.map(skillCardHtml).join("") || `<div class="empty-state">No matching skills.</div>`}
+        </div>
+      `;
+      board.querySelectorAll("[data-skill-filter]").forEach(button => {
+        button.addEventListener("click", () => {
+          activeSkillFilter = button.dataset.skillFilter || "";
+          localStorage.setItem("semantic-score-review:skill-filter", activeSkillFilter);
+          renderSkillRankingPage();
+        });
+      });
+      board.querySelectorAll("[data-score-input]").forEach(input => {
+        const commit = () => {
+          setRankedSkillScore(
+            input.dataset.alias || "",
+            input.dataset.spell || "",
+            Number(input.dataset.baseScore || 0),
+            input.value
+          );
+        };
+        input.addEventListener("change", commit);
+        input.addEventListener("keydown", event => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            commit();
+          }
+          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            const sign = event.key === "ArrowUp" ? 1 : -1;
+            const current = Number(input.value || 0);
+            const next = clampScoreFloor(current + spellStep(sign, event));
+            input.value = formatScore(next);
+            setRankedSkillScore(
+              input.dataset.alias || "",
+              input.dataset.spell || "",
+              Number(input.dataset.baseScore || 0),
+              input.value,
+              { focusInput: true }
+            );
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            input.value = formatScore(Number(input.dataset.baseScore || 0) + getSpellAdjustment("engage", input.dataset.alias || "", input.dataset.spell || ""));
+            input.blur();
+          }
+        });
+      });
+      board.querySelectorAll("[data-score-step]").forEach(button => {
         button.addEventListener("click", event => {
           event.stopPropagation();
-          const direction = Number(button.dataset.skillAdjust || 0);
-          adjustRankedSkill(button.dataset.alias || "", button.dataset.spell || "", direction, event);
+          const next = Number(button.dataset.currentScore || 0) + spellStep(Number(button.dataset.scoreStep || 0), event);
+          setRankedSkillScore(
+            button.dataset.alias || "",
+            button.dataset.spell || "",
+            Number(button.dataset.baseScore || 0),
+            String(next),
+            { focusInput: true }
+          );
+        });
+      });
+      bindSkillCardDrag(board);
+    }
+
+    function bindSkillCardDrag(board) {
+      let dragged = null;
+      board.querySelectorAll("[data-skill-card]").forEach(card => {
+        card.addEventListener("dragstart", event => {
+          if (event.target.closest("input, button")) {
+            event.preventDefault();
+            return;
+          }
+          dragged = card;
+          card.classList.add("dragging");
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", `${card.dataset.alias}:${card.dataset.spell}`);
+        });
+        card.addEventListener("dragend", () => {
+          card.classList.remove("dragging");
+          board.querySelectorAll(".skill-card.drop-target").forEach(item => item.classList.remove("drop-target"));
+          dragged = null;
+        });
+        card.addEventListener("dragover", event => {
+          if (!dragged || dragged === card) return;
+          event.preventDefault();
+          card.classList.add("drop-target");
+          event.dataTransfer.dropEffect = "move";
+        });
+        card.addEventListener("dragleave", () => {
+          card.classList.remove("drop-target");
+        });
+        card.addEventListener("drop", event => {
+          event.preventDefault();
+          card.classList.remove("drop-target");
+          if (!dragged || dragged === card) return;
+          const nextScore = Number((Number(card.dataset.score || 0) + SKILL_DROP_SCORE_DELTA).toFixed(2));
+          setRankedSkillScore(
+            dragged.dataset.alias || "",
+            dragged.dataset.spell || "",
+            Number(dragged.dataset.baseScore || 0),
+            String(nextScore)
+          );
         });
       });
     }
@@ -1600,9 +1887,11 @@
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         const c = champion(noteTarget.alias);
-        const rows = parseAbilityBreakdown(c, noteTarget.metric);
+        const rows = adjustedAbilityRows(c, noteTarget.metric);
         const direction = event.key === "ArrowRight" ? 1 : -1;
-        activeSpellIndex = Math.max(0, Math.min(rows.length - 1, activeSpellIndex + direction));
+        const currentIndex = Math.max(0, rows.findIndex(row => row.spell === activeSpellKey));
+        const nextIndex = Math.max(0, Math.min(rows.length - 1, currentIndex + direction));
+        activeSpellKey = rows[nextIndex]?.spell || "";
         renderSpellReview();
       }
     });
