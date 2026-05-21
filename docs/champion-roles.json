@@ -1239,7 +1239,7 @@
     }
   },
   "data_dragon_version": "16.10.1",
-  "generated_at": "2026-05-20T23:41:24Z",
+  "generated_at": "2026-05-21T01:05:11Z",
   "patch_prefix": "16.10",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",
@@ -1683,102 +1683,135 @@
   },
   "secondary_roles": {
     "Akali": {
+      "meta": {},
       "role": "Mage"
     },
     "Anivia": {
+      "meta": {},
       "role": "Fighter"
     },
     "Bard": {
+      "meta": {},
       "role": "Mage"
     },
     "Cassiopeia": {
+      "meta": {},
       "role": "Fighter"
     },
     "Diana": {
+      "meta": {},
       "role": "Tank"
     },
     "Ekko": {
+      "meta": {},
       "role": "Mage"
     },
     "Elise": {
+      "meta": {},
       "role": "Mage"
     },
     "Fizz": {
+      "meta": {},
       "role": "Mage"
     },
     "Gnar": {
+      "meta": {},
       "role": "Tank"
     },
     "Gragas": {
+      "meta": {},
       "role": "Mage"
     },
     "Gwen": {
+      "meta": {},
       "role": "Mage"
     },
     "Karma": {
+      "meta": {},
       "role": "Support"
     },
     "Kassadin": {
+      "meta": {},
       "role": "Mage"
     },
     "Katarina": {
+      "meta": {},
       "role": "Fighter"
     },
     "KogMaw": {
+      "meta": {},
       "role": "Mage"
     },
     "Leblanc": {
+      "meta": {},
       "role": "Mage"
     },
     "Lillia": {
+      "meta": {},
       "role": "Mage"
     },
     "MissFortune": {
+      "meta": {},
       "role": "Mage"
     },
     "Morgana": {
+      "meta": {},
       "role": "Mage"
     },
     "Nasus": {
+      "meta": {},
       "role": "Mage"
     },
     "Rakan": {
+      "meta": {},
       "role": "Tank"
     },
     "RekSai": {
+      "meta": {},
       "role": "Tank"
     },
     "Rengar": {
+      "meta": {},
       "role": "Fighter"
     },
     "Rumble": {
+      "meta": {},
       "role": "Fighter"
     },
     "Senna": {
+      "meta": {},
       "role": "Marksman"
     },
     "Shaco": {
+      "meta": {},
       "role": "Mage"
     },
     "Swain": {
+      "meta": {},
       "role": "Fighter"
     },
     "Sylas": {
+      "meta": {},
       "role": "Fighter"
     },
     "Thresh": {
+      "meta": {},
       "role": "Tank"
     },
     "Trundle": {
+      "meta": {},
       "role": "Tank"
     },
     "Udyr": {
+      "meta": {},
       "role": "Mage"
     },
     "Volibear": {
+      "meta": {},
       "role": "Fighter"
     },
     "Zilean": {
+      "meta": {},
       "role": "Mage"
     }
   }
