@@ -27,6 +27,11 @@ from typing import Any
 
 import click
 
+try:
+    from champion_roles import role_tags_for_alias
+except ImportError:  # pragma: no cover - supports importing as scripts.build_semantic_ability_scores.
+    from scripts.champion_roles import role_tags_for_alias
+
 
 SCORE_COLUMNS = (
     "wave_clear_score",
@@ -64,7 +69,156 @@ WAVE_WEIGHTS = {
     "prep": 0.06,
 }
 
+ENGAGE_TOP3_WEIGHTS = (0.60, 0.24, 0.10)
+ENGAGE_CHAIN_WEIGHT = 0.06
 WAVE_TOP3_WEIGHTS = (0.55, 0.30, 0.15)
+BASIC_ATTACK_FLOOR_MULTIPLIER = {
+    # Manual review marked these as "mostly autos" rather than real wave tools.
+    "Tryndamere": 0.55,
+    "Jax": 1.6,
+    "MasterYi": 0.75,
+}
+MANUAL_SPELL_SCORE_ADJUSTMENTS: dict[str, dict[str, dict[str, float]]] = {
+    # Exported from docs/semantic-score-review.html on 2026-05-21.
+    # These are additive, per-spell reviewer calibrations applied before
+    # champion top-3 aggregation.
+    "wave": {
+        "Xerath": {"Q": 0.9},
+        "Shen": {"Q": 0.05},
+        "Sejuani": {"W": 0.1},
+        "Braum": {"E": -0.45},
+    },
+    "engage": {
+        "Rell": {"W": 0.7, "R": 0.25, "Q": -0.1},
+        "Malphite": {"R": 0.8, "E": -0.05},
+        "Leona": {"R": 0.05, "Q": 0.1},
+        "Amumu": {"R": 1.45, "Q": -0.15, "W": -0.1},
+        "Nautilus": {"Q": 0.2, "R": 0.4},
+        "Alistar": {"Q": 0.9, "W": -0.3, "E": -0.1},
+        "Zac": {"E": 0.2, "R": 0.2},
+        "Blitzcrank": {"E": -0.75, "R": 0.25},
+        "Sejuani": {"Q": -0.1, "E": 0.1},
+        "Maokai": {"R": 0.55, "W": 0.2, "Q": -0.35},
+        "Neeko": {"R": 0.3, "E": 0.25},
+        "Rakan": {"R": 1.15, "W": 0.1, "E": -0.05},
+        "Vi": {"Q": -0.05, "E": -0.05},
+        "MonkeyKing": {"R": 0.15, "W": 0.05},
+        "Rammus": {"Q": -0.1, "E": -0.2, "R": 0.15},
+        "Sion": {"R": 0.65, "Q": 0.4, "E": -0.95},
+        "Galio": {"W": 0.65, "E": -0.05, "Q": -0.1},
+        "Lillia": {"R": 0.15, "E": 0.2},
+        "Kennen": {"R": 0.3, "W": 0.25},
+        "Morgana": {"Q": 0.3, "R": -0.05, "W": -0.2},
+        "Lissandra": {"R": 0.55, "W": -0.05},
+        "XinZhao": {"R": 0.55, "Q": -0.4},
+        "Gnar": {"R": 0.65, "W": -0.65},
+        "Gragas": {"E": 0.05, "R": 0.15},
+        "Ornn": {"R": 0.5, "E": 0.15, "Q": -0.05},
+        "Yone": {"R": 1.3, "Q": -0.25, "W": 0.15},
+        "Thresh": {"Q": 0.15, "W": -0.05},
+        "Ambessa": {"R": -0.1},
+        "Fiddlesticks": {"R": 0.2, "Q": -0.05},
+        "Azir": {"R": 0.75, "Q": -0.1},
+        "Annie": {"R": 0.45, "W": 0.3},
+        "Sett": {"R": 0.4},
+        "KSante": {"R": -0.35, "W": -0.1},
+        "Malzahar": {"R": 0.35, "Q": 0.05},
+        "Ashe": {"R": 0.35, "W": 0.15},
+        "Nilah": {"R": 0.05, "E": 0.1},
+        "Aurora": {"R": 0.65},
+        "JarvanIV": {"Q": 0.45, "R": 0.5, "W": -0.15},
+        "Diana": {"R": 0.1},
+        "Jax": {"E": 0.75, "W": -0.05},
+        "Taliyah": {"E": 0.35, "R": -0.2},
+        "Urgot": {"R": -0.1},
+        "RekSai": {"W": 0.1, "Q": -0.05},
+        "Jhin": {"W": -0.1, "R": 0.3, "E": -0.1},
+        "Singed": {"E": 0.1, "W": 0.15},
+        "Lux": {"Q": -0.1},
+        "Warwick": {"R": 0.9},
+        "Nunu": {"W": 0.55, "Q": -0.1},
+        "Zyra": {"R": 0.1, "E": 0.3, "W": -0.3},
+        "Pantheon": {"W": -0.05},
+        "Chogath": {"Q": 0.05, "W": 0.05},
+        "Vex": {"W": 0.1, "R": 0.2},
+        "Kled": {"R": 1.1, "Q": -0.6},
+        "Bard": {"R": 0.95, "Q": 0.35, "W": -0.05},
+        "Taric": {"E": 0.05, "W": 0.05, "Q": -0.05},
+        "Sylas": {"R": 0.5, "E": 0.3},
+        "Seraphine": {"E": 0.4},
+        "Poppy": {"E": 0.3, "W": 0.05},
+        "Renata": {"R": 0.95, "Q": 0.1, "E": 0.05},
+        "Cassiopeia": {"Q": -0.05},
+        "LeeSin": {"R": 0.05},
+        "Sona": {"R": 0.05},
+        "TwistedFate": {"W": 0.75},
+        "Briar": {"R": 0.75, "Q": 0.2, "E": -0.4},
+        "Braum": {"R": 0.2, "Q": 0.15, "W": -0.05},
+        "Syndra": {"E": 0.1, "W": 0.15},
+        "Karthus": {"P": 0.7},
+        "Varus": {"R": 0.4, "E": -0.05, "Q": -0.05},
+        "Fizz": {"R": 0.65, "E": -0.5, "Q": -0.1},
+        "Camille": {"R": 0.7, "E": -0.4, "W": -0.05},
+        "Anivia": {"Q": 0.35, "W": 0.1, "R": 0.1},
+        "Swain": {"E": 0.25, "W": -0.05},
+        "Viego": {"W": -0.05},
+        "Sivir": {"R": 0.9, "Q": -0.05},
+        "Shen": {"E": 0.8, "Q": -0.2, "W": -0.05},
+        "TahmKench": {"W": -0.1},
+        "Kalista": {"R": 0.8, "E": -0.4},
+        "Volibear": {"Q": 0.05, "R": 0.25},
+        "Darius": {"E": 0.35},
+        "Veigar": {"W": -0.05},
+        "Rumble": {"R": 0.5, "E": -0.05, "Q": -0.05},
+        "Zoe": {"E": 0.5, "R": 0.05},
+        "AurelionSol": {"R": 0.2, "Q": -0.05},
+        "Trundle": {"E": 0.1, "W": 0.05, "Q": -0.05},
+        "Shaco": {"R": -0.35},
+        "Gangplank": {"R": 0.45, "E": 0.35, "Q": -0.15},
+        "Elise": {"E": 0.15, "W": -0.05},
+        "Yuumi": {"R": 0.55, "Q": -0.05, "W": -0.05},
+        "Nami": {"Q": 0.05, "E": -0.2},
+        "Renekton": {"W": 0.05, "E": 0.05},
+        "Soraka": {"E": 0.5, "Q": 0.25},
+        "Ekko": {"W": 0.3, "Q": -0.05, "E": 0.1},
+        "Janna": {"Q": 0.3, "W": -0.05, "E": -0.05},
+        "Aphelios": {"Q": -0.3},
+        "Jinx": {"W": 0.35, "Q": -0.1},
+        "Evelynn": {"W": -0.15},
+        "Twitch": {"R": 0.5, "E": -0.1, "W": -0.1},
+        "MissFortune": {"E": 0.25, "W": 0.05, "Q": -0.05},
+        "Heimerdinger": {"R": 0.3, "E": 0.05, "Q": -0.05},
+        "Hwei": {"R": 0.2},
+        "Senna": {"W": 0.25, "E": 0.05},
+        "Zilean": {"Q": 0.3, "E": 0.1, "W": -0.05},
+        "Illaoi": {"E": 0.15},
+        "Samira": {"R": 0.4, "Q": -0.1},
+        "Khazix": {"W": 0.15, "E": -0.05, "Q": -0.1},
+        "DrMundo": {"Q": 0.05},
+        "Ziggs": {"E": 0.15, "Q": -0.1},
+        "Yorick": {"E": 0.05, "W": 0.1, "Q": -0.05},
+        "Caitlyn": {"W": 0.25, "E": -0.1, "Q": -0.1},
+        "Olaf": {"Q": 0.05},
+        "Brand": {"Q": -0.05, "R": -0.05, "W": -0.05},
+        "Naafiri": {"R": 0.2},
+        "Xayah": {"E": 0.15, "Q": -0.05, "W": -0.1},
+        "Tryndamere": {"W": 0.25, "E": 0.1, "Q": -0.05},
+        "Lulu": {"R": 0.1, "Q": -0.15},
+        "Milio": {"E": -0.05},
+        "Nasus": {"W": 0.25},
+        "KogMaw": {"Q": -0.1},
+        "Teemo": {"R": -0.05},
+        "Katarina": {"Q": -0.1},
+        "Graves": {"W": 0.15, "Q": -0.1},
+        "Quinn": {"Q": 0.05},
+        "Zeri": {"E": 0.1, "W": -0.25},
+        "Smolder": {"R": -0.1, "W": 0.05, "Q": -0.05},
+        "Lucian": {"Q": -0.05},
+        "Ezreal": {"E": 0.1, "Q": -0.05, "W": -0.05},
+        "Kayle": {"Q": 0.05, "W": 0.05, "E": -0.1},
+        "Corki": {"W": 0.05, "Q": -0.05},
+    },
+}
 
 BUILD_PROFILE_STATS = {
     "ap_burn": {
@@ -125,6 +279,8 @@ CHAMPION_BUILD_ARCHETYPE = {
     "Azir": "soldier_mage",
     "Brand": "ap_burn",
     "Corki": "hybrid_caster",
+    "Hwei": "ap_burst",
+    "Karma": "ap_burst",
     "KogMaw": "hybrid_caster",
     "Lux": "ap_burst",
     "Malzahar": "ap_burn",
@@ -145,7 +301,7 @@ CHAMPION_BUILD_ARCHETYPE = {
     "Smolder": "ad_caster",
 }
 
-FORMULA_VERSION = "v4_top3_itemized_scaling"
+FORMULA_VERSION = "v9_manual_spell_adjustments"
 EMPIRICAL_SCORE_CSV = Path("data/cache/champion_scores_empirical_merged.csv")
 SKILL_SEMANTIC_FEATURES_JSON = Path("data/cache/skill_semantic_features.json")
 
@@ -204,6 +360,7 @@ HARD_CC_WORDS = (
 SOFT_CC_WORDS = (
     "slow",
     "slows",
+    "slowing",
     "slowed",
     "cripple",
     "ground",
@@ -668,9 +825,21 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
     ("AurelionSol", "E"): {
         "shape": "circle",
         "radius": 260.0,
+        "cc_type": "soft_slow",
         "persistence": 0.95,
         "wave_reliability": 0.88,
         "damage_proxy": 0.54,
+    },
+    ("AurelionSol", "W"): {
+        "shape": "dash",
+        "range": 1500.0,
+        "mobility": True,
+        "cc_type": "none",
+        "targeting_bonus": 0.66,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.18,
+        "engage_score_multiplier": 1.65,
+        "supports_wave": 0.0,
     },
     ("Nidalee", "W"): {
         "shape": "targeted",
@@ -720,6 +889,16 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "targeting_bonus": 0.24,
         "entry_followthrough": 0.04,
     },
+    ("Pyke", "Q"): {
+        "condition_penalty": 0.12,
+        "engage_score_multiplier": 0.9,
+    },
+    ("Pyke", "E"): {
+        "certainty": 0.64,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.36,
+        "engage_score_multiplier": 0.72,
+    },
     ("Rell", "W"): {
         "shape": "dash",
         "cc_type": "aoe_hard",
@@ -735,6 +914,18 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "certainty": 0.88,
         "expected_targets": 2.1,
         "entry_followthrough": 0.86,
+        "wave_reliability": 0.08,
+        "damage_proxy": 0.08,
+    },
+    ("Rell", "Q"): {
+        "shape": "line",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.78,
+        "expected_targets": 1.4,
+        "entry_followthrough": 0.42,
+        "wave_reliability": 0.28,
+        "damage_proxy": 0.16,
     },
     ("Morgana", "Q"): {
         "shape": "line",
@@ -758,12 +949,42 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "expected_targets": 1.9,
         "entry_followthrough": 0.94,
     },
+    ("Vi", "R"): {
+        "shape": "dash",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.3,
+        "certainty": 0.86,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.84,
+    },
+    ("Yone", "R"): {
+        "shape": "line",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.82,
+        "expected_targets": 1.9,
+        "entry_followthrough": 0.74,
+    },
     ("TwistedFate", "Q"): {
         "shape": "line",
         "width": 150.0,
         "cast_range": 1450.0,
         "wave_reliability": 0.88,
-        "damage_proxy": 0.74,
+        "damage_proxy": 0.58,
+    },
+    ("TwistedFate", "W"): {
+        "shape": "circle",
+        "radius": 250.0,
+        "cast_range": 525.0,
+        "wave_reliability": 0.82,
+        "damage_proxy": 0.48,
+        "growth_proxy": 0.34,
+        "cc_type": "single_hard",
+        "cc_duration": 1.6,
+        "certainty": 0.98,
+        "targeting_bonus": 1.0,
+        "entry_followthrough": 0.18,
+        "supports_wave": 1.0,
     },
     ("Zoe", "W"): {
         "shape": "targeted",
@@ -822,6 +1043,18 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "wave_reliability": 0.58,
         "damage_proxy": 0.52,
     },
+    ("Corki", "W"): {
+        "shape": "dash",
+        "entry_followthrough": 0.12,
+    },
+    ("Ezreal", "E"): {
+        "shape": "dash",
+        "entry_followthrough": 0.14,
+    },
+    ("Tryndamere", "E"): {
+        "shape": "dash",
+        "entry_followthrough": 0.18,
+    },
     ("XinZhao", "E"): {
         "shape": "dash",
         "wave_reliability": 0.14,
@@ -832,6 +1065,11 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "width": 70.0,
         "wave_reliability": 0.12,
         "damage_proxy": 0.12,
+    },
+    ("Yuumi", "R"): {
+        "wave_reliability": 0.05,
+        "damage_proxy": 0.08,
+        "condition_penalty": 0.35,
     },
     ("Rumble", "Q"): {
         "shape": "cone",
@@ -877,6 +1115,19 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "shape": "line",
         "wave_reliability": 0.56,
         "damage_proxy": 0.42,
+    },
+    ("Anivia", "W"): {
+        "shape": "line",
+        "width": 220.0,
+        "cc_type": "utility_cc",
+        "cc_duration": 2.5,
+        "certainty": 0.7,
+        "targeting_bonus": 0.54,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.28,
+        "condition_penalty": 0.28,
+        "engage_score_multiplier": 1.25,
+        "supports_wave": 0.0,
     },
     ("Ahri", "Q"): {
         "shape": "line",
@@ -929,9 +1180,10 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "radius": 400.0,
         "cast_range": 650.0,
         "persistence": 0.9,
-        "wave_reliability": 0.88,
-        "damage_proxy": 0.68,
-        "prep_bonus": 0.2,
+        "wave_reliability": 0.58,
+        "damage_proxy": 0.42,
+        "prep_bonus": 0.08,
+        "wave_score_multiplier": 0.58,
     },
     ("Aatrox", "Q"): {
         "shape": "line",
@@ -1055,6 +1307,872 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
         "damage_proxy": 0.58,
         "wave_reliability": 0.74,
     },
+    ("Hwei", "Q"): {
+        "shape": "circle",
+        "radius": 235.0,
+        "cast_range": 850.0,
+        "persistence": 0.2,
+        "wave_reliability": 0.76,
+        "damage_proxy": 0.5,
+        "growth_proxy": 0.42,
+        "cc_type": "none",
+    },
+    ("Hwei", "E"): {
+        "shape": "circle",
+        "radius": 220.0,
+        "cast_range": 850.0,
+        "persistence": 0.12,
+        "wave_reliability": 0.64,
+        "damage_proxy": 0.28,
+        "cc_type": "root",
+        "cc_duration": 1.0,
+        "certainty": 0.62,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.24,
+    },
+    ("Karma", "Q"): {
+        "shape": "circle",
+        "radius": 230.0,
+        "cast_range": 950.0,
+        "persistence": 0.12,
+        "wave_reliability": 0.68,
+        "damage_proxy": 0.38,
+        "growth_proxy": 0.28,
+        "wave_score_multiplier": 0.72,
+    },
+    ("Singed", "Q"): {
+        "shape": "melee",
+        "cast_range": 450.0,
+        "persistence": 0.95,
+        "wave_reliability": 0.82,
+        "damage_proxy": 0.58,
+        "growth_proxy": 0.46,
+        "supports_wave": 1.0,
+    },
+    ("Veigar", "W"): {
+        "shape": "circle",
+        "radius": 240.0,
+        "cast_range": 900.0,
+        "wave_reliability": 0.72,
+        "damage_proxy": 0.52,
+    },
+    ("Ornn", "W"): {
+        "shape": "cone",
+        "cast_range": 500.0,
+        "wave_reliability": 0.64,
+        "damage_proxy": 0.48,
+    },
+    ("Skarner", "Q"): {
+        "shape": "circle",
+        "radius": 260.0,
+        "cast_range": 350.0,
+        "wave_reliability": 0.72,
+        "damage_proxy": 0.52,
+    },
+    ("Nilah", "Q"): {
+        "shape": "cone",
+        "cast_range": 600.0,
+        "wave_reliability": 0.78,
+        "damage_proxy": 0.62,
+        "growth_proxy": 0.52,
+    },
+    ("Lillia", "R"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 2.0,
+        "certainty": 0.86,
+        "expected_targets": 2.2,
+        "entry_followthrough": 0.52,
+        "condition_penalty": 0.16,
+    },
+    ("Nilah", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.82,
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.62,
+    },
+    ("Annie", "R"): {
+        "shape": "circle",
+        "radius": 290.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.25,
+        "certainty": 0.82,
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.55,
+        "condition_penalty": 0.08,
+        "engage_score_multiplier": 1.35,
+    },
+    ("Vex", "R"): {
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.54,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.22,
+    },
+    ("Vex", "W"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.66,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.18,
+    },
+    ("Fiddlesticks", "R"): {
+        "shape": "circle",
+        "radius": 650.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.25,
+        "certainty": 0.58,
+        "expected_targets": 1.65,
+        "targeting_bonus": 0.68,
+        "entry_followthrough": 0.58,
+        "condition_penalty": 0.28,
+        "engage_score_multiplier": 0.95,
+    },
+    ("Fiddlesticks", "E"): {
+        "shape": "cone",
+        "cc_type": "utility_cc",
+        "cc_duration": 1.25,
+        "certainty": 0.76,
+        "expected_targets": 1.25,
+        "entry_followthrough": 0.1,
+        "condition_penalty": 0.18,
+        "engage_score_multiplier": 1.05,
+    },
+    ("Rammus", "Q"): {
+        "shape": "dash",
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.86,
+        "expected_targets": 1.15,
+        "targeting_bonus": 0.78,
+        "entry_followthrough": 0.82,
+        "condition_penalty": 0.08,
+        "engage_score_multiplier": 1.5,
+    },
+    ("Rammus", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.72,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.48,
+        "condition_penalty": 0.16,
+        "engage_score_multiplier": 0.95,
+    },
+    ("Trundle", "E"): {
+        "shape": "circle",
+        "cc_type": "soft_slow",
+        "cc_duration": 2.0,
+        "certainty": 0.9,
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.34,
+    },
+    ("Karthus", "P"): {
+        "include_passive": True,
+        "shape": "circle",
+        "radius": 550.0,
+        "range": 550.0,
+        "cc_type": "none",
+        "targeting_bonus": 0.68,
+        "entry_followthrough": 0.35,
+        "condition_penalty": 0.18,
+        "engage_score_multiplier": 4.0,
+        "supports_wave": 0.0,
+        "wave_score_multiplier": 0.0,
+    },
+    ("Karthus", "W"): {
+        "shape": "line",
+        "width": 220.0,
+        "cc_type": "soft_slow",
+        "cc_duration": 4.0,
+        "certainty": 0.82,
+        "targeting_bonus": 0.62,
+        "expected_targets": 1.45,
+        "entry_followthrough": 0.24,
+        "condition_penalty": 0.16,
+        "engage_score_multiplier": 1.5,
+        "supports_wave": 0.0,
+    },
+    ("Xayah", "R"): {
+        "condition_penalty": 0.72,
+        "entry_followthrough": 0.05,
+    },
+    ("Xayah", "E"): {
+        "condition_penalty": 0.45,
+        "entry_followthrough": 0.16,
+    },
+    ("Fiora", "W"): {
+        "condition_penalty": 0.72,
+        "entry_followthrough": 0.04,
+    },
+    ("Orianna", "R"): {
+        "shape": "circle",
+        "radius": 300.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.7,
+        "expected_targets": 1.6,
+        "entry_followthrough": 0.42,
+        "wave_reliability": 0.35,
+        "damage_proxy": 0.3,
+    },
+    ("Mordekaiser", "E"): {
+        "cc_type": "root",
+        "cc_duration": 0.75,
+        "certainty": 0.62,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.22,
+    },
+    ("Janna", "R"): {
+        "condition_penalty": 0.75,
+        "entry_followthrough": 0.04,
+    },
+    ("Tristana", "R"): {
+        "condition_penalty": 0.72,
+        "entry_followthrough": 0.04,
+    },
+    ("MissFortune", "E"): {
+        "shape": "circle",
+        "cc_type": "soft_slow",
+        "cc_duration": 1.2,
+        "certainty": 0.82,
+        "expected_targets": 1.5,
+        "entry_followthrough": 0.16,
+        "wave_reliability": 0.5,
+        "damage_proxy": 0.38,
+    },
+    ("Teemo", "R"): {
+        "condition_penalty": 0.7,
+        "entry_followthrough": 0.06,
+        "wave_reliability": 0.78,
+        "damage_proxy": 0.72,
+    },
+    ("JarvanIV", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.78,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.5,
+        "condition_penalty": 0.26,
+    },
+    ("JarvanIV", "Q"): {
+        "shape": "line",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.62,
+        "expected_targets": 1.15,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.28,
+        "supports_wave": 0.0,
+    },
+    ("Galio", "W"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.2,
+        "certainty": 0.62,
+        "expected_targets": 1.25,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.26,
+    },
+    ("Galio", "E"): {
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.68,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.24,
+    },
+    ("Rakan", "W"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.58,
+        "expected_targets": 1.15,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.24,
+    },
+    ("Rakan", "R"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.64,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.22,
+    },
+    ("Diana", "R"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.72,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.36,
+        "condition_penalty": 0.18,
+    },
+    ("KogMaw", "Q"): {
+        "supports_wave": 0.0,
+        "damage_proxy": 0.3,
+        "wave_score_multiplier": 0.22,
+    },
+    ("Braum", "R"): {
+        "wave_score_multiplier": 0.12,
+    },
+    ("Teemo", "R"): {
+        "wave_score_multiplier": 0.35,
+    },
+    ("Pantheon", "R"): {
+        "certainty": 0.54,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.22,
+        "condition_penalty": 0.62,
+        "engage_score_multiplier": 0.42,
+        "supports_wave": 0.0,
+    },
+    ("Kled", "Q"): {
+        "certainty": 0.58,
+        "entry_followthrough": 0.28,
+        "condition_penalty": 0.28,
+        "engage_score_multiplier": 0.78,
+    },
+    ("Kled", "R"): {
+        "condition_penalty": 0.45,
+        "engage_score_multiplier": 0.72,
+    },
+    ("Poppy", "E"): {
+        "cc_type": "conditional_knockback",
+        "certainty": 0.62,
+        "entry_followthrough": 0.38,
+        "condition_penalty": 0.36,
+    },
+    ("Poppy", "R"): {
+        "entry_followthrough": 0.08,
+        "condition_penalty": 0.55,
+        "engage_score_multiplier": 0.42,
+    },
+    ("Sejuani", "R"): {
+        "shape": "line",
+        "width": 120.0,
+        "speed": 1600.0,
+        "cc_type": "single_hard",
+        "cc_duration": 1.25,
+        "certainty": 0.74,
+        "targeting_bonus": 0.62,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.62,
+        "condition_penalty": 0.08,
+        "engage_score_multiplier": 1.25,
+    },
+    ("Sejuani", "E"): {
+        "cc_type": "single_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.62,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.24,
+        "condition_penalty": 0.36,
+        "engage_score_multiplier": 0.58,
+    },
+    ("Sejuani", "W"): {
+        "cc_type": "soft_slow",
+        "cc_duration": 0.5,
+        "certainty": 0.76,
+        "expected_targets": 1.15,
+        "entry_followthrough": 0.16,
+        "condition_penalty": 0.12,
+        "engage_score_multiplier": 0.55,
+    },
+    ("Riven", "W"): {
+        "entry_followthrough": 0.22,
+        "condition_penalty": 0.4,
+        "engage_score_multiplier": 0.65,
+    },
+    ("Ziggs", "W"): {
+        "shape": "circle",
+        "radius": 325.0,
+        "cc_type": "conditional_knockback",
+        "cc_duration": 0.75,
+        "certainty": 0.5,
+        "expected_targets": 1.15,
+        "entry_followthrough": 0.2,
+        "condition_penalty": 0.38,
+        "engage_score_multiplier": 0.9,
+    },
+    ("Xerath", "E"): {
+        "certainty": 0.42,
+        "entry_followthrough": 0.12,
+        "condition_penalty": 0.42,
+        "engage_score_multiplier": 0.5,
+    },
+    ("Jinx", "E"): {
+        "shape": "line",
+        "cc_type": "root",
+        "cc_duration": 1.5,
+        "certainty": 0.42,
+        "expected_targets": 1.1,
+        "entry_followthrough": 0.26,
+        "condition_penalty": 0.38,
+        "engage_score_multiplier": 0.72,
+    },
+    ("Soraka", "E"): {
+        "shape": "circle",
+        "radius": 250.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.5,
+        "certainty": 0.58,
+        "expected_targets": 1.1,
+        "targeting_bonus": 0.52,
+        "wave_reliability": 0.42,
+        "damage_proxy": 0.34,
+        "prep_bonus": 0.12,
+        "entry_followthrough": 0.04,
+        "condition_penalty": 0.42,
+        "engage_score_multiplier": 0.68,
+    },
+    ("Katarina", "W"): {
+        "cc_type": "none",
+        "engage_score_multiplier": 0.08,
+    },
+    ("TahmKench", "Q"): {
+        "cc_type": "single_hard",
+        "certainty": 0.62,
+        "entry_followthrough": 0.14,
+        "condition_penalty": 0.34,
+        "engage_score_multiplier": 0.72,
+    },
+    ("Zac", "E"): {
+        "certainty": 0.88,
+        "expected_targets": 1.6,
+        "entry_followthrough": 0.68,
+        "engage_score_multiplier": 1.28,
+    },
+    ("Zac", "R"): {
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.42,
+        "engage_score_multiplier": 1.18,
+    },
+    ("MonkeyKing", "R"): {
+        "certainty": 0.86,
+        "expected_targets": 1.9,
+        "entry_followthrough": 0.58,
+        "engage_score_multiplier": 1.28,
+    },
+    ("Galio", "W"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.2,
+        "certainty": 0.7,
+        "expected_targets": 1.45,
+        "entry_followthrough": 0.48,
+        "condition_penalty": 0.14,
+        "engage_score_multiplier": 1.16,
+    },
+    ("Rakan", "W"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.62,
+        "expected_targets": 1.18,
+        "entry_followthrough": 0.46,
+        "condition_penalty": 0.22,
+        "engage_score_multiplier": 0.82,
+    },
+    ("Rakan", "R"): {
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.68,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.22,
+        "engage_score_multiplier": 0.82,
+    },
+    ("JarvanIV", "Q"): {
+        "shape": "line",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.64,
+        "expected_targets": 1.1,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.28,
+        "supports_wave": 0.0,
+        "engage_score_multiplier": 0.78,
+    },
+    ("JarvanIV", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.76,
+        "expected_targets": 1.25,
+        "entry_followthrough": 0.48,
+        "condition_penalty": 0.3,
+        "engage_score_multiplier": 0.78,
+    },
+    ("Diana", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.82,
+        "expected_targets": 1.55,
+        "entry_followthrough": 0.46,
+        "condition_penalty": 0.1,
+        "engage_score_multiplier": 1.16,
+    },
+    ("Thresh", "Q"): {
+        "cc_type": "hook_pull",
+        "certainty": 0.62,
+        "entry_followthrough": 0.42,
+        "condition_penalty": 0.12,
+        "engage_score_multiplier": 1.28,
+    },
+    ("Karthus", "E"): {
+        "cc_type": "soft_slow",
+        "entry_followthrough": 0.22,
+        "engage_score_multiplier": 1.25,
+    },
+    ("Sylas", "R"): {
+        "cc_type": "single_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.62,
+        "expected_targets": 1.25,
+        "entry_followthrough": 0.38,
+        "condition_penalty": 0.32,
+        "engage_score_multiplier": 1.15,
+    },
+    ("Trundle", "E"): {
+        "cc_type": "soft_slow",
+        "certainty": 0.96,
+        "expected_targets": 1.8,
+        "entry_followthrough": 0.42,
+        "engage_score_multiplier": 1.8,
+    },
+    ("Swain", "E"): {
+        "entry_followthrough": 0.28,
+        "condition_penalty": 0.12,
+        "engage_score_multiplier": 1.25,
+    },
+    ("Darius", "E"): {
+        "cc_type": "hook_pull",
+        "certainty": 0.62,
+        "entry_followthrough": 0.18,
+        "condition_penalty": 0.36,
+        "engage_score_multiplier": 0.58,
+    },
+    ("Briar", "Q"): {
+        "cc_type": "single_hard",
+        "certainty": 0.62,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.24,
+        "condition_penalty": 0.42,
+        "engage_score_multiplier": 0.48,
+    },
+    ("Briar", "R"): {
+        "cc_type": "single_hard",
+        "certainty": 0.5,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.52,
+        "engage_score_multiplier": 0.56,
+    },
+    ("Nami", "R"): {
+        "shape": "line",
+        "width": 260.0,
+        "speed": 850.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.5,
+        "certainty": 0.56,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.34,
+        "condition_penalty": 0.25,
+        "engage_score_multiplier": 1.15,
+    },
+    ("Gangplank", "E"): {
+        "shape": "circle",
+        "radius": 325.0,
+        "cc_type": "soft_slow",
+        "certainty": 0.68,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.18,
+        "condition_penalty": 0.34,
+        "engage_score_multiplier": 1.35,
+    },
+    ("Aphelios", "R"): {
+        "cc_type": "root",
+        "cc_duration": 1.0,
+        "certainty": 0.34,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.28,
+        "condition_penalty": 0.35,
+        "engage_score_multiplier": 0.95,
+    },
+    ("Twitch", "R"): {
+        "entry_followthrough": 0.28,
+        "condition_penalty": 0.18,
+        "engage_score_multiplier": 2.2,
+    },
+    ("Lucian", "R"): {
+        "entry_followthrough": 0.24,
+        "condition_penalty": 0.18,
+        "engage_score_multiplier": 2.4,
+    },
+    ("Aurora", "R"): {
+        "cc_type": "aoe_hard",
+        "certainty": 0.72,
+        "expected_targets": 1.5,
+        "entry_followthrough": 0.4,
+        "condition_penalty": 0.22,
+        "engage_score_multiplier": 1.35,
+    },
+    ("DrMundo", "Q"): {
+        "cc_type": "soft_slow",
+        "certainty": 0.78,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.16,
+        "engage_score_multiplier": 1.45,
+    },
+    ("Karma", "Q"): {
+        "shape": "circle",
+        "radius": 230.0,
+        "cast_range": 950.0,
+        "persistence": 0.12,
+        "wave_reliability": 0.68,
+        "damage_proxy": 0.44,
+        "growth_proxy": 0.3,
+        "wave_score_multiplier": 0.7,
+    },
+    ("Graves", "W"): {
+        "supports_wave": 0.0,
+        "wave_reliability": 0.05,
+        "damage_proxy": 0.04,
+        "wave_score_multiplier": 0.05,
+    },
+    ("Graves", "R"): {
+        "wave_score_multiplier": 0.28,
+    },
+    ("KogMaw", "W"): {
+        "supports_wave": 0.25,
+        "wave_reliability": 0.35,
+        "damage_proxy": 0.34,
+        "wave_score_multiplier": 0.38,
+    },
+    ("KogMaw", "E"): {
+        "wave_reliability": 0.72,
+        "damage_proxy": 0.52,
+        "wave_score_multiplier": 0.78,
+    },
+    ("Bard", "Q"): {
+        "shape": "line",
+        "range": 950.0,
+        "width": 90.0,
+        "speed": 1500.0,
+        "certainty": 0.6,
+        "condition_penalty": 0.2,
+        "wave_reliability": 0.16,
+        "damage_proxy": 0.14,
+        "wave_score_multiplier": 0.32,
+    },
+    ("Bard", "R"): {
+        "supports_wave": 0.0,
+        "damage_proxy": 0.02,
+        "wave_reliability": 0.02,
+        "wave_score_multiplier": 0.04,
+    },
+    ("Bard", "W"): {
+        "supports_wave": 0.0,
+        "damage_proxy": 0.0,
+        "wave_reliability": 0.0,
+        "wave_score_multiplier": 0.0,
+    },
+    ("Jhin", "R"): {
+        "wave_score_multiplier": 0.1,
+    },
+    ("Jhin", "E"): {
+        "wave_reliability": 0.22,
+        "damage_proxy": 0.18,
+        "wave_score_multiplier": 0.28,
+    },
+    ("Jhin", "W"): {
+        "wave_reliability": 0.24,
+        "damage_proxy": 0.2,
+        "wave_score_multiplier": 0.38,
+    },
+    ("MasterYi", "Q"): {
+        "wave_reliability": 0.34,
+        "damage_proxy": 0.38,
+        "condition_penalty": 0.52,
+        "wave_score_multiplier": 0.22,
+    },
+    ("Ekko", "Q"): {
+        "shape": "line",
+        "width": 120.0,
+        "cast_range": 1075.0,
+        "persistence": 0.45,
+        "wave_reliability": 0.92,
+        "damage_proxy": 0.86,
+        "growth_proxy": 0.58,
+        "wave_score_multiplier": 2.2,
+    },
+    ("Jax", "W"): {
+        "wave_reliability": 0.62,
+        "damage_proxy": 0.58,
+        "wave_score_multiplier": 1.28,
+    },
+    ("Jax", "R"): {
+        "wave_reliability": 0.58,
+        "damage_proxy": 0.56,
+        "wave_score_multiplier": 1.12,
+    },
+    ("Leblanc", "W"): {
+        "shape": "circle",
+        "radius": 260.0,
+        "cast_range": 600.0,
+        "wave_reliability": 0.62,
+        "damage_proxy": 0.58,
+        "wave_score_multiplier": 1.25,
+    },
+    ("Lissandra", "Q"): {
+        "shape": "line",
+        "width": 110.0,
+        "cast_range": 825.0,
+        "wave_reliability": 0.55,
+        "damage_proxy": 0.34,
+        "wave_score_multiplier": 0.34,
+    },
+    ("Rell", "Q"): {
+        "shape": "line",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.78,
+        "expected_targets": 1.4,
+        "entry_followthrough": 0.42,
+        "wave_reliability": 0.12,
+        "damage_proxy": 0.08,
+        "wave_score_multiplier": 0.28,
+    },
+    ("Blitzcrank", "Q"): {
+        "shape": "line",
+        "width": 140.0,
+        "speed": 1800.0,
+        "cast_time": 0.25,
+        "cc_type": "hook_pull",
+        "cc_duration": 1.0,
+        "certainty": 0.72,
+        "targeting_bonus": 0.52,
+        "expected_targets": 1.0,
+        "entry_followthrough": 1.0,
+        "wave_reliability": 0.04,
+        "damage_proxy": 0.05,
+        "wave_score_multiplier": 0.08,
+    },
+    ("Blitzcrank", "R"): {
+        "wave_score_multiplier": 0.18,
+    },
+    ("Renata", "E"): {
+        "shape": "line",
+        "width": 120.0,
+        "wave_reliability": 0.32,
+        "damage_proxy": 0.22,
+        "wave_score_multiplier": 0.52,
+    },
+    ("Bard", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 2.5,
+        "certainty": 0.58,
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.42,
+        "damage_proxy": 0.0,
+        "supports_wave": 0.0,
+    },
+    ("Renata", "R"): {
+        "shape": "line",
+        "width": 250.0,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.75,
+        "certainty": 0.62,
+        "expected_targets": 1.7,
+        "entry_followthrough": 0.62,
+        "damage_proxy": 0.0,
+        "supports_wave": 0.0,
+    },
+    ("Kled", "R"): {
+        "shape": "dash",
+        "mobility": True,
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.72,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.72,
+    },
+    ("Warwick", "R"): {
+        "shape": "dash",
+        "mobility": True,
+        "cc_type": "single_hard",
+        "cc_duration": 1.5,
+        "certainty": 0.72,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.78,
+    },
+    ("Shen", "E"): {
+        "shape": "dash",
+        "mobility": True,
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.5,
+        "certainty": 0.74,
+        "expected_targets": 1.45,
+        "entry_followthrough": 0.74,
+    },
+    ("Kalista", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 1.0,
+        "certainty": 0.72,
+        "expected_targets": 1.55,
+        "entry_followthrough": 0.58,
+        "condition_penalty": 0.22,
+        "damage_proxy": 0.0,
+        "supports_wave": 0.0,
+    },
+    ("Camille", "R"): {
+        "shape": "targeted",
+        "mobility": True,
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.8,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.82,
+    },
+    ("Quinn", "E"): {
+        "shape": "dash",
+        "mobility": True,
+        "cc_type": "single_hard",
+        "cc_duration": 0.25,
+        "certainty": 0.62,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.42,
+    },
+    ("Viego", "R"): {
+        "shape": "circle",
+        "cc_type": "aoe_hard",
+        "cc_duration": 0.5,
+        "certainty": 0.68,
+        "expected_targets": 1.35,
+        "entry_followthrough": 0.62,
+    },
+    ("Zaahen", "W"): {
+        "shape": "line",
+        "cc_type": "hook_pull",
+        "cc_duration": 0.75,
+        "certainty": 0.7,
+        "expected_targets": 1.2,
+        "entry_followthrough": 0.78,
+    },
+    ("Mordekaiser", "R"): {
+        "shape": "targeted",
+        "cc_type": "single_hard",
+        "cc_duration": 0.75,
+        "certainty": 0.9,
+        "expected_targets": 1.0,
+        "entry_followthrough": 0.46,
+        "damage_proxy": 0.0,
+        "supports_wave": 0.0,
+    },
 }
 
 
@@ -1066,6 +2184,35 @@ REVIEWED_OVERRIDES: dict[str, dict[str, float]] = {}
 
 def clamp_score(value: float) -> float:
     return round(max(0.0, min(3.0, value)), 2)
+
+
+def _score_note_with_adjustment(note: str, slot: str, score: float, adjustment: float) -> str:
+    parts = str(note or "").split(":")
+    if len(parts) >= 2 and parts[0] == slot:
+        parts[-1] = str(clamp_score(score))
+        return ":".join(parts)
+    return f"{slot}:manual:{clamp_score(score)}"
+
+
+def apply_manual_spell_score_adjustments(
+    metric: str,
+    alias: str,
+    skills: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    adjustments = MANUAL_SPELL_SCORE_ADJUSTMENTS.get(metric, {}).get(alias, {})
+    out: list[dict[str, Any]] = []
+    for skill in skills:
+        slot = str(skill.get("slot") or "")
+        adjustment = float(adjustments.get(slot, 0.0))
+        base_score = float(skill.get("score") or 0.0)
+        row = dict(skill)
+        row["base_score"] = clamp_score(base_score)
+        row["manual_adjustment"] = adjustment
+        if adjustment:
+            row["score"] = clamp_score(base_score + adjustment)
+            row["note"] = _score_note_with_adjustment(str(row.get("note") or ""), slot, float(row["score"]), adjustment)
+        out.append(row)
+    return out
 
 
 _EMPIRICAL_FLOOR_CACHE: dict[str, tuple[float, float]] | None = None
@@ -1171,6 +2318,57 @@ def passive_text(champion: dict[str, Any]) -> str:
         for k in ("name_en", "description_en_clean")
         if passive.get(k)
     ).lower()
+
+
+def passive_ability_for_scoring(champion: dict[str, Any]) -> dict[str, Any] | None:
+    alias = str(champion.get("alias") or "")
+    if ability_stat_override(alias, "P", "include_passive") is not True:
+        return None
+    passive = champion.get("passive") or {}
+    name_en = str(passive.get("name_en") or "Passive")
+    description_en = str(passive.get("description_en") or "")
+    description_en_clean = str(passive.get("description_en_clean") or description_en)
+    if not description_en_clean:
+        return None
+    return {
+        "slot": "P",
+        "spell_id": f"{alias}P",
+        "name_en": name_en,
+        "name_zh": passive.get("name_zh") or name_en,
+        "description_en": description_en,
+        "description_zh": passive.get("description_zh") or "",
+        "description_en_clean": description_en_clean,
+        "description_zh_clean": passive.get("description_zh_clean") or "",
+        "tooltip_en": description_en,
+        "tooltip_zh": passive.get("description_zh") or "",
+        "tooltip_en_clean": description_en_clean,
+        "tooltip_zh_clean": passive.get("description_zh_clean") or "",
+        "maxrank": 1,
+        "cooldown": [],
+        "cooldown_burn": "",
+        "cost": [],
+        "cost_burn": "",
+        "cost_type_en": "",
+        "cost_type_zh": "",
+        "resource_en": "",
+        "resource_zh": "",
+        "range": [],
+        "range_burn": "",
+        "effect": [],
+        "effect_burn": [],
+        "vars": [],
+        "image": {},
+        "image_url": "",
+        "heuristic_tags": [],
+    }
+
+
+def abilities_for_scoring(champion: dict[str, Any]) -> list[dict[str, Any]]:
+    abilities = list(champion.get("abilities") or [])
+    passive = passive_ability_for_scoring(champion)
+    if passive is not None and not any(str(ability.get("slot") or "") == "P" for ability in abilities):
+        abilities.append(passive)
+    return abilities
 
 
 def split_sentences(text: str) -> list[str]:
@@ -1371,7 +2569,7 @@ def effect_numbers(ability: dict[str, Any]) -> list[float]:
     return nums
 
 
-def ability_stat_override(alias: str, slot: str, key: str) -> float | str | None:
+def ability_stat_override(alias: str, slot: str, key: str) -> float | str | bool | None:
     return ABILITY_REVIEW_OVERRIDES.get((alias, slot), {}).get(key)
 
 
@@ -1396,6 +2594,9 @@ def ability_context(champion: dict[str, Any], ability: dict[str, Any]) -> dict[s
     cd = cooldown_min(ability)
     aoe = is_aoe(ability, scoped_text)
     mobility = has_mobility(scoped_text)
+    mobility_override = ability_stat_override(alias, slot, "mobility")
+    if isinstance(mobility_override, bool):
+        mobility = mobility_override
     shape = infer_shape(alias, slot, ability, scoped_text, rng)
     width = infer_width(alias, slot, scoped_text, shape)
     radius = infer_radius(alias, slot, scoped_text, effect_numbers(ability))
@@ -1448,7 +2649,18 @@ def has_hard_cc(text: str) -> bool:
 
 
 def has_soft_cc(text: str) -> bool:
-    return contains_terms(text, SOFT_CC_WORDS)
+    scrubbed = (
+        text.replace("slowing himself", "")
+        .replace("slows himself", "")
+        .replace("slowed himself", "")
+        .replace("slowing herself", "")
+        .replace("slows herself", "")
+        .replace("slowed herself", "")
+        .replace("slowing itself", "")
+        .replace("slows itself", "")
+        .replace("slowed itself", "")
+    )
+    return contains_terms(scrubbed, SOFT_CC_WORDS)
 
 
 def has_mobility(text: str) -> bool:
@@ -2239,6 +3451,7 @@ def growth_proxy(alias: str, slot: str, text: str, tags: set[str], aoe: bool) ->
 def engage_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dict[str, Any]:
     ctx = ability_context(champion, ability)
     alias = str(ctx["alias"])
+    tags = set(ctx["tags"])
     slot = str(ctx["slot"])
     text = str(ctx["text"])
     rng = float(ctx["range"])
@@ -2315,6 +3528,20 @@ def engage_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dic
         penalty += 0.32
     if effect_scope == "active_plus_passive":
         penalty += 0.05
+    fragile_controller = (
+        bool(tags & {"Mage", "Marksman", "Support"})
+        and not bool(tags & {"Tank", "Fighter"})
+        and cc_base >= 2.0
+        and cc_type != "hook_pull"
+    )
+    if fragile_controller and follow <= 0.25:
+        # Many squishy champions use short/slow CC as peel. Treat it as
+        # reactive unless the skill has explicit override evidence otherwise.
+        penalty += 0.3
+        if rng <= 1000:
+            penalty += 0.15
+    elif fragile_controller and rng <= 750 and cc_type != "aoe_hard":
+        penalty += 0.18
 
     gate_scale = {
         "forced_displacement": 1.0,
@@ -2329,6 +3556,9 @@ def engage_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dic
 
     value *= max(0.0, 1.0 - penalty)
     value *= gate_scale
+    skill_multiplier = ability_stat_override(alias, slot, "engage_score_multiplier")
+    if isinstance(skill_multiplier, (int, float)):
+        value *= float(skill_multiplier)
 
     return {
         "slot": slot,
@@ -2469,6 +3699,9 @@ def wave_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dict[
             and slot != "R"
         )
     )
+    supports_override = ability_stat_override(alias, slot, "supports_wave")
+    if isinstance(supports_override, (bool, int, float)):
+        supports_wave = bool(supports_override)
     if not has_damage(text) and not contains_any(text, AUTO_ATTACK_WORDS):
         value *= 0.25
     if champion_only:
@@ -2554,10 +3787,18 @@ def wave_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dict[
         value *= 0.55
     if "two nearby enemies" in text or "single target" in text:
         value *= 0.55
-    if slot == "R" and cd >= 20 and persistence <= 0.0 and not contains_any(text, MINION_HINT_WORDS):
-        value *= 0.38
-    if slot == "R" and cd >= 20 and persistence < 0.5 and cast_range <= 900 and "per second" not in text:
-        value *= 0.55
+    if slot == "R" and cd >= 20 and not contains_any(text, MINION_HINT_WORDS):
+        if "per second" in text or persistence >= 0.9:
+            value *= 0.7
+        elif persistence >= 0.5:
+            value *= 0.45
+        else:
+            value *= 0.28
+        if cast_range <= 900 and "per second" not in text:
+            value *= 0.65
+    skill_multiplier = ability_stat_override(alias, slot, "wave_score_multiplier")
+    if isinstance(skill_multiplier, (int, float)):
+        value *= float(skill_multiplier)
 
     return {
         "slot": slot,
@@ -2652,6 +3893,7 @@ def basic_attack_floor(champion: dict[str, Any]) -> float:
     if "Marksman" not in tags and reset_onhit <= 0.0:
         heuristic_floor *= 0.78
     floor = max(heuristic_floor, empirical_floor)
+    floor *= BASIC_ATTACK_FLOOR_MULTIPLIER.get(alias, 1.0)
     return clamp_score(floor)
 
 
@@ -2775,10 +4017,10 @@ def build_skill_debug_rows(
 ) -> list[dict[str, Any]]:
     engage_by_slot = {str(skill["slot"]): skill for skill in engage_skills}
     wave_by_slot = {str(skill["slot"]): skill for skill in wave_skills}
-    top_engage_slots = {str(skill["slot"]) for skill in engage_skills[:2]}
+    top_engage_slots = {str(skill["slot"]) for skill in engage_skills[:3]}
     top_wave_slots = {str(skill["slot"]) for skill in wave_skills[:3]}
     rows: list[dict[str, Any]] = []
-    for ability in champion.get("abilities") or []:
+    for ability in abilities_for_scoring(champion):
         slot = str(ability.get("slot") or "?")
         engage = engage_by_slot.get(slot, {})
         wave = wave_by_slot.get(slot, {})
@@ -2818,9 +4060,13 @@ def build_skill_debug_rows(
                 "persistence": wave.get("persistence") or "",
                 "self_commit": wave.get("self_commit") or "",
                 "supports_wave": wave.get("supports_wave") if "supports_wave" in wave else "",
+                "engage_base_score": engage.get("base_score") or "",
+                "engage_manual_adjustment": engage.get("manual_adjustment") or "",
                 "engage_skill_score": engage.get("score") or "",
+                "wave_base_score": wave.get("base_score") or "",
+                "wave_manual_adjustment": wave.get("manual_adjustment") or "",
                 "wave_skill_score": wave.get("score") or "",
-                "is_engage_top2": slot in top_engage_slots,
+                "is_engage_top3": slot in top_engage_slots,
                 "is_wave_top3": slot in top_wave_slots,
                 "semantic_formula_version": FORMULA_VERSION,
                 "analysis_text": analysis_text,
@@ -2834,23 +4080,28 @@ def score_champion(
     *,
     include_skill_debug: bool = False,
 ) -> dict[str, Any] | tuple[dict[str, Any], list[dict[str, Any]]]:
+    alias = str(champion.get("alias") or "")
     build_record = build_profile_record(
-        str(champion.get("alias") or ""),
+        alias,
         set(champion.get("tags") or []),
     )
-    engage_skills = [engage_skill_score(champion, ability) for ability in (champion.get("abilities") or [])]
-    wave_skills = [wave_skill_score(champion, ability) for ability in (champion.get("abilities") or [])]
+    ability_rows = abilities_for_scoring(champion)
+    engage_skills = [engage_skill_score(champion, ability) for ability in ability_rows]
+    wave_skills = [wave_skill_score(champion, ability) for ability in ability_rows]
+    engage_skills = apply_manual_spell_score_adjustments("engage", alias, engage_skills)
+    wave_skills = apply_manual_spell_score_adjustments("wave", alias, wave_skills)
     engage_skills.sort(key=lambda row: float(row["score"]), reverse=True)
     wave_skills.sort(key=lambda row: float(row["score"]), reverse=True)
 
     top_engage = float(engage_skills[0]["score"]) if engage_skills else 0.0
     second_engage = float(engage_skills[1]["score"]) if len(engage_skills) > 1 else 0.0
+    third_engage = float(engage_skills[2]["score"]) if len(engage_skills) > 2 else 0.0
     engage_total = clamp_score(
-        0.72 * top_engage
-        + 0.18 * second_engage
-        + 0.10 * 3.0 * chain_bonus(engage_skills)
+        ENGAGE_TOP3_WEIGHTS[0] * top_engage
+        + ENGAGE_TOP3_WEIGHTS[1] * second_engage
+        + ENGAGE_TOP3_WEIGHTS[2] * third_engage
+        + ENGAGE_CHAIN_WEIGHT * 3.0 * chain_bonus(engage_skills)
     )
-
     top_wave = float(wave_skills[0]["score"]) if wave_skills else 0.0
     second_wave = float(wave_skills[1]["score"]) if len(wave_skills) > 1 else 0.0
     third_wave = float(wave_skills[2]["score"]) if len(wave_skills) > 2 else 0.0
@@ -2863,9 +4114,8 @@ def score_champion(
             st_floor,
         )
     )
-
     cc, damage, poke, sustain, frontline, evidence = legacy_aux_scores(champion)
-    evidence["engage_score"] = [skill["note"] for skill in engage_skills[:2]]
+    evidence["engage_score"] = [skill["note"] for skill in engage_skills[:3]]
     evidence["wave_clear_score"] = [skill["note"] for skill in wave_skills[:3]]
 
     row = {
@@ -2885,7 +4135,7 @@ def score_champion(
         "poke_score": clamp_score(poke),
         "sustain_score": clamp_score(sustain),
         "frontline_score": clamp_score(frontline),
-        "engage_top_spells": ",".join(str(skill["slot"]) for skill in engage_skills[:2]),
+        "engage_top_spells": ",".join(str(skill["slot"]) for skill in engage_skills[:3]),
         "wave_top_spells": ",".join(str(skill["slot"]) for skill in wave_skills[:3]),
         "st_floor": st_floor,
         "semantic_formula_version": FORMULA_VERSION,
@@ -2909,9 +4159,21 @@ def score_champion(
     return row
 
 
+def champion_with_site_roles(champion: dict[str, Any]) -> dict[str, Any]:
+    alias = str(champion.get("alias") or "")
+    ddragon_tags = list(champion.get("tags") or [])
+    role_tags = role_tags_for_alias(alias, ddragon_tags)
+    if not role_tags:
+        return champion
+    out = dict(champion)
+    out["ddragon_tags"] = ddragon_tags
+    out["tags"] = role_tags
+    return out
+
+
 def build_scores(ability_json: Path) -> list[dict[str, Any]]:
     raw = json.loads(ability_json.read_text(encoding="utf-8"))
-    rows = [score_champion(champion) for champion in raw.get("champions", [])]
+    rows = [score_champion(champion_with_site_roles(champion)) for champion in raw.get("champions", [])]
     return sorted(rows, key=lambda row: int(row["champion_id"]))
 
 
@@ -2920,7 +4182,7 @@ def build_scores_with_debug(ability_json: Path) -> tuple[list[dict[str, Any]], l
     champion_rows: list[dict[str, Any]] = []
     skill_rows: list[dict[str, Any]] = []
     for champion in raw.get("champions", []):
-        champ_row, debug_rows = score_champion(champion, include_skill_debug=True)
+        champ_row, debug_rows = score_champion(champion_with_site_roles(champion), include_skill_debug=True)
         champion_rows.append(champ_row)
         skill_rows.extend(debug_rows)
     champion_rows.sort(key=lambda row: int(row["champion_id"]))
