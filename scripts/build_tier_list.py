@@ -32,6 +32,31 @@ import click
 import httpx
 
 try:
+    from champion_roles import (
+        MARKSMAN_ITEM_STYLES,
+        RANGED_ATTACK_RANGE_MIN,
+        ROLE_FROM_ITEM_STYLE,
+        ROLE_LABELS,
+        ROLE_ORDER,
+        ROLE_RANGED_ALIAS_OVERRIDES,
+        ROLE_SORT_PRIORITY,
+        role_definitions_payload,
+        role_tags_for_alias,
+    )
+except ImportError:  # pragma: no cover - supports importing as scripts.build_tier_list.
+    from scripts.champion_roles import (
+        MARKSMAN_ITEM_STYLES,
+        RANGED_ATTACK_RANGE_MIN,
+        ROLE_FROM_ITEM_STYLE,
+        ROLE_LABELS,
+        ROLE_ORDER,
+        ROLE_RANGED_ALIAS_OVERRIDES,
+        ROLE_SORT_PRIORITY,
+        role_definitions_payload,
+        role_tags_for_alias,
+    )
+
+try:
     from scipy.optimize import minimize_scalar
     from scipy.special import betaln, betaincinv
 except Exception:  # pragma: no cover - scipy is installed through sklearn locally.
@@ -78,13 +103,12 @@ ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
 ITEM_PAIR_MIN_GAMES = 30
 ITEM_PAIR_FALLBACK_MIN_GAMES = 20
-ITEM_PAIR_TOP_MIN_PICK_RATE = 0.002
 ITEM_PAIR_TOP_MIN_LIFT = -0.02
 ITEM_PAIR_PICK_LIFT_WEIGHT = 0.0
 ITEM_PAIR_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
-ITEM_PAIR_PICK_RATE_WEIGHT = 0.006
-ITEM_PAIR_PICK_RATE_REF = 0.002
-ITEM_PAIR_PICK_RATE_CAP = 0.012
+ITEM_PAIR_PICK_RATE_WEIGHT = 0.012
+ITEM_PAIR_PICK_RATE_REF = 0.005
+ITEM_PAIR_PICK_RATE_CAP = 0.045
 ITEM_PAIR_ORDER_PRIOR_GAMES = 20
 AUGMENT_TYPE_MIN_GAMES = 100
 
@@ -812,188 +836,13 @@ def assign_tier(bayes_wr: float) -> str:
         return "T4"
     return "T5"
 
-# Data Dragon tags are Riot general/SR labels, so we keep one curated
-# Mayhem primary role per champion. Secondary roles are inferred later
-# from current-patch item-style usage and win-rate fit.
-PRIMARY_ROLE_OVERRIDES: dict[str, str] = {
-    # --- Assassin ---
-    'Akali'   : 'Assassin',
-    'Diana'   : 'Assassin',
-    'Ekko'    : 'Assassin',
-    'Evelynn' : 'Assassin',
-    'Fizz'    : 'Assassin',
-    'Kassadin': 'Assassin',
-    'Katarina': 'Assassin',
-    'Leblanc' : 'Assassin',
-    'Naafiri' : 'Assassin',
-    'Nocturne': 'Assassin',
-    'Qiyana'  : 'Assassin',
-    'Rengar'  : 'Assassin',
-
-    # --- Fighter ---
-    'Briar'      : 'Fighter',
-    'Fiora'      : 'Fighter',
-    'Irelia'     : 'Fighter',
-    'Jax'        : 'Fighter',
-    'Kayn'       : 'Fighter',
-    'LeeSin'     : 'Fighter',
-    'MasterYi'   : 'Fighter',
-    'Pantheon'   : 'Fighter',
-    'Riven'      : 'Fighter',
-    'Tryndamere' : 'Fighter',
-    'Vi'         : 'Fighter',
-    'Viego'      : 'Fighter',
-    'XinZhao'    : 'Fighter',
-    'Yasuo'      : 'Fighter',
-    'Yone'       : 'Fighter',
-    'Zaahen'     : 'Fighter',
-    'Aatrox'     : 'Fighter',
-    'Ambessa'    : 'Fighter',
-    'Camille'    : 'Fighter',
-    'Darius'     : 'Fighter',
-    'Garen'      : 'Fighter',
-    'Gnar'       : 'Fighter',
-    'Hecarim'    : 'Fighter',
-    'Illaoi'     : 'Fighter',
-    'JarvanIV'   : 'Fighter',
-    'Jayce'      : 'Fighter',
-    'Kled'       : 'Fighter',
-    'MonkeyKing' : 'Fighter',
-    'Mordekaiser': 'Fighter',
-    'Olaf'       : 'Fighter',
-    'RekSai'     : 'Fighter',
-    'Renekton'   : 'Fighter',
-    'Sett'       : 'Fighter',
-    'Shyvana'    : 'Fighter',
-    'Trundle'    : 'Fighter',
-    'Udyr'       : 'Fighter',
-    'Urgot'      : 'Fighter',
-    'Warwick'    : 'Fighter',
-    'Yorick'     : 'Fighter',
-    'Singed'     : 'Fighter',
-
-    # --- Tank ---
-    'Poppy'    : 'Tank',
-    'Malphite' : 'Tank',
-    'Maokai'   : 'Tank',
-    'DrMundo'  : 'Tank',
-    'KSante'   : 'Tank',
-    'Nunu'     : 'Tank',
-    'Ornn'     : 'Tank',
-    'Rammus'   : 'Tank',
-    'Sejuani'  : 'Tank',
-    'Sion'     : 'Tank',
-    'Skarner'  : 'Tank',
-    'Zac'      : 'Tank',
-    'Amumu'    : 'Tank',
-    'Chogath'  : 'Tank',
-    'Galio'    : 'Tank',
-    'Nasus'    : 'Tank',
-    'Volibear' : 'Tank',
-    'TahmKench': 'Tank',
-    'Taric'    : 'Tank',
-
-    # --- Marksman ---
-    'Akshan'     : 'Marksman',
-    'Ashe'       : 'Marksman',
-    'Corki'      : 'Marksman',
-    'Ezreal'     : 'Marksman',
-    'Jhin'       : 'Marksman',
-    'Kaisa'      : 'Marksman',
-    'Kayle'      : 'Marksman',
-    'KogMaw'     : 'Marksman',
-    'Lucian'     : 'Marksman',
-    'MissFortune': 'Marksman',
-    'Nilah'      : 'Marksman',
-    'Quinn'      : 'Marksman',
-    'Samira'     : 'Marksman',
-    'Smolder'    : 'Marksman',
-    'Tristana'   : 'Marksman',
-    'Twitch'     : 'Marksman',
-    'Varus'      : 'Marksman',
-    'Vayne'      : 'Marksman',
-
-    # --- Mage ---
-    'Azir'        : 'Mage',
-    'Aurora'      : 'Mage',
-    'Fiddlesticks': 'Mage',
-    'Karma'       : 'Mage',
-    'Lux'         : 'Mage',
-    'Mel'         : 'Mage',
-    'Nidalee'     : 'Mage',
-    'Orianna'     : 'Mage',
-    'Rumble'      : 'Mage',
-    'Seraphine'   : 'Mage',
-    'Swain'       : 'Mage',
-    'Taliyah'     : 'Mage',
-    'Teemo'       : 'Mage',
-    'Zoe'         : 'Mage',
-    'Zyra'        : 'Mage',
-    'Annie'       : 'Mage',
-    'Brand'       : 'Mage',
-    'Heimerdinger': 'Mage',
-    'Hwei'        : 'Mage',
-    'Neeko'       : 'Mage',
-    'Velkoz'      : 'Mage',
-    'Xerath'      : 'Mage',
-    'TwistedFate' : 'Mage',
-    'Vladimir'    : 'Mage',
-
-    # --- Support ---
-    'Thresh' : 'Support',
-    'Morgana': 'Support',
-    'Bard'   : 'Support',
-    'Janna'  : 'Support',
-    'Lulu'   : 'Support',
-    'Nami'   : 'Support',
-    'Sona'   : 'Support',
-    'Soraka' : 'Support',
-    'Yuumi'  : 'Support',
-    'Zilean' : 'Support',
-    'Ivern'  : 'Support',
-    'Milio'  : 'Support',
-    'Renata' : 'Support',
-}
-
-ROLE_FROM_ITEM_STYLE: dict[str, str] = {
-    "ap_burn": "Mage",
-    "ap_burst": "Mage",
-    "ap_bruiser": "Fighter",
-    "ad_bruiser": "Fighter",
-    "tank": "Tank",
-    "heartsteel": "Tank",
-    "support": "Support",
-}
-ROLE_LABELS = {
-    "Assassin": {"zh": "刺客", "en": "Assassin"},
-    "Fighter": {"zh": "戰士", "en": "Fighter"},
-    "Mage": {"zh": "法師", "en": "Mage"},
-    "Marksman": {"zh": "射手", "en": "Marksman"},
-    "Support": {"zh": "輔助", "en": "Support"},
-    "Tank": {"zh": "坦克", "en": "Tank"},
-}
-MARKSMAN_ITEM_STYLES = {"crit", "onhit", "ad_poke", "ap_onhit"}
-RANGED_ATTACK_RANGE_MIN = 400
+# Role definitions live in scripts/champion_roles.py so every generated page
+# and public role spec shares one site-wide source of truth.
 ROLE_SCORE_CLOSE_GAP = 0.012
 ROLE_MIN_PICK_RATE = 0.06
 SECONDARY_ROLE_MIN_PICK_RATE = 0.08
 ROLE_PICK_LIFT_WEIGHT = AUGMENT_PICK_LIFT_WEIGHT
 ROLE_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
-ROLE_ORDER = ("Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank")
-ROLE_SORT_PRIORITY = {role: idx for idx, role in enumerate(ROLE_ORDER)}
-from champion_roles import (  # noqa: E402
-    PRIMARY_ROLE_OVERRIDES as SHARED_PRIMARY_ROLE_OVERRIDES,
-    ROLE_LABELS as SHARED_ROLE_LABELS,
-    ROLE_ORDER as SHARED_ROLE_ORDER,
-    ROLE_SORT_PRIORITY as SHARED_ROLE_SORT_PRIORITY,
-    role_definitions_payload,
-    role_tags_for_alias,
-)
-
-PRIMARY_ROLE_OVERRIDES = SHARED_PRIMARY_ROLE_OVERRIDES
-ROLE_LABELS = SHARED_ROLE_LABELS
-ROLE_ORDER = SHARED_ROLE_ORDER
-ROLE_SORT_PRIORITY = SHARED_ROLE_SORT_PRIORITY
 CHAMPION_NAME_OVERRIDES: dict[str, dict[str, str]] = {
     "Renata": {"name_zh": "睿娜妲", "name_en": "Renata"},
 }
@@ -1022,8 +871,8 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
         original_tags = list(tags)
         tags = role_tags_for_alias(alias, tags)
         primary_role = tags[0] if tags else ""
-        if tags and (tags != list(original_tags)):
-            applied.append((alias, list(original_tags), tags))
+        if tags != original_tags:
+            applied.append((alias, original_tags, tags))
         name_zh = entry_zh.get("name") or entry_en.get("name") or alias
         name_en = entry_en.get("name") or alias
         if alias in CHAMPION_NAME_OVERRIDES:
@@ -1042,7 +891,7 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
             "image": f"https://ddragon.leagueoflegends.com/cdn/{version}/img/champion/{alias}.png",
         }
     if applied:
-        click.echo(f"[tierlist] applied {len(applied)} PRIMARY_ROLE_OVERRIDES (DDragon -> Mayhem primary role):")
+        click.echo(f"[tierlist] applied {len(applied)} fixed Mayhem primary roles (DDragon -> site role):")
         for alias, before, after in applied:
             click.echo(f"  {alias:14s} {before} -> {after}")
     return version, by_id
@@ -1069,13 +918,17 @@ def write_role_definitions_json(
             tags = list(meta.get("tags") or [])
             primary = str(tags[0]) if tags else ""
             secondary = str(tags[1]) if len(tags) > 1 else ""
+            role_meta = meta.get("role_meta") or {}
             current_roles[alias] = {
                 "primary": primary,
                 "secondary": secondary,
                 "tags": tags,
             }
             if secondary:
-                secondary_roles[alias] = {"role": secondary}
+                secondary_roles[alias] = {
+                    "role": secondary,
+                    "meta": role_meta.get(secondary, {}),
+                }
         payload["current_roles"] = dict(sorted(current_roles.items()))
         payload["secondary_roles"] = dict(sorted(secondary_roles.items()))
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
@@ -2432,8 +2285,6 @@ def compute_champ_item_pair_affinities(
         pick_rate_cap=ITEM_PAIR_PICK_RATE_CAP,
         rank_mode="lift",
         top_min_lift=ITEM_PAIR_TOP_MIN_LIFT,
-        top_min_pick_rate=ITEM_PAIR_TOP_MIN_PICK_RATE,
-        top_pick_guarantee=True,
     )
     for cid, payload in affinity.items():
         for row in [*(payload.get("top") or []), *(payload.get("bot") or [])]:
@@ -3278,16 +3129,21 @@ def render_html(
     .chip[data-role="Support"]       { --role-color: #ec4899; }
     .chip[data-role="Tank"]          { --role-color: #a855f7; }
     .role-spec-link {
-        align-self: center;
-        color: #9fb4d8;
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        background: #11151d;
+        border: 1px solid #30363d;
+        border-radius: 18px;
+        color: #f5d780;
         font-size: 12px;
+        font-weight: 700;
         text-decoration: none;
-        border-bottom: 1px dotted rgba(159, 180, 216, 0.65);
-        padding: 4px 2px;
     }
     .role-spec-link:hover {
-        color: #d7e6ff;
-        border-bottom-color: #d7e6ff;
+        background: #1b2030;
+        border-color: #f5d780;
     }
     .filter-tools {
         display: flex;
@@ -5036,16 +4892,16 @@ def render_html(
         "aria-labelledby='updates-title'>"
         "<div class='updates-head'>"
         "<div>"
-        "<span class='updates-kicker' id='updates-kicker'>本版重點</span>"
-        "<h2 class='updates-title' id='updates-title'>近期重要更新</h2>"
+        "<span class='updates-kicker' id='updates-kicker'>?祉???</span>"
+        "<h2 class='updates-title' id='updates-title'>餈????湔</h2>"
         "</div>"
         "<button class='updates-close' id='updates-close' type='button' "
         "aria-label='關閉近期更新'>&times;</button>"
         "</div>"
         "<ul class='updates-list' id='updates-list'>"
-        "<li>隊友適配除了 pair 勝率，現在也會做隊伍組成修正，包含前排、AD/AP、poke、清線、開戰等陣容缺口。</li>"
-        "<li>增幅裝置排序小幅納入選取率訊號，低選取率高勝率會更保守看待。</li>"
-        "<li>推薦面板與搜尋互動持續優化，讓手機版更容易快速查英雄。</li>"
+        "<li>???拚??支? pair ??嚗?其?????蝯?靽格迤嚗??怠??D/AP?oke??蝺??啁???捆蝻箏??/li>"
+        "<li>憓?鋆蔭??撠?蝝?詨?????雿??擃????港?摰?敺?/li>"
+        "<li>?啣??箄?憸冽??撟???扼?/li>"
         "</ul>"
         "</section>"
     )
@@ -5224,10 +5080,7 @@ def render_html(
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const ROLE_LABELS = {
-        zh: { Assassin: '刺客', Fighter: '戰士', Mage: '法師', Marksman: '射手', Support: '輔助', Tank: '坦克' },
-        en: { Assassin: 'Assassin', Fighter: 'Fighter', Mage: 'Mage', Marksman: 'Marksman', Support: 'Support', Tank: 'Tank' },
-    };
+    const ROLE_LABELS = __ROLE_LABELS__;
     const ROLE_BADGE_ICONS = {
         Assassin: `
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -5320,7 +5173,7 @@ def render_html(
             setSectionTitle: '增幅裝置系列相性',
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
-            itemSectionMeta: '不含鞋子',
+            itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
             augTypeSectionTitle: '推薦增幅裝置類型',
             augTypeSectionMeta: '',
             relativeBest: '相對最佳',
@@ -5396,7 +5249,7 @@ def render_html(
             setSectionTitle: 'Augment Sets',
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
-            itemSectionMeta: 'boots excluded',
+            itemSectionMeta: 'boots excluded; left to right is #1 to #3',
             augTypeSectionTitle: 'Recommended Augment Types',
             augTypeSectionMeta: '',
             relativeBest: 'Relative Best',
@@ -5836,7 +5689,7 @@ def render_html(
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
                 <span class="cname" id="detail-title-${cid}">${escHtml(champName(info))}</span>
             </div>
-            ${buildAffinitySection(copy.itemSectionTitle, copy.itemSectionMeta, itemInfo, { minRows: 2, includeHighestPick: true })}
+            ${buildAffinitySection(copy.itemSectionTitle, copy.itemSectionMeta, itemInfo, { minRows: 3, maxRows: 3 })}
             <div class="detail-section">
                 <span class="section-meta augment-strength-meta">
                     ${copy.augmentStrengthMeta}
@@ -6761,6 +6614,16 @@ def render_html(
     js = js.replace("__BUILD_DATE__", json.dumps(build_date, ensure_ascii=False))
     js = js.replace("__PATCH_LABEL__", json.dumps(patch_label, ensure_ascii=False))
     js = js.replace("__TOTAL_GAMES__", json.dumps(f"{total_games:,}", ensure_ascii=False))
+    js = js.replace(
+        "__ROLE_LABELS__",
+        json.dumps(
+            {
+                "zh": {role: (ROLE_LABELS.get(role, {}).get("zh", role)) for role in ROLE_ORDER},
+                "en": {role: (ROLE_LABELS.get(role, {}).get("en", role)) for role in ROLE_ORDER},
+            },
+            ensure_ascii=False,
+        ),
+    )
     parts.append(f"<script>{js}</script>")
     parts.append("</body></html>")
     return "".join(parts)
@@ -6864,7 +6727,7 @@ def main(
     )
     click.echo(
         f"[tierlist] {len(item_pair_affinity)} champions have >= 1 core item-pair row "
-        f"(games >= {ITEM_PAIR_MIN_GAMES}, top_pick >= {ITEM_PAIR_TOP_MIN_PICK_RATE:.1%}, "
+        f"(games >= {ITEM_PAIR_MIN_GAMES}, no fixed pick floor, "
         f"top_lift >= {ITEM_PAIR_TOP_MIN_LIFT:.1%})"
     )
     click.echo(
