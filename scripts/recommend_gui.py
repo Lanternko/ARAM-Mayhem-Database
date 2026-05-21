@@ -10,7 +10,7 @@ Threading:
   - poll thread: runs the LCU polling loop, never touches Tk; pushes
     updates onto a queue.Queue that the main thread drains via root.after.
 
-Tkinter is not thread-safe — keep this separation strict.
+Tkinter is not thread-safe - keep this separation strict.
 
 Usage:
   python scripts/recommend_gui.py \
@@ -20,6 +20,7 @@ Usage:
 """
 from __future__ import annotations
 
+import math
 import queue
 import sys
 import threading
@@ -30,11 +31,13 @@ import click
 
 from aram_nn.icons import IconCache
 from aram_nn.lcu.client import (
-    LCUClient, get_champion_summary, get_champ_select_session, get_gameflow_phase,
+    LCUClient, get_champion_summary, get_champ_select_session, get_current_summoner,
+    get_gameflow_phase,
 )
 from aram_nn.lcu.process import get_credentials
 from aram_nn.recommend import (
-    ParsedSession, load_lr, parse_session, session_state_hash, suggest_for_cell,
+    ParsedSession, load_composition_lr, load_lr, parse_session, session_state_hash,
+    suggest_for_cell,
 )
 from aram_nn.pair_synergy import PairSynergyStats, load_pair_synergy
 
@@ -42,14 +45,14 @@ from aram_nn.pair_synergy import PairSynergyStats, load_pair_synergy
 # ---------- Polling thread ----------
 
 def poll_loop(
-    stop_event: threading.Event, q: queue.Queue, model, pair_stats, creds,
+    stop_event: threading.Event, q: queue.Queue, model, pair_stats, composition_model, creds,
     poll_interval: float, verbose: bool = False,
 ) -> None:
     """Run in background thread.  Pushes messages onto `q`:
-      ("static", id_to_name)         — once, after LCU static data loads
-      ("idle", phase)                — when not in (or about to leave) champ select
-      ("suggestions", parsed, sugs)  — when champ select state changes
-      ("error", message)             — on unrecoverable failure
+      ("static", id_to_name)         - once, after LCU static data loads
+      ("idle", phase)                - when not in (or about to leave) champ select
+      ("suggestions", parsed, sugs)  - when champ select state changes
+      ("error", message)             - on unrecoverable failure
 
     When verbose, also prints a status line to stdout on every poll so the
     user can see what the LCU is returning (phase + session presence)
@@ -59,55 +62,81 @@ def poll_loop(
         if verbose:
             print(msg, flush=True)
 
-    try:
-        with LCUClient(creds) as lcu:
-            id_to_name: dict[int, str] = {}
-            for entry in get_champion_summary(lcu):
-                cid = entry.get("id")
-                name = entry.get("name") or entry.get("alias")
-                if isinstance(cid, int) and isinstance(name, str) and cid > 0:
-                    id_to_name[cid] = name
-            q.put(("static", id_to_name))
-            log(f"[poll] loaded {len(id_to_name)} champion names from LCU")
+    current_creds = creds
 
-            last_hash: tuple | None = None
-            last_phase: str | None = None
+    while not stop_event.is_set():
+        if current_creds is None:
+            current_creds = get_credentials()
+            if current_creds is None:
+                q.put(("status", "Waiting for League client", "No LCU credentials found."))
+                log("[poll] waiting for LCU credentials")
+                stop_event.wait(max(poll_interval, 2.0))
+                continue
 
-            while not stop_event.is_set():
-                session = get_champ_select_session(lcu)
-                parsed = parse_session(session) if session else None
-
-                if parsed is None:
-                    phase = get_gameflow_phase(lcu)
-                    if verbose or phase != last_phase:
-                        log(f"[poll] idle  phase={phase}  "
-                            f"session={'yes(incomplete)' if session else 'no'}")
-                    if phase != last_phase:
-                        q.put(("idle", phase))
-                        last_phase = phase
-                        last_hash = None
-                    stop_event.wait(max(poll_interval, 2.0))
+        try:
+            with LCUClient(current_creds) as lcu:
+                if get_current_summoner(lcu) is None:
+                    q.put(("status", "LCU not ready", "Refreshing League client credentials..."))
+                    log("[poll] LCU health check failed; refreshing credentials")
+                    current_creds = None
+                    stop_event.wait(max(poll_interval, 1.0))
                     continue
-                last_phase = "ChampSelect"
+                id_to_name: dict[int, str] = {}
+                for entry in get_champion_summary(lcu):
+                    cid = entry.get("id")
+                    name = entry.get("name") or entry.get("alias")
+                    if isinstance(cid, int) and isinstance(name, str) and cid > 0:
+                        id_to_name[cid] = name
+                q.put(("static", id_to_name))
+                log(f"[poll] loaded {len(id_to_name)} champion names from LCU")
 
-                state = session_state_hash(parsed)
-                if state != last_hash:
-                    suggestions = suggest_for_cell(
-                        parsed.my_team_ids,
-                        parsed.my_current_id,
-                        parsed.bench_ids,
-                        model,
-                        pair_stats,
-                    )
-                    q.put(("suggestions", parsed, suggestions))
-                    last_hash = state
-                    log(f"[poll] champ-select update  cell={parsed.my_cell_id}  "
-                        f"current={parsed.my_current_id}  bench={len(parsed.bench_ids)}")
+                last_hash: tuple | None = None
+                last_phase: str | None = None
 
-                stop_event.wait(poll_interval)
-    except Exception as exc:  # pragma: no cover — surfaced to GUI
-        q.put(("error", repr(exc)))
-        log(f"[poll] error: {exc!r}")
+                while not stop_event.is_set():
+                    session = get_champ_select_session(lcu)
+                    parsed = parse_session(session) if session else None
+
+                    if parsed is None:
+                        phase = get_gameflow_phase(lcu)
+                        if phase == "None" and get_current_summoner(lcu) is None:
+                            q.put(("status", "LCU reconnecting", "League client credentials changed."))
+                            log("[poll] LCU became unreachable; reconnecting")
+                            current_creds = None
+                            break
+                        phase_label = f"{phase} (session incomplete)" if session else phase
+                        if verbose or phase != last_phase:
+                            log(f"[poll] idle  phase={phase_label}  "
+                                f"session={'yes(incomplete)' if session else 'no'}")
+                        if phase != last_phase:
+                            q.put(("idle", phase_label))
+                            last_phase = phase
+                            last_hash = None
+                        stop_event.wait(max(poll_interval, 2.0))
+                        continue
+                    last_phase = "ChampSelect"
+
+                    state = session_state_hash(parsed)
+                    if state != last_hash:
+                        suggestions = suggest_for_cell(
+                            parsed.my_team_ids,
+                            parsed.my_current_id,
+                            parsed.bench_ids,
+                            model,
+                            pair_stats,
+                            composition_model,
+                        )
+                        q.put(("suggestions", parsed, suggestions))
+                        last_hash = state
+                        log(f"[poll] champ-select update  cell={parsed.my_cell_id}  "
+                            f"current={parsed.my_current_id}  bench={len(parsed.bench_ids)}")
+
+                    stop_event.wait(poll_interval)
+        except Exception as exc:  # pragma: no cover - surfaced to GUI as status
+            q.put(("status", "LCU reconnecting", repr(exc)))
+            log(f"[poll] reconnect after error: {exc!r}")
+            current_creds = None
+            stop_event.wait(max(poll_interval, 2.0))
 
 
 def fake_poll_loop(
@@ -115,6 +144,7 @@ def fake_poll_loop(
     q: queue.Queue,
     model,
     pair_stats: PairSynergyStats | None,
+    composition_model,
     interval: float = 3.0,
 ) -> None:
     """Synthetic poll loop for --fake mode.
@@ -122,7 +152,7 @@ def fake_poll_loop(
     Emits randomly-generated champ-select states every `interval` seconds so
     the GUI can be validated without an LCU connection.  Predictions use the
     real LR model on the random teams, so delta magnitudes match what real
-    play would produce — only the champion picks are synthetic.
+    play would produce - only the champion picks are synthetic.
 
     Bench size is randomized between 5 and 10 each tick to exercise the
     GUI's vertical scrolling and to match the bench sizes a real ARAM
@@ -130,7 +160,7 @@ def fake_poll_loop(
     """
     import random
 
-    q.put(("static", {}))  # empty name map — GUI falls back to "#<id>"
+    q.put(("static", {}))  # empty name map - GUI falls back to "#<id>"
     all_ids = sorted(model.champ_to_idx.keys())
     cell_id = 2
 
@@ -148,50 +178,52 @@ def fake_poll_loop(
             bench_ids=bench,
             bench_enabled=True,
         )
-        suggestions = suggest_for_cell(my_team, my_current, bench, model, pair_stats)
+        suggestions = suggest_for_cell(my_team, my_current, bench, model, pair_stats, composition_model)
         q.put(("suggestions", parsed, suggestions))
         stop_event.wait(interval)
 
 
 # ---------- GUI ----------
 
-# Palette — warm tinted dark neutrals + a single muted gold accent.
-#
-# Picked against the scene this UI actually shows up in: an ARAM player
-# glancing at a secondary monitor while League's cool, saturated dark UI
-# dominates the main screen.  The warmth (low-chroma amber tint) reads as
-# a "different surface" rather than competing with League's blues, and
-# the muted sage/terracotta deltas avoid the neon-tool-dashboard reflex.
-BG        = "#181612"   # warm dark, very low chroma
-SURFACE   = "#1f1c17"   # one notch lighter, used sparingly
-BEST_BG   = "#2b251a"   # full-row tint for the best-pick row (no side stripes)
-FG        = "#e5e0d4"   # warm off-white
-DIM       = "#7e7869"   # secondary text, divider hints
-MUTED     = "#4a4639"   # tertiary text, unknown / n.a.
-DIVIDER   = "#2a261e"   # barely-visible separators
-GOLD      = "#d4a73e"   # accent: you, best pick — ≤10% of pixels
-GREEN     = "#7eb05e"   # sage — positive delta
-RED       = "#c87560"   # terracotta — negative delta
+# Palette - aligned with the public site: slate neutrals plus Mayhem-like
+# tier accents.  The GUI runs over a visually busy League client, so clarity
+# wins over transparency.
+BG        = "#0e1116"
+SURFACE   = "#161a22"
+ROW       = "#11151d"
+BEST_BG   = "#202414"
+WARN_BG   = "#241817"
+FG        = "#e6e8eb"
+DIM       = "#9aa0a6"
+MUTED     = "#69707a"
+DIVIDER   = "#30363d"
+GOLD      = "#f5c518"
+GREEN     = "#8ec441"
+RED       = "#ff6a4a"
+BLUE      = "#3aa0ff"
 
-# Fonts — Segoe UI for prose (Windows default sans, ships with the OS and
+# Fonts - Segoe UI for prose (Windows default sans, ships with the OS and
 # pairs well next to League's own Latin UI), Consolas for tabular numbers
 # so Δ% and z columns stay aligned across rows.
-FONT_HEAD    = ("Segoe UI", 14, "bold")
-FONT_SUB     = ("Segoe UI", 9)
-FONT_SECTION = ("Segoe UI", 8, "bold")
-FONT_NAME    = ("Segoe UI", 11)
-FONT_NAME_B  = ("Segoe UI", 11, "bold")
+FONT_HEAD    = ("Microsoft JhengHei UI", 15, "bold")
+FONT_SUB     = ("Microsoft JhengHei UI", 9)
+FONT_SECTION = ("Microsoft JhengHei UI", 8, "bold")
+FONT_NAME    = ("Microsoft JhengHei UI", 11)
+FONT_NAME_B  = ("Microsoft JhengHei UI", 11, "bold")
+FONT_DECISION = ("Microsoft JhengHei UI", 17, "bold")
 FONT_NUM      = ("Consolas", 11)
 FONT_NUM_B    = ("Consolas", 11, "bold")
-FONT_NUM_BEST = ("Consolas", 13, "bold")   # one notch up; only best-pick Δ.
+FONT_NUM_BEST = ("Consolas", 14, "bold")
 
-# U+2212 MINUS SIGN — proper typographic minus instead of HYPHEN-MINUS.
+# U+2212 MINUS SIGN - proper typographic minus instead of HYPHEN-MINUS.
 # Same width as "+" in Consolas so the columns still align.
 MINUS = "−"
 
 
 def _fmt_signed_pct(value_pp: float) -> str:
     """Format a percentage-point delta with a typographic minus for negatives."""
+    if math.isnan(value_pp):
+        return "n/a"
     if value_pp > 0:
         return f"+{value_pp:.1f}%"
     if value_pp < 0:
@@ -201,11 +233,19 @@ def _fmt_signed_pct(value_pp: float) -> str:
 
 def _fmt_signed_z(z: float) -> str:
     """Format a z-score with a typographic minus for negatives."""
+    if math.isnan(z):
+        return "n/a"
     if z > 0:
         return f"+{z:.2f}"
     if z < 0:
         return f"{MINUS}{abs(z):.2f}"
     return f" {z:.2f}"
+
+
+def _fmt_prob(value: float) -> str:
+    if math.isnan(value):
+        return "n/a"
+    return f"{value * 100:.1f}%"
 
 
 class RecommenderApp:
@@ -217,17 +257,10 @@ class RecommenderApp:
 
         root.title("ARAM Recommender")
         root.attributes("-topmost", True)
-        # 0.98 keeps a hair of see-through so a window underneath isn't a
-        # hard rectangle behind the UI, but stops terminal text reading
-        # through as ghosted noise the way 0.93 did.
-        root.attributes("-alpha", 0.98)
-        # Two-column layout — wider + shorter than the vertical v3.  The
-        # 10-row bench dictates height; the team column sits beside it
-        # rather than stacked above, which suits a secondary monitor better
-        # than a tall column did.
-        root.geometry("680x520+40+40")
+        root.attributes("-alpha", 1.0)
+        root.geometry("760x520+40+40")
         root.configure(bg=BG)
-        root.minsize(600, 420)
+        root.minsize(680, 460)
 
         # Pixel-perfect column geometry, applied identically to every row
         # frame so cells line up regardless of font.  Tk widget `width=N`
@@ -235,9 +268,10 @@ class RecommenderApp:
         # proportional) with FONT_NUM (Consolas mono) at the same `width=N`
         # produced visibly different pixel widths in earlier versions.
         # Pinning to minsize fixes it regardless of font.
-        self.COL_ICON   = 44   # 40px icon + 4px gutter
-        self.COL_DELTA  = 64
-        self.COL_Z      = 56
+        self.COL_ICON = 42
+        self.COL_DELTA = 74
+        self.COL_PROB = 64
+        self.COL_Z = 58
 
         # Tk widget constructors only accept a single int for padx/pady
         # (internal padding).  Asymmetric padding goes on the geometry
@@ -257,13 +291,13 @@ class RecommenderApp:
         )
         self.subheader.pack(fill="x", pady=(2, 12))
 
-        # Thin divider between header and the dynamic body — replaces what
+        # Thin divider between header and the dynamic body - replaces what
         # a bottom border on the header would do, without violating the
         # absolute ban on accent borders.
         tk.Frame(root, bg=DIVIDER, height=1).pack(fill="x", padx=16)
 
         self.body = tk.Frame(root, bg=BG)
-        self.body.pack(fill="both", expand=True, padx=16, pady=(12, 14))
+        self.body.pack(fill="both", expand=True, padx=16, pady=(10, 14))
 
         # Begin draining the queue.
         self.root.after(100, self._drain)
@@ -289,7 +323,12 @@ class RecommenderApp:
         elif kind == "idle":
             phase = msg[1]
             self.header.config(text=f"Idle · {phase}", fg=DIM)
-            self.subheader.config(text="Queue for ARAM to see swap suggestions.")
+            self.subheader.config(text="Queue for ARAM/Mayhem to see swap suggestions.")
+            self._clear_body()
+        elif kind == "status":
+            _, title, detail = msg
+            self.header.config(text=title, fg=DIM)
+            self.subheader.config(text=detail)
             self._clear_body()
         elif kind == "error":
             self.header.config(text="LCU error", fg=RED)
@@ -307,29 +346,80 @@ class RecommenderApp:
 
     def _render(self, parsed, suggestions) -> None:
         cur_name = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
-        self.header.config(text=f"Cell {parsed.my_cell_id}  ·  {cur_name}", fg=FG)
-        # Compressed legend.  v1 split this across "opponent unknown" and
-        # the column meanings; one line reads faster during a 30s timer.
+        self.header.config(text=f"Cell {parsed.my_cell_id} · {cur_name}", fg=FG)
         self.subheader.config(
-            text="Δ  win-rate change if you swap     z  champion meta strength"
+            text="MLΔ 是換人後勝率變化；z 是英雄本體強度"
         )
 
         self._clear_body()
 
-        # Two-column body: team (static context) on the left, bench (the
-        # action zone) on the right.  Bench gets more weight because it's
-        # what the user is actually scanning during a 30-second timer.
+        self._render_decision_band(self.body, parsed, suggestions)
+
         self.body.grid_columnconfigure(0, weight=2, minsize=260)
-        self.body.grid_columnconfigure(1, weight=3, minsize=320)
-        self.body.grid_rowconfigure(0, weight=1)
+        self.body.grid_columnconfigure(1, weight=3, minsize=360)
+        self.body.grid_rowconfigure(1, weight=1)
 
         left = tk.Frame(self.body, bg=BG)
-        left.grid(row=0, column=0, sticky="new", padx=(0, 24))
+        left.grid(row=1, column=0, sticky="new", padx=(0, 22), pady=(12, 0))
         right = tk.Frame(self.body, bg=BG)
-        right.grid(row=0, column=1, sticky="new")
+        right.grid(row=1, column=1, sticky="new", pady=(12, 0))
 
         self._render_team_section(left, parsed, suggestions)
-        self._render_bench_section(right, suggestions)
+        self._render_bench_table(right, suggestions)
+
+    def _render_decision_band(self, parent, parsed, suggestions) -> None:
+        keep = next((s for s in suggestions if s.source == "keep" and s.is_known), None)
+        bench = [s for s in suggestions if s.source == "bench" and s.is_known]
+        best = bench[0] if bench else None
+        should_swap = best is not None and best.delta > 0
+        action = best if should_swap else keep
+
+        current_name = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
+        action_name = (
+            self.id_to_name.get(action.champion_id, f"#{action.champion_id}")
+            if action is not None else "未知"
+        )
+        title = f"建議換成 {action_name}" if should_swap else f"建議保留 {current_name}"
+
+        if best is None:
+            detail = "沒有可用替補資料"
+            best_delta = float("nan")
+        elif should_swap:
+            best_name = self.id_to_name.get(best.champion_id, f"#{best.champion_id}")
+            detail = f"替補池最高收益：{best_name}"
+            best_delta = best.delta
+        else:
+            detail = f"最佳替補仍是 {_fmt_signed_pct(best.delta * 100)}，留著比較好"
+            best_delta = best.delta
+
+        band_bg = BEST_BG if should_swap else SURFACE
+        band = tk.Frame(parent, bg=band_bg, highlightthickness=1, highlightbackground=DIVIDER)
+        band.grid(row=0, column=0, columnspan=2, sticky="ew")
+        band.grid_columnconfigure(1, weight=1)
+
+        if action is not None:
+            self._icon_cell(band, action.champion_id, bg=band_bg)
+
+        text_box = tk.Frame(band, bg=band_bg)
+        text_box.grid(row=0, column=1, sticky="ew", padx=(4, 8), pady=10)
+        tk.Label(
+            text_box, text=title, bg=band_bg, fg=GREEN if should_swap else GOLD,
+            font=FONT_DECISION, anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            text_box, text=detail, bg=band_bg, fg=DIM,
+            font=FONT_SUB, anchor="w",
+        ).pack(fill="x", pady=(2, 0))
+
+        metrics = tk.Frame(band, bg=band_bg)
+        metrics.grid(row=0, column=2, sticky="e", padx=(0, 12), pady=8)
+        self._metric(metrics, 0, "替補最高", _fmt_signed_pct(best_delta * 100), self._delta_color(best_delta))
+        self._metric(metrics, 1, "預估勝率", _fmt_prob(action.win_prob) if action else "n/a", FG)
+        self._metric(
+            metrics, 2, "本體 z",
+            _fmt_signed_z(action.z_score) if action else "n/a",
+            self._z_color(action.z_score) if action else DIM,
+        )
 
     def _configure_team_row(self, row: tk.Frame) -> None:
         """Team rows only need icon + name (no Δ / no z column for teammates)."""
@@ -337,11 +427,12 @@ class RecommenderApp:
         row.grid_columnconfigure(1, weight=1)
 
     def _configure_bench_row(self, row: tk.Frame) -> None:
-        """Bench rows: icon + Δ + z + name."""
+        """Bench rows: icon + delta + prob + z + name."""
         row.grid_columnconfigure(0, minsize=self.COL_ICON)
         row.grid_columnconfigure(1, minsize=self.COL_DELTA)
-        row.grid_columnconfigure(2, minsize=self.COL_Z)
-        row.grid_columnconfigure(3, weight=1)
+        row.grid_columnconfigure(2, minsize=self.COL_PROB)
+        row.grid_columnconfigure(3, minsize=self.COL_Z)
+        row.grid_columnconfigure(4, weight=1)
 
     def _render_team_section(self, parent, parsed, suggestions) -> None:
         """Show all 5 blue-team champions in the left column.
@@ -351,15 +442,25 @@ class RecommenderApp:
         user always knows their current meta strength as an anchor for
         comparing the bench candidates on the right.
         """
-        own_z = next(
-            (s.z_score for s in suggestions if s.source == "keep" and s.is_known),
-            None,
-        )
+        keep = next((s for s in suggestions if s.source == "keep" and s.is_known), None)
+        own_z = keep.z_score if keep is not None else None
 
         tk.Label(
-            parent, text="YOUR TEAM",
+            parent, text="目前隊伍",
             bg=BG, fg=DIM, anchor="w", font=FONT_SECTION,
-        ).pack(fill="x", pady=(0, 10))
+        ).pack(fill="x", pady=(0, 8))
+
+        if keep is not None:
+            summary = tk.Frame(parent, bg=SURFACE, highlightthickness=1, highlightbackground=DIVIDER)
+            summary.pack(fill="x", pady=(0, 8), ipady=5)
+            tk.Label(
+                summary, text=f"目前預估 {_fmt_prob(keep.win_prob)}",
+                bg=SURFACE, fg=FG, font=FONT_NAME_B, anchor="w", padx=8,
+            ).pack(side="left")
+            tk.Label(
+                summary, text=f"本體 z {_fmt_signed_z(keep.z_score)}",
+                bg=SURFACE, fg=self._z_color(keep.z_score), font=FONT_NUM_B, anchor="e", padx=8,
+            ).pack(side="right")
 
         for cid in parsed.my_team_ids:
             is_me = (cid == parsed.my_current_id)
@@ -373,7 +474,7 @@ class RecommenderApp:
             if is_me:
                 z_str = f"   {_fmt_signed_z(own_z)}" if own_z is not None else ""
                 tk.Label(
-                    row, text=f"⊙ {name}{z_str}",
+                    row, text=f"你 · {name}{z_str}",
                     bg=BG, fg=GOLD, font=FONT_NAME_B, anchor="w",
                 ).grid(row=0, column=1, sticky="w")
             else:
@@ -382,70 +483,53 @@ class RecommenderApp:
                     font=FONT_NAME, anchor="w",
                 ).grid(row=0, column=1, sticky="w")
 
-    def _render_bench_section(self, parent, suggestions) -> None:
-        """Show bench swap candidates in the right column.
-
-        The keep entry from `suggestions` is excluded — it's already shown
-        in the team section.  Best pick gets a full-row warm-tint
-        background (no side stripe — that's a hard ban), a slightly larger
-        bold gold Δ, and a gold ★ marker; remaining rows fall back to BG.
-
-        Column-header row is intentionally absent: the subheader at the
-        top of the window explains Δ + z once, and a per-section header
-        in different font metrics from the data rows is what caused the
-        v2 alignment bug.
-        """
+    def _render_bench_table(self, parent, suggestions) -> None:
         bench = [s for s in suggestions if s.source == "bench"]
 
         tk.Label(
-            parent, text=f"BENCH   ·   {len(bench)} OPTIONS",
+            parent, text=f"替補池 · {len(bench)} 個選項",
             bg=BG, fg=DIM, anchor="w", font=FONT_SECTION,
-        ).pack(fill="x", pady=(0, 10))
+        ).pack(fill="x", pady=(0, 6))
 
-        # First known bench entry is the best swap (suggestions sorted desc by Δ).
+        header = tk.Frame(parent, bg=BG)
+        header.pack(fill="x", pady=(0, 4))
+        self._configure_bench_row(header)
+        self._cell(header, 1, "MLΔ", DIM, bg=BG, font=FONT_SECTION)
+        self._cell(header, 2, "換後", DIM, bg=BG, font=FONT_SECTION)
+        self._cell(header, 3, "z", DIM, bg=BG, font=FONT_SECTION)
+        self._cell(header, 4, "候選", DIM, bg=BG, font=FONT_SECTION)
+
         best_idx = next((i for i, s in enumerate(bench) if s.is_known), None)
 
         for i, s in enumerate(bench):
-            is_best = (i == best_idx)
-            row_bg = BEST_BG if is_best else BG
+            is_best = i == best_idx
+            if is_best and s.is_known:
+                row_bg = BEST_BG if s.delta > 0 else WARN_BG
+            else:
+                row_bg = ROW
 
             name = self.id_to_name.get(s.champion_id, f"#{s.champion_id}")
             row = tk.Frame(parent, bg=row_bg)
-            row.pack(fill="x", pady=1, ipady=3)
+            row.pack(fill="x", pady=1, ipady=4)
             self._configure_bench_row(row)
             self._icon_cell(row, s.champion_id, bg=row_bg)
 
             if not s.is_known:
                 self._cell(row, 1, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
                 self._cell(row, 2, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 3, f"{name}   (not in vocab)",
-                           MUTED, bg=row_bg, font=FONT_NAME)
+                self._cell(row, 3, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
+                self._cell(row, 4, f"{name}   (not in vocab)", MUTED, bg=row_bg, font=FONT_NAME)
                 continue
 
             delta_pp = s.delta * 100
-            delta_text = _fmt_signed_pct(delta_pp)
-            delta_color = GREEN if delta_pp > 0 else (RED if delta_pp < 0 else DIM)
-            # The best row's Δ gets the extra visual weight: bigger + bold,
-            # in gold so it ties to the row's name color.  All others use
-            # standard FONT_NUM and the green/red signal carries the
-            # status.  Heightened Δ on the best row is the single primary
-            # affordance — the eye lands there first.
-            if is_best:
-                delta_font = FONT_NUM_BEST
-                delta_color = GOLD if delta_pp >= 0 else RED
-            else:
-                delta_font = FONT_NUM
+            delta_font = FONT_NUM_BEST if is_best else FONT_NUM
+            name_color = (GREEN if s.delta > 0 else RED) if is_best else FG
+            marker = "首選 · " if is_best else ""
 
-            z_text = _fmt_signed_z(s.z_score)
-            z_color = GREEN if s.z_score > 0.5 else (RED if s.z_score < -0.5 else FG)
-
-            name_color = GOLD if is_best else FG
-            name_font = FONT_NAME_B if is_best else FONT_NAME
-            marker = "★  " if is_best else "    "
-
-            self._cell(row, 1, delta_text, delta_color, bg=row_bg, font=delta_font)
-            self._cell(row, 2, z_text, z_color, bg=row_bg, font=FONT_NUM)
-            self._cell(row, 3, f"{marker}{name}", name_color, bg=row_bg, font=name_font)
+            self._cell(row, 1, _fmt_signed_pct(delta_pp), self._delta_color(s.delta), bg=row_bg, font=delta_font)
+            self._cell(row, 2, _fmt_prob(s.win_prob), FG, bg=row_bg, font=FONT_NUM)
+            self._cell(row, 3, _fmt_signed_z(s.z_score), self._z_color(s.z_score), bg=row_bg, font=FONT_NUM)
+            self._cell(row, 4, f"{marker}{name}", name_color, bg=row_bg, font=FONT_NAME_B if is_best else FONT_NAME)
 
     def _icon_cell(self, parent: tk.Frame, champion_id: int, bg: str = BG) -> None:
         """Place the champion icon in column 0 of `parent`.
@@ -458,7 +542,7 @@ class RecommenderApp:
         photo = self.icon_cache.get(champion_id) if self.icon_cache else None
         if photo is not None:
             lbl = tk.Label(parent, image=photo, bg=bg, bd=0)
-            # Hold the reference on the widget too — Tk doesn't keep it, and
+            # Hold the reference on the widget too - Tk doesn't keep it, and
             # the redundancy is cheap and removes a class of GC bugs.
             lbl.image = photo  # type: ignore[attr-defined]
             lbl.grid(row=0, column=0, padx=(0, 6))
@@ -466,6 +550,39 @@ class RecommenderApp:
             tk.Label(
                 parent, text="", bg=bg, width=4, height=2,
             ).grid(row=0, column=0, padx=(0, 6))
+
+    @staticmethod
+    def _delta_color(value: float) -> str:
+        if math.isnan(value):
+            return MUTED
+        if value > 0:
+            return GREEN
+        if value < 0:
+            return RED
+        return DIM
+
+    @staticmethod
+    def _z_color(value: float) -> str:
+        if math.isnan(value):
+            return MUTED
+        if value > 0.5:
+            return GREEN
+        if value < -0.5:
+            return RED
+        return FG
+
+    @staticmethod
+    def _metric(parent: tk.Frame, col: int, label: str, value: str, fg: str) -> None:
+        box = tk.Frame(parent, bg=parent["bg"])
+        box.grid(row=0, column=col, padx=(10 if col else 0, 0), sticky="e")
+        tk.Label(
+            box, text=label, bg=parent["bg"], fg=DIM,
+            font=FONT_SECTION, anchor="e",
+        ).pack(fill="x")
+        tk.Label(
+            box, text=value, bg=parent["bg"], fg=fg,
+            font=FONT_NUM_B, anchor="e",
+        ).pack(fill="x")
 
     @staticmethod
     def _cell(
@@ -493,10 +610,13 @@ class RecommenderApp:
               help="Path to lr_model.pkl (sklearn LR pickle, loaded without sklearn) or lr_weights.json.")
 @click.option("--vocab", required=True,
               type=click.Path(exists=True, path_type=Path, dir_okay=False),
-              help="Path to tier2_checkpoint.pt or champ_to_idx.json — used for champion vocab.")
+              help="Path to tier2_checkpoint.pt or champ_to_idx.json - used for champion vocab.")
 @click.option("--pair-stats", default=Path("models/pair_synergy_16_10.json"),
               type=click.Path(path_type=Path, dir_okay=False),
               help="Path to pair synergy JSON from scripts/build_pair_stats.py.")
+@click.option("--composition-model", default=Path("models/composition_lr_16_10_2026_05_19_live/model.pkl"),
+              type=click.Path(path_type=Path, dir_okay=True),
+              help="Path to composition LR model.pkl or its model directory. Used for primary ML swap deltas.")
 @click.option("--poll-interval", default=1.0, show_default=True, type=float,
               help="Seconds between LCU polls while in ChampSelect.")
 @click.option("--fake", is_flag=True, default=False,
@@ -509,6 +629,7 @@ def main(
     lr_model: Path,
     vocab: Path,
     pair_stats: Path,
+    composition_model: Path,
     poll_interval: float,
     fake: bool,
     verbose: bool,
@@ -517,6 +638,15 @@ def main(
     print(f"[gui] loading model from {lr_model}")
     model = load_lr(lr_model, vocab)
     print(f"[gui] vocab covers {model.n_champs} champions")
+    comp_model = None
+    if composition_model.exists():
+        comp_model = load_composition_lr(composition_model)
+        print(
+            f"[gui] composition LR features={len(comp_model.feature_names)} "
+            f"champions={len(comp_model.champ_to_idx)}"
+        )
+    else:
+        print(f"[gui] WARN: composition model not found at {composition_model}; using old blend score")
     pair_model = None
     if pair_stats.exists():
         pair_model = load_pair_synergy(pair_stats)
@@ -525,7 +655,7 @@ def main(
             f"patch={pair_model.patch_prefix} min_pair={pair_model.min_pair}"
         )
     else:
-        print(f"[gui] WARN: pair stats not found at {pair_stats}; falling back to 30% LR score")
+        print(f"[gui] WARN: pair stats not found at {pair_stats}; old blend fallback will use LR only")
 
     q: queue.Queue = queue.Queue()
     stop_event = threading.Event()
@@ -541,12 +671,12 @@ def main(
     if fake:
         print("[gui] --fake: synthesizing champ-select states every 3s, no LCU needed")
         thread = threading.Thread(
-            target=fake_poll_loop, args=(stop_event, q, model, pair_model), daemon=True,
+            target=fake_poll_loop, args=(stop_event, q, model, pair_model, comp_model), daemon=True,
         )
     else:
-        creds = creds_for_icons  # reuse — same credentials work for both
+        creds = creds_for_icons  # reuse - same credentials work for both
         if not creds:
-            # Show the error in a window — easier to notice than a stderr message
+            # Show the error in a window - easier to notice than a stderr message
             # that scrolls off when the user double-clicks the script.
             root = tk.Tk()
             root.title("ARAM Recommender")
@@ -564,11 +694,11 @@ def main(
             sys.exit(1)
         thread = threading.Thread(
             target=poll_loop,
-            args=(stop_event, q, model, pair_model, creds, poll_interval, verbose),
+            args=(stop_event, q, model, pair_model, comp_model, creds, poll_interval, verbose),
             daemon=True,
         )
 
-    thread.start()  # crucial — without this, the poll loop never runs and
+    thread.start()  # crucial - without this, the poll loop never runs and
                     # the GUI stays on its placeholder "Loading..." header forever.
 
     root = tk.Tk()
