@@ -3128,23 +3128,6 @@ def render_html(
     .chip[data-role="Marksman"]      { --role-color: #22c55e; }
     .chip[data-role="Support"]       { --role-color: #ec4899; }
     .chip[data-role="Tank"]          { --role-color: #a855f7; }
-    .role-spec-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 28px;
-        padding: 0 10px;
-        background: #11151d;
-        border: 1px solid #30363d;
-        border-radius: 18px;
-        color: #f5d780;
-        font-size: 12px;
-        font-weight: 700;
-        text-decoration: none;
-    }
-    .role-spec-link:hover {
-        background: #1b2030;
-        border-color: #f5d780;
-    }
     .filter-tools {
         display: flex;
         align-items: center;
@@ -4917,10 +4900,6 @@ def render_html(
         parts.append(
             f'<button class="chip" data-role="{html.escape(role_en)}" data-label-zh="{html.escape(role_zh)}" '
             f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
-    )
-    parts.append(
-        '<a class="role-spec-link" href="champion-roles.json" target="_blank" rel="noopener" '
-        'title="主職業與副職業固定於 scripts/champion_roles.py">職業定義</a>'
     )
     parts.append("</div>")  # /role-chips
     parts.append("<div class='filter-tools'>")
