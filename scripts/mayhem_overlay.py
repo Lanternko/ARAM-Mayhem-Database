@@ -362,7 +362,7 @@ class RegionPicker:
         f.setPointSize(13)
         p.setFont(f)
         p.drawText(40, 60,
-                   "拖一個方框框住 augment offer 對話框（3 張卡都要包到）。Esc 取消。")
+                   "拖一個方框框住增幅裝置選擇對話框（3 張卡都要包到）。Esc 取消。")
         p.end()
 
     def _press(self, ev):
@@ -481,9 +481,9 @@ class ResultOverlay:
     ) -> None:
         from PyQt6 import QtCore, QtWidgets
         self._clear_rows()
-        self.title_l.setText(f"{champ_name} · Augment 評分")
+        self.title_l.setText(f"{champ_name} · 增幅裝置評分")
         if not picks:
-            self.meta_l.setText("OCR 沒抓到 augment 名稱。試著重抓 / 重定位區域。")
+            self.meta_l.setText("OCR 沒抓到增幅裝置名稱。試著重抓 / 重定位區域。")
         else:
             self.meta_l.setText(f"按 smoothed WR 排序 · 樣本 ≥ 15 場才入排名")
 
