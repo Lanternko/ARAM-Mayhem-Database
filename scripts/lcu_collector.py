@@ -262,14 +262,30 @@ def _fetch_opgg_leaderboard_page_slugs(
     return matches
 
 
-def _write_seed_file(path: Path, riot_ids: list[str], append: bool) -> None:
+def _opgg_seed_family(source: str, bucket: str, page: int) -> str:
+    normalized_source = source.strip().lower()
+    normalized_bucket = bucket.strip().lower()
+    if normalized_source == "level":
+        return f"opgg_level:p{page}"
+    return f"opgg_tier:{normalized_bucket}:p{page}"
+
+
+def _write_seed_file(
+    path: Path,
+    riot_ids: list[str] | list[tuple[str, str]],
+    append: bool,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = "a" if append else "w"
     with path.open(mode, encoding="utf-8", newline="\n") as fh:
         if append and path.stat().st_size > 0:
             fh.write("\n")
-        for riot_id in riot_ids:
-            fh.write(f"{riot_id}\n")
+        for item in riot_ids:
+            if isinstance(item, tuple):
+                riot_id, seed_family = item
+                fh.write(f"{riot_id}\t{seed_family}\n")
+            else:
+                fh.write(f"{item}\n")
 
 
 def _console_safe(text: str) -> str:
@@ -382,6 +398,7 @@ def _walk_opgg_pages(
     start_page: int,
     page_window: int,
     riot_ids: list[str],
+    seed_families: dict[str, str] | None,
     seen: set[str],
     page_hits: list[tuple[str, str, int, int]],
     topn_total: int,
@@ -410,6 +427,8 @@ def _walk_opgg_pages(
                 continue
             seen.add(riot_id)
             riot_ids.append(riot_id)
+            if seed_families is not None:
+                seed_families[riot_id] = _opgg_seed_family(source, bucket, page)
             added_this_page += 1
             total_added += 1
             if topn_total > 0 and len(riot_ids) >= topn_total:
@@ -2034,7 +2053,11 @@ def seed_opgg(tier: str, region: str, pages: int, topn: int, out: Path, append: 
     if not riot_ids:
         raise click.ClickException("OPGG returned no summoner profile links for the requested leaderboard")
 
-    _write_seed_file(out, riot_ids, append=append)
+    seed_rows = [
+        (riot_id, _opgg_seed_family("tier", str(tier).strip().lower(), 0))
+        for riot_id in riot_ids
+    ]
+    _write_seed_file(out, seed_rows, append=append)
     click.echo(
         f"[seed-opgg] wrote {len(riot_ids)} Riot IDs to {out}  "
         f"region={region}  tier={tier}  pages={pages}"
@@ -2091,6 +2114,7 @@ def seed_opgg_plan(
     page_window = max(1, pages_per_source if pages_per_source is not None else pages_per_tier)
     headers = {"User-Agent": "Mozilla/5.0"}
     riot_ids: list[str] = []
+    seed_families: dict[str, str] = {}
     seen: set[str] = set()
     page_hits: list[tuple[str, str, int, int]] = []
     state = _load_opgg_state(
@@ -2129,6 +2153,7 @@ def seed_opgg_plan(
                         start_page=start_page,
                         page_window=page_window,
                         riot_ids=riot_ids,
+                        seed_families=seed_families,
                         seen=seen,
                         page_hits=page_hits,
                         topn_total=topn_total,
@@ -2152,6 +2177,7 @@ def seed_opgg_plan(
                         start_page=start_page,
                         page_window=page_window,
                         riot_ids=riot_ids,
+                        seed_families=seed_families,
                         seen=seen,
                         page_hits=page_hits,
                         topn_total=topn_total,
@@ -2177,7 +2203,12 @@ def seed_opgg_plan(
         })
         raise click.ClickException("OPGG plan returned no summoner profile links for the requested tiers/pages")
 
-    _write_seed_file(out, riot_ids, append=append)
+    seed_rows = [
+        (riot_id, seed_families.get(riot_id, "manual_riot_id"))
+        for riot_id in riot_ids
+    ]
+    family_counts = Counter(seed_family for _, seed_family in seed_rows)
+    _write_seed_file(out, seed_rows, append=append)
     _save_opgg_state(state_file, state)
     _append_opgg_history(history_file, {
         "region": region,
@@ -2189,6 +2220,7 @@ def seed_opgg_plan(
         "state_file": str(state_file),
         "out": str(out),
         "written": len(riot_ids),
+        "seed_family_counts": dict(sorted(family_counts.items())),
         "page_hits": page_hits,
         "cursor_after": {
             "tiers": state.get("tiers", {}),
@@ -2202,6 +2234,8 @@ def seed_opgg_plan(
     )
     for page_source, page_bucket, page_no, page_added in page_hits:
         click.echo(f"  [{page_source}:{page_bucket} page {page_no}] added={page_added}")
+    for seed_family, count in sorted(family_counts.items()):
+        click.echo(f"  [seed-family] {seed_family}={count}")
     for riot_id in riot_ids[:10]:
         click.echo(f"  {_console_safe(riot_id)}")
 
