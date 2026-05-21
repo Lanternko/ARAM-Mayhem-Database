@@ -319,7 +319,7 @@ def start_league_client() -> dict[str, Any]:
         data=b"{}",
     )
     if status == 200:
-        return {"started": True, "method": "riot_remoting", "response": body}
+        return {"started": True, "method": "riot_remoting", "response": "<redacted>"}
 
     riot = find_riot_client()
     if not riot:
@@ -344,7 +344,7 @@ def start_league_client() -> dict[str, Any]:
                 "started": True,
                 "method": "riot_remoting_after_start",
                 "exe": str(riot),
-                "response": body,
+                "response": "<redacted>",
             }
     return {
         "started": False,
@@ -435,7 +435,8 @@ def append_state(path: Path, record: dict[str, Any]) -> None:
 
 
 def should_restart_client(args: argparse.Namespace, health: dict[str, Any], main_mb: float) -> tuple[bool, str]:
-    phase = health.get("phase")
+    # When LCU is down, gameflow has no phase; treat that like the idle "None" phase.
+    phase = health.get("phase") or "None"
     if phase not in args.safe_restart_phase:
         return False, f"phase {phase!r} is not safe to restart"
     if main_mb >= args.client_restart_mb:
@@ -461,11 +462,30 @@ def action_context(args: argparse.Namespace, health: dict[str, Any], main_mb: fl
 def wait_for_lcu_ready(args: argparse.Namespace) -> dict[str, Any]:
     deadline = time.monotonic() + args.client_ready_timeout_sec
     last_health: dict[str, Any] = {}
+    attempt = 0
     while time.monotonic() < deadline:
+        attempt += 1
         last_health = lcu_health()
         main_mb = league_main_mb()
         if last_health["ok"] and main_mb and main_mb <= args.worker_start_max_client_mb:
             return {"ready": True, "health": last_health, "league_main_mb": main_mb}
+        append_state(
+            args.state_file,
+            {
+                "ts": iso_now(),
+                "league_main_mb": main_mb,
+                "lcu": last_health,
+                "workers": snowball_workers(),
+                "latest_capture_age_min": latest_capture_age_min(args.db),
+                "actions": [
+                    {
+                        "action": "wait_for_lcu_ready_progress",
+                        "attempt": attempt,
+                        "ready": False,
+                    }
+                ],
+            },
+        )
         time.sleep(args.check_interval_sec)
     return {"ready": False, "health": last_health, "league_main_mb": league_main_mb()}
 
@@ -529,6 +549,17 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                 **action_context(args, health, main_mb),
             }
         )
+        append_state(
+            args.state_file,
+            {
+                "ts": iso_now(),
+                "league_main_mb": main_mb,
+                "lcu": health,
+                "workers": snowball_workers(),
+                "latest_capture_age_min": latest_age,
+                "actions": actions,
+            },
+        )
         ready = wait_for_lcu_ready(args)
         health = ready.get("health") or lcu_health()
         main_mb = float(ready.get("league_main_mb") or league_main_mb())
@@ -591,7 +622,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worker-stop-client-mb", type=float, default=5000.0)
     parser.add_argument("--worker-start-max-client-mb", type=float, default=3500.0)
     parser.add_argument("--client-ready-timeout-sec", type=int, default=600)
-    parser.add_argument("--safe-restart-phase", action="append", default=["None"])
+    parser.add_argument("--safe-restart-phase", action="append", default=["None", "EndOfGame"])
     parser.add_argument("--target-games", type=int, default=50000)
     parser.add_argument("--max-players", type=int, default=50000)
     parser.add_argument("--history-window", type=int, default=20)
