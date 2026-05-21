@@ -35,7 +35,7 @@ def _from_cmdline() -> LCUCredentials | None:
     for proc in psutil.process_iter(["name", "cmdline"]):
         try:
             name = proc.info["name"] or ""
-            if "LeagueClientUx" not in name:
+            if name.lower() != "leagueclientux.exe":
                 continue
             port_val: str | None = None
             token_val: str | None = None
