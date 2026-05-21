@@ -140,12 +140,143 @@ class SemanticScoreOrderingTests(unittest.TestCase):
         self.assertEqual(zilean_q["cast_state"], "conditional_trigger")
         self.assertEqual(zilean_q["engage_gate"], "conditional_hard_cc")
 
+    def test_sejuani_r_is_primary_engage_not_w(self) -> None:
+        sejuani = self.by_alias["Sejuani"]
+        sejuani_r = self.skill_by_key[("Sejuani", "R")]
+        sejuani_w = self.skill_by_key[("Sejuani", "W")]
+        self.assertEqual(sejuani_r["cc_type"], "single_hard")
+        self.assertEqual(sejuani_w["cc_type"], "soft_slow")
+        self.assertEqual(sejuani["engage_top_spells"].split(",")[0], "R")
+
+    def test_review_notes_promote_missing_engage_spells_into_top3(self) -> None:
+        expected_top3 = {
+            "Soraka": "E",
+            "Nami": "R",
+            "Gangplank": "E",
+            "Aphelios": "R",
+            "Twitch": "R",
+            "Lucian": "R",
+            "Fiddlesticks": "R",
+        }
+        for alias, slot in expected_top3.items():
+            with self.subTest(alias=alias, slot=slot):
+                self.assertIn(slot, self.by_alias[alias]["engage_top_spells"].split(","))
+
+    def test_fiddlesticks_r_and_e_have_engage_control_semantics(self) -> None:
+        fiddlesticks = self.by_alias["Fiddlesticks"]
+        fiddlesticks_r = self.skill_by_key[("Fiddlesticks", "R")]
+        fiddlesticks_e = self.skill_by_key[("Fiddlesticks", "E")]
+        self.assertEqual(fiddlesticks["engage_top_spells"].split(",")[0], "R")
+        self.assertEqual(fiddlesticks_r["cc_type"], "aoe_hard")
+        self.assertEqual(fiddlesticks_e["cc_type"], "utility_cc")
+
+    def test_rammus_q_is_primary_engage(self) -> None:
+        rammus = self.by_alias["Rammus"]
+        rammus_q = self.skill_by_key[("Rammus", "Q")]
+        self.assertEqual(rammus["engage_top_spells"].split(",")[0], "Q")
+        self.assertEqual(rammus_q["shape"], "dash")
+        self.assertEqual(rammus_q["cc_type"], "single_hard")
+
+    def test_karthus_passive_is_scored_as_special_engage(self) -> None:
+        karthus = self.by_alias["Karthus"]
+        karthus_p = self.skill_by_key[("Karthus", "P")]
+        self.assertIn("P", karthus["engage_top_spells"].split(","))
+        self.assertEqual(karthus_p["spell_name_en"], "Death Defied")
+        self.assertEqual(karthus_p["cc_type"], "none")
+        self.assertFalse(karthus_p["supports_wave"])
+
+    def test_karthus_wall_of_pain_is_soft_engage_setup(self) -> None:
+        karthus = self.by_alias["Karthus"]
+        karthus_w = self.skill_by_key[("Karthus", "W")]
+        self.assertIn("W", karthus["engage_top_spells"].split(","))
+        self.assertEqual(karthus_w["cc_type"], "soft_slow")
+        self.assertEqual(karthus_w["engage_gate"], "soft_cc_only")
+        self.assertFalse(karthus_w["supports_wave"])
+
+    def test_anivia_wall_and_gangplank_global_and_keg_are_engage_tools(self) -> None:
+        anivia = self.by_alias["Anivia"]
+        anivia_w = self.skill_by_key[("Anivia", "W")]
+        gangplank = self.by_alias["Gangplank"]
+        gangplank_r = self.skill_by_key[("Gangplank", "R")]
+        gangplank_e = self.skill_by_key[("Gangplank", "E")]
+        self.assertIn("W", anivia["engage_top_spells"].split(","))
+        self.assertEqual(anivia_w["cc_type"], "utility_cc")
+        self.assertEqual(gangplank["engage_top_spells"].split(",")[0], "R")
+        self.assertIn("E", gangplank["engage_top_spells"].split(","))
+        self.assertAlmostEqual(float(gangplank_r["engage_manual_adjustment"]), 0.45)
+        self.assertAlmostEqual(float(gangplank_e["engage_manual_adjustment"]), 0.35)
+        self.assertEqual(gangplank_e["cc_type"], "soft_slow")
+
+    def test_aurelion_sol_w_is_mobility_engage(self) -> None:
+        aurelion_sol = self.by_alias["AurelionSol"]
+        aurelion_sol_w = self.skill_by_key[("AurelionSol", "W")]
+        self.assertIn("W", aurelion_sol["engage_top_spells"].split(","))
+        self.assertEqual(aurelion_sol_w["shape"], "dash")
+        self.assertEqual(aurelion_sol_w["engage_gate"], "mobility_only")
+
+    def test_jinx_chompers_are_conditional_engage_setup(self) -> None:
+        jinx = self.by_alias["Jinx"]
+        jinx_e = self.skill_by_key[("Jinx", "E")]
+        self.assertIn("E", jinx["engage_top_spells"].split(","))
+        self.assertEqual(jinx_e["cc_type"], "root")
+        self.assertEqual(jinx_e["engage_gate"], "hard_cc")
+
+    def test_ziggs_satchel_charge_is_conditional_displacement_setup(self) -> None:
+        ziggs = self.by_alias["Ziggs"]
+        ziggs_w = self.skill_by_key[("Ziggs", "W")]
+        self.assertIn("W", ziggs["engage_top_spells"].split(","))
+        self.assertEqual(ziggs_w["cc_type"], "conditional_knockback")
+        self.assertIn(ziggs_w["engage_gate"], {"conditional_hard_cc", "hard_cc"})
+
+    def test_reviewed_control_ultimates_are_not_plain_mobility_or_damage(self) -> None:
+        expected = {
+            ("Bard", "R"): "aoe_hard",
+            ("Renata", "R"): "aoe_hard",
+            ("Shen", "E"): "aoe_hard",
+            ("Kalista", "R"): "aoe_hard",
+            ("Kled", "R"): "single_hard",
+            ("Warwick", "R"): "single_hard",
+            ("Camille", "R"): "single_hard",
+        }
+        for key, cc_type in expected.items():
+            with self.subTest(key=key):
+                skill = self.skill_by_key[key]
+                self.assertEqual(skill["cc_type"], cc_type)
+                self.assertNotEqual(skill["engage_gate"], "mobility_only")
+
+    def test_broad_slowing_and_pull_language_is_tagged(self) -> None:
+        expected = {
+            ("XinZhao", "E"): "soft_slow",
+            ("Nasus", "W"): "soft_slow",
+            ("Seraphine", "E"): "soft_slow",
+            ("Jinx", "W"): "soft_slow",
+            ("AurelionSol", "E"): "soft_slow",
+            ("Zaahen", "W"): "hook_pull",
+            ("Mordekaiser", "R"): "single_hard",
+            ("Viego", "R"): "aoe_hard",
+        }
+        for key, cc_type in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(self.skill_by_key[key]["cc_type"], cc_type)
+
     def test_wave_uses_top3_and_exposes_itemized_build_profile(self) -> None:
         xerath = self.by_alias["Xerath"]
         self.assertEqual(xerath["wave_top_spells"], "Q,W,E")
         self.assertEqual(xerath["build_profile"], "ap_burst")
         self.assertIn("Luden", xerath["build_items"])
         self.assertGreater(float(xerath["build_ap"]), 0.0)
+
+    def test_manual_spell_adjustments_are_visible_in_skill_debug(self) -> None:
+        xerath_q = self.skill_by_key[("Xerath", "Q")]
+        karthus_p = self.skill_by_key[("Karthus", "P")]
+        self.assertAlmostEqual(float(xerath_q["wave_manual_adjustment"]), 0.9)
+        self.assertAlmostEqual(
+            float(xerath_q["wave_skill_score"]),
+            min(3.0, float(xerath_q["wave_base_score"]) + 0.9),
+            places=2,
+        )
+        self.assertAlmostEqual(float(karthus_p["engage_manual_adjustment"]), 0.7)
+        self.assertGreater(float(karthus_p["engage_skill_score"]), float(karthus_p["engage_base_score"]))
 
 
 if __name__ == "__main__":
