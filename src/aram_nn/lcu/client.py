@@ -26,7 +26,9 @@ class LCUClient:
             base_url=f"https://127.0.0.1:{creds.port}",
             auth=("riot", creds.token),
             verify=False,
-            timeout=5.0,
+            # Cold remote match-history hydration regularly takes 5-10s.
+            # A shorter timeout looks identical to an empty history to callers.
+            timeout=httpx.Timeout(20.0, connect=5.0),
         )
         self._debug = _debug_enabled()
 
