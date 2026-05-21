@@ -3220,6 +3220,9 @@ def family_stats(db: Path, queue: tuple[int, ...]) -> None:
 @click.option("--pair-stats", default=Path("models/pair_synergy_16_10.json"),
               type=click.Path(path_type=Path, dir_okay=False),
               help="Path to pair synergy JSON from scripts/build_pair_stats.py.")
+@click.option("--composition-model", default=Path("models/composition_lr_16_10_2026_05_19_live/model.pkl"),
+              type=click.Path(path_type=Path, dir_okay=True),
+              help="Path to composition LR model.pkl or its model directory. Used for primary ML swap deltas.")
 @click.option("--poll-interval", default=1.0, show_default=True, type=float,
               help="Seconds between LCU polls while in ChampSelect.")
 @click.option("--verbose", is_flag=True, default=False,
@@ -3228,14 +3231,14 @@ def recommend(
     lr_model: Path,
     vocab: Path,
     pair_stats: Path,
+    composition_model: Path,
     poll_interval: float,
     verbose: bool,
 ) -> None:
     """Real-time bench-swap recommendations during ARAM champ select.
 
-    Uses anchor-conditional pair synergy as the primary signal, blended with
-    the LR baseline as a universal champion-strength prior.  Absolute win
-    probabilities are LR point estimates assuming an "average" opponent.
+    Uses composition LR as the primary swap-delta signal.  The older
+    anchor-conditional pair synergy + LR blend remains as a fallback.
 
     Run BEFORE you queue:
         python scripts/lcu_collector.py recommend \\
@@ -3249,7 +3252,7 @@ def recommend(
     )
     from aram_nn.lcu.process import get_credentials
     from aram_nn.recommend import (
-        load_lr, parse_session, session_state_hash, suggest_for_cell,
+        load_composition_lr, load_lr, parse_session, session_state_hash, suggest_for_cell,
     )
     from aram_nn.pair_synergy import load_pair_synergy
 
@@ -3261,6 +3264,15 @@ def recommend(
     click.echo(f"[recommend] loading model from {lr_model}")
     model = load_lr(lr_model, vocab)
     click.echo(f"[recommend] vocab covers {model.n_champs} champions")
+    comp_model = None
+    if composition_model.exists():
+        comp_model = load_composition_lr(composition_model)
+        click.echo(
+            f"[recommend] composition LR features={len(comp_model.feature_names)} "
+            f"champions={len(comp_model.champ_to_idx)}"
+        )
+    else:
+        click.echo(f"[recommend] WARN: composition model not found at {composition_model}; using old blend score")
     pair_model = None
     if pair_stats.exists():
         pair_model = load_pair_synergy(pair_stats)
@@ -3322,13 +3334,14 @@ def recommend(
                     parsed.bench_ids,
                     model,
                     pair_model,
+                    comp_model,
                 )
 
                 # Clear screen + home cursor for in-place refresh.
                 click.echo("\033[2J\033[H", nl=False)
                 cur_name = id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
                 click.echo(f"[champ select] cell {parsed.my_cell_id}   current: {cur_name}")
-                click.echo("               (score = 70% synergy + 30% LR; P(win) assumes average opponent)\n")
+                click.echo("               (score = ML swap delta; fallback = 70% synergy + 30% LR)\n")
                 click.echo(f"  {'score':>7}  {'syn':>7}  {'LR':>7}  {'P(win)':>7}  candidate")
                 click.echo("  " + "-" * 62)
                 for s in suggestions:
