@@ -1,0 +1,1683 @@
+{
+  "current_roles": {
+    "Aatrox": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Ahri": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Akali": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Akshan": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Alistar": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Ambessa": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Amumu": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Anivia": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Fighter"
+      ]
+    },
+    "Annie": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Aphelios": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Ashe": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "AurelionSol": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Aurora": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Azir": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Bard": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Mage"
+      ]
+    },
+    "Belveth": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Blitzcrank": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Brand": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Braum": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Briar": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Caitlyn": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Camille": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Cassiopeia": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Fighter"
+      ]
+    },
+    "Chogath": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Corki": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Darius": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Diana": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Tank"
+      ]
+    },
+    "DrMundo": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Draven": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Ekko": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Elise": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Evelynn": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Ezreal": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Fiddlesticks": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Fiora": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Fizz": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Galio": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Gangplank": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Garen": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Gnar": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Tank"
+      ]
+    },
+    "Gragas": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Mage"
+      ]
+    },
+    "Graves": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Gwen": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Mage"
+      ]
+    },
+    "Hecarim": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Heimerdinger": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Hwei": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Illaoi": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Irelia": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Ivern": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Janna": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "JarvanIV": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jax": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jayce": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jhin": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jinx": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "KSante": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Kaisa": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Kalista": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Karma": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Support"
+      ]
+    },
+    "Karthus": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Kassadin": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Katarina": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Fighter"
+      ]
+    },
+    "Kayle": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Kayn": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Kennen": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Khazix": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Kindred": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Kled": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "KogMaw": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman",
+        "Mage"
+      ]
+    },
+    "Leblanc": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "LeeSin": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Leona": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Lillia": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Mage"
+      ]
+    },
+    "Lissandra": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Lucian": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Lulu": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Lux": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Malphite": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Malzahar": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Maokai": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "MasterYi": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Mel": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Milio": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "MissFortune": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman",
+        "Mage"
+      ]
+    },
+    "MonkeyKing": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Mordekaiser": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Morgana": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Mage"
+      ]
+    },
+    "Naafiri": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Nami": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Nasus": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank",
+        "Mage"
+      ]
+    },
+    "Nautilus": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Neeko": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Nidalee": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Nilah": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Nocturne": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Nunu": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Olaf": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Orianna": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Ornn": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Pantheon": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Poppy": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Pyke": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Qiyana": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Quinn": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Rakan": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Tank"
+      ]
+    },
+    "Rammus": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "RekSai": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Tank"
+      ]
+    },
+    "Rell": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Renata": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Renekton": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Rengar": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Fighter"
+      ]
+    },
+    "Riven": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Rumble": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Fighter"
+      ]
+    },
+    "Ryze": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Samira": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Sejuani": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Senna": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Marksman"
+      ]
+    },
+    "Seraphine": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Sett": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Shaco": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin",
+        "Mage"
+      ]
+    },
+    "Shen": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Shyvana": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Singed": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Sion": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Sivir": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Skarner": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Smolder": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Sona": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Soraka": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Swain": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Fighter"
+      ]
+    },
+    "Sylas": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage",
+        "Fighter"
+      ]
+    },
+    "Syndra": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "TahmKench": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Taliyah": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Talon": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Taric": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Teemo": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Thresh": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Tank"
+      ]
+    },
+    "Tristana": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Trundle": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Tank"
+      ]
+    },
+    "Tryndamere": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "TwistedFate": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Twitch": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Udyr": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter",
+        "Mage"
+      ]
+    },
+    "Urgot": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Varus": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Vayne": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Veigar": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Velkoz": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Vex": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Vi": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Viego": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Viktor": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Vladimir": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Volibear": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank",
+        "Fighter"
+      ]
+    },
+    "Warwick": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Xayah": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Xerath": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "XinZhao": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Yasuo": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Yone": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Yorick": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Yunara": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Yuumi": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Zaahen": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Zac": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Zed": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Zeri": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Ziggs": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Zilean": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support",
+        "Mage"
+      ]
+    },
+    "Zoe": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Zyra": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    }
+  },
+  "data_dragon_version": "16.10.1",
+  "generated_at": "2026-05-21T11:15:34Z",
+  "primary_role_by_champion": {
+    "Aatrox": "Fighter",
+    "Ahri": "Mage",
+    "Akali": "Assassin",
+    "Akshan": "Marksman",
+    "Alistar": "Tank",
+    "Ambessa": "Fighter",
+    "Amumu": "Tank",
+    "Anivia": "Mage",
+    "Annie": "Mage",
+    "Aphelios": "Marksman",
+    "Ashe": "Marksman",
+    "AurelionSol": "Mage",
+    "Aurora": "Mage",
+    "Azir": "Mage",
+    "Bard": "Support",
+    "Belveth": "Fighter",
+    "Blitzcrank": "Tank",
+    "Brand": "Mage",
+    "Braum": "Tank",
+    "Briar": "Fighter",
+    "Caitlyn": "Marksman",
+    "Camille": "Fighter",
+    "Cassiopeia": "Mage",
+    "Chogath": "Tank",
+    "Corki": "Marksman",
+    "Darius": "Fighter",
+    "Diana": "Assassin",
+    "DrMundo": "Tank",
+    "Draven": "Marksman",
+    "Ekko": "Assassin",
+    "Elise": "Assassin",
+    "Evelynn": "Assassin",
+    "Ezreal": "Marksman",
+    "Fiddlesticks": "Mage",
+    "Fiora": "Fighter",
+    "Fizz": "Assassin",
+    "Galio": "Tank",
+    "Gangplank": "Fighter",
+    "Garen": "Fighter",
+    "Gnar": "Fighter",
+    "Gragas": "Fighter",
+    "Graves": "Marksman",
+    "Gwen": "Fighter",
+    "Hecarim": "Fighter",
+    "Heimerdinger": "Mage",
+    "Hwei": "Mage",
+    "Illaoi": "Fighter",
+    "Irelia": "Fighter",
+    "Ivern": "Support",
+    "Janna": "Support",
+    "JarvanIV": "Fighter",
+    "Jax": "Fighter",
+    "Jayce": "Fighter",
+    "Jhin": "Marksman",
+    "Jinx": "Marksman",
+    "KSante": "Tank",
+    "Kaisa": "Marksman",
+    "Kalista": "Marksman",
+    "Karma": "Mage",
+    "Karthus": "Mage",
+    "Kassadin": "Assassin",
+    "Katarina": "Assassin",
+    "Kayle": "Marksman",
+    "Kayn": "Fighter",
+    "Kennen": "Mage",
+    "Khazix": "Assassin",
+    "Kindred": "Marksman",
+    "Kled": "Fighter",
+    "KogMaw": "Marksman",
+    "Leblanc": "Assassin",
+    "LeeSin": "Fighter",
+    "Leona": "Tank",
+    "Lillia": "Fighter",
+    "Lissandra": "Mage",
+    "Lucian": "Marksman",
+    "Lulu": "Support",
+    "Lux": "Mage",
+    "Malphite": "Tank",
+    "Malzahar": "Mage",
+    "Maokai": "Tank",
+    "MasterYi": "Fighter",
+    "Mel": "Mage",
+    "Milio": "Support",
+    "MissFortune": "Marksman",
+    "MonkeyKing": "Fighter",
+    "Mordekaiser": "Fighter",
+    "Morgana": "Support",
+    "Naafiri": "Assassin",
+    "Nami": "Support",
+    "Nasus": "Tank",
+    "Nautilus": "Tank",
+    "Neeko": "Mage",
+    "Nidalee": "Mage",
+    "Nilah": "Marksman",
+    "Nocturne": "Assassin",
+    "Nunu": "Tank",
+    "Olaf": "Fighter",
+    "Orianna": "Mage",
+    "Ornn": "Tank",
+    "Pantheon": "Fighter",
+    "Poppy": "Tank",
+    "Pyke": "Support",
+    "Qiyana": "Assassin",
+    "Quinn": "Marksman",
+    "Rakan": "Support",
+    "Rammus": "Tank",
+    "RekSai": "Fighter",
+    "Rell": "Tank",
+    "Renata": "Support",
+    "Renekton": "Fighter",
+    "Rengar": "Assassin",
+    "Riven": "Fighter",
+    "Rumble": "Mage",
+    "Ryze": "Mage",
+    "Samira": "Marksman",
+    "Sejuani": "Tank",
+    "Senna": "Support",
+    "Seraphine": "Mage",
+    "Sett": "Fighter",
+    "Shaco": "Assassin",
+    "Shen": "Tank",
+    "Shyvana": "Fighter",
+    "Singed": "Fighter",
+    "Sion": "Tank",
+    "Sivir": "Marksman",
+    "Skarner": "Tank",
+    "Smolder": "Marksman",
+    "Sona": "Support",
+    "Soraka": "Support",
+    "Swain": "Mage",
+    "Sylas": "Mage",
+    "Syndra": "Mage",
+    "TahmKench": "Tank",
+    "Taliyah": "Mage",
+    "Talon": "Assassin",
+    "Taric": "Tank",
+    "Teemo": "Mage",
+    "Thresh": "Support",
+    "Tristana": "Marksman",
+    "Trundle": "Fighter",
+    "Tryndamere": "Fighter",
+    "TwistedFate": "Mage",
+    "Twitch": "Marksman",
+    "Udyr": "Fighter",
+    "Urgot": "Fighter",
+    "Varus": "Marksman",
+    "Vayne": "Marksman",
+    "Veigar": "Mage",
+    "Velkoz": "Mage",
+    "Vex": "Mage",
+    "Vi": "Fighter",
+    "Viego": "Fighter",
+    "Viktor": "Mage",
+    "Vladimir": "Mage",
+    "Volibear": "Tank",
+    "Warwick": "Fighter",
+    "Xayah": "Marksman",
+    "Xerath": "Mage",
+    "XinZhao": "Fighter",
+    "Yasuo": "Fighter",
+    "Yone": "Fighter",
+    "Yorick": "Fighter",
+    "Yunara": "Marksman",
+    "Yuumi": "Support",
+    "Zaahen": "Fighter",
+    "Zac": "Tank",
+    "Zed": "Assassin",
+    "Zeri": "Marksman",
+    "Ziggs": "Mage",
+    "Zilean": "Support",
+    "Zoe": "Mage",
+    "Zyra": "Mage"
+  },
+  "primary_role_policy": {
+    "source": "scripts/champion_roles.py",
+    "summary_en": "Primary role is a fixed site-wide spec, not inferred from Data Dragon tags or current win rate.",
+    "summary_zh": "主職業是全站固定規格，不從 Data Dragon tags 或當前勝率推斷。"
+  },
+  "primary_roles": {
+    "Assassin": [
+      "Akali",
+      "Diana",
+      "Ekko",
+      "Elise",
+      "Evelynn",
+      "Fizz",
+      "Kassadin",
+      "Katarina",
+      "Khazix",
+      "Leblanc",
+      "Naafiri",
+      "Nocturne",
+      "Qiyana",
+      "Rengar",
+      "Shaco",
+      "Talon",
+      "Zed"
+    ],
+    "Fighter": [
+      "Aatrox",
+      "Ambessa",
+      "Belveth",
+      "Briar",
+      "Camille",
+      "Darius",
+      "Fiora",
+      "Gangplank",
+      "Garen",
+      "Gnar",
+      "Gragas",
+      "Gwen",
+      "Hecarim",
+      "Illaoi",
+      "Irelia",
+      "JarvanIV",
+      "Jax",
+      "Jayce",
+      "Kayn",
+      "Kled",
+      "LeeSin",
+      "Lillia",
+      "MasterYi",
+      "MonkeyKing",
+      "Mordekaiser",
+      "Olaf",
+      "Pantheon",
+      "RekSai",
+      "Renekton",
+      "Riven",
+      "Sett",
+      "Shyvana",
+      "Singed",
+      "Trundle",
+      "Tryndamere",
+      "Udyr",
+      "Urgot",
+      "Vi",
+      "Viego",
+      "Warwick",
+      "XinZhao",
+      "Yasuo",
+      "Yone",
+      "Yorick",
+      "Zaahen"
+    ],
+    "Mage": [
+      "Ahri",
+      "Anivia",
+      "Annie",
+      "AurelionSol",
+      "Aurora",
+      "Azir",
+      "Brand",
+      "Cassiopeia",
+      "Fiddlesticks",
+      "Heimerdinger",
+      "Hwei",
+      "Karma",
+      "Karthus",
+      "Kennen",
+      "Lissandra",
+      "Lux",
+      "Malzahar",
+      "Mel",
+      "Neeko",
+      "Nidalee",
+      "Orianna",
+      "Rumble",
+      "Ryze",
+      "Seraphine",
+      "Swain",
+      "Sylas",
+      "Syndra",
+      "Taliyah",
+      "Teemo",
+      "TwistedFate",
+      "Veigar",
+      "Velkoz",
+      "Vex",
+      "Viktor",
+      "Vladimir",
+      "Xerath",
+      "Ziggs",
+      "Zoe",
+      "Zyra"
+    ],
+    "Marksman": [
+      "Akshan",
+      "Aphelios",
+      "Ashe",
+      "Caitlyn",
+      "Corki",
+      "Draven",
+      "Ezreal",
+      "Graves",
+      "Jhin",
+      "Jinx",
+      "Kaisa",
+      "Kalista",
+      "Kayle",
+      "Kindred",
+      "KogMaw",
+      "Lucian",
+      "MissFortune",
+      "Nilah",
+      "Quinn",
+      "Samira",
+      "Sivir",
+      "Smolder",
+      "Tristana",
+      "Twitch",
+      "Varus",
+      "Vayne",
+      "Xayah",
+      "Yunara",
+      "Zeri"
+    ],
+    "Support": [
+      "Bard",
+      "Ivern",
+      "Janna",
+      "Lulu",
+      "Milio",
+      "Morgana",
+      "Nami",
+      "Pyke",
+      "Rakan",
+      "Renata",
+      "Senna",
+      "Sona",
+      "Soraka",
+      "Thresh",
+      "Yuumi",
+      "Zilean"
+    ],
+    "Tank": [
+      "Alistar",
+      "Amumu",
+      "Blitzcrank",
+      "Braum",
+      "Chogath",
+      "DrMundo",
+      "Galio",
+      "KSante",
+      "Leona",
+      "Malphite",
+      "Maokai",
+      "Nasus",
+      "Nautilus",
+      "Nunu",
+      "Ornn",
+      "Poppy",
+      "Rammus",
+      "Rell",
+      "Sejuani",
+      "Shen",
+      "Sion",
+      "Skarner",
+      "TahmKench",
+      "Taric",
+      "Volibear",
+      "Zac"
+    ]
+  },
+  "role_labels": {
+    "Assassin": {
+      "en": "Assassin",
+      "zh": "刺客"
+    },
+    "Fighter": {
+      "en": "Fighter",
+      "zh": "戰士"
+    },
+    "Mage": {
+      "en": "Mage",
+      "zh": "法師"
+    },
+    "Marksman": {
+      "en": "Marksman",
+      "zh": "射手"
+    },
+    "Support": {
+      "en": "Support",
+      "zh": "輔助"
+    },
+    "Tank": {
+      "en": "Tank",
+      "zh": "坦克"
+    }
+  },
+  "role_order": [
+    "Assassin",
+    "Fighter",
+    "Mage",
+    "Marksman",
+    "Support",
+    "Tank"
+  ],
+  "schema_version": 1,
+  "secondary_role_by_champion": {
+    "Akali": "Mage",
+    "Anivia": "Fighter",
+    "Bard": "Mage",
+    "Cassiopeia": "Fighter",
+    "Diana": "Tank",
+    "Ekko": "Mage",
+    "Elise": "Mage",
+    "Fizz": "Mage",
+    "Gnar": "Tank",
+    "Gragas": "Mage",
+    "Gwen": "Mage",
+    "Karma": "Support",
+    "Kassadin": "Mage",
+    "Katarina": "Fighter",
+    "KogMaw": "Mage",
+    "Leblanc": "Mage",
+    "Lillia": "Mage",
+    "MissFortune": "Mage",
+    "Morgana": "Mage",
+    "Nasus": "Mage",
+    "Rakan": "Tank",
+    "RekSai": "Tank",
+    "Rengar": "Fighter",
+    "Rumble": "Fighter",
+    "Senna": "Marksman",
+    "Shaco": "Mage",
+    "Swain": "Fighter",
+    "Sylas": "Fighter",
+    "Thresh": "Tank",
+    "Trundle": "Tank",
+    "Udyr": "Mage",
+    "Volibear": "Fighter",
+    "Zilean": "Mage"
+  },
+  "secondary_role_policy": {
+    "source": "scripts/champion_roles.py",
+    "summary_en": "Secondary role is a sparse curated site-wide spec for explicit dual-role champions, not inferred from Data Dragon tags.",
+    "summary_zh": "副職業是全站固定規格中的少量明確雙職業，不從 Data Dragon tags 推斷。"
+  }
+}
