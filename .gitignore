@@ -23,6 +23,9 @@ venv/
 dist/
 build/
 
+# Publishable review pages
+!docs/semantic-score-review.html
+
 # OS
 .DS_Store
 Thumbs.db
