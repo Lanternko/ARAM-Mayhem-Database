@@ -473,27 +473,37 @@ def _append_metrics_history(path: Path, snapshot: dict) -> None:
 def _find_active_snowball_workers() -> list[dict]:
     workers: list[dict] = []
     if psutil is not None:
-        for proc in psutil.process_iter(["pid", "name", "cmdline", "create_time"]):
-            try:
-                name = str(proc.info.get("name") or "")
-                if "python" not in name.lower():
+        try:
+            for proc in psutil.process_iter(
+                ["pid", "name", "cmdline", "create_time"]
+            ):
+                try:
+                    name = str(proc.info.get("name") or "")
+                    if "python" not in name.lower():
+                        continue
+                    cmdline = [str(part) for part in (proc.info.get("cmdline") or [])]
+                    if not cmdline:
+                        continue
+                    joined = " ".join(cmdline)
+                    lower = joined.lower()
+                    if "lcu_collector.py" not in lower or "snowball" not in lower:
+                        continue
+                    workers.append(
+                        {
+                            "pid": int(proc.info["pid"]),
+                            "create_time": float(proc.info.get("create_time") or 0.0),
+                            "cmdline": joined,
+                        }
+                    )
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                    PermissionError,
+                ):
                     continue
-                cmdline = [str(part) for part in (proc.info.get("cmdline") or [])]
-                if not cmdline:
-                    continue
-                joined = " ".join(cmdline)
-                lower = joined.lower()
-                if "lcu_collector.py" not in lower or "snowball" not in lower:
-                    continue
-                workers.append(
-                    {
-                        "pid": int(proc.info["pid"]),
-                        "create_time": float(proc.info.get("create_time") or 0.0),
-                        "cmdline": joined,
-                    }
-                )
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                continue
+        except (PermissionError, psutil.AccessDenied):
+            return []
     else:
         probe = """
 $rows = Get-CimInstance Win32_Process | Where-Object {

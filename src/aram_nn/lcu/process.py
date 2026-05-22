@@ -1,7 +1,7 @@
 """Locate the running League Client and read its auth credentials.
 
 Two strategies, tried in order:
-  1. Parse LeagueClientUx.exe command-line args (reliable on Windows, same-user processes).
+  1. Parse LeagueClientUx command-line args (reliable on Windows/macOS, same-user processes).
      Args are read from the list directly — no join-then-regex, so tokens with special
      chars work correctly.
   2. Read the lockfile at the default install path, verify the PID is still alive.
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _LOCKFILE_PATHS = [
+    Path("/Applications/League of Legends.app/Contents/LoL/lockfile"),
     Path(r"C:\Riot Games\League of Legends\lockfile"),
     Path(r"C:\Program Files\Riot Games\League of Legends\lockfile"),
     Path(r"C:\Program Files (x86)\Riot Games\League of Legends\lockfile"),
@@ -32,24 +33,29 @@ def _from_cmdline() -> LCUCredentials | None:
     except ImportError:
         return None
 
-    for proc in psutil.process_iter(["name", "cmdline"]):
-        try:
-            name = proc.info["name"] or ""
-            if name.lower() != "leagueclientux.exe":
+    try:
+        for proc in psutil.process_iter(["name", "cmdline"]):
+            try:
+                name = proc.info["name"] or ""
+                if name.lower() not in {"leagueclientux.exe", "leagueclientux"}:
+                    continue
+                port_val: str | None = None
+                token_val: str | None = None
+                for arg in (proc.info["cmdline"] or []):
+                    # Parse each arg directly from the list — avoids join-then-regex issues
+                    # with tokens that contain spaces, quotes, or other special characters.
+                    if arg.startswith("--app-port="):
+                        port_val = arg.split("=", 1)[1]
+                    elif arg.startswith("--remoting-auth-token="):
+                        token_val = arg.split("=", 1)[1].strip("\"'")
+                if port_val and token_val:
+                    return LCUCredentials(int(port_val), token_val)
+            except Exception:
                 continue
-            port_val: str | None = None
-            token_val: str | None = None
-            for arg in (proc.info["cmdline"] or []):
-                # Parse each arg directly from the list — avoids join-then-regex issues
-                # with tokens that contain spaces, quotes, or other special characters.
-                if arg.startswith("--app-port="):
-                    port_val = arg.split("=", 1)[1]
-                elif arg.startswith("--remoting-auth-token="):
-                    token_val = arg.split("=", 1)[1].strip("\"'")
-            if port_val and token_val:
-                return LCUCredentials(int(port_val), token_val)
-        except Exception:
-            continue
+    except (PermissionError, psutil.AccessDenied, Exception):
+        # macOS environments may block process enumeration; treat as "not available"
+        # and fall back to lockfile probing.
+        return None
     return None
 
 
