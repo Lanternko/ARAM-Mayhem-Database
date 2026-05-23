@@ -14,6 +14,8 @@ dependencies = [
     "tqdm>=4.66",
     "click>=8.1",
     "psutil>=5.9",
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
 ]
 
 [project.scripts]
@@ -21,6 +23,8 @@ aram-ingest = "aram_nn.ingest.cli:main"
 aram-snowball = "aram_nn.ingest.snowball:main"
 aram-train = "aram_nn.train:main"
 aram-eval = "aram_nn.eval:main"
+aram-site-api = "aram_nn.site.api_cli:main"
+aram-site-sync = "aram_nn.site.sync_cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
