@@ -1,9 +1,9 @@
-<!-- lines: 122 -->
+<!-- lines: 155 -->
 # aram-winrate-nn — ARAM 英雄組合勝率預測 NN，Python / PyTorch
 
 ## Why
-輸入一場 League of Legends ARAM (queueId=450) 的雙方英雄組合 (5v5)，輸出藍方獲勝機率。
-目標是驗證「提供英雄組合資訊後，模型準確率能否超過藍方 base rate (~51%)」。
+輸入一場 League of Legends Mayhem (queueId=2400) 或 ARAM (450) 的雙方英雄組合 (5v5)，輸出藍方獲勝機率。
+目標是驗證「提供英雄組合資訊後，模型準確率能否超過藍方 base rate (~51%)」；目前產品焦點是 Mayhem tier list / 推薦資料庫。
 
 ## Architecture
 - **Python 3.13**, PyTorch 2.11, polars, scikit-learn, httpx, psutil, click
@@ -13,7 +13,8 @@
 - `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
 - `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（`games` + `crawl_seen` set + `crawl_queue` priority frontier）
 - `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`, `build_tier_list.py`
-- `docs/index.html` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://lanternko.github.io/ARAM-Mayhem-Database/
+- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://lanternko.github.io/ARAM-Mayhem-Database/
+- `src/aram_nn/site/` — 前後端分離層：公開 `games` DB schema、FastAPI backend、10k watermark sync、tier-list JSON payload API
 - `data/cache/` — `kiwi.bin.json` + `lol_stringtable_zh_tw.json` (CommunityDragon mirror, ~30 MB) 用來解析 Mayhem augment 中文敘述
 - 深度技術決策見 `PLAN.md`（v3，已經 Codex review）；部署流程見「Site deploy」節
 
@@ -40,8 +41,15 @@ python -m aram_nn.ingest.snowball \
 # 診斷：查某 Riot ID 最近打了哪些 queue
 python scripts/probe_user.py --region tw --riot-id "Name#TAG" --count 100
 
-# Tier list 網站重 build（見「Site deploy」節）
+# Tier list 網站 split build（見「Site deploy」節）：HTML fetch external JSON
+python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
+
+# 舊 inline build 仍可用於臨時單檔測試；正式 deploy 不用這個模式
 python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/"
+
+# VM/backend API + local 10k watermark upload
+python scripts/site_api.py
+python scripts/sync_site_backend.py --api-url http://127.0.0.1:8000 --watch
 ```
 
 ## LCU Collector (Mayhem data, local client only)
@@ -83,6 +91,14 @@ LCU retains only the **last ~20 games**.  Run the collector every session or you
 `dataset` 會直接在 terminal 印出目前資料集摘要與英雄勝率排行，英雄名稱優先從 LCU static data 解析。
 Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 
+## Backend / Frontend Split
+
+- GitHub Pages 目前是 static split：`docs/index.html` 是小型前端殼，載入 `docs/api/tier-list.json`；不是 live backend API。
+- 本機 collector DB 仍是 private source of truth；`crawl_seen` / `crawl_queue` / `riot_id_bridge` 不離開本機。
+- Website backend 用 `src/aram_nn/site/db.py` 的公開 `games` schema，`POST /games/bulk` 以 `game_id` idempotent upsert，會拒絕含 `puuid` / `summonerName` / `riotId` 或 UUID-like PUUID 的 `participants_json`。
+- `scripts/sync_site_backend.py --watch` 預設每新增 10,000 筆 filtered local games 才推一次；可用 `--force` 首次灌資料。
+- `scripts/build_tier_list.py --payload-out ... --payload-url ...` 會把前端資料切到 JSON；省略 `--payload-url` 就保留舊版 inline HTML。
+
 ## Stall Playbook
 
 - `metrics` 若出現 `Mayhem +0`、`current_patch +0`，但 `done_delta` 持續增加，代表 crawler 活著但目前 seed family 已低產值，不要只看 worker 是否存在。
@@ -109,24 +125,27 @@ Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 - **Never hardcode routing host** — TW 的 match-v5 走 `sea.api.riotgames.com`，account-v1 走 `asia.api.riotgames.com`，platform (league-exp) 走 `tw2.api.riotgames.com`；三個不同，搞混會 404。
 - **Never pass `--patch ""`** in PowerShell to CLI — PowerShell 5.1 會把空字串吃掉導致 Click argument shift；省略 `--patch` 即為全收（預設值已是空字串）。
 - **Never publish the tier-list site from `/site`** — GitHub Pages 「Deploy from a branch」只接受 `/(root)` 或 `/docs`；用 `/site` Save 不會生效。永遠輸出到 `docs/index.html`（`build_tier_list.py` 預設）。
-- **Never `git add -A` / `git add .` when deploying the site** — 工作樹常有未追蹤的 WIP scripts；只 stage `docs/index.html`（必要時加 `scripts/build_tier_list.py`）。詳見「Site deploy」節。
+- **Never `git add -A` / `git add .` when deploying the site** — 工作樹常有未追蹤的 WIP scripts；只 stage `docs/index.html`、`docs/api/tier-list.json`，以及本輪生成且確認需要的 `docs/champion-roles.json` / `docs/og-image.png`。不要 stage `scripts/build_tier_list.py`，除非 generator change 本身也要發布。
 
 ## Site deploy (GitHub Pages → `main` / `/docs`)
 Live: https://lanternko.github.io/ARAM-Mayhem-Database/
 ```powershell
-# 1. Rebuild — 一定要帶 --site-url，否則 og:url / canonical 會空
-python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/"
+# 1. Rebuild split site — 一定要帶 --site-url，否則 og:url / canonical 會空
+python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
 
 # 2. Stage 只有產出檔（不要 git add -A）
-git add docs/index.html
+git add docs/index.html docs/api/tier-list.json
+# 若 diff 顯示本輪 build 更新了角色規格或 OG 圖，才一併 stage：
+git add docs/champion-roles.json docs/og-image.png
 
 # 3. Commit 用日期或 patch 標
-git commit -m "Refresh tier list 2026-05-15"
+git commit -m "Refresh split tier list 2026-05-23"
 
 # 4. Push → Pages 自動 redeploy 30-60s
 git push origin main
 ```
 - 預設參數：`--queue 2400 --patch-prefix 16.10 --out docs/index.html --min-games 50 --min-pair-games 15`，使用者另外要 patch / queue 時才 override
+- 正式 Pages deploy 採 split static 形式；HTML 約數百 KB，資料在 `docs/api/tier-list.json`。省略 `--payload-url` 會回到舊 inline HTML。
 - `data/cache/{kiwi.bin.json, lol_stringtable_zh_tw.json}` 首跑會自動下載 ~30 MB，後續 build 走本地快取
 - repo 改名 `ARAM-mayhem-collector` → `ARAM-Mayhem-Database`，舊 URL 仍 redirect，但 OG meta 走新 URL（commit `276409b`）
 
