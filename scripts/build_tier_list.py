@@ -2453,12 +2453,13 @@ def build_champ_augment_picks(
     bot_n: int,
     prior_strength: float,
 ) -> dict[int, dict]:
-    """For each champion, pick top-N best and bot-N worst augments by fit score.
+    """For each champion, rank augments within each rarity by fit score.
 
     Displayed WR remains the posterior mean.  Ranking uses a conservative
     posterior lower-bound lift with a small peer-relative pick-rate weight.
     The pick-rate term nudges stable, repeatedly chosen fits without rewriting
-    the displayed WR.
+    the displayed WR.  A non-positive top/bot limit keeps the full ranked
+    bucket, which is what the carousel UI needs.
     """
     pick_lift_index = build_pick_lift_index(champ_aug, aug_meta, profiles)
     by_champ_rarity: dict[int, dict[str, list[dict]]] = {}
@@ -2498,16 +2499,20 @@ def build_champ_augment_picks(
         }
         bucket[rarity].append(ranked)
 
+    def _take_ranked(rows: list[dict], limit: int) -> list[dict]:
+        return rows if limit <= 0 else rows[:limit]
+
     out: dict[int, dict] = {}
     for cid, buckets in by_champ_rarity.items():
         top, bot = {}, {}
         for rarity, rows in buckets.items():
             rows.sort(key=lambda r: (-r["rank_score"], -r["lcb_lift"], -r["games"], r["augment_id"]))
-            top[rarity] = rows[:top_n]
-            bot[rarity] = sorted(
+            top[rarity] = _take_ranked(rows, top_n)
+            bot_rows = sorted(
                 rows,
                 key=lambda r: (r["rank_score"], r["lcb_lift"], r["games"], r["augment_id"]),
-            )[:bot_n]
+            )
+            bot[rarity] = _take_ranked(bot_rows, bot_n)
         out[cid] = {"top": top, "bot": bot}
     return out
 
@@ -2787,6 +2792,8 @@ def render_html(
     build_date: str = "",
     cloudflare_analytics_token: str = "",
     ga_measurement_id: str = "",
+    payload_out_path: Path | None = None,
+    payload_url: str = "",
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -4276,6 +4283,7 @@ def render_html(
         gap: 10px;
         align-items: start;
         margin-bottom: 10px;
+        min-width: 0;
     }
     .rlabel {
         font-size: 11px;
@@ -4302,12 +4310,27 @@ def render_html(
     .rlabel.gold     { background: linear-gradient(135deg,#ffe87a,#f5c518,#d99908); color: #3a2600; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
     .rlabel.silver   { background: linear-gradient(135deg,#eef0f4,#c0c5cc,#9aa0a6); color: #2a2e35; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
     .aug-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+        display: flex;
         gap: 10px;
+        min-width: 0;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: x proximity;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+        padding: 0 4px 8px 0;
+        -webkit-overflow-scrolling: touch;
+    }
+    .aug-list::-webkit-scrollbar { height: 7px; }
+    .aug-list::-webkit-scrollbar-track { background: transparent; }
+    .aug-list::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.35);
+        border-radius: 999px;
     }
     .aug-list.empty-list { color: #6b7280; font-size: 11px; padding: 8px 0; }
     .aug {
+        flex: 0 0 92px;
+        scroll-snap-align: start;
         background: #11151d;
         border-radius: 8px;
         padding: 8px 6px;
@@ -4656,9 +4679,17 @@ def render_html(
            which row is which is obvious. */
         .rarity-row { grid-template-columns: 1fr; gap: 4px; }
         .rlabel { display: none; }
-        /* Each rarity row shows exactly the same 5 augments (top / bot),
-           so force 5 columns and let each card shrink to fit. */
-        .aug-list { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+        /* Each rarity row is a horizontal carousel; show five cards at a
+           glance, then let the rest continue off-canvas for swipe. */
+        .aug-list {
+            gap: 4px;
+            padding-bottom: 6px;
+            scroll-snap-type: x mandatory;
+        }
+        .aug {
+            flex-basis: calc((100% - 16px) / 5);
+            min-width: 58px;
+        }
         .mate-list { grid-template-columns: 1fr; gap: 6px; }
         .mate-card {
             grid-template-columns: 34px 1fr;
@@ -4754,6 +4785,12 @@ def render_html(
         },
     }
     payload_json = json.dumps(payload, ensure_ascii=False)
+    if payload_out_path is not None:
+        payload_out_path.parent.mkdir(parents=True, exist_ok=True)
+        payload_out_path.write_text(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
 
     og_patch_label = f"patch {patch_prefix}" if patch_prefix else "all patches"
     og_title = f"{header_title}資料庫"
@@ -5055,6 +5092,13 @@ def render_html(
     parts.append("</div>")  # /app-shell
 
     js = """
+    async function loadSitePayload(url) {
+        const response = await fetch(url, { cache: 'no-cache' });
+        if (!response.ok) {
+            throw new Error(`payload ${response.status}: ${url}`);
+        }
+        return await response.json();
+    }
     const DATA = __PAYLOAD__;
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
@@ -6585,7 +6629,19 @@ def render_html(
         sEl.select();
     });
     """
-    js = js.replace("__PAYLOAD__", payload_json)
+    payload_expr = (
+        f"await loadSitePayload({json.dumps(payload_url, ensure_ascii=False)})"
+        if payload_url
+        else payload_json
+    )
+    js = "(async () => {\n" + js.strip() + "\n})().catch(err => {\n" \
+        "    console.error(err);\n" \
+        "    document.body.insertAdjacentHTML('afterbegin', " \
+        "`<div style=\"margin:16px;padding:12px 14px;border:1px solid #7f1d1d;" \
+        "background:#2a1216;color:#ffd7dc;border-radius:8px\">" \
+        "資料載入失敗，請稍後再試。</div>`);\n" \
+        "});"
+    js = js.replace("__PAYLOAD__", payload_expr)
     js = js.replace("__HEADER_TITLE_ZH__", json.dumps(header_title, ensure_ascii=False))
     js = js.replace("__HEADER_TITLE_EN__", json.dumps(header_title_en, ensure_ascii=False))
     js = js.replace("__SHORT_PATCH_ZH__", json.dumps(short_patch, ensure_ascii=False))
@@ -6618,8 +6674,10 @@ def render_html(
 @click.option("--min-pair-games", type=int, default=15, help="Min games per (champ, augment) pair")
 @click.option("--min-synergy-games", type=int, default=40,
               help="Min games per same-team champion pair for synergy / recommendation ranking")
-@click.option("--top-n", type=int, default=5)
-@click.option("--bot-n", type=int, default=5)
+@click.option("--top-n", type=int, default=0,
+              help="Max best augments per rarity; 0 keeps all qualifying augments")
+@click.option("--bot-n", type=int, default=0,
+              help="Max worst augments per rarity; 0 keeps all qualifying augments")
 @click.option("--site-url", default="",
               help="Canonical URL (used for OG og:url + <link rel=canonical>), e.g. https://user.github.io/repo/")
 @click.option("--og-image", default="",
@@ -6630,6 +6688,10 @@ def render_html(
               help="Cloudflare Web Analytics token; can also be set via CLOUDFLARE_ANALYTICS_TOKEN")
 @click.option("--ga-measurement-id", envvar="GA_MEASUREMENT_ID", default="",
               help="GA4 measurement id, e.g. G-XXXXXXXXXX; can also be set via GA_MEASUREMENT_ID")
+@click.option("--payload-out", type=click.Path(path_type=Path), default=None,
+              help="Write the frontend DATA payload as JSON for split frontend/backend deployment.")
+@click.option("--payload-url", default="",
+              help="Have the generated HTML fetch DATA from this URL instead of embedding it inline.")
 def main(
     db: Path,
     queue_id: int,
@@ -6646,6 +6708,8 @@ def main(
     build_date: str,
     cloudflare_analytics_token: str,
     ga_measurement_id: str,
+    payload_out: Path | None,
+    payload_url: str,
 ) -> None:
     patch_prefix = patch_prefix or None
     click.echo(f"[tierlist] db={db}  queue={queue_id}  patch_prefix={patch_prefix}")
@@ -6801,7 +6865,11 @@ def main(
         build_date=build_date,
         cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id,
+        payload_out_path=payload_out,
+        payload_url=payload_url,
     )
+    if payload_out is not None:
+        click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
