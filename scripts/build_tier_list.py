@@ -4338,7 +4338,7 @@ def render_html(
         border-radius: 999px;
     }
     .item-build-card {
-        flex: 0 0 88px;
+        flex: 0 0 76px;
         scroll-snap-align: start;
         display: grid;
         grid-template-rows: auto auto 1fr;
@@ -4354,42 +4354,42 @@ def render_html(
         box-shadow: 0 0 0 2px rgba(255,255,255,0.32);
     }
     .item-build-card.single-item-card {
-        flex-basis: 82px;
+        flex-basis: 68px;
     }
     .item-build-icons {
         display: grid;
         justify-items: center;
         align-content: center;
         gap: 4px;
-        min-height: 108px;
-        padding: 5px;
+        min-height: 90px;
+        padding: 4px;
         background: #0f131b;
     }
     .single-item-card .item-build-icons {
         grid-template-columns: 1fr;
-        min-height: 62px;
+        min-height: 50px;
     }
     .item-build-icon {
         display: block;
-        width: 48px;
-        height: 48px;
+        width: 40px;
+        height: 40px;
         aspect-ratio: 1 / 1;
         object-fit: contain;
         background: #2a3142;
     }
     .single-item-card .item-build-icon {
-        width: 50px;
-        height: 50px;
+        width: 42px;
+        height: 42px;
     }
     .item-build-wr {
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 34px;
+        min-height: 24px;
         border-top: 1px solid rgba(255,255,255,0.08);
         border-bottom: 1px solid rgba(255,255,255,0.08);
         color: #6bd16b;
-        font-size: 15px;
+        font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
@@ -4397,8 +4397,8 @@ def render_html(
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 32px;
-        padding: 4px 4px;
+        min-height: 28px;
+        padding: 3px 3px;
         color: #e6e8eb;
         font-size: 9px;
         font-weight: 600;
@@ -5019,42 +5019,42 @@ def render_html(
             min-width: 58px;
         }
         .item-build-carousel {
-            gap: 6px;
+            gap: 4px;
             padding-bottom: 6px;
             scroll-snap-type: x mandatory;
         }
         .item-build-card {
-            flex-basis: calc((100% - 24px) / 5);
-            min-width: 58px;
+            flex-basis: calc((100% - 20px) / 6);
+            min-width: 48px;
         }
         .item-build-card.single-item-card {
-            flex-basis: calc((100% - 24px) / 5);
-            min-width: 58px;
+            flex-basis: calc((100% - 20px) / 6);
+            min-width: 48px;
         }
         .item-build-icons {
-            min-height: 86px;
-            padding: 4px;
-            gap: 3px;
+            min-height: 66px;
+            padding: 3px;
+            gap: 2px;
         }
         .single-item-card .item-build-icons {
-            min-height: 48px;
+            min-height: 42px;
         }
         .item-build-icon {
-            width: 39px;
-            height: 39px;
+            width: 29px;
+            height: 29px;
         }
         .single-item-card .item-build-icon {
-            width: 42px;
-            height: 42px;
+            width: 34px;
+            height: 34px;
         }
         .item-build-wr {
-            min-height: 28px;
-            font-size: 13px;
+            min-height: 22px;
+            font-size: 10px;
         }
         .item-build-name {
-            min-height: 28px;
-            padding: 3px 2px;
-            font-size: 8px;
+            min-height: 24px;
+            padding: 2px 2px;
+            font-size: 9px;
         }
         .mate-list { grid-template-columns: 1fr; gap: 6px; }
         .mate-card {
