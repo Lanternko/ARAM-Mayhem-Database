@@ -19,6 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "ARAMRecommender"
+ICON_FILE = ROOT / "docs" / "recommender-app-icon.ico"
 
 DATA_FILES = [
     ("models/tier2_mayhem/lr_weights.json", "models/tier2_mayhem"),
@@ -33,6 +34,7 @@ DATA_FILES = [
         "models/composition_lr_16_10_2026_05_21_dual_roles",
     ),
     ("data/cache/champion_abilities.json", "data/cache"),
+    ("docs/recommender-app-icon.ico", "docs"),
 ]
 
 EXCLUDE_MODULES = [
@@ -68,6 +70,8 @@ def build(onefile: bool = False, skip_zip: bool = False) -> Path:
     missing = [str(ROOT / rel) for rel, _ in DATA_FILES if not (ROOT / rel).exists()]
     if missing:
         raise SystemExit("Missing package data:\n" + "\n".join(f"  {path}" for path in missing))
+    if not ICON_FILE.exists():
+        raise SystemExit(f"Missing app icon: {ICON_FILE}")
 
     dist_dir = ROOT / "dist"
     work_dir = ROOT / "build" / "pyinstaller"
@@ -90,6 +94,8 @@ def build(onefile: bool = False, skip_zip: bool = False) -> Path:
         str(spec_dir),
         "--paths",
         str(ROOT / "src"),
+        "--icon",
+        str(ICON_FILE),
     ]
 
     if onefile:

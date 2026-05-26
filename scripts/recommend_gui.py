@@ -47,6 +47,7 @@ DEFAULT_VOCAB = Path("models/tier2_mayhem/tier2_checkpoint.champ_to_idx.json")
 DEFAULT_PAIR_STATS = Path("models/pair_synergy_16_10.json")
 DEFAULT_COMPOSITION_MODEL = Path("models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl")
 DEFAULT_CHAMPION_NAMES = Path("data/cache/champion_abilities.json")
+DEFAULT_APP_ICON = Path("docs/recommender-app-icon.ico")
 
 
 def _project_root() -> Path:
@@ -82,6 +83,16 @@ def _icon_cache_dir() -> Path:
         base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
         return base / APP_NAME / "icons"
     return _resource_path("data/icons")
+
+
+def _set_window_icon(root: tk.Tk) -> None:
+    icon_path = _resource_path(DEFAULT_APP_ICON)
+    if not icon_path.exists():
+        return
+    try:
+        root.iconbitmap(default=str(icon_path))
+    except Exception:
+        pass
 
 
 # ---------- Polling thread ----------
@@ -464,6 +475,7 @@ class RecommenderApp:
         self._last_render_args: tuple | None = None
 
         root.title("ARAM Recommender")
+        _set_window_icon(root)
         root.attributes("-topmost", True)
         root.attributes("-alpha", 1.0)
         root.geometry("840x620+40+40")
@@ -1060,6 +1072,7 @@ def main(
             # that scrolls off when the user double-clicks the script.
             root = tk.Tk()
             root.title("ARAM Recommender")
+            _set_window_icon(root)
             root.configure(bg=BG)
             tk.Label(
                 root, text="League client not running",
