@@ -3230,7 +3230,7 @@ def family_stats(db: Path, queue: tuple[int, ...]) -> None:
 @click.option("--pair-stats", default=Path("models/pair_synergy_16_10.json"),
               type=click.Path(path_type=Path, dir_okay=False),
               help="Path to pair synergy JSON from scripts/build_pair_stats.py.")
-@click.option("--composition-model", default=Path("models/composition_lr_16_10_2026_05_19_live/model.pkl"),
+@click.option("--composition-model", default=Path("models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl"),
               type=click.Path(path_type=Path, dir_okay=True),
               help="Path to composition LR model.pkl or its model directory. Used for primary ML swap deltas.")
 @click.option("--poll-interval", default=1.0, show_default=True, type=float,
