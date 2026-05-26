@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import math
 import pickle
+from itertools import combinations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -126,6 +127,7 @@ class CompositionLRModel:
     feature_names: list[str]
     champ_to_idx: dict[int, int]
     profiles: dict[int, ChampionProfile]
+    single_team_intercept: float | None = None
 
     def __post_init__(self) -> None:
         self.feature_to_idx = {name: idx for idx, name in enumerate(self.feature_names)}
@@ -134,7 +136,10 @@ class CompositionLRModel:
         contribution, unknown = self.team_logit_contribution(team_ids)
         if unknown:
             return float("nan"), unknown
-        logit = float(contribution + self.intercept)
+        intercept = self.single_team_intercept
+        if intercept is None:
+            intercept = self.intercept
+        logit = float(contribution + intercept)
         return float(_sigmoid(logit)), []
 
     def team_logit_contribution(self, team_ids: Iterable[int]) -> tuple[float, list[int]]:
@@ -322,6 +327,7 @@ def _as_champion_profile(payload: dict) -> ChampionProfile:
 def load_composition_lr(path: Path) -> CompositionLRModel:
     """Load the saved composition LR without importing sklearn."""
     path = Path(path)
+    model_dir = path if path.is_dir() else path.parent
     if path.is_dir():
         path = path / "model.pkl"
     with path.open("rb") as f:
@@ -339,12 +345,20 @@ def load_composition_lr(path: Path) -> CompositionLRModel:
         int(cid): _as_champion_profile(profile)
         for cid, profile in payload["champion_profiles"].items()
     }
+    single_team_intercept = None
+    calibration_path = model_dir / "single_team_calibration.json"
+    if calibration_path.exists():
+        calibration = json.loads(calibration_path.read_text(encoding="utf-8"))
+        raw_intercept = calibration.get("single_team_intercept")
+        if raw_intercept is not None:
+            single_team_intercept = float(raw_intercept)
     return CompositionLRModel(
         coef=coef,
         intercept=intercept,
         feature_names=feature_names,
         champ_to_idx={int(k): int(v) for k, v in payload["champ_to_idx"].items()},
         profiles=profiles,
+        single_team_intercept=single_team_intercept,
     )
 
 
@@ -490,6 +504,135 @@ class Suggestion:
     is_known: bool         # False if championId is outside training vocab
 
 
+@dataclass
+class TeamCombo:
+    champion_ids: tuple[int, ...]
+    win_prob: float
+    score: float
+    delta: float
+    pair_delta: float
+    pair_coverage: int
+    ratings: tuple["TeamRating", ...]
+    ad_share: float
+    known_count: int
+    total_combos: int
+    rank: int
+
+
+@dataclass(frozen=True)
+class TeamRating:
+    label: str
+    value: float
+    detail: str = ""
+
+
+RATING_BANDS = {
+    # Rough 10th/90th percentiles from random 5-champion teams in the current
+    # champion profile model.  This makes B read as normal and S read as a
+    # standout strength, instead of treating "not deficient" as perfect.
+    "wave_clear_score": (2.7, 4.8),
+    "cc_score": (5.0, 10.0),
+    "engage_score": (1.6, 3.7),
+    "damage_score": (5.0, 10.0),
+    "poke_score": (2.1, 5.6),
+    "sustain_score": (5.0, 10.0),
+    "frontline_score": (5.0, 10.0),
+}
+
+
+def _rating_from_band(value: float, low: float, high: float) -> float:
+    if high <= low:
+        return 0.0
+    rating = 1.0 + 4.0 * ((float(value) - low) / (high - low))
+    return float(max(0.0, min(5.0, rating)))
+
+
+def _mix_rating(ad_share: float) -> float:
+    mix_distance = abs(float(ad_share) - 0.50)
+    # Damage mix is a health check, not a carry condition.  A balanced
+    # 45-55% AD profile should read as A-ish rather than S+.
+    rating = 3.65 - max(0.0, mix_distance - 0.05) / 0.35 * 3.4
+    return float(max(0.0, min(5.0, rating)))
+
+
+def _hero_strength_rating(team_ids: Iterable[int], model: LRModel) -> TeamRating:
+    z_scores: list[float] = []
+    for cid in team_ids:
+        idx = model.champ_to_idx.get(int(cid))
+        if idx is None:
+            return TeamRating("英雄強度", float("nan"))
+        z_scores.append(model.z_score(idx))
+    avg_z = float(np.mean(z_scores)) if z_scores else 0.0
+    rating = 2.5 + 1.35 * avg_z
+    return TeamRating("英雄強度", max(0.0, min(5.0, rating)))
+
+
+def team_rating_summary(
+    team_ids: Iterable[int],
+    composition_model: CompositionLRModel,
+) -> tuple[TeamRating, ...]:
+    """Translate composition-model team features into compact UI ratings."""
+    ratings, _ = _team_rating_profile(team_ids, composition_model)
+    return ratings
+
+
+def _team_rating_profile(
+    team_ids: Iterable[int],
+    composition_model: CompositionLRModel,
+) -> tuple[tuple[TeamRating, ...], float]:
+    team, unknown = _team_profile_from_ids(team_ids, composition_model.profiles)
+    if unknown or team is None:
+        return (), float("nan")
+
+    def score(label: str, key: str, detail: str = "") -> TeamRating:
+        low, high = RATING_BANDS[key]
+        value = _rating_from_band(team.score_sums[key], low, high)
+        return TeamRating(label=label, value=value, detail=detail)
+
+    damage = score("傷害", "damage_score")
+    ad_ratio = TeamRating("AD佔比", _mix_rating(team.ad_share), f"{team.ad_share * 100:.0f}%")
+    frontline = score("坦度", "frontline_score", f"{team.front_count}前排")
+    cc = score("控場", "cc_score")
+    engage_base = score("開戰", "engage_score")
+    engage = TeamRating(
+        "開戰",
+        max(0.0, min(5.0, 0.65 * engage_base.value + 0.35 * cc.value)),
+    )
+    poke = score("消耗", "poke_score")
+    wave_base = score("清兵", "wave_clear_score")
+    wave = TeamRating(
+        "清兵",
+        max(0.0, min(5.0, 0.75 * wave_base.value + 0.25 * poke.value)),
+    )
+    sustain = score("續航", "sustain_score")
+
+    damage = TeamRating(
+        "傷害",
+        max(0.0, min(5.0, 0.82 * damage.value + 0.18 * ad_ratio.value + min(team.true_share * 2.0, 0.25))),
+    )
+    candidates = (
+        (damage, -0.45),
+        (wave, -0.35),
+        (frontline, -0.25),
+        (engage, -0.20),
+        (cc, 0.10),
+        (sustain, 0.18),
+        (poke, 0.25),
+    )
+    risk = min(candidates, key=lambda item: item[0].value + item[1])[0]
+    strengths = [
+        rating for rating, _ in sorted(candidates, key=lambda item: item[0].value, reverse=True)
+        if rating.label != risk.label
+    ][:2]
+    if risk.value < 1.35:
+        risk_label = f"高風險：{risk.label}"
+    elif risk.value < 3.05:
+        risk_label = f"風險：{risk.label}"
+    else:
+        risk_label = f"低點：{risk.label}"
+    return (ad_ratio, *strengths, TeamRating(risk_label, risk.value, risk.detail)), team.ad_share
+
+
 def _combine_synergy(
     anchors: Iterable[int],
     candidate_id: int,
@@ -528,6 +671,33 @@ def _combine_synergy(
         synergy *= 0.5
 
     return float(synergy), float(combined_se), anchors_covered
+
+
+def _team_pair_synergy(team_ids: Iterable[int], pair_stats: PairSynergyStats | None) -> tuple[float, int]:
+    """Small same-team chemistry adjustment from ordered pair residuals."""
+    if pair_stats is None:
+        return 0.0, 0
+
+    weighted_sum = 0.0
+    weight_sum = 0.0
+    coverage = 0
+    team = [int(cid) for cid in team_ids]
+    for anchor, candidate in combinations(team, 2):
+        for a, b in ((anchor, candidate), (candidate, anchor)):
+            row = pair_stats.get(a, b)
+            if row is None:
+                continue
+            weight = 1.0 / (row.se * row.se + 0.0004)
+            weighted_sum += row.delta * weight
+            weight_sum += weight
+            coverage += 1
+
+    if coverage == 0 or weight_sum <= 0:
+        return 0.0, 0
+
+    raw = weighted_sum / weight_sum
+    shrink = coverage / (coverage + 8.0)
+    return float(max(min(raw * shrink, 0.06), -0.06)), coverage
 
 
 def suggest_for_cell(
@@ -618,6 +788,117 @@ def suggest_for_cell(
 
     out.sort(key=lambda s: (not s.is_known, -s.score if s.is_known else 0.0))
     return out
+
+
+def best_available_team_combos(
+    my_team_ids: list[int],
+    bench_ids: list[int],
+    model: LRModel,
+    composition_model: CompositionLRModel | None = None,
+    *,
+    top_n: int = 3,
+) -> list[TeamCombo]:
+    """Exhaustively rank 5-champion teams by team-level model probability.
+
+    Normal champ-select pools are small: 5 current allies plus about 5 bench
+    champions, so C(10, 5) = 252.  This is cheap enough to run on every LCU
+    state change.  We intentionally do not enumerate the full champion roster
+    here; C(172, 5) is over a billion combinations.
+    """
+    pool: list[int] = []
+    seen: set[int] = set()
+    for cid_raw in [*my_team_ids, *bench_ids]:
+        cid = int(cid_raw)
+        if cid > 0 and cid not in seen:
+            seen.add(cid)
+            pool.append(cid)
+
+    if len(pool) < 5:
+        return []
+
+    if composition_model is not None:
+        baseline, baseline_unknown = composition_model.predict_team_prob(my_team_ids)
+        if baseline_unknown or math.isnan(baseline):
+            baseline = predict_blue_prob(my_team_ids, model)
+    else:
+        baseline = predict_blue_prob(my_team_ids, model)
+
+    rows: list[TeamCombo] = []
+    total = math.comb(len(pool), 5)
+    for team in combinations(pool, 5):
+        known_count = sum(1 for cid in team if cid in model.champ_to_idx)
+        ratings: tuple[TeamRating, ...] = ()
+        ad_share = float("nan")
+        if known_count < 5:
+            prob = float("nan")
+            score = float("nan")
+        elif composition_model is not None:
+            prob, unknown = composition_model.predict_team_prob(team)
+            if unknown or math.isnan(prob):
+                prob = predict_blue_prob(team, model)
+            else:
+                ratings, ad_share = _team_rating_profile(team, composition_model)
+                ratings = (_hero_strength_rating(team, model), *ratings)
+            score = prob
+        else:
+            prob = predict_blue_prob(team, model)
+            score = prob
+        rows.append(TeamCombo(
+            champion_ids=tuple(int(cid) for cid in team),
+            win_prob=prob,
+            score=score,
+            delta=(score - baseline) if not math.isnan(score) else float("nan"),
+            pair_delta=0.0,
+            pair_coverage=0,
+            ratings=ratings,
+            ad_share=ad_share,
+            known_count=known_count,
+            total_combos=total,
+            rank=0,
+        ))
+
+    rows.sort(key=lambda row: (row.known_count < 5, -row.score if not math.isnan(row.score) else 0.0))
+    for idx, row in enumerate(rows[:top_n], start=1):
+        row.rank = idx
+    return rows[:top_n]
+
+
+def describe_team_combo(
+    team_ids: Iterable[int],
+    model: LRModel,
+    composition_model: CompositionLRModel | None = None,
+) -> TeamCombo:
+    """Return model probability and display ratings for a concrete 5-champion team."""
+    team = tuple(int(cid) for cid in team_ids)
+    known_count = sum(1 for cid in team if cid in model.champ_to_idx)
+    ratings: tuple[TeamRating, ...] = ()
+    ad_share = float("nan")
+
+    if known_count < len(team) or len(team) != 5:
+        prob = float("nan")
+    elif composition_model is not None:
+        prob, unknown = composition_model.predict_team_prob(team)
+        if unknown or math.isnan(prob):
+            prob = predict_blue_prob(team, model)
+        else:
+            ratings, ad_share = _team_rating_profile(team, composition_model)
+            ratings = (_hero_strength_rating(team, model), *ratings)
+    else:
+        prob = predict_blue_prob(team, model)
+
+    return TeamCombo(
+        champion_ids=team,
+        win_prob=prob,
+        score=prob,
+        delta=0.0 if not math.isnan(prob) else float("nan"),
+        pair_delta=0.0,
+        pair_coverage=0,
+        ratings=ratings,
+        ad_share=ad_share,
+        known_count=known_count,
+        total_combos=1,
+        rank=0,
+    )
 
 
 # ---------- Session parsing ----------
