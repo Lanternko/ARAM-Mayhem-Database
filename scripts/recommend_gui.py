@@ -1074,15 +1074,17 @@ def main(
             root.title("ARAM Recommender")
             _set_window_icon(root)
             root.configure(bg=BG)
-            tk.Label(
+            title = tk.Label(
                 root, text="League client not running",
-                bg=BG, fg=RED, font=FONT_HEAD, padx=24, pady=(20, 4), anchor="w",
-            ).pack(fill="x")
-            tk.Label(
+                bg=BG, fg=RED, font=FONT_HEAD, padx=24, anchor="w",
+            )
+            title.pack(fill="x", pady=(20, 4))
+            body = tk.Label(
                 root, text="No LCU credentials found.\n\nTip: pass --fake to demo the GUI without League.",
-                bg=BG, fg=DIM, font=FONT_NAME, padx=24, pady=(0, 24),
+                bg=BG, fg=DIM, font=FONT_NAME, padx=24,
                 anchor="w", justify="left",
-            ).pack(fill="x")
+            )
+            body.pack(fill="x", pady=(0, 24))
             root.mainloop()
             sys.exit(1)
         thread = threading.Thread(
