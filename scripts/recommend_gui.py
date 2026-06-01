@@ -1068,25 +1068,7 @@ def main(
     else:
         creds = creds_for_icons  # reuse - same credentials work for both
         if not creds:
-            # Show the error in a window - easier to notice than a stderr message
-            # that scrolls off when the user double-clicks the script.
-            root = tk.Tk()
-            root.title("ARAM Recommender")
-            _set_window_icon(root)
-            root.configure(bg=BG)
-            title = tk.Label(
-                root, text="League client not running",
-                bg=BG, fg=RED, font=FONT_HEAD, padx=24, anchor="w",
-            )
-            title.pack(fill="x", pady=(20, 4))
-            body = tk.Label(
-                root, text="No LCU credentials found.\n\nTip: pass --fake to demo the GUI without League.",
-                bg=BG, fg=DIM, font=FONT_NAME, padx=24,
-                anchor="w", justify="left",
-            )
-            body.pack(fill="x", pady=(0, 24))
-            root.mainloop()
-            sys.exit(1)
+            print("[gui] no LCU credentials at startup; GUI will keep waiting")
         thread = threading.Thread(
             target=poll_loop,
             args=(stop_event, q, model, pair_model, comp_model, creds, poll_interval, verbose),
