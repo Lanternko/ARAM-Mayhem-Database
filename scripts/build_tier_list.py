@@ -98,6 +98,8 @@ AUGMENT_PICK_LIFT_CAP = 3.0
 EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.csv")
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
+ITEM_BOOT_MIN_TOTAL_GOLD = 900
+GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 CATEGORY_PRIOR_DEFAULT = AUGMENT_PRIOR_DEFAULT
 ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
@@ -118,6 +120,43 @@ SINGLE_ITEM_PICK_LIFT_CAP = ITEM_PAIR_PICK_LIFT_CAP
 SINGLE_ITEM_PICK_RATE_WEIGHT = ITEM_PAIR_PICK_RATE_WEIGHT
 SINGLE_ITEM_PICK_RATE_REF = ITEM_PAIR_PICK_RATE_REF
 SINGLE_ITEM_PICK_RATE_CAP = ITEM_PAIR_PICK_RATE_CAP
+BOOT_ITEM_MIN_GAMES = 30
+BOOT_ITEM_FALLBACK_MIN_GAMES = 20
+BOOT_ITEM_TOP_MIN_LIFT = -0.04
+ITEM_CLUSTER_MIN_PAIR_GAMES = 20
+ITEM_CLUSTER_MIN_COSINE = 0.10
+ITEM_CLUSTER_MIN_GAMES = 20
+ITEM_CLUSTER_MIN_EXACT_GAMES = 3
+ITEM_CLUSTER_ITEM_EVIDENCE_MIN_GAMES = 50
+ITEM_CLUSTER_ITEM_FALLBACK_MIN_GAMES = 20
+ITEM_CLUSTER_ITEM_FALLBACK_MIN_LIFT = 0.02
+ITEM_CLUSTER_TOP_MIN_LIFT = -0.02
+ITEM_CLUSTER_TOP_N = 4
+ITEM_CLUSTER_MAX_ITEMS = 6
+ITEM_CLUSTER_PAIR_WEIGHT = 0.45
+ITEM_CLUSTER_SINGLE_WEIGHT = 0.35
+ITEM_CLUSTER_GLOBAL_WEIGHT = 0.20
+ITEM_CLUSTER_CORE_ITEM_COUNT = 3
+ITEM_CLUSTER_ROUTE_LIFT_WEIGHT = 0.55
+ITEM_CLUSTER_CORE_PAIR_WEIGHT = 0.45
+ITEM_CLUSTER_CORE_SINGLE_WEIGHT = 0.40
+ITEM_CLUSTER_CORE_GLOBAL_WEIGHT = 0.12
+ITEM_CLUSTER_FLEX_SINGLE_WEIGHT = 0.06
+ITEM_CLUSTER_FLEX_GLOBAL_WEIGHT = 0.06
+ITEM_CLUSTER_FLEX_STABILITY_PICK_REF = 0.15
+ITEM_CLUSTER_FLEX_STABILITY_WEIGHT = 1.25
+ITEM_CLUSTER_EXACT_GAMES_WEIGHT = 0.014
+ITEM_CLUSTER_PICK_RATE_WEIGHT = 0.012
+ITEM_CLUSTER_PICK_RATE_REF = 0.01
+ITEM_CLUSTER_PICK_RATE_CAP = 0.035
+PATCH_CHANGE_TOP_N = 10
+PATCH_CHANGE_HERO_MIN_GAMES = 500
+PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES = 500
+PATCH_CHANGE_ITEM_BASELINE_MIN_GAMES = 800
+PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES = 80
+PATCH_CHANGE_CHAMP_ITEM_BASELINE_MIN_GAMES = 120
+PATCH_CHANGE_ITEM_PRIOR_GAMES = 200
+PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES = 30
 AUGMENT_TYPE_MIN_GAMES = 100
 
 ITEM_STYLE_LABELS = {
@@ -273,6 +312,8 @@ AD_BRUISER_ITEM_KEYWORDS = (
 )
 
 HEARTSTEEL_ITEM_IDS = {3084, 223084, 323084}
+# Quest: Icathia's Fall combines Sunfire Aegis + Hollow Radiance into this reward item.
+AUGMENT_GATED_ITEM_IDS = {223069}
 ROLE_RANGED_ALIAS_OVERRIDES = {"Kayle"}
 HEARTSTEEL_TANK_FOLLOWUP_STYLES = {"tank"}
 HEARTSTEEL_BRUISER_FOLLOWUP_STYLES = {
@@ -1790,10 +1831,40 @@ def _participant_item_infos(item_ids: list[int], item_meta: dict[int, dict]) -> 
 def _is_recommendable_core_item(item: dict | None) -> bool:
     if not item:
         return False
+    if int(item.get("id") or 0) in AUGMENT_GATED_ITEM_IDS:
+        return False
     if int(item.get("price_total") or 0) < ITEM_MIN_TOTAL_GOLD:
         return False
     categories = set(str(c) for c in item.get("categories") or [])
     return "Boots" not in categories
+
+def _is_guardian_starter_item(item: dict | None) -> bool:
+    if not item:
+        return False
+    if int(item.get("id") or 0) not in GUARDIAN_STARTER_ITEM_IDS:
+        return False
+    if int(item.get("price_total") or 0) != 950:
+        return False
+    categories = set(str(c) for c in item.get("categories") or [])
+    return "Boots" not in categories
+
+def _is_recommendable_single_item(item: dict | None) -> bool:
+    return _is_recommendable_core_item(item) or _is_guardian_starter_item(item)
+
+def _is_boot_item(item: dict | None) -> bool:
+    if not item:
+        return False
+    categories = set(str(c) for c in item.get("categories") or [])
+    return "Boots" in categories
+
+def _is_recommendable_route_item(item: dict | None) -> bool:
+    if not item:
+        return False
+    if int(item.get("id") or 0) in AUGMENT_GATED_ITEM_IDS:
+        return False
+    if _is_boot_item(item):
+        return int(item.get("price_total") or 0) >= ITEM_BOOT_MIN_TOTAL_GOLD
+    return _is_recommendable_core_item(item)
 
 def _item_pair_payload(item_ids: list[int], item_meta: dict[int, dict]) -> list[dict[str, object]]:
     payload: list[dict[str, object]] = []
@@ -1838,11 +1909,44 @@ def _participant_recommendable_item_ids(item_ids: list[int], item_meta: dict[int
             continue
         if item_id <= 0 or item_id in seen:
             continue
-        if not _is_recommendable_core_item(item_meta.get(item_id)):
+        if not _is_recommendable_single_item(item_meta.get(item_id)):
             continue
         core_ids.append(item_id)
         seen.add(item_id)
     return core_ids
+
+def _participant_route_item_ids(item_ids: list[int], item_meta: dict[int, dict]) -> list[int]:
+    route_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_id in item_ids:
+        try:
+            item_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0 or item_id in seen:
+            continue
+        if not _is_recommendable_route_item(item_meta.get(item_id)):
+            continue
+        route_ids.append(item_id)
+        seen.add(item_id)
+    return route_ids
+
+def _participant_boot_item_ids(item_ids: list[int], item_meta: dict[int, dict]) -> list[int]:
+    boot_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_id in item_ids:
+        try:
+            item_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if item_id <= 0 or item_id in seen:
+            continue
+        item = item_meta.get(item_id)
+        if not _is_recommendable_route_item(item) or not _is_boot_item(item):
+            continue
+        boot_ids.append(item_id)
+        seen.add(item_id)
+    return boot_ids
 
 def _item_pair_name(item_payload: list[dict[str, object]], key: str) -> str:
     return " + ".join(str(item.get(key) or item.get("name") or item.get("id")) for item in item_payload)
@@ -2318,13 +2422,15 @@ def compute_champ_item_pair_affinities(
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
             (queue_id, f"{patch_prefix}%"),
         )
     else:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL",
+            "WHERE queue_id=? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
             (queue_id,),
         )
 
@@ -2428,7 +2534,7 @@ def compute_champ_item_pair_affinities(
             row["items"] = items
     return affinity
 
-def compute_champ_single_item_affinities(
+def _compute_champ_item_slot_affinities(
     db_path: Path,
     queue_id: int,
     patch_prefix: str | None,
@@ -2436,6 +2542,10 @@ def compute_champ_single_item_affinities(
     champ_records: list[dict],
     *,
     min_games: int,
+    item_selector,
+    fallback_min_games: int,
+    top_min_lift: float,
+    top_n: int = 0,
 ) -> dict[int, dict]:
     baseline_by_champ = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
@@ -2445,13 +2555,15 @@ def compute_champ_single_item_affinities(
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
             (queue_id, f"{patch_prefix}%"),
         )
     else:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL",
+            "WHERE queue_id=? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
             (queue_id,),
         )
 
@@ -2475,15 +2587,15 @@ def compute_champ_single_item_affinities(
                 if cid <= 0 or team_id not in (100, 200):
                     continue
                 champ_total_games[cid] += 1
-                core_ids = _participant_recommendable_item_ids(
+                selected_ids = item_selector(
                     participant.get("items") or participant.get("itemSlots") or [],
                     item_meta,
                 )
-                if not core_ids:
+                if not selected_ids:
                     continue
                 baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                for item_id in core_ids:
+                for item_id in selected_ids:
                     slug = str(item_id)
                     key = (cid, slug)
                     cs_games[key] += 1
@@ -2515,16 +2627,709 @@ def compute_champ_single_item_affinities(
         category_baseline_games,
         category_names,
         min_games=min_games,
-        fallback_min_games=SINGLE_ITEM_FALLBACK_MIN_GAMES,
+        fallback_min_games=fallback_min_games,
         pick_lift_weight=SINGLE_ITEM_PICK_LIFT_WEIGHT,
         pick_lift_cap=SINGLE_ITEM_PICK_LIFT_CAP,
         pick_rate_weight=SINGLE_ITEM_PICK_RATE_WEIGHT,
         pick_rate_ref=SINGLE_ITEM_PICK_RATE_REF,
         pick_rate_cap=SINGLE_ITEM_PICK_RATE_CAP,
         rank_mode="lift",
+        top_min_lift=top_min_lift,
+        top_n=top_n,
+    )
+
+def compute_champ_single_item_affinities(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+    *,
+    min_games: int,
+) -> dict[int, dict]:
+    return _compute_champ_item_slot_affinities(
+        db_path,
+        queue_id,
+        patch_prefix,
+        item_meta,
+        champ_records,
+        min_games=min_games,
+        item_selector=_participant_recommendable_item_ids,
+        fallback_min_games=SINGLE_ITEM_FALLBACK_MIN_GAMES,
         top_min_lift=SINGLE_ITEM_TOP_MIN_LIFT,
         top_n=0,
     )
+
+def compute_champ_boot_item_affinities(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+    *,
+    min_games: int,
+) -> dict[int, dict]:
+    return _compute_champ_item_slot_affinities(
+        db_path,
+        queue_id,
+        patch_prefix,
+        item_meta,
+        champ_records,
+        min_games=min_games,
+        item_selector=_participant_boot_item_ids,
+        fallback_min_games=BOOT_ITEM_FALLBACK_MIN_GAMES,
+        top_min_lift=BOOT_ITEM_TOP_MIN_LIFT,
+        top_n=4,
+    )
+
+def previous_patch_prefix(patch_prefix: str | None) -> str | None:
+    if not patch_prefix:
+        return None
+    match = re.fullmatch(r"(\d+)\.(\d+)", patch_prefix.strip())
+    if not match:
+        return None
+    major = int(match.group(1))
+    minor = int(match.group(2))
+    if minor <= 0:
+        return None
+    return f"{major}.{minor - 1}"
+
+def _champ_record_index(records: list[dict]) -> dict[int, dict]:
+    return {int(row["champion_id"]): row for row in records}
+
+def _record_total_games(records: list[dict]) -> int:
+    return sum(int(row.get("games", 0) or 0) for row in records) // 10
+
+def _record_global_wr(records: list[dict]) -> float:
+    games = sum(int(row.get("games", 0) or 0) for row in records)
+    wins = sum(int(row.get("wins", 0) or 0) for row in records)
+    return (wins / games) if games else 0.5
+
+def _smoothed_patch_wr(wins: int, games: int, prior: float, prior_games: int) -> float:
+    return (wins + prior * prior_games) / (games + prior_games) if games + prior_games else prior
+
+def _patch_champ_payload(cid: int, champ_meta: dict[int, dict]) -> dict[str, object]:
+    meta = champ_meta.get(cid, {})
+    return {
+        "id": cid,
+        "name": meta.get("name", str(cid)),
+        "name_zh": meta.get("name_zh", meta.get("name", str(cid))),
+        "name_en": meta.get("name_en", meta.get("alias", meta.get("name", str(cid)))),
+        "alias": meta.get("alias", ""),
+        "image": meta.get("image", ""),
+    }
+
+def _patch_item_payload(item_id: int, item_meta: dict[int, dict]) -> dict[str, object]:
+    item = item_meta.get(item_id, {})
+    return {
+        "id": item_id,
+        "name": item.get("name", str(item_id)),
+        "name_zh": item.get("name_zh", item.get("name", str(item_id))),
+        "name_en": item.get("name_en", item.get("name", str(item_id))),
+        "icon": item.get("icon", ""),
+    }
+
+def _compute_core_item_patch_stats(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+) -> dict[str, object]:
+    champ_baseline = {
+        int(row["champion_id"]): float(row.get("raw_wr", 0.5) or 0.5)
+        for row in champ_records
+    }
+    item_stats: dict[int, dict[str, float]] = defaultdict(
+        lambda: {"games": 0.0, "wins": 0.0}
+    )
+    champ_item_stats: dict[tuple[int, int], dict[str, float]] = defaultdict(
+        lambda: {"games": 0.0, "wins": 0.0, "baseline_sum": 0.0}
+    )
+    con = sqlite3.connect(str(db_path))
+    try:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
+            (queue_id, f"{patch_prefix}%"),
+        )
+        for blue_wins, participants_json in rows:
+            if not participants_json:
+                continue
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
+                    continue
+                selected_ids = _participant_recommendable_item_ids(
+                    participant.get("items") or participant.get("itemSlots") or [],
+                    item_meta,
+                )
+                if not selected_ids:
+                    continue
+                player_won = 1 if (team_id == 100) == blue_won else 0
+                baseline = champ_baseline.get(cid, 0.5)
+                for item_id in selected_ids:
+                    item_bucket = item_stats[item_id]
+                    item_bucket["games"] += 1
+                    item_bucket["wins"] += player_won
+                    champ_bucket = champ_item_stats[(cid, item_id)]
+                    champ_bucket["games"] += 1
+                    champ_bucket["wins"] += player_won
+                    champ_bucket["baseline_sum"] += baseline
+    finally:
+        con.close()
+    return {
+        "item": item_stats,
+        "champ_item": champ_item_stats,
+        "global_wr": _record_global_wr(champ_records),
+    }
+
+def compute_patch_changes(
+    db_path: Path,
+    queue_id: int,
+    current_patch: str | None,
+    baseline_patch: str | None,
+    item_meta: dict[int, dict],
+    champ_meta: dict[int, dict],
+    current_records: list[dict],
+    baseline_records: list[dict],
+) -> dict[str, object] | None:
+    if not current_patch or not baseline_patch:
+        return None
+
+    current_by_champ = _champ_record_index(current_records)
+    baseline_by_champ = _champ_record_index(baseline_records)
+    hero_rows: list[dict[str, object]] = []
+    for cid, current in current_by_champ.items():
+        baseline = baseline_by_champ.get(cid)
+        if not baseline:
+            continue
+        current_games = int(current.get("games", 0) or 0)
+        baseline_games = int(baseline.get("games", 0) or 0)
+        if current_games < PATCH_CHANGE_HERO_MIN_GAMES or baseline_games < PATCH_CHANGE_HERO_MIN_GAMES:
+            continue
+        current_wr = float(current.get("bayes_wr", 0.0) or 0.0)
+        baseline_wr = float(baseline.get("bayes_wr", 0.0) or 0.0)
+        hero_rows.append({
+            **_patch_champ_payload(cid, champ_meta),
+            "current_wr": round(current_wr, 4),
+            "baseline_wr": round(baseline_wr, 4),
+            "delta": round(current_wr - baseline_wr, 4),
+            "current_games": current_games,
+            "baseline_games": baseline_games,
+            "current_tier": assign_tier(current_wr),
+            "baseline_tier": assign_tier(baseline_wr),
+        })
+
+    current_item_stats = _compute_core_item_patch_stats(
+        db_path, queue_id, current_patch, item_meta, current_records
+    )
+    baseline_item_stats = _compute_core_item_patch_stats(
+        db_path, queue_id, baseline_patch, item_meta, baseline_records
+    )
+    current_global_wr = float(current_item_stats["global_wr"])
+    baseline_global_wr = float(baseline_item_stats["global_wr"])
+
+    item_rows: list[dict[str, object]] = []
+    current_items = current_item_stats["item"]
+    baseline_items = baseline_item_stats["item"]
+    for item_id, current in current_items.items():
+        baseline = baseline_items.get(item_id)
+        if not baseline or item_id not in item_meta:
+            continue
+        current_games = int(current["games"])
+        baseline_games = int(baseline["games"])
+        if (
+            current_games < PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES
+            or baseline_games < PATCH_CHANGE_ITEM_BASELINE_MIN_GAMES
+        ):
+            continue
+        current_wr = _smoothed_patch_wr(
+            int(current["wins"]), current_games, current_global_wr, PATCH_CHANGE_ITEM_PRIOR_GAMES
+        )
+        baseline_wr = _smoothed_patch_wr(
+            int(baseline["wins"]), baseline_games, baseline_global_wr, PATCH_CHANGE_ITEM_PRIOR_GAMES
+        )
+        item_rows.append({
+            **_patch_item_payload(item_id, item_meta),
+            "current_wr": round(current_wr, 4),
+            "baseline_wr": round(baseline_wr, 4),
+            "delta": round(current_wr - baseline_wr, 4),
+            "current_games": current_games,
+            "baseline_games": baseline_games,
+        })
+
+    champ_item_rows: list[dict[str, object]] = []
+    current_champ_items = current_item_stats["champ_item"]
+    baseline_champ_items = baseline_item_stats["champ_item"]
+    for key, current in current_champ_items.items():
+        cid, item_id = key
+        baseline = baseline_champ_items.get(key)
+        if not baseline or cid not in champ_meta or item_id not in item_meta:
+            continue
+        current_games = int(current["games"])
+        baseline_games = int(baseline["games"])
+        if (
+            current_games < PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES
+            or baseline_games < PATCH_CHANGE_CHAMP_ITEM_BASELINE_MIN_GAMES
+        ):
+            continue
+        current_prior = float(current["baseline_sum"]) / current_games if current_games else 0.5
+        baseline_prior = float(baseline["baseline_sum"]) / baseline_games if baseline_games else 0.5
+        current_wr = _smoothed_patch_wr(
+            int(current["wins"]), current_games, current_prior, PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES
+        )
+        baseline_wr = _smoothed_patch_wr(
+            int(baseline["wins"]), baseline_games, baseline_prior, PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES
+        )
+        current_lift = current_wr - current_prior
+        baseline_lift = baseline_wr - baseline_prior
+        champ_item_rows.append({
+            "champ": _patch_champ_payload(cid, champ_meta),
+            "item": _patch_item_payload(item_id, item_meta),
+            "current_wr": round(current_wr, 4),
+            "baseline_wr": round(baseline_wr, 4),
+            "current_lift": round(current_lift, 4),
+            "baseline_lift": round(baseline_lift, 4),
+            "delta": round(current_lift - baseline_lift, 4),
+            "current_games": current_games,
+            "baseline_games": baseline_games,
+        })
+
+    return {
+        "currentPatch": current_patch,
+        "baselinePatch": baseline_patch,
+        "currentGames": _record_total_games(current_records),
+        "baselineGames": _record_total_games(baseline_records),
+        "minHeroGames": PATCH_CHANGE_HERO_MIN_GAMES,
+        "minItemGames": PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES,
+        "minChampItemGames": PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES,
+        "heroRisers": sorted(hero_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
+        "heroFallers": sorted(hero_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
+        "itemRisers": sorted(item_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
+        "itemFallers": sorted(item_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
+        "champItemRisers": sorted(champ_item_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
+        "champItemFallers": sorted(champ_item_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
+    }
+
+def _affinity_top_rows_by_slug(affinity: dict[int, dict]) -> dict[int, dict[str, dict]]:
+    by_champ: dict[int, dict[str, dict]] = {}
+    for cid, payload in affinity.items():
+        rows = payload.get("top") or []
+        by_champ[int(cid)] = {
+            str(row.get("slug") or ""): row
+            for row in rows
+            if row.get("slug")
+        }
+    return by_champ
+
+def _item_cluster_names(item_ids: list[int], item_meta: dict[int, dict]) -> dict[str, str]:
+    style_weight: Counter[str] = Counter()
+    style_info_by_slug: dict[str, dict[str, str]] = {}
+    for item_id in item_ids:
+        item = item_meta.get(int(item_id))
+        if not item:
+            continue
+        for info in item_style_infos(item):
+            slug = str(info.get("slug") or "")
+            if not slug:
+                continue
+            style_weight[slug] += max(int(item.get("price_total") or 0), 1)
+            style_info_by_slug[slug] = info
+
+    slugs = sorted(style_weight, key=lambda slug: (-style_weight[slug], slug))[:2]
+    if slugs:
+        infos = [style_info_by_slug[slug] for slug in slugs]
+        return {
+            "name": " / ".join(str(info.get("name") or info.get("name_zh") or info.get("name_en") or "") for info in infos),
+            "name_zh": " / ".join(str(info.get("name_zh") or info.get("name") or info.get("name_en") or "") for info in infos),
+            "name_en": " / ".join(str(info.get("name_en") or info.get("name") or info.get("name_zh") or "") for info in infos),
+        }
+
+    items = _item_pair_payload(item_ids[:2], item_meta)
+    fallback = _item_pair_name(items, "name_zh") if items else "Item route"
+    fallback_en = _item_pair_name(items, "name_en") if items else "Item route"
+    return {"name": fallback, "name_zh": fallback, "name_en": fallback_en}
+
+def _connected_item_components(
+    items: set[int],
+    adjacency: dict[int, set[int]],
+) -> list[list[int]]:
+    seen: set[int] = set()
+    components: list[list[int]] = []
+    for start in sorted(items):
+        if start in seen or not adjacency.get(start):
+            continue
+        stack = [start]
+        seen.add(start)
+        component: list[int] = []
+        while stack:
+            item_id = stack.pop()
+            component.append(item_id)
+            for nxt in sorted(adjacency.get(item_id, set())):
+                if nxt in seen:
+                    continue
+                seen.add(nxt)
+                stack.append(nxt)
+        if len(component) >= 2:
+            components.append(sorted(component))
+    return components
+
+def compute_champ_item_build_clusters(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+    single_item_affinity: dict[int, dict],
+    *,
+    min_pair_games: int = ITEM_CLUSTER_MIN_PAIR_GAMES,
+    min_games: int = ITEM_CLUSTER_MIN_GAMES,
+    max_items: int = ITEM_CLUSTER_MAX_ITEMS,
+    top_n: int = ITEM_CLUSTER_TOP_N,
+) -> dict[int, dict]:
+    """Cluster each champion's co-built core items into readable build routes."""
+    baseline_by_champ = {
+        int(row["champion_id"]): float(row.get("raw_wr", 0.5))
+        for row in champ_records
+    }
+    con = sqlite3.connect(str(db_path))
+    if patch_prefix:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
+            (queue_id, f"{patch_prefix}%"),
+        )
+    else:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND participants_json IS NOT NULL "
+            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
+            (queue_id,),
+        )
+
+    champ_total_games = Counter()
+    champ_item_games: Counter[tuple[int, int]] = Counter()
+    champ_item_wins: Counter[tuple[int, int]] = Counter()
+    champ_item_baseline_games: Counter[tuple[int, int]] = Counter()
+    champ_pair_games: Counter[tuple[int, int, int]] = Counter()
+    champ_pair_wins: Counter[tuple[int, int, int]] = Counter()
+    champ_pair_baseline_games: Counter[tuple[int, int, int]] = Counter()
+    champ_exact_build_games: Counter[tuple[int, tuple[int, ...]]] = Counter()
+    champ_exact_build_wins: Counter[tuple[int, tuple[int, ...]]] = Counter()
+    champ_exact_build_baseline_games: Counter[tuple[int, tuple[int, ...]]] = Counter()
+    global_item_games: Counter[int] = Counter()
+    global_item_wins: Counter[int] = Counter()
+    global_item_baseline_games: Counter[int] = Counter()
+    champ_builds: dict[int, list[tuple[tuple[int, ...], int, float]]] = defaultdict(list)
+
+    try:
+        for blue_wins, participants_json in rows:
+            if not participants_json:
+                continue
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
+                    continue
+                champ_total_games[cid] += 1
+                route_ids = _participant_route_item_ids(
+                    participant.get("items") or participant.get("itemSlots") or [],
+                    item_meta,
+                )
+                if not route_ids:
+                    continue
+                baseline = baseline_by_champ.get(cid, 0.5)
+                player_won = 1 if (team_id == 100) == blue_won else 0
+                ordered_route = tuple(route_ids)
+                champ_builds[cid].append((ordered_route, player_won, baseline))
+                sorted_route = tuple(sorted(ordered_route))
+                if len(sorted_route) == max_items:
+                    exact_key = (cid, sorted_route)
+                    champ_exact_build_games[exact_key] += 1
+                    champ_exact_build_wins[exact_key] += player_won
+                    champ_exact_build_baseline_games[exact_key] += baseline
+                for item_id in sorted_route:
+                    item_key = (cid, item_id)
+                    champ_item_games[item_key] += 1
+                    champ_item_wins[item_key] += player_won
+                    champ_item_baseline_games[item_key] += baseline
+                    global_item_games[item_id] += 1
+                    global_item_wins[item_id] += player_won
+                    global_item_baseline_games[item_id] += baseline
+                for idx, item_a in enumerate(sorted_route):
+                    for item_b in sorted_route[idx + 1:]:
+                        pair_key = (cid, item_a, item_b)
+                        champ_pair_games[pair_key] += 1
+                        champ_pair_wins[pair_key] += player_won
+                        champ_pair_baseline_games[pair_key] += baseline
+    finally:
+        con.close()
+
+    single_rows_by_champ = _affinity_top_rows_by_slug(single_item_affinity)
+    global_item_lift = {
+        item_id: (global_item_wins[item_id] / games) - (global_item_baseline_games[item_id] / games)
+        for item_id, games in global_item_games.items()
+        if games > 0
+    }
+    exact_routes_by_champ: dict[int, list[tuple[int, ...]]] = defaultdict(list)
+    for (exact_cid, route_key), games in champ_exact_build_games.items():
+        if games >= ITEM_CLUSTER_MIN_EXACT_GAMES:
+            exact_routes_by_champ[exact_cid].append(route_key)
+    pair_keys_by_champ: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
+    for (pair_cid, item_a, item_b), games in champ_pair_games.items():
+        pair_keys_by_champ[pair_cid].append((item_a, item_b, games))
+
+    out: dict[int, dict] = {}
+    for cid, single_rows in single_rows_by_champ.items():
+        if not single_rows:
+            continue
+        eligible_items = {
+            int(slug)
+            for slug, row in single_rows.items()
+            if slug.isdigit()
+            and champ_item_games[(cid, int(slug))] >= SINGLE_ITEM_FALLBACK_MIN_GAMES
+        }
+        if len(eligible_items) < 2:
+            continue
+        exact_routes = exact_routes_by_champ.get(cid, [])
+        if not exact_routes:
+            continue
+
+        def route_item_lift(item_id: int) -> float:
+            games = champ_item_games[(cid, item_id)]
+            if games <= 0:
+                return 0.0
+            baseline = champ_item_baseline_games[(cid, item_id)] / games
+            return (champ_item_wins[(cid, item_id)] / games) - baseline
+
+        def route_item_has_evidence(item_id: int) -> bool:
+            games = champ_item_games[(cid, item_id)]
+            if games >= ITEM_CLUSTER_ITEM_EVIDENCE_MIN_GAMES:
+                return True
+            return (
+                games >= ITEM_CLUSTER_ITEM_FALLBACK_MIN_GAMES
+                and route_item_lift(item_id) >= ITEM_CLUSTER_ITEM_FALLBACK_MIN_LIFT
+            )
+
+        def item_strength(item_id: int) -> float:
+            row = single_rows.get(str(item_id), {})
+            item_lift = route_item_lift(item_id)
+            return (
+                float(row.get("rank_score", 0.0))
+                + 0.25 * item_lift
+                + 0.20 * global_item_lift.get(item_id, float(row.get("avg_lift", 0.0)))
+                + 0.05 * math.log1p(champ_item_games[(cid, item_id)])
+            )
+
+        adjacency: dict[int, set[int]] = defaultdict(set)
+        pair_metrics: dict[tuple[int, int], dict[str, float]] = {}
+        for item_a, item_b, games in pair_keys_by_champ.get(cid, []):
+            if games < min_pair_games:
+                continue
+            if _is_boot_item(item_meta.get(item_a)) or _is_boot_item(item_meta.get(item_b)):
+                continue
+            if item_a not in eligible_items or item_b not in eligible_items:
+                continue
+            item_a_games = champ_item_games[(cid, item_a)]
+            item_b_games = champ_item_games[(cid, item_b)]
+            if item_a_games <= 0 or item_b_games <= 0:
+                continue
+            cosine = games / math.sqrt(item_a_games * item_b_games)
+            if cosine < ITEM_CLUSTER_MIN_COSINE:
+                continue
+            baseline = champ_pair_baseline_games[(cid, item_a, item_b)] / games
+            raw_wr = champ_pair_wins[(cid, item_a, item_b)] / games
+            pair_lift = raw_wr - baseline
+            if pair_lift < ITEM_CLUSTER_TOP_MIN_LIFT:
+                continue
+            adjacency[item_a].add(item_b)
+            adjacency[item_b].add(item_a)
+            pair_metrics[(item_a, item_b)] = {
+                "games": float(games),
+                "lift": float(pair_lift),
+                "cosine": float(cosine),
+            }
+
+        rows_by_slug: dict[str, dict] = {}
+        for component in _connected_item_components(eligible_items, adjacency):
+            cluster_set = set(component)
+            cluster_games = 0
+            for build_item_ids, player_won, baseline in champ_builds.get(cid, []):
+                if len(cluster_set.intersection(build_item_ids)) < 2:
+                    continue
+                cluster_games += 1
+            if cluster_games < min_games:
+                continue
+
+            for route_key in exact_routes:
+                exact_games = champ_exact_build_games[(cid, route_key)]
+                if exact_games < ITEM_CLUSTER_MIN_EXACT_GAMES:
+                    continue
+                boot_items = [item_id for item_id in route_key if _is_boot_item(item_meta.get(item_id))]
+                if len(boot_items) != 1:
+                    continue
+                core_items = [item_id for item_id in route_key if item_id not in boot_items]
+                if len(core_items) < 2 or len(cluster_set.intersection(core_items)) < 2:
+                    continue
+                if not all(route_item_has_evidence(item_id) for item_id in route_key):
+                    continue
+
+                ordered_core_items = sorted(
+                    core_items,
+                    key=lambda item_id: (
+                        -item_strength(item_id),
+                        -champ_item_games[(cid, item_id)],
+                        str((item_meta.get(item_id) or {}).get("name_en") or item_id),
+                    ),
+                )[:max(0, max_items - 1)]
+                selected_items = ordered_core_items + boot_items[:1]
+                if len(selected_items) != max_items:
+                    continue
+                scoring_items = ordered_core_items
+
+                core_score_items = scoring_items[:ITEM_CLUSTER_CORE_ITEM_COUNT]
+                flex_score_items = scoring_items[ITEM_CLUSTER_CORE_ITEM_COUNT:]
+
+                def average(values: list[float]) -> float:
+                    return sum(values) / len(values) if values else 0.0
+
+                def item_global_fit(item_id: int) -> float:
+                    return global_item_lift.get(
+                        item_id,
+                        float(single_rows.get(str(item_id), {}).get("avg_lift", 0.0)),
+                    )
+
+                def weighted_pair_lift(items: list[int]) -> tuple[float, int]:
+                    pair_weight = 0.0
+                    pair_weighted_lift = 0.0
+                    pair_coverage = 0
+                    for idx, item_a in enumerate(items):
+                        for item_b in items[idx + 1:]:
+                            metric = pair_metrics.get((min(item_a, item_b), max(item_a, item_b)))
+                            if not metric:
+                                continue
+                            weight = metric["games"] * max(metric["cosine"], ITEM_CLUSTER_MIN_COSINE)
+                            pair_weight += weight
+                            pair_weighted_lift += metric["lift"] * weight
+                            pair_coverage += 1
+                    return (pair_weighted_lift / pair_weight if pair_weight > 0 else 0.0, pair_coverage)
+
+                core_pair_fit, core_pair_coverage = weighted_pair_lift(core_score_items)
+                pair_fit, pair_coverage = weighted_pair_lift(scoring_items)
+                core_single_fit = average([route_item_lift(item_id) for item_id in core_score_items])
+                flex_single_fit = average([route_item_lift(item_id) for item_id in flex_score_items])
+                single_fit = average([route_item_lift(item_id) for item_id in selected_items])
+                core_global_fit = average([item_global_fit(item_id) for item_id in core_score_items])
+                flex_global_fit = average([item_global_fit(item_id) for item_id in flex_score_items])
+                global_fit = average([item_global_fit(item_id) for item_id in selected_items])
+
+                flex_stability_scores: list[float] = []
+                for item_id in flex_score_items:
+                    item_cluster_games = 0
+                    core_pair_games_sum = 0
+                    for build_item_ids, _player_won, _baseline in champ_builds.get(cid, []):
+                        build_set = set(build_item_ids)
+                        if item_id in build_set and len(cluster_set.intersection(build_set)) >= 2:
+                            item_cluster_games += 1
+                    for core_item_id in core_score_items:
+                        core_pair_games_sum += champ_pair_games[
+                            (cid, min(item_id, core_item_id), max(item_id, core_item_id))
+                        ]
+                    cluster_pick = item_cluster_games / max(cluster_games, 1)
+                    item_pick = champ_item_games[(cid, item_id)] / max(champ_total_games.get(cid, 0), 1)
+                    flex_stability_scores.append(
+                        min(0.018, 0.018 * cluster_pick / ITEM_CLUSTER_FLEX_STABILITY_PICK_REF)
+                        + min(0.012, 0.012 * math.sqrt(champ_item_games[(cid, item_id)] / 300.0))
+                        + min(0.010, 0.010 * math.log1p(core_pair_games_sum) / math.log1p(120.0))
+                        + min(0.006, 0.006 * item_pick / ITEM_CLUSTER_PICK_RATE_REF)
+                    )
+                flex_stability = average(flex_stability_scores)
+                exact_wins = champ_exact_build_wins[(cid, route_key)]
+                baseline_wr = champ_exact_build_baseline_games[(cid, route_key)] / exact_games
+                smoothed_wr = (
+                    exact_wins + baseline_wr * ITEM_PAIR_ORDER_PRIOR_GAMES
+                ) / (exact_games + ITEM_PAIR_ORDER_PRIOR_GAMES)
+                route_lift = smoothed_wr - baseline_wr
+                if (
+                    route_lift < ITEM_CLUSTER_TOP_MIN_LIFT
+                    and single_fit < 0.0
+                    and pair_fit < 0.0
+                ):
+                    continue
+                pick_rate = exact_games / max(champ_total_games.get(cid, 0), 1)
+                pick_credit = ITEM_CLUSTER_PICK_RATE_WEIGHT * math.log1p(
+                    pick_rate / max(ITEM_CLUSTER_PICK_RATE_REF, 1e-9)
+                )
+                pick_credit = min(ITEM_CLUSTER_PICK_RATE_CAP, pick_credit)
+                exact_credit = ITEM_CLUSTER_EXACT_GAMES_WEIGHT * math.log1p(exact_games)
+                rank_score = (
+                    ITEM_CLUSTER_ROUTE_LIFT_WEIGHT * route_lift
+                    + ITEM_CLUSTER_CORE_PAIR_WEIGHT * core_pair_fit
+                    + ITEM_CLUSTER_CORE_SINGLE_WEIGHT * core_single_fit
+                    + ITEM_CLUSTER_CORE_GLOBAL_WEIGHT * core_global_fit
+                    + ITEM_CLUSTER_FLEX_SINGLE_WEIGHT * flex_single_fit
+                    + ITEM_CLUSTER_FLEX_GLOBAL_WEIGHT * flex_global_fit
+                    + ITEM_CLUSTER_FLEX_STABILITY_WEIGHT * flex_stability
+                    + pick_credit
+                    + exact_credit
+                )
+                slug = "cluster:" + "+".join(str(item_id) for item_id in route_key)
+                names = _item_cluster_names(selected_items, item_meta)
+                row = {
+                    **names,
+                    "slug": slug,
+                    "games": exact_games,
+                    "wins": exact_wins,
+                    "raw_wr": exact_wins / exact_games,
+                    "smoothed_wr": smoothed_wr,
+                    "baseline_wr": baseline_wr,
+                    "lift": route_lift,
+                    "rank_score": rank_score,
+                    "pick_rate": pick_rate,
+                    "pair_lift": pair_fit,
+                    "single_lift": single_fit,
+                    "global_lift": global_fit,
+                    "core_pair_lift": core_pair_fit,
+                    "core_single_lift": core_single_fit,
+                    "flex_single_lift": flex_single_fit,
+                    "flex_stability": flex_stability,
+                    "pair_coverage": pair_coverage,
+                    "core_pair_coverage": core_pair_coverage,
+                    "cluster_size": len(selected_items),
+                    "cluster_games": cluster_games,
+                    "exact_games": exact_games,
+                    "items": _item_pair_payload(selected_items, item_meta),
+                }
+                existing = rows_by_slug.get(slug)
+                if existing is None or (
+                    float(row.get("rank_score", 0.0)),
+                    int(row.get("games", 0)),
+                ) > (
+                    float(existing.get("rank_score", 0.0)),
+                    int(existing.get("games", 0)),
+                ):
+                    rows_by_slug[slug] = row
+
+        rows_out = list(rows_by_slug.values())
+        if not rows_out:
+            continue
+        rows_out.sort(
+            key=lambda row: (
+                -float(row.get("rank_score", 0.0)),
+                -float(row.get("lift", 0.0)),
+                -float(row.get("pick_rate", 0.0)),
+                -int(row.get("games", 0)),
+                str(row.get("name_en", "")),
+            )
+        )
+        out[cid] = {"top": rows_out[:top_n], "bot": []}
+    return out
 
 def _is_ranged_champion(meta: dict) -> bool:
     if str(meta.get("alias") or "") in ROLE_RANGED_ALIAS_OVERRIDES:
@@ -3006,9 +3811,12 @@ def render_html(
     champ_sets: dict[int, dict],
     champ_item_builds: dict[int, dict],
     champ_single_items: dict[int, dict],
+    champ_boot_items: dict[int, dict],
+    champ_item_clusters: dict[int, dict],
     champ_augment_types: dict[int, dict],
     champ_synergy: dict[int, list[dict]],
     aug_meta: dict[int, dict],
+    patch_changes: dict[str, object] | None,
     *,
     queue_id: int,
     patch_prefix: str | None,
@@ -3057,6 +3865,8 @@ def render_html(
         }
 
     def _pack_set(r: dict) -> dict:
+        avg_value = float(r.get("avg_lift", r.get("global_lift", 0.0)) or 0.0)
+        residual_value = float(r.get("residual", float(r.get("lift", 0.0) or 0.0) - avg_value) or 0.0)
         packed = {
             "name": r.get("set", r.get("name", r["slug"])),
             "name_zh": r.get("set_zh", r.get("name_zh", r.get("set", r.get("name", r["slug"])))),
@@ -3065,17 +3875,39 @@ def render_html(
             "g": r["games"],
             "wr": round(r["smoothed_wr"], 4),
             "lift": round(r["lift"], 4),
-        "avg": round(r["avg_lift"], 4),
-        "res": round(r["residual"], 4),
-        "score": round(r.get("rank_score", r.get("lcb_residual", r["residual"])), 4),
-        "badScore": round(r.get("rank_bad_score", r.get("ucb_residual", r["residual"])), 4),
-        "pick": round(r.get("pick_rate", 0.0), 4),
-        "globalPick": round(r.get("global_pick_rate", 0.0), 4),
-        "pickLift": round(r.get("pick_lift", 0.0), 3),
-        "pickCredit": round(r.get("pick_rate_credit", 0.0), 4),
-        "peerGroup": r.get("peer_group", ""),
-        "peerScope": r.get("peer_scope", ""),
-    }
+            "avg": round(avg_value, 4),
+            "res": round(residual_value, 4),
+            "score": round(r.get("rank_score", r.get("lcb_residual", residual_value)), 4),
+            "badScore": round(r.get("rank_bad_score", r.get("ucb_residual", residual_value)), 4),
+            "pick": round(r.get("pick_rate", 0.0), 4),
+            "globalPick": round(r.get("global_pick_rate", 0.0), 4),
+            "pickLift": round(r.get("pick_lift", 0.0), 3),
+            "pickCredit": round(r.get("pick_rate_credit", 0.0), 4),
+            "peerGroup": r.get("peer_group", ""),
+            "peerScope": r.get("peer_scope", ""),
+        }
+        optional_float_fields = {
+            "pair_lift": "pairLift",
+            "single_lift": "singleLift",
+            "global_lift": "globalLift",
+            "core_pair_lift": "corePairLift",
+            "core_single_lift": "coreSingleLift",
+            "flex_single_lift": "flexSingleLift",
+            "flex_stability": "flexStability",
+        }
+        for source_key, dest_key in optional_float_fields.items():
+            if source_key in r:
+                packed[dest_key] = round(float(r.get(source_key, 0.0)), 4)
+        optional_int_fields = {
+            "cluster_size": "routeSize",
+            "pair_coverage": "pairCoverage",
+            "core_pair_coverage": "corePairCoverage",
+            "cluster_games": "clusterGames",
+            "exact_games": "exactGames",
+        }
+        for source_key, dest_key in optional_int_fields.items():
+            if source_key in r:
+                packed[dest_key] = int(r.get(source_key, 0) or 0)
         if r.get("items"):
             packed["items"] = r["items"]
         return packed
@@ -3123,6 +3955,92 @@ def render_html(
                 "roleLabelEn": info.get("role_label_en", role),
             }
         return out
+
+    def _add_search_terms(terms: list[str], *values: object) -> None:
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, dict):
+                _add_search_terms(terms, *value.values())
+                continue
+            if isinstance(value, (list, tuple, set)):
+                _add_search_terms(terms, *value)
+                continue
+            text = str(value).strip()
+            if text:
+                terms.append(text)
+
+    def _add_named_rows_for_search(terms: list[str], rows: list[dict]) -> None:
+        for row in rows:
+            _add_search_terms(
+                terms,
+                row.get("name"),
+                row.get("name_zh"),
+                row.get("name_en"),
+                row.get("set"),
+                row.get("set_zh"),
+                row.get("set_en"),
+                row.get("slug"),
+            )
+            for item in row.get("items") or []:
+                _add_search_terms(
+                    terms,
+                    item.get("name"),
+                    item.get("name_zh"),
+                    item.get("name_en"),
+                    item.get("id"),
+                )
+
+    def _champ_search_blob(cid: int, display_name: str, meta: dict, tags: list[str]) -> str:
+        terms: list[str] = []
+        _add_search_terms(
+            terms,
+            display_name,
+            meta.get("name"),
+            meta.get("name_zh"),
+            meta.get("name_en"),
+            meta.get("alias"),
+            tags,
+        )
+        picks_for_champ = champ_picks.get(cid, {"top": {}, "bot": {}})
+        for side in ("top", "bot"):
+            for rows in picks_for_champ.get(side, {}).values():
+                for row in rows:
+                    aug = aug_meta.get(int(row.get("augment_id") or 0))
+                    if not aug:
+                        continue
+                    _add_search_terms(
+                        terms,
+                        aug.get("name"),
+                        aug.get("name_zh"),
+                        aug.get("name_en"),
+                        aug.get("set"),
+                        aug.get("set_zh"),
+                        aug.get("set_en"),
+                    )
+                    for aug_set in aug.get("sets") or []:
+                        _add_search_terms(
+                            terms,
+                            aug_set.get("name"),
+                            aug_set.get("name_zh"),
+                            aug_set.get("name_en"),
+                            aug_set.get("slug"),
+                        )
+            _add_named_rows_for_search(terms, champ_sets.get(cid, {}).get(side, []))
+            _add_named_rows_for_search(terms, champ_item_builds.get(cid, {}).get(side, []))
+            _add_named_rows_for_search(terms, champ_single_items.get(cid, {}).get(side, []))
+            _add_named_rows_for_search(terms, champ_boot_items.get(cid, {}).get(side, []))
+            _add_named_rows_for_search(terms, champ_item_clusters.get(cid, {}).get(side, []))
+            _add_named_rows_for_search(terms, champ_augment_types.get(cid, {}).get(side, []))
+        seen: set[str] = set()
+        unique_terms: list[str] = []
+        for term in terms:
+            normalized = term.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            unique_terms.append(normalized)
+        return " ".join(unique_terms)
 
     visible_cids = [int(r["champion_id"]) for r in records]
     visible_cid_set = set(visible_cids)
@@ -3172,6 +4090,14 @@ def render_html(
             "singleItems": {
                 "top": [_pack_set(r) for r in champ_single_items.get(cid, {}).get("top", [])],
                 "bot": [_pack_set(r) for r in champ_single_items.get(cid, {}).get("bot", [])],
+            },
+            "boots": {
+                "top": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("top", [])],
+                "bot": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("bot", [])],
+            },
+            "itemClusters": {
+                "top": [_pack_set(r) for r in champ_item_clusters.get(cid, {}).get("top", [])],
+                "bot": [_pack_set(r) for r in champ_item_clusters.get(cid, {}).get("bot", [])],
             },
             "augTypes": {
                 "top": [_pack_set(r) for r in champ_augment_types.get(cid, {}).get("top", [])],
@@ -3497,6 +4423,145 @@ def render_html(
         height: 5px;
         border-radius: 999px;
         background: #f5d780;
+    }
+    .change-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 12px;
+    }
+    .change-chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 3px 8px;
+        border: 1px solid rgba(245, 215, 128, 0.28);
+        border-radius: 999px;
+        color: #d8dce3;
+        background: rgba(245, 215, 128, 0.06);
+        font-size: 11px;
+        line-height: 1.2;
+    }
+    .change-tabs {
+        display: flex;
+        gap: 6px;
+        margin: 2px 0 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .change-tabs::-webkit-scrollbar { display: none; }
+    .change-tab {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: 5px 10px;
+        border: 1px solid #30363d;
+        border-radius: 999px;
+        background: #1b2030;
+        color: #c5cad3;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .change-tab:hover {
+        border-color: #58606b;
+        background: #21283a;
+    }
+    .change-tab.active {
+        border-color: #f5d780;
+        background: #f5d780;
+        color: #231802;
+    }
+    .change-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+    }
+    .change-column-title {
+        margin: 0 0 8px;
+        color: #e6e8eb;
+        font-size: 12px;
+        font-weight: 800;
+    }
+    .change-list {
+        display: grid;
+        gap: 6px;
+    }
+    .change-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-height: 44px;
+        padding: 7px 9px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.025);
+        color: inherit;
+        text-align: left;
+        font: inherit;
+    }
+    button.change-row {
+        cursor: pointer;
+    }
+    button.change-row:hover {
+        border-color: rgba(245, 215, 128, 0.38);
+        background: rgba(245, 215, 128, 0.045);
+    }
+    .change-icon,
+    .change-duo img {
+        width: 34px;
+        height: 34px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: #0e1116;
+    }
+    .change-duo {
+        display: inline-flex;
+        align-items: center;
+    }
+    .change-duo img + img {
+        margin-left: -9px;
+        box-shadow: -2px 0 0 #11151d;
+    }
+    .change-name {
+        min-width: 0;
+        color: #e6e8eb;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .change-meta {
+        display: block;
+        margin-top: 2px;
+        color: #8d96a0;
+        font-size: 10px;
+        line-height: 1.35;
+    }
+    .change-delta {
+        justify-self: end;
+        min-width: 56px;
+        padding: 3px 6px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+    }
+    .change-delta.up {
+        color: #11151d;
+        background: #7ddc8a;
+    }
+    .change-delta.down {
+        color: #180f12;
+        background: #ff9aa5;
+    }
+    .change-empty {
+        color: #9aa0a6;
+        font-size: 12px;
+        line-height: 1.6;
     }
     .search-wrap {
         position: relative;
@@ -4165,7 +5230,7 @@ def render_html(
         margin: 6px 0 4px;
         background: #1b2030;
         border-radius: 10px;
-        padding: 14px 16px 16px;
+        padding: 16px 18px 18px;
         position: relative;
         animation: slideDown .18s ease-out;
     }
@@ -4185,7 +5250,7 @@ def render_html(
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 12px;
+        margin-bottom: 16px;
     }
     .detail-avatar {
         width: 34px;
@@ -4197,6 +5262,100 @@ def render_html(
         flex: 0 0 auto;
     }
     .detail-head .cname { font-size: 16px; font-weight: 600; }
+    .detail-tab-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .detail-tab-list {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        overflow-x: auto;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        scrollbar-width: none;
+    }
+    .detail-tab-list::-webkit-scrollbar {
+        display: none;
+    }
+    .detail-tab-label {
+        flex: 0 0 auto;
+        min-height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        border-bottom: 2px solid transparent;
+        color: #9aa0a6;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .detail-tab-label:hover {
+        color: #dce4ef;
+        background: rgba(255,255,255,0.03);
+    }
+    .detail-tab-label:focus-visible {
+        outline: 2px solid rgba(107,209,255,0.45);
+        outline-offset: -2px;
+    }
+    .detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(1),
+    .detail-tabset > .detail-tab-input:nth-of-type(2):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(2),
+    .detail-tabset > .detail-tab-input:nth-of-type(3):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(3),
+    .detail-tabset > .detail-tab-input:nth-of-type(4):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(4),
+    .detail-tabset > .detail-tab-input:nth-of-type(5):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(5),
+    .detail-tabset > .detail-tab-input:nth-of-type(6):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+        outline: 2px solid rgba(107,209,255,0.45);
+        outline-offset: -2px;
+    }
+    .detail-tab-panels {
+        min-width: 0;
+    }
+    .detail-tab-panel {
+        display: none;
+        padding-top: 16px;
+    }
+    .detail-sub-tabs {
+        margin-top: 0;
+    }
+    .detail-sub-tabs .detail-tab-list {
+        border-bottom-color: rgba(255,255,255,0.055);
+    }
+    .detail-sub-tabs .detail-tab-label {
+        min-height: 34px;
+        padding: 0 11px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-list .detail-tab-label:nth-child(1),
+    .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-list .detail-tab-label:nth-child(2),
+    .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-list .detail-tab-label:nth-child(3),
+    .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-list .detail-tab-label:nth-child(4),
+    .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-list .detail-tab-label:nth-child(5),
+    .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+        color: #7fc8ff;
+        border-bottom-color: #3aa0ff;
+        background: rgba(58,160,255,0.08);
+    }
+    .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(1),
+    .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(2),
+    .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(3),
+    .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(4),
+    .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(5),
+    .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(6) {
+        display: block;
+    }
+    .detail-tab-panel > .detail-section:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+    }
     .detail-section + .detail-section {
         margin-top: 18px;
         padding-top: 14px;
@@ -4337,6 +5496,14 @@ def render_html(
         background: rgba(148, 163, 184, 0.35);
         border-radius: 999px;
     }
+    .item-build-carousel.single-item-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+        align-items: stretch;
+        overflow-x: visible;
+        scroll-snap-type: none;
+        padding: 0;
+    }
     .item-build-card {
         flex: 0 0 76px;
         scroll-snap-align: start;
@@ -4350,11 +5517,35 @@ def render_html(
         text-align: center;
         outline: none;
     }
+    .item-build-card.search-hit {
+        border-color: #f5c518;
+        background: #171711;
+        box-shadow:
+            0 0 0 2px rgba(245, 197, 24, 0.36),
+            0 10px 24px rgba(245, 197, 24, 0.16);
+        transform: translateY(-2px);
+    }
+    .item-build-card.search-hit .item-build-icons {
+        background: rgba(245, 197, 24, 0.14);
+    }
+    .item-build-card.search-hit .item-build-name span,
+    .item-build-card.search-hit .item-build-wr {
+        color: #ffe58a;
+    }
     .item-build-card:focus-visible {
         box-shadow: 0 0 0 2px rgba(255,255,255,0.32);
     }
     .item-build-card.single-item-card {
         flex-basis: 68px;
+    }
+    .single-item-grid .item-build-card.single-item-card {
+        flex: initial;
+        min-width: 0;
+        scroll-snap-align: unset;
+    }
+    .item-build-card.item-cluster-card {
+        flex-basis: 176px;
+        text-align: left;
     }
     .item-build-icons {
         display: grid;
@@ -4369,6 +5560,12 @@ def render_html(
         grid-template-columns: 1fr;
         min-height: 50px;
     }
+    .item-cluster-card .item-build-icons {
+        grid-template-columns: repeat(3, 1fr);
+        min-height: 112px;
+        padding: 8px;
+        gap: 6px;
+    }
     .item-build-icon {
         display: block;
         width: 40px;
@@ -4380,6 +5577,10 @@ def render_html(
     .single-item-card .item-build-icon {
         width: 42px;
         height: 42px;
+    }
+    .item-cluster-card .item-build-icon {
+        width: 44px;
+        height: 44px;
     }
     .item-build-wr {
         display: flex;
@@ -4404,6 +5605,12 @@ def render_html(
         font-weight: 600;
         line-height: 1.35;
         overflow: hidden;
+    }
+    .item-cluster-card .item-build-name {
+        justify-content: flex-start;
+        min-height: 36px;
+        padding: 5px 8px;
+        font-size: 10px;
     }
     .item-build-name span {
         display: -webkit-box;
@@ -4765,6 +5972,13 @@ def render_html(
     .aug.rarity-kGold   { box-shadow: inset 0 0 0 2px #f5c518; }
     .aug.rarity-kSilver { box-shadow: inset 0 0 0 2px #c0c5cc; }
     .aug.rarity-kPrismatic { box-shadow: inset 0 0 0 2px #d36bff; }
+    .aug.search-hit {
+        background: rgba(245, 197, 24, 0.12);
+        box-shadow:
+            inset 0 0 0 2px #f5c518,
+            0 0 0 2px rgba(245, 197, 24, 0.28),
+            0 10px 22px rgba(245, 197, 24, 0.12);
+    }
     .mate-list {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
@@ -4906,6 +6120,22 @@ def render_html(
         }
         .updates-title { font-size: 14px; }
         .updates-list li { font-size: 11px; }
+        .change-summary { margin-bottom: 10px; }
+        .change-grid { grid-template-columns: 1fr; gap: 12px; }
+        .change-row {
+            min-height: 42px;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            padding: 6px 8px;
+        }
+        .change-icon,
+        .change-duo img {
+            width: 30px;
+            height: 30px;
+        }
+        .change-delta {
+            min-width: 50px;
+            font-size: 10px;
+        }
         .side-panel {
             position: fixed;
             z-index: 60;
@@ -4953,7 +6183,7 @@ def render_html(
             max-width: 680px;
             min-height: 100%;
             margin: 0 auto;
-            padding: 14px;
+            padding: 16px;
             border: 1px solid #30363d;
             border-radius: 14px;
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
@@ -4978,6 +6208,7 @@ def render_html(
             align-items: center;
             gap: 10px;
             padding-right: 42px;
+            margin-bottom: 18px;
         }
         .detail-avatar {
             display: block;
@@ -4988,7 +6219,33 @@ def render_html(
         .detail-section-head {
             flex-direction: column;
             align-items: flex-start;
-            gap: 4px;
+            gap: 5px;
+            margin-bottom: 12px;
+        }
+        .detail-section-head h3 {
+            font-size: 14px;
+        }
+        .detail-tab-list {
+            gap: 8px;
+        }
+        .detail-tab-label {
+            min-height: 40px;
+            padding-inline: 12px;
+            font-size: 12px;
+        }
+        .detail-tab-panel {
+            padding-top: 18px;
+        }
+        .detail-sub-tabs {
+            margin-top: 2px;
+        }
+        .detail-sub-tabs .detail-tab-label {
+            min-height: 36px;
+            padding-inline: 12px;
+            font-size: 11px;
+        }
+        .detail-sub-tabs .detail-tab-panel {
+            padding-top: 18px;
         }
         .aug-set-summary {
             max-width: 100%;
@@ -5019,9 +6276,16 @@ def render_html(
             min-width: 58px;
         }
         .item-build-carousel {
-            gap: 4px;
-            padding-bottom: 6px;
+            gap: 8px;
+            padding-bottom: 10px;
             scroll-snap-type: x mandatory;
+        }
+        .item-build-carousel.single-item-grid {
+            grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+            gap: 7px;
+            padding-bottom: 0;
+            overflow-x: visible;
+            scroll-snap-type: none;
         }
         .item-build-card {
             flex-basis: calc((100% - 20px) / 6);
@@ -5031,6 +6295,14 @@ def render_html(
             flex-basis: calc((100% - 20px) / 6);
             min-width: 48px;
         }
+        .single-item-grid .item-build-card.single-item-card {
+            flex-basis: auto;
+            min-width: 0;
+        }
+        .item-build-card.item-cluster-card {
+            flex: 0 0 220px;
+            min-width: 220px;
+        }
         .item-build-icons {
             min-height: 66px;
             padding: 3px;
@@ -5038,6 +6310,12 @@ def render_html(
         }
         .single-item-card .item-build-icons {
             min-height: 42px;
+        }
+        .item-cluster-card .item-build-icons {
+            min-height: 116px;
+            grid-template-columns: repeat(3, 1fr);
+            padding: 8px;
+            gap: 6px;
         }
         .item-build-icon {
             width: 29px;
@@ -5047,6 +6325,10 @@ def render_html(
             width: 34px;
             height: 34px;
         }
+        .item-cluster-card .item-build-icon {
+            width: 44px;
+            height: 44px;
+        }
         .item-build-wr {
             min-height: 22px;
             font-size: 10px;
@@ -5055,6 +6337,11 @@ def render_html(
             min-height: 24px;
             padding: 2px 2px;
             font-size: 9px;
+        }
+        .item-cluster-card .item-build-name {
+            min-height: 36px;
+            padding: 5px 8px;
+            font-size: 10px;
         }
         .mate-list { grid-template-columns: 1fr; gap: 6px; }
         .mate-card {
@@ -5138,6 +6425,7 @@ def render_html(
         "augs": js_augs,
         "min_games_per_pair": min_games_per_pair,
         "min_synergy_games": min_synergy_games,
+        "patchChanges": patch_changes or {},
         "recommendation_composition": {
             "weight": RECOMMENDATION_COMPOSITION_WEIGHT,
             "clamp": RECOMMENDATION_COMPOSITION_CLAMP,
@@ -5285,11 +6573,11 @@ def render_html(
         "<button class='updates-close' id='updates-close' type='button' "
         "aria-label='關閉近期更新'>&times;</button>"
         "</div>"
-        "<ul class='updates-list' id='updates-list'>"
+        "<div class='updates-list' id='updates-list'>"
         "<li>???拚??支? pair ??嚗?其?????蝯?靽格迤嚗??怠??D/AP?oke??蝺??啁???捆蝻箏??/li>"
         "<li>憓?鋆蔭??撠?蝝?詨?????雿??擃????港?摰?敺?/li>"
         "<li>?啣??箄?憸冽??撟???扼?/li>"
-        "</ul>"
+        "</div>"
         "</section>"
     )
 
@@ -5367,7 +6655,7 @@ def render_html(
             primary_role = tags[0] if tags else ""
             secondary_role = tags[1] if len(tags) > 1 else ""
             alias = meta.get("alias", "")
-            search_blob = f"{r['name']} {alias} {tag_str}".lower()
+            search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
             title = (
                 f"{r['name']} · WR {wr_pct} · games {r['games']:,} · "
                 f"raw {r['raw_wr']*100:.1f}%"
@@ -5379,7 +6667,7 @@ def render_html(
                 f"data-name-en=\"{html.escape(meta.get('name_en', alias or r['name']))}\" "
                 f"data-tags='{tag_str}' data-primary-role='{html.escape(primary_role)}' "
                 f"data-secondary-role='{html.escape(secondary_role)}' "
-                f"data-search=\"{search_blob}\" "
+                f"data-search=\"{html.escape(search_blob, quote=True)}\" "
                 f"data-tier='{tier}' data-wr='{wr_pct}' data-games='{r['games']}' "
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"role='button' tabindex='0' "
@@ -5564,6 +6852,8 @@ def render_html(
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
             itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
+            itemClusterSectionTitle: '出裝路線 TLDR',
+            itemClusterSectionMeta: '實際出現過的完整六件；依核心裝備共現分群',
             augTypeSectionTitle: '推薦增幅裝置傾向',
             augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
             relativeBest: '相對最佳',
@@ -5585,6 +6875,7 @@ def render_html(
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · 英雄 lift ${lift} · 類型平均 ${avg} · WR ${wr} · ${games}場`,
             setMeta: (lift, avg, wr, games) => `英雄 ${lift} · 類型 ${avg} · WR ${wr} · ${games}場`,
             itemBuildTitle: (name, pick, lift) => `${name} 選取率 ${pick} 勝率${lift}`,
+            itemClusterCardTitle: (name, wr, pick, lift, pairLift, singleLift, games) => `${name} · WR ${wr} · pick ${pick} · route ${lift} · pair ${pairLift} · item ${singleLift} · ${games} 場`,
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             leastFitLabel: '最不適配',
@@ -5640,6 +6931,8 @@ def render_html(
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
             itemSectionMeta: 'boots excluded; left to right is #1 to #3',
+            itemClusterSectionTitle: 'Build Routes TLDR',
+            itemClusterSectionMeta: 'observed exact 6-item builds; clustered by co-built core items',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
             augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
             relativeBest: 'Relative Best',
@@ -5661,6 +6954,7 @@ def render_html(
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · champion lift ${lift} · type average ${avg} · WR ${wr} · ${games} games`,
             setMeta: (lift, avg, wr, games) => `champ ${lift} · type ${avg} · WR ${wr} · ${games} games`,
             itemBuildTitle: (name, pick, lift) => `${name} pick ${pick}, WR ${lift}`,
+            itemClusterCardTitle: (name, wr, pick, lift, pairLift, singleLift, games) => `${name} · WR ${wr} · pick ${pick} · route ${lift} · pair ${pairLift} · item ${singleLift} · ${games} games`,
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             leastFitLabel: 'Least fit',
@@ -5674,6 +6968,7 @@ def render_html(
     };
     let currentLang = 'zh';
     let updatesOpen = false;
+    let activeUpdateTab = 'heroes';
     let filterState = { role: '', q: '' };
 
     function tr() {
@@ -5845,6 +7140,47 @@ def render_html(
         return entry.name_zh || entry.name || entry.name_en || '';
     }
 
+    function compactSearchText(value) {
+        return String(value || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '');
+    }
+
+    function searchMatchesText(haystack, query) {
+        const q = String(query || '').trim().toLowerCase();
+        if (!q) return false;
+        const text = String(haystack || '').toLowerCase();
+        if (text.includes(q)) return true;
+        const compactQ = compactSearchText(q);
+        return Boolean(compactQ) && compactSearchText(text).includes(compactQ);
+    }
+
+    function entrySearchText(entry) {
+        const parts = [
+            entry?.name,
+            entry?.name_zh,
+            entry?.name_en,
+            entry?.set,
+            entry?.set_zh,
+            entry?.set_en,
+            entry?.slug,
+        ];
+        (entry?.items || []).forEach(item => {
+            parts.push(item.name, item.name_zh, item.name_en, item.id);
+        });
+        return parts.filter(Boolean).join(' ');
+    }
+
+    function currentSearchQuery() {
+        const searchEl = document.getElementById('champ-search');
+        return searchEl ? searchEl.value : filterState.q;
+    }
+
+    function applySearchHighlights(root = document) {
+        const q = currentSearchQuery();
+        root.querySelectorAll('[data-match-text]').forEach(card => {
+            card.classList.toggle('search-hit', searchMatchesText(card.getAttribute('data-match-text') || '', q));
+        });
+    }
+
     function buildAugCard(entry, kind) {
         const aug = DATA.augs[entry.id];
         const name = aug ? augName(aug) : '#' + entry.id;
@@ -5853,6 +7189,18 @@ def render_html(
         const desc = augDesc(aug);
         const setName = augSetName(aug);
         const copy = tr();
+        const matchText = [
+            name,
+            aug?.name,
+            aug?.name_zh,
+            aug?.name_en,
+            setName,
+            aug?.set,
+            aug?.set_zh,
+            aug?.set_en,
+            aug?.setSlug,
+            entry.id,
+        ].filter(Boolean).join(' ');
         const titleAttr = copy.augTitle(name, setName, pct(entry.wr), entry.g, desc);
         const tooltip = `
             <div class="aug-tip">
@@ -5868,6 +7216,7 @@ def render_html(
         return `
             <div class="aug ${kind} rarity-${rarity}"
                  tabindex="0"
+                 data-match-text="${escHtml(matchText)}"
                  aria-label="${escHtml(ariaLabel)}"
                  title="${escHtml(titleAttr)}">
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div style="width:48px;height:48px;margin:0 auto 4px;background:#2a3142;border-radius:6px"></div>'}
@@ -5917,6 +7266,8 @@ def render_html(
         const setTop = setInfo.top || [];
         const itemInfo = info.items || {};
         const singleItemInfo = info.singleItems || {};
+        const bootInfo = info.boots || {};
+        const itemClusterInfo = info.itemClusters || {};
         const augTypeInfo = info.augTypes || {};
         const augmentRankTitle = currentLang === 'en' ? 'Augment Ranking' : '增幅裝置排行';
         const singleItemTitle = currentLang === 'en' ? 'Single Item Strength' : '單件裝備強度';
@@ -6017,25 +7368,40 @@ def render_html(
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
                     : `${itemName} · WR ${wr} · 挑選率 ${pick} · 勝率 ${lift} · ${games} 場`
             ));
-            const titleAttr = titleForItemCard(
-                name,
-                pct(entry.wr || 0),
-                pct(entry.pick || 0),
-                signed(liftValue),
-                entry.g || 0,
-            );
-            const iconLimit = options.singleItem ? 1 : 2;
+            const titleAttr = options.itemCluster && copy.itemClusterCardTitle
+                ? copy.itemClusterCardTitle(
+                    name,
+                    pct(entry.wr || 0),
+                    pct(entry.pick || 0),
+                    signed(liftValue),
+                    signed(Number(entry.pairLift || 0)),
+                    signed(Number(entry.singleLift || 0)),
+                    entry.g || 0,
+                )
+                : titleForItemCard(
+                    name,
+                    pct(entry.wr || 0),
+                    pct(entry.pick || 0),
+                    signed(liftValue),
+                    entry.g || 0,
+                );
+            const iconLimit = options.itemCluster ? 6 : (options.singleItem ? 1 : 2);
             const icons = pairItems.slice(0, iconLimit).map(item => (
                 item.icon
                     ? `<img class="item-build-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
                     : '<span class="item-build-icon"></span>'
             )).join('');
-            const paddedIcons = icons || (options.singleItem
-                ? '<span class="item-build-icon"></span>'
-                : '<span class="item-build-icon"></span><span class="item-build-icon"></span>');
-            const cardClass = options.singleItem ? 'item-build-card single-item-card' : 'item-build-card';
+            const placeholderCount = options.itemCluster ? 6 : (options.singleItem ? 1 : 2);
+            const paddedIcons = icons || Array.from(
+                { length: placeholderCount },
+                () => '<span class="item-build-icon"></span>'
+            ).join('');
+            const cardClass = options.itemCluster
+                ? 'item-build-card item-cluster-card'
+                : (options.singleItem ? 'item-build-card single-item-card' : 'item-build-card');
+            const matchText = entrySearchText(entry);
             return `
-                <div class="${cardClass}" tabindex="0" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
+                <div class="${cardClass}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="item-build-wr">${pct(entry.wr || 0)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
@@ -6044,7 +7410,10 @@ def render_html(
         };
         const buildItemCarousel = (rows, options = {}) => {
             if (!rows || !rows.length) return `<div class="mate-list empty-list">${copy.insufficient}</div>`;
-            return `<div class="item-build-carousel">${rows.map(entry => buildItemCard(entry, options)).join('')}</div>`;
+            const carouselClass = options.singleItem && !options.bootItem
+                ? 'item-build-carousel single-item-grid'
+                : 'item-build-carousel';
+            return `<div class="${carouselClass}">${rows.map(entry => buildItemCard(entry, options)).join('')}</div>`;
         };
         const closeFitRows = (rows, minRows = 1, maxRows = 3, options = {}) => {
             if (!rows || !rows.length) return [];
@@ -6107,7 +7476,7 @@ def render_html(
                 const itemMeta = currentLang === 'en'
                     ? 'boots excluded; strongest first, swipe for more'
                     : '不含鞋子；勝率分數由高到低，右滑看更多';
-                const displayMeta = options.singleItem && meta ? meta : itemMeta;
+                const displayMeta = (options.singleItem || options.itemCluster) && meta ? meta : itemMeta;
                 const metaHtml = `<span class="section-meta">${displayMeta}</span>`;
                 return `
                     <div class="detail-section">
@@ -6115,7 +7484,10 @@ def render_html(
                             <h3>${title}</h3>
                             ${metaHtml}
                         </div>
-                        ${buildItemCarousel(rows, { singleItem: Boolean(options.singleItem) })}
+                        ${buildItemCarousel(rows, {
+                            singleItem: Boolean(options.singleItem),
+                            itemCluster: Boolean(options.itemCluster),
+                        })}
                     </div>
                 `;
             }
@@ -6137,14 +7509,95 @@ def render_html(
                 </div>
             `;
         };
-        return `
-            <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
-            <div class="detail-head">
-                ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
-                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info))}</span>
+        const emptyDetailSection = (title, meta = '') => `
+            <div class="detail-section">
+                <div class="detail-section-head">
+                    <h3>${title}</h3>
+                    ${meta ? `<span class="section-meta">${meta}</span>` : ''}
+                </div>
+                <div class="mate-list empty-list">${copy.insufficient}</div>
             </div>
-            ${buildAffinitySection(copy.itemSectionTitle, copy.itemSectionMeta, itemInfo, { itemCarousel: true })}
-            ${buildAffinitySection(singleItemTitle, singleItemMeta, singleItemInfo, { itemCarousel: true, singleItem: true })}
+        `;
+        const buildItemPanel = (title, meta, payload, options = {}) => (
+            buildAffinitySection(title, meta, payload, options) || emptyDetailSection(title, meta)
+        );
+        const buildDetailTabSet = (scope, tabs, extraClass = '') => {
+            const name = `detail-${scope}-${cid}`;
+            const inputs = tabs.map((tab, idx) => {
+                const inputId = `${name}-${tab.key}`;
+                return `<input class="detail-tab-input" type="radio" id="${inputId}" name="${name}" ${idx === 0 ? 'checked' : ''} aria-label="${escHtml(tab.label)}">`;
+            }).join('');
+            const labels = tabs.map(tab => {
+                const inputId = `${name}-${tab.key}`;
+                return `<label class="detail-tab-label" id="${inputId}-label" role="tab" for="${inputId}">${escHtml(tab.label)}</label>`;
+            }).join('');
+            const panels = tabs.map(tab => {
+                const inputId = `${name}-${tab.key}`;
+                return `<section class="detail-tab-panel" role="tabpanel" aria-labelledby="${inputId}-label">${tab.content}</section>`;
+            }).join('');
+            return `
+                <div class="detail-tabset ${extraClass}">
+                    ${inputs}
+                    <div class="detail-tab-list" role="tablist">${labels}</div>
+                    <div class="detail-tab-panels">${panels}</div>
+                </div>
+            `;
+        };
+        const mainTabLabels = currentLang === 'en'
+            ? { items: 'Items', augments: 'Augments', teammates: 'Teammates' }
+            : { items: '出裝', augments: '增幅裝置', teammates: '最佳搭檔' };
+        const itemTabLabels = currentLang === 'en'
+            ? { routes: '6-item routes', single: 'Single items', pairs: 'First two', boots: 'Boots' }
+            : { routes: '六件路線', single: '單件', pairs: '前兩件', boots: '鞋子' };
+        const bootItemTitle = currentLang === 'en' ? 'Recommended Boots' : '推薦鞋子';
+        const bootItemMeta = currentLang === 'en'
+            ? 'boots only; ranked by conservative win-rate lift and pick stability'
+            : '只看鞋子；用保守勝率提升與選取率穩定度排序';
+        const itemTabContent = buildDetailTabSet('items', [
+            {
+                key: 'routes',
+                label: itemTabLabels.routes,
+                content: buildItemPanel(
+                    copy.itemClusterSectionTitle || (currentLang === 'en' ? 'Build Routes TLDR' : '\u51fa\u88dd\u8def\u7dda TLDR'),
+                    copy.itemClusterSectionMeta || (currentLang === 'en'
+                        ? 'observed exact 6-item builds; clustered by co-built core items'
+                        : '\u5be6\u969b\u51fa\u73fe\u904e\u7684\u5b8c\u6574\u516d\u4ef6\uff1b\u4f9d\u6838\u5fc3\u88dd\u5099\u5171\u73fe\u5206\u7fa4'),
+                    itemClusterInfo,
+                    { itemCarousel: true, itemCluster: true },
+                ),
+            },
+            {
+                key: 'single',
+                label: itemTabLabels.single,
+                content: buildItemPanel(
+                    singleItemTitle,
+                    singleItemMeta,
+                    singleItemInfo,
+                    { itemCarousel: true, singleItem: true },
+                ),
+            },
+            {
+                key: 'pairs',
+                label: itemTabLabels.pairs,
+                content: buildItemPanel(
+                    copy.itemSectionTitle,
+                    copy.itemSectionMeta,
+                    itemInfo,
+                    { itemCarousel: true },
+                ),
+            },
+            {
+                key: 'boots',
+                label: itemTabLabels.boots,
+                content: buildItemPanel(
+                    bootItemTitle,
+                    bootItemMeta,
+                    bootInfo,
+                    { itemCarousel: true, singleItem: true, bootItem: true },
+                ),
+            },
+        ], 'detail-sub-tabs');
+        const augmentTabContent = `
             <div class="detail-section">
                 <span class="section-meta augment-strength-meta">
                     ${copy.augmentStrengthMeta}
@@ -6162,6 +7615,8 @@ def render_html(
                 </div>
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
+        `;
+        const teammateTabContent = `
             <div class="detail-section">
                 <div class="detail-section-head">
                     <h3>${copy.pairSectionTitle}</h3>
@@ -6178,6 +7633,19 @@ def render_html(
                     </div>
                 </div>
             </div>
+        `;
+        const detailTabs = buildDetailTabSet('main', [
+            { key: 'items', label: mainTabLabels.items, content: itemTabContent },
+            { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
+            { key: 'teammates', label: mainTabLabels.teammates, content: teammateTabContent },
+        ], 'detail-main-tabs');
+        return `
+            <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
+            <div class="detail-head">
+                ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
+                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info))}</span>
+            </div>
+            ${detailTabs}
         `;
     }
 
@@ -6600,8 +8068,181 @@ def render_html(
         });
     }
 
+    function changeLabels() {
+        const changes = DATA.patchChanges || {};
+        const range = changes.baselinePatch && changes.currentPatch
+            ? `${changes.baselinePatch} -> ${changes.currentPatch}`
+            : PATCH_LABEL;
+        if (currentLang === 'en') {
+            return {
+                button: 'Patch changes',
+                kicker: range,
+                title: 'What moved this patch',
+                close: 'Close patch changes',
+                tabs: { heroes: 'Heroes', items: 'Items', champItems: 'Hero x item' },
+                summaryBase: 'Compared with',
+                summarySample: 'Sample',
+                summaryRule: 'Signal',
+                summaryRuleText: `heroes >= ${changes.minHeroGames || 0} games`,
+                noData: 'No baseline patch data is available for this build.',
+                heroUp: 'Biggest hero climbs',
+                heroDown: 'Biggest hero drops',
+                itemUp: 'Item win-rate climbs',
+                itemDown: 'Item win-rate drops',
+                champItemUp: 'Hero-item spikes',
+                champItemDown: 'Hero-item slumps',
+                itemNote: 'Core items only; boots and augment-gated rewards are excluded. Hero x item compares item lift against that hero baseline.',
+                games: 'games',
+                uses: 'uses',
+                lift: 'lift',
+            };
+        }
+        return {
+            button: '版本變動',
+            kicker: range,
+            title: '這版誰變多了',
+            close: '關閉版本變動',
+            tabs: { heroes: '英雄', items: '裝備', champItems: '英雄×裝備' },
+            summaryBase: '比較基準',
+            summarySample: '樣本',
+            summaryRule: '訊號門檻',
+            summaryRuleText: `英雄 >= ${changes.minHeroGames || 0} 場`,
+            noData: '這次 build 沒有可比較的上一版資料。',
+            heroUp: '勝率提升最多',
+            heroDown: '勝率下降最多',
+            itemUp: '裝備勝率提升',
+            itemDown: '裝備勝率下降',
+            champItemUp: '搭配突然變好',
+            champItemDown: '搭配突然變差',
+            itemNote: '只看核心裝備，不含鞋子與增幅限定獎勵；英雄×裝備比較的是相對該英雄 baseline 的 lift 變動。',
+            games: '場',
+            uses: '次',
+            lift: 'lift',
+        };
+    }
+
+    function fmtInt(n) {
+        return Number(n || 0).toLocaleString(currentLang === 'en' ? 'en-US' : 'zh-TW');
+    }
+
+    function localizedEntityName(entity) {
+        if (!entity) return '';
+        return currentLang === 'en'
+            ? (entity.name_en || entity.alias || entity.name || entity.id || '')
+            : (entity.name_zh || entity.name || entity.name_en || entity.alias || entity.id || '');
+    }
+
+    function changeDeltaClass(value) {
+        return Number(value || 0) >= 0 ? 'up' : 'down';
+    }
+
+    function changeHeroRow(row) {
+        const labels = changeLabels();
+        const name = localizedEntityName(row);
+        const title = `${name} ${signed(row.delta || 0)}`;
+        const meta = `${pct(row.baseline_wr || 0)} -> ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.games} · ${row.baseline_tier || ''}->${row.current_tier || ''}`;
+        return `
+            <button class="change-row" type="button" data-change-cid="${row.id}" title="${escHtml(title)}">
+                <img class="change-icon" src="${escHtml(row.image || '')}" alt="">
+                <span>
+                    <span class="change-name">${escHtml(name)}</span>
+                    <span class="change-meta">${escHtml(meta)}</span>
+                </span>
+                <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
+            </button>
+        `;
+    }
+
+    function changeItemRow(row) {
+        const labels = changeLabels();
+        const name = localizedEntityName(row);
+        const title = `${name} ${signed(row.delta || 0)}`;
+        const meta = `${pct(row.baseline_wr || 0)} -> ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        return `
+            <div class="change-row" title="${escHtml(title)}">
+                <img class="change-icon" src="${escHtml(row.icon || '')}" alt="">
+                <span>
+                    <span class="change-name">${escHtml(name)}</span>
+                    <span class="change-meta">${escHtml(meta)}</span>
+                </span>
+                <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
+            </div>
+        `;
+    }
+
+    function changeChampItemRow(row) {
+        const labels = changeLabels();
+        const champ = row.champ || {};
+        const item = row.item || {};
+        const champName = localizedEntityName(champ);
+        const itemName = localizedEntityName(item);
+        const title = `${champName} + ${itemName} ${signed(row.delta || 0)}`;
+        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} -> ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        return `
+            <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
+                <span class="change-duo">
+                    <img src="${escHtml(champ.image || '')}" alt="">
+                    <img src="${escHtml(item.icon || '')}" alt="">
+                </span>
+                <span>
+                    <span class="change-name">${escHtml(champName)} + ${escHtml(itemName)}</span>
+                    <span class="change-meta">${escHtml(meta)}</span>
+                </span>
+                <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
+            </button>
+        `;
+    }
+
+    function changeColumn(title, rows, renderer) {
+        const labels = changeLabels();
+        const body = rows && rows.length
+            ? rows.map(renderer).join('')
+            : `<div class="change-empty">${escHtml(labels.noData)}</div>`;
+        return `
+            <div class="change-column">
+                <h3 class="change-column-title">${escHtml(title)}</h3>
+                <div class="change-list">${body}</div>
+            </div>
+        `;
+    }
+
+    function renderChangeTabContent(changes, labels) {
+        if (!changes || !changes.currentPatch) {
+            return `<div class="change-empty">${escHtml(labels.noData)}</div>`;
+        }
+        if (activeUpdateTab === 'items') {
+            return `
+                <div class="change-grid">
+                    ${changeColumn(labels.itemUp, changes.itemRisers || [], changeItemRow)}
+                    ${changeColumn(labels.itemDown, changes.itemFallers || [], changeItemRow)}
+                </div>
+                <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
+            `;
+        }
+        if (activeUpdateTab === 'champItems') {
+            return `
+                <div class="change-grid">
+                    ${changeColumn(labels.champItemUp, changes.champItemRisers || [], changeChampItemRow)}
+                    ${changeColumn(labels.champItemDown, changes.champItemFallers || [], changeChampItemRow)}
+                </div>
+                <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
+            `;
+        }
+        return `
+            <div class="change-grid">
+                ${changeColumn(labels.heroUp, changes.heroRisers || [], changeHeroRow)}
+                ${changeColumn(labels.heroDown, changes.heroFallers || [], changeHeroRow)}
+            </div>
+        `;
+    }
+
     function renderUpdatesPanel() {
         const copy = tr();
+        const labels = changeLabels();
+        const changes = DATA.patchChanges || {};
+        if (!['heroes', 'items', 'champItems'].includes(activeUpdateTab)) {
+            activeUpdateTab = 'heroes';
+        }
         const button = document.getElementById('updates-toggle');
         const panel = document.getElementById('updates-panel');
         const kicker = document.getElementById('updates-kicker');
@@ -6609,15 +8250,32 @@ def render_html(
         const close = document.getElementById('updates-close');
         const list = document.getElementById('updates-list');
         if (button) {
-            button.textContent = copy.updatesButton;
+            button.textContent = labels.button || copy.updatesButton;
             button.setAttribute('aria-expanded', updatesOpen ? 'true' : 'false');
         }
         if (panel) panel.classList.toggle('is-hidden', !updatesOpen);
-        if (kicker) kicker.textContent = copy.updatesKicker;
-        if (title) title.textContent = copy.updatesTitle;
-        if (close) close.setAttribute('aria-label', copy.updatesClose);
+        if (kicker) kicker.textContent = labels.kicker || copy.updatesKicker;
+        if (title) title.textContent = labels.title || copy.updatesTitle;
+        if (close) close.setAttribute('aria-label', labels.close || copy.updatesClose);
         if (list) {
-            list.innerHTML = copy.updatesItems.map(item => `<li>${escHtml(item)}</li>`).join('');
+            const tabHtml = Object.entries(labels.tabs).map(([key, label]) => `
+                <button class="change-tab${activeUpdateTab === key ? ' active' : ''}" type="button"
+                        data-change-tab="${key}" aria-pressed="${activeUpdateTab === key ? 'true' : 'false'}">
+                    ${escHtml(label)}
+                </button>
+            `).join('');
+            const summary = changes.currentPatch ? `
+                <div class="change-summary">
+                    <span class="change-chip">${escHtml(labels.summaryBase)} ${escHtml(changes.baselinePatch || '')}</span>
+                    <span class="change-chip">${escHtml(labels.summarySample)} ${fmtInt(changes.currentGames)} / ${fmtInt(changes.baselineGames)}</span>
+                    <span class="change-chip">${escHtml(labels.summaryRule)} ${escHtml(labels.summaryRuleText)}</span>
+                </div>
+            ` : '';
+            list.innerHTML = `
+                ${summary}
+                <div class="change-tabs" role="tablist">${tabHtml}</div>
+                ${renderChangeTabContent(changes, labels)}
+            `;
         }
     }
 
@@ -6724,6 +8382,7 @@ def render_html(
             ? ` role="dialog" aria-modal="true" aria-labelledby="detail-title-${cid}"`
             : '';
         host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
+        applySearchHighlights(host);
         champ.classList.add('detail-selected');
         detailSelected = cid;
         syncDetailModalState();
@@ -6794,6 +8453,19 @@ def render_html(
         }
         if (isMobileViewport() && ev.target.classList && ev.target.classList.contains('detail-host')) {
             closeDetail();
+            return;
+        }
+        const changeTab = ev.target.closest('[data-change-tab]');
+        if (changeTab) {
+            activeUpdateTab = changeTab.getAttribute('data-change-tab') || 'heroes';
+            renderUpdatesPanel();
+            trackEvent('patch_change_tab', { tab: activeUpdateTab });
+            return;
+        }
+        const changeCid = ev.target.closest('[data-change-cid]');
+        if (changeCid) {
+            openDetailByCid(changeCid.getAttribute('data-change-cid'));
+            trackEvent('patch_change_detail_open', { champion_id: changeCid.getAttribute('data-change-cid') });
             return;
         }
         const updatesBtn = ev.target.closest('#updates-toggle');
@@ -6868,11 +8540,74 @@ def render_html(
         }, 120);
     });
 
+    function addSearchTerm(terms, value) {
+        if (value === null || value === undefined) return;
+        if (Array.isArray(value)) {
+            value.forEach(item => addSearchTerm(terms, item));
+            return;
+        }
+        const text = String(value).trim();
+        if (text) terms.push(text);
+    }
+
+    function addNamedSearchRow(terms, row) {
+        if (!row) return;
+        addSearchTerm(terms, [
+            row.name, row.name_zh, row.name_en,
+            row.set, row.set_zh, row.set_en, row.slug,
+        ]);
+        (row.items || []).forEach(item => {
+            addSearchTerm(terms, [item.name, item.name_zh, item.name_en, item.id]);
+        });
+    }
+
+    function addAugmentSearchRow(terms, row) {
+        if (!row) return;
+        const aug = (DATA.augs || {})[String(row.id || row.augment_id || '')];
+        if (!aug) return;
+        addSearchTerm(terms, [
+            aug.name, aug.name_zh, aug.name_en,
+            aug.set, aug.set_zh, aug.set_en, aug.setSlug,
+        ]);
+        (aug.sets || []).forEach(setInfo => {
+            addSearchTerm(terms, [
+                setInfo.name, setInfo.name_zh, setInfo.name_en, setInfo.slug,
+            ]);
+        });
+    }
+
+    function enrichSearchIndexes() {
+        document.querySelectorAll('.champ[data-cid]').forEach(champ => {
+            const cid = champ.getAttribute('data-cid');
+            const info = (DATA.champs || {})[String(cid)];
+            if (!info) return;
+            const terms = [champ.getAttribute('data-search') || ''];
+            addSearchTerm(terms, [info.name, info.name_zh, info.name_en, info.alias, info.tags || []]);
+            ['top', 'bot'].forEach(side => {
+                Object.values(info[side] || {}).forEach(rows => (rows || []).forEach(row => addAugmentSearchRow(terms, row)));
+                ['sets', 'items', 'singleItems', 'boots', 'itemClusters', 'augTypes'].forEach(key => {
+                    ((info[key] || {})[side] || []).forEach(row => addNamedSearchRow(terms, row));
+                });
+            });
+            const seen = new Set();
+            const blob = terms
+                .flatMap(term => String(term).toLowerCase().split(/\\s+/))
+                .filter(term => {
+                    if (!term || seen.has(term)) return false;
+                    seen.add(term);
+                    return true;
+                })
+                .join(' ');
+            champ.setAttribute('data-search', blob);
+        });
+    }
+
     try {
         const savedLang = localStorage.getItem(LANG_KEY);
         if (savedLang === 'en' || savedLang === 'zh') currentLang = savedLang;
     } catch {}
 
+    enrichSearchIndexes();
     setRecommendMode(false);
     syncPickDecorations();
     renderSidePanel();
@@ -6882,7 +8617,7 @@ def render_html(
 
     function applyFilters() {
         const role = filterState.role;
-        const q = filterState.q.trim().toLowerCase();
+        const q = filterState.q.trim();
         let shown = 0;
         document.querySelectorAll('.tier-block').forEach(block => {
             let tierShown = 0;
@@ -6891,7 +8626,7 @@ def render_html(
                 const tags = (c.getAttribute('data-tags') || '').split(' ');
                 const blob = c.getAttribute('data-search') || '';
                 const matchRole = !role || tags.includes(role);
-                const matchQ = !q || blob.includes(q);
+                const matchQ = !q || searchMatchesText(blob, q);
                 const hide = !(matchRole && matchQ);
                 c.classList.toggle('hidden', hide);
                 if (!hide) tierShown++;
@@ -6917,6 +8652,7 @@ def render_html(
             }
         }
         refreshSecondaryRoleBadges();
+        applySearchHighlights();
     }
 
     function setActiveChip(role) {
@@ -7149,12 +8885,34 @@ def main(
     item_meta = load_item_metadata(cache_dir=Path("data/cache"))
     click.echo(f"[tierlist] item catalogue: {len(item_meta)} entries")
 
-    champ_records, champ_aug, champ_pairs = compute_winrates(db, queue_id, patch_prefix)
-    total_games = sum(r["games"] for r in champ_records) // 10
-    champ_records = [r for r in champ_records if r["games"] >= min_games]
+    all_champ_records, champ_aug, champ_pairs = compute_winrates(db, queue_id, patch_prefix)
+    total_games = sum(r["games"] for r in all_champ_records) // 10
+    champ_records = [r for r in all_champ_records if r["games"] >= min_games]
     click.echo(f"[tierlist] {len(champ_records)} champions after min_games={min_games}")
     click.echo(f"[tierlist] {len(champ_aug):,} (champ, augment) pairs total")
     click.echo(f"[tierlist] {len(champ_pairs):,} ordered same-team champion pairs total")
+
+    patch_changes = None
+    baseline_patch_prefix = previous_patch_prefix(patch_prefix)
+    if baseline_patch_prefix:
+        baseline_champ_records, _, _ = compute_winrates(db, queue_id, baseline_patch_prefix)
+        baseline_total_games = sum(r["games"] for r in baseline_champ_records) // 10
+        if baseline_total_games:
+            patch_changes = compute_patch_changes(
+                db,
+                queue_id,
+                patch_prefix,
+                baseline_patch_prefix,
+                item_meta,
+                champ_meta,
+                all_champ_records,
+                baseline_champ_records,
+            )
+            if patch_changes:
+                click.echo(
+                    f"[tierlist] patch changes: {baseline_patch_prefix} -> {patch_prefix} "
+                    f"({baseline_total_games:,} vs {total_games:,} games)"
+                )
 
     aug_prior_strength = estimate_augment_prior_strength(champ_aug)
     click.echo(
@@ -7210,6 +8968,32 @@ def main(
         f"[tierlist] {len(single_item_affinity)} champions have >= 1 single-item row "
         f"(games >= {SINGLE_ITEM_MIN_GAMES}, no fixed pick floor, "
         f"top_lift >= {SINGLE_ITEM_TOP_MIN_LIFT:.1%})"
+    )
+    boot_item_affinity = compute_champ_boot_item_affinities(
+        db,
+        queue_id,
+        patch_prefix,
+        item_meta,
+        champ_records,
+        min_games=BOOT_ITEM_MIN_GAMES,
+    )
+    click.echo(
+        f"[tierlist] {len(boot_item_affinity)} champions have >= 1 boot row "
+        f"(games >= {BOOT_ITEM_MIN_GAMES}, top_lift >= {BOOT_ITEM_TOP_MIN_LIFT:.1%})"
+    )
+    item_build_clusters = compute_champ_item_build_clusters(
+        db,
+        queue_id,
+        patch_prefix,
+        item_meta,
+        champ_records,
+        single_item_affinity,
+    )
+    click.echo(
+        f"[tierlist] {len(item_build_clusters)} champions have >= 1 clustered item route "
+        f"(pair_games >= {ITEM_CLUSTER_MIN_PAIR_GAMES}, cluster_games >= {ITEM_CLUSTER_MIN_GAMES}, "
+        f"exact_games >= {ITEM_CLUSTER_MIN_EXACT_GAMES}, item_evidence >= {ITEM_CLUSTER_ITEM_EVIDENCE_MIN_GAMES} "
+        f"or lift >= {ITEM_CLUSTER_ITEM_FALLBACK_MIN_LIFT:.1%}, max_items={ITEM_CLUSTER_MAX_ITEMS})"
     )
     click.echo(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
@@ -7289,9 +9073,12 @@ def main(
         set_affinity,
         item_pair_affinity,
         single_item_affinity,
+        boot_item_affinity,
+        item_build_clusters,
         augment_type_affinity,
         synergy,
         aug_meta,
+        patch_changes,
         queue_id=queue_id,
         patch_prefix=patch_prefix,
         ddragon_version=version,
