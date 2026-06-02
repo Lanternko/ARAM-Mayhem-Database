@@ -21,9 +21,11 @@ import json
 import math
 import os
 import queue
+import ssl
 import sys
 import threading
 import tkinter as tk
+import urllib.request
 from pathlib import Path
 
 import click
@@ -48,6 +50,7 @@ DEFAULT_PAIR_STATS = Path("models/pair_synergy_16_10.json")
 DEFAULT_COMPOSITION_MODEL = Path("models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl")
 DEFAULT_CHAMPION_NAMES = Path("data/cache/champion_abilities.json")
 DEFAULT_APP_ICON = Path("docs/recommender-app-icon.ico")
+LIVE_CLIENT_ALL_GAME_DATA_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
 
 
 def _project_root() -> Path:
@@ -136,6 +139,129 @@ def load_fallback_champion_names() -> dict[int, str]:
             out[cid] = name
     return out
 
+
+def load_champion_alias_to_id() -> dict[str, int]:
+    """Offline Data Dragon alias -> championId map for Live Client Data."""
+    names = load_fallback_champion_names()
+    return {alias.lower(): cid for cid, alias in names.items()}
+
+
+def _live_raw_champion_alias(raw_name: object) -> str:
+    raw = str(raw_name or "")
+    for prefix in (
+        "game_character_displayname_",
+        "game_character_skin_displayname_",
+    ):
+        if raw.startswith(prefix):
+            return raw[len(prefix):]
+    return raw
+
+
+def get_live_game_snapshot(alias_to_id: dict[str, int], timeout_sec: float = 1.0) -> dict | None:
+    """Read in-game 10-player composition from Live Client Data.
+
+    Champ-select data disappears once the match starts.  During InProgress,
+    Riot exposes the visible in-game roster through HTTPS port 2999 instead.
+    """
+    try:
+        context = ssl._create_unverified_context()
+        with urllib.request.urlopen(
+            LIVE_CLIENT_ALL_GAME_DATA_URL,
+            timeout=timeout_sec,
+            context=context,
+        ) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+
+    players = data.get("allPlayers") or []
+    active = data.get("activePlayer") or {}
+    active_riot_id = active.get("riotId") or active.get("summonerName")
+    active_team = None
+    for player in players:
+        if active_riot_id and (
+            player.get("riotId") == active_riot_id
+            or player.get("summonerName") == active_riot_id
+        ):
+            active_team = player.get("team")
+            break
+    if not active_team:
+        return None
+
+    names: dict[int, str] = {}
+    teams: dict[str, list[int]] = {"ORDER": [], "CHAOS": []}
+    active_champion_id: int | None = None
+    for player in players:
+        team = player.get("team")
+        if team not in teams:
+            continue
+        alias = _live_raw_champion_alias(player.get("rawChampionName"))
+        champion_id = alias_to_id.get(alias.lower())
+        if not champion_id:
+            continue
+        teams[team].append(champion_id)
+        display_name = player.get("championName") or alias
+        if isinstance(display_name, str) and display_name:
+            names[champion_id] = display_name
+        if active_riot_id and (
+            player.get("riotId") == active_riot_id
+            or player.get("summonerName") == active_riot_id
+        ):
+            active_champion_id = champion_id
+
+    enemy_team = "CHAOS" if active_team == "ORDER" else "ORDER"
+    my_team_ids = teams.get(str(active_team), [])
+    enemy_team_ids = teams.get(enemy_team, [])
+    if len(my_team_ids) != 5 or len(enemy_team_ids) != 5:
+        return None
+
+    return {
+        "my_team_ids": my_team_ids,
+        "enemy_team_ids": enemy_team_ids,
+        "active_champion_id": active_champion_id or my_team_ids[0],
+        "names": names,
+        "game_time": ((data.get("gameData") or {}).get("gameTime")),
+    }
+
+
+def _sigmoid_scalar(logit: float) -> float:
+    if logit >= 0:
+        z = math.exp(-logit)
+        return 1.0 / (1.0 + z)
+    z = math.exp(logit)
+    return z / (1.0 + z)
+
+
+def predict_matchup_prob(
+    my_team_ids: list[int],
+    enemy_team_ids: list[int],
+    model,
+    composition_model,
+) -> float:
+    """Predict P(my team wins) with both in-game teams known."""
+    if len(my_team_ids) != 5 or len(enemy_team_ids) != 5:
+        return float("nan")
+
+    if composition_model is not None:
+        my_logit, my_unknown = composition_model.team_logit_contribution(my_team_ids)
+        enemy_logit, enemy_unknown = composition_model.team_logit_contribution(enemy_team_ids)
+        if not my_unknown and not enemy_unknown:
+            return _sigmoid_scalar(float(my_logit - enemy_logit + composition_model.intercept))
+
+    logit = float(model.intercept)
+    for cid in my_team_ids:
+        idx = model.champ_to_idx.get(int(cid))
+        if idx is None:
+            return float("nan")
+        logit += float(model.coef[idx])
+    for cid in enemy_team_ids:
+        idx = model.champ_to_idx.get(int(cid))
+        if idx is None:
+            return float("nan")
+        logit -= float(model.coef[idx])
+    return _sigmoid_scalar(logit)
+
+
 def poll_loop(
     stop_event: threading.Event, q: queue.Queue, model, pair_stats, composition_model, creds,
     poll_interval: float, verbose: bool = False,
@@ -155,6 +281,7 @@ def poll_loop(
             print(msg, flush=True)
 
     current_creds = creds
+    alias_to_id = load_champion_alias_to_id()
 
     while not stop_event.is_set():
         if current_creds is None:
@@ -196,6 +323,36 @@ def poll_loop(
                             log("[poll] LCU became unreachable; reconnecting")
                             current_creds = None
                             break
+                        if phase == "InProgress":
+                            snapshot = get_live_game_snapshot(alias_to_id)
+                            if snapshot is not None:
+                                state = (
+                                    "ingame",
+                                    tuple(snapshot["my_team_ids"]),
+                                    tuple(snapshot["enemy_team_ids"]),
+                                )
+                                if state != last_hash:
+                                    current_combo = describe_team_combo(
+                                        snapshot["my_team_ids"],
+                                        model,
+                                        composition_model,
+                                    )
+                                    enemy_combo = describe_team_combo(
+                                        snapshot["enemy_team_ids"],
+                                        model,
+                                        composition_model,
+                                    )
+                                    snapshot["matchup_prob"] = predict_matchup_prob(
+                                        snapshot["my_team_ids"],
+                                        snapshot["enemy_team_ids"],
+                                        model,
+                                        composition_model,
+                                    )
+                                    q.put(("ingame", snapshot, current_combo, enemy_combo))
+                                    last_hash = state
+                                stop_event.wait(max(poll_interval, 2.0))
+                                continue
+                            phase = "InProgress (live data unavailable)"
                         phase_label = f"{phase} (session incomplete)" if session else phase
                         if verbose or phase != last_phase:
                             log(f"[poll] idle  phase={phase_label}  "
@@ -602,6 +759,9 @@ class RecommenderApp:
             combos = rest[0] if rest else []
             current_combo = rest[1] if len(rest) > 1 else None
             self._render(parsed, suggestions, combos, current_combo)
+        elif kind == "ingame":
+            _, snapshot, current_combo, enemy_combo = msg
+            self._render_ingame(snapshot, current_combo, enemy_combo)
 
     # ----- Rendering -----
 
@@ -637,6 +797,87 @@ class RecommenderApp:
 
         self._render_team_section(left, parsed, suggestions, current_combo)
         self._render_bench_table(right, suggestions)
+
+    def _render_ingame(self, snapshot: dict, current_combo=None, enemy_combo=None) -> None:
+        self._last_render_args = None
+        self.id_to_name.update(snapshot.get("names") or {})
+
+        self.header.config(text="In-game · 10 champions detected", fg=FG)
+        self.subheader.config(text="Champ-select bench is gone; showing current 5v5 only.")
+        self._clear_body()
+
+        matchup_prob = float(snapshot.get("matchup_prob", float("nan")))
+        current_prob = matchup_prob
+        if math.isnan(current_prob):
+            current_prob = (
+                current_combo.win_prob
+                if current_combo is not None and not math.isnan(current_combo.win_prob)
+                else float("nan")
+            )
+
+        summary = tk.Frame(self.body, bg=BG)
+        summary.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            summary, text=f"5v5 estimate {_fmt_prob(current_prob)}",
+            bg=BG, fg=FG, anchor="w", font=self._font(FONT_HEAD),
+        ).pack(side="left")
+
+        if current_combo is not None and getattr(current_combo, "ratings", None):
+            self._render_team_ratings(
+                self.body,
+                current_combo.ratings,
+                getattr(current_combo, "ad_share", float("nan")),
+            )
+
+        columns = tk.Frame(self.body, bg=BG)
+        columns.pack(fill="both", expand=True, pady=(4, 0))
+        columns.grid_columnconfigure(0, weight=1, uniform="ingame")
+        columns.grid_columnconfigure(1, weight=1, uniform="ingame")
+
+        left = tk.Frame(columns, bg=BG)
+        left.grid(row=0, column=0, sticky="new", padx=(0, 12))
+        right = tk.Frame(columns, bg=BG)
+        right.grid(row=0, column=1, sticky="new", padx=(12, 0))
+
+        self._render_live_team(
+            left,
+            "Your team",
+            snapshot.get("my_team_ids") or [],
+            active_champion_id=snapshot.get("active_champion_id"),
+        )
+        self._render_live_team(
+            right,
+            "Enemy team",
+            snapshot.get("enemy_team_ids") or [],
+        )
+
+    def _render_live_team(
+        self,
+        parent: tk.Frame,
+        title: str,
+        champion_ids,
+        active_champion_id: int | None = None,
+    ) -> None:
+        tk.Label(
+            parent, text=title, bg=BG, fg=DIM,
+            font=self._font(FONT_SECTION), anchor="w",
+        ).pack(fill="x", pady=(0, 4))
+
+        for cid in champion_ids:
+            row = tk.Frame(parent, bg=ROW if cid == active_champion_id else BG)
+            row.pack(fill="x", pady=1, ipady=2)
+            self._configure_team_row(row)
+            self._icon_cell(row, int(cid), bg=ROW if cid == active_champion_id else BG)
+
+            name = self.id_to_name.get(int(cid), f"#{cid}")
+            marker = "You · " if cid == active_champion_id else ""
+            tk.Label(
+                row, text=f"{marker}{name}",
+                bg=ROW if cid == active_champion_id else BG,
+                fg=GOLD if cid == active_champion_id else FG,
+                font=self._font(FONT_NAME_B if cid == active_champion_id else FONT_NAME),
+                anchor="w",
+            ).grid(row=0, column=1, sticky="w")
 
     def _configure_team_row(self, row: tk.Frame) -> None:
         """Team rows only need icon + name (no Δ / no z column for teammates)."""
