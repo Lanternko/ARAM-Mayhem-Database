@@ -5496,13 +5496,23 @@ def render_html(
         background: rgba(148, 163, 184, 0.35);
         border-radius: 999px;
     }
-    .item-build-carousel.single-item-grid {
+    .item-build-carousel.item-build-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
         align-items: stretch;
         overflow-x: visible;
         scroll-snap-type: none;
         padding: 0;
+    }
+    .item-build-carousel.single-item-grid {
+        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    }
+    .item-build-carousel.item-pair-grid {
+        grid-template-columns: repeat(auto-fill, minmax(76px, 92px));
+        justify-content: start;
+    }
+    .item-build-carousel.item-cluster-grid {
+        grid-template-columns: repeat(auto-fill, minmax(176px, 176px));
+        justify-content: start;
     }
     .item-build-card {
         flex: 0 0 76px;
@@ -5538,7 +5548,7 @@ def render_html(
     .item-build-card.single-item-card {
         flex-basis: 68px;
     }
-    .single-item-grid .item-build-card.single-item-card {
+    .item-build-grid .item-build-card {
         flex: initial;
         min-width: 0;
         scroll-snap-align: unset;
@@ -6280,12 +6290,22 @@ def render_html(
             padding-bottom: 10px;
             scroll-snap-type: x mandatory;
         }
-        .item-build-carousel.single-item-grid {
-            grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+        .item-build-carousel.item-build-grid {
             gap: 7px;
             padding-bottom: 0;
             overflow-x: visible;
             scroll-snap-type: none;
+        }
+        .item-build-carousel.single-item-grid {
+            grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+        }
+        .item-build-carousel.item-pair-grid {
+            grid-template-columns: repeat(auto-fill, minmax(58px, 76px));
+            justify-content: start;
+        }
+        .item-build-carousel.item-cluster-grid {
+            grid-template-columns: repeat(auto-fill, minmax(174px, 1fr));
+            justify-content: start;
         }
         .item-build-card {
             flex-basis: calc((100% - 20px) / 6);
@@ -6295,7 +6315,7 @@ def render_html(
             flex-basis: calc((100% - 20px) / 6);
             min-width: 48px;
         }
-        .single-item-grid .item-build-card.single-item-card {
+        .item-build-grid .item-build-card {
             flex-basis: auto;
             min-width: 0;
         }
@@ -7410,9 +7430,15 @@ def render_html(
         };
         const buildItemCarousel = (rows, options = {}) => {
             if (!rows || !rows.length) return `<div class="mate-list empty-list">${copy.insufficient}</div>`;
-            const carouselClass = options.singleItem && !options.bootItem
-                ? 'item-build-carousel single-item-grid'
-                : 'item-build-carousel';
+            const carouselClasses = ['item-build-carousel'];
+            if (options.itemCluster) {
+                carouselClasses.push('item-build-grid', 'item-cluster-grid');
+            } else if (options.itemPairGrid) {
+                carouselClasses.push('item-build-grid', 'item-pair-grid');
+            } else if (options.singleItem && !options.bootItem) {
+                carouselClasses.push('item-build-grid', 'single-item-grid');
+            }
+            const carouselClass = carouselClasses.join(' ');
             return `<div class="${carouselClass}">${rows.map(entry => buildItemCard(entry, options)).join('')}</div>`;
         };
         const closeFitRows = (rows, minRows = 1, maxRows = 3, options = {}) => {
@@ -7487,6 +7513,7 @@ def render_html(
                         ${buildItemCarousel(rows, {
                             singleItem: Boolean(options.singleItem),
                             itemCluster: Boolean(options.itemCluster),
+                            itemPairGrid: Boolean(options.itemPairGrid),
                         })}
                     </div>
                 `;
@@ -7583,7 +7610,7 @@ def render_html(
                     copy.itemSectionTitle,
                     copy.itemSectionMeta,
                     itemInfo,
-                    { itemCarousel: true },
+                    { itemCarousel: true, itemPairGrid: true },
                 ),
             },
             {
