@@ -342,6 +342,63 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertEqual(top_route, frozenset({101, 102, 103, 104, 106, 301}))
         self.assertGreaterEqual(clusters[1]["top"][0]["exact_games"], 30)
 
+    def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
+        item_meta = {
+            item_id: {
+                "id": item_id,
+                "name": f"Item {item_id}",
+                "name_zh": f"Item {item_id}",
+                "name_en": f"Item {item_id}",
+                "categories": ["Damage"],
+                "price_total": 3000,
+                "icon": "",
+            }
+            for item_id in (101, 102, 103, 104, 105, 106, 107, 108, 109, 110)
+        }
+        item_meta[301] = {
+            "id": 301,
+            "name": "Boots",
+            "name_zh": "Boots",
+            "name_en": "Boots",
+            "categories": ["Boots"],
+            "price_total": 1100,
+            "icon": "",
+        }
+        rows = [
+            {
+                "name_en": "Crit / AD bruiser",
+                "items": [{"id": item_id} for item_id in (101, 102, 103, 104, 105, 301)],
+                "rank_score": 0.90,
+            },
+            {
+                "name_en": "AD bruiser / Crit",
+                "items": [{"id": item_id} for item_id in (101, 102, 103, 104, 106, 301)],
+                "rank_score": 0.88,
+            },
+            {
+                "name_en": "Tank / AD bruiser",
+                "items": [{"id": item_id} for item_id in (101, 102, 107, 108, 109, 301)],
+                "rank_score": 0.80,
+            },
+            {
+                "name_en": "Lethality assassin",
+                "items": [{"id": item_id} for item_id in (102, 103, 107, 108, 110, 301)],
+                "rank_score": 0.72,
+            },
+        ]
+
+        selected = tier_list._select_diverse_item_cluster_rows(rows, item_meta, top_n=4)
+
+        self.assertEqual(len(selected), 3)
+        selected_sets = [
+            frozenset(int(item["id"]) for item in row["items"])
+            for row in selected
+        ]
+        self.assertIn(frozenset({101, 102, 103, 104, 105, 301}), selected_sets)
+        self.assertIn(frozenset({101, 102, 107, 108, 109, 301}), selected_sets)
+        self.assertIn(frozenset({102, 103, 107, 108, 110, 301}), selected_sets)
+        self.assertNotIn(frozenset({101, 102, 103, 104, 106, 301}), selected_sets)
+
 
 if __name__ == "__main__":
     unittest.main()

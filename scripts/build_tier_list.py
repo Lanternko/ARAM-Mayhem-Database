@@ -150,6 +150,8 @@ ITEM_CLUSTER_EXACT_GAMES_WEIGHT = 0.014
 ITEM_CLUSTER_PICK_RATE_WEIGHT = 0.012
 ITEM_CLUSTER_PICK_RATE_REF = 0.01
 ITEM_CLUSTER_PICK_RATE_CAP = 0.035
+ITEM_CLUSTER_DIVERSITY_MAX_JACCARD = 0.66
+ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD = 0.80
 PATCH_CHANGE_TOP_N = 10
 PATCH_CHANGE_HERO_MIN_GAMES = 500
 PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES = 500
@@ -2979,6 +2981,87 @@ def _connected_item_components(
             components.append(sorted(component))
     return components
 
+
+def _item_cluster_style_key(row: dict) -> str:
+    label = str(row.get("name_en") or row.get("name") or row.get("name_zh") or "")
+    if not label:
+        return ""
+    parts = [part.strip().lower() for part in label.split("/") if part.strip()]
+    if not parts:
+        return ""
+    return " / ".join(sorted(dict.fromkeys(parts)))
+
+
+def _item_cluster_core_item_set(row: dict, item_meta: dict[int, dict]) -> set[int]:
+    item_set: set[int] = set()
+    for item in row.get("items", []):
+        try:
+            item_id = int(item.get("id"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not item_id or _is_boot_item(item_meta.get(item_id)):
+            continue
+        item_set.add(item_id)
+    return item_set
+
+
+def _item_cluster_core_signature(
+    row: dict,
+    item_meta: dict[int, dict],
+    *,
+    core_count: int = ITEM_CLUSTER_CORE_ITEM_COUNT,
+) -> tuple[int, ...]:
+    core_items: list[int] = []
+    for item in row.get("items", []):
+        try:
+            item_id = int(item.get("id"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not item_id or _is_boot_item(item_meta.get(item_id)):
+            continue
+        core_items.append(item_id)
+        if len(core_items) >= core_count:
+            break
+    return tuple(core_items)
+
+
+def _item_cluster_rows_too_similar(row: dict, other: dict, item_meta: dict[int, dict]) -> bool:
+    row_core = _item_cluster_core_signature(row, item_meta)
+    other_core = _item_cluster_core_signature(other, item_meta)
+    if row_core and row_core == other_core:
+        return True
+    row_items = _item_cluster_core_item_set(row, item_meta)
+    other_items = _item_cluster_core_item_set(other, item_meta)
+    if not row_items or not other_items:
+        return False
+    union = row_items | other_items
+    if not union:
+        return False
+    jaccard = len(row_items & other_items) / len(union)
+    if jaccard >= ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD:
+        return True
+    return (
+        jaccard >= ITEM_CLUSTER_DIVERSITY_MAX_JACCARD
+        and _item_cluster_style_key(row) == _item_cluster_style_key(other)
+    )
+
+
+def _select_diverse_item_cluster_rows(
+    rows: list[dict],
+    item_meta: dict[int, dict],
+    *,
+    top_n: int,
+) -> list[dict]:
+    selected: list[dict] = []
+    for row in rows:
+        if any(_item_cluster_rows_too_similar(row, existing, item_meta) for existing in selected):
+            continue
+        selected.append(row)
+        if len(selected) >= top_n:
+            break
+    return selected
+
+
 def compute_champ_item_build_clusters(
     db_path: Path,
     queue_id: int,
@@ -3337,7 +3420,10 @@ def compute_champ_item_build_clusters(
                 str(row.get("name_en", "")),
             )
         )
-        out[cid] = {"top": rows_out[:top_n], "bot": []}
+        rows_out = _select_diverse_item_cluster_rows(rows_out, item_meta, top_n=top_n)
+        if not rows_out:
+            continue
+        out[cid] = {"top": rows_out, "bot": []}
     return out
 
 def _is_ranged_champion(meta: dict) -> bool:
@@ -6202,7 +6288,7 @@ def render_html(
             max-width: 680px;
             min-height: 100%;
             margin: 0 auto;
-            padding: 16px;
+            padding: 14px;
             border: 1px solid #30363d;
             border-radius: 14px;
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
@@ -6245,12 +6331,12 @@ def render_html(
             font-size: 14px;
         }
         .detail-tab-list {
-            gap: 8px;
+            gap: 6px;
         }
         .detail-tab-label {
-            min-height: 40px;
-            padding-inline: 12px;
-            font-size: 12px;
+            min-height: 38px;
+            padding-inline: 10px;
+            font-size: 11px;
         }
         .detail-tab-panel {
             padding-top: 18px;
@@ -6259,8 +6345,8 @@ def render_html(
             margin-top: 2px;
         }
         .detail-sub-tabs .detail-tab-label {
-            min-height: 36px;
-            padding-inline: 12px;
+            min-height: 34px;
+            padding-inline: 10px;
             font-size: 11px;
         }
         .detail-sub-tabs .detail-tab-panel {
@@ -6313,7 +6399,7 @@ def render_html(
             justify-content: start;
         }
         .item-build-carousel.item-cluster-grid {
-            grid-template-columns: repeat(auto-fill, minmax(174px, 1fr));
+            grid-template-columns: 1fr;
             justify-content: start;
         }
         .item-build-card {
@@ -6329,8 +6415,9 @@ def render_html(
             min-width: 0;
         }
         .item-build-card.item-cluster-card {
-            flex: 0 0 220px;
-            min-width: 220px;
+            flex: 0 0 auto;
+            min-width: 0;
+            width: 100%;
         }
         .item-build-icons {
             min-height: 66px;
@@ -6355,8 +6442,8 @@ def render_html(
             height: 34px;
         }
         .item-cluster-card .item-build-icon {
-            width: 44px;
-            height: 44px;
+            width: 42px;
+            height: 42px;
         }
         .item-build-wr {
             min-height: 22px;
@@ -6409,6 +6496,11 @@ def render_html(
         .gh-star { min-height: 36px; }
         .gh-star { width: 36px; padding: 8px 0; }
         .lang-toggle { min-width: 0; }
+    }
+    @media (min-width: 520px) and (max-width: 700px) {
+        .item-build-carousel.item-cluster-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
     }
     @media (min-width: 320px) and (max-width: 359px) {
         .mate-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
