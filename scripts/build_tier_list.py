@@ -133,6 +133,8 @@ ITEM_CLUSTER_ITEM_FALLBACK_MIN_LIFT = 0.02
 ITEM_CLUSTER_TOP_MIN_LIFT = -0.02
 ITEM_CLUSTER_TOP_N = 4
 ITEM_CLUSTER_MAX_ITEMS = 6
+ITEM_CLUSTER_MAX_EXACT_ROUTES_PER_CHAMP = 100
+ITEM_CLUSTER_MAX_SOURCE_GAMES = 0
 ITEM_CLUSTER_PAIR_WEIGHT = 0.45
 ITEM_CLUSTER_SINGLE_WEIGHT = 0.35
 ITEM_CLUSTER_GLOBAL_WEIGHT = 0.20
@@ -2992,6 +2994,9 @@ def compute_champ_item_build_clusters(
     top_n: int = ITEM_CLUSTER_TOP_N,
 ) -> dict[int, dict]:
     """Cluster each champion's co-built core items into readable build routes."""
+    if ITEM_CLUSTER_MAX_SOURCE_GAMES <= 0:
+        return {}
+
     baseline_by_champ = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
@@ -3081,6 +3086,14 @@ def compute_champ_item_build_clusters(
     for (exact_cid, route_key), games in champ_exact_build_games.items():
         if games >= ITEM_CLUSTER_MIN_EXACT_GAMES:
             exact_routes_by_champ[exact_cid].append(route_key)
+    for exact_cid, routes in list(exact_routes_by_champ.items()):
+        routes.sort(
+            key=lambda route_key: (
+                -champ_exact_build_games[(exact_cid, route_key)],
+                route_key,
+            )
+        )
+        exact_routes_by_champ[exact_cid] = routes[:ITEM_CLUSTER_MAX_EXACT_ROUTES_PER_CHAMP]
     pair_keys_by_champ: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
     for (pair_cid, item_a, item_b), games in champ_pair_games.items():
         pair_keys_by_champ[pair_cid].append((item_a, item_b, games))
