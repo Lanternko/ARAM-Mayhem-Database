@@ -62,6 +62,54 @@ class ItemBuildScoringTests(unittest.TestCase):
 
         self.assertGreater(staple_modest_lift_score, niche_high_lift_score)
 
+    def test_popular_bad_rows_skip_antiheal_items(self) -> None:
+        cs_games = Counter({
+            (1, "imperial"): 300,
+            (1, "morello"): 320,
+            (1, "malignance"): 180,
+        })
+        cs_wins = Counter({
+            (1, "imperial"): 120,
+            (1, "morello"): 110,
+            (1, "malignance"): 65,
+        })
+        cs_baseline_games = Counter({
+            (1, "imperial"): 150.0,
+            (1, "morello"): 160.0,
+            (1, "malignance"): 90.0,
+        })
+        champ_total_games = Counter({1: 900})
+        category_games = Counter({"imperial": 300, "morello": 320, "malignance": 180})
+        category_wins = Counter({"imperial": 120, "morello": 110, "malignance": 65})
+        category_baseline_games = Counter({"imperial": 150.0, "morello": 160.0, "malignance": 90.0})
+        category_names = {
+            "imperial": {"name": "Imperial Mandate", "name_zh": "帝王命令", "name_en": "Imperial Mandate"},
+            "morello": {"name": "Morellonomicon", "name_zh": "黑魔禁書", "name_en": "Morellonomicon"},
+            "malignance": {"name": "Malignance", "name_zh": "惡意", "name_en": "Malignance"},
+        }
+
+        rows = tier_list._finalize_category_affinity(
+            cs_games,
+            cs_wins,
+            cs_baseline_games,
+            champ_total_games,
+            category_games,
+            category_wins,
+            category_baseline_games,
+            category_names,
+            min_games=30,
+            top_n=0,
+            bot_n=0,
+            rank_mode="lift",
+            top_min_lift=-0.02,
+            popular_bad_n=3,
+        )[1]["popular_bad"]
+
+        names = [row["name_en"] for row in rows]
+        self.assertIn("Imperial Mandate", names)
+        self.assertIn("Malignance", names)
+        self.assertNotIn("Morellonomicon", names)
+
     def test_item_build_section_renders_three_ranked_recommendations(self) -> None:
         source = (ROOT / "scripts" / "build_tier_list.py").read_text(encoding="utf-8")
 
