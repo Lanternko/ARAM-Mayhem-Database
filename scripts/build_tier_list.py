@@ -2754,6 +2754,25 @@ def previous_patch_prefix(patch_prefix: str | None) -> str | None:
         return None
     return f"{major}.{minor - 1}"
 
+def display_patch_prefix(patch_prefix: str | None) -> str | None:
+    """Map internal Riot patch numbers to the public display version.
+
+    Riot's data endpoints and local Mayhem DB still use internal versions like
+    ``16.11``, while the public patch notes / user-facing copy show ``26.11``.
+    This helper is display-only; queries and asset fetches must keep using the
+    original internal version string.
+    """
+    if not patch_prefix:
+        return None
+    stripped = patch_prefix.strip()
+    match = re.fullmatch(r"(\d+)(\..+)", stripped)
+    if not match:
+        return stripped
+    major = int(match.group(1))
+    if 10 <= major < 20:
+        return f"{major + 10}{match.group(2)}"
+    return stripped
+
 def _champ_record_index(records: list[dict]) -> dict[int, dict]:
     return {int(row["champion_id"]): row for row in records}
 
@@ -3995,7 +4014,8 @@ def render_html(
 
     header_title, queue_label = _queue_copy(queue_id)
     header_title_en = "ARAM Mayhem Database" if queue_id == 2400 else queue_label
-    patch_label = f"patch {patch_prefix}" if patch_prefix else "all patches"
+    display_patch = display_patch_prefix(patch_prefix)
+    patch_label = f"patch {display_patch}" if display_patch else "all patches"
 
     # Build the JS data payload. Keep it slim: only champs we render + their
     # picked augments / teammate synergy rows + the augment metadata for ids
@@ -6629,7 +6649,7 @@ def render_html(
             encoding="utf-8",
         )
 
-    og_patch_label = f"patch {patch_prefix}" if patch_prefix else "all patches"
+    og_patch_label = f"patch {display_patch}" if display_patch else "all patches"
     og_title = f"{header_title}資料庫"
     og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
 
@@ -6693,7 +6713,7 @@ def render_html(
     # The repo name is the canonical project URL; if the user later forks /
     # renames, update REPO_URL below.
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
-    short_patch = patch_prefix if patch_prefix else "all patches"
+    short_patch = display_patch if display_patch else "all patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
