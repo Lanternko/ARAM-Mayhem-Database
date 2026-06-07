@@ -459,6 +459,12 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertIn(frozenset({102, 103, 107, 108, 110, 301}), selected_sets)
         self.assertNotIn(frozenset({101, 102, 103, 104, 106, 301}), selected_sets)
 
+    def test_display_patch_prefix_only_changes_public_label(self) -> None:
+        self.assertEqual(tier_list.display_patch_prefix("16.11"), "26.11")
+        self.assertEqual(tier_list.display_patch_prefix("16.11.1"), "26.11.1")
+        self.assertEqual(tier_list.display_patch_prefix("26.11"), "26.11")
+        self.assertIsNone(tier_list.display_patch_prefix(None))
+
 
 if __name__ == "__main__":
     unittest.main()
