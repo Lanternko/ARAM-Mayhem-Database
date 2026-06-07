@@ -105,6 +105,15 @@ ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "bramble vest",
     "executioner's calling",
 )
+ANTIHEAL_ITEM_NAME_KEYWORDS = (
+    "oblivion orb",
+    "bramble vest",
+    "executioner's calling",
+    "morellonomicon",
+    "thornmail",
+    "mortal reminder",
+    "chempunk chainsword",
+)
 CATEGORY_PRIOR_DEFAULT = AUGMENT_PRIOR_DEFAULT
 ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
@@ -125,6 +134,7 @@ SINGLE_ITEM_PICK_LIFT_CAP = ITEM_PAIR_PICK_LIFT_CAP
 SINGLE_ITEM_PICK_RATE_WEIGHT = ITEM_PAIR_PICK_RATE_WEIGHT
 SINGLE_ITEM_PICK_RATE_REF = ITEM_PAIR_PICK_RATE_REF
 SINGLE_ITEM_PICK_RATE_CAP = ITEM_PAIR_PICK_RATE_CAP
+SINGLE_ITEM_COMMON_TRAP_N = 6
 BOOT_ITEM_MIN_GAMES = 30
 BOOT_ITEM_FALLBACK_MIN_GAMES = 20
 BOOT_ITEM_TOP_MIN_LIFT = -0.04
@@ -1866,6 +1876,11 @@ def _is_antiheal_component(item: dict | None) -> bool:
     name_en = str(item.get("name_en") or item.get("name") or "").strip().lower()
     return any(keyword in name_en for keyword in ANTIHEAL_COMPONENT_NAME_KEYWORDS)
 
+
+def _is_antiheal_item_name(name: str | None) -> bool:
+    value = str(name or "").strip().lower()
+    return any(keyword in value for keyword in ANTIHEAL_ITEM_NAME_KEYWORDS)
+
 def _is_recommendable_single_item(item: dict | None) -> bool:
     return (
         _is_recommendable_core_item(item)
@@ -2134,6 +2149,7 @@ def _finalize_category_affinity(
     top_min_lift: float | None = None,
     top_min_pick_rate: float = 0.0,
     top_pick_guarantee: bool = False,
+    popular_bad_n: int = 0,
 ) -> dict[int, dict]:
     global_total_games = sum(champ_total_games.values())
     category_avg_lift: dict[str, float] = {}
@@ -2310,7 +2326,27 @@ def _finalize_category_affinity(
             bot_rows = sorted(eligible, key=lambda r: (r["rank_bad_score"], r["ucb_residual"], r["residual"], r["games"], r["name_en"]))
         if bot_n > 0:
             bot_rows = bot_rows[:bot_n]
-        out[cid] = {"top": top_rows, "bot": bot_rows, "prior_strength": prior_strength}
+        popular_bad_rows: list[dict] = []
+        if popular_bad_n > 0:
+            popular_bad_rows = sorted(
+                [
+                    r for r in eligible
+                    if float(r.get("lift", 0.0)) < -0.0005
+                    and not _is_antiheal_item_name(str(r.get("name_en") or r.get("name") or ""))
+                ],
+                key=lambda r: (
+                    -float(r.get("pick_rate", 0.0)),
+                    -int(r.get("games", 0)),
+                    float(r.get("lift", 0.0)),
+                    str(r.get("name_en", "")),
+                ),
+            )[:popular_bad_n]
+        out[cid] = {
+            "top": top_rows,
+            "bot": bot_rows,
+            "popular_bad": popular_bad_rows,
+            "prior_strength": prior_strength,
+        }
     return out
 
 def compute_champ_category_affinities(
@@ -2658,6 +2694,7 @@ def _compute_champ_item_slot_affinities(
         rank_mode="lift",
         top_min_lift=top_min_lift,
         top_n=top_n,
+        popular_bad_n=SINGLE_ITEM_COMMON_TRAP_N,
     )
 
 def compute_champ_single_item_affinities(
@@ -4204,6 +4241,7 @@ def render_html(
             "singleItems": {
                 "top": [_pack_set(r) for r in champ_single_items.get(cid, {}).get("top", [])],
                 "bot": [_pack_set(r) for r in champ_single_items.get(cid, {}).get("bot", [])],
+                "popularBad": [_pack_set(r) for r in champ_single_items.get(cid, {}).get("popular_bad", [])],
             },
             "boots": {
                 "top": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("top", [])],
@@ -7585,7 +7623,8 @@ def render_html(
             `;
         };
         const selectCommonTrapRows = (payload, maxRows = 4) => {
-            const badRows = ((payload && payload.bot) || [])
+            const sourceRows = (payload && (payload.popularBad || payload.bot)) || [];
+            const badRows = sourceRows
                 .filter(entry => Number(entry.lift ?? 0) < -0.0005);
             if (!badRows.length) return [];
             return [...badRows]
