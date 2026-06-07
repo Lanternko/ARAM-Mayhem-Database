@@ -135,6 +135,7 @@ SINGLE_ITEM_PICK_RATE_WEIGHT = ITEM_PAIR_PICK_RATE_WEIGHT
 SINGLE_ITEM_PICK_RATE_REF = ITEM_PAIR_PICK_RATE_REF
 SINGLE_ITEM_PICK_RATE_CAP = ITEM_PAIR_PICK_RATE_CAP
 SINGLE_ITEM_COMMON_TRAP_N = 6
+SINGLE_ITEM_COMMON_TRAP_MIN_LIFT = -0.01
 BOOT_ITEM_MIN_GAMES = 30
 BOOT_ITEM_FALLBACK_MIN_GAMES = 20
 BOOT_ITEM_TOP_MIN_LIFT = -0.04
@@ -2331,7 +2332,7 @@ def _finalize_category_affinity(
             popular_bad_rows = sorted(
                 [
                     r for r in eligible
-                    if float(r.get("lift", 0.0)) < -0.0005
+                    if float(r.get("lift", 0.0)) <= SINGLE_ITEM_COMMON_TRAP_MIN_LIFT
                     and not _is_antiheal_item_name(str(r.get("name_en") or r.get("name") or ""))
                 ],
                 key=lambda r: (
@@ -7625,7 +7626,7 @@ def render_html(
         const selectCommonTrapRows = (payload, maxRows = 4) => {
             const sourceRows = (payload && (payload.popularBad || payload.bot)) || [];
             const badRows = sourceRows
-                .filter(entry => Number(entry.lift ?? 0) < -0.0005);
+                .filter(entry => Number(entry.lift ?? 0) <= -0.01);
             if (!badRows.length) return [];
             return [...badRows]
                 .sort((a, b) => (
