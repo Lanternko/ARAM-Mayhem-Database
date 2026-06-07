@@ -100,6 +100,11 @@ SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
 ITEM_BOOT_MIN_TOTAL_GOLD = 900
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
+ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
+    "oblivion orb",
+    "bramble vest",
+    "executioner's calling",
+)
 CATEGORY_PRIOR_DEFAULT = AUGMENT_PRIOR_DEFAULT
 ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
@@ -1851,8 +1856,22 @@ def _is_guardian_starter_item(item: dict | None) -> bool:
     categories = set(str(c) for c in item.get("categories") or [])
     return "Boots" not in categories
 
+def _is_antiheal_component(item: dict | None) -> bool:
+    if not item:
+        return False
+    if int(item.get("id") or 0) in AUGMENT_GATED_ITEM_IDS:
+        return False
+    if int(item.get("price_total") or 0) >= ITEM_MIN_TOTAL_GOLD:
+        return False
+    name_en = str(item.get("name_en") or item.get("name") or "").strip().lower()
+    return any(keyword in name_en for keyword in ANTIHEAL_COMPONENT_NAME_KEYWORDS)
+
 def _is_recommendable_single_item(item: dict | None) -> bool:
-    return _is_recommendable_core_item(item) or _is_guardian_starter_item(item)
+    return (
+        _is_recommendable_core_item(item)
+        or _is_guardian_starter_item(item)
+        or _is_antiheal_component(item)
+    )
 
 def _is_boot_item(item: dict | None) -> bool:
     if not item:
@@ -7398,6 +7417,10 @@ def render_html(
         const singleItemMeta = currentLang === 'en'
             ? 'counts any final-slot item; strongest first, swipe for more'
             : '六格中出過就計入；由強到弱，右滑看更多';
+        const singleItemBadTitle = currentLang === 'en' ? 'Common Traps' : '常見但不推薦';
+        const singleItemBadMeta = currentLang === 'en'
+            ? 'high-pick negative-lift items; commonly built, but they drag this champion below baseline'
+            : '高出場但負 lift；很多人出，但相對該英雄 baseline 會拉低勝率';
         const topRows = RARITIES.map(r => buildRarityRow(top[r.key], 'ranked', r)).join('');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
@@ -7548,6 +7571,32 @@ def render_html(
             const carouselClass = carouselClasses.join(' ');
             return `<div class="${carouselClass}">${rows.map(entry => buildItemCard(entry, options)).join('')}</div>`;
         };
+        const buildItemSectionFromRows = (title, meta, rows, options = {}) => {
+            if (!rows || !rows.length) return '';
+            const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
+            return `
+                <div class="detail-section">
+                    <div class="detail-section-head">
+                        <h3>${title}</h3>
+                        ${metaHtml}
+                    </div>
+                    ${buildItemCarousel(rows, options)}
+                </div>
+            `;
+        };
+        const selectCommonTrapRows = (payload, maxRows = 4) => {
+            const badRows = ((payload && payload.bot) || [])
+                .filter(entry => Number(entry.lift ?? 0) < -0.0005);
+            if (!badRows.length) return [];
+            return [...badRows]
+                .sort((a, b) => (
+                    Number(b.pick ?? b.pick_rate ?? 0) - Number(a.pick ?? a.pick_rate ?? 0)
+                    || Number(b.g ?? b.games ?? 0) - Number(a.g ?? a.games ?? 0)
+                    || Number(a.lift ?? 0) - Number(b.lift ?? 0)
+                    || String(a.name_en || '').localeCompare(String(b.name_en || ''))
+                ))
+                .slice(0, maxRows);
+        };
         const closeFitRows = (rows, minRows = 1, maxRows = 3, options = {}) => {
             if (!rows || !rows.length) return [];
             const topScore = rows[0].score ?? rows[0].res ?? 0;
@@ -7655,6 +7704,19 @@ def render_html(
         const buildItemPanel = (title, meta, payload, options = {}) => (
             buildAffinitySection(title, meta, payload, options) || emptyDetailSection(title, meta)
         );
+        const buildSingleItemPanel = (title, meta, payload) => {
+            const goodSection = buildAffinitySection(title, meta, payload, { itemCarousel: true, singleItem: true });
+            const badSection = buildItemSectionFromRows(
+                singleItemBadTitle,
+                singleItemBadMeta,
+                selectCommonTrapRows(payload, 4),
+                { singleItem: true },
+            );
+            if (!goodSection && !badSection) {
+                return emptyDetailSection(title, meta);
+            }
+            return `${goodSection || ''}${badSection || ''}`;
+        };
         const buildDetailTabSet = (scope, tabs, extraClass = '') => {
             const name = `detail-${scope}-${cid}`;
             const inputs = tabs.map((tab, idx) => {
@@ -7703,11 +7765,10 @@ def render_html(
             {
                 key: 'single',
                 label: itemTabLabels.single,
-                content: buildItemPanel(
+                content: buildSingleItemPanel(
                     singleItemTitle,
                     singleItemMeta,
                     singleItemInfo,
-                    { itemCarousel: true, singleItem: true },
                 ),
             },
             {
