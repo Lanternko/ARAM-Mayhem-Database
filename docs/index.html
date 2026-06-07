@@ -1474,6 +1474,9 @@
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
+    .item-build-wr.is-bad {
+        color: #ff8a8a;
+    }
     .item-build-name {
         display: flex;
         align-items: center;
@@ -2967,11 +2970,14 @@ async function loadSitePayload(url) {
             const cardClass = options.itemCluster
                 ? 'item-build-card item-cluster-card'
                 : (options.singleItem ? 'item-build-card single-item-card' : 'item-build-card');
+            const wrClass = options.singleItem && !options.bootItem && liftValue < -0.0005
+                ? 'item-build-wr is-bad'
+                : 'item-build-wr';
             const matchText = entrySearchText(entry);
             return `
                 <div class="${cardClass}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
-                    <div class="item-build-wr">${pct(entry.wr || 0)}</div>
+                    <div class="${wrClass}">${pct(entry.wr || 0)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                 </div>
             `;
