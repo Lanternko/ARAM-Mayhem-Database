@@ -77,6 +77,10 @@ class ItemBuildScoringTests(unittest.TestCase):
         item_meta = {
             101: {"id": 101, "categories": ["Damage"], "price_total": 3000},
             2051: {"id": 2051, "categories": ["Health", "Lane"], "price_total": 950},
+            3916: {"id": 3916, "name_en": "Oblivion Orb", "categories": ["MagicPenetration"], "price_total": 800},
+            3076: {"id": 3076, "name_en": "Bramble Vest", "categories": ["Armor"], "price_total": 800},
+            3123: {"id": 3123, "name_en": "Executioner's Calling", "categories": ["CriticalStrike"], "price_total": 800},
+            1037: {"id": 1037, "name_en": "Pickaxe", "categories": ["Damage"], "price_total": 875},
             301: {"id": 301, "categories": ["Boots"], "price_total": 1100},
             302: {"id": 302, "categories": ["Boots"], "price_total": 300},
             223069: {"id": 223069, "categories": ["Boots"], "price_total": 6000},
@@ -87,11 +91,14 @@ class ItemBuildScoringTests(unittest.TestCase):
             [301],
         )
         self.assertEqual(
-            tier_list._participant_recommendable_item_ids([101, 2051, 301, 302, 223069], item_meta),
-            [101, 2051],
+            tier_list._participant_recommendable_item_ids(
+                [101, 2051, 3916, 3076, 3123, 1037, 301, 302, 223069],
+                item_meta,
+            ),
+            [101, 2051, 3916, 3076, 3123],
         )
         self.assertEqual(
-            tier_list._participant_core_item_ids([101, 2051, 301, 302, 223069], item_meta),
+            tier_list._participant_core_item_ids([101, 2051, 3916, 3076, 3123, 301, 302, 223069], item_meta),
             [101],
         )
 
