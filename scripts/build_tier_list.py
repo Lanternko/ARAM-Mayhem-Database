@@ -22,7 +22,6 @@ import csv
 import html
 from io import BytesIO
 import json
-import itertools
 import math
 import re
 import sqlite3
@@ -172,6 +171,7 @@ ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD = 0.80
 # Core-3 build recommender: stats live on the 3 core items (stable sample); a
 # real observed 6-item completion is attached only as confirmation.
 ITEM_CORE_BUILD_PRIOR_GAMES = 20.0          # smoothing pseudo-games toward champ baseline
+ITEM_CORE_BUILD_EARLY_PRIOR = 20.0          # shrinkage for the build-order (earliness) signal
 ITEM_CORE_BUILD_MIN_GAMES = 40              # a core triple must be observed >= this often
 ITEM_CORE_BUILD_MIN_CONFIRM = 3            # a real 6-item completion must exist >= this often
 ITEM_CORE_BUILD_WINRATE_MIN_GAMES = 50      # stricter sample floor for the winrate lane
@@ -182,6 +182,11 @@ ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT = 0.012
 ITEM_CORE_BUILD_PICK_CREDIT_CAP = 0.035
 ITEM_CORE_BUILD_LIFT_WEIGHT = 0.55
 ITEM_CORE_BUILD_GAMES_WEIGHT = 0.02
+ITEM_CORE_BUILD_OPTION_MIN_GAMES = 15       # a 3rd-item option needs this many games to show
+ITEM_CORE_BUILD_OPTION_TOP_N = 5            # max 3rd-item options shown per group
+ITEM_CORE_BUILD_TAIL_N = 3                  # completion (tail) items shown per group
+ITEM_CORE_BUILD_GROUP_TOP_N = 3             # max core groups (distinct build paths) per champion
+ITEM_CORE_BUILD_GROUP_MIN_PICK = 0.04       # drop tiny build-path groups (the top group is always kept)
 PATCH_CHANGE_TOP_N = 10
 PATCH_CHANGE_HERO_MIN_GAMES = 500
 PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES = 500
@@ -3184,14 +3189,6 @@ def compute_champ_item_build_clusters(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    single_rank: dict[int, dict[int, float]] = {}
-    for rank_cid, rows_by_slug in _affinity_top_rows_by_slug(single_item_affinity).items():
-        ranks: dict[int, float] = {}
-        for slug, row in rows_by_slug.items():
-            if str(slug).isdigit():
-                ranks[int(slug)] = float(row.get("rank_score", 0.0) or 0.0)
-        single_rank[int(rank_cid)] = ranks
-
     con = sqlite3.connect(str(db_path))
     if patch_prefix:
         sql_rows = con.execute(
@@ -3231,8 +3228,10 @@ def compute_champ_item_build_clusters(
                     item_id for item_id in route_ids
                     if not _is_boot_item(item_meta.get(item_id))
                 })
-                if len(core) < core_count:
+                if not core:
                     continue
+                # Keep short (1-2 item) builds too: they carry the build-order
+                # signal even though they cannot form a 3-item core themselves.
                 boots = [item_id for item_id in route_ids if _is_boot_item(item_meta.get(item_id))]
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won))
@@ -3246,167 +3245,164 @@ def compute_champ_item_build_clusters(
         if total < min_games or len(builds) < core_min_games:
             continue
         baseline = baseline_by_champ.get(cid, 0.5)
-        ranks = single_rank.get(cid, {})
 
         item_games: Counter[int] = Counter()
-        for core, _boot, _won in builds:
-            for item_id in core:
+        item_size_sum: Counter[int] = Counter()
+        for build_core, _boot, _won in builds:
+            size = len(build_core)
+            for item_id in build_core:
                 item_games[item_id] += 1
+                item_size_sum[item_id] += size
+        item_count = sum(item_games.values())
+        global_mean_size = (sum(item_size_sum.values()) / item_count) if item_count else float(max_items)
 
-        def item_strength(item_id: int) -> float:
-            return ranks.get(item_id, 0.0) + 0.05 * math.log1p(item_games.get(item_id, 0))
+        def earliness(item_id: int) -> float:
+            # Mean build size when the item is present, shrunk toward the champ
+            # average.  LOWER = the item shows up even in games that ended early
+            # = built first = more core.  Recovers build order from short games.
+            return (
+                item_size_sum.get(item_id, 0) + ITEM_CORE_BUILD_EARLY_PRIOR * global_mean_size
+            ) / (item_games.get(item_id, 0) + ITEM_CORE_BUILD_EARLY_PRIOR)
 
-        triple_games: Counter[tuple[int, ...]] = Counter()
-        triple_wins: Counter[tuple[int, ...]] = Counter()
-        triple_fulls: dict[tuple[int, ...], Counter[tuple[int, ...]]] = defaultdict(Counter)
-        for core, boot, won in builds:
-            for tri in itertools.combinations(core, 3):
-                triple_games[tri] += 1
-                triple_wins[tri] += won
-            # Canonical 6-item completion: strongest core items capped to the
-            # 6-slot inventory (+ boot), dropping the weakest extras.  This also
-            # works for boots-less builds and excludes oversized off-meta items.
-            ranked_core = sorted(
-                core,
-                key=lambda item_id: (-item_strength(item_id), -item_games.get(item_id, 0), item_id),
-            )
-            if boot:
-                route_core = tuple(sorted(ranked_core[:full_core_len]))
-                route = route_core + (boot,)
-            else:
-                route_core = tuple(sorted(ranked_core[:max_items]))
-                route = route_core
+        def earliness_key(item_id: int) -> tuple[float, int, int]:
+            return (earliness(item_id), -item_games.get(item_id, 0), item_id)
+
+        # Group builds by their shared rush — the two earliest-built items.
+        # Within a group the 3rd-earliest item is the real decision (the "option");
+        # later items are the completion tail.  This collapses cards that only
+        # reshuffle staples into one block with a list of 3rd-item choices.
+        option_index = core_count - 1
+        group_games: Counter[tuple[int, int]] = Counter()
+        group_wins: Counter[tuple[int, int]] = Counter()
+        option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
+        option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
+        option_fulls: dict[tuple[int, int], dict[int, Counter[tuple[int, ...]]]] = defaultdict(
+            lambda: defaultdict(Counter)
+        )
+        group_tail: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
+        for build_core, boot, won in builds:
+            if len(build_core) < 2:
+                continue
+            ranked_core = sorted(build_core, key=earliness_key)  # earliest built first
+            core_pair = (ranked_core[0], ranked_core[1])
+            group_games[core_pair] += 1
+            group_wins[core_pair] += won
+            if len(ranked_core) <= option_index:
+                continue
+            option = ranked_core[option_index]
+            option_games[core_pair][option] += 1
+            option_wins[core_pair][option] += won
+            # Canonical 6-item completion: keep the earliest items up to the 6
+            # inventory slots (+ boot), dropping whatever is built latest.  The
+            # tail is read from this capped route so dropped items never leak in.
+            route_ranked = ranked_core[:full_core_len] if boot else ranked_core[:max_items]
+            route_core = tuple(sorted(route_ranked))
+            route = route_core + ((boot,) if boot else ())
             if len(route) == max_items:
-                for tri in itertools.combinations(route_core, 3):
-                    triple_fulls[tri][route] += 1
+                option_fulls[core_pair][option][route] += 1
+            for late in route_ranked[core_count:]:
+                group_tail[core_pair][late] += 1
 
-        candidates: list[dict] = []
-        for tri, games in triple_games.items():
-            if games < core_min_games:
-                continue
-            fulls = triple_fulls.get(tri)
-            if not fulls:
-                continue
-            rep_full, confirm = fulls.most_common(1)[0]
-            if confirm < min_confirm_games:
-                continue
-            wins = triple_wins[tri]
-            smoothed = (wins + baseline * ITEM_CORE_BUILD_PRIOR_GAMES) / (
-                games + ITEM_CORE_BUILD_PRIOR_GAMES
+        def smoothed_lift(wins_: int, games_: int) -> tuple[float, float, float]:
+            smoothed = (wins_ + baseline * ITEM_CORE_BUILD_PRIOR_GAMES) / (
+                games_ + ITEM_CORE_BUILD_PRIOR_GAMES
             )
-            lift = smoothed - baseline
-            raw_wr = wins / games
-            stderr = math.sqrt(max(raw_wr * (1.0 - raw_wr), 1e-6) / games)
-            lcb_lift = (smoothed - ITEM_CORE_BUILD_LCB_Z * stderr) - baseline
-            pick = games / max(total, 1)
+            raw = wins_ / games_ if games_ else baseline
+            stderr = math.sqrt(max(raw * (1.0 - raw), 1e-6) / games_) if games_ else 0.0
+            return smoothed, smoothed - baseline, (smoothed - ITEM_CORE_BUILD_LCB_Z * stderr) - baseline
+
+        groups_out: list[dict] = []
+        for core_pair, gg in group_games.items():
+            if gg < core_min_games:
+                continue
+            options: list[dict] = []
+            for option, og in (option_games.get(core_pair) or {}).items():
+                if og < ITEM_CORE_BUILD_OPTION_MIN_GAMES:
+                    continue
+                fulls = option_fulls[core_pair].get(option)
+                if not fulls:  # require a real observed 6-item completion
+                    continue
+                o_smoothed, o_lift, o_lcb = smoothed_lift(option_wins[core_pair][option], og)
+                options.append({
+                    "id": int(option),
+                    "games": og,
+                    "smoothed_wr": o_smoothed,
+                    "lift": o_lift,
+                    "core_lcb": o_lcb,
+                    "pick_rate": og / max(total, 1),
+                    "exact_games": fulls.most_common(1)[0][1],
+                    "lane": "",
+                })
+            if not options:
+                continue
+            options.sort(key=lambda o: (-o["pick_rate"], -o["lift"]))
+            options[0]["lane"] = "popular"
+            winrate_opt = max(
+                (o for o in options
+                 if o is not options[0]
+                 and o["games"] >= winrate_min_games
+                 and o["core_lcb"] > ITEM_CORE_BUILD_WINRATE_MIN_LCB),
+                key=lambda o: o["core_lcb"],
+                default=None,
+            )
+            if winrate_opt is not None:
+                winrate_opt["lane"] = "winrate"
+            options = options[:ITEM_CORE_BUILD_OPTION_TOP_N]
+            option_ids = {o["id"] for o in options}
+
+            g_smoothed, g_lift, _ = smoothed_lift(group_wins[core_pair], gg)
+            group_pick = gg / max(total, 1)
             pick_credit = min(
                 ITEM_CORE_BUILD_PICK_CREDIT_CAP,
                 ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT
-                * math.log1p(pick / max(ITEM_CORE_BUILD_PICK_RATE_REF, 1e-9)),
+                * math.log1p(group_pick / max(ITEM_CORE_BUILD_PICK_RATE_REF, 1e-9)),
             )
-            combined = (
-                ITEM_CORE_BUILD_LIFT_WEIGHT * lift
-                + pick_credit
-                + ITEM_CORE_BUILD_GAMES_WEIGHT * math.log1p(games)
-            )
-            core_ordered = sorted(
-                tri,
-                key=lambda item_id: (-item_strength(item_id), -item_games.get(item_id, 0), item_id),
-            )
-            flex_core = sorted(
-                (item_id for item_id in rep_full
-                 if item_id not in tri and not _is_boot_item(item_meta.get(item_id))),
-                key=lambda item_id: (-item_strength(item_id), -item_games.get(item_id, 0), item_id),
-            )
-            flex_boot = [item_id for item_id in rep_full if _is_boot_item(item_meta.get(item_id))]
-            ordered_ids = list(core_ordered) + flex_core + flex_boot[:1]
-            items_payload = _item_pair_payload(ordered_ids, item_meta)
-            for idx, item in enumerate(items_payload):
-                item["core"] = idx < core_count
-            names = _item_cluster_names(list(rep_full), item_meta)
-            candidates.append({
+            core_ordered = list(core_pair)  # already earliest-first
+            tail_ids = [
+                item_id for item_id, _ in group_tail[core_pair].most_common()
+                if item_id not in core_pair and item_id not in option_ids
+            ][:ITEM_CORE_BUILD_TAIL_N]
+            names = _item_cluster_names(core_ordered + [o["id"] for o in options[:1]], item_meta)
+            groups_out.append({
                 **names,
-                "slug": "core:" + "+".join(str(item_id) for item_id in sorted(tri)),
-                "core_ids": tuple(sorted(tri)),
-                "games": games,
-                "wins": wins,
-                "raw_wr": raw_wr,
-                "smoothed_wr": smoothed,
-                "lift": lift,
-                "core_lcb": lcb_lift,
-                "pick_rate": pick,
-                "rank_score": combined,
-                "exact_games": confirm,
-                "cluster_size": len(ordered_ids),
-                "items": items_payload,
+                "slug": "coregroup:" + "+".join(str(i) for i in core_ordered),
+                "core_ids": tuple(core_ordered),
+                "core_items": _item_pair_payload(core_ordered, item_meta),
+                "games": gg,
+                "smoothed_wr": g_smoothed,
+                "lift": g_lift,
+                "pick_rate": group_pick,
+                "rank_score": (
+                    ITEM_CORE_BUILD_LIFT_WEIGHT * g_lift
+                    + pick_credit
+                    + ITEM_CORE_BUILD_GAMES_WEIGHT * math.log1p(gg)
+                ),
+                "options": [
+                    {**opt, "item": _item_pair_payload([opt["id"]], item_meta)[0]}
+                    for opt in options
+                    if _item_pair_payload([opt["id"]], item_meta)
+                ],
+                "tail_items": _item_pair_payload(tail_ids, item_meta),
             })
 
-        if not candidates:
+        if not groups_out:
             continue
-
-        def core_set(row: dict) -> frozenset[int]:
-            return frozenset(row["core_ids"])
-
-        def overlap(row: dict, other: dict) -> int:
-            return len(core_set(row) & core_set(other))
-
-        by_pick = sorted(candidates, key=lambda c: (-c["pick_rate"], -c["lift"], -c["games"]))
-        by_lcb = sorted(candidates, key=lambda c: (-c["core_lcb"], -c["games"]))
-        by_combined = sorted(candidates, key=lambda c: (-c["rank_score"], -c["games"]))
-
-        chosen: list[tuple[dict, str]] = []
-
-        def is_duplicate(row: dict) -> bool:
-            return any(core_set(row) == core_set(picked) for picked, _ in chosen)
-
-        def max_overlap(row: dict, lanes: tuple[str, ...]) -> int:
-            return max(
-                (overlap(row, picked) for picked, lane in chosen if lane in lanes),
-                default=0,
-            )
-
-        # Popular anchor: the single most-built core (shown even if below baseline).
-        chosen.append((by_pick[0], "popular"))
-        # Up to 2 winrate builds: highest LCB-lift on a stable sample.  A winrate
-        # build may share staple items with the popular build (it is often a
-        # variant of it), but the two winrate builds must differ by >= 2 items so
-        # the cards are not near-twins.
-        winrate_count = 0
-        for row in by_lcb:
-            if winrate_count >= 2 or len(chosen) >= top_n:
+        # Most-played build paths first; keep distinct core pairs only.
+        groups_out.sort(key=lambda g: (-g["pick_rate"], -g["rank_score"]))
+        selected_groups: list[dict] = []
+        seen_pairs: set[frozenset[int]] = set()
+        for group in groups_out:
+            key = frozenset(group["core_ids"])
+            if key in seen_pairs:
+                continue
+            if selected_groups and group["pick_rate"] < ITEM_CORE_BUILD_GROUP_MIN_PICK:
+                continue
+            seen_pairs.add(key)
+            selected_groups.append(group)
+            if len(selected_groups) >= ITEM_CORE_BUILD_GROUP_TOP_N:
                 break
-            if row["games"] < winrate_min_games or row["core_lcb"] <= ITEM_CORE_BUILD_WINRATE_MIN_LCB:
-                continue
-            if is_duplicate(row) or max_overlap(row, ("winrate",)) > 1:
-                continue
-            chosen.append((row, "winrate"))
-            winrate_count += 1
-        # Fill remaining slots by blended score; allow shared-core variants but
-        # not near-duplicates of anything already chosen.
-        for row in by_combined:
-            if len(chosen) >= top_n:
-                break
-            if is_duplicate(row) or max_overlap(row, ("popular", "winrate", "combined")) > 2:
-                continue
-            chosen.append((row, "combined"))
-        # Still short (sparse champion): dedupe identical cores only.
-        if len(chosen) < min(top_n, len(candidates)):
-            for row in by_combined:
-                if len(chosen) >= top_n:
-                    break
-                if is_duplicate(row):
-                    continue
-                chosen.append((row, "combined"))
-
-        lane_order = {"winrate": 0, "popular": 1, "combined": 2}
-        chosen.sort(key=lambda pair: (lane_order.get(pair[1], 9), -pair[0]["rank_score"]))
-        rows_out: list[dict] = []
-        for row, lane in chosen:
-            row = dict(row)
-            row["lane"] = lane
-            rows_out.append(row)
-        if rows_out:
-            out[cid] = {"top": rows_out, "bot": []}
+        if selected_groups:
+            out[cid] = {"groups": selected_groups}
     return out
 
 def _is_ranged_champion(meta: dict) -> bool:
@@ -3994,6 +3990,33 @@ def render_html(
             packed["items"] = r["items"]
         return packed
 
+    def _pack_core_group(grp: dict) -> dict:
+        def _pack_option(o: dict) -> dict:
+            item = dict(o.get("item") or {})
+            item.update({
+                "g": int(o.get("games", 0) or 0),
+                "wr": round(float(o.get("smoothed_wr", 0.0) or 0.0), 4),
+                "lift": round(float(o.get("lift", 0.0) or 0.0), 4),
+                "lcb": round(float(o.get("core_lcb", 0.0) or 0.0), 4),
+                "pick": round(float(o.get("pick_rate", 0.0) or 0.0), 4),
+                "exactGames": int(o.get("exact_games", 0) or 0),
+                "lane": str(o.get("lane", "") or ""),
+            })
+            return item
+        return {
+            "name": grp.get("name", grp.get("name_zh", "")),
+            "name_zh": grp.get("name_zh", grp.get("name", "")),
+            "name_en": grp.get("name_en", grp.get("name", "")),
+            "slug": grp.get("slug", ""),
+            "core": grp.get("core_items", []),
+            "g": int(grp.get("games", 0) or 0),
+            "wr": round(float(grp.get("smoothed_wr", 0.0) or 0.0), 4),
+            "lift": round(float(grp.get("lift", 0.0) or 0.0), 4),
+            "pick": round(float(grp.get("pick_rate", 0.0) or 0.0), 4),
+            "options": [_pack_option(o) for o in grp.get("options", [])],
+            "tail": grp.get("tail_items", []),
+        }
+
     def _pack_comp(profile: dict[str, object]) -> dict:
         return {
             "phys": round(float(profile.get("physical_dpm") or 0.0), 3),
@@ -4179,8 +4202,7 @@ def render_html(
                 "bot": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("bot", [])],
             },
             "itemClusters": {
-                "top": [_pack_set(r) for r in champ_item_clusters.get(cid, {}).get("top", [])],
-                "bot": [_pack_set(r) for r in champ_item_clusters.get(cid, {}).get("bot", [])],
+                "groups": [_pack_core_group(grp) for grp in champ_item_clusters.get(cid, {}).get("groups", [])],
             },
             "augTypes": {
                 "top": [_pack_set(r) for r in champ_augment_types.get(cid, {}).get("top", [])],
@@ -5738,6 +5760,42 @@ def render_html(
     .cluster-pick.is-hot { color: #ffd479; }
     .cluster-pick.is-warm { color: #c7cede; }
     .cluster-pick.is-cold { color: #7f8aa3; }
+    /* Core build groups: shared rush (core 2) + 3rd-item options + finish tail. */
+    .core-group-list { display: flex; flex-direction: column; gap: 12px; }
+    .core-group {
+        border: 1px solid rgba(107, 209, 107, 0.18);
+        border-radius: 10px;
+        background: #11151d;
+        padding: 12px;
+    }
+    .cg-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .cg-core { display: flex; align-items: center; gap: 4px; }
+    .cg-core-icon { width: 48px; height: 48px; border-radius: 6px; background: #2a3142; object-fit: contain; }
+    .cg-arrow { color: #6b7280; font-size: 13px; }
+    .cg-core-meta { display: flex; flex-direction: column; gap: 2px; }
+    .cg-core-share { font-size: 13px; font-weight: 700; color: #e6e8eb; font-variant-numeric: tabular-nums; }
+    .cg-core-name { font-size: 11px; color: #8b93a7; }
+    .cg-options-label { margin: 10px 0 6px; font-size: 11px; color: #8b93a7; }
+    .cg-options { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cg-option {
+        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        padding: 6px; border-radius: 8px; min-width: 60px;
+        background: #0f131b; border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .cg-option:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); outline: none; }
+    .cg-option-icon { width: 40px; height: 40px; border-radius: 6px; background: #2a3142; object-fit: contain; }
+    .cg-option-wr { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .cg-option-pick { font-size: 10px; font-variant-numeric: tabular-nums; }
+    .cg-option-wr.is-good { color: #6bd16b; }
+    .cg-option-wr.is-bad { color: #ff8a8a; }
+    .cg-option-wr.is-even { color: #c7cede; }
+    .cg-option-pick.is-hot { color: #ffd479; }
+    .cg-option-pick.is-warm { color: #c7cede; }
+    .cg-option-pick.is-cold { color: #7f8aa3; }
+    .cg-option .lane-badge { font-size: 9px; padding: 1px 5px; }
+    .cg-tail { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+    .cg-tail-label { font-size: 10px; color: #6b7280; }
+    .cg-tail-icon { width: 28px; height: 28px; border-radius: 5px; background: #2a3142; object-fit: contain; opacity: 0.65; filter: grayscale(0.35); }
     .item-build-icons {
         display: grid;
         justify-items: center;
@@ -7063,7 +7121,7 @@ def render_html(
             itemSectionTitle: '最強前兩件出裝',
             itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
             itemClusterSectionTitle: '出裝路線 TLDR',
-            itemClusterSectionMeta: '勝率／選取率看核心三件（彩色）；後三件（淡色）為實際出現過的完整六件，僅作確認',
+            itemClusterSectionMeta: '依出裝順序分群：核心＝最先做的兩件（從提早結束的場次推回）；「第三件」列出各分歧選擇的勝率／選取率；收尾為常見後續',
             augTypeSectionTitle: '推薦增幅裝置傾向',
             augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
             relativeBest: '相對最佳',
@@ -7085,10 +7143,13 @@ def render_html(
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · 英雄 lift ${lift} · 類型平均 ${avg} · WR ${wr} · ${games}場`,
             setMeta: (lift, avg, wr, games) => `英雄 ${lift} · 類型 ${avg} · WR ${wr} · ${games}場`,
             itemBuildTitle: (name, pick, lift) => `${name} 選取率 ${pick} 勝率${lift}`,
-            itemClusterCardTitle: (name, wr, pick, lift, games, confirm, lane) => `${name}〔${lane}〕· 勝率 ${wr}（${lift}）· 選取率 ${pick} · 核心三件 ${games} 場 · 完整六件確認 ${confirm} 場`,
+            itemClusterCardTitle: (name, wr, pick, lift, games, confirm, lane) => `${name}〔${lane}〕· 勝率 ${wr}（${lift}）· 選取率 ${pick} · 該選擇 ${games} 場 · 完整六件確認 ${confirm} 場`,
             itemClusterLanes: { popular: { label: '熱門' }, winrate: { label: '高勝率' }, combined: { label: '綜合' } },
             itemClusterPick: (pick) => `${pick} 選取`,
             itemClusterGames: (games) => `${games} 場`,
+            coreBuildShare: (pick) => `${pick} 走這套開局`,
+            coreBuildThird: '第三件選擇（彩色＝勝率／選取率）',
+            coreBuildTail: '常見收尾',
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             leastFitLabel: '最不適配',
@@ -7145,7 +7206,7 @@ def render_html(
             itemSectionTitle: 'Best First Two Items',
             itemSectionMeta: 'boots excluded; left to right is #1 to #3',
             itemClusterSectionTitle: 'Build Routes TLDR',
-            itemClusterSectionMeta: 'win/pick rate measured on the 3 core items (full colour); the faded last 3 are a real observed 6-item completion, shown only as confirmation',
+            itemClusterSectionMeta: 'grouped by build order: core = the first 2 items built (inferred from games that ended early); the "3rd item" row lists each branch with its win/pick rate; finish = common follow-up',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
             augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
             relativeBest: 'Relative Best',
@@ -7171,6 +7232,9 @@ def render_html(
             itemClusterLanes: { popular: { label: 'Popular' }, winrate: { label: 'High WR' }, combined: { label: 'Balanced' } },
             itemClusterPick: (pick) => `${pick} pick`,
             itemClusterGames: (games) => `${games}g`,
+            coreBuildShare: (pick) => `${pick} open this way`,
+            coreBuildThird: '3rd item (colour = WR / pick)',
+            coreBuildTail: 'Typical finish',
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             leastFitLabel: 'Least fit',
@@ -7811,6 +7875,60 @@ def render_html(
                 <div class="mate-list empty-list">${copy.insufficient}</div>
             </div>
         `;
+        const buildCoreGroupSection = (title, meta, info) => {
+            const groups = (info && info.groups) || [];
+            if (!groups.length) return emptyDetailSection(title, meta);
+            const laneLabels = copy.itemClusterLanes || {};
+            const iconImg = (item, cls) => (item && item.icon)
+                ? `<img class="${cls}" src="${escHtml(item.icon)}" alt="${escHtml(item.name_zh || item.name || '')}" loading="lazy">`
+                : `<span class="${cls}"></span>`;
+            const blocks = groups.map(grp => {
+                const core = Array.isArray(grp.core) ? grp.core : [];
+                const coreIcons = core.map(it => iconImg(it, 'cg-core-icon')).join('<span class="cg-arrow">▸</span>');
+                const options = (Array.isArray(grp.options) ? grp.options : []).map(o => {
+                    const lift = Number(o.lift || 0);
+                    const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
+                    const pickVal = Number(o.pick || 0);
+                    const pickHeat = pickVal >= 0.05 ? 'is-hot' : (pickVal < 0.02 ? 'is-cold' : 'is-warm');
+                    const laneInfo = laneLabels[o.lane];
+                    const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
+                    const tip = copy.itemClusterCardTitle
+                        ? copy.itemClusterCardTitle(o.name_zh || o.name || '', pct(o.wr || 0), pct(pickVal), signed(lift), o.g || 0, o.exactGames || 0, laneInfo ? laneInfo.label : (o.lane || ''))
+                        : (o.name_zh || o.name || '');
+                    return `
+                        <div class="cg-option" tabindex="0" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">
+                            ${iconImg(o, 'cg-option-icon')}
+                            <span class="cg-option-wr ${wrSign}">${pct(o.wr || 0)}</span>
+                            <span class="cg-option-pick ${pickHeat}">${pct(pickVal)}</span>
+                            ${badge}
+                        </div>`;
+                }).join('');
+                const tail = Array.isArray(grp.tail) ? grp.tail : [];
+                const tailBlock = tail.length
+                    ? `<div class="cg-tail"><span class="cg-tail-label">${copy.coreBuildTail || '收尾'}</span>${tail.map(it => iconImg(it, 'cg-tail-icon')).join('')}</div>`
+                    : '';
+                const share = copy.coreBuildShare ? copy.coreBuildShare(pct(grp.pick || 0)) : pct(grp.pick || 0);
+                return `
+                    <div class="core-group">
+                        <div class="cg-head">
+                            <div class="cg-core">${coreIcons}</div>
+                            <div class="cg-core-meta">
+                                <span class="cg-core-share">${escHtml(share)}</span>
+                                <span class="cg-core-name">${escHtml(grp.name_zh || grp.name || '')}</span>
+                            </div>
+                        </div>
+                        <div class="cg-options-label">${copy.coreBuildThird || '第三件選擇'}</div>
+                        <div class="cg-options">${options}</div>
+                        ${tailBlock}
+                    </div>`;
+            }).join('');
+            const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
+            return `
+                <div class="detail-section">
+                    <div class="detail-section-head"><h3>${title}</h3>${metaHtml}</div>
+                    <div class="core-group-list">${blocks}</div>
+                </div>`;
+        };
         const buildItemPanel = (title, meta, payload, options = {}) => (
             buildAffinitySection(title, meta, payload, options) || emptyDetailSection(title, meta)
         );
@@ -7863,13 +7981,10 @@ def render_html(
             {
                 key: 'routes',
                 label: itemTabLabels.routes,
-                content: buildItemPanel(
+                content: buildCoreGroupSection(
                     copy.itemClusterSectionTitle || (currentLang === 'en' ? 'Build Routes TLDR' : '\u51fa\u88dd\u8def\u7dda TLDR'),
-                    copy.itemClusterSectionMeta || (currentLang === 'en'
-                        ? 'observed exact 6-item builds; clustered by co-built core items'
-                        : '\u5be6\u969b\u51fa\u73fe\u904e\u7684\u5b8c\u6574\u516d\u4ef6\uff1b\u4f9d\u6838\u5fc3\u88dd\u5099\u5171\u73fe\u5206\u7fa4'),
+                    copy.itemClusterSectionMeta || '',
                     itemClusterInfo,
-                    { itemCarousel: true, itemCluster: true },
                 ),
             },
             {
