@@ -177,29 +177,27 @@ class ItemBuildScoringTests(unittest.TestCase):
         finally:
             con.close()
 
-    def test_core_build_lanes_split_popular_and_winrate(self) -> None:
+    def test_core_build_group_options_split_popular_and_winrate(self) -> None:
         item_meta = {
             item_id: {
-                "id": item_id,
-                "name": f"Item {item_id}",
-                "name_zh": f"Item {item_id}",
-                "name_en": f"Item {item_id}",
-                "categories": ["Damage"],
-                "price_total": 3000,
-                "icon": "",
+                "id": item_id, "name": f"Item {item_id}", "name_zh": f"Item {item_id}",
+                "name_en": f"Item {item_id}", "categories": ["Damage"], "price_total": 3000, "icon": "",
             }
-            for item_id in (101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206, 207, 208)
+            for item_id in (101, 102, 103, 104, 201, 202)
         }
         item_meta[301] = {
             "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
             "categories": ["Boots"], "price_total": 1100, "icon": "",
         }
-        # Popular core {101,102,103} ~50% WR (varied flex), niche core {104,105,106} 80% WR.
+        # Shared rush 101 -> 102 (seen even in short games).  The 3rd item is the
+        # real choice: 103 popular (~50% WR), 104 a niche high-win-rate option.
+        # 201/202 only show up in completed builds (built late).
         builds = [
-            ([101, 102, 103, 201, 202, 301], 20, 10),
-            ([101, 102, 103, 203, 204, 301], 20, 10),
-            ([101, 102, 103, 205, 206, 301], 10, 5),
-            ([104, 105, 106, 207, 208, 301], 20, 16),
+            ([101, 102, 301], 30, 15),
+            ([101, 102, 103, 301], 30, 15),
+            ([101, 102, 103, 201, 202, 301], 25, 12),
+            ([101, 102, 104, 301], 12, 11),
+            ([101, 102, 104, 201, 202, 301], 10, 8),
         ]
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "games.db"
@@ -211,21 +209,18 @@ class ItemBuildScoringTests(unittest.TestCase):
                 min_games=10, top_n=4,
             )
 
-        top = clusters[1]["top"]
-        self.assertTrue(top)
-        popular = next(r for r in top if r["lane"] == "popular")
-        self.assertEqual(popular["core_ids"], (101, 102, 103))
-        self.assertEqual(popular["games"], 50)
-        # The headline sample (core triple) dwarfs the exact 6-item confirmation count.
-        self.assertGreater(popular["games"], popular["exact_games"])
-
-        winrate = next(r for r in top if r["lane"] == "winrate")
-        self.assertEqual(winrate["core_ids"], (104, 105, 106))
-        self.assertGreater(winrate["lift"], popular["lift"])
-
-        for row in top:
-            self.assertEqual(len(row["items"]), 6)
-            self.assertEqual([bool(it["core"]) for it in row["items"]], [True, True, True, False, False, False])
+        groups = clusters[1]["groups"]
+        self.assertTrue(groups)
+        grp = groups[0]
+        self.assertEqual(grp["core_ids"], (101, 102))  # shared rush, in build order
+        self.assertEqual([int(it["id"]) for it in grp["core_items"]], [101, 102])
+        opt_by_id = {int(o["id"]): o for o in grp["options"]}
+        self.assertIn(103, opt_by_id)
+        self.assertIn(104, opt_by_id)
+        self.assertEqual(opt_by_id[103]["lane"], "popular")  # most-picked 3rd item
+        self.assertEqual(opt_by_id[104]["lane"], "winrate")  # high-LCB 3rd item
+        self.assertGreater(opt_by_id[104]["smoothed_wr"], opt_by_id[103]["smoothed_wr"])
+        self.assertNotIn(201, opt_by_id)  # late items are not 3rd-item options
 
     def test_core_build_requires_real_six_item_completion(self) -> None:
         item_meta = {
@@ -286,12 +281,14 @@ class ItemBuildScoringTests(unittest.TestCase):
                 core_min_games=10, min_confirm_games=3, winrate_min_games=10,
                 min_games=10, top_n=4,
             )
-        top = clusters[1]["top"]
-        self.assertTrue(top)
-        for row in top:
-            ids = {int(it["id"]) for it in row["items"]}
-            self.assertNotIn(223069, ids)
-            self.assertLessEqual(len(row["items"]), 6)
+        groups = clusters[1]["groups"]
+        self.assertTrue(groups)
+        shown_ids = set()
+        for grp in groups:
+            shown_ids.update(int(it["id"]) for it in grp["core_items"])
+            shown_ids.update(int(o["id"]) for o in grp["options"])
+            shown_ids.update(int(it["id"]) for it in grp["tail_items"])
+        self.assertNotIn(223069, shown_ids)  # oversized item dropped beyond the 6-slot cap
 
     def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
         item_meta = {
@@ -349,6 +346,46 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertIn(frozenset({101, 102, 107, 108, 109, 301}), selected_sets)
         self.assertIn(frozenset({102, 103, 107, 108, 110, 301}), selected_sets)
         self.assertNotIn(frozenset({101, 102, 103, 104, 106, 301}), selected_sets)
+
+    def test_core_uses_build_order_from_short_games(self) -> None:
+        item_meta = {
+            item_id: {
+                "id": item_id, "name": f"Item {item_id}", "name_zh": f"Item {item_id}",
+                "name_en": f"Item {item_id}", "categories": ["Damage"], "price_total": 3000, "icon": "",
+            }
+            for item_id in (101, 102, 103, 201, 999)
+        }
+        item_meta[301] = {
+            "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
+            "categories": ["Boots"], "price_total": 1100, "icon": "",
+        }
+        # 101,102 appear even in 2-item games (rushed); 103 in 3-item games;
+        # 201 and 999 only ever appear in completed 6-item builds (built last),
+        # despite 999 being frequent overall.
+        builds = [
+            ([101, 102, 301], 50, 25),
+            ([101, 102, 103, 301], 30, 15),
+            ([101, 102, 103, 201, 999, 301], 40, 22),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            self._build_games_db(db_path, builds)
+            clusters = tier_list.compute_champ_item_build_clusters(
+                db_path, 2400, "16.10", item_meta,
+                [{"champion_id": 1, "raw_wr": 0.5}], {},
+                core_min_games=10, min_confirm_games=3, winrate_min_games=10,
+                min_games=10, top_n=4,
+            )
+        groups = clusters[1]["groups"]
+        self.assertTrue(groups)
+        grp = groups[0]
+        # The shared rush is the earliest-built pair (101,102); 103 is the 3rd
+        # item; the frequent-but-late 999 is never core or a 3rd-item option.
+        self.assertEqual(grp["core_ids"], (101, 102))
+        self.assertEqual([int(it["id"]) for it in grp["core_items"]], [101, 102])
+        self.assertEqual({int(o["id"]) for o in grp["options"]}, {103})
+        self.assertNotIn(999, {int(o["id"]) for o in grp["options"]})
+        self.assertNotIn(999, {int(it["id"]) for it in grp["core_items"]})
 
     def test_display_patch_prefix_only_changes_public_label(self) -> None:
         self.assertEqual(tier_list.display_patch_prefix("16.11"), "26.11")
