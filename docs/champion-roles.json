@@ -131,9 +131,10 @@
     },
     "Braum": {
       "primary": "Tank",
-      "secondary": "",
+      "secondary": "Support",
       "tags": [
-        "Tank"
+        "Tank",
+        "Support"
       ]
     },
     "Briar": {
@@ -975,9 +976,10 @@
     },
     "Taric": {
       "primary": "Tank",
-      "secondary": "",
+      "secondary": "Support",
       "tags": [
-        "Tank"
+        "Tank",
+        "Support"
       ]
     },
     "Teemo": {
@@ -1239,7 +1241,7 @@
     }
   },
   "data_dragon_version": "16.12.1",
-  "generated_at": "2026-06-14T12:51:00Z",
+  "generated_at": "2026-06-15T14:20:38Z",
   "patch_prefix": "16.12",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",
@@ -1645,6 +1647,7 @@
     "Akali": "Mage",
     "Anivia": "Fighter",
     "Bard": "Mage",
+    "Braum": "Support",
     "Cassiopeia": "Fighter",
     "Diana": "Tank",
     "Ekko": "Mage",
@@ -1670,6 +1673,7 @@
     "Shaco": "Mage",
     "Swain": "Fighter",
     "Sylas": "Fighter",
+    "Taric": "Support",
     "Thresh": "Tank",
     "Trundle": "Tank",
     "Udyr": "Mage",
@@ -1693,6 +1697,10 @@
     "Bard": {
       "meta": {},
       "role": "Mage"
+    },
+    "Braum": {
+      "meta": {},
+      "role": "Support"
     },
     "Cassiopeia": {
       "meta": {},
@@ -1793,6 +1801,10 @@
     "Sylas": {
       "meta": {},
       "role": "Fighter"
+    },
+    "Taric": {
+      "meta": {},
+      "role": "Support"
     },
     "Thresh": {
       "meta": {},
