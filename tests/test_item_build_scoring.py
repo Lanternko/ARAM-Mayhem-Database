@@ -155,163 +155,29 @@ class ItemBuildScoringTests(unittest.TestCase):
             [101],
         )
 
-    def test_item_build_clusters_keep_hybrid_routes_separate(self) -> None:
-        item_meta = {
-            101: {"id": 101, "name": "Damage A", "name_zh": "Damage A", "name_en": "Damage A", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            102: {"id": 102, "name": "Damage B", "name_zh": "Damage B", "name_en": "Damage B", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            103: {"id": 103, "name": "Damage C", "name_zh": "Damage C", "name_en": "Damage C", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            104: {"id": 104, "name": "Damage D", "name_zh": "Damage D", "name_en": "Damage D", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            105: {"id": 105, "name": "Damage E", "name_zh": "Damage E", "name_en": "Damage E", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            201: {"id": 201, "name": "Tank A", "name_zh": "Tank A", "name_en": "Tank A", "categories": ["Health", "Armor"], "price_total": 3000, "icon": ""},
-            202: {"id": 202, "name": "Tank B", "name_zh": "Tank B", "name_en": "Tank B", "categories": ["Health", "Armor"], "price_total": 3000, "icon": ""},
-            203: {"id": 203, "name": "Tank C", "name_zh": "Tank C", "name_en": "Tank C", "categories": ["Health", "Armor"], "price_total": 3000, "icon": ""},
-            204: {"id": 204, "name": "Tank D", "name_zh": "Tank D", "name_en": "Tank D", "categories": ["Health", "Armor"], "price_total": 3000, "icon": ""},
-            205: {"id": 205, "name": "Tank E", "name_zh": "Tank E", "name_en": "Tank E", "categories": ["Health", "Armor"], "price_total": 3000, "icon": ""},
-            301: {"id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots", "categories": ["Boots"], "price_total": 1100, "icon": ""},
-            223069: {"id": 223069, "name": "Void Immolation", "name_zh": "Void Immolation", "name_en": "Void Immolation", "categories": ["Health", "Armor"], "price_total": 6000, "icon": ""},
-        }
-        single_item_affinity = {
-            1: {
-                "top": [
-                    {
-                        "slug": str(item_id),
-                        "rank_score": 0.05,
-                        "lift": 0.04,
-                        "avg_lift": 0.02,
-                    }
-                    for item_id in item_meta
-                    if item_id not in {301, 223069}
-                ],
-                "bot": [],
-            }
-        }
-
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "games.db"
-            con = sqlite3.connect(db_path)
-            try:
-                con.execute(
-                    "CREATE TABLE games (queue_id INTEGER, patch TEXT, blue_wins INTEGER, participants_json TEXT)"
-                )
-                for idx in range(30):
-                    con.execute(
-                        "INSERT INTO games VALUES (?, ?, ?, ?)",
-                        (
-                            2400,
-                            "16.10",
-                            1 if idx < 24 else 0,
-                            json.dumps([{
-                                "championId": 1,
-                                "teamId": 100,
-                                "items": [101, 102, 103, 104, 105, 223069, 301],
-                            }]),
-                        ),
-                    )
-                for idx in range(30):
-                    con.execute(
-                        "INSERT INTO games VALUES (?, ?, ?, ?)",
-                        (
-                            2400,
-                            "16.10",
-                            1 if idx < 21 else 0,
-                            json.dumps([{
-                                "championId": 1,
-                                "teamId": 100,
-                                "items": [201, 202, 203, 204, 205, 223069, 301],
-                            }]),
-                        ),
-                    )
-                con.commit()
-            finally:
-                con.close()
-
-            clusters = tier_list.compute_champ_item_build_clusters(
-                db_path,
-                2400,
-                "16.10",
-                item_meta,
-                [{"champion_id": 1, "raw_wr": 0.5}],
-                single_item_affinity,
-                min_pair_games=10,
-                min_games=10,
-                max_items=6,
-                top_n=4,
+    def _build_games_db(self, db_path: Path, builds: list[tuple[list[int], int, int]]) -> None:
+        """builds: list of (item_ids, copies, wins) for champion 1 on blue side."""
+        con = sqlite3.connect(db_path)
+        try:
+            con.execute(
+                "CREATE TABLE games (queue_id INTEGER, patch TEXT, blue_wins INTEGER, participants_json TEXT)"
             )
-
-        rows = clusters[1]["top"]
-        route_sets = {
-            frozenset(int(item["id"]) for item in row["items"])
-            for row in rows
-        }
-        self.assertIn(frozenset({101, 102, 103, 104, 105, 301}), route_sets)
-        self.assertIn(frozenset({201, 202, 203, 204, 205, 301}), route_sets)
-        self.assertFalse(any(223069 in route for route in route_sets))
-        self.assertLessEqual(max(len(row["items"]) for row in rows), 6)
-
-    def test_item_build_clusters_require_observed_exact_six_item_route(self) -> None:
-        item_meta = {
-            101: {"id": 101, "name": "A", "name_zh": "A", "name_en": "A", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            102: {"id": 102, "name": "B", "name_zh": "B", "name_en": "B", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            103: {"id": 103, "name": "C", "name_zh": "C", "name_en": "C", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            104: {"id": 104, "name": "D", "name_zh": "D", "name_en": "D", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            105: {"id": 105, "name": "E", "name_zh": "E", "name_en": "E", "categories": ["Damage"], "price_total": 3000, "icon": ""},
-            301: {"id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots", "categories": ["Boots"], "price_total": 1100, "icon": ""},
-        }
-        single_item_affinity = {
-            1: {
-                "top": [
-                    {"slug": str(item_id), "rank_score": 0.05, "lift": 0.04, "avg_lift": 0.02}
-                    for item_id in (101, 102, 103, 104, 105)
-                ],
-                "bot": [],
-            }
-        }
-
-        with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "games.db"
-            con = sqlite3.connect(db_path)
-            try:
-                con.execute(
-                    "CREATE TABLE games (queue_id INTEGER, patch TEXT, blue_wins INTEGER, participants_json TEXT)"
-                )
-                partial_routes = [
-                    [101, 102, 103, 104, 301],
-                    [101, 102, 103, 105, 301],
-                ]
-                for idx in range(40):
+            for items, copies, wins in builds:
+                for idx in range(copies):
                     con.execute(
                         "INSERT INTO games VALUES (?, ?, ?, ?)",
                         (
                             2400,
                             "16.10",
-                            1 if idx < 30 else 0,
-                            json.dumps([{
-                                "championId": 1,
-                                "teamId": 100,
-                                "items": partial_routes[idx % len(partial_routes)],
-                            }]),
+                            1 if idx < wins else 0,
+                            json.dumps([{"championId": 1, "teamId": 100, "items": items}]),
                         ),
                     )
-                con.commit()
-            finally:
-                con.close()
+            con.commit()
+        finally:
+            con.close()
 
-            clusters = tier_list.compute_champ_item_build_clusters(
-                db_path,
-                2400,
-                "16.10",
-                item_meta,
-                [{"champion_id": 1, "raw_wr": 0.5}],
-                single_item_affinity,
-                min_pair_games=5,
-                min_games=5,
-                max_items=6,
-                top_n=4,
-            )
-
-        self.assertNotIn(1, clusters)
-
-    def test_item_build_clusters_rank_late_items_by_stability(self) -> None:
+    def test_core_build_lanes_split_popular_and_winrate(self) -> None:
         item_meta = {
             item_id: {
                 "id": item_id,
@@ -322,85 +188,110 @@ class ItemBuildScoringTests(unittest.TestCase):
                 "price_total": 3000,
                 "icon": "",
             }
-            for item_id in (101, 102, 103, 104, 105, 106, 107)
+            for item_id in (101, 102, 103, 104, 105, 106, 201, 202, 203, 204, 205, 206, 207, 208)
         }
         item_meta[301] = {
-            "id": 301,
-            "name": "Boots",
-            "name_zh": "Boots",
-            "name_en": "Boots",
-            "categories": ["Boots"],
-            "price_total": 1100,
-            "icon": "",
+            "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
+            "categories": ["Boots"], "price_total": 1100, "icon": "",
+        }
+        # Popular core {101,102,103} ~50% WR (varied flex), niche core {104,105,106} 80% WR.
+        builds = [
+            ([101, 102, 103, 201, 202, 301], 20, 10),
+            ([101, 102, 103, 203, 204, 301], 20, 10),
+            ([101, 102, 103, 205, 206, 301], 10, 5),
+            ([104, 105, 106, 207, 208, 301], 20, 16),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            self._build_games_db(db_path, builds)
+            clusters = tier_list.compute_champ_item_build_clusters(
+                db_path, 2400, "16.10", item_meta,
+                [{"champion_id": 1, "raw_wr": 0.5}], {},
+                core_min_games=10, min_confirm_games=3, winrate_min_games=10,
+                min_games=10, top_n=4,
+            )
+
+        top = clusters[1]["top"]
+        self.assertTrue(top)
+        popular = next(r for r in top if r["lane"] == "popular")
+        self.assertEqual(popular["core_ids"], (101, 102, 103))
+        self.assertEqual(popular["games"], 50)
+        # The headline sample (core triple) dwarfs the exact 6-item confirmation count.
+        self.assertGreater(popular["games"], popular["exact_games"])
+
+        winrate = next(r for r in top if r["lane"] == "winrate")
+        self.assertEqual(winrate["core_ids"], (104, 105, 106))
+        self.assertGreater(winrate["lift"], popular["lift"])
+
+        for row in top:
+            self.assertEqual(len(row["items"]), 6)
+            self.assertEqual([bool(it["core"]) for it in row["items"]], [True, True, True, False, False, False])
+
+    def test_core_build_requires_real_six_item_completion(self) -> None:
+        item_meta = {
+            item_id: {
+                "id": item_id, "name": f"Item {item_id}", "name_zh": f"Item {item_id}",
+                "name_en": f"Item {item_id}", "categories": ["Damage"], "price_total": 3000, "icon": "",
+            }
+            for item_id in (101, 102, 103)
+        }
+        item_meta[301] = {
+            "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
+            "categories": ["Boots"], "price_total": 1100, "icon": "",
+        }
+        # Core {101,102,103} is built often but never completed to 6 items.
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "games.db"
+            self._build_games_db(db_path, [([101, 102, 103, 301], 40, 24)])
+            clusters = tier_list.compute_champ_item_build_clusters(
+                db_path, 2400, "16.10", item_meta,
+                [{"champion_id": 1, "raw_wr": 0.5}], {},
+                core_min_games=10, min_confirm_games=3, winrate_min_games=10,
+                min_games=10, top_n=4,
+            )
+        self.assertNotIn(1, clusters)
+
+    def test_core_build_drops_oversized_item_beyond_six_slots(self) -> None:
+        item_meta = {
+            item_id: {
+                "id": item_id, "name": f"Item {item_id}", "name_zh": f"Item {item_id}",
+                "name_en": f"Item {item_id}", "categories": ["Damage"], "price_total": 3000, "icon": "",
+            }
+            for item_id in (101, 102, 103, 104, 105)
+        }
+        item_meta[223069] = {
+            "id": 223069, "name": "Void Immolation", "name_zh": "Void Immolation",
+            "name_en": "Void Immolation", "categories": ["Health", "Armor"], "price_total": 6000, "icon": "",
+        }
+        item_meta[301] = {
+            "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
+            "categories": ["Boots"], "price_total": 1100, "icon": "",
         }
         single_item_affinity = {
             1: {
                 "top": [
-                    {"slug": str(item_id), "rank_score": 0.04, "lift": 0.02, "avg_lift": 0.01}
-                    for item_id in (101, 102, 103, 104, 105, 106, 107)
+                    {"slug": str(item_id), "rank_score": 0.1, "lift": 0.05, "avg_lift": 0.02}
+                    for item_id in (101, 102, 103, 104, 105)
                 ],
                 "bot": [],
             }
         }
-
+        # 7-item builds (over the 6-slot cap); the low-affinity oversized item must be dropped.
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "games.db"
-            con = sqlite3.connect(db_path)
-            try:
-                con.execute(
-                    "CREATE TABLE games (queue_id INTEGER, patch TEXT, blue_wins INTEGER, participants_json TEXT)"
-                )
-                # Small high-win flex branch: enough single-item evidence, but few exact six-item games.
-                for idx in range(20):
-                    exact = idx < 5
-                    con.execute(
-                        "INSERT INTO games VALUES (?, ?, ?, ?)",
-                        (
-                            2400,
-                            "16.10",
-                            1 if idx < 13 else 0,
-                            json.dumps([{
-                                "championId": 1,
-                                "teamId": 100,
-                                "items": [101, 102, 103, 105, 107, 301] if exact else [101, 102, 103, 105, 107],
-                            }]),
-                        ),
-                    )
-                # Stable flex branch: more exact route evidence and thicker co-build support.
-                for idx in range(30):
-                    con.execute(
-                        "INSERT INTO games VALUES (?, ?, ?, ?)",
-                        (
-                            2400,
-                            "16.10",
-                            1 if idx < 18 else 0,
-                            json.dumps([{
-                                "championId": 1,
-                                "teamId": 100,
-                                "items": [101, 102, 103, 104, 106, 301],
-                            }]),
-                        ),
-                    )
-                con.commit()
-            finally:
-                con.close()
-
+            self._build_games_db(db_path, [([101, 102, 103, 104, 105, 223069, 301], 40, 24)])
             clusters = tier_list.compute_champ_item_build_clusters(
-                db_path,
-                2400,
-                "16.10",
-                item_meta,
-                [{"champion_id": 1, "raw_wr": 0.5}],
-                single_item_affinity,
-                min_pair_games=3,
-                min_games=5,
-                max_items=6,
-                top_n=4,
+                db_path, 2400, "16.10", item_meta,
+                [{"champion_id": 1, "raw_wr": 0.5}], single_item_affinity,
+                core_min_games=10, min_confirm_games=3, winrate_min_games=10,
+                min_games=10, top_n=4,
             )
-
-        top_route = frozenset(int(item["id"]) for item in clusters[1]["top"][0]["items"])
-        self.assertEqual(top_route, frozenset({101, 102, 103, 104, 106, 301}))
-        self.assertGreaterEqual(clusters[1]["top"][0]["exact_games"], 30)
+        top = clusters[1]["top"]
+        self.assertTrue(top)
+        for row in top:
+            ids = {int(it["id"]) for it in row["items"]}
+            self.assertNotIn(223069, ids)
+            self.assertLessEqual(len(row["items"]), 6)
 
     def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
         item_meta = {
