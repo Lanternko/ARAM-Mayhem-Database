@@ -1037,6 +1037,70 @@ def _icon_url(lcu_path: str) -> str:
     stripped = lcu_path.replace("/lol-game-data/assets/", "", 1).lower()
     return f"{CDRAGON_BASE}/{stripped}"
 
+def localize_cdragon_icons(
+    payload: dict,
+    assets_dir: Path,
+    *,
+    rel_prefix: str = "assets/icons",
+) -> int:
+    """Download every CommunityDragon icon in `payload` and rewrite its URL to a
+    site-relative path under `assets_dir`.
+
+    `raw.communitydragon.org` is slow / unreachable on some networks, so any icon
+    that has no Data Dragon equivalent (Mayhem-only items, every augment, set /
+    particle icons) would otherwise hang forever. Self-hosting them removes the
+    runtime dependency. Standard item icons already point at Data Dragon and are
+    left untouched. Files that already exist on disk are not re-downloaded, and a
+    failed download keeps the remote URL as a fallback.
+    """
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    resolved: dict[str, str] = {}
+    downloaded = 0
+
+    def localize(url: str) -> str:
+        nonlocal downloaded
+        if url in resolved:
+            return resolved[url]
+        name = url.rsplit("/", 1)[-1].split("?", 1)[0]
+        if not name:
+            resolved[url] = url
+            return url
+        dest = assets_dir / name
+        rel = f"{rel_prefix}/{name}"
+        if not dest.exists():
+            try:
+                r = httpx.get(url, timeout=30, follow_redirects=True)
+                r.raise_for_status()
+                dest.write_bytes(r.content)
+                downloaded += 1
+            except Exception as exc:  # keep remote URL as a fallback
+                click.echo(f"[tierlist] WARN: failed to self-host {url}: {exc}")
+                resolved[url] = url
+                return url
+        resolved[url] = rel
+        return rel
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, str) and value.startswith("https://raw.communitydragon.org"):
+                    node[key] = localize(value)
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for idx, value in enumerate(node):
+                if isinstance(value, str) and value.startswith("https://raw.communitydragon.org"):
+                    node[idx] = localize(value)
+                else:
+                    walk(value)
+
+    walk(payload)
+    click.echo(
+        f"[tierlist] self-hosted {len(resolved)} CommunityDragon icons "
+        f"({downloaded} newly downloaded) -> {assets_dir}"
+    )
+    return downloaded
+
 def _cached_get_json(url: str, cache_path: Path, timeout: float = 60) -> dict | list:
     """Fetch JSON with on-disk caching (the kiwi.bin.json + stringtable are large)."""
     if cache_path.exists():
@@ -1263,7 +1327,39 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
 
     return by_id
 
-def load_item_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
+def _ddragon_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
+    """Item IDs that Data Dragon serves an icon for.
+
+    CommunityDragon (`raw.communitydragon.org`) is the only source for Mayhem-only
+    items, but it is slow / unreachable on some networks, leaving every item icon
+    stuck loading. Data Dragon (Riot's official, Cloudflare-backed CDN — already
+    used for champion portraits) is reliable everywhere, so we prefer it for any
+    item it actually has and only fall back to CommunityDragon for the handful of
+    Mayhem-exclusive items it 403s on.
+    """
+    try:
+        data = _cached_get_json(
+            f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/item.json",
+            (cache_dir or Path("data/cache")) / f"ddragon_items_{version}.json",
+        )
+    except Exception as exc:  # pragma: no cover - network/cache failure is non-fatal
+        click.echo(f"[tierlist] WARN: ddragon item.json fetch failed ({exc}); items stay on CommunityDragon")
+        return set()
+    raw = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(raw, dict):
+        return set()
+    ids: set[int] = set()
+    for key in raw:
+        try:
+            ids.add(int(key))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+def load_item_metadata(
+    cache_dir: Path | None = None,
+    ddragon_version: str | None = None,
+) -> dict[int, dict]:
     rows_default = _cached_get_json(
         f"{CDRAGON_BASE}/v1/items.json",
         (cache_dir or Path("data/cache")) / "cdragon_items_en_us.json",
@@ -1277,6 +1373,9 @@ def load_item_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
         for row in rows_zh
         if isinstance(row, dict) and row.get("id") is not None
     }
+    ddragon_ids = (
+        _ddragon_item_ids(ddragon_version, cache_dir) if ddragon_version else set()
+    )
     out: dict[int, dict] = {}
     for row in rows_default:
         if not isinstance(row, dict) or row.get("id") is None:
@@ -1296,7 +1395,11 @@ def load_item_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             "name_en": row.get("name") or zh_row.get("name") or f"#{item_id}",
             "categories": list(row.get("categories") or zh_row.get("categories") or []),
             "price_total": price_total,
-            "icon": _icon_url(icon_path) if icon_path else "",
+            "icon": (
+                f"https://ddragon.leagueoflegends.com/cdn/{ddragon_version}/img/item/{item_id}.png"
+                if item_id in ddragon_ids
+                else (_icon_url(icon_path) if icon_path else "")
+            ),
         }
     return out
 
@@ -3905,6 +4008,7 @@ def render_html(
     ga_measurement_id: str = "",
     payload_out_path: Path | None = None,
     payload_url: str = "",
+    icon_assets_dir: Path | None = None,
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -4149,6 +4253,12 @@ def render_html(
 
     visible_cids = [int(r["champion_id"]) for r in records]
     visible_cid_set = set(visible_cids)
+    # Champion-level overall meta win rate, so downstream consumers (the
+    # recommender's shared-bench copy) can show a real, cell-independent win
+    # rate instead of a baseline-shifted per-cell estimate.  bayes_wr matches
+    # the public tier-list headline number; raw_wr / games are kept alongside
+    # for the empirical rate and sample size.
+    champ_stat_by_cid = {int(r["champion_id"]): r for r in records}
     for cid in visible_cids:
         meta = champ_meta.get(cid)
         if meta is None:
@@ -4211,6 +4321,9 @@ def render_html(
             "pairs": pairs,
             "comp": _pack_comp(champ_profiles.get(cid, {})),
             "roleMeta": _pack_role_meta(meta.get("role_meta")),
+            "wr": round(float(champ_stat_by_cid.get(cid, {}).get("bayes_wr", 0.0) or 0.0), 4),
+            "rawWr": round(float(champ_stat_by_cid.get(cid, {}).get("raw_wr", 0.0) or 0.0), 4),
+            "g": int(champ_stat_by_cid.get(cid, {}).get("games", 0) or 0),
         }
     js_augs = {
         str(aid): {
@@ -5522,6 +5635,60 @@ def render_html(
         font-size: 11px;
         font-family: "Noto Serif TC", "Source Han Serif TC", serif;
     }
+    .detail-overview-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+    }
+    .ovr-wr {
+        font-size: 22px;
+        font-weight: 800;
+        color: #dce4ef;
+        letter-spacing: 0.3px;
+    }
+    .ovr-meta {
+        font-size: 12px;
+        color: #9aa0a6;
+    }
+    .comp-advice {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .comp-advice-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        border-left: 2px solid #3aa0ff;
+        padding-left: 10px;
+    }
+    .comp-advice-item .ca-tag {
+        font-size: 13px;
+        font-weight: 700;
+        color: #cfe4ff;
+    }
+    .comp-advice-item .ca-desc {
+        font-size: 12px;
+        color: #9aa0a6;
+        line-height: 1.5;
+        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+    }
+    .comp-fit-legend {
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 10px;
+    }
+    .comp-fit-empty {
+        color: #6b7280;
+        font-size: 12px;
+        padding: 6px 0 12px;
+    }
+    .comp-radar {
+        display: block;
+        max-width: 340px;
+        margin: 2px auto 0;
+    }
     .augment-strength-meta {
         display: flex;
         align-items: center;
@@ -6167,6 +6334,19 @@ def render_html(
         color: #9aa0a6;
         margin-top: 1px;
     }
+    .aug-hot-badge {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        font-size: 8px;
+        font-weight: 700;
+        color: #1a1205;
+        background: #ffcf4d;
+        border-radius: 4px;
+        padding: 1px 4px;
+        line-height: 1.3;
+        z-index: 2;
+    }
     /* Custom hover popup with augment description.  Native title is kept too
        as an accessibility/fallback path. */
     .aug-tip {
@@ -6724,6 +6904,8 @@ def render_html(
             },
         },
     }
+    if icon_assets_dir is not None:
+        localize_cdragon_icons(payload, icon_assets_dir)
     payload_json = json.dumps(payload, ensure_ascii=False)
     if payload_out_path is not None:
         payload_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -7043,6 +7225,137 @@ def render_html(
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    // Capability dims we percentile-rank per champion (the building blocks of comp fit).
+    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage'];
+    // The 6 comp archetypes. Each is a weighted blend of the capabilities that comp is
+    // built around — a champion's fit = how much it supplies those, ranked across all champs.
+    // The 6 aren't mutually exclusive (a champ can fit several); together they span most comps.
+    const COMP_FIT_DEFS = [
+        { key: 'dive',      w: { engage: 0.45, cc: 0.3, front: 0.25 }, zh: { name: '衝排',     desc: '高CC、能先手切入，適合衝臉/開團陣' },     en: { name: 'Dive',         desc: 'hard CC and engage — fits a dive / all-in comp' } },
+        { key: 'poke',      w: { poke: 0.7, wave: 0.3 },               zh: { name: '消耗',     desc: '遠程消耗、清線，適合 poke 拉扯陣' },       en: { name: 'Poke',         desc: 'ranged harass and waveclear — fits a poke / siege comp' } },
+        { key: 'adc',       w: { phys: 0.6, damage: 0.4 },             zh: { name: '物理後排', desc: '物理持續輸出核心，適合保護後排的物理 carry 陣' }, en: { name: 'AD carry',  desc: 'sustained physical DPS — fits a protect-the-carry comp' } },
+        { key: 'mage',      w: { magic: 0.6, damage: 0.4 },            zh: { name: '法師核心', desc: '主要法傷輸出，適合圍繞他的法師核心陣' },   en: { name: 'Mage core',    desc: 'magic damage core — fits an AP-centric comp' } },
+        { key: 'sustain',   w: { sustain: 0.6, poke: 0.25, cc: 0.15 }, zh: { name: '續航',     desc: '高回復、拉打耗血，適合持久續航陣' },       en: { name: 'Sustain',      desc: 'healing and kiting — fits an attrition / sustain comp' } },
+        { key: 'frontback', w: { front: 0.4, damage: 0.35, cc: 0.25 }, zh: { name: '前後排',   desc: '穩固前排＋輸出，適合站樁前後排陣' },       en: { name: 'Front-to-back', desc: 'tanky front and a carry — fits a stand-and-deliver comp' } },
+    ];
+    const COMP_FIT_ADVICE_THRESHOLD = 0.6;  // fit percentile (0-1) needed to surface a comp as advice
+    // Per-dim sorted value list across all champions, computed once (DATA.champs is static).
+    let _compNormCache = null;
+    function compNormStats() {
+        if (_compNormCache) return _compNormCache;
+        const cols = {};
+        COMP_STAT_KEYS.forEach(k => { cols[k] = []; });
+        Object.values(DATA.champs || {}).forEach(info => {
+            const comp = info && info.comp;
+            if (!comp) return;
+            COMP_STAT_KEYS.forEach(k => { cols[k].push(Number(comp[k] || 0)); });
+        });
+        COMP_STAT_KEYS.forEach(k => cols[k].sort((a, b) => a - b));
+        _compNormCache = cols;
+        return _compNormCache;
+    }
+    // Hexagon radar SVG from N axes [{label, pct}] (pct 0-1), clockwise from top.
+    function compRadarSvg(axes, ariaLabel) {
+        const cx = 190, cy = 158, R = 108, n = axes.length;
+        const ang = i => (-90 + i * (360 / n)) * Math.PI / 180;
+        const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+        const ringPts = f => axes.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
+        const grid = [0.25, 0.5, 0.75, 1].map(f =>
+            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+        const spokes = axes.map((_, i) => {
+            const [x, y] = at(i, R);
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+        }).join('');
+        const dataPts = axes.map((a, i) => at(i, R * Math.max(0, Math.min(1, a.pct))));
+        const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
+        const dots = dataPts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#3aa0ff"/>`).join('');
+        const labels = axes.map((a, i) => {
+            const [lx, ly] = at(i, R + 24);
+            const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
+            const val = Math.round(a.pct * 100);
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="#7fc8ff">${val}</tspan></text>`;
+        }).join('');
+        return `<svg class="comp-radar" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${spokes}<polygon points="${dataPoly}" fill="rgba(58,160,255,0.18)" stroke="#3aa0ff" stroke-width="2"/>${dots}${labels}</svg>`;
+    }
+    // Percentile rank 0-1: fraction of champions this value beats (robust to outliers).
+    function compNorm(comp, key) {
+        const arr = compNormStats()[key];
+        const n = arr ? arr.length : 0;
+        if (n < 2) return 0;
+        const v = Number((comp && comp[key]) || 0);
+        let lt = 0;
+        while (lt < n && arr[lt] < v) lt += 1;  // count champions strictly weaker
+        return Math.max(0, Math.min(1, lt / (n - 1)));
+    }
+    // Raw comp-fit score: weighted blend of a champion's capability percentiles.
+    function compFitRaw(def, capPct) {
+        let s = 0;
+        for (const k in def.w) s += def.w[k] * (capPct[k] || 0);
+        return s;
+    }
+    function compCapPct(comp) {
+        const cap = {};
+        COMP_STAT_KEYS.forEach(k => { cap[k] = compNorm(comp, k); });
+        return cap;
+    }
+    // Per-comp sorted fit scores across all champions, computed once (DATA.champs is static).
+    let _compFitCache = null;
+    function compFitStats() {
+        if (_compFitCache) return _compFitCache;
+        const cols = {};
+        COMP_FIT_DEFS.forEach(d => { cols[d.key] = []; });
+        Object.values(DATA.champs || {}).forEach(info => {
+            const comp = info && info.comp;
+            if (!comp) return;
+            const cap = compCapPct(comp);
+            COMP_FIT_DEFS.forEach(d => { cols[d.key].push(compFitRaw(d, cap)); });
+        });
+        COMP_FIT_DEFS.forEach(d => cols[d.key].sort((a, b) => a - b));
+        _compFitCache = cols;
+        return _compFitCache;
+    }
+    // "Comp fit" tab: a radar of how well this champion fits each of the 6 comp
+    // archetypes (a champ can fit several), with the top fits called out as advice.
+    function buildCompFit(info) {
+        const copy = tr();
+        const lang = currentLang === 'en' ? 'en' : 'zh';
+        const comp = (info && info.comp) || {};
+        const cap = compCapPct(comp);
+        const stats = compFitStats();
+        const fits = COMP_FIT_DEFS.map(def => {
+            const raw = compFitRaw(def, cap);
+            const arr = stats[def.key];
+            const n = arr ? arr.length : 0;
+            let lt = 0;
+            while (lt < n && arr[lt] < raw) lt += 1;
+            const pct = n < 2 ? 0 : Math.max(0, Math.min(1, lt / (n - 1)));
+            return { def, name: def[lang].name, pct };
+        });
+        // Headline advice: the comps this champion fits best.
+        const advice = [...fits]
+            .sort((a, b) => b.pct - a.pct)
+            .filter(f => f.pct >= COMP_FIT_ADVICE_THRESHOLD)
+            .slice(0, 3)
+            .map(f => f.def[lang]);
+        const adviceHtml = advice.length
+            ? `<div class="comp-advice">${advice.map(a =>
+                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(a.name)}</span><span class="ca-desc">${escHtml(a.desc)}</span></div>`
+              ).join('')}</div>`
+            : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
+        const radarAxes = fits.map(f => ({ label: f.name, pct: f.pct }));
+        const radar = compRadarSvg(radarAxes, copy.compFitTitle);
+        return `
+            <div class="detail-section">
+                <div class="detail-section-head">
+                    <h3>${escHtml(copy.compFitTitle)}</h3>
+                    <span class="section-meta">${escHtml(copy.compFitMeta)}</span>
+                </div>
+                ${adviceHtml}
+                ${radar}
+                <div class="comp-fit-legend">${escHtml(copy.compFitLegend)}</div>
+            </div>
+        `;
+    }
     const ROLE_LABELS = __ROLE_LABELS__;
     const ROLE_BADGE_ICONS = {
         Assassin: `
@@ -7179,6 +7492,14 @@ def render_html(
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} 選取率 ${pick}，勝率${lift}`,
             secondaryRoleBadgePick: pick => `選取率 ${pick}`,
             secondaryRoleBadgeLift: lift => `勝率${lift}`,
+            augPickLabel: pick => `選用率 ${pick}`,
+            augHotBadge: '熱門',
+            overviewWrLabel: '綜合勝率',
+            overviewGames: games => `${games} 場`,
+            compFitTitle: '適配陣型',
+            compFitMeta: '這隻英雄適合哪些陣型（可同時適配多種）',
+            compFitLegend: '六角＝適配各陣型的程度（全英雄中的百分位，越外圈越適合）',
+            compFitFlexible: '綜合型，沒有特別突出的適配陣型，可彈性搭配各種陣容',
         },
         en: {
             htmlLang: 'en',
@@ -7267,6 +7588,14 @@ def render_html(
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} pick ${pick}, WR ${lift}`,
             secondaryRoleBadgePick: pick => `pick ${pick}`,
             secondaryRoleBadgeLift: lift => `WR ${lift}`,
+            augPickLabel: pick => `pick ${pick}`,
+            augHotBadge: 'Hot',
+            overviewWrLabel: 'Overall WR',
+            overviewGames: games => `${games} games`,
+            compFitTitle: 'Comp fit',
+            compFitMeta: 'which comps this champion fits (can fit several)',
+            compFitLegend: 'hexagon = how well it fits each comp (percentile across all champions, further out = better fit)',
+            compFitFlexible: 'Flexible — no standout comp fit, slots into many comps',
         }
     };
     let currentLang = 'zh';
@@ -7526,6 +7855,10 @@ def render_html(
         `;
         // Augment card carries its own ARIA semantics so screen readers and
         // keyboard users get the same info hover tooltip shows.
+        const pickRate = Number(entry.pick || 0);
+        const pickPct = pct(pickRate);
+        const isHot = pickRate >= AUG_HOT_PICK;
+        const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
         return `
             <div class="aug ${kind} rarity-${rarity}"
@@ -7533,15 +7866,18 @@ def render_html(
                  data-match-text="${escHtml(matchText)}"
                  aria-label="${escHtml(ariaLabel)}"
                  title="${escHtml(titleAttr)}">
+                ${hotBadge}
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div style="width:48px;height:48px;margin:0 auto 4px;background:#2a3142;border-radius:6px"></div>'}
                 <div class="aname">${escHtml(name)}</div>
                 <div class="awr">${pct(entry.wr)}</div>
-                <div class="alift">${signed(entry.lift)} · ${entry.g}場</div>
+                <div class="alift">${signed(entry.lift)} · ${copy.augPickLabel(pickPct)} · ${entry.g}場</div>
                 ${tooltip}
             </div>
         `;
     }
 
+    // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
+    const AUG_HOT_PICK = 0.20;
     const RARITIES = [
         { key: 'kPrismatic', css: 'prismatic' },
         { key: 'kGold',      css: 'gold' },
@@ -8003,55 +8339,41 @@ def render_html(
             `;
         };
         const mainTabLabels = currentLang === 'en'
-            ? { items: 'Items', augments: 'Augments', teammates: 'Teammates' }
-            : { items: '出裝', augments: '增幅裝置', teammates: '最佳搭檔' };
-        const itemTabLabels = currentLang === 'en'
-            ? { routes: '6-item routes', single: 'Single items', pairs: 'First two', boots: 'Boots' }
-            : { routes: '六件路線', single: '單件', pairs: '前兩件', boots: '鞋子' };
+            ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Comp fit' }
+            : { overview: '概覽', items: '出裝', augments: '增幅裝置', compfit: '適配陣型' };
         const bootItemTitle = currentLang === 'en' ? 'Recommended Boots' : '推薦鞋子';
         const bootItemMeta = currentLang === 'en'
             ? 'boots only; ranked by conservative win-rate lift and pick stability'
             : '只看鞋子；用保守勝率提升與選取率穩定度排序';
-        const itemTabContent = buildDetailTabSet('items', [
-            {
-                key: 'routes',
-                label: itemTabLabels.routes,
-                content: buildCoreGroupSection(
-                    copy.itemClusterSectionTitle || (currentLang === 'en' ? 'Build Routes TLDR' : '\u51fa\u88dd\u8def\u7dda TLDR'),
-                    copy.itemClusterSectionMeta || '',
-                    itemClusterInfo,
-                ),
-            },
-            {
-                key: 'single',
-                label: itemTabLabels.single,
-                content: buildSingleItemPanel(
-                    singleItemTitle,
-                    singleItemMeta,
-                    singleItemInfo,
-                ),
-            },
-            {
-                key: 'pairs',
-                label: itemTabLabels.pairs,
-                content: buildItemPanel(
-                    copy.itemSectionTitle,
-                    copy.itemSectionMeta,
-                    itemInfo,
-                    { itemCarousel: true, itemPairGrid: true },
-                ),
-            },
-            {
-                key: 'boots',
-                label: itemTabLabels.boots,
-                content: buildItemPanel(
-                    bootItemTitle,
-                    bootItemMeta,
-                    bootInfo,
-                    { itemCarousel: true, singleItem: true, bootItem: true },
-                ),
-            },
-        ], 'detail-sub-tabs');
+        // \u6982\u89bd: headline win-rate, then 6-item routes + boots stacked (no sub-tabs).
+        const overviewTabContent = `
+            <div class="detail-section detail-overview-head">
+                <span class="ovr-wr">${pct(info.wr)}</span>
+                <span class="ovr-meta">${copy.overviewWrLabel} \u00b7 ${copy.overviewGames(info.g)}</span>
+            </div>
+            ${buildCoreGroupSection(
+                copy.itemClusterSectionTitle || (currentLang === 'en' ? 'Build Routes TLDR' : '\u51fa\u88dd\u8def\u7dda TLDR'),
+                copy.itemClusterSectionMeta || '',
+                itemClusterInfo,
+            )}
+            ${buildItemPanel(
+                bootItemTitle,
+                bootItemMeta,
+                bootInfo,
+                { itemCarousel: true, singleItem: true, bootItem: true },
+            )}
+        `;
+        // \u51fa\u88dd: single items + first-two items stacked (no sub-tabs).
+        const itemTabContent = `
+            ${buildSingleItemPanel(singleItemTitle, singleItemMeta, singleItemInfo)}
+            ${buildItemPanel(
+                copy.itemSectionTitle,
+                copy.itemSectionMeta,
+                itemInfo,
+                { itemCarousel: true, itemPairGrid: true },
+            )}
+        `;
+        const compFitTabContent = buildCompFit(info);
         const augmentTabContent = `
             <div class="detail-section">
                 <span class="section-meta augment-strength-meta">
@@ -8071,28 +8393,11 @@ def render_html(
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
         `;
-        const teammateTabContent = `
-            <div class="detail-section">
-                <div class="detail-section-head">
-                    <h3>${copy.pairSectionTitle}</h3>
-                    <span class="section-meta">${copy.pairSectionMeta}</span>
-                </div>
-                <div class="detail-cols">
-                    <div class="detail-col best">
-                        <h3>${copy.best}</h3>
-                        ${buildMateList(mateTop, 'good')}
-                    </div>
-                    <div class="detail-col worst">
-                        <h3>${copy.worst}</h3>
-                        ${buildMateList(mateBot, 'bad')}
-                    </div>
-                </div>
-            </div>
-        `;
         const detailTabs = buildDetailTabSet('main', [
+            { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
-            { key: 'teammates', label: mainTabLabels.teammates, content: teammateTabContent },
+            { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
         ], 'detail-main-tabs');
         return `
             <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
@@ -9346,7 +9651,7 @@ def main(
         f"[tierlist] augment catalogue: {len(aug_meta)} entries "
         f"({desc_n} with zh-TW description)"
     )
-    item_meta = load_item_metadata(cache_dir=Path("data/cache"))
+    item_meta = load_item_metadata(cache_dir=Path("data/cache"), ddragon_version=version)
     click.echo(f"[tierlist] item catalogue: {len(item_meta)} entries")
 
     all_champ_records, champ_aug, champ_pairs = compute_winrates(db, queue_id, patch_prefix)
@@ -9556,6 +9861,7 @@ def main(
         ga_measurement_id=ga_measurement_id,
         payload_out_path=payload_out,
         payload_url=payload_url,
+        icon_assets_dir=out_path.parent / "assets" / "icons",
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")
