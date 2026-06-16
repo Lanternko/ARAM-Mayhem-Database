@@ -5661,7 +5661,7 @@ def render_html(
         flex: 0 0 76px;
         scroll-snap-align: start;
         display: grid;
-        grid-template-rows: auto auto 1fr;
+        grid-template-rows: auto auto auto 1fr;
         overflow: hidden;
         border-radius: 8px;
         border: 1px solid rgba(107, 209, 107, 0.24);
@@ -5773,8 +5773,11 @@ def render_html(
     .cg-core-icon { width: 48px; height: 48px; border-radius: 6px; background: #2a3142; object-fit: contain; }
     .cg-arrow { color: #6b7280; font-size: 13px; }
     .cg-core-meta { display: flex; flex-direction: column; gap: 2px; }
-    .cg-core-share { font-size: 13px; font-weight: 700; color: #e6e8eb; font-variant-numeric: tabular-nums; }
-    .cg-core-name { font-size: 11px; color: #8b93a7; }
+    .cg-core-wr { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .cg-core-wr.is-good { color: #6bd16b; }
+    .cg-core-wr.is-bad { color: #ff8a8a; }
+    .cg-core-wr.is-even { color: #c7cede; }
+    .cg-core-share { font-size: 12px; font-weight: 600; color: #8b93a7; font-variant-numeric: tabular-nums; }
     .cg-options-label { margin: 10px 0 6px; font-size: 11px; color: #8b93a7; }
     .cg-options { display: flex; flex-wrap: wrap; gap: 8px; }
     .cg-option {
@@ -5845,6 +5848,16 @@ def render_html(
     }
     .item-build-wr.is-bad {
         color: #ff8a8a;
+    }
+    .item-build-pick {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 18px;
+        color: #9aa3b8;
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
     }
     .item-build-name {
         display: flex;
@@ -6596,6 +6609,10 @@ def render_html(
             min-height: 22px;
             font-size: 10px;
         }
+        .item-build-pick {
+            min-height: 15px;
+            font-size: 9px;
+        }
         .item-build-name {
             min-height: 24px;
             padding: 2px 2px;
@@ -7147,9 +7164,12 @@ def render_html(
             itemClusterLanes: { popular: { label: '熱門' }, winrate: { label: '高勝率' }, combined: { label: '綜合' } },
             itemClusterPick: (pick) => `${pick} 選取`,
             itemClusterGames: (games) => `${games} 場`,
-            coreBuildShare: (pick) => `${pick} 走這套開局`,
-            coreBuildThird: '第三件選擇（彩色＝勝率／選取率）',
-            coreBuildTail: '常見收尾',
+            coreBuildShare: (pick) => `${pick} 選取率`,
+            coreBuildWr: (wr) => `勝率 ${wr}`,
+            coreBuildThird: '第三件選擇',
+            coreBuildTail: '常見後續',
+            coreBuildTailTip: '這套常一起出、但不在上方「第三件選擇」內的裝備',
+            coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · 勝率 ${wr}（${lift}）· 選取率 ${pick} · ${games} 場`,
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             leastFitLabel: '最不適配',
@@ -7232,9 +7252,12 @@ def render_html(
             itemClusterLanes: { popular: { label: 'Popular' }, winrate: { label: 'High WR' }, combined: { label: 'Balanced' } },
             itemClusterPick: (pick) => `${pick} pick`,
             itemClusterGames: (games) => `${games}g`,
-            coreBuildShare: (pick) => `${pick} open this way`,
-            coreBuildThird: '3rd item (colour = WR / pick)',
-            coreBuildTail: 'Typical finish',
+            coreBuildShare: (pick) => `${pick} pick`,
+            coreBuildWr: (wr) => `${wr} WR`,
+            coreBuildThird: '3rd item',
+            coreBuildTail: 'Also common',
+            coreBuildTailTip: 'Items often added later — not the 3rd-item picks shown above',
+            coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             leastFitLabel: 'Least fit',
@@ -7661,7 +7684,7 @@ def render_html(
             const titleForItemCard = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
-                    : `${itemName} · WR ${wr} · 挑選率 ${pick} · 勝率 ${lift} · ${games} 場`
+                    : `${itemName} · WR ${wr} · 選取率 ${pick} · 勝率 ${lift} · ${games} 場`
             ));
             const matchText = entrySearchText(entry);
 
@@ -7727,6 +7750,7 @@ def render_html(
                 <div class="${cardClass}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
+                    <div class="item-build-pick">${pct(entry.pick || 0)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                 </div>
             `;
@@ -7879,9 +7903,12 @@ def render_html(
             const groups = (info && info.groups) || [];
             if (!groups.length) return emptyDetailSection(title, meta);
             const laneLabels = copy.itemClusterLanes || {};
-            const iconImg = (item, cls) => (item && item.icon)
-                ? `<img class="${cls}" src="${escHtml(item.icon)}" alt="${escHtml(item.name_zh || item.name || '')}" loading="lazy">`
-                : `<span class="${cls}"></span>`;
+            const iconImg = (item, cls) => {
+                const nm = escHtml((item && (item.name_zh || item.name)) || '');
+                return (item && item.icon)
+                    ? `<img class="${cls}" src="${escHtml(item.icon)}" alt="${nm}" title="${nm}" loading="lazy">`
+                    : `<span class="${cls}"></span>`;
+            };
             const blocks = groups.map(grp => {
                 const core = Array.isArray(grp.core) ? grp.core : [];
                 const coreIcons = core.map(it => iconImg(it, 'cg-core-icon')).join('<span class="cg-arrow">▸</span>');
@@ -7904,17 +7931,25 @@ def render_html(
                         </div>`;
                 }).join('');
                 const tail = Array.isArray(grp.tail) ? grp.tail : [];
+                const tailTip = copy.coreBuildTailTip ? ` title="${escHtml(copy.coreBuildTailTip)}"` : '';
                 const tailBlock = tail.length
-                    ? `<div class="cg-tail"><span class="cg-tail-label">${copy.coreBuildTail || '收尾'}</span>${tail.map(it => iconImg(it, 'cg-tail-icon')).join('')}</div>`
+                    ? `<div class="cg-tail"${tailTip}><span class="cg-tail-label">${copy.coreBuildTail || '收尾'}</span>${tail.map(it => iconImg(it, 'cg-tail-icon')).join('')}</div>`
                     : '';
                 const share = copy.coreBuildShare ? copy.coreBuildShare(pct(grp.pick || 0)) : pct(grp.pick || 0);
+                const coreLift = Number(grp.lift || 0);
+                const coreWrSign = coreLift > 0.005 ? 'is-good' : (coreLift < -0.005 ? 'is-bad' : 'is-even');
+                const wrText = copy.coreBuildWr ? copy.coreBuildWr(pct(grp.wr || 0)) : pct(grp.wr || 0);
+                const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrSign}">${escHtml(wrText)}</span>` : '';
+                const headTitle = copy.coreBuildHeadTitle
+                    ? copy.coreBuildHeadTitle(grp.name_zh || grp.name || '', pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
+                    : '';
                 return `
                     <div class="core-group">
-                        <div class="cg-head">
+                        <div class="cg-head"${headTitle ? ` title="${escHtml(headTitle)}"` : ''}>
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
+                                ${wrHtml}
                                 <span class="cg-core-share">${escHtml(share)}</span>
-                                <span class="cg-core-name">${escHtml(grp.name_zh || grp.name || '')}</span>
                             </div>
                         </div>
                         <div class="cg-options-label">${copy.coreBuildThird || '第三件選擇'}</div>
