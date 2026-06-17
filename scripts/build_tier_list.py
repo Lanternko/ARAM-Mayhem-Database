@@ -5650,44 +5650,89 @@ def render_html(
         font-size: 12px;
         color: #9aa0a6;
     }
+    .comp-fit-main {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 20px;
+    }
+    .comp-fit-radar {
+        flex: 1 1 250px;
+        min-width: 220px;
+    }
+    .comp-fit-radar .comp-radar {
+        display: block;
+        width: 100%;
+        max-width: 320px;
+        margin: 0 auto;
+    }
+    .comp-fit-abilities {
+        flex: 1 1 190px;
+        min-width: 180px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+    }
+    .cf-cap {
+        font-size: 11px;
+        color: #6b7280;
+        margin-bottom: 2px;
+    }
+    .ab-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .ab-label {
+        flex: 0 0 38px;
+        font-size: 12px;
+        color: #c2c7ce;
+    }
+    .ab-bar {
+        flex: 1;
+        height: 8px;
+        background: rgba(255,255,255,0.06);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .ab-bar > span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, #3aa0ff, #7fc8ff);
+        border-radius: 999px;
+    }
+    .ab-val {
+        flex: 0 0 24px;
+        text-align: right;
+        font-size: 11px;
+        color: #9aa0a6;
+        font-variant-numeric: tabular-nums;
+    }
     .comp-advice {
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        margin-bottom: 12px;
+        gap: 5px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(255,255,255,0.06);
     }
     .comp-advice-item {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        border-left: 2px solid #3aa0ff;
-        padding-left: 10px;
+        font-size: 12px;
+        line-height: 1.5;
     }
     .comp-advice-item .ca-tag {
-        font-size: 13px;
-        font-weight: 700;
         color: #cfe4ff;
+        font-weight: 600;
+        margin-right: 6px;
     }
     .comp-advice-item .ca-desc {
-        font-size: 12px;
         color: #9aa0a6;
-        line-height: 1.5;
         font-family: "Noto Serif TC", "Source Han Serif TC", serif;
-    }
-    .comp-fit-legend {
-        font-size: 11px;
-        color: #6b7280;
-        margin-bottom: 10px;
     }
     .comp-fit-empty {
         color: #6b7280;
         font-size: 12px;
-        padding: 6px 0 12px;
-    }
-    .comp-radar {
-        display: block;
-        max-width: 340px;
-        margin: 2px auto 0;
+        padding: 6px 0 0;
     }
     .augment-strength-meta {
         display: flex;
@@ -7239,6 +7284,15 @@ def render_html(
         { key: 'frontback', w: { front: 0.4, damage: 0.35, cc: 0.25 }, zh: { name: '前後排',   desc: '穩固前排＋輸出，適合站樁前後排陣' },       en: { name: 'Front-to-back', desc: 'tanky front and a carry — fits a stand-and-deliver comp' } },
     ];
     const COMP_FIT_ADVICE_THRESHOLD = 0.6;  // fit percentile (0-1) needed to surface a comp as advice
+    // Raw-ability bars shown beside the radar (champion capability percentiles, not comp fit).
+    const ABILITY_BARS = [
+        { key: 'damage',  zh: '傷害', en: 'Damage' },
+        { key: 'front',   zh: '坦度', en: 'Tank' },
+        { key: 'cc',      zh: '控場', en: 'CC' },
+        { key: 'sustain', zh: '恢復', en: 'Sustain' },
+        { key: 'engage',  zh: '開團', en: 'Engage' },
+        { key: 'poke',    zh: '消耗', en: 'Poke' },
+    ];
     // Per-dim sorted value list across all champions, computed once (DATA.champs is static).
     let _compNormCache = null;
     function compNormStats() {
@@ -7344,15 +7398,24 @@ def render_html(
             : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
         const radarAxes = fits.map(f => ({ label: f.name, pct: f.pct }));
         const radar = compRadarSvg(radarAxes, copy.compFitTitle);
+        const abilities = ABILITY_BARS.map(a => {
+            const val = Math.round((cap[a.key] || 0) * 100);
+            return `<div class="ab-row"><span class="ab-label">${escHtml(a[lang])}</span><span class="ab-bar"><span style="width:${val}%"></span></span><span class="ab-val">${val}</span></div>`;
+        }).join('');
         return `
             <div class="detail-section">
                 <div class="detail-section-head">
                     <h3>${escHtml(copy.compFitTitle)}</h3>
                     <span class="section-meta">${escHtml(copy.compFitMeta)}</span>
                 </div>
+                <div class="comp-fit-main">
+                    <div class="comp-fit-radar">${radar}</div>
+                    <div class="comp-fit-abilities">
+                        <div class="cf-cap">${escHtml(copy.compAbilityCap)}</div>
+                        ${abilities}
+                    </div>
+                </div>
                 ${adviceHtml}
-                ${radar}
-                <div class="comp-fit-legend">${escHtml(copy.compFitLegend)}</div>
             </div>
         `;
     }
@@ -7497,8 +7560,8 @@ def render_html(
             overviewWrLabel: '綜合勝率',
             overviewGames: games => `${games} 場`,
             compFitTitle: '適配陣型',
-            compFitMeta: '這隻英雄適合哪些陣型（可同時適配多種）',
-            compFitLegend: '六角＝適配各陣型的程度（全英雄中的百分位，越外圈越適合）',
+            compFitMeta: '左：適配陣型；右：英雄能力（皆為全英雄百分位）',
+            compAbilityCap: '英雄能力',
             compFitFlexible: '綜合型，沒有特別突出的適配陣型，可彈性搭配各種陣容',
         },
         en: {
@@ -7593,8 +7656,8 @@ def render_html(
             overviewWrLabel: 'Overall WR',
             overviewGames: games => `${games} games`,
             compFitTitle: 'Comp fit',
-            compFitMeta: 'which comps this champion fits (can fit several)',
-            compFitLegend: 'hexagon = how well it fits each comp (percentile across all champions, further out = better fit)',
+            compFitMeta: 'left: comp fit; right: abilities (both percentile across all champions)',
+            compAbilityCap: 'Abilities',
             compFitFlexible: 'Flexible — no standout comp fit, slots into many comps',
         }
     };
