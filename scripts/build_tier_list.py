@@ -7513,7 +7513,7 @@ def render_html(
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
             itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
-            itemClusterSectionTitle: '出裝路線 TLDR',
+            itemClusterSectionTitle: '',
             itemClusterSectionMeta: '依出裝順序分群：核心＝最先做的兩件（從提早結束的場次推回）；「第三件」列出各分歧選擇的勝率／選取率；收尾為常見後續',
             augTypeSectionTitle: '推薦增幅裝置傾向',
             augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
@@ -7609,7 +7609,7 @@ def render_html(
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
             itemSectionMeta: 'boots excluded; left to right is #1 to #3',
-            itemClusterSectionTitle: 'Build Routes TLDR',
+            itemClusterSectionTitle: '',
             itemClusterSectionMeta: 'grouped by build order: core = the first 2 items built (inferred from games that ended early); the "3rd item" row lists each branch with its win/pick rate; finish = common follow-up',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
             augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
@@ -8357,9 +8357,13 @@ def render_html(
                     </div>`;
             }).join('');
             const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
+            const titleHtml = title ? `<h3>${title}</h3>` : '';
+            const headHtml = (titleHtml || metaHtml)
+                ? `<div class="detail-section-head">${titleHtml}${metaHtml}</div>`
+                : '';
             return `
                 <div class="detail-section">
-                    <div class="detail-section-head"><h3>${title}</h3>${metaHtml}</div>
+                    ${headHtml}
                     <div class="core-group-list">${blocks}</div>
                 </div>`;
         };
@@ -8415,7 +8419,7 @@ def render_html(
                 <span class="ovr-meta">${copy.overviewWrLabel} \u00b7 ${copy.overviewGames(info.g)}</span>
             </div>
             ${buildCoreGroupSection(
-                copy.itemClusterSectionTitle || (currentLang === 'en' ? 'Build Routes TLDR' : '\u51fa\u88dd\u8def\u7dda TLDR'),
+                copy.itemClusterSectionTitle || '',
                 copy.itemClusterSectionMeta || '',
                 itemClusterInfo,
             )}
