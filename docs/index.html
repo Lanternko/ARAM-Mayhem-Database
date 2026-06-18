@@ -4932,7 +4932,14 @@ async function loadSitePayload(url) {
                 const blob = c.getAttribute('data-search') || '';
                 const matchRole = !role || tags.includes(role);
                 const matchQ = !q || searchMatchesText(blob, q);
-                const hide = !(matchRole && matchQ);
+                // Keep the open detail's champ pinned even when it fails the
+                // active role/search filter, so searching never closes the
+                // panel you're reading.  (Ctrl+F focuses this search box; a
+                // non-matching query used to hide the selected champ, which
+                // closed its detail and looked like the page reset itself.)
+                const isSelected = detailSelected
+                    && c.getAttribute('data-cid') === detailSelected;
+                const hide = !(matchRole && matchQ) && !isSelected;
                 c.classList.toggle('hidden', hide);
                 if (!hide) tierShown++;
             });
