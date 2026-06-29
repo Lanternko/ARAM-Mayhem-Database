@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>增益分類校正 · Augment Category Editor</title>
+<style>
+  :root{
+    --bg:#0f141b; --panel:#161d27; --panel2:#1c2531; --line:#26313f;
+    --text:#e6edf5; --muted:#8b97a7; --accent:#d9a441; --accent2:#5aa9e6;
+    --ok:#46c98b; --mod:#e0b552; --chip:#222c39; --chip-on:#2f4a63;
+    --silver:#9aa4b2; --gold:#e0b552; --prism:#7bd6e0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;
+    font-size:14px; display:flex; flex-direction:column; height:100vh;
+  }
+  a{color:var(--accent2)}
+  .topbar{
+    display:flex; align-items:center; gap:16px; padding:10px 16px;
+    background:linear-gradient(180deg,#141b24,#10161e);
+    border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  .topbar h1{font-size:16px; margin:0; font-weight:650; letter-spacing:.3px}
+  .topbar h1 small{color:var(--muted); font-weight:400; margin-left:6px; font-size:12px}
+  .counts{color:var(--muted); font-size:12.5px}
+  .counts b{color:var(--text)} .counts .mod{color:var(--mod)} .counts .un{color:#e07a7a}
+  .spacer{flex:1}
+  .btn{
+    background:var(--chip); color:var(--text); border:1px solid var(--line);
+    border-radius:7px; padding:7px 12px; font-size:12.5px; cursor:pointer;
+    transition:.12s; white-space:nowrap;
+  }
+  .btn:hover{background:var(--chip-on); border-color:#3a5066}
+  .btn.primary{background:var(--accent); color:#1a1206; border-color:var(--accent); font-weight:600}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent}
+  .toolbar{
+    display:flex; align-items:center; gap:8px; padding:9px 16px; flex-wrap:wrap;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:0 0 auto;
+  }
+  .search{
+    background:var(--bg); border:1px solid var(--line); border-radius:7px;
+    padding:7px 11px; color:var(--text); min-width:220px; font-size:13px;
+  }
+  .search:focus{outline:none; border-color:var(--accent2)}
+  .fchip{
+    background:var(--chip); border:1px solid var(--line); color:var(--muted);
+    border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer; transition:.12s;
+  }
+  .fchip:hover{color:var(--text)}
+  .fchip.on{background:var(--chip-on); color:var(--text); border-color:#3a5066}
+  .fchip.on.mod{background:#4a3a1a; border-color:#7a611f; color:#f0cd77}
+  .fchip.on.un{background:#4a2020; border-color:#7a2f2f; color:#f0a0a0}
+  .tablewrap{flex:1 1 auto; overflow:auto; position:relative}
+  .grid{min-width:max-content}
+  .row,.head{display:grid; grid-template-columns:var(--cols); align-items:stretch}
+  .head{
+    position:sticky; top:0; z-index:5;
+    background:var(--panel2); border-bottom:1px solid var(--line);
+  }
+  .head .gh{
+    padding:8px 4px; text-align:center; font-size:11.5px; color:var(--muted);
+    border-left:1px solid var(--line); display:flex; flex-direction:column;
+    justify-content:center; gap:1px; user-select:none;
+  }
+  .head .gh b{color:var(--text); font-size:13px; font-weight:600}
+  .head .gh.aughdr, .row .aug{
+    position:sticky; left:0; z-index:1;
+  }
+  .head .gh.aughdr{
+    z-index:6; text-align:left; padding-left:14px; align-items:flex-start;
+    border-left:none; background:var(--panel2);
+  }
+  .head .gh small{font-size:10px; opacity:.7}
+  .row{border-bottom:1px solid #1b232e}
+  .row:hover{background:#172131}
+  .row.modified{background:#1d1e16}
+  .row.modified:hover{background:#23241a}
+  .row.hidden{display:none}
+  .aug{
+    display:flex; gap:10px; align-items:center; padding:8px 10px 8px 8px;
+    background:var(--bg); border-left:3px solid transparent; min-width:0;
+  }
+  .row:hover .aug{background:#161f2c}
+  .row.modified .aug{background:#1c1d14}
+  .aug[data-rarity="kSilver"]{border-left-color:var(--silver)}
+  .aug[data-rarity="kGold"]{border-left-color:var(--gold)}
+  .aug[data-rarity="kPrismatic"]{border-left-color:var(--prism)}
+  .aug img{
+    width:34px; height:34px; border-radius:6px; flex:0 0 auto;
+    background:#0a0e13; object-fit:cover;
+  }
+  .aug .meta{min-width:0}
+  .aug .nm{font-weight:600; font-size:13.5px; line-height:1.2;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .aug .en{color:var(--muted); font-size:11px; margin-left:0}
+  .aug .desc{
+    color:#9fb0c2; font-size:11px; line-height:1.3; margin-top:2px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden; max-width:520px;
+  }
+  .modtag{
+    display:none; font-size:9.5px; color:#1a1206; background:var(--mod);
+    border-radius:4px; padding:0 5px; margin-left:6px; vertical-align:middle; font-weight:700;
+  }
+  .row.modified .modtag{display:inline-block}
+  .cell{
+    display:flex; align-items:center; justify-content:center;
+    border-left:1px solid #1b232e; cursor:pointer;
+  }
+  .cell input{width:17px; height:17px; cursor:pointer; accent-color:var(--accent)}
+  .cell:hover{background:#1f2c3b}
+  .empty{padding:40px; text-align:center; color:var(--muted)}
+  .statusbar{
+    flex:0 0 auto; padding:6px 16px; font-size:11.5px; color:var(--muted);
+    border-top:1px solid var(--line); background:var(--panel);
+    display:flex; align-items:center; gap:14px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:5px}
+  .hidden-input{display:none}
+  kbd{background:#222c39;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:10.5px}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>增益分類校正 <small>Augment Category Editor</small></h1>
+    <div class="counts" id="counts"></div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="exportDiff">匯出修正</button>
+    <button class="btn ghost" id="exportAll">匯出全部</button>
+    <button class="btn ghost" id="importBtn">匯入</button>
+    <button class="btn ghost" id="loadBtn">載入 tier-list.json</button>
+    <button class="btn ghost" id="resetBtn">全部還原</button>
+    <input type="file" id="importFile" class="hidden-input" accept="application/json,.json">
+    <input type="file" id="loadFile" class="hidden-input" accept="application/json,.json">
+  </div>
+  <div class="toolbar">
+    <input class="search" id="search" placeholder="搜尋增益名稱 (中 / EN)…">
+    <span id="filters"></span>
+  </div>
+  <div class="tablewrap">
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">沒有符合條件的增益</div>
+  </div>
+  <div class="statusbar">
+    <span id="saveState"><span class="dot"></span>變更會自動存到瀏覽器</span>
+    <span>勾選 = 該增益屬於此分類。修改過的列會標記 <span style="color:var(--mod)">●</span> 並可用「已修改」篩選。</span>
+    <span class="spacer" style="flex:1"></span>
+    <span>匯出修正 → <kbd>augment_category_overrides.json</kbd></span>
+  </div>
+
+<script>
+const DATA = {"site": "https://lanternko.github.io/ARAM-Mayhem-Database/", "categories": {"order": ["ap", "ad", "tank", "support", "gold", "mechanic", "cd", "new", "crit", "amp"], "labels": {"ap": {"zh": "AP", "en": "AP"}, "ad": {"zh": "AD", "en": "AD"}, "tank": {"zh": "坦度", "en": "Tank"}, "support": {"zh": "輔助", "en": "Support"}, "gold": {"zh": "金錢", "en": "Gold"}, "mechanic": {"zh": "機制", "en": "Mechanic"}, "cd": {"zh": "CD", "en": "CD"}, "new": {"zh": "新", "en": "New"}, "crit": {"zh": "暴擊", "en": "Crit"}, "amp": {"zh": "增傷", "en": "Amp"}}}, "augments": [{"id": 2111, "name": "一棒入魂！", "name_en": "BONK!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/bonk_large.png", "rarity": "kGold", "desc": "以{{SpellName}}強化的普攻與技能，會對目標與鄰近敵軍造成額外傷害。", "cats": ["ad", "new", "amp"]}, {"id": 1214, "name": "一轉就贏", "name_en": "Spin To Win", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/spintowin_small.png", "rarity": "kSilver", "desc": "旋轉技能增加[數值]技能加速，並額外造成[數值]傷害。", "cats": ["cd", "amp"]}, {"id": 2054, "name": "三連射", "name_en": "Tripleshot", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "你的{{SpellName}}會額外鎖定你前方的2名敵軍。", "cats": ["mechanic", "new"]}, {"id": 1149, "name": "不可通行", "name_en": "Impassable", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/impassable_small.png", "rarity": "kGold", "desc": "獲得裂地衝擊與冰川增幅關鍵符文。", "cats": ["tank"]}, {"id": 1332, "name": "不祥契約", "name_en": "Ominous Pact", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/wisdomofages_small.png", "rarity": "kPrismatic", "desc": "根據已損失生命獲得魔攻、跑速和全能吸血，每次施放技能都會受到傷害。", "cats": ["ap", "mechanic", "amp"]}, {"id": 1348, "name": "二次閃現", "name_en": "Flash 2", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/flash2_small.png", "rarity": "kSilver", "desc": "獲得第二次閃現召喚師技能和[數值]召喚師技能加速。", "cats": ["ap", "mechanic", "cd"]}, {"id": 1051, "name": "亮起來！", "name_en": "Light 'Em Up!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/lightemup_small.png", "rarity": "kSilver", "desc": "每第4次普攻發射4個鞭炮，造成魔法傷害 {{ Item_Keyword_OnHit }}。", "cats": ["ad", "amp"]}, {"id": 1361, "name": "伊卡西亞殞落", "name_en": "Icathia's Fall", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/quest_voidimmolation_small.png", "rarity": "kPrismatic", "desc": "立即獲得一個巴米灰燼。 條件：持有日炎聖盾和虛偽光彩。 獎勵：這些道具能合成虛空獻祭。", "cats": ["tank"]}, {"id": 2115, "name": "伸縮手掌黏黏樂", "name_en": "Squishy Slappy Grab", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/squishyslappygrab_small.png", "rarity": "kPrismatic", "desc": "偶爾會向所有鄰近敵方英雄甩出黏呼呼的巴掌，束縛他們。下一次普攻會將所有被束縛的敵軍拉向你。", "cats": ["mechanic", "new"]}, {"id": 1028, "name": "侵蝕裝甲", "name_en": "Erosion", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/erosion_small.png", "rarity": "kSilver", "desc": "對敵軍造成傷害可累加一層物理與魔法防禦削弱，持續[數值]秒。", "cats": ["mechanic", "amp"]}, {"id": 1063, "name": "俠盜恆毅", "name_en": "Outlaw's Grit", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/outlawsgrit_small.png", "rarity": "kGold", "desc": "使用衝刺、閃現或傳送技能後，增加[數值]物防和魔防，最多[數值]層。", "cats": ["tank", "mechanic"]}, {"id": 1062, "name": "全能之魂", "name_en": "Omni Soul", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/omnisoul_small.png", "rarity": "kPrismatic", "desc": "獲得[數值]種隨機龍魂。", "cats": ["mechanic"]}, {"id": 1141, "name": "全部都給你", "name_en": "All For You", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/allforyou_small.png", "rarity": "kGold", "desc": "對友軍使用時，你的治療和護盾效果提升。", "cats": ["tank", "support"]}, {"id": 2082, "name": "共享治療", "name_en": "Our Healing", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/equillibrium_small.png", "rarity": "kGold", "desc": "當其他人在你周圍接受治療時，你也會獲得其中[數值]的治療效果。來自敵軍的治療效果加倍。", "cats": ["support", "new"]}, {"id": 2062, "name": "共鳴施放", "name_en": "Echo Cast", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "施放{{SpellName}}時會朝滑鼠位置製造一個分身，並重施技能。", "cats": ["mechanic", "new"]}, {"id": 1026, "name": "別眨眼", "name_en": "Don't Blink", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dontblink_small.png", "rarity": "kSilver", "desc": "每高出目標10跑速，傷害便增加[數值]。", "cats": ["amp"]}, {"id": 2131, "name": "別轉台", "name_en": "Don't Change the Channel", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dontchangethechannel_small.png", "rarity": "kSilver", "desc": "每詠唱1秒，獲得1層護盾。", "cats": ["tank", "new"]}, {"id": 2129, "name": "劃地為王", "name_en": "Terrain'd", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/lightningstrikes_small.png", "rarity": "kGold", "desc": "你的{{SpellName}}在其周圍造成範圍傷害。", "cats": ["mechanic", "new", "amp"]}, {"id": 1006, "name": "劍舞之心", "name_en": "Blade Waltz", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/bladewaltz_small.png", "rarity": "kPrismatic", "desc": "獲得召喚師技能華爾茲劍舞。", "cats": ["amp"]}, {"id": 1318, "name": "升級中婭沙漏", "name_en": "Upgrade Zhonya's", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradezh_small.png", "rarity": "kSilver", "desc": "將中婭沙漏的冷卻時間縮短至[數值]秒。你現在處於中婭沙漏、探索者護腕或烏莉特的法帽的凝滯狀態時可以移動且增加跑速。 獲得250金錢。", "cats": ["ap", "gold", "cd"]}, {"id": 1320, "name": "升級收藏家", "name_en": "Upgrade Collector", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradecollector_small.png", "rarity": "kSilver", "desc": "以蒐集者的被動效果處決敵軍時，會提升處決門檻並獲得額外金錢。 獲得250金錢。", "cats": ["gold", "amp"]}, {"id": 1336, "name": "升級無盡之刃", "name_en": "Upgrade Infinity Edge", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradeie_small.png", "rarity": "kGold", "desc": "獲得[數值]暴擊率和500金錢。 持有無盡之刃時，每次普攻可從暴擊率獲得隨機暴擊傷害。", "cats": ["gold", "crit", "amp"]}, {"id": 1319, "name": "升級獻祭", "name_en": "Upgrade Immolate", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradeimmolate_small.png", "rarity": "kSilver", "desc": "每有一名受獻祭影響的目標，虛偽光彩和日炎聖盾賦予[數值]金錢。獲得250金錢。", "cats": ["tank", "gold", "amp"]}, {"id": 1379, "name": "升級破曉綻放之劍", "name_en": "Upgrade Sword of Blossoming Dawn", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgrademikaelsblessing_small.png", "rarity": "kPrismatic", "desc": "增加[數值]攻速。 你對敵方英雄進行普攻時，破曉綻放之劍的治療效果提升至[數值]。", "cats": ["ad", "support"]}, {"id": 1996, "name": "升級閃耀劍", "name_en": "Upgrade Sheen", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradesheen_small.png", "rarity": "kGold", "desc": "魔法彎刀的效果會造成額外傷害，並依目標生命的一定比例治療你。此外，可獲得250金錢。", "cats": ["gold", "amp"]}, {"id": 1315, "name": "又快又穩", "name_en": "Swift and Safe", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/swiftandsafe_small.png", "rarity": "kSilver", "desc": "衝刺或閃現後獲得護盾。", "cats": ["tank", "support"]}, {"id": 2136, "name": "可靠武器", "name_en": "Trusty Weapon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "以{{SpellName}}命中敵方英雄會締結友誼羈絆。 {{SpellName}}會根據你的友誼等級暫時提升傷害。", "cats": ["mechanic", "new", "amp"]}, {"id": 2098, "name": "吃過路兵", "name_en": "En Passant", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dashing_small.png", "rarity": "kPrismatic", "desc": "定期找出敵方英雄的破綻。用普攻或技能擊中破綻時，造成最大生命的真實傷害、回復自身生命並增加跑速。這些效果可累加。", "cats": ["mechanic", "new", "amp"]}, {"id": 2089, "name": "哎呀，我的金幣！", "name_en": "Yowch, My Coins!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/youchmycoins_small.png", "rarity": "kGold", "desc": "參與擊殺敵方英雄時，敵方英雄會在附近掉落金幣，供你和隊友撿取。每枚金幣值[數值]金錢。", "cats": ["gold", "new"]}, {"id": 1005, "name": "嗚咿嗚咿", "name_en": "Wee Woo Wee Woo", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/weewooweewoo_small.png", "rarity": "kGold", "desc": "當你朝生命較低的友軍移動時，會獲得跑速。目標生命越低，你的治療和護盾效果越強。", "cats": ["support", "new"]}, {"id": 1067, "name": "回春", "name_en": "Rejuvenation", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/rabblerousing_small.png", "rarity": "kGold", "desc": "施放技能時回復[數值]生命。", "cats": ["tank", "support"]}, {"id": 2004, "name": "因信得力", "name_en": "Empowered By The Faithful", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/empoweredbythefaithful_small.png", "rarity": "kPrismatic", "desc": "給予友軍治療或護盾時會祝福對方；他們對敵軍造成傷害時，你會獲得信仰。 累積足夠信仰時，便會發出衝擊波，造成魔法傷害並處決低生命的敵軍。", "cats": ["support", "mechanic", "amp"]}, {"id": 1056, "name": "因心成體", "name_en": "Mind to Matter", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/mindtomatter_small.png", "rarity": "kSilver", "desc": "增加最大生命，增加量為魔力的一半。", "cats": ["ap", "tank"]}, {"id": 1103, "name": "土司和奶油", "name_en": "Bread And Butter", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "你的第一個基礎技能（Q）獲得[數值]技能加速。", "cats": ["cd"]}, {"id": 1150, "name": "土司和果醬", "name_en": "Bread And Jam", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "你的第二個基礎技能（W）獲得[數值]技能加速。", "cats": ["cd"]}, {"id": 1151, "name": "土司和起司", "name_en": "Bread and Cheese", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "你的第三個基礎技能（E）獲得[數值]技能加速。", "cats": ["cd"]}, {"id": 1353, "name": "坦克引擎", "name_en": "Tank Engine", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/tank_engine_small.png", "rarity": "kGold", "desc": "參與擊殺時獲得一層堆層，可增加體型和最大生命。死亡時失去層數。", "cats": ["tank"]}, {"id": 1004, "name": "基本功夫", "name_en": "Back To Basics", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/backtobasics_small.png", "rarity": "kPrismatic", "desc": "增加技能傷害、治療、護盾，並獲得技能加速，但無法使用大絕。", "cats": ["tank", "mechanic", "cd", "amp"]}, {"id": 1204, "name": "堆層暴龍", "name_en": "Stackosaurus Rex", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/stackosaurusrex_small.png", "rarity": "kSilver", "desc": "永久獲得技能、增幅裝置或道具的堆層時，額外獲得[數值]堆層！", "cats": ["mechanic", "new"]}, {"id": 2102, "name": "壓力火鍋", "name_en": "Pressure Cooker", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/questpressurecooker_small.png", "rarity": "kGold", "desc": "每秒對鄰近敵方英雄附加一層燃燒，傷害隨你的最大生命成長。 任務：對敵方英雄造成燃燒傷害。 獎勵：任務每升一級，提升體型和傷害。", "cats": ["tank", "new", "amp"]}, {"id": 1104, "name": "士兵術師", "name_en": "Minionmancer", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/minionmancer_small.png", "rarity": "kGold", "desc": "你的召喚物增加[數值]體型、生命與傷害。", "cats": ["mechanic"]}, {"id": 2055, "name": "多重射擊", "name_en": "Multishot", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "任務：以{{SpellName}}命中敵方英雄[數值]次。 獎勵：任務每升一級可發射額外飛彈。", "cats": ["mechanic", "new", "amp"]}, {"id": 1027, "name": "大地覺醒", "name_en": "Earthwake", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/earthwake_small.png", "rarity": "kPrismatic", "desc": "施放衝刺、閃現或傳送技能後會留下軌跡，軌跡會在[數值]秒後引爆。", "cats": ["mechanic"]}, {"id": 2127, "name": "大師鑄造", "name_en": "Forged By The Master", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/forgedbythemaster_small.png", "rarity": "kSilver", "desc": "道具與增幅裝置的傷害提升[數值]。", "cats": ["new", "amp"]}, {"id": 2087, "name": "大法師", "name_en": "Archmage", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/eureka_small.png", "rarity": "kPrismatic", "desc": "施放技能時，會返還另一個隨機技能的費用，數值為原始技能冷卻時間的[數值]。", "cats": ["cd", "new"]}, {"id": 2118, "name": "大絕電腦", "name_en": "Ult Bot", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/skipthebasic_small.png", "rarity": "kPrismatic", "desc": "你的技能加速只能套用於大絕，但效果提升50%。獲得100技能加速。", "cats": ["cd", "new"]}, {"id": 1013, "name": "天界之身", "name_en": "Celestial Body", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/celestialbody_small.png", "rarity": "kGold", "desc": "增加[數值]生命，但造成的傷害降低[數值]。", "cats": ["tank"]}, {"id": 2031, "name": "天降戰熊", "name_en": "DropBear", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/drop_bear_small.png", "rarity": "kPrismatic", "desc": "死亡時，一隻擁有你所有增幅裝置的巨型泰貝爾會從天而降，對鄰近敵軍造成傷害。", "cats": ["mechanic", "new", "amp"]}, {"id": 1420, "name": "奏鳴曲", "name_en": "Sonata", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/sonata_small.png", "rarity": "kGold", "desc": "每隔[數值]秒自動輪替施放堅毅詠嘆調和迅捷奏鳴曲。 堅毅詠嘆調使鄰近友軍回復生命，並暫時獲得護盾靈氣。 迅捷奏鳴曲暫時賦予可增加跑速的靈氣。", "cats": ["support", "amp"]}, {"id": 2006, "name": "奪命飛踢", "name_en": "Dropkick", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dropkick_small.png", "rarity": "kPrismatic", "desc": "普攻會處決低生命的敵方英雄、造成擊退並引發爆炸，同時回復自身生命。", "cats": ["tank", "mechanic", "amp"]}, {"id": 1097, "name": "女巫思維", "name_en": "Witchful Thinking", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/witchfulthinking_small.png", "rarity": "kSilver", "desc": "增加 [數值]魔攻。", "cats": ["ap"]}, {"id": 1194, "name": "妖精魔法", "name_en": "Fey Magic", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/feymagic_small.png", "rarity": "kPrismatic", "desc": "使用大絕造成傷害會變形敵軍幾秒。", "cats": ["mechanic"]}, {"id": 1034, "name": "守護面紗", "name_en": "Veil of Warding", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/poltergeist_small.png", "rarity": "kSilver", "desc": "每[數值]秒獲得一道法術護盾，可阻擋下一個敵方技能。", "cats": ["tank"]}, {"id": 1048, "name": "寶石手套", "name_en": "Jeweled Gauntlet", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/jeweledgauntlet_small.png", "rarity": "kPrismatic", "desc": "技能可以暴擊。 增加 [數值]暴擊率。", "cats": ["crit"]}, {"id": 1337, "name": "封我為王", "name_en": "King Me", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/kingme_small.png", "rarity": "kPrismatic", "desc": "首次攜帶傳說道具乘坐敵方傳送門後，你將加冕為王、升級道具，並獲得一件隨機稜鏡增幅裝置。", "cats": ["gold"]}, {"id": 1129, "name": "射手法師", "name_en": "Marksmage", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/marksmage_small.png", "rarity": "kGold", "desc": "你的普攻造成等同於[數值]魔攻的額外物理傷害。", "cats": ["ap", "amp"]}, {"id": 1170, "name": "射程強化改造", "name_en": "Scoped Weapons", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/scopedweapons_small.png", "rarity": "kSilver", "desc": "增加[數值]攻擊距離，遠攻英雄則減至只增加[數值]攻擊距離。", "cats": ["mechanic"]}, {"id": 2096, "name": "小小助力", "name_en": "Lil' Extra Help", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "在{{SpellName}}持續期間增加[數值]攻擊距離和[數值]攻速。", "cats": ["ad", "new"]}, {"id": 1041, "name": "巨人", "name_en": "Goliath", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/goliath_small.png", "rarity": "kPrismatic", "desc": "體型變大，增加[數值]生命及[數值]適性之力。", "cats": ["tank", "amp"]}, {"id": 1195, "name": "巨人殺手", "name_en": "Giant Slayer", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/giantslayer_small.png", "rarity": "kPrismatic", "desc": "體型變小，獲得跑速，並根據目標英雄與自身體型差距造成額外傷害。", "cats": ["amp"]}, {"id": 1018, "name": "巨像之勇氣", "name_en": "Courage of the Colossus", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/courageofthecolossus_small.png", "rarity": "kPrismatic", "desc": "在硬控場或禁錮敵方英雄後獲得[數值]護盾。", "cats": ["tank"]}, {"id": 1314, "name": "巨大盾牌", "name_en": "Mighty Shield", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/mightyshield_small.png", "rarity": "kSilver", "desc": "獲得護盾時，增加[數值]適性之力，持續[數值]秒(冷卻時間[數值]秒)。", "cats": ["ap", "ad"]}, {"id": 1329, "name": "巨無霸雪球", "name_en": "Biggest Snowball Ever", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/biggestsnowballever_small.png", "rarity": "kPrismatic", "desc": "雪球增加[數值]技能加速。 你的雪球超大且會穿過士兵。雪球會緩速、擊飛英雄並造成額外傷害。 若你沒有雪球就會獲得一顆雪球。", "cats": ["mechanic", "cd", "amp"]}, {"id": 1389, "name": "巴龍之爪", "name_en": "Hand of Baron", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/handofbaron_small.png", "rarity": "kPrismatic", "desc": "增加[數值]適性之力。大幅強化鄰近友軍士兵。", "cats": ["amp"]}, {"id": 1029, "name": "幻影武器", "name_en": "Ethereal Weapon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/etherealweapon_small.png", "rarity": "kGold", "desc": "技能會施加{{ Item_Keyword_OnHit }}。對每個目標有1秒冷卻時間。", "cats": ["mechanic"]}, {"id": 1331, "name": "幻焰之誓", "name_en": "Empyrean Promise", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/empyreampromise_small.png", "rarity": "kPrismatic", "desc": "增加 [數值]治療量和護盾量。獲得幻焰之誓召喚師技能。 全神貫注 傳送到友軍身旁，抵達時獲得[數值]護盾，持續[數值]秒。", "cats": ["tank", "support", "mechanic"]}, {"id": 2016, "name": "強化攻擊", "name_en": "Juiced", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/juiced_small.png", "rarity": "kSilver", "desc": "命中會消耗[數值]魔力造成[數值]魔法傷害，此傷害可暴擊。", "cats": ["ad", "amp"]}, {"id": 1358, "name": "彈珠台", "name_en": "Pinball", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/pinballsnowball_small.png", "rarity": "kGold", "desc": "你的雪球獲得技能加速，且會造成額外真實傷害。 雪球碰到牆體反彈時，體積和傷害會增加，並縮短冷卻時間。", "cats": ["mechanic", "cd", "amp"]}, {"id": 1068, "name": "循環利用", "name_en": "Recursion", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/recursion_small.png", "rarity": "kGold", "desc": "增加[數值]技能加速。", "cats": ["cd"]}, {"id": 1152, "name": "心鋼起來", "name_en": "Steel Your Heart", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/quest_steelyourheart_small.png", "rarity": "kGold", "desc": "條件：擁有[數值]層以上的雄心之鋼。 獎勵：雄心之鋼堆層乘以[數值]倍。", "cats": ["tank"]}, {"id": 2064, "name": "快步移動", "name_en": "Quickstep", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "使用{{SpellName}}時，朝著游標衝刺。", "cats": ["mechanic", "new"]}, {"id": 1037, "name": "急救箱", "name_en": "First-Aid Kit", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/firstaidkit_small.png", "rarity": "kSilver", "desc": "增加[數值]治療與護盾強度。", "cats": ["support"]}, {"id": 1401, "name": "急遽成長", "name_en": "Growth Spurt", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/growthspurt_small.png", "rarity": "kGold", "desc": "獲得召喚師技能「急遽成長」。 「急遽成長」會使你體型瞬間變大，擊飛鄰近敵軍並賦予你最大生命。", "cats": ["tank"]}, {"id": 2065, "name": "恐懼", "name_en": "Terror", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/desecrator_large.png", "rarity": "kGold", "desc": "施放{{SpellName}}時，使周圍敵軍陷入恐懼。", "cats": ["mechanic", "new"]}, {"id": 2133, "name": "慈悲之擊", "name_en": "Mercy's Strike", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "使用{{SpellName}}後，你的下幾次普攻將獲得攻擊距離和攻速，並造成額外最大生命的魔法傷害。", "cats": ["ad", "new", "amp"]}, {"id": 1079, "name": "戰爭交響曲", "name_en": "Symphony of War", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/symphonyofwar_small.png", "rarity": "kPrismatic", "desc": "獲得致命節奏與征服者關鍵符文。", "cats": ["amp"]}, {"id": 1022, "name": "手腳麻利", "name_en": "Deft", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/deft_small.png", "rarity": "kSilver", "desc": "增加 [數值]攻速。", "cats": ["ad"]}, {"id": 1386, "name": "把我耍得團團轉", "name_en": "Spin Me Right Round", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/youspinmerightround_small.png", "rarity": "kSilver", "desc": "英勇勾索取代一個召喚師技能。 施放英勇勾索會發射鉤爪嵌入地形，重施技能可以擺蕩繞過地形。擺蕩時會自動普攻最靠近的敵軍。若撞上敵方英雄或重施技能，就會結束擺盪。", "cats": ["mechanic", "amp"]}, {"id": 2137, "name": "拍拍鼓勵", "name_en": "Pat On The Back", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/patontheback_small.png", "rarity": "kGold", "desc": "經過友軍身旁時，對方會鼓勵你，賦予你護盾和跑速。", "cats": ["tank", "new"]}, {"id": 1134, "name": "拔劍吧", "name_en": "Draw Your Sword", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/drawyoursword_small.png", "rarity": "kPrismatic", "desc": "變為近戰並增加物攻、生命、攻速、吸血以及跑速(成長幅度取決於你犧牲的距離)。", "cats": ["ad", "tank", "amp"]}, {"id": 1347, "name": "搗蛋鬼", "name_en": "Poltergeist", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/poltergeist_small.png", "rarity": "kSilver", "desc": "獲得召喚師技能「搗蛋鬼」。 「搗蛋鬼」可施放「光盾」和「鬼步」。", "cats": ["tank"]}, {"id": 2026, "name": "收頭好手", "name_en": "Kill Secured", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/killsecure_small.png", "rarity": "kSilver", "desc": "跑向低生命敵軍時，增加跑速。", "cats": ["mechanic"]}, {"id": 1384, "name": "斗內", "name_en": "Donation", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/donation_small.png", "rarity": "kGold", "desc": "獲得[數值]金錢。別問那麼多。", "cats": ["gold", "mechanic"]}, {"id": 1220, "name": "旋風鎚", "name_en": "Fan The Hammer", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/fanthehammer_small.png", "rarity": "kPrismatic", "desc": "對敵方英雄普攻時，發射[數值]枚爆竹，其傷害量會隨飛行距離增加。每個方向的冷卻時間各不相同。", "cats": ["ad", "amp"]}, {"id": 2099, "name": "昇華儀式", "name_en": "Rite of Ascension", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/glasscannon_small.png", "rarity": "kPrismatic", "desc": "參與擊殺時，敵方英雄會留下精華。攻擊精華會獲得跑速，並重置基礎技能冷卻時間。", "cats": ["tank", "mechanic", "new"]}, {"id": 2046, "name": "普羅衝鋒", "name_en": "Poro Stampede", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/questporocharge_small.png", "rarity": "kPrismatic", "desc": "任務：收集普羅點心並餵食[數值]普羅。 獎勵：召喚師技能「普羅衝鋒」——向敵方隊伍發射一波波超可愛又超危險的普羅。任務每升一級，就能發射更多次普羅。 「喔呵！你看看他們多可愛啊！」——普羅牧人", "cats": ["mechanic", "new", "amp"]}, {"id": 1326, "name": "暗夜潛行", "name_en": "Nightstalking", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/nightstalking_small.png", "rarity": "kGold", "desc": "對敵方英雄造成傷害後，在[數值]秒內參與擊殺他們，會讓你進入隱形狀態。", "cats": ["mechanic"]}, {"id": 2024, "name": "暴擊和施法", "name_en": "Crit 'n Cast", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/critncast_small.png", "rarity": "kSilver", "desc": "獲得自身[數值]暴擊率的技能加速。", "cats": ["cd", "crit"]}, {"id": 1356, "name": "暴擊沖天炮", "name_en": "Critical Missile", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/criticalmissile_small.png", "rarity": "kGold", "desc": "暴擊時，會發射爆竹，造成魔法傷害。 增加 [數值]暴擊率。", "cats": ["ad", "crit"]}, {"id": 1118, "name": "暴擊治療", "name_en": "Critical Healing", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/criticalhealing_small.png", "rarity": "kGold", "desc": "你的治療與護盾可以暴擊，治療量或護盾量提升[數值]。增加 [數值]暴擊率。", "cats": ["tank", "crit"]}, {"id": 1328, "name": "暴擊節奏", "name_en": "Critical Rhythm", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/criticalrhythm_small.png", "rarity": "kGold", "desc": "普攻暴擊時會累加攻速。 增加 [數值]暴擊率。", "cats": ["ad", "crit"]}, {"id": 1344, "name": "最終型態", "name_en": "Final Form", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/finalform_small.png", "rarity": "kPrismatic", "desc": "施放大絕後，獲得最大生命護盾、全能吸血以及跑速，持續[數值]秒。", "cats": ["tank", "mechanic", "amp"]}, {"id": 1349, "name": "最終型態", "name_en": "Ultimate Awakening", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/zerohour_small.png", "rarity": "kPrismatic", "desc": "增加[數值]大絕加速。 施放大絕後，重置基礎技能並增加[數值]基礎技能加速，持續[數值]秒(冷卻時間[數值]秒)。", "cats": ["cd"]}, {"id": 2076, "name": "果斷", "name_en": "Stay Resolute", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "{{Spellname}}對敵方英雄造成傷害時，增加[數值]物防和魔防。", "cats": ["tank", "new"]}, {"id": 1061, "name": "棒棒回力鏢", "name_en": "Ok Boomerang", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/okboomerang_small.png", "rarity": "kGold", "desc": "每[數值]秒自動施放對鄰近敵軍發射回力鏢。", "cats": ["mechanic", "amp"]}, {"id": 1390, "name": "極度邪惡", "name_en": "Phenomenal Evil", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/aram_phenomenalevil_small.png", "rarity": "kGold", "desc": "使用技能對敵方英雄造成傷害後，可永久增加[數值]魔攻。 若這是你拿的第二件增幅裝置，開始時有[數值]魔攻。", "cats": ["ap"]}, {"id": 2063, "name": "次元轉移", "name_en": "Dimension Shift", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/whenthedarknesscomes_small.png", "rarity": "kPrismatic", "desc": "獲得召喚師技能「黑暗時刻」。創造一個區域，將其中所有人傳送到另一個次元。", "cats": ["support", "mechanic", "new"]}, {"id": 1015, "name": "死亡循環", "name_en": "Circle of Death", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/circleofdeath_small.png", "rarity": "kPrismatic", "desc": "施展治療和生命回復時，也會對最靠近的敵方英雄造成魔法傷害。", "cats": ["support", "amp"]}, {"id": 1323, "name": "殘忍", "name_en": "Cruelty", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/cruelty_small.png", "rarity": "kPrismatic", "desc": "硬控場或禁錮英雄時，召喚一顆於短暫延遲後墜落的彗星，對鄰近敵軍造成魔法傷害。", "cats": ["amp"]}, {"id": 1211, "name": "殺戮時間", "name_en": "It's Killing Time", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/itskillingtime_small.png", "rarity": "kGold", "desc": "施放大絕後，標記所有敵軍，並儲存你對目標造成的傷害。倒數結束時，引爆傷害。", "cats": ["amp"]}, {"id": 1080, "name": "毫髮無傷", "name_en": "Tank It Or Leave It", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/tankitorleaveit_small.png", "rarity": "kSilver", "desc": "可根據自身暴擊率進行完美防禦(上限為[數值]機率)，觸發時減少承受的傷害。 增加 [數值]暴擊率。", "cats": ["tank", "crit"]}, {"id": 2072, "name": "法術迸裂", "name_en": "Spell Split", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "你的{{SpellName}}飛彈在命中、達到最遠距離或重施技能時會分裂成兩發。", "cats": ["ap", "ad", "mechanic", "new"]}, {"id": 1001, "name": "泰坦的決意", "name_en": "Titan's Resolve", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/iamthejuggernaut_small.png", "rarity": "kPrismatic", "desc": "受到或造成傷害時獲得層數。每累積[數值]層，便獲得適性之力、物防、魔防、體型和韌性。", "cats": ["tank", "new", "amp"]}, {"id": 1416, "name": "海克斯科技龍魂", "name_en": "Hextech Soul", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/infernalsoul_small.png", "rarity": "kSilver", "desc": "每過一段時間，下一次傷害性技能或普攻會對附近敵人觸發連鎖的閃電炸裂，造成傷害與緩速。", "cats": ["amp"]}, {"id": 1060, "name": "海洋之魂", "name_en": "Ocean Soul", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/oceansoul_small.png", "rarity": "kSilver", "desc": "獲得海洋之魂，對敵軍造成傷害後可增加大量生命及魔力回復。", "cats": ["tank", "mechanic"]}, {"id": 1311, "name": "溢流", "name_en": "Overflow", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/overflow_small.png", "rarity": "kGold", "desc": "你的魔力消耗加倍。 技能的治療、護盾以及傷害提升，提升幅度取決於最大魔力。", "cats": ["ap", "ad", "tank", "amp"]}, {"id": 1105, "name": "溫泉加速", "name_en": "Homeguard", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/homeguard_small.png", "rarity": "kSilver", "desc": "獲得[數值]跑速，受到傷害後失效[數值]秒。", "cats": ["amp"]}, {"id": 12317, "name": "潘朵拉的寶盒", "name_en": "Pandora's Box", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/pandoras_box_small.png", "rarity": "kPrismatic", "desc": "將所有的增幅裝置物轉化為隨機稜鏡增幅裝置。", "cats": ["mechanic"]}, {"id": 1308, "name": "火狐", "name_en": "FireFox", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/firfox_small.png", "rarity": "kSilver", "desc": "自動施放 獲得跑速並召喚三團環繞你的火焰，指定最靠近的可見敵軍並造成魔法傷害。", "cats": ["ap", "amp"]}, {"id": 1072, "name": "灼熱黎明", "name_en": "Searing Dawn", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/searingdawn_small.png", "rarity": "kGold", "desc": "技能會標記敵軍，友軍的下一次普攻或技能會對其造成額外魔法傷害。", "cats": ["amp"]}, {"id": 1156, "name": "烏莉特的法帽", "name_en": "Wooglet's Witchcap", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/quest_woogletswitchcap_small.png", "rarity": "kPrismatic", "desc": "立刻獲得巨型魔棒。 條件：擁有死亡之帽和中婭沙漏。 獎勵：獲得烏莉特的法帽。", "cats": ["ap"]}, {"id": 1112, "name": "無敵大絕", "name_en": "Ultimate Unstoppable", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/ultimateunstoppable_small.png", "rarity": "kSilver", "desc": "使用大絕後會免疫控場效果[數值]秒(冷卻時間[數值]秒)。", "cats": ["tank"]}, {"id": 1011, "name": "無法掌握", "name_en": "Can't Touch This", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/canttouchthis_small.png", "rarity": "kPrismatic", "desc": "施放大絕時，進入無敵狀態，持續一小段時間。", "cats": ["tank"]}, {"id": 2091, "name": "無盡屠滅", "name_en": "Endless Decimation", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/endlessdecimate_small.png", "rarity": "kGold", "desc": "戰鬥時，自動施放圓形斧擊，造成物理傷害。外圈的敵軍會受到額外傷害，並讓你回復生命。", "cats": ["mechanic", "new", "amp"]}, {"id": 1388, "name": "無限循環", "name_en": "Infinite Recursion", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/infiniterecursion_small.png", "rarity": "kPrismatic", "desc": "增加[數值]技能加速，每次參與擊殺則額外增加[數值]技能加速。", "cats": ["cd"]}, {"id": 1045, "name": "煉獄使者", "name_en": "Infernal Conduit", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/infernalconduit_small.png", "rarity": "kPrismatic", "desc": "技能附加可累加的燃燒，此效果會持續造成傷害。 你施加的燃燒效果可縮短基礎技能冷卻時間。", "cats": ["ap", "cd", "amp"]}, {"id": 1046, "name": "煉獄惡靈", "name_en": "Infernal Soul", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/infernalsoul_small.png", "rarity": "kSilver", "desc": "獲得赤燄龍魂，使用技能或普攻命中敵軍時，造成額外傷害。", "cats": ["amp"]}, {"id": 1036, "name": "煽風點火", "name_en": "Firebrand", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/firebrand_small.png", "rarity": "kGold", "desc": "普攻{{ Item_Keyword_OnHit }}造成燃燒效果，並持續造成傷害，可無限累加。", "cats": ["amp"]}, {"id": 2128, "name": "燃燒利息", "name_en": "Combusting Interest", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/bloodmoney2_small.png", "rarity": "kGold", "desc": "對英雄造成燃燒或持續傷害時，獲得金錢。", "cats": ["ap", "gold", "new"]}, {"id": 2083, "name": "牙仙", "name_en": "Tooth Fairy", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/questburstingteeth_small.png", "rarity": "kGold", "desc": "暴擊敵軍會掉落牙齒。撿起牙齒會永久獲得物理致命和魔法穿透。", "cats": ["new", "amp"]}, {"id": 2009, "name": "狂戰士", "name_en": "Zealot", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/zealot_small.png", "rarity": "kSilver", "desc": "增加[數值]暴擊率和[數值]攻速。", "cats": ["ad", "crit"]}, {"id": 1322, "name": "狂躁！", "name_en": "Get Excited!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/getexcited_small.png", "rarity": "kGold", "desc": "參與擊殺時，增加跑速和攻速，持續[數值]秒。", "cats": ["ad"]}, {"id": 1325, "name": "玻璃大砲", "name_en": "Glass Cannon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/glasscannon_small.png", "rarity": "kPrismatic", "desc": "最大生命減少[數值]。造成額外[數值]的真實傷害。", "cats": ["amp"]}, {"id": 2100, "name": "疾速追擊", "name_en": "Pursuit of Haste", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_gold.png", "rarity": "kGold", "desc": "任務：以{{SpellName}}命中敵方英雄[數值]次。 獎勵：任務每升一級，{{SpellName}}獲得技能加速，最多獲得[數值]。", "cats": ["mechanic", "cd", "new"]}, {"id": 1047, "name": "痛恨一擊", "name_en": "It's Critical", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/itscritical_small.png", "rarity": "kGold", "desc": "增加 [數值]暴擊率。", "cats": ["crit"]}, {"id": 1136, "name": "痛打一頓", "name_en": "Slap Around", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/slaparound_small.png", "rarity": "kSilver", "desc": "硬控場或禁錮敵軍時，獲得[數值]適性之力。死亡時失去[數值]。", "cats": ["ap", "ad"]}, {"id": 1053, "name": "瘋狂科學家", "name_en": "Mad Scientist", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/madscientist_small.png", "rarity": "kPrismatic", "desc": "每次復活時，體型變大(增加適性之力及生命)或變小(增加技能加速及跑速)。", "cats": ["tank", "mechanic", "cd"]}, {"id": 1058, "name": "祕術拳擊", "name_en": "Mystic Punch", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/mysticpunch_small.png", "rarity": "kPrismatic", "desc": "{{ Item_Keyword_OnHit }}會縮短技能冷卻時間[數值]秒。", "cats": ["cd"]}, {"id": 1392, "name": "神聖雪球", "name_en": "Holy Snowball", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/goldensnowball_small.png", "rarity": "kPrismatic", "desc": "雪球增加[數值]技能加速。 使用雪球衝刺時，短暫進入無敵狀態。 若你沒有雪球就會獲得一顆雪球。", "cats": ["tank", "mechanic", "cd"]}, {"id": 1084, "name": "穿針引線", "name_en": "Thread the Needle", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/threadtheneedle_small.png", "rarity": "kGold", "desc": "獲得[數值]物理穿透與魔法穿透。", "cats": ["ap", "ad"]}, {"id": 2018, "name": "純粹 - 法師", "name_en": "Purist - Caster", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/puristcaster_small.png", "rarity": "kSilver", "desc": "冷卻時間減免一定百分比，並將所有攻速轉換為技能加速。", "cats": ["ap", "ad", "mechanic", "cd"]}, {"id": 1088, "name": "終極革新", "name_en": "Ultimate Revolution", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/ultimaterevolution_small.png", "rarity": "kPrismatic", "desc": "施放大絕後重置其冷卻時間(冷卻時間[數值]秒，或在死亡時重置)。", "cats": ["cd"]}, {"id": 1074, "name": "縮小光線", "name_en": "Shrink Ray", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/shrinkray_small.png", "rarity": "kGold", "desc": "你的普攻{{ Item_Keyword_OnHit }}會使目標的傷害和體型降低[數值]。", "cats": ["amp"]}, {"id": 1373, "name": "縮小引擎", "name_en": "Shrink Engine", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/shrinkengine_small.png", "rarity": "kGold", "desc": "參與擊殺會使體型變小，並賦予技能加速及跑速。 死亡時失去[數值]堆層。", "cats": ["tank", "cd"]}, {"id": 1113, "name": "老練狙擊手", "name_en": "Skilled Sniper", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/skilledsniper_small.png", "rarity": "kGold", "desc": "在遠距離以非大絕技能命中敵軍時，可縮短冷卻時間[數值](持續性技能為[數值])。", "cats": ["ap", "ad", "cd"]}, {"id": 1301, "name": "聖光顯靈", "name_en": "Divine Intervention", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/slowactingpainkillers_small.png", "rarity": "kGold", "desc": "戰鬥開始後不久，召喚一顆守護星。守護星落地時，你和附近的友軍獲得幾秒鐘的無敵狀態。 隨後每隔[數值]秒自動施放一次。", "cats": ["tank", "mechanic", "amp"]}, {"id": 1402, "name": "能力值堆堆堆起來！", "name_en": "Stats on Stats on Stats!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/statsonstatsonstats_small.png", "rarity": "kPrismatic", "desc": "獲得[數值]個能力值鐵砧，並有較高機會是黃金或稜鏡鐵砧！ 下次選擇增幅裝置時，每個欄位可額外重抽一次。", "cats": ["gold", "mechanic"]}, {"id": 1403, "name": "能力值堆起來！", "name_en": "Stats on Stats!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/statsonstats_small.png", "rarity": "kGold", "desc": "獲得[數值]個能力值鐵砧，並有較高機會是黃金或稜鏡鐵砧！", "cats": ["gold", "mechanic"]}, {"id": 1404, "name": "能力值！", "name_en": "Stats!", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/stats_small.png", "rarity": "kSilver", "desc": "獲得[數值]塊能力值鐵砧！", "cats": ["gold", "mechanic"]}, {"id": 2144, "name": "能力強化", "name_en": "Bolstered", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "{{SpellName}}賦予的護盾量增強，且會隨目標的已損失生命而提升。", "cats": ["tank", "support", "new"]}, {"id": 1098, "name": "腳程加速", "name_en": "With Haste", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/withhaste_small.png", "rarity": "kGold", "desc": "獲得等同於技能加速[數值]的跑速。", "cats": ["cd"]}, {"id": 1305, "name": "腿部訓練日", "name_en": "Leg Day", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/legday_small.png", "rarity": "kSilver", "desc": "獲得[數值]跑速和[數值]緩速抗性。", "cats": ["tank"]}, {"id": 1038, "name": "自始至終", "name_en": "From Beginning To End", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/frombeginningtoend_small.png", "rarity": "kGold", "desc": "獲得先發制人及靈魂收割關鍵符文。", "cats": ["gold", "amp"]}, {"id": 2043, "name": "自然治療", "name_en": "Nature is Healing", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/natureishealing_small.png", "rarity": "kGold", "desc": "站在草叢中時，每秒會回復[數值]最大生命。", "cats": ["support", "new"]}, {"id": 1025, "name": "自爆炸彈客", "name_en": "Dive Bomber", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/divebomber_small.png", "rarity": "kSilver", "desc": "死亡時爆炸，造成大量真實傷害。", "cats": ["amp"]}, {"id": 1421, "name": "舞會皇后", "name_en": "Prom Queen", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/promqueen_small.png", "rarity": "kPrismatic", "desc": "每隔[數值]秒自動施放，以閃亮寶冠為自己加冕。戴上寶冠時，獲得銳空的大絕，可魅惑觸碰到的敵軍。", "cats": ["tank", "mechanic", "amp"]}, {"id": 2073, "name": "虹吸", "name_en": "Siphon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "以{{SpellName}}對敵方英雄造成傷害時，會治療自身。", "cats": ["tank", "new"]}, {"id": 1324, "name": "蛋白飲", "name_en": "Protein Shake", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/proteinshake_small.png", "rarity": "kPrismatic", "desc": "根據額外物防和魔防，增加[數值]治療量和護盾量。", "cats": ["tank", "support"]}, {"id": 1007, "name": "蠻力重擊", "name_en": "Blunt Force", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/bluntforce_small.png", "rarity": "kSilver", "desc": "獲得 [數值]物攻。", "cats": ["ad", "amp"]}, {"id": 2132, "name": "術士果汁盒", "name_en": "Warlock Juicebox", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/warlockjuicebox_small.png", "rarity": "kGold", "desc": "獲得[數值]全能吸血。", "cats": ["tank", "new"]}, {"id": 1019, "name": "衝鋒", "name_en": "Dashing", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dashing_small.png", "rarity": "kPrismatic", "desc": "衝刺、跳躍、閃現或傳送技能獲得[數值]技能加速。", "cats": ["cd"]}, {"id": 1057, "name": "裂地龍魂", "name_en": "Mountain Soul", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/mountainsoul_small.png", "rarity": "kSilver", "desc": "獲得裂地龍魂，脫離戰鬥一段時間後可獲得一道護盾。", "cats": ["tank"]}, {"id": 1092, "name": "見縫插針", "name_en": "Vulnerability", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/vulnerability_small.png", "rarity": "kGold", "desc": "道具與持續傷害效果可以暴擊。 增加 [數值]暴擊率。", "cats": ["crit", "amp"]}, {"id": 2005, "name": "觸發地獄火狂襲", "name_en": "Triggered Inferno", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/madscientist_small.png", "rarity": "kPrismatic", "desc": "獲得敢死風采。煞氣等級達到S時，自動使用「地獄火狂襲」。", "cats": ["amp"]}, {"id": 2125, "name": "該出手了", "name_en": "It's Go Time", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "發動{{SpellName}}會在持續期間賦予自身跑速。", "cats": ["mechanic", "new"]}, {"id": 2095, "name": "豪氣賭客", "name_en": "High Roller", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/highroller_small.png", "rarity": "kPrismatic", "desc": "鄰近敵軍在死亡時有機會掉落能力值鐵砧。", "cats": ["gold", "new"]}, {"id": 2139, "name": "豪豬", "name_en": "Porcupine", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/pincushion_small.png", "rarity": "kGold", "desc": "受到英雄傷害時，會匯聚細針然後向四周爆裂，對鄰近敵軍造成傷害和緩速效果。", "cats": ["tank", "new", "amp"]}, {"id": 2077, "name": "貪婪束縛", "name_en": "Ravenous Bind", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/upgradehubris_small.png", "rarity": "kGold", "desc": "以{{SpellName}}對敵方英雄施加硬控場或禁錮時造成額外傷害，並使你回復生命。", "cats": ["tank", "new", "amp"]}, {"id": 1243, "name": "質變：大混亂", "name_en": "Transmute: Chaos", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/transmutechaos_small.png", "rarity": "kPrismatic", "desc": "獲得[數值]件隨機增幅裝置。", "cats": ["gold"]}, {"id": 1238, "name": "質變：稜鏡", "name_en": "Transmute: Prismatic", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/transmuteprismatic_small.png", "rarity": "kGold", "desc": "獲得一件隨機稜鏡增幅裝置。", "cats": ["gold"]}, {"id": 1237, "name": "質變：金級", "name_en": "Transmute: Gold", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/transmutegold_small.png", "rarity": "kSilver", "desc": "獲得一件隨機金色增幅裝置。", "cats": ["gold"]}, {"id": 1180, "name": "超強大腦", "name_en": "Big Brain", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/bigbrain_small.png", "rarity": "kGold", "desc": "每有 [數值]魔攻增加[數值]護盾。在死亡或護盾耗盡後70秒重置。", "cats": ["ap", "tank"]}, {"id": 1071, "name": "超狙武器", "name_en": "Scopier Weapons", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/scopierweapons_small.png", "rarity": "kGold", "desc": "增加[數值]攻擊距離，遠程英雄則減至[數值]。", "cats": ["mechanic"]}, {"id": 2103, "name": "超遠射擊", "name_en": "From Downtown", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/questbangbang_small.png", "rarity": "kGold", "desc": "任務：用技能狙擊[數值]名敵方英雄 獎勵：召喚隕石砸向你狙擊的敵方英雄，對其周圍區域造成魔法傷害", "cats": ["ap", "mechanic", "new"]}, {"id": 2042, "name": "躲草叢", "name_en": "Hide on Bush", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/brushpower_small.png", "rarity": "kGold", "desc": "進入草叢後，可造成額外[數值]傷害，持續[數值]秒。待在草叢中可重置效果。", "cats": ["new", "amp"]}, {"id": 1081, "name": "輕舞飛揚", "name_en": "Tap Dancer", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/tapdancer_small.png", "rarity": "kPrismatic", "desc": "普攻可增加跑速。根據跑速獲得攻速。", "cats": ["ad", "mechanic"]}, {"id": 2123, "name": "輸出超負荷", "name_en": "Overloaded", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "使用其他技能會重置{{SpellName}}的冷卻時間。", "cats": ["mechanic", "cd", "new"]}, {"id": 1206, "name": "轉換惡作劇", "name_en": "escAPADe", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/escapade_small.png", "rarity": "kSilver", "desc": "將魔攻轉換為額外物攻。增加[數值]物攻。", "cats": ["ad", "mechanic", "amp"]}, {"id": 2116, "name": "追求力量", "name_en": "Pursuit of Power", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/marksmage_small.png", "rarity": "kGold", "desc": "任務：以{{SpellName}}命中敵方英雄[數值]次。 獎勵：永久提升{{SpellName}}傷害", "cats": ["mechanic", "new", "amp"]}, {"id": 1333, "name": "逃跑計畫", "name_en": "Escape Plan", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/escapeplan_small.png", "rarity": "kSilver", "desc": "達到[數值]生命時，獲得大量逐漸衰減的護盾、逐漸衰減的跑速，以及逐漸恢復的縮小效果。", "cats": ["tank"]}, {"id": 2078, "name": "連鎖反應", "name_en": "Chain Reaction", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_prismatic.png", "rarity": "kPrismatic", "desc": "如果目標被{{SpellName}}擊退時撞到另一位英雄，該英雄會被擊飛並受到傷害。如果撞擊地形，則延長擊飛時間並造成額外傷害。", "cats": ["mechanic", "new", "amp"]}, {"id": 2119, "name": "過度延伸", "name_en": "Overextender", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/overextender_small.png", "rarity": "kGold", "desc": "回城進入你的砲擊發射器。它的射程、砲彈速度和傷害都大幅提升。", "cats": ["mechanic", "new", "amp"]}, {"id": 2138, "name": "適性之護", "name_en": "Adaptive Ward", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/genericabilityaugmenticon_silver.png", "rarity": "kSilver", "desc": "以{{SpellName}}擊中敵方英雄時，根據其傷害類型，賦予你[數值]物防或魔防，持續[數值]秒。此效果可累加。", "cats": ["tank", "new"]}, {"id": 1181, "name": "重型打手", "name_en": "Heavy Hitter", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/heavyhitter_small.png", "rarity": "kSilver", "desc": "你的普攻額外造成等同於自身最大生命[數值]的物理傷害。", "cats": ["ad", "tank"]}, {"id": 2135, "name": "針插", "name_en": "Pin Cushion", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/symphonyofwar_small.png", "rarity": "kPrismatic", "desc": "在{{SpellName}}期間的普攻會施加標記，標記會在召喚師技能結束時爆炸，造成傷害並賦予跑速。", "cats": ["ad", "new", "amp"]}, {"id": 1116, "name": "閃光俠", "name_en": "Flashy", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/flashy_small.png", "rarity": "kGold", "desc": "你可以使用[數值]次閃現。[數值]秒後，恢復所有使用次數。", "cats": ["mechanic"]}, {"id": 1187, "name": "閃光彈", "name_en": "Flashbang", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/flashbang_small.png", "rarity": "kSilver", "desc": "閃現會觸發爆炸，造成傷害和緩速效果(死亡時重置)。", "cats": ["amp"]}, {"id": 1154, "name": "阿福英雄", "name_en": "Urf's Champion", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/quest_urfschampion_small.png", "rarity": "kPrismatic", "desc": "條件：參與擊殺[數值]次。 獎勵：黃金鍋鏟", "cats": ["gold"]}, {"id": 2088, "name": "降雪之日", "name_en": "Snowday", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/snowday_small.png", "rarity": "kSilver", "desc": "你的雪球獲得100技能加速。命中敵軍時會造成額外魔法傷害。若你沒有雪球，則你獲得一顆雪球。", "cats": ["mechanic", "new"]}, {"id": 2107, "name": "陰魂不散", "name_en": "Hellbent", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/hellbent_small.png", "rarity": "kPrismatic", "desc": "透過普攻或技能傷害敵方英雄會賦予層數。滿層後，死亡時會復活並獲得強化。", "cats": ["tank", "mechanic", "new"]}, {"id": 1413, "name": "隨我同困", "name_en": "Stuck In Here With Me", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/stuckinherewithme_small.png", "rarity": "kPrismatic", "desc": "施放大絕後，嘲諷鄰近敵軍並賦予自身傷害減免。", "cats": ["tank", "support", "mechanic", "amp"]}, {"id": 1054, "name": "雙修大師", "name_en": "Master of Duality", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/masterofduality_small.png", "rarity": "kPrismatic", "desc": "普攻可累加魔攻，技能則可增加物攻。", "cats": ["ap", "ad", "amp"]}, {"id": 1225, "name": "雙刀流", "name_en": "Dual Wield", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dualwield_small.png", "rarity": "kPrismatic", "desc": "普攻會射出一道箭矢，施加{{ Item_Keyword_OnHit }}但威力減弱。增加[數值]總攻速。", "cats": ["ad", "amp"]}, {"id": 2010, "name": "雙重命中", "name_en": "Double Tap", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/doubletap_small.png", "rarity": "kGold", "desc": "暴擊額外施加一次命中效果。 增加 [數值]暴擊率。", "cats": ["ad", "crit"]}, {"id": 1415, "name": "雙響炮", "name_en": "Twin Fire", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/twinfire_small.png", "rarity": "kSilver", "desc": "造成技能傷害時，發射1+[數值]枚爆竹，每一枚爆竹造成[數值]魔法傷害。 增加 [數值]暴擊率。", "cats": ["ap", "ad", "crit"]}, {"id": 1044, "name": "雪地踱步", "name_en": "Ice Cold", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/icecold_small.png", "rarity": "kSilver", "desc": "造成的緩速效果額外降低[數值]跑速。", "cats": ["mechanic"]}, {"id": 2080, "name": "雪爆", "name_en": "Snowblast", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/snowbomb_small.png", "rarity": "kGold", "desc": "重施雪球會造成更高的傷害，擊飛目標，並擊退鄰近敵軍。", "cats": ["mechanic", "new", "amp"]}, {"id": 1030, "name": "靈光一閃", "name_en": "Eureka", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/eureka_small.png", "rarity": "kPrismatic", "desc": "增加相當於[數值]魔攻的技能加速。", "cats": ["ap", "cd"]}, {"id": 1205, "name": "靈活轉換", "name_en": "ADAPt", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/adapt_small.png", "rarity": "kSilver", "desc": "將額外物攻轉換為魔攻。增加[數值]魔攻。", "cats": ["ap", "mechanic", "amp"]}, {"id": 1345, "name": "靈魂淨化", "name_en": "Spiritual Purification", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/spiritualpurification_small.png", "rarity": "kGold", "desc": "參與擊殺時會產生爆炸，使鄰近敵軍緩速[數值]，並根據其當前生命造成傷害。", "cats": ["amp"]}, {"id": 2104, "name": "靈魂炸彈", "name_en": "Spirit Bomb", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/spiritbomb_small.png", "rarity": "kPrismatic", "desc": "對友方英雄進行治療和護盾會累積靈魂炸彈。滿層時，將該炸彈丟到生命最低的友軍身上，為其及附近友軍提供治療並護盾。", "cats": ["support", "new"]}, {"id": 1077, "name": "靈魂虹吸", "name_en": "Soul Siphon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/soulsiphon_small.png", "rarity": "kGold", "desc": "獲得等同於暴擊造成傷害的[數值]的治療。 增加 [數值]暴擊率。", "cats": ["tank", "crit"]}, {"id": 1002, "name": "頂尖發明家", "name_en": "Apex Inventor", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/apexinventor_small.png", "rarity": "kGold", "desc": "獲得[數值]道具加速(等同於[數值]道具冷卻時間減免)。 道具加速會縮短所有道具技能的冷卻時間。", "cats": ["cd"]}, {"id": 1115, "name": "頂狙武器", "name_en": "Scopiest Weapons", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/scopiestweapons_small.png", "rarity": "kPrismatic", "desc": "增加[數值]攻擊距離，遠攻英雄則減至[數值]。", "cats": ["mechanic"]}, {"id": 1095, "name": "風語者的祝福", "name_en": "Windspeaker's Blessing", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/windspeakersblessing_small.png", "rarity": "kPrismatic", "desc": "治療與護盾效果同時會增加目標的物理防禦與魔法防禦3秒。", "cats": ["support"]}, {"id": 1087, "name": "颱風", "name_en": "Typhoon", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/typhoon_small.png", "rarity": "kSilver", "desc": "普攻會朝額外一名目標射出爆竹，造成較低傷害，並附加{{ Item_Keyword_OnHit }}。", "cats": ["ad"]}, {"id": 1073, "name": "飛影跑法", "name_en": "Shadow Runner", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/shadowrunner_small.png", "rarity": "kSilver", "desc": "使用衝刺、閃現或傳送技能或脫離潛行後，增加跑速。", "cats": ["mechanic"]}, {"id": 1375, "name": "食魂者", "name_en": "Soul Eater", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/souleater_small.png", "rarity": "kGold", "desc": "對敵方英雄造成硬控場後，賦予[數值]最大生命。", "cats": ["tank"]}, {"id": 1138, "name": "飲血", "name_en": "Goredrink", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/goredrink_small.png", "rarity": "kSilver", "desc": "獲得[數值]全能吸血效果。", "cats": ["tank"]}, {"id": 1076, "name": "餘音震盪", "name_en": "Sonic Boom", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/sonicboom_small.png", "rarity": "kSilver", "desc": "強化、治療、或賦予友軍護盾時，會對友軍周圍的敵人造成傷害與緩速。", "cats": ["support", "amp"]}, {"id": 2134, "name": "高能量場域", "name_en": "Surge Field", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/surgefield_small.png", "rarity": "kPrismatic", "desc": "施放大絕時，生成一個區域，為你提供技能加速和跑速。在裡面時，會發射飛彈，造成等同於你[數值]的傷害。", "cats": ["cd", "new", "amp"]}, {"id": 1133, "name": "魔法導彈", "name_en": "Magic Missile", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/magicmissile_small.png", "rarity": "kGold", "desc": "造成技能傷害會對目標發射[數值]個爆竹，每個爆竹會根據飛行距離造成百分比最大生命的真實傷害。", "cats": ["ap", "amp"]}, {"id": 2032, "name": "鯊魚誘餌", "name_en": "Shark Bait", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/fishbait_small.png", "rarity": "kGold", "desc": "死亡後幾秒內，鯊魚會撕咬所有鄰近敵軍。你在死亡後可以透過移動瞄準鯊魚攻擊。", "cats": ["mechanic", "new"]}, {"id": 2034, "name": "鯊魚風暴", "name_en": "Shark Tempest", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/sharktempest_small.png", "rarity": "kGold", "desc": "鯊魚會圍繞你的雪球盤旋，緩速並傷害鄰近敵軍。當你的雪球命中英雄時，對方會被困在鯊魚風暴中！", "cats": ["mechanic", "new"]}, {"id": 1335, "name": "黃金撕裂", "name_en": "Goldrend", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/goldrend_small.png", "rarity": "kPrismatic", "desc": "以普攻或技能傷害英雄時，造成額外魔法傷害，並獲得金錢和跑速。", "cats": ["gold", "amp"]}, {"id": 1020, "name": "黎明使者之決意", "name_en": "Dawnbringer's Resolve", "icon": "https://lanternko.github.io/ARAM-Mayhem-Database/assets/icons/dawnbringersresolve_small.png", "rarity": "kGold", "desc": "生命低於[數值]時，在3秒內回復[數值]最大生命。 每[數值]秒或死亡時重置。", "cats": ["tank"]}]};
+const SITE = DATA.site;
+const STORE_KEY = "augCatEditor.v1";
+
+function iconUrl(p){
+  if(!p) return "";
+  if(p.indexOf("http")===0) return p;
+  return SITE + p.replace(/^\/+/,"");
+}
+function esc(s){
+  return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+function sameSet(a,b){
+  if(a.length!==b.length) return false;
+  const sa=[...a].sort(), sb=[...b].sort();
+  return sa.every((v,i)=>v===sb[i]);
+}
+
+let CATS = DATA.categories;            // {order, labels}
+let AUGS = [];                         // working augments with ._orig
+let filter = "all";                    // all | modified | uncat | cat:<key>
+let query = "";
+
+function initAugs(list){
+  AUGS = list.map(a => ({...a, cats:[...a.cats], _orig:[...a.cats]}));
+  applySaved();
+}
+function applySaved(){
+  let saved={};
+  try{ saved = JSON.parse(localStorage.getItem(STORE_KEY)||"{}"); }catch(e){}
+  for(const a of AUGS){
+    if(saved[a.id]) a.cats = [...saved[a.id]];
+  }
+}
+function isMod(a){ return !sameSet(a.cats, a._orig); }
+function saveDiffs(){
+  const diff={};
+  for(const a of AUGS){ if(isMod(a)) diff[a.id]=[...a.cats].sort(); }
+  localStorage.setItem(STORE_KEY, JSON.stringify(diff));
+  const n=Object.keys(diff).length;
+  document.getElementById("saveState").innerHTML =
+    '<span class="dot"></span>已存 '+n+' 筆修正到瀏覽器';
+}
+
+function labelOf(key){
+  const l = CATS.labels[key]||{};
+  return {zh:l.zh||key, en:l.en||key};
+}
+
+function buildHead(){
+  const order=CATS.order;
+  document.getElementById("grid").style.setProperty(
+    "--cols", "minmax(260px,1.4fr) repeat("+order.length+", 52px)");
+  let h='<div class="head"><div class="gh aughdr"><b>增益 Augment</b><small>'+AUGS.length+' 個 · 由 Riot 關鍵字自動分類，請手動校正</small></div>';
+  for(const k of order){
+    const L=labelOf(k);
+    h+='<div class="gh" title="'+esc(L.en)+'"><b>'+esc(L.zh)+'</b><small>'+esc(L.en)+'</small></div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+function matchFilter(a){
+  if(query){
+    const q=query.toLowerCase();
+    if((a.name||"").toLowerCase().indexOf(q)<0 &&
+       (a.name_en||"").toLowerCase().indexOf(q)<0) return false;
+  }
+  if(filter==="all") return true;
+  if(filter==="modified") return isMod(a);
+  if(filter==="uncat") return a.cats.length===0;
+  if(filter.indexOf("cat:")===0) return a.cats.indexOf(filter.slice(4))>=0;
+  return true;
+}
+
+function rowHtml(a){
+  const order=CATS.order;
+  let cells="";
+  for(const k of order){
+    const on=a.cats.indexOf(k)>=0;
+    cells+='<label class="cell"><input type="checkbox" data-id="'+a.id+
+           '" data-cat="'+k+'"'+(on?" checked":"")+'></label>';
+  }
+  return '<div class="row'+(isMod(a)?" modified":"")+'" data-id="'+a.id+'">'+
+    '<div class="aug" data-rarity="'+esc(a.rarity)+'">'+
+      (a.icon?'<img loading="lazy" src="'+esc(a.icon)+'" onerror="this.style.visibility=\'hidden\'">':'<img>')+
+      '<div class="meta">'+
+        '<div class="nm">'+esc(a.name)+
+          ' <span class="en">'+esc(a.name_en)+'</span>'+
+          '<span class="modtag">已改</span></div>'+
+        (a.desc?'<div class="desc" title="'+esc(a.desc)+'">'+esc(a.desc)+'</div>':'')+
+      '</div>'+
+    '</div>'+ cells +'</div>';
+}
+
+function render(){
+  const grid=document.getElementById("grid");
+  const rows=AUGS.filter(matchFilter);
+  grid.innerHTML = buildHead() + rows.map(rowHtml).join("");
+  document.getElementById("empty").style.display = rows.length?"none":"block";
+  renderCounts();
+  renderFilters();
+}
+function renderCounts(){
+  const total=AUGS.length;
+  const mod=AUGS.filter(isMod).length;
+  const un=AUGS.filter(a=>a.cats.length===0).length;
+  document.getElementById("counts").innerHTML =
+    '共 <b>'+total+'</b> ・ 已修改 <span class="mod"><b>'+mod+'</b></span> ・ 未分類 <span class="un"><b>'+un+'</b></span>';
+}
+function renderFilters(){
+  const order=CATS.order;
+  let h='';
+  h+=chip("all","全部");
+  h+=chip("modified","已修改","mod");
+  h+=chip("uncat","未分類","un");
+  for(const k of order){ h+=chip("cat:"+k, labelOf(k).zh); }
+  document.getElementById("filters").innerHTML=h;
+}
+function chip(key,label,extra){
+  const on = filter===key;
+  return '<span class="fchip'+(on?" on":"")+(extra&&on?" "+extra:"")+
+    '" data-f="'+esc(key)+'">'+esc(label)+'</span>';
+}
+
+/* ---- events (delegated) ---- */
+document.getElementById("grid").addEventListener("change", e=>{
+  const cb=e.target.closest('input[type=checkbox]'); if(!cb) return;
+  const id=parseInt(cb.dataset.id,10), cat=cb.dataset.cat;
+  const a=AUGS.find(x=>x.id===id); if(!a) return;
+  const i=a.cats.indexOf(cat);
+  if(cb.checked && i<0) a.cats.push(cat);
+  else if(!cb.checked && i>=0) a.cats.splice(i,1);
+  // reorder to canonical order
+  a.cats = CATS.order.filter(k=>a.cats.indexOf(k)>=0);
+  const row=cb.closest(".row");
+  if(row) row.classList.toggle("modified", isMod(a));
+  saveDiffs(); renderCounts();
+  if(filter==="modified" || filter==="uncat" || filter.indexOf("cat:")===0){
+    // membership may have changed -> refresh list
+    render();
+  }
+});
+document.getElementById("filters").addEventListener("click", e=>{
+  const c=e.target.closest(".fchip"); if(!c) return;
+  filter=c.dataset.f; render();
+});
+document.getElementById("search").addEventListener("input", e=>{
+  query=e.target.value.trim(); render();
+});
+
+/* ---- export / import ---- */
+function download(name, obj){
+  const blob=new Blob([JSON.stringify(obj,null,2)], {type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+document.getElementById("exportDiff").addEventListener("click", ()=>{
+  const out={};
+  for(const a of AUGS){ if(isMod(a)) out[a.id]=[...a.cats]; }
+  if(!Object.keys(out).length){ alert("目前沒有任何修改。"); return; }
+  download("augment_category_overrides.json", out);
+});
+document.getElementById("exportAll").addEventListener("click", ()=>{
+  const out={};
+  for(const a of AUGS){ out[a.id]=[...a.cats]; }
+  download("augment_categories_full.json", out);
+});
+document.getElementById("importBtn").addEventListener("click",
+  ()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const obj=JSON.parse(r.result);
+      let n=0;
+      for(const a of AUGS){
+        let v=obj[a.id]!=null?obj[a.id]:obj[String(a.id)];
+        if(v==null) continue;
+        if(v && !Array.isArray(v) && Array.isArray(v.cats)) v=v.cats;
+        if(Array.isArray(v)){ a.cats=CATS.order.filter(k=>v.indexOf(k)>=0); n++; }
+      }
+      saveDiffs(); render();
+      alert("已匯入 "+n+" 筆分類。");
+    }catch(err){ alert("匯入失敗：" + err.message); }
+  };
+  r.readAsText(f); e.target.value="";
+});
+document.getElementById("loadBtn").addEventListener("click",
+  ()=>document.getElementById("loadFile").click());
+document.getElementById("loadFile").addEventListener("change", e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      const augs=d.augs||{}; const list=[];
+      for(const [aid,a] of Object.entries(augs)){
+        list.push({
+          id:parseInt(aid,10),
+          name:a.name_zh||a.name||("#"+aid),
+          name_en:a.name_en||"",
+          icon:iconUrl(a.icon||""),
+          rarity:a.rarity||"",
+          desc:a.desc_zh||a.desc||"",
+          cats:Array.isArray(a.cats)?[...a.cats]:[],
+        });
+      }
+      list.sort((x,y)=>(x.name||"").localeCompare(y.name||"","zh-Hant"));
+      if(d.augCategories && d.augCategories.order) CATS=d.augCategories;
+      initAugs(list); render();
+      alert("已載入 "+list.length+" 個增益（你之前的修正會自動套用）。");
+    }catch(err){ alert("載入失敗：" + err.message); }
+  };
+  r.readAsText(f); e.target.value="";
+});
+document.getElementById("resetBtn").addEventListener("click", ()=>{
+  if(!confirm("確定要把所有分類還原成自動分類的原始值？（會清除你的修正）")) return;
+  for(const a of AUGS) a.cats=[...a._orig];
+  localStorage.removeItem(STORE_KEY);
+  document.getElementById("saveState").innerHTML='<span class="dot"></span>已還原';
+  render();
+});
+
+/* ---- boot ---- */
+initAugs(DATA.augments);
+render();
+</script>
+</body>
+</html>

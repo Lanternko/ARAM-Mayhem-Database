@@ -46,7 +46,7 @@ Generate HTML plus an external data payload:
 
 ```powershell
 python scripts/build_tier_list.py `
-  --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/" `
+  --site-url "https://arammeta.com/" `
   --payload-out docs/api/tier-list.json `
   --payload-url api/tier-list.json
 ```

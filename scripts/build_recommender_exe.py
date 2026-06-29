@@ -21,19 +21,16 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "ARAMRecommender"
 ICON_FILE = ROOT / "docs" / "recommender-app-icon.ico"
 
+# Pooled cross-patch + recency-weighted recommender models (see recommend_gui.py).
+_RECMODEL = "models/composition_lr_pooled_recency_7d"
 DATA_FILES = [
-    ("models/tier2_mayhem/lr_weights.json", "models/tier2_mayhem"),
-    ("models/tier2_mayhem/tier2_checkpoint.champ_to_idx.json", "models/tier2_mayhem"),
-    ("models/pair_synergy_16_10.json", "models"),
-    (
-        "models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl",
-        "models/composition_lr_16_10_2026_05_21_dual_roles",
-    ),
-    (
-        "models/composition_lr_16_10_2026_05_21_dual_roles/single_team_calibration.json",
-        "models/composition_lr_16_10_2026_05_21_dual_roles",
-    ),
+    (f"{_RECMODEL}/lr_weights.json", _RECMODEL),
+    (f"{_RECMODEL}/champ_to_idx.json", _RECMODEL),
+    (f"{_RECMODEL}/role_synergy.json", _RECMODEL),
+    (f"{_RECMODEL}/model.pkl", _RECMODEL),
+    (f"{_RECMODEL}/single_team_calibration.json", _RECMODEL),
     ("data/cache/champion_abilities.json", "data/cache"),
+    ("docs/api/tier-list.json", "docs/api"),
     ("docs/recommender-app-icon.ico", "docs"),
 ]
 

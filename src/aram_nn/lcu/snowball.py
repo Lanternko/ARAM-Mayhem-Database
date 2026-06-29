@@ -52,7 +52,7 @@ _SOURCE_FAMILY_BACKOFF_SEC = 45 * 60
 _MANUAL_SEED_HOT_WINDOW_HOURS = 24
 _MANUAL_SEED_WARM_WINDOW_HOURS = 72
 _LCU_UNAVAILABLE_RETRY_DELAY_MS = 60_000
-_SCHEMA_INIT_RETRY_ATTEMPTS = 12
+_SCHEMA_INIT_RETRY_ATTEMPTS = 60
 _SCHEMA_INIT_RETRY_SLEEP_SEC = 2.0
 
 _CREATE_GAMES_SQL = """
@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS games (
     duration_sec INTEGER NOT NULL,
     created_ms   INTEGER NOT NULL,
     captured_at  TEXT NOT NULL,
-    participants_json TEXT
+    participants_json TEXT,
+    participants_private_json TEXT
 );
 """
 
@@ -246,6 +247,36 @@ def _lookup_game_created_ms(con: sqlite3.Connection, game_id: str | None) -> int
     return int(row[0]) if row else 0
 
 
+_SCHEMA_BACKFILL_FLAG = "schema_backfill_v1_done"
+
+
+def _schema_backfill_done(con: sqlite3.Connection) -> bool:
+    """Return True once the one-time column backfills have completed.
+
+    These backfills scan crawl_queue (~450k) and games (~820k) and hold the
+    write lock; re-running them on every worker startup starves game inserts.
+    New rows are populated at insert time, so the backfills only need to run
+    once after the columns are added — gate them behind this persisted flag.
+    """
+    try:
+        row = con.execute(
+            "SELECT 1 FROM crawl_runtime_state WHERE state_key = ?",
+            (_SCHEMA_BACKFILL_FLAG,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    return row is not None
+
+
+def _mark_schema_backfill_done(con: sqlite3.Connection) -> None:
+    con.execute(
+        "INSERT INTO crawl_runtime_state(state_key, state_value, updated_at) "
+        "VALUES (?, '1', ?) "
+        "ON CONFLICT(state_key) DO UPDATE SET state_value='1', updated_at=excluded.updated_at",
+        (_SCHEMA_BACKFILL_FLAG, _utc_now()),
+    )
+
+
 def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_GAMES_SQL)
     con.execute(_CREATE_CRAWL_SEEN_SQL)
@@ -259,6 +290,12 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         "games",
         "participants_json",
         "participants_json TEXT",
+    )
+    _ensure_column(
+        con,
+        "games",
+        "participants_private_json",
+        "participants_private_json TEXT",
     )
 
     _ensure_column(
@@ -324,6 +361,13 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
 
     con.execute(_CREATE_CRAWL_QUEUE_INDEX_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL)
+
+    # The large one-time backfills below scan crawl_queue / games and hold the
+    # write lock. Skip them once completed so worker startup stays sub-second
+    # and never monopolizes the lock against game inserts.
+    if _schema_backfill_done(con):
+        con.commit()
+        return
 
     # Backfill seed_family for any rows pre-dating the column.
     # Root sources self-attribute; match-source rows with no traceable parent
@@ -416,6 +460,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
             WHERE processed = 1 AND last_crawled_match_created_ms = 0
             """
         )
+    _mark_schema_backfill_done(con)
     con.commit()
 
 
@@ -831,8 +876,8 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
         INSERT OR IGNORE INTO games (
             game_id, queue_id, patch, blue_champs, red_champs,
             blue_wins, duration_sec, created_ms, captured_at, participants_json,
-            seed_family
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            participants_private_json, seed_family
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             record["game_id"],
@@ -845,6 +890,7 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
             record["created_ms"],
             record["captured_at"],
             json.dumps(record.get("participants", []), separators=(",", ":")),
+            json.dumps(record.get("participants_private", []), ensure_ascii=False, separators=(",", ":")),
             str(record.get("seed_family") or _UNKNOWN_FAMILY),
         ),
     )
@@ -854,30 +900,50 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
 
 def _backfill_participants_json(con: sqlite3.Connection, record: dict) -> bool:
     row = con.execute(
-        "SELECT participants_json FROM games WHERE game_id = ?",
+        "SELECT participants_json, participants_private_json FROM games WHERE game_id = ?",
         (record["game_id"],),
     ).fetchone()
     if row is None:
         return False
     current_json = str(row[0] or "")
     new_json = json.dumps(record.get("participants", []), separators=(",", ":"))
+    current_private_json = str(row[1] or "")
+    new_private_json = json.dumps(
+        record.get("participants_private", []),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    should_update_public = True
     if current_json:
         if _participants_payload_has_postgame_stats(current_json):
-            return False
+            should_update_public = False
         if not _participants_payload_has_postgame_stats(new_json):
-            return False
+            should_update_public = False
+    elif not new_json or new_json == "[]":
+        should_update_public = False
+
+    should_update_private = bool(new_private_json and new_private_json != "[]") and (
+        not current_private_json
+        or not _participants_payload_has_postgame_stats(current_private_json)
+        or _participants_payload_has_postgame_stats(new_private_json)
+    )
+    if not should_update_public and not should_update_private:
+        return False
+
+    assignments: list[str] = []
+    params: list[object] = []
+    if should_update_public:
+        assignments.append("participants_json = ?")
+        params.append(new_json)
+    if should_update_private:
+        assignments.append("participants_private_json = ?")
+        params.append(new_private_json)
+    params.append(record["game_id"])
 
     before = con.total_changes
     con.execute(
-        """
-        UPDATE games
-        SET participants_json = ?
-        WHERE game_id = ?
-        """,
-        (
-            new_json,
-            record["game_id"],
-        ),
+        f"UPDATE games SET {', '.join(assignments)} WHERE game_id = ?",
+        params,
     )
     con.commit()
     return con.total_changes > before
@@ -1952,6 +2018,8 @@ def _seed_manual_riot_ids(
                         flush=True,
                     )
                     break
+        if remaining_budget is not None and remaining_budget <= 0:
+            break
         if chunk_idx == 1 or chunk_idx == total_chunks or chunk_idx % 5 == 0:
             print(
                 f"[snowball] manual_riot_id seed progress  chunks={chunk_idx}/{total_chunks}  "

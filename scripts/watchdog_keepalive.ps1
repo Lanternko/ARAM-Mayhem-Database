@@ -16,7 +16,7 @@ function Write-KeepaliveLog {
 
 $watchdog = Get-CimInstance Win32_Process |
     Where-Object {
-        $_.Name -eq "python.exe" -and
+        ($_.Name -eq "python.exe" -or $_.Name -eq "pythonw.exe") -and
         $_.CommandLine -like "*mayhem_lcu_watchdog.py*"
     } |
     Select-Object -First 1
@@ -28,19 +28,30 @@ if ($watchdog) {
 
 $argsList = @(
     "scripts/mayhem_lcu_watchdog.py",
-    "--workers", "3",
-    "--degraded-workers", "2",
+    "--workers", "1",
+    "--degraded-workers", "1",
     "--degrade-client-mb", "5200",
     "--client-restart-mb", "5800",
     "--worker-start-max-client-mb", "4200",
-    "--manual-seed-pending-cap", "40",
+    "--manual-seed-pending-cap", "120",
     "--check-interval-sec", "60",
     "--client-ready-timeout-sec", "600",
-    "--games-per-player", "4"
+    "--games-per-player", "4",
+    "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),
+    "--static-publish-growth-ratio", "0.10",
+    "--static-publish-threshold", "0",
+    # Pin the public tier list to the current patch (16.13, deployed 2026-06-25 at ~15k games:
+    # all 172 champions clear the 50-game floor). Explicit pin keeps controlled patch flips: a
+    # watchdog restart stays on 16.13 instead of "auto" advancing to the next thin patch. Bump
+    # this to the new patch once it has enough games (target ~50k) when 16.14+ arrives.
+    "--static-publish-patch-prefix", "16.13"
 )
 
+$pythonw = Join-Path (Split-Path (Get-Command python).Source -Parent) "pythonw.exe"
+$pythonExe = if (Test-Path $pythonw) { $pythonw } else { "python" }
+
 $process = Start-Process `
-    -FilePath "python" `
+    -FilePath $pythonExe `
     -ArgumentList $argsList `
     -WorkingDirectory $root `
     -RedirectStandardOutput $watchdogOut `

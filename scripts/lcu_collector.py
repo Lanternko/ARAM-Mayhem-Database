@@ -40,6 +40,7 @@ import time
 import webbrowser
 import zipfile
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote, unquote, urlencode
 
@@ -93,6 +94,21 @@ CREATE TABLE IF NOT EXISTS games (
     duration_sec INTEGER NOT NULL,
     created_ms   INTEGER NOT NULL,
     captured_at  TEXT NOT NULL,
+    participants_json TEXT,
+    participants_private_json TEXT
+);
+"""
+_PUBLIC_GAMES_CREATE_SQL = """
+CREATE TABLE IF NOT EXISTS games (
+    game_id      TEXT PRIMARY KEY,
+    queue_id     INTEGER NOT NULL,
+    patch        TEXT NOT NULL,
+    blue_champs  TEXT NOT NULL,
+    red_champs   TEXT NOT NULL,
+    blue_wins    INTEGER NOT NULL,
+    duration_sec INTEGER NOT NULL,
+    created_ms   INTEGER NOT NULL,
+    captured_at  TEXT NOT NULL,
     participants_json TEXT
 );
 """
@@ -101,6 +117,13 @@ INSERT OR IGNORE INTO games (
     game_id, queue_id, patch, blue_champs, red_champs,
     blue_wins, duration_sec, created_ms, captured_at, participants_json
 ) VALUES (?,?,?,?,?,?,?,?,?,?)
+"""
+_GAMES_PRIVATE_INSERT_SQL = """
+INSERT OR IGNORE INTO games (
+    game_id, queue_id, patch, blue_champs, red_champs,
+    blue_wins, duration_sec, created_ms, captured_at,
+    participants_json, participants_private_json
+) VALUES (?,?,?,?,?,?,?,?,?,?,?)
 """
 
 
@@ -133,6 +156,13 @@ def _ensure_games_schema(con: sqlite3.Connection) -> None:
     columns = _table_columns(con, "games")
     if "participants_json" not in columns:
         con.execute("ALTER TABLE games ADD COLUMN participants_json TEXT")
+    if "participants_private_json" not in columns:
+        con.execute("ALTER TABLE games ADD COLUMN participants_private_json TEXT")
+    con.commit()
+
+
+def _ensure_public_share_schema(con: sqlite3.Connection) -> None:
+    con.execute(_PUBLIC_GAMES_CREATE_SQL)
     con.commit()
 
 
@@ -151,6 +181,27 @@ def _iter_game_rows(con: sqlite3.Connection, chunk_size: int = 2000):
         """
         SELECT game_id, queue_id, patch, blue_champs, red_champs,
                blue_wins, duration_sec, created_ms, captured_at, NULL as participants_json
+        FROM games
+        ORDER BY created_ms, game_id
+        """
+    )
+    while True:
+        rows = cursor.fetchmany(chunk_size)
+        if not rows:
+            break
+        yield rows
+
+
+def _iter_game_rows_with_private(con: sqlite3.Connection, chunk_size: int = 2000):
+    columns = _table_columns(con, "games")
+    has_participants = "participants_json" in columns
+    has_private = "participants_private_json" in columns
+    cursor = con.execute(
+        f"""
+        SELECT game_id, queue_id, patch, blue_champs, red_champs,
+               blue_wins, duration_sec, created_ms, captured_at,
+               {'participants_json' if has_participants else 'NULL as participants_json'},
+               {'participants_private_json' if has_private else 'NULL as participants_private_json'}
         FROM games
         ORDER BY created_ms, game_id
         """
@@ -518,6 +569,7 @@ $rows | ConvertTo-Json -Compress
                 text=True,
                 check=False,
                 timeout=15,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             raw = (result.stdout or "").strip()
             if raw:
@@ -576,6 +628,7 @@ def _stop_active_snowball_workers(timeout_sec: float = 10.0) -> int:
             ],
             check=False,
             timeout=max(5.0, timeout_sec),
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         stopped = len(pids)
     return stopped
@@ -748,11 +801,12 @@ def _merge_games_from_source(
         rows_read = 0
         inserted = 0
         participants_backfilled = 0
-        for rows in _iter_game_rows(src_con, chunk_size=chunk_size):
+        private_backfilled = 0
+        for rows in _iter_game_rows_with_private(src_con, chunk_size=chunk_size):
             rows_read += len(rows)
 
             before_insert = dst_con.total_changes
-            dst_con.executemany(_GAMES_INSERT_SQL, rows)
+            dst_con.executemany(_GAMES_PRIVATE_INSERT_SQL, rows)
             inserted += dst_con.total_changes - before_insert
 
             backfill_rows = [(row[9], row[0]) for row in rows if row[9]]
@@ -769,11 +823,26 @@ def _merge_games_from_source(
                 )
                 participants_backfilled += dst_con.total_changes - before_backfill
 
+            private_backfill_rows = [(row[10], row[0]) for row in rows if row[10]]
+            if private_backfill_rows:
+                before_private_backfill = dst_con.total_changes
+                dst_con.executemany(
+                    """
+                    UPDATE games
+                    SET participants_private_json = ?
+                    WHERE game_id = ?
+                      AND COALESCE(participants_private_json, '') = ''
+                    """,
+                    private_backfill_rows,
+                )
+                private_backfilled += dst_con.total_changes - before_private_backfill
+
         dst_con.commit()
         return {
             "rows_read": rows_read,
             "inserted": inserted,
             "participants_backfilled": participants_backfilled,
+            "private_backfilled": private_backfilled,
         }
     finally:
         src_con.close()
@@ -1578,7 +1647,9 @@ def merge_db(out_db: Path, globs: tuple[str, ...], vacuum: bool, sources: tuple[
             backfilled_total += stats["participants_backfilled"]
             click.echo(
                 f"  [source] {src_db}  rows={stats['rows_read']}  "
-                f"inserted={stats['inserted']}  participants_backfilled={stats['participants_backfilled']}"
+                f"inserted={stats['inserted']}  "
+                f"participants_backfilled={stats['participants_backfilled']}  "
+                f"private_backfilled={stats['private_backfilled']}"
             )
 
         if vacuum:
@@ -1673,7 +1744,7 @@ def export_share(
     try:
         if not _table_exists(src_con, "games"):
             raise click.ClickException(f"source DB has no games table: {src_db}")
-        _ensure_games_schema(dst_con)
+        _ensure_public_share_schema(dst_con)
 
         total_in = 0
         total_out = 0
@@ -1921,6 +1992,8 @@ def verify_share(sources: tuple[Path, ...], strict: bool) -> None:
 
             cols = _table_columns(con, "games")
             has_participants = "participants_json" in cols
+            if "participants_private_json" in cols:
+                warnings.append("contains_private_participant_column")
 
             # Spot-check first participants_json row for PUUID-like fields
             if has_participants:
@@ -1931,7 +2004,16 @@ def verify_share(sources: tuple[Path, ...], strict: bool) -> None:
                 if sample and sample[0]:
                     try:
                         payload = json.loads(sample[0])
-                        forbidden = {"puuid", "summonerId", "summonerName", "riotIdGameName"}
+                        forbidden = {
+                            "puuid",
+                            "summonerId",
+                            "summonerName",
+                            "riotId",
+                            "riotIdGameName",
+                            "gameName",
+                            "tagLine",
+                            "accountId",
+                        }
                         if isinstance(payload, list):
                             for p in payload:
                                 if isinstance(p, dict) and forbidden & set(p.keys()):
@@ -2472,7 +2554,13 @@ def _run_seed_opgg_plan_subprocess(
     for tier in tiers:
         cmd.extend(["--tier", tier])
 
-    result = subprocess.run(cmd, cwd=str(Path.cwd()), text=True, check=False)
+    result = subprocess.run(
+        cmd,
+        cwd=str(Path.cwd()),
+        text=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
     return int(result.returncode)
 
 
@@ -2505,7 +2593,13 @@ def _launch_snowball_workers_subprocess(
         "--manual-seed-pending-cap",
         str(max(0, manual_seed_pending_cap)),
     ]
-    result = subprocess.run(cmd, cwd=str(Path.cwd()), text=True, check=False)
+    result = subprocess.run(
+        cmd,
+        cwd=str(Path.cwd()),
+        text=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
     return int(result.returncode)
 
 
@@ -2654,6 +2748,164 @@ def opgg_autorefresh(
         click.echo("[opgg-autorefresh] stopped")
 
 
+@cli.command("requeue-active")
+@click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
+              show_default=True)
+@click.option("--cap", default=200, show_default=True, type=int,
+              help="Maximum productive players to requeue")
+@click.option("--cooldown-hours", default=36.0, show_default=True, type=float,
+              help="Only revisit players not crawled within this many hours")
+@click.option("--min-new-games", default=1, show_default=True, type=int,
+              help="Minimum prior target games found by this player")
+@click.option("--source", "sources", multiple=True, default=(),
+              help="Optional source filter; repeatable")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Report candidates without changing the queue")
+def requeue_active(
+    db: Path,
+    cap: int,
+    cooldown_hours: float,
+    min_new_games: int,
+    sources: tuple[str, ...],
+    dry_run: bool,
+) -> None:
+    """Requeue previously productive players so active Mayhem users are revisited."""
+    if cap <= 0:
+        raise click.ClickException("--cap must be positive")
+    if not db.exists():
+        raise click.ClickException(f"database not found: {db}")
+
+    con = sqlite3.connect(str(db), timeout=30.0)
+    con.row_factory = sqlite3.Row
+    queue_cols = {str(row[1]) for row in con.execute("PRAGMA table_info(crawl_queue)").fetchall()}
+    seen_cols = {str(row[1]) for row in con.execute("PRAGMA table_info(crawl_seen)").fetchall()}
+    required = {
+        "puuid",
+        "source",
+        "priority",
+        "min_depth",
+        "discovered_from_game_id",
+        "last_crawled_at",
+        "new_games_found",
+        "latest_seen_match_created_ms",
+        "seed_family",
+    }
+    missing = sorted(required - seen_cols)
+    if missing:
+        raise click.ClickException(f"crawl_seen missing columns: {', '.join(missing)}")
+    if "seed_family" not in queue_cols:
+        raise click.ClickException("crawl_queue.seed_family missing; run snowball once to migrate schema")
+
+    cooldown_sec = max(0.0, cooldown_hours) * 60 * 60
+    cutoff_text = datetime.fromtimestamp(
+        max(0.0, time.time() - cooldown_sec),
+        tz=timezone.utc,
+    ).isoformat()
+    normalized_sources = tuple(str(source).strip() for source in sources if str(source).strip())
+    clauses = [
+        "new_games_found >= ?",
+        "latest_seen_match_created_ms > 0",
+        "(last_crawled_at IS NULL OR last_crawled_at <= ?)",
+    ]
+    params: list[object] = [max(1, min_new_games), cutoff_text]
+    if normalized_sources:
+        placeholders = ",".join("?" for _ in normalized_sources)
+        clauses.append(f"source IN ({placeholders})")
+        params.extend(normalized_sources)
+    params.append(max(1, cap))
+
+    rows = con.execute(
+        f"""
+        SELECT puuid, source, priority, min_depth, discovered_from_game_id,
+               latest_seen_match_created_ms, seed_family, new_games_found
+        FROM crawl_seen
+        WHERE {' AND '.join(clauses)}
+        ORDER BY new_games_found DESC,
+                 latest_seen_match_created_ms DESC,
+                 priority ASC,
+                 min_depth ASC,
+                 first_seen_at DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    if dry_run:
+        counts = Counter(str(row["source"]) for row in rows)
+        click.echo(
+            f"[requeue-active] dry_run candidates={len(rows)}  "
+            f"cap={cap}  cooldown_hours={cooldown_hours:g}"
+        )
+        for source, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
+            click.echo(f"  source={source} count={count}")
+        return
+
+    now_text = datetime.now(timezone.utc).isoformat()
+    now_ms = int(time.time() * 1000)
+    requeued = 0
+    skipped_in_progress = 0
+    by_source: Counter[str] = Counter()
+    for row in rows:
+        puuid = str(row["puuid"])
+        existing = con.execute(
+            "SELECT status FROM crawl_queue WHERE puuid = ?",
+            (puuid,),
+        ).fetchone()
+        if existing and str(existing["status"]) == "in_progress":
+            skipped_in_progress += 1
+            continue
+
+        source = str(row["source"] or "match")
+        seed_family = str(row["seed_family"] or "") or source
+        con.execute(
+            """
+            INSERT INTO crawl_queue(
+                puuid, depth, source, priority, discovered_from_game_id,
+                discovered_match_created_ms, enqueued_at, updated_at,
+                claimed_by, claimed_at_ms, eligible_at_ms, status, seed_family
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 'pending', ?)
+            ON CONFLICT(puuid) DO UPDATE SET
+                depth = excluded.depth,
+                source = excluded.source,
+                priority = excluded.priority,
+                discovered_from_game_id = excluded.discovered_from_game_id,
+                discovered_match_created_ms = excluded.discovered_match_created_ms,
+                updated_at = excluded.updated_at,
+                claimed_by = NULL,
+                claimed_at_ms = 0,
+                eligible_at_ms = 0,
+                status = 'pending',
+                seed_family = CASE
+                    WHEN crawl_queue.seed_family = '' THEN excluded.seed_family
+                    ELSE crawl_queue.seed_family
+                END
+            WHERE crawl_queue.status != 'in_progress'
+            """,
+            (
+                puuid,
+                int(row["min_depth"] or 0),
+                source,
+                int(row["priority"] or 99),
+                str(row["discovered_from_game_id"]) if row["discovered_from_game_id"] else None,
+                now_ms,
+                now_text,
+                now_text,
+                seed_family,
+            ),
+        )
+        con.execute("UPDATE crawl_seen SET processed = 0 WHERE puuid = ?", (puuid,))
+        requeued += 1
+        by_source[source] += 1
+
+    con.commit()
+    click.echo(
+        f"[requeue-active] requeued={requeued}  skipped_in_progress={skipped_in_progress}  "
+        f"cap={cap}  cooldown_hours={cooldown_hours:g}  min_new_games={max(1, min_new_games)}"
+    )
+    for source, count in sorted(by_source.items(), key=lambda item: (-item[1], item[0])):
+        click.echo(f"  source={source} count={count}")
+
+
 # ------------------------------------------------------------------- stats ---
 
 @cli.command()
@@ -2697,6 +2949,10 @@ def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[s
     augment_wins: Counter[int] = Counter()
     hero_augment_games: Counter[tuple[int, int]] = Counter()
     hero_augment_wins: Counter[tuple[int, int]] = Counter()
+    spell_games: Counter[int] = Counter()
+    spell_wins: Counter[int] = Counter()
+    hero_spell_games: Counter[tuple[int, int]] = Counter()
+    hero_spell_wins: Counter[tuple[int, int]] = Counter()
 
     kept_games = 0
     participant_games = 0
@@ -2736,21 +2992,51 @@ def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[s
                 augment_wins[augment_id] += player_win
                 hero_augment_games[(champion_id, augment_id)] += 1
                 hero_augment_wins[(champion_id, augment_id)] += player_win
+            # Mark/Dash (id 32) is forced on everyone, so its rows sit near base
+            # rate; the chosen second spell is the signal.  Keep all ids — no
+            # hardcoded filter — and let downstream analysis drop 32 if desired.
+            for spell_id in participant.get("spells") or []:
+                spell_id = int(spell_id)
+                if spell_id <= 0:
+                    continue
+                spell_games[spell_id] += 1
+                spell_wins[spell_id] += player_win
+                hero_spell_games[(champion_id, spell_id)] += 1
+                hero_spell_wins[(champion_id, spell_id)] += player_win
+
+    total_player_games = sum(hero_games.values())
+    total_player_wins = sum(hero_wins.values())
+    global_wr = (total_player_wins / total_player_games) if total_player_games > 0 else 0.5
+    prior_strength = 50.0
+
+    def _decorate_pair_rows(
+        games: Counter[tuple[int, int]],
+        wins: Counter[tuple[int, int]],
+        left_field: str,
+        right_field: str,
+    ) -> list[dict]:
+        decorated: list[dict] = []
+        for (left_id, right_id), games_played in games.items():
+            won = wins[(left_id, right_id)]
+            decorated.append(
+                {
+                    left_field: left_id,
+                    right_field: right_id,
+                    "games": games_played,
+                    "wins": won,
+                    "win_rate": won / games_played if games_played > 0 else global_wr,
+                    "bayes_win_rate": _bayes_win_rate(won, games_played, global_wr, prior_strength),
+                    "wilson_lb": _wilson_lower_bound(won, games_played),
+                }
+            )
+        return decorated
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    hero_rows = []
-    for champion_id, games_played in hero_games.items():
-        wins = hero_wins[champion_id]
-        hero_rows.append(
-            {
-                "champion_id": champion_id,
-                "games": games_played,
-                "wins": wins,
-                "win_rate": wins / games_played,
-                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
-            }
-        )
+    hero_rows = _decorate_rate_rows(
+        [{"champion_id": cid, "games": g, "wins": hero_wins[cid]} for cid, g in hero_games.items()],
+        key_field="champion_id", global_wr=global_wr, prior_strength=prior_strength,
+    )
     _write_csv_rows(
         out_dir / "hero_winrates.csv",
         hero_rows,
@@ -2765,18 +3051,10 @@ def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[s
         ["games", "bayes_win_rate"],
     )
 
-    augment_rows = []
-    for augment_id, games_played in augment_games.items():
-        wins = augment_wins[augment_id]
-        augment_rows.append(
-            {
-                "augment_id": augment_id,
-                "games": games_played,
-                "wins": wins,
-                "win_rate": wins / games_played,
-                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
-            }
-        )
+    augment_rows = _decorate_rate_rows(
+        [{"augment_id": aid, "games": g, "wins": augment_wins[aid]} for aid, g in augment_games.items()],
+        key_field="augment_id", global_wr=global_wr, prior_strength=prior_strength,
+    )
     _write_csv_rows(
         out_dir / "augment_winrates.csv",
         augment_rows,
@@ -2791,19 +3069,9 @@ def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[s
         ["games", "bayes_win_rate"],
     )
 
-    hero_augment_rows = []
-    for (champion_id, augment_id), games_played in hero_augment_games.items():
-        wins = hero_augment_wins[(champion_id, augment_id)]
-        hero_augment_rows.append(
-            {
-                "champion_id": champion_id,
-                "augment_id": augment_id,
-                "games": games_played,
-                "wins": wins,
-                "win_rate": wins / games_played,
-                "smoothed_win_rate": (wins + 1.0) / (games_played + 2.0),
-            }
-        )
+    hero_augment_rows = _decorate_pair_rows(
+        hero_augment_games, hero_augment_wins, "champion_id", "augment_id"
+    )
     _write_csv_rows(
         out_dir / "hero_augment_winrates.csv",
         hero_augment_rows,
@@ -2819,11 +3087,48 @@ def stats(db: Path, out_dir: Path, queue: tuple[int, ...], patch_prefix: tuple[s
         ["games", "bayes_win_rate"],
     )
 
+    spell_rows = _decorate_rate_rows(
+        [{"spell_id": sid, "games": g, "wins": spell_wins[sid]} for sid, g in spell_games.items()],
+        key_field="spell_id", global_wr=global_wr, prior_strength=prior_strength,
+    )
+    _write_csv_rows(
+        out_dir / "spell_winrates.csv",
+        spell_rows,
+        {
+            "spell_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        },
+        ["games", "bayes_win_rate"],
+    )
+
+    hero_spell_rows = _decorate_pair_rows(
+        hero_spell_games, hero_spell_wins, "champion_id", "spell_id"
+    )
+    _write_csv_rows(
+        out_dir / "hero_spell_winrates.csv",
+        hero_spell_rows,
+        {
+            "champion_id": pl.Int64,
+            "spell_id": pl.Int64,
+            "games": pl.Int64,
+            "wins": pl.Int64,
+            "win_rate": pl.Float64,
+            "bayes_win_rate": pl.Float64,
+            "wilson_lb": pl.Float64,
+        },
+        ["games", "bayes_win_rate"],
+    )
+
     click.echo(
         f"[stats] wrote {out_dir}  games={kept_games}  "
         f"games_with_participants={participant_games}  "
         f"heroes={len(hero_rows)}  augments={len(augment_rows)}  "
-        f"hero_x_augment={len(hero_augment_rows)}"
+        f"hero_x_augment={len(hero_augment_rows)}  "
+        f"spells={len(spell_rows)}  hero_x_spell={len(hero_spell_rows)}"
     )
 
 
@@ -3227,10 +3532,11 @@ def family_stats(db: Path, queue: tuple[int, ...]) -> None:
 @click.option("--vocab", required=True,
               type=click.Path(exists=True, path_type=Path, dir_okay=False),
               help="Path to tier2_checkpoint.pt or champ_to_idx.json — used for champion vocab.")
-@click.option("--pair-stats", default=Path("models/pair_synergy_16_10.json"),
+@click.option("--pair-stats", default=Path("models/composition_lr_pooled_recency_7d/role_synergy.json"),
               type=click.Path(path_type=Path, dir_okay=False),
-              help="Path to pair synergy JSON from scripts/build_pair_stats.py.")
-@click.option("--composition-model", default=Path("models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl"),
+              help="Path to synergy JSON: role-pooled from build_role_synergy.py (default) "
+                   "or legacy pair from build_pair_stats.py. Schema is auto-detected.")
+@click.option("--composition-model", default=Path("models/composition_lr_pooled_recency_7d/model.pkl"),
               type=click.Path(path_type=Path, dir_okay=True),
               help="Path to composition LR model.pkl or its model directory. Used for primary ML swap deltas.")
 @click.option("--poll-interval", default=1.0, show_default=True, type=float,
@@ -3247,14 +3553,14 @@ def recommend(
 ) -> None:
     """Real-time bench-swap recommendations during ARAM champ select.
 
-    Uses composition LR as the primary swap-delta signal.  The older
-    anchor-conditional pair synergy + LR blend remains as a fallback.
+    Uses composition LR as the primary swap-delta signal.  Same-team chemistry
+    comes from role-pooled synergy (raw champ pairs were winner's-curse noise);
+    it feeds the fallback blend used only when the composition model can't score.
 
     Run BEFORE you queue:
         python scripts/lcu_collector.py recommend \\
-            --lr-model models/tier2_mayhem/lr_model.pkl \\
-            --vocab    models/tier2_mayhem/tier2_checkpoint.pt \\
-            --pair-stats models/pair_synergy_16_10.json
+            --lr-model models/composition_lr_pooled_recency_7d/lr_weights.json \\
+            --vocab    models/composition_lr_pooled_recency_7d/champ_to_idx.json
     """
     # Lazy imports keep the CLI startup fast for other subcommands.
     from aram_nn.lcu.client import (
@@ -3262,9 +3568,9 @@ def recommend(
     )
     from aram_nn.lcu.process import get_credentials
     from aram_nn.recommend import (
-        load_composition_lr, load_lr, parse_session, session_state_hash, suggest_for_cell,
+        load_composition_lr, load_lr, load_synergy, parse_session, session_state_hash, suggest_for_cell,
     )
-    from aram_nn.pair_synergy import load_pair_synergy
+    from aram_nn.role_synergy import RoleSynergyStats
 
     creds = get_credentials()
     if not creds:
@@ -3285,14 +3591,20 @@ def recommend(
         click.echo(f"[recommend] WARN: composition model not found at {composition_model}; using old blend score")
     pair_model = None
     if pair_stats.exists():
-        pair_model = load_pair_synergy(pair_stats)
-        click.echo(
-            f"[recommend] pair synergy rows={len(pair_model.rows):,} "
-            f"patch={pair_model.patch_prefix} min_pair={pair_model.min_pair}"
-        )
+        pair_model = load_synergy(pair_stats)
+        if isinstance(pair_model, RoleSynergyStats):
+            click.echo(
+                f"[recommend] role synergy cells={len(pair_model.rows):,} "
+                f"roles={list(pair_model.roles)} min_cell={pair_model.min_pair}"
+            )
+        else:
+            click.echo(
+                f"[recommend] pair synergy rows={len(pair_model.rows):,} "
+                f"patch={pair_model.patch_prefix} min_pair={pair_model.min_pair}"
+            )
     else:
         click.echo(
-            f"[recommend] WARN: pair stats not found at {pair_stats}; "
+            f"[recommend] WARN: synergy stats not found at {pair_stats}; "
             "falling back to 30% LR score only"
         )
 

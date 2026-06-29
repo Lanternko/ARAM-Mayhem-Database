@@ -18,7 +18,7 @@ def build_tier_list_payload(
     *,
     db: Path,
     queue_id: int = 2400,
-    patch_prefix: str | None = "16.10",
+    patch_prefix: str | None = None,
     ddragon_version: str | None = None,
     min_games: int = 50,
     min_pair_games: int = 15,

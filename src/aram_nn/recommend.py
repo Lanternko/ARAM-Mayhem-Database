@@ -31,7 +31,34 @@ from typing import Iterable
 
 import numpy as np
 
-from aram_nn.pair_synergy import PairSynergyStats
+from aram_nn.pair_synergy import PairSynergyStats, load_pair_synergy
+from aram_nn.role_synergy import (
+    SCHEMA_KIND as ROLE_SYNERGY_KIND,
+    RoleSynergyStats,
+    load_role_synergy,
+)
+
+# Same-team chemistry can come from raw champ-pair stats (legacy, noisy) or the
+# role-pooled stats (shipped). Both expose .get(anchor_id, candidate_id) -> row
+# with .delta/.se, so the synergy combiners below are agnostic to which is used.
+SynergyStats = PairSynergyStats | RoleSynergyStats
+
+
+def load_synergy(path: Path | str) -> SynergyStats:
+    """Load same-team synergy stats, auto-detecting role-pooled vs legacy pairs.
+
+    Both the role-pooled file (build_role_synergy.py, shipped) and the legacy
+    raw-pair file (build_pair_stats.py) expose the same .get()/.delta/.se API,
+    so callers consume the result identically.
+    """
+    path = Path(path)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        payload = {}
+    if payload.get("kind") == ROLE_SYNERGY_KIND:
+        return load_role_synergy(path)
+    return load_pair_synergy(path)
 
 try:
     from scripts.champion_roles import ROLE_ORDER
@@ -636,7 +663,7 @@ def _team_rating_profile(
 def _combine_synergy(
     anchors: Iterable[int],
     candidate_id: int,
-    pair_stats: PairSynergyStats | None,
+    pair_stats: SynergyStats | None,
 ) -> tuple[float, float, int]:
     """Return (synergy_delta, combined_se, anchors_covered)."""
     if pair_stats is None:
@@ -673,7 +700,7 @@ def _combine_synergy(
     return float(synergy), float(combined_se), anchors_covered
 
 
-def _team_pair_synergy(team_ids: Iterable[int], pair_stats: PairSynergyStats | None) -> tuple[float, int]:
+def _team_pair_synergy(team_ids: Iterable[int], pair_stats: SynergyStats | None) -> tuple[float, int]:
     """Small same-team chemistry adjustment from ordered pair residuals."""
     if pair_stats is None:
         return 0.0, 0
@@ -705,7 +732,7 @@ def suggest_for_cell(
     my_current_id: int,
     bench_ids: list[int],
     model: LRModel,
-    pair_stats: PairSynergyStats | None = None,
+    pair_stats: SynergyStats | None = None,
     composition_model: CompositionLRModel | None = None,
 ) -> list[Suggestion]:
     """Rank candidates for the local player's cell.

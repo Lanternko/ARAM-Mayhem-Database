@@ -33,20 +33,39 @@ def _save_or_backfill(
     existing_payload: dict[str, str],
 ) -> str:
     participants_json = json.dumps(record.get("participants", []), separators=(",", ":"))
+    participants_private_json = json.dumps(
+        record.get("participants_private", []),
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
     if record["game_id"] in already:
         current_json = existing_payload.get(record["game_id"], "")
+        assignments: list[str] = []
+        params: list[object] = []
         if current_json:
             if _participants_payload_has_postgame_stats(current_json):
-                return "skipped"
-            if not _participants_payload_has_postgame_stats(participants_json):
-                return "skipped"
+                pass
+            elif _participants_payload_has_postgame_stats(participants_json):
+                assignments.append("participants_json = ?")
+                params.append(participants_json)
+        elif participants_json and participants_json != "[]":
+            assignments.append("participants_json = ?")
+            params.append(participants_json)
+
+        if participants_private_json and participants_private_json != "[]":
+            assignments.append("participants_private_json = ?")
+            params.append(participants_private_json)
+
+        if not assignments:
+            return "skipped"
+        params.append(record["game_id"])
         con.execute(
-            """
+            f"""
             UPDATE games
-            SET participants_json = ?
+            SET {', '.join(assignments)}
             WHERE game_id = ?
             """,
-            (participants_json, record["game_id"]),
+            params,
         )
         existing_payload[record["game_id"]] = participants_json
         return "backfilled"
@@ -55,8 +74,9 @@ def _save_or_backfill(
         """
         INSERT OR IGNORE INTO games (
             game_id, queue_id, patch, blue_champs, red_champs,
-            blue_wins, duration_sec, created_ms, captured_at, participants_json
-        ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            blue_wins, duration_sec, created_ms, captured_at,
+            participants_json, participants_private_json
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             record["game_id"],
@@ -69,6 +89,7 @@ def _save_or_backfill(
             record["created_ms"],
             record["captured_at"],
             participants_json,
+            participants_private_json,
         ),
     )
     already.add(record["game_id"])
@@ -88,6 +109,10 @@ _ensure_games_schema(con)
 existing_payload = {
     str(row[0]): str(row[1] or "")
     for row in con.execute("SELECT game_id, participants_json FROM games").fetchall()
+}
+existing_private_payload = {
+    str(row[0]): str(row[1] or "")
+    for row in con.execute("SELECT game_id, participants_private_json FROM games").fetchall()
 }
 already = set(existing_payload)
 print(f"DB already has {len(already)} games")
@@ -115,7 +140,7 @@ with LCUClient(creds) as lcu:
     for game_id in target_ids:
         if game_id in already and _participants_payload_has_postgame_stats(
             existing_payload.get(game_id, "")
-        ):
+        ) and existing_private_payload.get(game_id, ""):
             skipped += 1
             continue
 
@@ -132,6 +157,12 @@ with LCUClient(creds) as lcu:
             continue
 
         action = _save_or_backfill(con, record, already, existing_payload)
+        if action == "backfilled":
+            existing_private_payload[record["game_id"]] = json.dumps(
+                record.get("participants_private", []),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
         con.commit()
         if action == "saved":
             saved += 1

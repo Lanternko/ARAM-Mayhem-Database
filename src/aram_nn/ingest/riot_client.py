@@ -156,6 +156,17 @@ class RiotClient:
         data = self._get(self.platform_host, path, params={"page": page})
         return data if isinstance(data, list) else []
 
+    def league_entries_by_puuid(self, puuid: str) -> list[dict]:
+        """Ranked entries (solo + flex) by ENCRYPTED PUUID, on the platform host (TW -> tw2).
+
+        Newer League-V4 route that skips the summoner-V4 hop.  Returns [] when the
+        player is unranked or the route 404s.  The PUUID must be the PUBLIC Riot puuid
+        (from account-v1), NOT the 36-char LCU-local puuid stored in games.db.
+        """
+        path = f"/lol/league/v4/entries/by-puuid/{puuid}"
+        data = self._get(self.platform_host, path)
+        return data if isinstance(data, list) else []
+
     # ---- Match v5 (routing host) ----
     def match_ids_by_puuid(
         self, puuid: str, queue: int | None = None, count: int = 100, start: int = 0

@@ -536,6 +536,13 @@
         "Mage"
       ]
     },
+    "Locke": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
     "Lucian": {
       "primary": "Marksman",
       "secondary": "",
@@ -1240,9 +1247,9 @@
       ]
     }
   },
-  "data_dragon_version": "16.12.1",
-  "generated_at": "2026-06-17T16:17:27Z",
-  "patch_prefix": "16.12",
+  "data_dragon_version": "16.13.1",
+  "generated_at": "2026-06-29T09:27:26Z",
+  "patch_prefix": "16.13",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",
     "Ahri": "Mage",
