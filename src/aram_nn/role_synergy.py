@@ -96,32 +96,25 @@ def _team_rows_from_parquet(
     return team_rows, len(blue)
 
 
-def build_champ_role_synergy(
-    data_path: Path,
+def build_role_rows_from_team_rows(
+    team_rows: Iterable[tuple[Iterable[int], int]],
     *,
     role_by_champ: dict[int, str],
-    queue_id: int | None = 2400,
-    patch_prefix: str | None = None,
     min_cell: int = 150,
     min_rest: int | None = None,
     shrink_k: float = 150.0,
     persistence_factor: float = 0.5,
-    min_duration_sec: int = 300,
-) -> RoleSynergyStats:
-    """Build ordered anchor -> teammate-role synergy rows from a pooled parquet.
+) -> dict[tuple[int, str], RoleSynergyRow]:
+    """Tally anchor -> teammate-role cells from in-memory (team, won) rows.
 
-    A cell qualifies only when BOTH the present bucket (anchor's team has the
-    role) and the rest bucket (anchor's team lacks it) clear their minimums.
-    The rest guard matters for common roles (Mage/Tank): almost every team has
-    one, so "team without that role" is a rare, unrepresentative subset whose
-    win rate would otherwise inject noise into the difference.
+    Split out from build_champ_role_synergy so callers holding a time-split fold
+    in memory can reuse the exact shrink + persistence formula that ships,
+    without round-tripping through a parquet.  The recommender backtest uses this
+    to build synergy from its TRAIN fold only, so the stat never sees val/test.
     """
     if min_rest is None:
         min_rest = min_cell
     role_by_champ = {int(k): str(v) for k, v in role_by_champ.items() if v}
-    team_rows, total_matches = _team_rows_from_parquet(
-        Path(data_path), min_duration_sec=min_duration_sec
-    )
 
     anchor_games: Counter[int] = Counter()
     anchor_wins: Counter[int] = Counter()
@@ -129,7 +122,8 @@ def build_champ_role_synergy(
     cell_wins: Counter[tuple[int, str]] = Counter()
 
     for team, won in team_rows:
-        ids = sorted({c for c in team if c > 0})
+        won = int(won)
+        ids = sorted({int(c) for c in team if int(c) > 0})
         for anchor in ids:
             anchor_games[anchor] += 1
             anchor_wins[anchor] += won
@@ -173,6 +167,41 @@ def build_champ_role_synergy(
             delta=shrunk,
             se=se,
         )
+    return out
+
+
+def build_champ_role_synergy(
+    data_path: Path,
+    *,
+    role_by_champ: dict[int, str],
+    queue_id: int | None = 2400,
+    patch_prefix: str | None = None,
+    min_cell: int = 150,
+    min_rest: int | None = None,
+    shrink_k: float = 150.0,
+    persistence_factor: float = 0.5,
+    min_duration_sec: int = 300,
+) -> RoleSynergyStats:
+    """Build ordered anchor -> teammate-role synergy rows from a pooled parquet.
+
+    A cell qualifies only when BOTH the present bucket (anchor's team has the
+    role) and the rest bucket (anchor's team lacks it) clear their minimums.
+    The rest guard matters for common roles (Mage/Tank): almost every team has
+    one, so "team without that role" is a rare, unrepresentative subset whose
+    win rate would otherwise inject noise into the difference.
+    """
+    role_by_champ = {int(k): str(v) for k, v in role_by_champ.items() if v}
+    team_rows, total_matches = _team_rows_from_parquet(
+        Path(data_path), min_duration_sec=min_duration_sec
+    )
+    out = build_role_rows_from_team_rows(
+        team_rows,
+        role_by_champ=role_by_champ,
+        min_cell=min_cell,
+        min_rest=min_rest,
+        shrink_k=shrink_k,
+        persistence_factor=persistence_factor,
+    )
 
     roles = tuple(sorted({r for _, r in out.keys()}))
     return RoleSynergyStats(

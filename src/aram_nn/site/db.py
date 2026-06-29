@@ -78,6 +78,54 @@ def ensure_public_schema(con: sqlite3.Connection) -> None:
     con.commit()
 
 
+def _patch_major_minor(patch: str) -> str | None:
+    parts = patch.split(".")
+    if len(parts) >= 2:
+        return f"{parts[0]}.{parts[1]}"
+    return patch or None
+
+
+def latest_patch_prefix(
+    db_path: Path, *, queue_id: int = 2400, min_games: int = 1000,
+) -> str | None:
+    """Return the most recent major.minor prefix that has at least *min_games*.
+
+    Recency is determined by the newest game's ``created_ms`` within each
+    prefix group.  Falls back to the absolute most-recent prefix if none
+    meet *min_games*.
+    """
+    if not db_path.exists():
+        return None
+    con = connect(db_path)
+    try:
+        rows = con.execute(
+            """
+            SELECT patch, COUNT(*) AS n, MAX(created_ms) AS latest
+            FROM games WHERE queue_id = ?
+            GROUP BY patch ORDER BY latest DESC
+            """,
+            (queue_id,),
+        ).fetchall()
+    finally:
+        con.close()
+    if not rows:
+        return None
+    prefix_stats: dict[str, tuple[int, int]] = {}
+    for patch_full, count, latest_ms in rows:
+        prefix = _patch_major_minor(str(patch_full))
+        if not prefix:
+            continue
+        prev_n, prev_latest = prefix_stats.get(prefix, (0, 0))
+        prefix_stats[prefix] = (prev_n + count, max(prev_latest, latest_ms or 0))
+    if not prefix_stats:
+        return None
+    qualified = [(latest, pfx) for pfx, (n, latest) in prefix_stats.items() if n >= min_games]
+    if not qualified:
+        qualified = [(latest, pfx) for pfx, (_, latest) in prefix_stats.items()]
+    qualified.sort(reverse=True)
+    return qualified[0][1]
+
+
 def count_games(db_path: Path, *, queue_id: int | None = None, patch_prefix: str | None = None) -> int:
     if not db_path.exists():
         return 0

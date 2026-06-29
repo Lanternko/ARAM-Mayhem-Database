@@ -95,6 +95,17 @@ AUGMENT_POSTERIOR_Q = 0.10
 AUGMENT_LCB_Z = 1.2815515655446004
 AUGMENT_PICK_LIFT_WEIGHT = 0.003
 AUGMENT_PICK_LIFT_CAP = 3.0
+# Augment tier board is scoped to the current patch.  Augments with fewer than this
+# many current-patch games get their sample topped up with the previous patch (at the
+# previous patch's win rate) so thin / newly-released augments still clear the frontend
+# AUG_TIER_MIN_GAMES floor instead of vanishing.  Keep in sync with that floor (500).
+AUGMENT_CURRENT_MIN_GAMES = 500
+# An augment needs at least this many current-patch games to count as "in the current
+# patch".  0 games across a mature patch means Riot removed/disabled it (often it still
+# lingers in the CommunityDragon catalogue), so we drop it rather than resurrect it from
+# the previous patch.  Raise it to also cut augments that are technically present but
+# vanishingly rare this patch.
+AUGMENT_PRESENT_MIN_GAMES = 1
 EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.csv")
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
@@ -139,6 +150,10 @@ SINGLE_ITEM_COMMON_TRAP_MIN_LIFT = -0.01
 BOOT_ITEM_MIN_GAMES = 30
 BOOT_ITEM_FALLBACK_MIN_GAMES = 20
 BOOT_ITEM_TOP_MIN_LIFT = -0.04
+SPELL_MIN_GAMES = 50
+SPELL_FALLBACK_MIN_GAMES = 30
+SPELL_TOP_MIN_LIFT = -0.04
+SPELL_TOP_N = 5
 ITEM_CLUSTER_MIN_PAIR_GAMES = 20
 ITEM_CLUSTER_MIN_COSINE = 0.10
 ITEM_CLUSTER_MIN_GAMES = 20
@@ -182,9 +197,10 @@ ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT = 0.012
 ITEM_CORE_BUILD_PICK_CREDIT_CAP = 0.035
 ITEM_CORE_BUILD_LIFT_WEIGHT = 0.55
 ITEM_CORE_BUILD_GAMES_WEIGHT = 0.02
-ITEM_CORE_BUILD_OPTION_MIN_GAMES = 15       # a 3rd-item option needs this many games to show
-ITEM_CORE_BUILD_OPTION_TOP_N = 5            # max 3rd-item options shown per group
-ITEM_CORE_BUILD_TAIL_N = 3                  # completion (tail) items shown per group
+ITEM_CORE_BUILD_OPTION_MIN_GAMES = 15       # any pairing item needs this many games to show
+ITEM_CORE_BUILD_OPTION_MIN_PICK = 0.015     # ...or this pick rate — the "popular" half of the OR gate
+ITEM_CORE_BUILD_OPTION_TOP_N = 8            # max pairing items shown per core-2 group
+ITEM_CORE_BUILD_TAIL_N = 3                  # extra "also common" items shown dim per group
 ITEM_CORE_BUILD_GROUP_TOP_N = 3             # max core groups (distinct build paths) per champion
 ITEM_CORE_BUILD_GROUP_MIN_PICK = 0.04       # drop tiny build-path groups (the top group is always kept)
 PATCH_CHANGE_TOP_N = 10
@@ -996,6 +1012,45 @@ def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
     return version, by_id
 
 
+def load_summoner_spell_metadata(version: str) -> dict[int, dict]:
+    """Fetch summoner-spell id -> name (zh/en) + icon from Data Dragon.
+
+    Icons live on the same DDragon CDN as champions/items, so no self-hosting is
+    needed.  Returns an empty dict on a network hiccup — the spell rail then just
+    falls back to the numeric id and a blank icon rather than failing the build.
+    """
+    by_id: dict[int, dict] = {}
+    url_zh = f"https://ddragon.leagueoflegends.com/cdn/{version}/data/zh_TW/summoner.json"
+    url_en = f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/summoner.json"
+    try:
+        r_zh = httpx.get(url_zh, timeout=30)
+        r_en = httpx.get(url_en, timeout=30)
+    except Exception as exc:  # pragma: no cover - network hiccup
+        click.echo(f"[tierlist] WARN: summoner-spell metadata fetch failed ({exc})")
+        return by_id
+    raw_zh = r_zh.json()["data"] if r_zh.status_code == 200 else {}
+    raw_en = r_en.json()["data"] if r_en.status_code == 200 else {}
+    source = raw_en or raw_zh
+    for alias, entry_base in source.items():
+        try:
+            spell_id = int(entry_base["key"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        entry_en = raw_en.get(alias, entry_base)
+        entry_zh = raw_zh.get(alias, entry_base)
+        name_en = entry_en.get("name") or alias
+        name_zh = entry_zh.get("name") or name_en
+        image = (entry_en.get("image") or entry_zh.get("image") or {}).get("full") or f"{alias}.png"
+        by_id[spell_id] = {
+            "name": name_zh,
+            "name_zh": name_zh,
+            "name_en": name_en,
+            "alias": alias,
+            "icon": f"https://ddragon.leagueoflegends.com/cdn/{version}/img/spell/{image}",
+        }
+    return by_id
+
+
 def write_role_definitions_json(
     out_path: Path,
     *,
@@ -1101,13 +1156,50 @@ def localize_cdragon_icons(
     )
     return downloaded
 
-def _cached_get_json(url: str, cache_path: Path, timeout: float = 60) -> dict | list:
-    """Fetch JSON with on-disk caching (the kiwi.bin.json + stringtable are large)."""
+# New augments ship every patch and are described only in kiwi.bin.json +
+# the stringtable.  These files used to be cached forever, so once the cache was
+# written (patch 16.10) every later augment had a blank description — which broke
+# both category auto-classification and the hand-correction editor.  Re-fetch the
+# augment caches at most once a day; everything else keeps the never-expire cache.
+AUGMENT_CACHE_MAX_AGE_HOURS = 24.0
+
+
+def _cached_get_json(
+    url: str,
+    cache_path: Path,
+    timeout: float = 60,
+    max_age_hours: float | None = None,
+) -> dict | list:
+    """Fetch JSON with on-disk caching (the kiwi.bin.json + stringtable are large).
+
+    With ``max_age_hours`` set, a cache file older than that is refreshed from the
+    network; if the refresh fails the stale copy is reused so an automated build
+    never hard-fails on a transient error.  Without it the cache never expires."""
     if cache_path.exists():
-        try:
-            return json.loads(cache_path.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+        stale = False
+        if max_age_hours is not None:
+            try:
+                age_h = (_dt.datetime.now().timestamp() - cache_path.stat().st_mtime) / 3600.0
+                stale = age_h >= max_age_hours
+            except OSError:
+                stale = False
+        if not stale:
+            try:
+                return json.loads(cache_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        else:
+            try:
+                r = httpx.get(url, timeout=timeout)
+                r.raise_for_status()
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                cache_path.write_text(r.text, encoding="utf-8")
+                return r.json()
+            except Exception:
+                try:
+                    return json.loads(cache_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
     r = httpx.get(url, timeout=timeout)
     r.raise_for_status()
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1150,6 +1242,7 @@ def load_augment_descriptions(
     kiwi = _cached_get_json(
         "https://raw.communitydragon.org/latest/game/maps/modespecificdata/kiwi.bin.json",
         cache_dir / "kiwi.bin.json",
+        max_age_hours=AUGMENT_CACHE_MAX_AGE_HOURS,
     )
     plat: dict[int, tuple[str | None, str | None]] = {}
     for entry in kiwi.values() if isinstance(kiwi, dict) else []:
@@ -1165,6 +1258,7 @@ def load_augment_descriptions(
     st = _cached_get_json(
         f"https://raw.communitydragon.org/latest/game/{locale}/data/menu/en_us/lol.stringtable.json",
         cache_dir / cache_name,
+        max_age_hours=AUGMENT_CACHE_MAX_AGE_HOURS,
     )
     entries = st["entries"] if isinstance(st, dict) and "entries" in st else {}
 
@@ -1186,6 +1280,7 @@ def load_augment_display_tags(cache_dir: Path) -> dict[int, list[int]]:
     kiwi = _cached_get_json(
         "https://raw.communitydragon.org/latest/game/maps/modespecificdata/kiwi.bin.json",
         cache_dir / "kiwi.bin.json",
+        max_age_hours=AUGMENT_CACHE_MAX_AGE_HOURS,
     )
     out: dict[int, list[int]] = {}
     for entry in kiwi.values() if isinstance(kiwi, dict) else []:
@@ -1628,6 +1723,25 @@ def estimate_augment_prior_strength(champ_aug: list[dict]) -> float:
         return AUGMENT_PRIOR_DEFAULT
     return max(5.0, min(5000.0, (1.0 / rho) - 1.0))
 
+def raw_wilson_bounds(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for the *raw* per-pair winrate.
+
+    Used as a trust region for the displayed number: the smoothed/shrunk value
+    is clamped into this interval so the headline a user reads can never sit
+    outside what the raw sample actually supports.  Wilson (not Wald) so the
+    interval does not collapse to a point at p_hat in {0, 1}.
+    """
+    if games <= 0:
+        return 0.0, 1.0
+    p = min(max(wins / games, 0.0), 1.0)
+    n = float(games)
+    z2 = z * z
+    denom = 1.0 + z2 / n
+    center = (p + z2 / (2.0 * n)) / denom
+    half = (z / denom) * math.sqrt(p * (1.0 - p) / n + z2 / (4.0 * n * n))
+    return max(0.0, center - half), min(1.0, center + half)
+
+
 def beta_posterior_quantile(q: float, alpha: float, beta: float) -> float:
     if betaincinv is not None:
         try:
@@ -1646,6 +1760,91 @@ def posterior_wr_summary(wins: int, games: int, baseline: float, prior_strength:
     mean = alpha / (alpha + beta)
     lower = beta_posterior_quantile(AUGMENT_POSTERIOR_Q, alpha, beta)
     return mean, lower
+
+def build_augment_global_stats(
+    champ_aug_records: list[dict],
+    aug_meta: dict[int, dict],
+    *,
+    prior_strength: float = AUGMENT_PRIOR_DEFAULT,
+    prev_champ_aug_records: list[dict] | None = None,
+    current_min_games: int = AUGMENT_CURRENT_MIN_GAMES,
+    present_min_games: int = AUGMENT_PRESENT_MIN_GAMES,
+) -> dict[int, dict]:
+    """Roll the per-(champion, augment) rows up into a global per-augment WR.
+
+    Every Mayhem game equips augments on both teams, so summing wins/games across
+    all champions for an augment_id yields that augment's true overall sample (the
+    sums are additive).  We EB-shrink the rate toward the overall augment WR
+    (~0.50) with posterior_wr_summary -- the same machinery champions use -- and
+    attach a within-rarity pick share as a popularity signal.  Tiering is left to
+    the frontend (within-rarity percentile of wr) so it can be tuned without a
+    full rebuild.
+
+    The board is scoped to the current patch (``champ_aug_records``).  An augment
+    with fewer than ``present_min_games`` games this patch is treated as not in the
+    current patch (removed / disabled -- e.g. 0 picks across a mature patch) and is
+    dropped entirely, never resurrected from the previous patch.  An augment that
+    *is* present but has fewer than ``current_min_games`` games has its sample
+    topped up toward that floor with previous-patch games
+    (``prev_champ_aug_records``) at the previous patch's win rate -- "mix in some of
+    last patch when this patch is thin" -- so rarely-picked augments still surface
+    instead of being cut by the frontend's min-games floor.  Well-sampled augments
+    stay 100% current patch; ``pick`` always reflects current-patch popularity.
+    ``curG`` / ``prevMix`` expose the blend.
+    """
+    def _rollup(records: list[dict] | None) -> tuple[dict[int, int], dict[int, int]]:
+        g_by: dict[int, int] = {}
+        w_by: dict[int, int] = {}
+        for r in records or []:
+            aid = int(r["augment_id"])
+            g_by[aid] = g_by.get(aid, 0) + int(r["games"])
+            w_by[aid] = w_by.get(aid, 0) + int(r["wins"])
+        return g_by, w_by
+
+    games_by, wins_by = _rollup(champ_aug_records)
+    prev_games_by, prev_wins_by = _rollup(prev_champ_aug_records)
+
+    total_g = sum(games_by.values())
+    total_w = sum(wins_by.values())
+    overall = total_w / total_g if total_g else 0.5
+    rarity_games: dict[str, int] = {}
+    for aid, g in games_by.items():
+        if g > 0 and aid in aug_meta:
+            rar = aug_meta[aid].get("rarity", "")
+            rarity_games[rar] = rarity_games.get(rar, 0) + g
+    stats: dict[int, dict] = {}
+    # Only augments actually present in the current patch.  curG below
+    # present_min_games (0 across a mature patch == removed/disabled) is dropped,
+    # never resurrected from the previous patch.
+    for aid, cur_g in games_by.items():
+        if aid not in aug_meta or cur_g < present_min_games:
+            continue
+        cur_w = wins_by.get(aid, 0)
+        eff_g = float(cur_g)
+        eff_w = float(cur_w)
+        borrowed_g = 0.0
+        if cur_g < current_min_games and prev_games_by.get(aid, 0) > 0:
+            pg = prev_games_by[aid]
+            pw = prev_wins_by[aid]
+            borrowed_g = float(min(current_min_games - cur_g, pg))
+            eff_g = cur_g + borrowed_g
+            eff_w = cur_w + (pw / pg) * borrowed_g
+        if eff_g <= 0:
+            continue
+        mean, lower = posterior_wr_summary(eff_w, eff_g, overall, prior_strength)
+        rar = aug_meta[aid].get("rarity", "")
+        rg = rarity_games.get(rar, 0) or 1
+        stats[aid] = {
+            "g": int(round(eff_g)),
+            "wr": mean,
+            "rawWr": eff_w / eff_g,
+            "lcb": lower,
+            "lift": mean - overall,
+            "pick": cur_g / rg,
+            "curG": cur_g,
+            "prevMix": round(borrowed_g / eff_g, 3) if eff_g else 0.0,
+        }
+    return stats
 
 def _safe_float(value: object, default: float = 0.0) -> float:
     try:
@@ -2174,25 +2373,32 @@ _SET_TO_AUGMENT_TYPES = {
 
 _DISPLAY_TAG_TO_AUGMENT_TYPES = {
     0: {"official_ally"},
-    # Do not add official damage/support for every matching augment: those
-    # buckets are intentionally broad and would drown out AP/AD/crit/snowball
-    # style chips. More specific official tags still add useful signal.
+    # Do not add official `damage` for every matching augment: that bucket is
+    # intentionally broad and would drown out AP/AD/crit/snowball style chips.
+    # Support (5) / Ally (0) now feed the dedicated `support` chip instead.
     2: {"official_general"},
     3: {"official_tenacity"},
     4: {"official_speed"},
+    5: {"official_support"},
     7: {"economy"},
 }
 
 _OFFICIAL_AUGMENT_TYPE_LABELS = {
     "official_ally": {"zh": "隊友", "en": "Ally"},
+    "official_support": {"zh": "輔助", "en": "Support"},
     "official_general": {"zh": "一般 / 質變", "en": "General / Transmute"},
     "official_tenacity": {"zh": "韌性", "en": "Tenacity"},
     "official_speed": {"zh": "速度", "en": "Speed"},
 }
 
-def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
+def augment_type_slugs(meta: dict | None) -> set[str]:
+    """Fine-grained internal augment-type slugs from name/desc/set/displayTag.
+
+    Shared by the per-champion 'augment tendencies' affinity labels
+    (`augment_type_infos`) and the coarse user-facing category filter
+    (`augment_filter_categories`)."""
     if not meta:
-        return []
+        return set()
     text = " ".join(
         str(meta.get(key) or "")
         for key in ("name", "name_en", "desc", "desc_en", "set", "set_en", "setSlug")
@@ -2208,8 +2414,226 @@ def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
             slugs.update(_DISPLAY_TAG_TO_AUGMENT_TYPES.get(int(tag), set()))
         except (TypeError, ValueError):
             continue
+    return slugs
+
+
+def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
+    slugs = augment_type_slugs(meta)
+    if not slugs:
+        return []
     labels = {**AUGMENT_TYPE_LABELS, **_OFFICIAL_AUGMENT_TYPE_LABELS}
     return [_label_entry(labels, slug) for slug in sorted(slugs)]
+
+
+# ---- User-facing augment category filter (site chips) -----------------------
+# Nine coarse buckets the tier-list site exposes as filter chips above each
+# champion's augment ranking.  Most are derived from the finer internal type
+# slugs; `cd` and `amp` add dedicated keyword passes (cooldown / damage-amp are
+# folded into broader internal slugs), and `new` is the data-driven "introduced
+# this patch" set.  Buckets intentionally OVERLAP — an AP burn augment is both
+# `ap` and `amp` — because the chips are OR filters, so an augment shows under
+# every chip that fits it.
+AUGMENT_CATEGORY_ORDER = ("ap", "ad", "tank", "support", "gold", "mechanic", "cd", "new", "crit", "amp")
+AUGMENT_CATEGORY_LABELS = {
+    "ap":       {"zh": "AP",   "en": "AP"},
+    "ad":       {"zh": "AD",   "en": "AD"},
+    "tank":     {"zh": "坦度", "en": "Tank"},
+    "support":  {"zh": "輔助", "en": "Support"},
+    "gold":     {"zh": "金錢", "en": "Gold"},
+    "mechanic": {"zh": "機制", "en": "Mechanic"},
+    "cd":       {"zh": "CD",   "en": "CD"},
+    "new":      {"zh": "新",   "en": "New"},
+    "crit":     {"zh": "暴擊", "en": "Crit"},
+    "amp":      {"zh": "增傷", "en": "Amp"},
+}
+# Internal type slug -> user chip.  mobility / utility / official_speed have no
+# dedicated chip (they show only under "全部").
+_TYPE_SLUG_TO_CATEGORY = {
+    "spell": "ap",
+    "attack": "ad",
+    "crit": "crit",
+    "tank": "tank",
+    "sustain": "tank",            # heal / shield / lifesteal -> survivability
+    "official_tenacity": "tank",
+    "official_ally": "support",   # Riot Ally (0) tag
+    "official_support": "support",  # Riot Support (5) tag
+    "economy": "gold",
+    "damage": "amp",
+    "auto": "mechanic",
+    "stacking": "mechanic",
+    "snowball": "mechanic",
+    "official_general": "mechanic",  # transmute / general gameplay-altering
+}
+# Ability-haste / cooldown augments (folded into `spell` internally; the site
+# wants a dedicated CD chip).  Matched against en + zh name/desc text.
+_AUGMENT_CD_KEYWORDS = (
+    "ability haste", "cooldown", "haste", "recharge", "refund",
+    "技能急速", "冷卻", "急速",
+)
+# Damage amplification beyond the internal `damage` type: true damage, execute,
+# bonus / extra / increased / % more damage.
+_AUGMENT_AMP_KEYWORDS = (
+    "true damage", "execute", "amplif", "bonus damage", "extra damage",
+    "increased damage", "more damage", "% damage", "deal more",
+    "真實傷害", "處決", "增傷", "增加傷害", "額外傷害", "提高傷害", "傷害提高",
+)
+
+
+def augment_filter_categories(
+    aid: int,
+    meta: dict | None,
+    new_aug_ids: set[int] | frozenset[int] = frozenset(),
+) -> list[str]:
+    """Coarse user-facing categories for the site's augment filter chips.
+
+    Returns an ordered subset of AUGMENT_CATEGORY_ORDER (possibly empty)."""
+    if not meta:
+        return []
+    cats: set[str] = set()
+    for slug in augment_type_slugs(meta):
+        cat = _TYPE_SLUG_TO_CATEGORY.get(slug)
+        if cat:
+            cats.add(cat)
+    text = " ".join(
+        str(meta.get(key) or "")
+        for key in ("name", "name_en", "desc", "desc_en")
+    ).lower()
+    if any(kw in text for kw in _AUGMENT_CD_KEYWORDS):
+        cats.add("cd")
+    if any(kw in text for kw in _AUGMENT_AMP_KEYWORDS):
+        cats.add("amp")
+    try:
+        if int(aid) in new_aug_ids:
+            cats.add("new")
+    except (TypeError, ValueError):
+        pass
+    return [c for c in AUGMENT_CATEGORY_ORDER if c in cats]
+
+
+# Hand-curated category corrections exported from the augment-category editor
+# (scripts/build_augment_category_editor.py -> "匯出").  Maps augment id -> the
+# exact category list, REPLACING the fuzzy keyword auto-classification for that
+# augment.  `new` is ignored on load and always recomputed from new_aug_ids, so
+# the "introduced this patch" flag stays correct on every auto-rebuild.
+AUGMENT_CATEGORY_OVERRIDES_PATH = (
+    Path(__file__).resolve().parent / "augment_category_overrides.json"
+)
+
+
+def load_augment_category_overrides(
+    path: Path = AUGMENT_CATEGORY_OVERRIDES_PATH,
+) -> dict[int, list[str]]:
+    if not path or not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    valid = set(AUGMENT_CATEGORY_ORDER)
+    out: dict[int, list[str]] = {}
+    for key, val in raw.items():
+        try:
+            aid = int(key)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(val, list):
+            continue
+        chosen = {c for c in val if c in valid and c != "new"}
+        out[aid] = [c for c in AUGMENT_CATEGORY_ORDER if c in chosen]
+    return out
+
+
+def resolve_augment_categories(
+    aid: int,
+    meta: dict | None,
+    new_aug_ids: set[int] | frozenset[int] = frozenset(),
+    overrides: dict[int, list[str]] | None = None,
+) -> list[str]:
+    """Curated override wins over the keyword auto-classifier; `new` is always
+    (re)computed from new_aug_ids regardless of any override."""
+    try:
+        key: int | None = int(aid)
+    except (TypeError, ValueError):
+        key = None
+    if overrides and key in overrides:
+        cats = set(overrides[key])
+        if key in new_aug_ids:
+            cats.add("new")
+        return [c for c in AUGMENT_CATEGORY_ORDER if c in cats]
+    return augment_filter_categories(aid, meta, new_aug_ids)
+
+
+def derive_new_augment_ids(
+    current_champ_aug: list[dict],
+    baseline_champ_aug: list[dict] | None,
+    *,
+    min_games: int = 20,
+    max_baseline_games: int = 3,
+) -> frozenset[int]:
+    """Augment ids introduced in the current patch.
+
+    "New" = present with at least ``min_games`` games this patch but at most
+    ``max_baseline_games`` in the previous patch (essentially absent before).
+    Empirically the two sets are cleanly separated — a fresh patch ships a whole
+    new id block that is literally absent earlier — so the thresholds only guard
+    against parse noise.  Takes the already-aggregated champ x augment rows so it
+    costs nothing beyond scans the build already runs."""
+    cur: Counter[int] = Counter()
+    for row in current_champ_aug:
+        cur[int(row["augment_id"])] += int(row.get("games", 0))
+    base: Counter[int] = Counter()
+    for row in baseline_champ_aug or []:
+        base[int(row["augment_id"])] += int(row.get("games", 0))
+    return frozenset(
+        aid
+        for aid, games in cur.items()
+        if games >= min_games and base.get(aid, 0) <= max_baseline_games
+    )
+
+
+# An augment stays flagged 新 for this many patches after it first appears.  A
+# fresh patch usually ships no new augments and has little data, so anchoring 新
+# to *only* the current patch makes the chip empty the moment the patch rolls.
+# Window=2 keeps last patch's augments "new" through the following patch.
+NEW_AUGMENT_PATCH_WINDOW = 2
+
+
+def derive_recent_augment_ids(
+    db,
+    queue_id: int,
+    patch_prefix: str | None,
+    current_champ_aug: list[dict],
+    *,
+    window: int = NEW_AUGMENT_PATCH_WINDOW,
+    baseline_prefix: str | None = None,
+    baseline_champ_aug: list[dict] | None = None,
+) -> frozenset[int]:
+    """Augment ids introduced within the last ``window`` patches.
+
+    Unions ``derive_new_augment_ids`` across each recent patch transition
+    (current-vs-previous, previous-vs-previous2, ...), so an augment shipped one
+    patch ago is still flagged 新.  Each transition compares against its own
+    adjacent, data-rich baseline rather than one far baseline, keeping the
+    "absent before" test reliable even when the newest patch has few games.
+    Reuses the already-computed ``baseline_champ_aug`` for the first hop."""
+    new_ids: set[int] = set()
+    cur_rows = current_champ_aug
+    cur_prefix = patch_prefix
+    for _ in range(max(1, window)):
+        prev_prefix = previous_patch_prefix(cur_prefix)
+        if not prev_prefix:
+            break
+        if prev_prefix == baseline_prefix and baseline_champ_aug is not None:
+            prev_rows = baseline_champ_aug
+        else:
+            prev_rows = compute_winrates(db, queue_id, prev_prefix)[1]
+        new_ids |= set(derive_new_augment_ids(cur_rows, prev_rows))
+        cur_rows = prev_rows
+        cur_prefix = prev_prefix
+    return frozenset(new_ids)
+
 
 def estimate_category_prior_strength(rows: list[dict]) -> float:
     usable = [
@@ -2864,6 +3288,118 @@ def compute_champ_boot_item_affinities(
         top_n=4,
     )
 
+def compute_champ_spell_affinities(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    spell_meta: dict[int, dict],
+    champ_records: list[dict],
+    *,
+    min_games: int = SPELL_MIN_GAMES,
+) -> dict[int, dict]:
+    """Champion-level win/pick rate per summoner spell.
+
+    Mirrors the boot/item affinity pipeline (same empirical-Bayes shrinkage so
+    small cells lean on the global per-spell baseline) but reads each
+    participant's ``spells`` list instead of items.  Mayhem players freely pick
+    *two* spells (Flash is near-universal; Mark/Dash, Ghost, Heal … are the real
+    second-slot choices), so every spell is counted and pick rates sum to ~200%
+    across the two slots.
+    """
+    baseline_by_champ = {
+        int(row["champion_id"]): float(row.get("raw_wr", 0.5))
+        for row in champ_records
+    }
+    con = sqlite3.connect(str(db_path))
+    if patch_prefix:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "AND participants_json LIKE '%\"spells\"%'",
+            (queue_id, f"{patch_prefix}%"),
+        )
+    else:
+        rows = con.execute(
+            "SELECT blue_wins, participants_json FROM games "
+            "WHERE queue_id=? AND participants_json IS NOT NULL "
+            "AND participants_json LIKE '%\"spells\"%'",
+            (queue_id,),
+        )
+
+    cs_games: Counter[tuple[int, str]] = Counter()
+    cs_wins: Counter[tuple[int, str]] = Counter()
+    cs_baseline_games: Counter[tuple[int, str]] = Counter()
+    champ_total_games: Counter[int] = Counter()
+    category_games: Counter[str] = Counter()
+    category_wins: Counter[str] = Counter()
+    category_baseline_games: Counter[str] = Counter()
+    category_names: dict[str, dict[str, object]] = {}
+
+    try:
+        for blue_wins, participants_json in rows:
+            if not participants_json:
+                continue
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
+                    continue
+                chosen = [int(s) for s in (participant.get("spells") or []) if int(s) > 0]
+                if not chosen:
+                    continue
+                champ_total_games[cid] += 1
+                baseline = baseline_by_champ.get(cid, 0.5)
+                player_won = 1 if (team_id == 100) == blue_won else 0
+                for spell_id in chosen:
+                    slug = str(spell_id)
+                    key = (cid, slug)
+                    cs_games[key] += 1
+                    cs_wins[key] += player_won
+                    cs_baseline_games[key] += baseline
+                    category_games[slug] += 1
+                    category_wins[slug] += player_won
+                    category_baseline_games[slug] += baseline
+                    if slug not in category_names:
+                        meta = spell_meta.get(spell_id) or {}
+                        name_zh = str(meta.get("name_zh") or meta.get("name") or f"#{spell_id}")
+                        name_en = str(meta.get("name_en") or name_zh)
+                        category_names[slug] = {
+                            "name": name_zh,
+                            "name_zh": name_zh,
+                            "name_en": name_en,
+                            "items": [{
+                                "id": spell_id,
+                                "name": name_zh,
+                                "name_zh": name_zh,
+                                "name_en": name_en,
+                                "icon": str(meta.get("icon") or ""),
+                            }],
+                        }
+    finally:
+        con.close()
+
+    return _finalize_category_affinity(
+        cs_games,
+        cs_wins,
+        cs_baseline_games,
+        champ_total_games,
+        category_games,
+        category_wins,
+        category_baseline_games,
+        category_names,
+        min_games=min_games,
+        fallback_min_games=SPELL_FALLBACK_MIN_GAMES,
+        pick_lift_weight=SINGLE_ITEM_PICK_LIFT_WEIGHT,
+        pick_lift_cap=SINGLE_ITEM_PICK_LIFT_CAP,
+        pick_rate_weight=SINGLE_ITEM_PICK_RATE_WEIGHT,
+        pick_rate_ref=SINGLE_ITEM_PICK_RATE_REF,
+        pick_rate_cap=SINGLE_ITEM_PICK_RATE_CAP,
+        rank_mode="lift",
+        top_min_lift=SPELL_TOP_MIN_LIFT,
+        top_n=SPELL_TOP_N,
+    )
+
 def previous_patch_prefix(patch_prefix: str | None) -> str | None:
     if not patch_prefix:
         return None
@@ -3276,16 +3812,18 @@ def compute_champ_item_build_clusters(
     min_confirm_games: int = ITEM_CORE_BUILD_MIN_CONFIRM,
     winrate_min_games: int = ITEM_CORE_BUILD_WINRATE_MIN_GAMES,
 ) -> dict[int, dict]:
-    """Recommend item builds keyed by their CORE 3 items.
+    """Recommend item builds keyed by their CORE 2 (earliest-built) items.
 
-    Win rate / pick rate / sample size are computed on the 3 core items, which
-    carry orders of magnitude more support than any exact 6-item route.  A real
-    observed 6-item completion (5 core + 1 boot) is attached only as
-    confirmation that players actually finish the build this way; its three
-    non-core items are the flexible (desaturated) tail.  Per champion we curate
-    up to ``top_n`` builds: 1 popular (highest pick), up to 2 winrate (highest
-    lower-confidence-bound lift on a stable sample), then the rest by a blended
-    score.  ``bot`` stays empty for payload-shape parity with the old output.
+    Builds are grouped by their shared rush (the two earliest-built items).  For
+    each group we then surface every item built afterwards — not just the single
+    3rd-earliest one — that clears a pick-rate OR win-rate bar, each scored on
+    its own conditional win/pick rate.  The core-2 pick/win rate carries orders
+    of magnitude more support than any exact 6-item route, and a real observed
+    6-item completion is kept only as a confirmation badge (``exact_games``).
+    Per champion we curate up to ``top_n`` core-2 groups: 1 popular (highest
+    pick), up to 2 winrate (highest lower-confidence-bound lift on a stable
+    sample), then the rest by a blended score.  ``bot`` stays empty for
+    payload-shape parity with the old output.
     """
     core_count = max(1, ITEM_CLUSTER_CORE_ITEM_COUNT)
     baseline_by_champ = {
@@ -3371,18 +3909,18 @@ def compute_champ_item_build_clusters(
             return (earliness(item_id), -item_games.get(item_id, 0), item_id)
 
         # Group builds by their shared rush — the two earliest-built items.
-        # Within a group the 3rd-earliest item is the real decision (the "option");
-        # later items are the completion tail.  This collapses cards that only
-        # reshuffle staples into one block with a list of 3rd-item choices.
-        option_index = core_count - 1
+        # EVERY item built after the core-2 (within the capped canonical route),
+        # not just the single 3rd-earliest one, is a candidate "option" scored by
+        # its own win/pick rate.  A core-2 block therefore lists all the items it
+        # commonly pairs with — collapsing reshuffled-staple cards into one block
+        # while still surfacing the 4th/5th-item choices the old single-slot
+        # version hid.
+        option_index = core_count - 1  # first slot after the core-2 pair
         group_games: Counter[tuple[int, int]] = Counter()
         group_wins: Counter[tuple[int, int]] = Counter()
         option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
-        option_fulls: dict[tuple[int, int], dict[int, Counter[tuple[int, ...]]]] = defaultdict(
-            lambda: defaultdict(Counter)
-        )
-        group_tail: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
+        option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         for build_core, boot, won in builds:
             if len(build_core) < 2:
                 continue
@@ -3390,21 +3928,16 @@ def compute_champ_item_build_clusters(
             core_pair = (ranked_core[0], ranked_core[1])
             group_games[core_pair] += 1
             group_wins[core_pair] += won
-            if len(ranked_core) <= option_index:
-                continue
-            option = ranked_core[option_index]
-            option_games[core_pair][option] += 1
-            option_wins[core_pair][option] += won
             # Canonical 6-item completion: keep the earliest items up to the 6
-            # inventory slots (+ boot), dropping whatever is built latest.  The
-            # tail is read from this capped route so dropped items never leak in.
+            # inventory slots (+ boot), dropping whatever is built latest, so the
+            # latest-dropped items never become options.
             route_ranked = ranked_core[:full_core_len] if boot else ranked_core[:max_items]
-            route_core = tuple(sorted(route_ranked))
-            route = route_core + ((boot,) if boot else ())
-            if len(route) == max_items:
-                option_fulls[core_pair][option][route] += 1
-            for late in route_ranked[core_count:]:
-                group_tail[core_pair][late] += 1
+            is_full = len(route_ranked) + (1 if boot else 0) == max_items
+            for follow in route_ranked[option_index:]:
+                option_games[core_pair][follow] += 1
+                option_wins[core_pair][follow] += won
+                if is_full:
+                    option_full_games[core_pair][follow] += 1
 
         def smoothed_lift(wins_: int, games_: int) -> tuple[float, float, float]:
             smoothed = (wins_ + baseline * ITEM_CORE_BUILD_PRIOR_GAMES) / (
@@ -3420,20 +3953,27 @@ def compute_champ_item_build_clusters(
                 continue
             options: list[dict] = []
             for option, og in (option_games.get(core_pair) or {}).items():
-                if og < ITEM_CORE_BUILD_OPTION_MIN_GAMES:
-                    continue
-                fulls = option_fulls[core_pair].get(option)
-                if not fulls:  # require a real observed 6-item completion
+                if option in core_pair or og < ITEM_CORE_BUILD_OPTION_MIN_GAMES:
                     continue
                 o_smoothed, o_lift, o_lcb = smoothed_lift(option_wins[core_pair][option], og)
+                pick_rate = og / max(total, 1)
+                # "一定選用率或勝率以上" gate: keep an item if it clears EITHER bar —
+                # popular enough (pick rate) OR a confident winrate lift on a
+                # stable sample.  All such pairings show, not just the 3rd item.
+                is_popular = pick_rate >= ITEM_CORE_BUILD_OPTION_MIN_PICK
+                is_winrate = (
+                    og >= winrate_min_games and o_lcb > ITEM_CORE_BUILD_WINRATE_MIN_LCB
+                )
+                if not (is_popular or is_winrate):
+                    continue
                 options.append({
                     "id": int(option),
                     "games": og,
                     "smoothed_wr": o_smoothed,
                     "lift": o_lift,
                     "core_lcb": o_lcb,
-                    "pick_rate": og / max(total, 1),
-                    "exact_games": fulls.most_common(1)[0][1],
+                    "pick_rate": pick_rate,
+                    "exact_games": option_full_games[core_pair].get(option, 0),
                     "lane": "",
                 })
             if not options:
@@ -3450,6 +3990,10 @@ def compute_champ_item_build_clusters(
             )
             if winrate_opt is not None:
                 winrate_opt["lane"] = "winrate"
+            # Keep the laned standouts (popular + winrate) ahead of the rest so
+            # the TOP_N cap can never drop a low-pick / high-winrate pick; the
+            # remaining qualifying items then follow by pick rate.
+            options.sort(key=lambda o: (o["lane"] == "", -o["pick_rate"], -o["lift"]))
             options = options[:ITEM_CORE_BUILD_OPTION_TOP_N]
             option_ids = {o["id"] for o in options}
 
@@ -3461,9 +4005,13 @@ def compute_champ_item_build_clusters(
                 * math.log1p(group_pick / max(ITEM_CORE_BUILD_PICK_RATE_REF, 1e-9)),
             )
             core_ordered = list(core_pair)  # already earliest-first
+            # "Also common" tail: frequent follow-ups that did not clear the
+            # options gate (or overflowed the cap), shown dim for context.
             tail_ids = [
-                item_id for item_id, _ in group_tail[core_pair].most_common()
-                if item_id not in core_pair and item_id not in option_ids
+                item_id for item_id, og in option_games[core_pair].most_common()
+                if item_id not in core_pair
+                and item_id not in option_ids
+                and og >= ITEM_CORE_BUILD_OPTION_MIN_GAMES
             ][:ITEM_CORE_BUILD_TAIL_N]
             names = _item_cluster_names(core_ordered + [o["id"] for o in options[:1]], item_meta)
             groups_out.append({
@@ -3989,12 +4537,14 @@ def render_html(
     champ_item_builds: dict[int, dict],
     champ_single_items: dict[int, dict],
     champ_boot_items: dict[int, dict],
+    champ_spell_items: dict[int, dict],
     champ_item_clusters: dict[int, dict],
     champ_augment_types: dict[int, dict],
     champ_synergy: dict[int, list[dict]],
     aug_meta: dict[int, dict],
     patch_changes: dict[str, object] | None,
     *,
+    new_aug_ids: set[int] | frozenset[int] = frozenset(),
     queue_id: int,
     patch_prefix: str | None,
     ddragon_version: str,
@@ -4009,6 +4559,7 @@ def render_html(
     payload_out_path: Path | None = None,
     payload_url: str = "",
     icon_assets_dir: Path | None = None,
+    aug_global: dict[int, dict] | None = None,
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -4030,12 +4581,37 @@ def render_html(
     used_aug_ids: set[int] = set()
     js_champs: dict[str, dict] = {}
 
+    # Per-champion skill-scaling ("operation coefficient"): WR(high-skill lobbies) - WR(low-skill).
+    # Decoupled build-time artifact from build_skill_scaling_rating.py; absent -> field omitted.
+    skill_scaling_by_cid: dict[int, dict] = {}
+    _ss_path = Path("data/cache/champ_skill_scaling.json")
+    if _ss_path.exists():
+        try:
+            _ss_raw = json.loads(_ss_path.read_text(encoding="utf-8"))
+            for _k, _v in (_ss_raw.get("champs") or {}).items():
+                skill_scaling_by_cid[int(_k)] = _v
+            click.echo(f"[tierlist] loaded skill-scaling for {len(skill_scaling_by_cid)} champions")
+        except (ValueError, OSError):
+            skill_scaling_by_cid = {}
+
     def _pack(r: dict) -> dict:
+        # Display rule: show a number the raw sample can support.  We clamp the
+        # shrunk posterior mean into the raw 95% Wilson CI, so a high-sample
+        # pair (e.g. TF Echo Cast, n=573) is never dragged below its own CI
+        # lower bound, while low-sample pairs still shrink toward baseline.
+        # The shrunk value (rank_score / lcb_lift) is kept untouched for SORTING.
+        games = int(r["games"])
+        wins = int(r.get("wins", round(float(r.get("raw_wr", 0.0)) * games)))
+        smoothed = float(r["smoothed_wr"])
+        baseline = smoothed - float(r["lift"])  # baseline_wr, derived
+        lo, hi = raw_wilson_bounds(wins, games)
+        display_wr = min(max(smoothed, lo), hi)
         return {
             "id": r["augment_id"],
-            "g": r["games"],
-            "wr": round(r["smoothed_wr"], 4),
-            "lift": round(r["lift"], 4),
+            "g": games,
+            "wr": round(display_wr, 4),
+            "rawWr": round(float(r.get("raw_wr", display_wr)), 4),
+            "lift": round(display_wr - baseline, 4),
             "score": round(r.get("rank_score", r["lift"]), 4),
             "lcb": round(r.get("lcb_lift", r["lift"]), 4),
             "pick": round(r.get("pick_rate", 0.0), 4),
@@ -4311,6 +4887,9 @@ def render_html(
                 "top": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("top", [])],
                 "bot": [_pack_set(r) for r in champ_boot_items.get(cid, {}).get("bot", [])],
             },
+            "spells": {
+                "top": [_pack_set(r) for r in champ_spell_items.get(cid, {}).get("top", [])],
+            },
             "itemClusters": {
                 "groups": [_pack_core_group(grp) for grp in champ_item_clusters.get(cid, {}).get("groups", [])],
             },
@@ -4320,11 +4899,21 @@ def render_html(
             },
             "pairs": pairs,
             "comp": _pack_comp(champ_profiles.get(cid, {})),
+            "skillScaling": skill_scaling_by_cid.get(cid),
             "roleMeta": _pack_role_meta(meta.get("role_meta")),
             "wr": round(float(champ_stat_by_cid.get(cid, {}).get("bayes_wr", 0.0) or 0.0), 4),
             "rawWr": round(float(champ_stat_by_cid.get(cid, {}).get("raw_wr", 0.0) or 0.0), 4),
             "g": int(champ_stat_by_cid.get(cid, {}).get("games", 0) or 0),
         }
+    aug_cat_overrides = load_augment_category_overrides()
+    if aug_cat_overrides:
+        click.echo(
+            f"[tierlist] applied {len(aug_cat_overrides)} augment category overrides"
+        )
+    # Augments that carry a global win-rate (the 增幅榜 rollup) must ship their
+    # metadata too, even if no champion ranked them into a top/bot pick bucket.
+    if aug_global:
+        used_aug_ids |= {aid for aid in aug_global if aid in aug_meta}
     js_augs = {
         str(aid): {
             "name": aug_meta[aid]["name"],
@@ -4341,24 +4930,109 @@ def render_html(
             "setSlug": aug_meta[aid].get("setSlug", ""),
             "sets": aug_meta[aid].get("sets", []),
             "displayTags": aug_meta[aid].get("displayTags", []),
+            "cats": resolve_augment_categories(
+                aid, aug_meta[aid], new_aug_ids, aug_cat_overrides
+            ),
         }
         for aid in used_aug_ids
         if aid in aug_meta
     }
+    # Merge the global per-augment win-rate / pick share into the augment payload
+    # the frontend already ships.  The 增幅榜 tier itself is computed client-side
+    # (within-rarity percentile of wr) so it can be tuned without a rebuild.
+    for _aid, _gs in (aug_global or {}).items():
+        _key = str(_aid)
+        if _key not in js_augs:
+            continue
+        js_augs[_key].update({
+            "wr": round(float(_gs["wr"]), 4),
+            "rawWr": round(float(_gs["rawWr"]), 4),
+            "g": int(_gs["g"]),
+            "lcb": round(float(_gs["lcb"]), 4),
+            "lift": round(float(_gs["lift"]), 4),
+            "pick": round(float(_gs["pick"]), 4),
+            # current-patch games + fraction borrowed from the previous patch when
+            # this patch was thin (see build_augment_global_stats); 0 = pure current.
+            "curG": int(_gs.get("curG", _gs["g"])),
+            "prevMix": round(float(_gs.get("prevMix", 0.0)), 3),
+        })
 
     css = """
-    :root { color-scheme: dark; }
+    /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
+       the palette.  New chrome (header, nav, views, settings, column) is
+       authored entirely against these vars so both themes are correct.  The
+       dense legacy tier-list surfaces keep their hardcoded dark values and
+       get a curated set of light overrides further down (search
+       "[data-theme=light]"). ===== */
+    :root {
+        color-scheme: dark;
+        --bg: #0e1116;
+        --surface: #161a22;
+        --surface-2: #1b2030;
+        --surface-sunken: #11151d;
+        --surface-raised: #21262d;
+        --chip-bg: #1f2530;
+        --overlay: #232936;
+        --text: #e6e8eb;
+        --text-muted: #9aa0a6;
+        --text-dim: #6b7280;
+        /* Translucent-white borders read as a top-lit edge and auto-adapt to
+           every elevation + the light theme (premium-dark technique). */
+        --border: rgba(255, 255, 255, 0.085);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --accent: #f5c518;
+        --accent-soft: #f5d780;
+        --accent-on: #14110a;
+        --header-h: 56px;
+        --container: 1320px;
+        --r-sm: 8px;
+        --r-md: 12px;
+        --r-lg: 16px;
+        --shadow: 0 18px 50px rgba(0,0,0,0.45);
+        /* One ease-out curve + a 4-step duration scale = coherent motion. */
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --dur-1: 120ms;
+        --dur-2: 180ms;
+        --dur-3: 240ms;
+        --dur-4: 320ms;
+    }
+    :root[data-theme="light"] {
+        color-scheme: light;
+        --bg: #f3f5f9;
+        --surface: #ffffff;
+        --surface-2: #eef0f3;
+        --surface-sunken: #eef1f6;
+        --surface-raised: #ffffff;
+        --chip-bg: #eceff4;
+        --overlay: #ffffff;
+        --text: #1a1e26;
+        --text-muted: #5b6472;
+        --text-dim: #818b99;
+        --border: rgba(0, 0, 0, 0.10);
+        --border-strong: rgba(0, 0, 0, 0.16);
+        /* Vivid gold for fills/underline; the darker soft tone is text-only. */
+        --accent: #e0a500;
+        --accent-soft: #9a7100;
+        --accent-on: #14110a;
+        --shadow: 0 18px 50px rgba(31,41,55,0.16);
+    }
     * { box-sizing: border-box; }
+    /* During a theme flip, kill every transition for one tick so var()-driven
+       backgrounds snap to the new palette instead of getting stuck mid-
+       transition on the `background` shorthand. */
+    .no-theme-transition * { transition: none !important; }
     body {
         margin: 0;
-        background: #0e1116;
-        color: #e6e8eb;
+        background: var(--bg);
+        color: var(--text);
         /* Body = Noto Sans TC (modern sans, readable in dense UI).  Serif
            is reserved for small captions — see `.subtitle`,
            `.aug .alift`. */
         font-family: "Noto Sans TC", -apple-system, "Segoe UI",
                      "Microsoft JhengHei", "PingFang TC", sans-serif;
-        padding: 32px 24px 64px;
+        padding: 0;
     }
     h1 { margin: 0; font-weight: 600; font-size: 22px; line-height: 1.1; }
     /* Mincho-only captions — opt-in serif for the three small metadata
@@ -4476,6 +5150,12 @@ def render_html(
     .lang-toggle span { font-size: 12px; letter-spacing: 0; }
     /* Filter bar: role chips + free-text search + live count. */
     .filter-bar {
+        /* Sticky: keep filters reachable so Ctrl+F focus never scrolls the
+           page up.  z-index 30 sits above cards (1-4), below the rec FAB (40),
+           tooltips (50+) and the mobile modals (55-70). */
+        position: sticky;
+        top: 0;
+        z-index: 30;
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
@@ -4484,6 +5164,7 @@ def render_html(
         padding: 10px 12px;
         background: #161a22;
         border-radius: 10px;
+        box-shadow: 0 8px 18px -10px rgba(0, 0, 0, 0.7);
     }
     .role-chips {
         display: flex;
@@ -5194,6 +5875,15 @@ def render_html(
         grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
         gap: 10px;
     }
+    /* ===== 增幅榜 (augment tier) — reuses .tier-block / .tier-pill / .aug card,
+       with a wider grid (aug cards carry more text than champ thumbnails) and a
+       rarity-filter chip row above the category chips. ===== */
+    .aug-tier-filters { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 20px; }
+    .aug-tier-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+    .aug.hidden { display: none; }
+    .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
+    .aug-rarity-chip.rarity-kGold.is-active { border-color: #f5c518; color: #ffe9a3; background: color-mix(in srgb, #f5c518 18%, transparent); }
+    .aug-rarity-chip.rarity-kSilver.is-active { border-color: #c0c5cc; color: #eef1f5; background: color-mix(in srgb, #c0c5cc 22%, transparent); }
     .champ {
         position: relative;
         aspect-ratio: 1 / 1;
@@ -5207,7 +5897,15 @@ def render_html(
         cursor: pointer;
         transition: transform .08s, box-shadow .08s, filter .08s;
     }
-    .champ:hover { transform: translateY(-1px); }
+    @media (hover: hover) {
+        .champ:hover {
+            transform: translateY(-3px) scale(1.015);
+            border-color: color-mix(in srgb, var(--accent) 55%, var(--tier-color, #555));
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+                        0 8px 24px -8px rgba(245, 197, 24, 0.35);
+            z-index: 1;
+        }
+    }
     .champ.detail-selected {
         transform: translateY(-2px);
         filter: brightness(1.08);
@@ -5402,11 +6100,12 @@ def render_html(
         left: 2px;
         bottom: 2px;
         font-size: 10px;
-        font-weight: 600;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums lining-nums;
         padding: 1px 4px;
-        border-radius: 3px;
+        border-radius: 6px;
         color: #e6e8eb;
-        background: rgba(14,17,22,0.78);
+        background: rgba(14,17,22,0.9);
     }
     .champ .name {
         position: absolute;
@@ -5635,6 +6334,20 @@ def render_html(
         font-size: 11px;
         font-family: "Noto Serif TC", "Source Han Serif TC", serif;
     }
+    .cf-skill {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        padding: 2px 9px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.04);
+        color: #c2c7ce;
+        white-space: nowrap;
+    }
+    .cf-skill b { font-weight: 600; }
     .detail-overview-head {
         display: flex;
         align-items: baseline;
@@ -5969,10 +6682,17 @@ def render_html(
         border-left: 1px solid rgba(255, 255, 255, 0.08);
         color: #9aa3b8;
     }
-    .cluster-pick.is-hot { color: #ffd479; }
-    .cluster-pick.is-warm { color: #c7cede; }
-    .cluster-pick.is-cold { color: #7f8aa3; }
-    /* Core build groups: shared rush (core 2) + 3rd-item options + finish tail. */
+    /* Pick-rate ("選取率") on every item surface uses the same cool->hot
+       popularity ramp as the augment cards (`.aug .alift.pick-*`): rare = cool
+       grey/blue, common = sand, popular = orange / gold.  Tier from pickTier()
+       — absolute 2/5/10/20% cuts, so a 60%-pick boot reads gold and a 1%-pick
+       combo reads grey, consistently across clusters / options / items / boots. */
+    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #7c8794; }
+    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #8fb4d6; }
+    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6c45c; }
+    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #f0962f; }
+    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #ffcf4d; }
+    /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
         border: 1px solid rgba(107, 209, 107, 0.18);
@@ -6004,13 +6724,50 @@ def render_html(
     .cg-option-wr.is-good { color: #6bd16b; }
     .cg-option-wr.is-bad { color: #ff8a8a; }
     .cg-option-wr.is-even { color: #c7cede; }
-    .cg-option-pick.is-hot { color: #ffd479; }
-    .cg-option-pick.is-warm { color: #c7cede; }
-    .cg-option-pick.is-cold { color: #7f8aa3; }
+    /* (.cg-option-pick pick-rate colour comes from the shared .pick-* ramp above) */
     .cg-option .lane-badge { font-size: 9px; padding: 1px 5px; }
     .cg-tail { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
     .cg-tail-label { font-size: 10px; color: #6b7280; }
     .cg-tail-icon { width: 28px; height: 28px; border-radius: 5px; background: #2a3142; object-fit: contain; opacity: 0.65; filter: grayscale(0.35); }
+    .overview-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) clamp(208px, 24%, 284px);
+        gap: 18px;
+        align-items: start;
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .overview-split > .detail-section,
+    .overview-split .overview-split-main > .detail-section {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+    }
+    .overview-split-main { min-width: 0; }
+    .overview-rail-col { min-width: 0; }
+    .boot-rail-section .detail-section-head { flex-wrap: wrap; }
+    .boot-rail { display: flex; flex-direction: column; gap: 6px; }
+    .boot-rail-row {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 8px; border-radius: 8px;
+        background: #0f131b; border: 1px solid rgba(255, 255, 255, 0.06);
+        outline: none;
+    }
+    .boot-rail-row.is-top { border-color: rgba(107, 209, 107, 0.32); background: #11151d; }
+    .boot-rail-row:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); }
+    .boot-rail-icon { width: 32px; height: 32px; border-radius: 6px; background: #2a3142; object-fit: contain; flex: 0 0 auto; }
+    .boot-rail-name { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #e6e8eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .boot-rail-wr { flex: 0 0 auto; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .boot-rail-wr.is-good { color: #6bd16b; }
+    .boot-rail-wr.is-bad { color: #ff8a8a; }
+    .boot-rail-wr.is-even { color: #c7cede; }
+    .boot-rail-pick { flex: 0 0 auto; min-width: 36px; text-align: right; font-size: 11px; color: #8b93a7; font-variant-numeric: tabular-nums; }
+    @media (max-width: 760px) {
+        .overview-split { grid-template-columns: 1fr; gap: 0; }
+        .overview-split .overview-split-main > .detail-section { margin-top: 0; }
+        .overview-split > .overview-rail-col { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+    }
     .item-build-icons {
         display: grid;
         justify-items: center;
@@ -6289,6 +7046,47 @@ def render_html(
     .detail-col-heading h3 { margin: 0; }
     .detail-col.best h3 { color: #6bd16b; }
     .detail-col.worst h3 { color: #ff6b6b; }
+    /* Augment category filter chips (above the per-champion ranking).  OR
+       multi-select; .is-active fills with the per-category accent. */
+    .aug-cat-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 12px;
+    }
+    .aug-cat-chip {
+        padding: 4px 11px;
+        background: #1f2530;
+        color: #c5cad3;
+        border: 1px solid #2f3645;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.1s, border-color 0.1s, color 0.1s;
+        --cat-color: #f5c518;
+    }
+    .aug-cat-chip:hover { background: #2a3142; border-color: #3a4252; }
+    .aug-cat-chip.is-active {
+        background: var(--cat-color);
+        color: #0e1116;
+        border-color: var(--cat-color);
+    }
+    .aug-cat-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .aug-cat-chip.cat-ap       { --cat-color: #3b82f6; }
+    .aug-cat-chip.cat-ad       { --cat-color: #f97316; }
+    .aug-cat-chip.cat-tank     { --cat-color: #a855f7; }
+    .aug-cat-chip.cat-gold     { --cat-color: #f5c518; }
+    .aug-cat-chip.cat-mechanic { --cat-color: #14b8a6; }
+    .aug-cat-chip.cat-cd       { --cat-color: #38bdf8; }
+    .aug-cat-chip.cat-new      { --cat-color: #ec4899; }
+    .aug-cat-chip.cat-crit     { --cat-color: #fbbf24; }
+    .aug-cat-chip.cat-amp      { --cat-color: #ef4444; }
+    .aug-cat-all               { --cat-color: #9aa0a6; }
+    .aug.cat-hidden { display: none; }
+    .rarity-row.cat-empty { display: none; }
     .rarity-row {
         display: grid;
         grid-template-columns: 56px 1fr;
@@ -6374,11 +7172,29 @@ def render_html(
     }
     .aug.good .awr { color: #6bd16b; }
     .aug.bad  .awr { color: #ff6b6b; }
+    /* Raw (unsmoothed) winrate + sample size, shown beneath the in-CI headline
+       so the displayed number is always backed by what the raw sample supports. */
+    .aug .araw {
+        font-size: 9px;
+        color: #7c8794;
+        margin-top: 1px;
+        white-space: nowrap;
+    }
     .aug .alift {
         font-size: 9px;
         color: #9aa0a6;
         margin-top: 1px;
     }
+    /* Pick-rate line is colour-coded by champion-relative popularity on a
+       cool->hot ramp (rare = cool grey/blue, common = sand, popular = orange,
+       熱門 = gold).  Deliberately NOT the green/red of `.awr` so popularity
+       reads as distinct from win rate.  Cuts follow the live distribution
+       (p85≈5%, p95≈10%, 熱門 ≥20%). */
+    .aug .alift.pick-1 { color: #7c8794; }
+    .aug .alift.pick-2 { color: #8fb4d6; }
+    .aug .alift.pick-3 { color: #e6c45c; }
+    .aug .alift.pick-4 { color: #f0962f; font-weight: 600; }
+    .aug .alift.pick-5 { color: #ffcf4d; font-weight: 700; }
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -6564,7 +7380,7 @@ def render_html(
        space.  ~700px is around where the two-column layout starts looking
        cramped on most phones. */
     @media (max-width: 700px) {
-        body { padding: 18px 10px 40px; }
+        /* Body padding is 0; .site-main owns content padding (see chrome CSS). */
         body.rec-modal-open,
         body.detail-modal-open { overflow: hidden; }
         h1 { font-size: 18px; }
@@ -6591,7 +7407,7 @@ def render_html(
         .page-actions .gh-star { width: auto; }
         /* Filter bar wraps tighter; search input becomes full-width on
            its own row. */
-        .filter-bar { padding: 8px; gap: 8px; }
+        .filter-bar { padding: 8px; gap: 8px; position: static; box-shadow: none; }
         .role-chips { gap: 4px; }
         .chip { padding: 4px 10px; font-size: 11px; }
         .filter-tools {
@@ -6871,9 +7687,9 @@ def render_html(
         .aug img { width: 36px; height: 36px; }
         .aug .aname { font-size: 9px; min-height: 22px; }
         .aug .awr { font-size: 10px; }
-        /* Hide the lift% / games count on mobile - keep cards compact.
-           Numbers still available on hover (tooltip) and via the title attr. */
-        .aug .alift { display: none; }
+        /* Pick-rate line stays visible on mobile — it's a single colour-coded
+           token now.  Lift / games stay hover-only on desktop, off on mobile. */
+        .aug .alift { font-size: 8px; margin-top: 0; }
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip { display: none; }
@@ -6918,6 +7734,369 @@ def render_html(
         outline: 2px solid #f5e8ff;
         outline-offset: 2px;
     }
+    .nav-tab:focus-visible,
+    .brand:focus-visible,
+    .segmented button:focus-visible,
+    .article-card:focus-visible,
+    .article-back:focus-visible {
+        outline: 2px solid var(--accent-soft);
+        outline-offset: 2px;
+    }
+    /* ============================================================
+       Site chrome: fixed header + tab nav + view switching.
+       ============================================================ */
+    .site-header {
+        position: sticky;
+        top: 0;
+        /* z 45: above page content + the sticky filter-bar (30) and rec FAB
+           (40), below the mobile modals / backdrops (55-70) so detail and
+           recommend overlays cover the header. */
+        z-index: 45;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        -webkit-backdrop-filter: saturate(180%) blur(14px);
+        backdrop-filter: saturate(180%) blur(14px);
+        border-bottom: 1px solid var(--border);
+        transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+    }
+    /* Opaque-ish fallback where backdrop-filter is unsupported. */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        .site-header,
+        .view-home .filter-bar { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+    }
+    /* Lift the header once the page scrolls under it (JS toggles .scrolled). */
+    .site-header.scrolled {
+        border-bottom-color: transparent;
+        box-shadow: 0 6px 22px -10px rgba(0, 0, 0, 0.55);
+    }
+    .site-header-inner {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: var(--header-h);
+        max-width: var(--container);
+        width: 100%;
+        margin: 0 auto;
+        padding: 0 24px;
+    }
+    .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        color: var(--text);
+        flex-shrink: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+        padding: 0;
+        font: inherit;
+    }
+    .brand-logo { width: 28px; height: 28px; display: block; border-radius: 7px; }
+    .brand-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .brand-title { font-size: 17px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+    .brand-patch {
+        font-family: "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums lining-nums;
+        color: var(--accent-soft);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+        padding: 1px 7px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+    .nav-tabs {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin: 0 auto 0 8px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .nav-tabs::-webkit-scrollbar { display: none; }
+    .nav-tab {
+        appearance: none;
+        border: 0;
+        background: none;
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 7px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+        position: relative;
+        transition: color 0.14s, background-color 0.14s;
+    }
+    .nav-tab:hover { color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
+    /* Active reads heavier than hover: a soft accent wash + the shared underline. */
+    .nav-tab.active { color: var(--text); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    /* One shared underline that slides between tabs (JS sets --ind-x / --ind-w in
+       moveTabIndicator).  It's a real element, not a ::after, so it can carry a
+       view-transition-name and morph ABOVE the frozen root snapshot during a tab
+       View Transition.  transition:none until .ui-ready so it doesn't grow from
+       width:0 on first paint. */
+    .nav-ind {
+        position: absolute;
+        bottom: 0;
+        left: var(--ind-x, 0);
+        width: var(--ind-w, 0);
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+        background: var(--accent);
+        box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+        pointer-events: none;
+        view-transition-name: tab-ind;
+        transition: none;
+    }
+    .ui-ready .nav-ind { transition: left var(--dur-3) var(--ease), width var(--dur-3) var(--ease); }
+    /* During a tab View Transition the indicator/thumb are morphed by the VT
+       (nav-ind as its own snapshot group, seg-thumb inside the panel snapshot).
+       Suppress their CSS transitions then, so the real elements jump to the final
+       geometry the new snapshot captures, instead of the CSS tween and the VT
+       fighting and stranding the indicator mid-slide. */
+    .vt-running .nav-ind, .vt-running .seg-thumb { transition: none; }
+    .nav-tab:active,
+    .site-header .gh-star:active,
+    .chip:active,
+    .segmented button:active { transform: scale(0.96); transition-duration: var(--dur-1); }
+    .header-actions { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    /* Header GitHub star overrides the legacy .gh-star sizing/colour. */
+    .site-header .gh-star {
+        display: inline-flex; align-items: center; gap: 6px;
+        width: auto; padding: 6px 10px;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 600;
+        text-decoration: none;
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
+    }
+    .site-header .gh-star:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
+    .site-header .lang-toggle {
+        width: auto; min-width: 0; padding: 6px 10px;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        font-size: 12px; font-weight: 600;
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
+    }
+    .site-header .lang-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
+    .site-header .lang-toggle:active { transform: scale(0.96); transition-duration: var(--dur-1); }
+
+    /* Shared content rail: chrome + grid align to one max-width on wide
+       monitors so the brand and GitHub star don't drift to far corners. */
+    .site-main { max-width: var(--container); margin: 0 auto; padding: 24px 24px 64px; }
+    .view { display: none; }
+    .view.is-active { display: block; view-transition-name: view; }
+    /* Tab switches cross-fade + slide the active panel via the View Transitions
+       API (see setActiveView).  Root is pinned (animation:none) so only the named
+       `view` (panel) and `tab-ind` (underline) groups morph -- the fixed header
+       never flickers and the scrollTo during the swap can't drag the page.  The
+       old/new panels keep their own heights (height:auto) so a tall->short swap
+       cross-fades instead of squashing.  No-API browsers fall back to an instant
+       swap. */
+    ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+    ::view-transition-group(view) { animation-duration: var(--dur-3); }
+    ::view-transition-old(view), ::view-transition-new(view) { height: auto; }
+    ::view-transition-old(view) { animation: vt-out 90ms var(--ease) both; }
+    ::view-transition-new(view) { animation: vt-in var(--dur-3) var(--ease) 60ms both; }
+    @keyframes vt-in { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes vt-out { to { opacity: 0; transform: translateY(-6px); } }
+    .view-narrow { max-width: 920px; margin: 0 auto; }
+    .section-head { margin: 0 0 4px; font-size: 22px; font-weight: 700; }
+    .section-sub { margin: 0 0 22px; color: var(--text-muted); font-size: 14px; }
+
+    /* Augment tier — placeholder until the global augment rollup ships. */
+    .coming-soon { text-align: center; padding: 96px 20px; }
+    .coming-soon-mark {
+        width: 64px; height: 64px; margin: 0 auto 18px;
+        border-radius: var(--r-lg); display: grid; place-items: center;
+        background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+        border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+        color: var(--accent);
+        filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 38%, transparent));
+        animation: csBreathe 3.2s var(--ease) infinite;
+    }
+    @keyframes csBreathe {
+        0%, 100% { transform: scale(1); opacity: 0.9; }
+        50% { transform: scale(1.06); opacity: 1; }
+    }
+    .coming-soon h2 { margin: 0 0 8px; font-size: 22px; }
+    .coming-soon p { margin: 0 auto; max-width: 440px; color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+    .coming-soon .cs-cta {
+        display: inline-flex; align-items: center; gap: 6px; margin-top: 22px;
+        padding: 9px 18px; border: 1px solid var(--border); border-radius: var(--r-sm);
+        background: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+        transition: background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
+    }
+    .coming-soon .cs-cta:hover { background: var(--surface-2); border-color: var(--border-strong); }
+    .coming-soon .cs-cta:active { transform: scale(0.97); }
+
+    /* Column — article cards + single-article reader. */
+    .article-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .article-card {
+        text-align: left; cursor: pointer;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+        padding: 18px 18px 20px; color: var(--text); font: inherit;
+        transition: border-color 0.14s, transform 0.14s, box-shadow 0.14s;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .article-card:hover { border-color: var(--accent-soft); transform: translateY(-2px); box-shadow: var(--shadow); }
+    .article-kicker { font-size: 12px; font-weight: 600; color: var(--accent-soft); letter-spacing: 0.04em; }
+    .article-card h3 { margin: 0; font-size: 17px; line-height: 1.35; }
+    .article-card p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+    .article-meta { margin-top: auto; padding-top: 6px; font-size: 12px; color: var(--text-dim); }
+    .article-reader { max-width: 720px; margin: 0 auto; }
+    .article-back {
+        display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+        background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .article-back:hover { color: var(--text); }
+    .article-reader h1 { font-size: 28px; margin: 0 0 8px; line-height: 1.25; }
+    .article-reader .article-meta { margin: 0 0 24px; padding: 0; }
+    .article-body { font-size: 15px; line-height: 1.8; color: var(--text); }
+    .article-body h2 { font-size: 19px; margin: 28px 0 10px; }
+    .article-body p { margin: 0 0 16px; }
+    .article-body ul { margin: 0 0 16px; padding-left: 22px; }
+    .article-body li { margin: 4px 0; }
+    .article-body b { color: var(--text); font-weight: 700; }
+    .art-rank { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .art-rank:last-of-type { border-bottom: 0; margin-bottom: 16px; }
+    .art-rank .rk { flex: 0 0 auto; width: 16px; text-align: center; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .art-face { flex: 0 0 auto; width: 46px; height: 46px; border-radius: var(--r-sm); object-fit: cover; background: var(--surface-2); }
+    .art-meta { flex: 1 1 auto; min-width: 0; }
+    .art-meta .nm { font-weight: 700; color: var(--text); }
+    .art-meta .sb { color: var(--text-muted); font-size: 13px; }
+    .art-rank .lf { flex: 0 0 auto; font-weight: 700; font-size: 18px; color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .art-rank .lf small { font-size: 11px; color: var(--text-muted); margin-left: 2px; font-weight: 400; }
+    .art-build { display: flex; flex-wrap: wrap; gap: 10px 14px; margin: 6px 0 16px; }
+    .art-item { width: 74px; display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center; }
+    .art-item img { width: 52px; height: 52px; border-radius: var(--r-sm); display: block; background: var(--surface-2); }
+    .art-item .it-nm { font-size: 12px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .art-item .it-tag { font-size: 11px; color: var(--text-muted); }
+
+    /* Scaling x snowball scatter (column article). */
+    .scatter-wrap { margin: 14px 0 8px; }
+    .scatter-chart { position: relative; width: 100%; }
+    .scatter-chart svg text { font-family: inherit; }
+    .sc-dot {
+        position: absolute; border-radius: 50%; border: 2px solid var(--ring, #555);
+        box-sizing: border-box; object-fit: cover; background: var(--surface-2);
+        transform: translate(-50%, -50%); z-index: 5; cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.4); transition: transform .09s var(--ease);
+    }
+    .sc-dot:hover { transform: translate(-50%, -50%) scale(1.95); z-index: 60; border-color: var(--text); }
+    .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
+    .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
+
+    /* Settings. */
+    .settings-grid { display: flex; flex-direction: column; gap: 16px; }
+    .setting-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    .setting-card h3 { margin: 0 0 4px; font-size: 16px; }
+    .setting-card .setting-desc { margin: 0 0 14px; color: var(--text-muted); font-size: 13px; }
+    .segmented { position: relative; display: inline-flex; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
+    /* Sliding fill behind the active option (JS sets left/width in moveSegThumb).
+       transition:none until .ui-ready so it doesn't slide in from the left edge on
+       first paint; spring easing gives the toggle a tactile settle. */
+    .seg-thumb {
+        position: absolute; z-index: 0;
+        top: 3px; bottom: 3px; left: 0; width: 0;
+        background: var(--accent); border-radius: 7px;
+        pointer-events: none;
+        transition: none;
+    }
+    .ui-ready .seg-thumb { transition: left var(--dur-2) var(--ease-spring), width var(--dur-2) var(--ease-spring); }
+    .segmented button {
+        position: relative; z-index: 1;
+        appearance: none; border: 0; background: none; color: var(--text-muted);
+        font: inherit; font-size: 13px; font-weight: 600; padding: 7px 16px; border-radius: 7px; cursor: pointer;
+        transition: color 0.12s;
+    }
+    .segmented button.active { color: var(--accent-on); }
+    .about-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 13px; }
+    .about-row:first-of-type { border-top: 0; }
+    .about-row .k { color: var(--text-muted); }
+    .about-row .v { color: var(--text); font-weight: 600; text-align: right; }
+    .about-link { color: var(--accent-soft); text-decoration: none; font-weight: 600; }
+    .settings-disclaimer { margin: 14px 0 0; color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+    .setting-card .updates-panel { margin-top: 12px; }
+
+    /* Re-stick the home filter bar just below the fixed header, and make it
+       the same frosted-glass material so the chrome reads as one band. */
+    .view-home .filter-bar {
+        top: var(--header-h);
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        -webkit-backdrop-filter: saturate(180%) blur(14px);
+        backdrop-filter: saturate(180%) blur(14px);
+        border: 1px solid var(--border);
+        box-shadow: none;
+        margin: 0 0 20px;
+    }
+
+    @media (max-width: 700px) {
+        .site-header-inner { padding: 0 12px; gap: 10px; }
+        .brand-title { font-size: 15px; }
+        .brand-patch { font-size: 11px; }
+        .nav-tabs { margin-left: 4px; }
+        .nav-tab { padding: 7px 10px; font-size: 13px; }
+        .site-main { padding: 16px 12px 48px; }
+        .site-header .gh-star span { display: none; }
+        .section-head { font-size: 19px; }
+        .article-reader h1 { font-size: 23px; }
+    }
+
+    /* The `background` shorthand transition permanently wedges when a var()
+       palette flips on a theme switch (the engine can't interpolate the
+       substitution and gets stuck on the old colour).  Transition
+       background-color instead for the interactive chrome, which IS
+       interpolable, so theme switches always land. */
+    .chip, .icon-btn, .gh-star, .tool-btn, .search, .change-tab,
+    .pick-chip, .meta-help, .detail-tab-label, .rec-fab, .side-close,
+    .detail-close, .nav-tab, .champ, .article-card, .setting-card {
+        transition: background-color var(--dur-2) var(--ease),
+                    color var(--dur-2) var(--ease),
+                    border-color var(--dur-2) var(--ease),
+                    box-shadow var(--dur-2) var(--ease),
+                    transform var(--dur-2) var(--ease);
+    }
+    /* "Top-highlight" inner hairline: a 1px translucent-white top edge fakes a
+       light source above and makes flat outlined surfaces read as physical
+       cards (the signature premium-dark depth cue). */
+    .champ, .article-card, .setting-card, .segmented {
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+    [data-theme="light"] .champ,
+    [data-theme="light"] .article-card,
+    [data-theme="light"] .setting-card,
+    [data-theme="light"] .segmented {
+        box-shadow: 0 1px 2px rgba(31, 41, 55, 0.06);
+    }
+    /* ===== Light theme: curated overrides for the legacy dark surfaces.
+       The chrome above themes via vars; these cover the home tier-list so
+       light mode reads as intentional.  The detail panel / recommend
+       side-panel stay dark cards (their dense internals use hardcoded light
+       text); we only force their inherited base colour light so nothing goes
+       dark-on-dark — a deliberate first-pass scope. ===== */
+    /* .filter-bar is frosted glass in both themes now (see .view-home .filter-bar). */
+    [data-theme="light"] .chip:not(.active) { background: var(--chip-bg); color: var(--text-muted); }
+    [data-theme="light"] .search { background: #ffffff; color: var(--text); border: 1px solid var(--border-strong); }
+    [data-theme="light"] .shown-count { color: var(--text-muted); }
+    [data-theme="light"] .tier-count,
+    [data-theme="light"] .tier-count-unit,
+    [data-theme="light"] .tier-count-num { color: var(--text-muted); }
+    [data-theme="light"] .footer { border-top-color: var(--border); color: var(--text-dim); }
+    [data-theme="light"] .footer .cutoffs,
+    [data-theme="light"] .footer .freshness { color: var(--text-muted); }
+    [data-theme="light"] .empty-state { color: var(--text-muted); }
+    [data-theme="light"] .empty-state strong { color: var(--text); }
+    [data-theme="light"] .detail,
+    [data-theme="light"] .side-panel { color: #e6e8eb; }
     /* Reduced-motion override.  Disables prismShift / shineSweep /
        slideDown so vestibular-sensitive users don't get hue drift and
        sweep effects across the page. */
@@ -6926,6 +8105,10 @@ def render_html(
             animation-duration: 0.001ms !important;
             animation-iteration-count: 1 !important;
             transition-duration: 0.001ms !important;
+            scroll-behavior: auto !important;
+        }
+        ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+            animation: none !important;
         }
     }
     """
@@ -6933,6 +8116,18 @@ def render_html(
     payload = {
         "champs": js_champs,
         "augs": js_augs,
+        "augCategories": {
+            "order": list(AUGMENT_CATEGORY_ORDER),
+            "labels": AUGMENT_CATEGORY_LABELS,
+            "newPatch": display_patch or "",
+        },
+        "tiers": {
+            "order": list(TIER_ORDER),
+            "colors": {
+                t: {"color": TIER_COLOR[t], "bg": TIER_LABEL_BG[t]}
+                for t in TIER_ORDER
+            },
+        },
         "min_games_per_pair": min_games_per_pair,
         "min_synergy_games": min_synergy_games,
         "patchChanges": patch_changes or {},
@@ -7047,16 +8242,40 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    parts.append("<div class='page-header'>")
-    parts.append("<div><div class='title-meta'>")
-    parts.append(f"<h1 id='site-title'>{header_title}</h1>")
-    parts.append(f"<div class='subtitle title-patch' id='site-subtitle'>{short_patch}</div>")
-    parts.append("</div></div>")
-    parts.append("<div class='page-actions'>")
+    # Fixed top header: brand (left) + tab nav + language toggle + GitHub star.
+    # Theme + changelog live in the Settings view; the language toggle sits in
+    # the header.  #site-title / #site-subtitle ids are preserved so applyLanguage
+    # keeps driving the brand text + patch chip.  The #updates-panel node (declared
+    # below) is relocated into Settings by JS on init to dodge its placeholder bytes.
+    parts.append("<header class='site-header'>")
+    parts.append("<div class='site-header-inner'>")
     parts.append(
-        '<button class="tool-btn update-tab header-update-tab" id="updates-toggle" type="button" '
-        'aria-expanded="false" aria-controls="updates-panel">近期更新</button>'
+        "<button class='brand' data-nav-tab='home' type='button' aria-label='ARAM 大亂鬥'>"
+        "<img class='brand-logo' src='favicon.svg' alt=''>"
+        "<span class='brand-text'>"
+        f"<span class='brand-title' id='site-title'>{header_title}</span>"
+        f"<span class='brand-patch' id='site-subtitle'>{short_patch}</span>"
+        "</span>"
+        "</button>"
     )
+    parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
+    for nav_key, nav_zh, nav_en in (
+        ("home", "主頁", "Home"),
+        ("augments", "增幅榜", "Augment Tier"),
+        ("column", "專欄", "Column"),
+        ("settings", "設定", "Settings"),
+    ):
+        is_home = nav_key == "home"
+        parts.append(
+            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
+            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
+            f"aria-selected='{'true' if is_home else 'false'}' "
+            f"tabindex='{'0' if is_home else '-1'}' "
+            f"data-i18n-zh='{nav_zh}' data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
+        )
+    parts.append("<span class='nav-ind' aria-hidden='true'></span>")
+    parts.append("</nav>")
+    parts.append("<div class='header-actions'>")
     parts.append(
         "<button class='icon-btn lang-toggle' id='lang-toggle' type='button' "
         "title='Switch to English' aria-label='切換語言'>"
@@ -7065,13 +8284,17 @@ def render_html(
     )
     parts.append(
         f"<a class='gh-star' href='{REPO_URL}' target='_blank' rel='noopener' "
-        "aria-label='GitHub' "
-        f"title='覺得有用請幫忙按 Star ⭐'>"
-        f"{gh_icon}"
-        f"</a>"
+        f"aria-label='GitHub' title='覺得有用請幫忙按 Star ⭐'>{gh_icon}<span>Star</span></a>"
     )
-    parts.append("</div>")
-    parts.append("</div>")  # /page-header
+    parts.append("</div>")  # /header-actions
+    parts.append("</div>")  # /site-header-inner
+    parts.append("</header>")
+    parts.append("<main class='site-main'>")
+    # ---- View: 主頁 (home) — champion tier list + recommend panel ----
+    parts.append(
+        "<section class='view view-home is-active' id='view-home' "
+        "data-view='home' role='tabpanel' aria-labelledby='tab-home'>"
+    )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
     parts.append(
@@ -7257,6 +8480,103 @@ def render_html(
         "<button class='rec-fab is-hidden' id='rec-fab' type='button'>看推薦組合</button>"
     )
     parts.append("</div>")  # /app-shell
+    parts.append("</section>")  # /view-home
+
+    # ---- View: 增幅榜 (augments) — global per-augment WR tier, rendered by JS ----
+    parts.append(
+        "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
+        "<div class='view-narrow'>"
+        "<h2 class='section-head' data-i18n-zh='增幅榜' data-i18n-en='Augment Tier'>增幅榜</h2>"
+        "<p class='section-sub' data-i18n-zh='每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。' "
+        "data-i18n-en='Overall win-rate of every augment, tiered by win-rate rank within its own rarity. More games = more reliable.'>"
+        "每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。</p>"
+        "<div class='aug-tier-filters' id='aug-tier-filters'></div>"
+        "<div id='aug-tier-host'></div>"
+        "</div>"
+        "</section>"
+    )
+
+    # ---- View: 專欄 (column) — article list + reader, rendered by JS ----
+    parts.append(
+        "<section class='view view-column' id='view-column' data-view='column' role='tabpanel' aria-labelledby='tab-column'>"
+        "<div class='view-narrow' id='column-host'></div>"
+        "</section>"
+    )
+
+    # ---- View: 設定 (settings) — language + theme + changelog + about ----
+    parts.append(
+        "<section class='view view-settings' id='view-settings' data-view='settings' role='tabpanel' aria-labelledby='tab-settings'>"
+    )
+    parts.append("<div class='view-narrow'>")
+    parts.append("<h2 class='section-head' data-i18n-zh='設定' data-i18n-en='Settings'>設定</h2>")
+    parts.append(
+        "<p class='section-sub' data-i18n-zh='主題、近期更新與資料來源。' "
+        "data-i18n-en='Theme, recent updates and data source.'>"
+        "主題、近期更新與資料來源。</p>"
+    )
+    parts.append("<div class='settings-grid'>")
+    # Language toggle now lives in the fixed header (#lang-toggle); see site-header build above.
+    # Theme card — segmented dark / light control (new JS).
+    parts.append(
+        "<div class='setting-card'>"
+        "<h3 data-i18n-zh='主題' data-i18n-en='Theme'>主題</h3>"
+        "<p class='setting-desc' data-i18n-zh='深色為預設；淺色為初版，密集面板持續調整中。' "
+        "data-i18n-en='Dark is the default; light is a first pass and dense panels are still being tuned.'>"
+        "深色為預設；淺色為初版，密集面板持續調整中。</p>"
+        "<div class='segmented' id='theme-seg' role='group' aria-label='主題'>"
+        "<span class='seg-thumb' aria-hidden='true'></span>"
+        "<button type='button' data-theme-choice='dark' aria-pressed='true' data-i18n-zh='深色' data-i18n-en='Dark'>深色</button>"
+        "<button type='button' data-theme-choice='light' aria-pressed='false' data-i18n-zh='淺色' data-i18n-en='Light'>淺色</button>"
+        "</div>"
+        "</div>"
+    )
+    # Changelog card — #updates-toggle; JS relocates #updates-panel into #updates-host.
+    parts.append(
+        "<div class='setting-card'>"
+        "<h3 data-i18n-zh='近期更新' data-i18n-en='Recent updates'>近期更新</h3>"
+        "<p class='setting-desc' data-i18n-zh='本站近期的功能與資料調整。' "
+        "data-i18n-en='Recent feature and data changes on this site.'>本站近期的功能與資料調整。</p>"
+        '<button class="tool-btn update-tab header-update-tab" id="updates-toggle" type="button" '
+        'aria-expanded="false" aria-controls="updates-panel">近期更新</button>'
+        "<div id='updates-host'></div>"
+        "</div>"
+    )
+    # About card.
+    parts.append("<div class='setting-card'>")
+    parts.append("<h3 data-i18n-zh='關於與資料來源' data-i18n-en='About &amp; data source'>關於與資料來源</h3>")
+    parts.append(
+        "<p class='setting-desc' data-i18n-zh='本站資料與更新資訊。' "
+        "data-i18n-en='Data and freshness information for this site.'>本站資料與更新資訊。</p>"
+    )
+    parts.append(
+        "<div class='about-row'><span class='k' data-i18n-zh='資料佇列' data-i18n-en='Queue'>資料佇列</span>"
+        f"<span class='v'>{html.escape(queue_label)} (queueId {queue_id})</span></div>"
+    )
+    if display_patch:
+        parts.append(
+            "<div class='about-row'><span class='k' data-i18n-zh='版本' data-i18n-en='Patch'>版本</span>"
+            f"<span class='v'>patch {html.escape(str(display_patch))}</span></div>"
+        )
+    if build_date:
+        parts.append(
+            "<div class='about-row'><span class='k' data-i18n-zh='更新時間' data-i18n-en='Updated'>更新時間</span>"
+            f"<span class='v'>{html.escape(build_date)}（{total_games:,}）</span></div>"
+        )
+    parts.append(
+        "<div class='about-row'><span class='k' data-i18n-zh='原始碼' data-i18n-en='Source'>原始碼</span>"
+        f"<span class='v'><a class='about-link' href='{REPO_URL}' target='_blank' rel='noopener'>GitHub ↗</a></span></div>"
+    )
+    parts.append(
+        "<p class='settings-disclaimer'>"
+        "This site isn't endorsed by Riot Games. League of Legends and Riot Games are "
+        "trademarks or registered trademarks of Riot Games, Inc. League of Legends © Riot Games, Inc."
+        "</p>"
+    )
+    parts.append("</div>")  # /about card
+    parts.append("</div>")  # /settings-grid
+    parts.append("</div>")  # /view-narrow
+    parts.append("</section>")  # /view-settings
+    parts.append("</main>")
 
     js = """
     async function loadSitePayload(url) {
@@ -7267,11 +8587,34 @@ def render_html(
         return await response.json();
     }
     const DATA = __PAYLOAD__;
+    // Empirical champion x team-archetype fit (decoupled artifact; absence -> heuristic fallback).
+    let ARCHFIT = null;
+    try {
+        ARCHFIT = await loadSitePayload("api/champ-archetype-fit.json");
+        if (ARCHFIT && ARCHFIT.champs && DATA.champs) {
+            for (const cid in ARCHFIT.champs) {
+                if (DATA.champs[cid]) DATA.champs[cid].archFit = ARCHFIT.champs[cid];
+            }
+        }
+    } catch (e) { ARCHFIT = null; }
+    // Empirical ability axes (scaling/snowball + empirical damage/tank/cc bars) merged into comp.
+    try {
+        const AXES = await loadSitePayload("api/champ-empirical-axes.json");
+        if (AXES && AXES.champs && DATA.champs) {
+            for (const cid in AXES.champs) {
+                const c = DATA.champs[cid], a = AXES.champs[cid];
+                if (c && c.comp && a) {
+                    c.comp.scaling = a.scaling; c.comp.snowball = a.snowball;
+                    c.comp.e_damage = a.e_damage; c.comp.e_tank = a.e_tank; c.comp.e_cc = a.e_cc;
+                }
+            }
+        }
+    } catch (e) {}
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     // Capability dims we percentile-rank per champion (the building blocks of comp fit).
-    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage'];
+    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'e_damage', 'e_tank', 'e_cc'];
     // The 6 comp archetypes. Each is a weighted blend of the capabilities that comp is
     // built around — a champion's fit = how much it supplies those, ranked across all champs.
     // The 6 aren't mutually exclusive (a champ can fit several); together they span most comps.
@@ -7283,15 +8626,17 @@ def render_html(
         { key: 'sustain',   w: { sustain: 0.6, poke: 0.25, cc: 0.15 }, zh: { name: '續航',     desc: '高回復、拉打耗血，適合持久續航陣' },       en: { name: 'Sustain',      desc: 'healing and kiting — fits an attrition / sustain comp' } },
         { key: 'frontback', w: { front: 0.4, damage: 0.35, cc: 0.25 }, zh: { name: '前後排',   desc: '穩固前排＋輸出，適合站樁前後排陣' },       en: { name: 'Front-to-back', desc: 'tanky front and a carry — fits a stand-and-deliver comp' } },
     ];
-    const COMP_FIT_ADVICE_THRESHOLD = 0.6;  // fit percentile (0-1) needed to surface a comp as advice
+    const COMP_FIT_ADVICE_THRESHOLD = 0.6;  // fit percentile (0-1) needed to surface a comp as advice (heuristic fallback)
+    const COMP_FIT_EMP_POS = 0.4;   // empirical delta pp to call a comp a fit ("build this around him")
+    const COMP_FIT_EMP_NEG = -0.4;  // empirical delta pp to call a comp one to avoid (redundant teammates)
     // Raw-ability bars shown beside the radar (champion capability percentiles, not comp fit).
     const ABILITY_BARS = [
-        { key: 'damage',  zh: '傷害', en: 'Damage' },
-        { key: 'front',   zh: '坦度', en: 'Tank' },
-        { key: 'cc',      zh: '控場', en: 'CC' },
+        { key: 'e_damage', zh: '傷害', en: 'Damage' },
+        { key: 'e_tank',   zh: '坦度', en: 'Tank' },
+        { key: 'e_cc',     zh: '控場', en: 'CC' },
         { key: 'sustain', zh: '恢復', en: 'Sustain' },
-        { key: 'engage',  zh: '開團', en: 'Engage' },
-        { key: 'poke',    zh: '消耗', en: 'Poke' },
+        { key: 'scaling',  zh: '後期', en: 'Scaling' },
+        { key: 'snowball', zh: '滾雪球', en: 'Snowball' },
     ];
     // Per-dim sorted value list across all champions, computed once (DATA.champs is static).
     let _compNormCache = null;
@@ -7308,8 +8653,11 @@ def render_html(
         _compNormCache = cols;
         return _compNormCache;
     }
-    // Hexagon radar SVG from N axes [{label, pct}] (pct 0-1), clockwise from top.
-    function compRadarSvg(axes, ariaLabel) {
+    // axes: heuristic mode [{label, pct 0-1}]; signed mode (opts.signed) [{label, delta pp}].
+    // Signed mode draws a dashed 0pp baseline ring; out=fits (blue), in=avoid (red); scale pp at full radius.
+    function compRadarSvg(axes, ariaLabel, opts) {
+        opts = opts || {};
+        const signed = !!opts.signed, scale = opts.scale || 2;
         const cx = 190, cy = 158, R = 108, n = axes.length;
         const ang = i => (-90 + i * (360 / n)) * Math.PI / 180;
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
@@ -7320,16 +8668,26 @@ def render_html(
             const [x, y] = at(i, R);
             return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
         }).join('');
-        const dataPts = axes.map((a, i) => at(i, R * Math.max(0, Math.min(1, a.pct))));
+        const frac = a => signed
+            ? Math.max(0.02, Math.min(1, 0.5 + Math.max(-1, Math.min(1, (a.delta || 0) / scale)) * 0.5))
+            : Math.max(0, Math.min(1, a.pct || 0));
+        const baseline = signed
+            ? `<polygon points="${ringPts(0.5)}" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="1" stroke-dasharray="3 3"/>`
+            : '';
+        const dataPts = axes.map((a, i) => at(i, R * frac(a)));
         const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
-        const dots = dataPts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#3aa0ff"/>`).join('');
+        const dotCol = a => signed ? ((a.delta || 0) >= 0 ? '#3aa0ff' : '#e2574b') : '#3aa0ff';
+        const dots = dataPts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="${dotCol(axes[i])}"/>`).join('');
         const labels = axes.map((a, i) => {
             const [lx, ly] = at(i, R + 24);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
-            const val = Math.round(a.pct * 100);
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="#7fc8ff">${val}</tspan></text>`;
+            const valTxt = signed ? ((a.delta || 0) >= 0 ? '+' : '') + (a.delta || 0).toFixed(1) : String(Math.round((a.pct || 0) * 100));
+            const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : '#7fc8ff';
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
         }).join('');
-        return `<svg class="comp-radar" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${spokes}<polygon points="${dataPoly}" fill="rgba(58,160,255,0.18)" stroke="#3aa0ff" stroke-width="2"/>${dots}${labels}</svg>`;
+        const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
+        const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
+        return `<svg class="comp-radar" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${baseline}${spokes}<polygon points="${dataPoly}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="2"/>${dots}${labels}</svg>`;
     }
     // Percentile rank 0-1: fraction of champions this value beats (robust to outliers).
     function compNorm(comp, key) {
@@ -7375,38 +8733,67 @@ def render_html(
         const lang = currentLang === 'en' ? 'en' : 'zh';
         const comp = (info && info.comp) || {};
         const cap = compCapPct(comp);
-        const stats = compFitStats();
-        const fits = COMP_FIT_DEFS.map(def => {
-            const raw = compFitRaw(def, cap);
-            const arr = stats[def.key];
-            const n = arr ? arr.length : 0;
-            let lt = 0;
-            while (lt < n && arr[lt] < raw) lt += 1;
-            const pct = n < 2 ? 0 : Math.max(0, Math.min(1, lt / (n - 1)));
-            return { def, name: def[lang].name, pct };
-        });
-        // Headline advice: the comps this champion fits best.
-        const advice = [...fits]
-            .sort((a, b) => b.pct - a.pct)
-            .filter(f => f.pct >= COMP_FIT_ADVICE_THRESHOLD)
-            .slice(0, 3)
-            .map(f => f.def[lang]);
-        const adviceHtml = advice.length
-            ? `<div class="comp-advice">${advice.map(a =>
-                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(a.name)}</span><span class="ca-desc">${escHtml(a.desc)}</span></div>`
-              ).join('')}</div>`
-            : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
-        const radarAxes = fits.map(f => ({ label: f.name, pct: f.pct }));
-        const radar = compRadarSvg(radarAxes, copy.compFitTitle);
+        let radar, adviceHtml, metaText;
+        const af = info && info.archFit;
+        const signedPp = d => ((d >= 0 ? '+' : '') + d.toFixed(1) + 'pp');
+        if (af && af.qualified && af.fit) {
+            // Empirical: signed WR delta when the OTHER 4 teammates lean each archetype.
+            const fits = COMP_FIT_DEFS.map(def => ({ def, name: def[lang].name, delta: Number((af.fit[def.key] || {}).delta || 0) }));
+            radar = compRadarSvg(fits.map(f => ({ label: f.name, delta: f.delta })), copy.compFitTitle, { signed: true, scale: 2 });
+            const best = [...fits].sort((a, b) => b.delta - a.delta).filter(f => f.delta >= COMP_FIT_EMP_POS).slice(0, 2);
+            const avoid = [...fits].sort((a, b) => a.delta - b.delta).filter(f => f.delta <= COMP_FIT_EMP_NEG).slice(0, 1);
+            const items = best.map(f =>
+                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(f.def[lang].desc)}</span></div>`);
+            avoid.forEach(f => items.push(
+                `<div class="comp-advice-item"><span class="ca-tag" style="color:#f0998a;border-color:rgba(226,87,75,.45)">${escHtml(copy.compFitAvoid)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(copy.compFitAvoidDesc)}</span></div>`));
+            adviceHtml = items.length ? `<div class="comp-advice">${items.join('')}</div>` : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
+            metaText = copy.compFitMetaEmp;
+        } else {
+            // Heuristic fallback (low sample): the champion's own ability blend, percentile-ranked.
+            const stats = compFitStats();
+            const fits = COMP_FIT_DEFS.map(def => {
+                const raw = compFitRaw(def, cap);
+                const arr = stats[def.key];
+                const n = arr ? arr.length : 0;
+                let lt = 0;
+                while (lt < n && arr[lt] < raw) lt += 1;
+                const pct = n < 2 ? 0 : Math.max(0, Math.min(1, lt / (n - 1)));
+                return { def, name: def[lang].name, pct };
+            });
+            const advice = [...fits].sort((a, b) => b.pct - a.pct).filter(f => f.pct >= COMP_FIT_ADVICE_THRESHOLD).slice(0, 3).map(f => f.def[lang]);
+            adviceHtml = advice.length
+                ? `<div class="comp-advice">${advice.map(a => `<div class="comp-advice-item"><span class="ca-tag">${escHtml(a.name)}</span><span class="ca-desc">${escHtml(a.desc)}</span></div>`).join('')}</div>`
+                : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
+            radar = compRadarSvg(fits.map(f => ({ label: f.name, pct: f.pct })), copy.compFitTitle);
+            metaText = copy.compFitMetaEst;
+        }
         const abilities = ABILITY_BARS.map(a => {
             const val = Math.round((cap[a.key] || 0) * 100);
             return `<div class="ab-row"><span class="ab-label">${escHtml(a[lang])}</span><span class="ab-bar"><span style="width:${val}%"></span></span><span class="ab-val">${val}</span></div>`;
         }).join('');
+        // Skill-scaling chip ("operation coefficient"): WR(high-skill lobbies) - WR(low-skill).
+        const ss = info && info.skillScaling;
+        let skillChip = '';
+        if (ss && typeof ss.pp === 'number') {
+            const strong = Math.abs(ss.z || 0) >= 2 && Math.abs(ss.pp) >= 2;
+            const pos = ss.pp >= 0;
+            const ppTxt = (pos ? '+' : '') + ss.pp.toFixed(1) + 'pp';
+            const col = !strong ? '#9aa3ad' : (pos ? '#3aa0ff' : '#e2574b');
+            const lbl = lang === 'en'
+                ? (!strong ? 'skill-neutral' : pos ? 'rewards skill' : 'stomps low elo')
+                : (!strong ? '中性' : pos ? '吃操作' : '低分強勢');
+            const nameTxt = lang === 'en' ? 'Skill-scaling' : '操作係數';
+            const titleTxt = lang === 'en'
+                ? 'Win-rate in high-skill minus low-skill lobbies (top vs bottom 25% by lobby skill)'
+                : '高分局勝率 − 低分局勝率（依對局水平前 25% vs 後 25%）';
+            skillChip = `<span class="cf-skill" title="${escHtml(titleTxt)}">${escHtml(nameTxt)} <b style="color:${col}">${ppTxt}</b><span style="color:${col}">· ${escHtml(lbl)}</span></span>`;
+        }
         return `
             <div class="detail-section">
                 <div class="detail-section-head">
                     <h3>${escHtml(copy.compFitTitle)}</h3>
-                    <span class="section-meta">${escHtml(copy.compFitMeta)}</span>
+                    <span class="section-meta">${escHtml(metaText)}</span>
+                    ${skillChip}
                 </div>
                 <div class="comp-fit-main">
                     <div class="comp-fit-radar">${radar}</div>
@@ -7461,6 +8848,185 @@ def render_html(
     const PATCH_LABEL = __PATCH_LABEL__;
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
+    const THEME_KEY = 'aram-mayhem-site-theme';
+    const VIEWS = ['home', 'augments', 'column', 'settings'];
+    // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
+    // escaped at render time.  Add new entries here — newest first.
+    const ARTICLES = [
+        {
+            id: 'skill-scaling',
+            date: '2026-06-28',
+            kicker_zh: '操作係數', kicker_en: 'Skill-scaling',
+            title_zh: '操作係數：誰吃操作，誰專屠低分',
+            title_en: 'Skill-scaling: who rewards skill, who farms low elo',
+            summary_zh: '同一隻英雄，在高手局和菜雞局的勝率差多少？汎 +5.0pp、賽恩 −4.3pp —— 一張表看誰吃操作、誰只會屠低分。',
+            summary_en: 'The same champion, split by lobby skill: Vayne climbs +5.0pp in strong lobbies, Sion drops −4.3pp. Who rewards good play, and who just farms weak games.',
+            body_zh: `<p>大亂鬥隨機發英雄，又靠配對把勝率拉回五五波，所以「牌位」幾乎被磨平 —— 出裝大家抄一樣的、英雄又不能選。那 ARAM 還有沒有高低手之分？有，只是它不藏在「選什麼」，而藏在「同一隻英雄，你榨得出多少」。</p>
+<p>我把每一場依玩家平均效率分成<b>高分局（前 25%）</b>與<b>低分局（後 25%）</b>，再看每隻英雄在這兩種局裡的勝率差。這個差就是<b>操作係數</b>：</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>操作係數 ＝ 高分局勝率 − 低分局勝率</b></p>
+<p>正值代表<b>吃操作</b> —— 高手手上更強；負值代表<b>低分強勢</b> —— 在弱局屠殺、遇到高手就現形。下面每一列，<b>箭頭左邊是低分局勝率、右邊是高分局勝率</b>。</p>
+<h2>最吃操作（高手手上更強）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="汎"><div class="art-meta"><div class="nm">汎</div><div class="sb">55.0% → 60.0% · 23,659 場</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="露璐"><div class="art-meta"><div class="nm">露璐</div><div class="sb">46.1% → 50.6% · 9,704 場</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="塔莉雅"><div class="art-meta"><div class="nm">塔莉雅</div><div class="sb">46.3% → 50.5% · 7,804 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="弗拉迪米爾"><div class="art-meta"><div class="nm">弗拉迪米爾</div><div class="sb">46.5% → 50.7% · 12,907 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="史矛德"><div class="art-meta"><div class="nm">史矛德</div><div class="sb">45.6% → 49.8% · 23,583 場</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="葵恩"><div class="art-meta"><div class="nm">葵恩</div><div class="sb">43.8% → 48.1% · 6,628 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<h2>最低分強勢（專屠弱局）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="悟空"><div class="art-meta"><div class="nm">悟空</div><div class="sb">51.9% → 47.4% · 9,927 場</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="賽恩"><div class="art-meta"><div class="nm">賽恩</div><div class="sb">61.3% → 57.0% · 18,598 場</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="賈克斯"><div class="art-meta"><div class="nm">賈克斯</div><div class="sb">53.8% → 49.6% · 10,341 場</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="納瑟斯"><div class="art-meta"><div class="nm">納瑟斯</div><div class="sb">53.0% → 49.2% · 13,004 場</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="斯溫"><div class="art-meta"><div class="nm">斯溫</div><div class="sb">49.5% → 45.9% · 20,924 場</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="卡爾瑟斯"><div class="art-meta"><div class="nm">卡爾瑟斯</div><div class="sb">52.3% → 48.8% · 24,173 場</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
+<h2>讀出來的故事</h2>
+<p>排行幾乎照著老常識走：<b>吃操作</b>那端清一色是機制難、上限高的後排 carry（汎、史矛德、貝爾薇斯）跟要搭 carry 的<b>露璐</b> —— 高手才餵得動、站得穩。<b>低分強勢</b>那端則是好上手的前排戰坦（賽恩、納瑟斯、悟空）：點一點就有貢獻，在亂打的局裡屠殺，一旦對手會閃、會集火，就被針對。</p>
+<p>賽恩是最戲劇化的例子：低分局他有 <b>61.3%</b> 勝率（全英雄數一數二），到高分局掉到 57.0% —— 還是強，但「躺贏」那一截被抽掉了。</p>
+<h2>一個誠實的但書</h2>
+<p>這個訊號是<b>真的</b>（跨版本穩定、統計顯著），但<b>不大</b> —— 最極端也就 ±5pp 上下。它能告訴你「這隻吃不吃操作」，卻<b>不能</b>反推某個玩家的牌位：大亂鬥勝負雜訊太大，個人分數會被拉回中段。把它當「選角／練哪隻」的參考剛剛好，別當天梯分。</p>
+<p>資料：本機 games.db · queue 2400（Mayhem）· 版本 16.11–16.13 · 對局水平＝玩家「同英雄傷害／經濟效率」，高低分各取前後 25%，每英雄樣本 ≥800 場 · 操作係數跨版本相關 r≈0.5。</p>`,
+            body_en: `<p>ARAM hands you random champions and matchmaking drags every win rate back toward 50% — so "rank" gets ground flat: everyone copies the same build, and you don't pick your champ. Is there still a skill gap? Yes — it doesn't live in <i>what you pick</i>, but in <i>how much you squeeze out of the same champion</i>.</p>
+<p>I split every game by average player efficiency into a <b>high-skill half (top 25%)</b> and a <b>low-skill half (bottom 25%)</b>, then measured each champion's win-rate gap between them. That gap is the <b>skill-scaling</b> coefficient:</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>Skill-scaling = WR(high-skill lobbies) − WR(low-skill lobbies)</b></p>
+<p>Positive = <b>rewards skill</b> (stronger in good hands); negative = <b>stomps low elo</b> (farms weak games, exposed against good players). In every row below, <b>the left number is the low-skill-lobby win rate, the right is the high-skill-lobby win rate</b>.</p>
+<h2>Rewards skill the most</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="Vayne"><div class="art-meta"><div class="nm">Vayne</div><div class="sb">55.0% → 60.0% · 23,659 games</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">46.1% → 50.6% · 9,704 games</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="Taliyah"><div class="art-meta"><div class="nm">Taliyah</div><div class="sb">46.3% → 50.5% · 7,804 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="Vladimir"><div class="art-meta"><div class="nm">Vladimir</div><div class="sb">46.5% → 50.7% · 12,907 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="Smolder"><div class="art-meta"><div class="nm">Smolder</div><div class="sb">45.6% → 49.8% · 23,583 games</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="Quinn"><div class="art-meta"><div class="nm">Quinn</div><div class="sb">43.8% → 48.1% · 6,628 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<h2>Farms low elo the most</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="Wukong"><div class="art-meta"><div class="nm">Wukong</div><div class="sb">51.9% → 47.4% · 9,927 games</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">61.3% → 57.0% · 18,598 games</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="Jax"><div class="art-meta"><div class="nm">Jax</div><div class="sb">53.8% → 49.6% · 10,341 games</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="Nasus"><div class="art-meta"><div class="nm">Nasus</div><div class="sb">53.0% → 49.2% · 13,004 games</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="Swain"><div class="art-meta"><div class="nm">Swain</div><div class="sb">49.5% → 45.9% · 20,924 games</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="Karthus"><div class="art-meta"><div class="nm">Karthus</div><div class="sb">52.3% → 48.8% · 24,173 games</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
+<h2>What it says</h2>
+<p>The ranking tracks common sense: the <b>rewards-skill</b> end is mechanically demanding, high-ceiling carries (Vayne, Smolder, Bel'Veth) plus the carry-dependent <b>Lulu</b> — they only pay off in good hands. The <b>low-elo</b> end is simple frontline bruisers (Sion, Nasus, Wukong): point-and-click value that stomps messy games, but gets exposed once enemies flash and focus-fire.</p>
+<p>Sion is the most dramatic case: <b>61.3%</b> win rate in low-skill lobbies (one of the highest of any champion), falling to 57.0% in high-skill ones — still strong, just with the free-win cushion stripped away.</p>
+<h2>One honest caveat</h2>
+<p>The signal is <b>real</b> (patch-stable, statistically significant) but <b>small</b> — at most ±5pp. It tells you whether a champion rewards skill; it <b>cannot</b> be flipped around to read a player's rank, because ARAM outcomes are too noisy and individual scores regress to the middle. Use it to pick a champ or decide what to practice — not as a ladder rating.</p>
+<p>Data: local games.db · queue 2400 (Mayhem) · patches 16.11–16.13 · lobby skill = players' champ-controlled damage/gold efficiency, top vs bottom 25%, ≥800 games per champion · skill-scaling cross-patch correlation r≈0.5.</p>`,
+        },
+        {
+            id: 'scaling-snowball',
+            date: '2026-06-28',
+            kicker_zh: '英雄地圖', kicker_en: 'Champion map',
+            title_zh: '後期 × 滾雪球：英雄定位圖',
+            title_en: 'Late game × snowball: a champion map',
+            summary_zh: '把全英雄畫在「能不能滾雪球」與「能不能撐到後期」兩條軸上，一眼看出誰是速攻、誰是發育、誰是全能。',
+            summary_en: 'Every champion plotted on two axes — snowball potential and late-game strength — so you can see who rushes, who scales, and who does both.',
+            body_zh: `<p>每隻英雄在 Mayhem 都有兩種「怎麼贏」的傾向：能不能<b>滾雪球</b>（靠人頭擴大優勢），以及能不能撐到<b>後期</b>。這張圖把全英雄同時畫在這兩條軸上。</p>
+<div class="scatter-wrap"><div class="scatter-chart" id="scatter-host"></div>
+<div class="scatter-legend"><span><span class="dot" style="background:#d64545"></span>低勝率</span><span><span class="dot" style="background:#d0b23a"></span>中</span><span><span class="dot" style="background:#48b868"></span>高勝率</span><span style="color:var(--text-dim)">· 滑鼠移到頭像看詳細數據</span></div></div>
+<h2>怎麼讀</h2>
+<ul><li><b>X 軸 滾雪球</b>＝0.6×平均最大連殺 ＋ 0.4×平均最大多殺。越右邊代表越會打出大連殺、滾成肥 carry。</li>
+<li><b>Y 軸 後期</b>＝比賽 ≥22 分鐘的勝率 − ≤16 分鐘的勝率。越上面代表局拖越久越強。</li>
+<li><b>外框顏色</b>＝該英雄平均勝率（紅→黃→綠）。</li>
+<li>虛線是全英雄<b>中位數</b>，把圖切成四象限。</li></ul>
+<h2>四象限</h2>
+<ul><li><b>右上（滾雪球強・後期強）</b>：全能型，前中後期都能打。</li>
+<li><b>左上（後期強）</b>：發育型，前期低調、愈拖愈強。</li>
+<li><b>右下（滾雪球強・後期弱）</b>：速攻型，要趁早靠人頭結束，拖久會虛。</li>
+<li><b>左下（兩者皆弱）</b>：較吃節奏，仰賴隊友或特定增幅。</li></ul>
+<p>一個常見誤解：滾雪球量的是「人頭爆發／收割能力」，<b>不直接等於把比賽提早結束</b>——它只反映擊殺面的擴張力，與局長是兩件事。本資料中位數時長約 17.6 分鐘。</p>
+<p>資料：本機 games.db · queue 2400（Mayhem）· 後期／滾雪球取自 <code>champ-empirical-axes.json</code>，每英雄樣本 ≥400 場。</p>`,
+            body_en: `<p>In Mayhem every champion leans two ways to win: how well they <b>snowball</b> (turn kills into a lead) and how well they <b>scale into the late game</b>. This chart plots all champions on both axes at once.</p>
+<div class="scatter-wrap"><div class="scatter-chart" id="scatter-host"></div>
+<div class="scatter-legend"><span><span class="dot" style="background:#d64545"></span>Low WR</span><span><span class="dot" style="background:#d0b23a"></span>Mid</span><span><span class="dot" style="background:#48b868"></span>High WR</span><span style="color:var(--text-dim)">· hover an icon for details</span></div></div>
+<h2>How to read it</h2>
+<ul><li><b>X axis — snowball</b> = 0.6×avg largest killing spree + 0.4×avg largest multi-kill. Further right = bigger kill streaks, snowballs into a fed carry.</li>
+<li><b>Y axis — late game</b> = WR(games ≥22 min) − WR(games ≤16 min). Higher = stronger the longer the game runs.</li>
+<li><b>Ring color</b> = the champion's average win rate (red → yellow → green).</li>
+<li>The dashed lines are the all-champion <b>medians</b>, splitting the map into four quadrants.</li></ul>
+<h2>The four quadrants</h2>
+<ul><li><b>Top-right (snowball + late)</b>: all-rounders, strong at every stage.</li>
+<li><b>Top-left (late)</b>: scalers, quiet early and stronger the longer it goes.</li>
+<li><b>Bottom-right (snowball, weak late)</b>: rushers — close it out early on kills, fade if it drags.</li>
+<li><b>Bottom-left (neither)</b>: tempo-dependent, lean on teammates or specific augments.</li></ul>
+<p>One common misread: snowball measures kill burst / cleanup potential, it does <b>not</b> directly mean ending the game early — it only reflects kill-side expansion, which is separate from game length. The median game here is about 17.6 minutes.</p>
+<p>Data: local games.db · queue 2400 (Mayhem) · late/snowball from <code>champ-empirical-axes.json</code>, ≥400 games per champion.</p>`,
+        },
+        {
+            id: 'draw-your-sword',
+            date: '2026-06-28',
+            kicker_zh: '增幅深入', kicker_en: 'Augment deep-dive',
+            title_zh: '拔劍吧：誰用最強，怎麼出裝',
+            title_en: 'Draw Your Sword: who abuses it, and how to build',
+            summary_zh: '依 lift（已扣除英雄本身強度）排名，煞蜜拉以 +20.7pp 居首；附實測最佳出裝與「雙開不拖」的證據。',
+            summary_en: 'Ranked by lift (champion strength removed): Samira tops at +20.7pp, plus the data-backed core build.',
+            body_zh: `<p><b>拔劍吧</b>（Draw Your Sword）：附近沒有敵人時蓄力，下次攻擊向前突進斬擊、造成額外傷害。本質是「進場 ＋ 收割」的爆發型增幅。</p>
+<p>下面依 <b>lift</b> 排名 —— 也就是「裝了這個增幅後，勝率比該英雄平常高多少」，已扣除英雄本身的強度，所以衡量的是「這個增幅成就了誰」，而不是誰本來就強。</p>
+<h2>最強使用者（依 lift）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="煞蜜拉"><div class="art-meta"><div class="nm">煞蜜拉</div><div class="sb">46.4% → 67.1% · 2,171 場</div></div><span class="lf">+20.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="亞菲利歐"><div class="art-meta"><div class="nm">亞菲利歐</div><div class="sb">52.3% → 67.9% · 589 場</div></div><span class="lf">+15.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="葛雷夫"><div class="art-meta"><div class="nm">葛雷夫</div><div class="sb">50.7% → 65.2% · 5,283 場</div></div><span class="lf">+14.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="凱特琳"><div class="art-meta"><div class="nm">凱特琳</div><div class="sb">52.5% → 67.1% · 1,330 場</div></div><span class="lf">+14.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="法洛士"><div class="art-meta"><div class="nm">法洛士</div><div class="sb">48.6% → 62.0% · 1,044 場</div></div><span class="lf">+13.3<small>pp</small></span></div>
+<p>煞蜜拉登頂的原因很直覺：她本體勝率只有 46%、偏弱，痛點正是「進不去」；拔劍吧的突進剛好補足進場，於是勝率直接噴到 67%。這個增幅不是錦上添花，而是補她的命門。</p>
+<h2>推薦核心出裝</h2>
+<p>全都是實測正向的單品，依建議順序：</p>
+<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="蒐集者"><div class="it-nm">蒐集者</div><div class="it-tag">①核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="無盡之刃"><div class="it-nm">無盡之刃</div><div class="it-tag">②核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="貪婪護脛"><div class="it-nm">貪婪護脛</div><div class="it-tag">③鞋</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="傲慢"><div class="it-nm">傲慢</div><div class="it-tag">④滾雪球</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="多明尼克的問候"><div class="it-nm">多明尼克</div><div class="it-tag">⑤破甲</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="死亡之舞"><div class="it-nm">死亡之舞</div><div class="it-tag">⑥防爆</div></div></div>
+<ul><li><b>① 蒐集者</b> — 最便宜、斬殺 ＋ 暴擊，最快成戰力</li>
+<li><b>② 無盡之刃</b> — 暴擊乘區核心</li>
+<li><b>③ 貪婪護脛</b> — 補移速 ＋ 擊殺疊吸血（被風箏兇可提前）</li>
+<li><b>④ 傲慢</b> — 靠擊殺滾 AD，越早越強</li>
+<li><b>⑤ 多明尼克的問候</b> — 對面有坦克／高護甲再提前</li>
+<li><b>⑥ 死亡之舞</b> — 後期防爆收尾</li></ul>
+<h2>三個關鍵心得</h2>
+<ul><li><b>蒐集者 ＋ 傲慢雙開不拖節奏。</b>四象限實測雙開 67.4% 是最高，平均時長只比單開多約 30 秒 —— 兩件都是中價位即戰力，戰力曲線連續上升，沒有空窗。</li>
+<li><b>不要疊兩件吸血。</b>嗜血者（61.9%）與無盡飢渴（60.9%）在骨架上都明顯低於基準；爆發流要的是傷害，不是續航。</li>
+<li><b>鞋子要出，首選貪婪護脛（67.2%）。</b>「不出鞋勝率較高」是反向因果（贏太快來不及買第六件），不是策略；對面 AP／控制多時改水星之靴。</li></ul>
+<p><b>lift</b> ＝ 裝此增幅後勝率 − 該英雄不帶此增幅的勝率（pp）。資料：本機 games.db · queue 2400（Mayhem）· patch 16.12 · 每英雄帶此增幅 ≥150 場。</p>`,
+            body_en: `<p><b>Draw Your Sword</b>: when no enemy is nearby you charge up, and your next attack dashes forward with a slash for bonus damage. It is fundamentally an engage-and-cleanup burst augment.</p>
+<p>The ranking below is by <b>lift</b> — how much higher a champion's win rate is with this augment than their usual baseline, with the champion's own strength removed. So it measures who the augment <b>elevates</b>, not who was already strong.</p>
+<h2>Top users (by lift)</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="Samira"><div class="art-meta"><div class="nm">Samira</div><div class="sb">46.4% → 67.1% · 2,171 games</div></div><span class="lf">+20.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="Aphelios"><div class="art-meta"><div class="nm">Aphelios</div><div class="sb">52.3% → 67.9% · 589 games</div></div><span class="lf">+15.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="Graves"><div class="art-meta"><div class="nm">Graves</div><div class="sb">50.7% → 65.2% · 5,283 games</div></div><span class="lf">+14.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="Caitlyn"><div class="art-meta"><div class="nm">Caitlyn</div><div class="sb">52.5% → 67.1% · 1,330 games</div></div><span class="lf">+14.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="Varus"><div class="art-meta"><div class="nm">Varus</div><div class="sb">48.6% → 62.0% · 1,044 games</div></div><span class="lf">+13.3<small>pp</small></span></div>
+<p>Samira tops the list for an intuitive reason: her baseline is only 46% — on the weak side — and her core problem is reaching the fight. The dash fixes exactly that, and her win rate jumps to 67%. The augment patches her weakness rather than padding a strength.</p>
+<h2>Recommended core build</h2>
+<p>Every item below tests positive; in suggested order:</p>
+<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="The Collector"><div class="it-nm">Collector</div><div class="it-tag">① core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="Infinity Edge"><div class="it-nm">Infinity Edge</div><div class="it-tag">② core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="Gluttonous Greaves"><div class="it-nm">Greaves</div><div class="it-tag">③ boots</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="Hubris"><div class="it-nm">Hubris</div><div class="it-tag">④ snowball</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="Lord Dominik's Regards"><div class="it-nm">Dominik's</div><div class="it-tag">⑤ armor pen</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="Death's Dance"><div class="it-nm">Death's Dance</div><div class="it-tag">⑥ anti-burst</div></div></div>
+<ul><li><b>① The Collector</b> — cheapest, execute + crit, fastest power spike</li>
+<li><b>② Infinity Edge</b> — the crit-multiplier core</li>
+<li><b>③ Gluttonous Greaves</b> — movement + kill-stacked omnivamp (rush earlier if kited hard)</li>
+<li><b>④ Hubris</b> — stacks AD off kills; the earlier the better</li>
+<li><b>⑤ Lord Dominik's Regards</b> — pull earlier vs tanks / heavy armor</li>
+<li><b>⑥ Death's Dance</b> — late-game anti-burst to close it out</li></ul>
+<h2>Three key takeaways</h2>
+<ul><li><b>Collector + Hubris together does not slow you down.</b> In the four-quadrant test, running both is the highest at 67.4%, and games are only ~30s longer than running one — both are mid-cost, immediately useful items, so the power curve climbs without a gap.</li>
+<li><b>Do not stack two lifesteal items.</b> Bloodthirster (61.9%) and the omnivamp lifesteal option (60.9%) both sit clearly below baseline on the skeleton; a burst build wants damage, not sustain.</li>
+<li><b>Buy boots — Gluttonous Greaves first (67.2%).</b> "No boots wins more" is reverse causation (you snowball too fast to afford a sixth item), not a strategy; swap to Mercury's Treads vs heavy AP / CC.</li></ul>
+<p><b>lift</b> = win rate with this augment − the champion's win rate without it (pp). Data: local games.db · queue 2400 (Mayhem) · patch 16.12 · ≥150 games per champion with this augment.</p>`,
+        },
+        {
+            id: 'how-to-read',
+            date: '2026-06-27',
+            kicker_zh: '入門', kicker_en: 'Basics',
+            title_zh: '如何閱讀這份 Tier List',
+            title_en: 'How to read this tier list',
+            summary_zh: '勝率、貝氏修正、樣本數 — 三個你該先看懂的欄位，別被小樣本誤導。',
+            summary_en: 'Win rate, Bayesian shrinkage, sample size — the three columns to read first so small samples do not fool you.',
+            body_zh: `<p>這份 tier list 把英雄依「貝氏修正後的勝率」分級，而不是單純的原始勝率。原因很簡單：小樣本的原始勝率非常不穩。</p>
+<h2>三個關鍵欄位</h2>
+<ul><li><b>勝率</b>：經貝氏收縮後的估計值，樣本越少越會被拉回整體基準。</li>
+<li><b>場次</b>：樣本數，決定你該多相信這個數字。</li>
+<li><b>原始勝率</b>：未修正的真實勝率，和上面對照看落差。</li></ul>
+<p>當原始勝率很高、但場次很低時，修正後的勝率會明顯被往下壓 — 這是刻意的保守，避免你追到只打了幾場的假強勢。</p>`,
+            body_en: `<p>This tier list ranks champions by a <b>Bayesian-shrunk win rate</b>, not the raw win rate. The reason is simple: raw win rate is very noisy on small samples.</p>
+<h2>Three columns that matter</h2>
+<ul><li><b>Win rate</b>: the shrunk estimate; the fewer the games, the more it is pulled back toward the overall baseline.</li>
+<li><b>Games</b>: the sample size — how much to trust the number.</li>
+<li><b>Raw win rate</b>: the unadjusted figure; compare it against the shrunk one.</li></ul>
+<p>When the raw win rate is high but games are few, the shrunk win rate is pushed down noticeably — a deliberate caution that keeps you from chasing a few-game mirage.</p>`,
+        },
+    ];
+    let columnArticle = null;
     const SET_RESIDUAL_THRESHOLD = 0.02;
     function trackEvent(name, params = {}) {
         if (typeof gtag === 'function') {
@@ -7481,6 +9047,8 @@ def render_html(
             updatesTitle: '近期重要更新',
             updatesClose: '關閉近期更新',
             updatesItems: [
+                '2026-06-17：出裝頁的選取率數字（單件／前兩件／核心／搭配裝備／鞋子）也套用與增幅裝置相同的熱門程度配色。',
+                '2026-06-17：增幅裝置卡片下方灰字精簡為只顯示選用率，並依熱門程度上色（冷色＝少人選，金色＝熱門）。',
                 '2026-05-25：英雄詳情新增「單件裝備強度」，六格中出過就計入，幫你選第三到第六件。',
                 '2026-05-25：前兩件出裝與單件裝備改成右滑 carousel，手機一次看更多裝備。',
                 '2026-05-25：增幅裝置改成同彩度一路由強排到弱，不再拆成兩個區塊。',
@@ -7514,7 +9082,7 @@ def render_html(
             itemSectionTitle: '最強前兩件出裝',
             itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
             itemClusterSectionTitle: '',
-            itemClusterSectionMeta: '依出裝順序分群：核心＝最先做的兩件（從提早結束的場次推回）；「第三件」列出各分歧選擇的勝率／選取率；收尾為常見後續',
+            itemClusterSectionMeta: '依出裝順序分群：核心＝最先做的兩件（從提早結束的場次推回）；「搭配裝備」列出與核心常一起出、且選取率或勝率達標的所有裝備（各附勝率／選取率）；收尾為其餘常見後續',
             augTypeSectionTitle: '推薦增幅裝置傾向',
             augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
             relativeBest: '相對最佳',
@@ -7523,7 +9091,7 @@ def render_html(
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：冷色＝少人選，金色＝熱門。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -7542,9 +9110,9 @@ def render_html(
             itemClusterGames: (games) => `${games} 場`,
             coreBuildShare: (pick) => `${pick} 選取率`,
             coreBuildWr: (wr) => `勝率 ${wr}`,
-            coreBuildThird: '第三件選擇',
+            coreBuildThird: '搭配裝備',
             coreBuildTail: '常見後續',
-            coreBuildTailTip: '這套常一起出、但不在上方「第三件選擇」內的裝備',
+            coreBuildTailTip: '這套常一起出、但選取率與勝率都未達上方「搭配裝備」門檻的裝備',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · 勝率 ${wr}（${lift}）· 選取率 ${pick} · ${games} 場`,
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
@@ -7557,10 +9125,18 @@ def render_html(
             secondaryRoleBadgeLift: lift => `勝率${lift}`,
             augPickLabel: pick => `選用率 ${pick}`,
             augHotBadge: '熱門',
+            augFilterAll: '全部',
+            augFilterAllTip: '清除分類，顯示全部增幅',
+            augFilterNewTip: patch => `${patch} 新推出的增幅`,
+            augFilterEmpty: '此分類沒有符合的增幅',
             overviewWrLabel: '綜合勝率',
             overviewGames: games => `${games} 場`,
             compFitTitle: '適配陣型',
             compFitMeta: '左：適配陣型；右：英雄能力（皆為全英雄百分位）',
+            compFitMetaEmp: '左：實測適配（隊友走該型時的勝率差 pp，正=圍繞他組／負=該避免）；右：能力百分位',
+            compFitMetaEst: '左：適配陣型（出賽量不足，暫以能力推估）；右：能力百分位',
+            compFitAvoid: '避免',
+            compFitAvoidDesc: '隊友角色重複，發揮變差',
             compAbilityCap: '英雄能力',
             compFitFlexible: '綜合型，沒有特別突出的適配陣型，可彈性搭配各種陣容',
         },
@@ -7577,6 +9153,8 @@ def render_html(
             updatesTitle: 'Recent important changes',
             updatesClose: 'Close recent updates',
             updatesItems: [
+                '2026-06-17: Item pick-rate figures (single items, first two items, core rush, paired items, boots) now use the same popularity colour-coding as augments.',
+                '2026-06-17: Augment cards now show only the pick rate beneath each tile, colour-coded by popularity (cool = rarely taken, gold = hot).',
                 '2026-05-25: Added Single Item Strength, counting any final-slot item to help choose items three through six.',
                 '2026-05-25: First-two-item and single-item recommendations now use swipeable carousels with denser mobile cards.',
                 '2026-05-25: Augment rows now run strongest to weakest within each rarity instead of splitting into two blocks.',
@@ -7610,7 +9188,7 @@ def render_html(
             itemSectionTitle: 'Best First Two Items',
             itemSectionMeta: 'boots excluded; left to right is #1 to #3',
             itemClusterSectionTitle: '',
-            itemClusterSectionMeta: 'grouped by build order: core = the first 2 items built (inferred from games that ended early); the "3rd item" row lists each branch with its win/pick rate; finish = common follow-up',
+            itemClusterSectionMeta: 'grouped by build order: core = the first 2 items built (inferred from games that ended early); the "other items" row lists every item commonly paired with the core that clears a pick-rate or win-rate bar (each with its win/pick rate); finish = other common follow-ups',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
             augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
             relativeBest: 'Relative Best',
@@ -7619,7 +9197,7 @@ def render_html(
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card is colour-coded by popularity: cool = rarely taken, gold = hot.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -7638,9 +9216,9 @@ def render_html(
             itemClusterGames: (games) => `${games}g`,
             coreBuildShare: (pick) => `${pick} pick`,
             coreBuildWr: (wr) => `${wr} WR`,
-            coreBuildThird: '3rd item',
+            coreBuildThird: 'Other items',
             coreBuildTail: 'Also common',
-            coreBuildTailTip: 'Items often added later — not the 3rd-item picks shown above',
+            coreBuildTailTip: 'Built with this core but below the pick-rate / win-rate bar of the items above',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
@@ -7653,10 +9231,18 @@ def render_html(
             secondaryRoleBadgeLift: lift => `WR ${lift}`,
             augPickLabel: pick => `pick ${pick}`,
             augHotBadge: 'Hot',
+            augFilterAll: 'All',
+            augFilterAllTip: 'Clear categories — show every augment',
+            augFilterNewTip: patch => `Augments introduced in ${patch}`,
+            augFilterEmpty: 'No augments match this category',
             overviewWrLabel: 'Overall WR',
             overviewGames: games => `${games} games`,
             compFitTitle: 'Comp fit',
             compFitMeta: 'left: comp fit; right: abilities (both percentile across all champions)',
+            compFitMetaEmp: 'left: measured fit (WR delta when teammates lean each comp; + build around him / − avoid); right: ability percentiles',
+            compFitMetaEst: 'left: comp fit (low sample — estimated from abilities); right: ability percentiles',
+            compFitAvoid: 'Avoid',
+            compFitAvoidDesc: 'redundant teammates — underperforms',
             compAbilityCap: 'Abilities',
             compFitFlexible: 'Flexible — no standout comp fit, slots into many comps',
         }
@@ -7922,18 +9508,27 @@ def render_html(
         const pickPct = pct(pickRate);
         const isHot = pickRate >= AUG_HOT_PICK;
         const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
-        const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
+        const augTierCls = pickTier(pickRate);
+        const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
+        // rawWr is the unsmoothed win rate; fall back to the headline for older
+        // payloads built before rawWr was emitted.
+        const rawWrVal = (entry.rawWr != null ? entry.rawWr : entry.wr);
+        const rawLine = (currentLang === 'en' ? 'raw ' : '原始 ') + pct(rawWrVal) + ' · n=' + entry.g;
+        const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc)
+            + ' · ' + rawLine;
         return `
             <div class="aug ${kind} rarity-${rarity}"
                  tabindex="0"
                  data-match-text="${escHtml(matchText)}"
+                 data-cats="${escHtml(cats)}"
                  aria-label="${escHtml(ariaLabel)}"
                  title="${escHtml(titleAttr)}">
                 ${hotBadge}
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div style="width:48px;height:48px;margin:0 auto 4px;background:#2a3142;border-radius:6px"></div>'}
                 <div class="aname">${escHtml(name)}</div>
                 <div class="awr">${pct(entry.wr)}</div>
-                <div class="alift">${signed(entry.lift)} · ${copy.augPickLabel(pickPct)} · ${entry.g}場</div>
+                <div class="araw">${escHtml(rawLine)}</div>
+                <div class="alift pick-${augTierCls}">${copy.augPickLabel(pickPct)}</div>
                 ${tooltip}
             </div>
         `;
@@ -7941,6 +9536,18 @@ def render_html(
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
     const AUG_HOT_PICK = 0.20;
+    // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
+    // the cool->hot colour ramp shared by augment cards AND every item surface
+    // (clusters / core-build options / first-two & single items / boots / core
+    // rush share).  Absolute cuts (2/5/10/20%) so the colour means the same
+    // thing everywhere; tier 5 (>=20%) lines up with the augment 熱門 badge.
+    function pickTier(pick) {
+        if (pick >= 0.20) return 5;
+        if (pick >= 0.10) return 4;
+        if (pick >= 0.05) return 3;
+        if (pick >= 0.02) return 2;
+        return 1;
+    }
     const RARITIES = [
         { key: 'kPrismatic', css: 'prismatic' },
         { key: 'kGold',      css: 'gold' },
@@ -7948,6 +9555,231 @@ def render_html(
     ];
     const MATE_LIST_LIMIT_DESKTOP = 8;
     const MATE_LIST_LIMIT_MOBILE = 6;
+
+    // ----- Augment category filter (chips above the per-champion ranking) -----
+    // Multi-select OR filter, persisted across champion switches within a
+    // session.  Each .aug card carries data-cats; chips toggle membership and we
+    // show/hide the matching cards (+ collapse rarity rows that empty out)
+    // without re-rendering the whole detail.
+    const augCatFilter = new Set();
+    function augCatMeta() {
+        return (DATA && DATA.augCategories) || { order: [], labels: {}, newPatch: '' };
+    }
+    function augCatLabel(cat) {
+        const lbl = (augCatMeta().labels || {})[cat];
+        if (!lbl) return cat;
+        return currentLang === 'en' ? (lbl.en || lbl.zh || cat) : (lbl.zh || lbl.en || cat);
+    }
+    function buildAugCatChips() {
+        const meta = augCatMeta();
+        const order = Array.isArray(meta.order) ? meta.order : [];
+        if (!order.length) return '';
+        const copy = tr();
+        const allActive = augCatFilter.size === 0;
+        const chips = [
+            `<button type="button" class="aug-cat-chip aug-cat-all${allActive ? ' is-active' : ''}" data-cat="" aria-pressed="${allActive}" title="${escHtml(copy.augFilterAllTip)}">${escHtml(copy.augFilterAll)}</button>`,
+        ];
+        order.forEach(cat => {
+            const active = augCatFilter.has(cat);
+            const tip = (cat === 'new' && meta.newPatch) ? ` title="${escHtml(copy.augFilterNewTip(meta.newPatch))}"` : '';
+            chips.push(`<button type="button" class="aug-cat-chip cat-${cat}${active ? ' is-active' : ''}" data-cat="${cat}" aria-pressed="${active}"${tip}>${escHtml(augCatLabel(cat))}</button>`);
+        });
+        return `<div class="aug-cat-bar" role="group" aria-label="${escHtml(currentLang === 'en' ? 'Augment categories' : '增幅分類')}">${chips.join('')}</div>`;
+    }
+    // Re-apply the active filter to every .aug card under `root`, syncing chip
+    // pressed state and collapsing rarity rows that hold cards but match none.
+    function applyAugCatFilter(root) {
+        if (!root) return;
+        const active = augCatFilter;
+        root.querySelectorAll('.aug-cat-chip').forEach(chip => {
+            const cat = chip.getAttribute('data-cat') || '';
+            const on = cat ? active.has(cat) : active.size === 0;
+            chip.classList.toggle('is-active', on);
+            chip.setAttribute('aria-pressed', String(on));
+        });
+        root.querySelectorAll('.rarity-row').forEach(row => {
+            let shown = 0;
+            const cards = row.querySelectorAll('.aug');
+            cards.forEach(card => {
+                const cats = (card.getAttribute('data-cats') || '').split(' ').filter(Boolean);
+                const match = active.size === 0 || cats.some(c => active.has(c));
+                card.classList.toggle('cat-hidden', !match);
+                if (match) shown++;
+            });
+            row.classList.toggle('cat-empty', cards.length > 0 && shown === 0 && active.size > 0);
+        });
+    }
+    function toggleAugCat(cat) {
+        if (!cat) augCatFilter.clear();
+        else if (augCatFilter.has(cat)) augCatFilter.delete(cat);
+        else augCatFilter.add(cat);
+        document.querySelectorAll('.detail').forEach(applyAugCatFilter);
+    }
+    document.addEventListener('click', (ev) => {
+        const chip = ev.target.closest('.aug-cat-chip');
+        // The 增幅榜 tab reuses .aug-cat-chip styling but has its own filter state
+        // and handler (below); don't let the per-champion detail filter grab them.
+        if (!chip || chip.closest('#aug-tier-filters')) return;
+        ev.preventDefault();
+        toggleAugCat(chip.getAttribute('data-cat') || '');
+    });
+
+    /* ===== 增幅榜 (global augment tier) =========================================
+       Built client-side from DATA.augs (each augment carries wr/g/lift/pick from
+       the Python rollup).  Tier = within-rarity percentile of wr, so a strong
+       Silver is not buried under mediocre Prismatics.  Reuses buildAugCard + the
+       .tier-block visuals; rarity + category chips filter the cards in place. */
+    const AUG_TIER_MIN_GAMES = 500;
+    const AUG_TIER_PCT = [['OP',0.08],['T1',0.17],['T2',0.25],['T3',0.25],['T4',0.17],['T5',0.08]];
+    const AUG_RARITY_LABELS = {
+        kPrismatic: { zh: '棱彩', en: 'Prismatic' },
+        kGold:      { zh: '金',   en: 'Gold' },
+        kSilver:    { zh: '銀',   en: 'Silver' },
+    };
+    const AUG_RARITY_ORDER = ['', 'kPrismatic', 'kGold', 'kSilver'];
+    let augTierRarity = '';
+    const augTierCats = new Set();
+
+    function augTierEntries() {
+        const out = [];
+        const augs = (DATA && DATA.augs) || {};
+        for (const id in augs) {
+            const a = augs[id];
+            if (a && typeof a.wr === 'number' && (a.g || 0) >= AUG_TIER_MIN_GAMES) {
+                out.push({ id: id, wr: a.wr, g: a.g, rawWr: a.rawWr, lift: a.lift, pick: a.pick, rarity: a.rarity || '' });
+            }
+        }
+        return out;
+    }
+    function computeAugTiers(entries) {
+        const byR = {};
+        entries.forEach(e => { (byR[e.rarity] = byR[e.rarity] || []).push(e); });
+        Object.keys(byR).forEach(rar => {
+            const list = byR[rar];
+            list.sort((a, b) => b.wr - a.wr);
+            const n = list.length;
+            let idx = 0, cum = 0;
+            AUG_TIER_PCT.forEach(pair => {
+                cum += pair[1];
+                const cutoff = Math.round(cum * n);
+                while (idx < cutoff && idx < n) { list[idx].tier = pair[0]; idx++; }
+            });
+            while (idx < n) { list[idx].tier = 'T5'; idx++; }
+        });
+        return entries;
+    }
+    function augRarityLabel(rar) {
+        if (!rar) return currentLang === 'en' ? 'All' : '全部';
+        const l = AUG_RARITY_LABELS[rar];
+        return l ? (currentLang === 'en' ? l.en : l.zh) : rar;
+    }
+    function buildAugTierFilters() {
+        const host = document.getElementById('aug-tier-filters');
+        if (!host) return;
+        const rarChips = AUG_RARITY_ORDER.map(rar => {
+            const on = augTierRarity === rar;
+            const cls = 'aug-cat-chip aug-rarity-chip' + (rar ? ' rarity-' + rar : '') + (on ? ' is-active' : '');
+            return `<button type="button" class="${cls}" data-rarity="${rar}" aria-pressed="${on}">${escHtml(augRarityLabel(rar))}</button>`;
+        }).join('');
+        const meta = augCatMeta();
+        const order = Array.isArray(meta.order) ? meta.order : [];
+        const allCat = augTierCats.size === 0;
+        const catChips = [`<button type="button" class="aug-cat-chip aug-cat-all${allCat ? ' is-active' : ''}" data-tcat="" aria-pressed="${allCat}">${escHtml(currentLang === 'en' ? 'All' : '全部')}</button>`]
+            .concat(order.map(cat => {
+                const on = augTierCats.has(cat);
+                return `<button type="button" class="aug-cat-chip cat-${cat}${on ? ' is-active' : ''}" data-tcat="${cat}" aria-pressed="${on}">${escHtml(augCatLabel(cat))}</button>`;
+            })).join('');
+        const rarLbl = currentLang === 'en' ? 'Rarity' : '稀有度';
+        const catLbl = currentLang === 'en' ? 'Category' : '分類';
+        host.innerHTML =
+            `<div class="aug-cat-bar aug-rarity-bar" role="group" aria-label="${escHtml(rarLbl)}">${rarChips}</div>`
+            + `<div class="aug-cat-bar" role="group" aria-label="${escHtml(catLbl)}">${catChips}</div>`;
+    }
+    function renderAugmentTier() {
+        const host = document.getElementById('aug-tier-host');
+        if (!host) return;
+        buildAugTierFilters();
+        const tierMeta = (DATA && DATA.tiers) || {};
+        const order = (tierMeta.order && tierMeta.order.length) ? tierMeta.order : ['OP','T1','T2','T3','T4','T5'];
+        const colors = tierMeta.colors || {};
+        const entries = computeAugTiers(augTierEntries());
+        if (!entries.length) {
+            host.innerHTML = `<div class="empty-state visible">${escHtml(currentLang === 'en' ? 'Augment win-rate data is not available yet.' : '尚無增幅勝率資料。')}</div>`;
+            return;
+        }
+        const byTier = {};
+        entries.forEach(e => { (byTier[e.tier] = byTier[e.tier] || []).push(e); });
+        const unit = currentLang === 'en' ? '' : '個';
+        const blocks = [];
+        order.forEach(tier => {
+            const list = byTier[tier];
+            if (!list || !list.length) return;
+            list.sort((a, b) => b.wr - a.wr);
+            const col = colors[tier] || {};
+            const cards = list.map(e => buildAugCard(e, e.wr >= 0.5 ? 'good' : 'bad')).join('');
+            blocks.push(
+                `<div class="tier-block aug-tier-block" data-tier="${tier}" style="--tier-color:${col.color || '#555'}; --tier-bg:${col.bg || '#555'};">`
+                + `<h2 class="tier-heading"><span class="tier-pill"><span>${tier}</span></span>`
+                + `<span class="tier-count"><span class="aug-tier-count-num">${list.length}</span>${unit ? ' ' + escHtml(unit) : ''}</span></h2>`
+                + `<div class="tier-grid aug-tier-grid">${cards}</div>`
+                + `</div>`
+            );
+        });
+        host.innerHTML = blocks.join('');
+        applyAugTierFilters();
+    }
+    function applyAugTierFilters() {
+        const host = document.getElementById('aug-tier-host');
+        const filters = document.getElementById('aug-tier-filters');
+        if (!host) return;
+        host.querySelectorAll('.aug-tier-block').forEach(block => {
+            let shown = 0;
+            block.querySelectorAll('.aug').forEach(card => {
+                const cats = (card.getAttribute('data-cats') || '').split(' ').filter(Boolean);
+                const rarCls = [...card.classList].find(c => c.indexOf('rarity-') === 0) || '';
+                const rarKey = rarCls.replace('rarity-', '');
+                const okRar = !augTierRarity || rarKey === augTierRarity;
+                const okCat = augTierCats.size === 0 || cats.some(c => augTierCats.has(c));
+                const hide = !(okRar && okCat);
+                card.classList.toggle('hidden', hide);
+                if (!hide) shown++;
+            });
+            const num = block.querySelector('.aug-tier-count-num');
+            if (num) num.textContent = shown;
+            block.classList.toggle('hidden', shown === 0);
+        });
+        if (filters) {
+            filters.querySelectorAll('.aug-rarity-chip').forEach(chip => {
+                const on = (chip.getAttribute('data-rarity') || '') === augTierRarity;
+                chip.classList.toggle('is-active', on); chip.setAttribute('aria-pressed', String(on));
+            });
+            filters.querySelectorAll('[data-tcat]').forEach(chip => {
+                const cat = chip.getAttribute('data-tcat') || '';
+                const on = cat ? augTierCats.has(cat) : augTierCats.size === 0;
+                chip.classList.toggle('is-active', on); chip.setAttribute('aria-pressed', String(on));
+            });
+        }
+    }
+    document.addEventListener('click', (ev) => {
+        if (!ev.target.closest('#aug-tier-filters')) return;
+        const rChip = ev.target.closest('[data-rarity]');
+        if (rChip) {
+            ev.preventDefault();
+            augTierRarity = rChip.getAttribute('data-rarity') || '';
+            applyAugTierFilters();
+            return;
+        }
+        const tChip = ev.target.closest('[data-tcat]');
+        if (tChip) {
+            ev.preventDefault();
+            const cat = tChip.getAttribute('data-tcat') || '';
+            if (!cat) augTierCats.clear();
+            else if (augTierCats.has(cat)) augTierCats.delete(cat);
+            else augTierCats.add(cat);
+            applyAugTierFilters();
+            return;
+        }
+    });
 
     function buildRarityRow(items, kind, r) {
         const copy = tr();
@@ -7980,6 +9812,7 @@ def render_html(
         const itemInfo = info.items || {};
         const singleItemInfo = info.singleItems || {};
         const bootInfo = info.boots || {};
+        const spellInfo = info.spells || {};
         const itemClusterInfo = info.itemClusters || {};
         const augTypeInfo = info.augTypes || {};
         const augmentRankTitle = currentLang === 'en' ? 'Augment Ranking' : '增幅裝置排行';
@@ -8095,7 +9928,7 @@ def render_html(
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-                const pickHeat = pickVal >= 0.05 ? 'is-hot' : (pickVal < 0.02 ? 'is-cold' : 'is-warm');
+                const pickHeat = 'pick-' + pickTier(pickVal);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
                     : titleForItemCard(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games);
@@ -8149,7 +9982,7 @@ def render_html(
                 <div class="${cardClass}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
-                    <div class="item-build-pick">${pct(entry.pick || 0)}</div>
+                    <div class="item-build-pick pick-${pickTier(Number(entry.pick || 0))}">${pct(entry.pick || 0)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                 </div>
             `;
@@ -8315,7 +10148,7 @@ def render_html(
                     const lift = Number(o.lift || 0);
                     const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
                     const pickVal = Number(o.pick || 0);
-                    const pickHeat = pickVal >= 0.05 ? 'is-hot' : (pickVal < 0.02 ? 'is-cold' : 'is-warm');
+                    const pickHeat = 'pick-' + pickTier(pickVal);
                     const laneInfo = laneLabels[o.lane];
                     const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
                     const tip = copy.itemClusterCardTitle
@@ -8348,10 +10181,10 @@ def render_html(
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
                                 ${wrHtml}
-                                <span class="cg-core-share">${escHtml(share)}</span>
+                                <span class="cg-core-share pick-${pickTier(Number(grp.pick || 0))}">${escHtml(share)}</span>
                             </div>
                         </div>
-                        <div class="cg-options-label">${copy.coreBuildThird || '第三件選擇'}</div>
+                        <div class="cg-options-label">${copy.coreBuildThird || '搭配裝備'}</div>
                         <div class="cg-options">${options}</div>
                         ${tailBlock}
                     </div>`;
@@ -8370,6 +10203,42 @@ def render_html(
         const buildItemPanel = (title, meta, payload, options = {}) => (
             buildAffinitySection(title, meta, payload, options) || emptyDetailSection(title, meta)
         );
+        // Compact vertical boots list for the Overview right rail (fills the
+        // space beside the build routes; champion-level, not per-route).
+        const buildBootRail = (title, meta, payload, opts = {}) => {
+            const rows = (payload && payload.top) || [];
+            if (!rows.length) return emptyDetailSection(title, meta);
+            const railLimit = opts.limit || 4;
+            const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
+            const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
+                currentLang === 'en'
+                    ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
+                    : `${itemName} · WR ${wr} · 選取率 ${pick} · 勝率 ${lift} · ${games} 場`
+            ));
+            const items = rows.slice(0, railLimit).map((entry, idx) => {
+                const name = setEntryName(entry);
+                const pairItems = Array.isArray(entry.items) ? entry.items : [];
+                const icon = pairItems[0] && pairItems[0].icon;
+                const wr = Number(entry.wr || 0);
+                const liftValue = Number(entry.lift ?? entry.res ?? 0);
+                const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+                const pickVal = Number(entry.pick || 0);
+                const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
+                return `
+                    <div class="boot-rail-row${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">
+                        ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
+                        <span class="boot-rail-name">${escHtml(name)}</span>
+                        <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
+                        <span class="boot-rail-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</span>
+                    </div>`;
+            }).join('');
+            const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
+            return `
+                <div class="detail-section boot-rail-section${railExtraClass}">
+                    <div class="detail-section-head"><h3>${title}</h3>${metaHtml}</div>
+                    <div class="boot-rail">${items}</div>
+                </div>`;
+        };
         const buildSingleItemPanel = (title, meta, payload) => {
             const goodSection = buildAffinitySection(title, meta, payload, { itemCarousel: true, singleItem: true });
             const badSection = buildItemSectionFromRows(
@@ -8409,26 +10278,30 @@ def render_html(
             ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Comp fit' }
             : { overview: '概覽', items: '出裝', augments: '增幅裝置', compfit: '適配陣型' };
         const bootItemTitle = currentLang === 'en' ? 'Recommended Boots' : '推薦鞋子';
-        const bootItemMeta = currentLang === 'en'
-            ? 'boots only; ranked by conservative win-rate lift and pick stability'
-            : '只看鞋子；用保守勝率提升與選取率穩定度排序';
-        // \u6982\u89bd: headline win-rate, then 6-item routes + boots stacked (no sub-tabs).
+        const bootItemMeta = currentLang === 'en' ? 'WR · pick' : '勝率 · 選取率';
+        const spellRailTitle = currentLang === 'en' ? 'Summoner Spells' : '召喚師技能';
+        // Mayhem players carry two spells, so pick rates sum to ~200%.
+        const spellRailMeta = currentLang === 'en' ? 'WR · pick · 2 per player' : '勝率 · 選取率 · 每人 2 個';
+        // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
+        // on the left, a compact boots rail filling the space on the right.
         const overviewTabContent = `
             <div class="detail-section detail-overview-head">
                 <span class="ovr-wr">${pct(info.wr)}</span>
                 <span class="ovr-meta">${copy.overviewWrLabel} \u00b7 ${copy.overviewGames(info.g)}</span>
             </div>
-            ${buildCoreGroupSection(
-                copy.itemClusterSectionTitle || '',
-                copy.itemClusterSectionMeta || '',
-                itemClusterInfo,
-            )}
-            ${buildItemPanel(
-                bootItemTitle,
-                bootItemMeta,
-                bootInfo,
-                { itemCarousel: true, singleItem: true, bootItem: true },
-            )}
+            <div class="overview-split">
+                <div class="overview-split-main">
+                    ${buildCoreGroupSection(
+                        copy.itemClusterSectionTitle || '',
+                        copy.itemClusterSectionMeta || '',
+                        itemClusterInfo,
+                    )}
+                </div>
+                <div class="overview-rail-col">
+                    ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
+                    ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, { limit: 5, extraClass: 'spell-rail-section' })}
+                </div>
+            </div>
         `;
         // \u51fa\u88dd: single items + first-two items stacked (no sub-tabs).
         const itemTabContent = `
@@ -8455,6 +10328,7 @@ def render_html(
                         <h3>${augmentRankTitle}</h3>
                         ${buildSetSummary(setTop)}
                     </div>
+                    ${buildAugCatChips()}
                     ${topRows}
                 </div>
             </div>
@@ -9107,6 +10981,240 @@ def render_html(
         }
     }
 
+    function articleField(a, base) {
+        return currentLang === 'en'
+            ? (a[base + '_en'] || a[base + '_zh'] || '')
+            : (a[base + '_zh'] || a[base + '_en'] || '');
+    }
+    function renderColumnList() {
+        columnArticle = null;
+        if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
+        const host = document.getElementById('column-host');
+        if (!host) return;
+        const head = currentLang === 'en' ? 'Column' : '專欄';
+        const sub = currentLang === 'en'
+            ? 'The thinking behind the data, and how to play it.'
+            : '資料背後的思考與玩法解析。';
+        const cards = ARTICLES.map(a => `
+            <div class="article-card" data-article="${escHtml(a.id)}" role="button" tabindex="0"
+                 aria-label="${escHtml(articleField(a, 'title'))}">
+                <span class="article-kicker">${escHtml(articleField(a, 'kicker'))}</span>
+                <h3>${escHtml(articleField(a, 'title'))}</h3>
+                <p>${escHtml(articleField(a, 'summary'))}</p>
+                <span class="article-meta">${escHtml(a.date)}</span>
+            </div>`).join('');
+        host.innerHTML = `<h2 class="section-head">${escHtml(head)}</h2>`
+            + `<p class="section-sub">${escHtml(sub)}</p>`
+            + `<div class="article-list">${cards}</div>`;
+    }
+    function renderArticle(id) {
+        const a = ARTICLES.find(x => x.id === id);
+        if (!a) { renderColumnList(); return; }
+        columnArticle = id;
+        if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
+        const host = document.getElementById('column-host');
+        if (!host) return;
+        const back = currentLang === 'en' ? 'Back to Column' : '返回專欄';
+        host.innerHTML = `<div class="article-reader">`
+            + `<button class="article-back" data-article-back type="button">← ${escHtml(back)}</button>`
+            + `<h1>${escHtml(articleField(a, 'title'))}</h1>`
+            + `<div class="article-meta">${escHtml(articleField(a, 'kicker'))} · ${escHtml(a.date)}</div>`
+            + `<div class="article-body">${articleField(a, 'body')}</div></div>`;
+        if (document.getElementById('scatter-host')) renderScalingSnowballChart();
+    }
+    // ---- Scaling x snowball scatter (rendered into the 'scaling-snowball' article) ----
+    let _scatterRO = null, _scatterW = 0;
+    function scatterWrColor(wr) {
+        const t = Math.max(0, Math.min(1, (wr - 0.44) / (0.56 - 0.44)));
+        const stops = [[0, [214, 69, 69]], [0.5, [208, 178, 58]], [1, [72, 184, 104]]];
+        for (let i = 0; i < stops.length - 1; i++) {
+            const [t0, c0] = stops[i], [t1, c1] = stops[i + 1];
+            if (t <= t1) { const f = (t - t0) / (t1 - t0); return `rgb(${c0.map((v, k) => Math.round(v + (c1[k] - v) * f)).join(',')})`; }
+        }
+        return 'rgb(72,184,104)';
+    }
+    function renderScalingSnowballChart() {
+        const host = document.getElementById('scatter-host');
+        if (!host) return;
+        const W = Math.max(320, Math.round(host.clientWidth || 700));
+        const H = Math.max(440, Math.min(620, Math.round(W * 0.74)));
+        const rows = [];
+        for (const cid in (DATA.champs || {})) {
+            const info = DATA.champs[cid], c = info && info.comp;
+            if (!c) continue;
+            const sx = Number(c.snowball), sy = Number(c.scaling);
+            if (!isFinite(sx) || !isFinite(sy)) continue;
+            rows.push({ name: champName(info), img: info.image || '', wr: Number(info.wr) || 0, g: Number(info.g) || 0, sx, sy });
+        }
+        if (!rows.length) { host.innerHTML = ''; return; }
+        const xs = rows.map(r => r.sx), ys = rows.map(r => r.sy);
+        const med = arr => { const s = [...arr].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+        const xMin = Math.min(...xs), xMax = Math.max(...xs), yMin = Math.min(...ys), yMax = Math.max(...ys);
+        const xPad = (xMax - xMin) * 0.06 || 0.1, yPad = (yMax - yMin) * 0.06 || 0.01;
+        const X0 = xMin - xPad, X1 = xMax + xPad, Y0 = yMin - yPad, Y1 = yMax + yPad;
+        const xMed = med(xs), yMed = med(ys);
+        const M = { l: 46, r: 14, t: 14, b: 38 };
+        const PW = W - M.l - M.r, PH = H - M.t - M.b;
+        const px = v => M.l + (v - X0) / (X1 - X0) * PW;
+        const py = v => H - M.b - (v - Y0) / (Y1 - Y0) * PH;
+        const mx = px(xMed), my = py(yMed);
+        const ICON = Math.max(18, Math.min(30, Math.round(W / 30)));
+        // declutter: repulsion + spring back to true position (Gauss-Seidel)
+        const pos = rows.map(r => [px(r.sx), py(r.sy)]);
+        const tgt = pos.map(p => [p[0], p[1]]);
+        for (let i = 0; i < pos.length; i++) { pos[i][0] += ((i * 53) % 7 - 3) * 0.3; pos[i][1] += ((i * 31) % 7 - 3) * 0.3; }
+        const mind = ICON * 0.92;
+        for (let it = 0; it < 180; it++) {
+            for (let i = 0; i < pos.length; i++) {
+                let dx = 0, dy = 0;
+                for (let j = 0; j < pos.length; j++) {
+                    if (i === j) continue;
+                    const ax = pos[i][0] - pos[j][0], ay = pos[i][1] - pos[j][1];
+                    const d = Math.hypot(ax, ay) || 0.01;
+                    if (d < mind) { const f = (mind - d) / d * 0.5; dx += ax * f; dy += ay * f; }
+                }
+                dx += (tgt[i][0] - pos[i][0]) * 0.06;
+                dy += (tgt[i][1] - pos[i][1]) * 0.06;
+                pos[i][0] = Math.max(M.l + ICON / 2, Math.min(W - M.r - ICON / 2, pos[i][0] + dx));
+                pos[i][1] = Math.max(M.t + ICON / 2, Math.min(H - M.b - ICON / 2, pos[i][1] + dy));
+            }
+        }
+        const en = currentLang === 'en';
+        const q = en ? { tr: 'Snowball + late', tl: 'Late game', br: 'Snowball', bl: 'Neither' }
+                     : { tr: '滾雪球強 · 後期強', tl: '後期強', br: '滾雪球強', bl: '兩者皆弱' };
+        const xTitle = en ? 'Snowball  →' : '滾雪球能力  →';
+        const yTitle = en ? 'Late game  →' : '後期能力  →';
+        let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none">`;
+        s += `<defs><clipPath id="sc-panel"><rect x="${M.l}" y="${M.t}" width="${PW}" height="${PH}" rx="12"/></clipPath></defs>`;
+        s += `<rect x="${M.l}" y="${M.t}" width="${PW}" height="${PH}" rx="12" fill="var(--surface-sunken)" stroke="var(--border)"/>`;
+        s += `<g clip-path="url(#sc-panel)">`;
+        s += `<rect x="${mx}" y="${M.t}" width="${W - M.r - mx}" height="${my - M.t}" fill="rgba(72,184,104,0.09)"/>`;
+        s += `<rect x="${M.l}" y="${M.t}" width="${mx - M.l}" height="${my - M.t}" fill="rgba(80,150,230,0.07)"/>`;
+        s += `<rect x="${mx}" y="${my}" width="${W - M.r - mx}" height="${H - M.b - my}" fill="rgba(230,150,60,0.07)"/>`;
+        s += `<line x1="${mx}" y1="${M.t}" x2="${mx}" y2="${H - M.b}" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="5 5"/>`;
+        s += `<line x1="${M.l}" y1="${my}" x2="${W - M.r}" y2="${my}" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="5 5"/>`;
+        s += `</g>`;
+        const qc = 'fill="var(--text-muted)" font-size="12.5" font-weight="600" opacity="0.85"';
+        s += `<text x="${W - M.r - 8}" y="${M.t + 18}" text-anchor="end" ${qc}>${q.tr}</text>`;
+        s += `<text x="${M.l + 8}" y="${M.t + 18}" ${qc}>${q.tl}</text>`;
+        s += `<text x="${W - M.r - 8}" y="${H - M.b - 8}" text-anchor="end" ${qc}>${q.br}</text>`;
+        s += `<text x="${M.l + 8}" y="${H - M.b - 8}" ${qc}>${q.bl}</text>`;
+        const tc = 'fill="var(--text-dim)" font-size="11"';
+        [1.0, 1.5, 2.0, 2.5, 3.0, 3.5].forEach(v => { if (v >= X0 && v <= X1) s += `<text x="${px(v).toFixed(1)}" y="${H - M.b + 16}" text-anchor="middle" ${tc}>${v.toFixed(1)}</text>`; });
+        [-0.10, -0.05, 0, 0.05, 0.10, 0.15].forEach(v => { if (v >= Y0 && v <= Y1) s += `<text x="${M.l - 8}" y="${(py(v) + 4).toFixed(1)}" text-anchor="end" ${tc}>${(v > 0 ? '+' : '') + (v * 100).toFixed(0)}%</text>`; });
+        s += `<text x="${(M.l + (W - M.r)) / 2}" y="${H - 4}" text-anchor="middle" fill="var(--text-muted)" font-size="12" font-weight="600">${xTitle}</text>`;
+        const yc = M.t + PH / 2;
+        s += `<text x="14" y="${yc}" text-anchor="middle" transform="rotate(-90 14 ${yc})" fill="var(--text-muted)" font-size="12" font-weight="600">${yTitle}</text>`;
+        s += `</svg>`;
+        let imgs = '';
+        rows.forEach((r, i) => {
+            const ring = scatterWrColor(r.wr);
+            const tip = en
+                ? `${r.name}  ·  late ${signed(r.sy)}  ·  snowball ${r.sx.toFixed(2)}  ·  WR ${pct(r.wr)}  ·  ${r.g} games`
+                : `${r.name}  ·  後期 ${signed(r.sy)}  ·  滾雪球 ${r.sx.toFixed(2)}  ·  勝率 ${pct(r.wr)}  ·  ${r.g}場`;
+            imgs += `<img class="sc-dot" src="${escHtml(r.img)}" alt="" loading="lazy" title="${escHtml(tip)}" `
+                + `style="left:${pos[i][0].toFixed(1)}px;top:${pos[i][1].toFixed(1)}px;width:${ICON}px;height:${ICON}px;--ring:${ring}">`;
+        });
+        host.style.position = 'relative';
+        host.style.height = H + 'px';
+        host.innerHTML = s + imgs;
+        if (_scatterRO) { _scatterRO.disconnect(); }
+        _scatterW = W;
+        _scatterRO = new ResizeObserver(entries => {
+            const w = Math.round(entries[0].contentRect.width);
+            if (Math.abs(w - _scatterW) > 16) { _scatterW = w; renderScalingSnowballChart(); }
+        });
+        _scatterRO.observe(host);
+    }
+    // The #updates-panel node is emitted inside the home view (to dodge its
+    // placeholder bytes); move it into the Settings changelog card at runtime.
+    function relocateUpdatesPanel() {
+        const host = document.getElementById('updates-host');
+        const panel = document.getElementById('updates-panel');
+        if (host && panel && panel.parentElement !== host) host.appendChild(panel);
+    }
+    // Slide the shared nav underline under the active tab.  Reads layout
+    // (offsetLeft/Width) so call it after .active toggles and whenever tab
+    // widths can change (language switch, resize, fonts load).
+    function moveTabIndicator() {
+        const bar = document.querySelector('.nav-tabs');
+        const active = bar && bar.querySelector('.nav-tab.active');
+        if (!bar || !active) return;
+        bar.style.setProperty('--ind-x', active.offsetLeft + 'px');
+        bar.style.setProperty('--ind-w', active.offsetWidth + 'px');
+    }
+    // Slide the segmented control's fill behind its active option.  Snaps by
+    // default; pass animate=true (theme toggle) for the slide.  Skips while the
+    // control is hidden / not yet laid out (offsetWidth 0) so a hidden or
+    // prematurely-measured seg never collapses the thumb to width 0 -- it keeps
+    // its last good geometry until the seg is genuinely visible.
+    function moveSegThumb(seg, animate) {
+        seg = seg || document.getElementById('theme-seg');
+        if (!seg) return;
+        const active = seg.querySelector('button.active') || seg.querySelector('button');
+        const thumb = seg.querySelector('.seg-thumb');
+        if (!active || !thumb || !active.offsetWidth) return;
+        if (!animate) thumb.style.transition = 'none';
+        thumb.style.left = (active.offsetLeft - seg.clientLeft) + 'px';
+        thumb.style.width = active.offsetWidth + 'px';
+        if (!animate) { void thumb.offsetWidth; thumb.style.transition = ''; }
+    }
+    function setActiveView(name, instant) {
+        if (!VIEWS.includes(name)) name = 'home';
+        const apply = () => {
+            document.querySelectorAll('.nav-tab[data-nav-tab]').forEach(t => {
+                const on = t.getAttribute('data-nav-tab') === name;
+                t.classList.toggle('active', on);
+                t.setAttribute('aria-selected', on ? 'true' : 'false');
+                t.tabIndex = on ? 0 : -1;  // roving tabindex (WAI-ARIA tabs)
+            });
+            document.querySelectorAll('.view[data-view]').forEach(v => {
+                v.classList.toggle('is-active', v.getAttribute('data-view') === name);
+            });
+            if (name === 'column') {
+                columnArticle ? renderArticle(columnArticle) : renderColumnList();
+            }
+            if (name === 'augments') {
+                renderAugmentTier();
+            }
+            if (('#' + name) !== location.hash) {
+                try { history.replaceState(null, '', '#' + name); } catch { location.hash = name; }
+            }
+            window.scrollTo(0, 0);
+            moveTabIndicator();
+            moveSegThumb();  // settings seg is measurable only while its view is visible
+        };
+        // Cross-fade the panel via the View Transitions API; root is pinned so the
+        // header and the scrollTo above don't animate.  Skip on first paint
+        // (instant) and for reduced-motion / unsupported browsers.
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (instant || reduce || !document.startViewTransition) { apply(); return; }
+        // Flag the VT so .vt-running suppresses the indicator/thumb CSS tweens
+        // while the snapshots are captured; clear it once the VT settles.
+        const root = document.documentElement;
+        root.classList.add('vt-running');
+        document.startViewTransition(apply).finished.finally(() => {
+            root.classList.remove('vt-running');
+            moveSegThumb();  // seg is laid out now if we landed on settings; snap the thumb
+        });
+    }
+    function applyTheme(theme) {
+        const t = theme === 'light' ? 'light' : 'dark';
+        const root = document.documentElement;
+        // Kill transitions for one tick so var()-driven backgrounds snap to the
+        // new palette instead of sticking mid-transition (see .no-theme-transition).
+        root.classList.add('no-theme-transition');
+        root.setAttribute('data-theme', t);
+        setTimeout(() => root.classList.remove('no-theme-transition'), 60);
+        document.querySelectorAll('#theme-seg [data-theme-choice]').forEach(b => {
+            const on = b.getAttribute('data-theme-choice') === t;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        moveSegThumb(undefined, true);  // animate the fill across on theme toggle
+        try { localStorage.setItem(THEME_KEY, t); } catch {}
+    }
+
     function applyLanguage(nextLang) {
         currentLang = nextLang === 'en' ? 'en' : 'zh';
         const copy = tr();
@@ -9148,6 +11256,25 @@ def render_html(
         }
         if (toggleLabel) toggleLabel.textContent = copy.langToggleLabel;
 
+        // Static chrome strings (nav tabs, settings, augment placeholder) carry
+        // their own zh/en text via data-i18n-* attributes.
+        document.querySelectorAll('[data-i18n-zh]').forEach(el => {
+            const val = currentLang === 'en'
+                ? el.getAttribute('data-i18n-en')
+                : el.getAttribute('data-i18n-zh');
+            if (val != null) el.textContent = val;
+        });
+        if (document.getElementById('view-column')
+                && document.getElementById('view-column').classList.contains('is-active')) {
+            columnArticle ? renderArticle(columnArticle) : renderColumnList();
+        }
+        const _augView = document.getElementById('view-augments');
+        if (_augView && _augView.classList.contains('is-active')) {
+            renderAugmentTier();
+        }
+
+        moveTabIndicator();
+        moveSegThumb();
         updateChampCardCopy();
         refreshSecondaryRoleBadges();
         renderUpdatesPanel();
@@ -9211,6 +11338,7 @@ def render_html(
             : '';
         host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
         applySearchHighlights(host);
+        applyAugCatFilter(host);
         champ.classList.add('detail-selected');
         detailSelected = cid;
         syncDetailModalState();
@@ -9227,6 +11355,10 @@ def render_html(
     }
 
     function openDetailByCid(cid) {
+        // The detail host lives inside the home tier grid; callers can fire from
+        // the Settings changelog or a recommend row, so always surface the home
+        // view first or the panel would open in a hidden view (invisible).
+        setActiveView('home');
         const champ = document.querySelector(`.champ[data-cid="${cid}"]:not(.hidden)`);
         if (!champ) return;
         openDetailForChamp(champ);
@@ -9251,6 +11383,33 @@ def render_html(
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
             trackEvent('github_star_click', { location: 'header' });
+            return;
+        }
+        const navTab = ev.target.closest('[data-nav-tab]');
+        if (navTab) {
+            const view = navTab.getAttribute('data-nav-tab');
+            setActiveView(view);
+            trackEvent('view_change', { view });
+            return;
+        }
+        const themeBtn = ev.target.closest('[data-theme-choice]');
+        if (themeBtn) {
+            const theme = themeBtn.getAttribute('data-theme-choice');
+            applyTheme(theme);
+            trackEvent('theme_toggle', { theme });
+            return;
+        }
+        const articleCard = ev.target.closest('[data-article]');
+        if (articleCard) {
+            const id = articleCard.getAttribute('data-article');
+            renderArticle(id);
+            window.scrollTo(0, 0);
+            trackEvent('article_open', { id });
+            return;
+        }
+        if (ev.target.closest('[data-article-back]')) {
+            renderColumnList();
+            window.scrollTo(0, 0);
             return;
         }
         const langBtn = ev.target.closest('#lang-toggle');
@@ -9358,6 +11517,8 @@ def render_html(
         resizeT = setTimeout(() => {
             updateSearchPlaceholder();
             renderSidePanel();
+            moveTabIndicator();
+            moveSegThumb();
             if (!detailSelected) return;
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (!champ) return;
@@ -9441,6 +11602,57 @@ def render_html(
     renderSidePanel();
     applyLanguage(currentLang);
 
+    // ---- Chrome init: changelog relocation, theme, tab routing ----
+    relocateUpdatesPanel();
+    try {
+        const savedTheme = localStorage.getItem(THEME_KEY);
+        applyTheme(savedTheme === 'light' ? 'light' : 'dark');
+    } catch { applyTheme('dark'); }
+    (function initView() {
+        const start = (location.hash || '').replace('#', '');
+        setActiveView(VIEWS.includes(start) ? start : 'home', true);  // instant: no View Transition on first paint
+    })();
+    // Position the sliding indicator/thumb now (base CSS has transition:none so
+    // they snap), commit that layout with a reflow, THEN enable the transitions
+    // so only later tab/theme changes animate -- never a grow-from-0 on load.
+    // Synchronous (not requestAnimationFrame) so it still runs when the tab is
+    // backgrounded / not painting (rAF callbacks are parked there).
+    moveTabIndicator();
+    moveSegThumb();
+    void document.documentElement.offsetWidth;  // reflow: commit initial geometry
+    document.documentElement.classList.add('ui-ready');
+    // Web fonts can resize tab/segment labels after load -- re-anchor once settled.
+    window.addEventListener('load', () => { moveTabIndicator(); moveSegThumb(); });
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => { moveTabIndicator(); moveSegThumb(); });
+    }
+    window.addEventListener('hashchange', () => {
+        const v = (location.hash || '').replace('#', '');
+        setActiveView(VIEWS.includes(v) ? v : 'home');
+    });
+    // WAI-ARIA tablist keyboard nav: arrows / Home / End move focus + activate.
+    document.querySelector('.nav-tabs')?.addEventListener('keydown', (ev) => {
+        const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
+        const idx = tabs.indexOf(document.activeElement);
+        if (idx === -1) return;
+        let next = null;
+        if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') next = tabs[(idx + 1) % tabs.length];
+        else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') next = tabs[(idx - 1 + tabs.length) % tabs.length];
+        else if (ev.key === 'Home') next = tabs[0];
+        else if (ev.key === 'End') next = tabs[tabs.length - 1];
+        if (!next) return;
+        ev.preventDefault();
+        next.focus();
+        setActiveView(next.getAttribute('data-nav-tab'));
+    });
+    // Scroll-aware header: lift it once content scrolls underneath.
+    const siteHeaderEl = document.querySelector('.site-header');
+    if (siteHeaderEl) {
+        const onHeaderScroll = () => siteHeaderEl.classList.toggle('scrolled', window.scrollY > 4);
+        window.addEventListener('scroll', onHeaderScroll, { passive: true });
+        onHeaderScroll();
+    }
+
     /* -----  Filter / search  --------------------------------------- */
 
     function applyFilters() {
@@ -9455,7 +11667,14 @@ def render_html(
                 const blob = c.getAttribute('data-search') || '';
                 const matchRole = !role || tags.includes(role);
                 const matchQ = !q || searchMatchesText(blob, q);
-                const hide = !(matchRole && matchQ);
+                // Keep the open detail's champ pinned even when it fails the
+                // active role/search filter, so searching never closes the
+                // panel you're reading.  (Ctrl+F focuses this search box; a
+                // non-matching query used to hide the selected champ, which
+                // closed its detail and looked like the page reset itself.)
+                const isSelected = detailSelected
+                    && c.getAttribute('data-cid') === detailSelected;
+                const hide = !(matchRole && matchQ) && !isSelected;
                 c.classList.toggle('hidden', hide);
                 if (!hide) tierShown++;
             });
@@ -9524,7 +11743,7 @@ def render_html(
         if (ev.key !== 'Enter' && ev.key !== ' ') return;
         const t = ev.target;
         if (!t || !t.classList) return;
-        if (t.classList.contains('champ') || t.classList.contains('aug')) {
+        if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card')) {
             ev.preventDefault();
             t.click();
         }
@@ -9608,11 +11827,15 @@ def render_html(
     document.addEventListener('keydown', (ev) => {
         const isFind = (ev.ctrlKey || ev.metaKey) && ev.key && ev.key.toLowerCase() === 'f';
         if (!isFind) return;
+        // Only hijack find on the home view; on Column/Settings the search box is
+        // hidden, so let the browser's native find work there.
+        const homeView = document.getElementById('view-home');
+        if (!homeView || !homeView.classList.contains('is-active')) return;
         const sEl = document.getElementById('champ-search');
         if (!sEl) return;
         if (document.activeElement === sEl) return;  // let browser take over on 2nd press
         ev.preventDefault();
-        sEl.focus();
+        sEl.focus({ preventScroll: true });
         sEl.select();
     });
     """
@@ -9720,6 +11943,8 @@ def main(
     )
     item_meta = load_item_metadata(cache_dir=Path("data/cache"), ddragon_version=version)
     click.echo(f"[tierlist] item catalogue: {len(item_meta)} entries")
+    spell_meta = load_summoner_spell_metadata(version)
+    click.echo(f"[tierlist] summoner-spell catalogue: {len(spell_meta)} entries")
 
     all_champ_records, champ_aug, champ_pairs = compute_winrates(db, queue_id, patch_prefix)
     total_games = sum(r["games"] for r in all_champ_records) // 10
@@ -9729,10 +11954,25 @@ def main(
     click.echo(f"[tierlist] {len(champ_pairs):,} ordered same-team champion pairs total")
 
     patch_changes = None
+    new_aug_ids: frozenset[int] = frozenset()
+    baseline_champ_aug: list[dict] = []
     baseline_patch_prefix = previous_patch_prefix(patch_prefix)
     if baseline_patch_prefix:
-        baseline_champ_records, _, _ = compute_winrates(db, queue_id, baseline_patch_prefix)
+        baseline_champ_records, baseline_champ_aug, _ = compute_winrates(db, queue_id, baseline_patch_prefix)
         baseline_total_games = sum(r["games"] for r in baseline_champ_records) // 10
+        new_aug_ids = derive_recent_augment_ids(
+            db,
+            queue_id,
+            patch_prefix,
+            champ_aug,
+            baseline_prefix=baseline_patch_prefix,
+            baseline_champ_aug=baseline_champ_aug,
+        )
+        click.echo(
+            f"[tierlist] {len(new_aug_ids)} augments new within last "
+            f"{NEW_AUGMENT_PATCH_WINDOW} patches (through {patch_prefix}); "
+            f"flagged with the 新 category chip"
+        )
         if baseline_total_games:
             patch_changes = compute_patch_changes(
                 db,
@@ -9817,6 +12057,18 @@ def main(
         f"[tierlist] {len(boot_item_affinity)} champions have >= 1 boot row "
         f"(games >= {BOOT_ITEM_MIN_GAMES}, top_lift >= {BOOT_ITEM_TOP_MIN_LIFT:.1%})"
     )
+    spell_affinity = compute_champ_spell_affinities(
+        db,
+        queue_id,
+        patch_prefix,
+        spell_meta,
+        champ_records,
+        min_games=SPELL_MIN_GAMES,
+    )
+    click.echo(
+        f"[tierlist] {len(spell_affinity)} champions have >= 1 summoner-spell row "
+        f"(games >= {SPELL_MIN_GAMES}, top_lift >= {SPELL_TOP_MIN_LIFT:.1%})"
+    )
     item_build_clusters = compute_champ_item_build_clusters(
         db,
         queue_id,
@@ -9826,10 +12078,10 @@ def main(
         single_item_affinity,
     )
     click.echo(
-        f"[tierlist] {len(item_build_clusters)} champions have >= 1 core-3 build route "
-        f"(core_games >= {ITEM_CORE_BUILD_MIN_GAMES}, full-build confirm >= {ITEM_CORE_BUILD_MIN_CONFIRM}, "
-        f"winrate lane games >= {ITEM_CORE_BUILD_WINRATE_MIN_GAMES} & LCB-lift > {ITEM_CORE_BUILD_WINRATE_MIN_LCB:+.0%}, "
-        f"max_items={ITEM_CLUSTER_MAX_ITEMS}); lanes = 1 popular + up to 2 winrate + rest combined"
+        f"[tierlist] {len(item_build_clusters)} champions have >= 1 core-2 build route "
+        f"(core_games >= {ITEM_CORE_BUILD_MIN_GAMES}, pairing item games >= {ITEM_CORE_BUILD_OPTION_MIN_GAMES} "
+        f"& (pick >= {ITEM_CORE_BUILD_OPTION_MIN_PICK:.1%} or LCB-lift > {ITEM_CORE_BUILD_WINRATE_MIN_LCB:+.0%} on >= {ITEM_CORE_BUILD_WINRATE_MIN_GAMES} games), "
+        f"max_items={ITEM_CLUSTER_MAX_ITEMS}); up to {ITEM_CORE_BUILD_OPTION_TOP_N} pairing items per core-2"
     )
     click.echo(
         f"[tierlist] {len(augment_type_affinity)} champions have >= 1 augment-type affinity row "
@@ -9901,6 +12153,15 @@ def main(
     for asset_path in favicon_outputs:
         click.echo(f"[tierlist] wrote {asset_path}  ({asset_path.stat().st_size:,} bytes)")
 
+    aug_global = build_augment_global_stats(
+        champ_aug, aug_meta, prev_champ_aug_records=baseline_champ_aug
+    )
+    blended_n = sum(1 for v in aug_global.values() if v.get("prevMix", 0))
+    click.echo(
+        f"[tierlist] augment tier: {len(aug_global)} augments rolled up to a global win-rate "
+        f"(current {patch_prefix}; {blended_n} thin augments topped up from "
+        f"{baseline_patch_prefix or 'n/a'} below {AUGMENT_CURRENT_MIN_GAMES} games)"
+    )
     html = render_html(
         champ_records,
         champ_meta,
@@ -9910,11 +12171,13 @@ def main(
         item_pair_affinity,
         single_item_affinity,
         boot_item_affinity,
+        spell_affinity,
         item_build_clusters,
         augment_type_affinity,
         synergy,
         aug_meta,
         patch_changes,
+        new_aug_ids=new_aug_ids,
         queue_id=queue_id,
         patch_prefix=patch_prefix,
         ddragon_version=version,
@@ -9929,6 +12192,7 @@ def main(
         payload_out_path=payload_out,
         payload_url=payload_url,
         icon_assets_dir=out_path.parent / "assets" / "icons",
+        aug_global=aug_global,
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")

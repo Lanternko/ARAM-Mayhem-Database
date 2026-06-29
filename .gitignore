@@ -23,6 +23,18 @@ venv/
 dist/
 build/
 
+# Scratch & local-only artifacts (keep the public repo code-only)
+# build logs, image cache, intermediate JSON, and an embedded Chrome profile w/ creds
+outputs/
+# research reports, slide sub-projects, pptx/png exports (~271MB, local)
+documents/
+# native Overwolf app (built / distributed separately)
+overwolf/
+# hand-authored score-override CSV inputs
+manual/
+# one-off scratch analysis scripts
+scripts/_*.py
+
 # Publishable review pages
 !docs/semantic-score-review.html
 

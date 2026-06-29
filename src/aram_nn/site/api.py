@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .db import count_games, insert_public_games
+from .db import count_games, insert_public_games, latest_patch_prefix
 from .payload import build_tier_list_payload, champion_augments
 
 
@@ -64,18 +64,24 @@ def post_games_bulk(
     }
 
 
+def _resolve_patch(patch: str | None, queue: int) -> str | None:
+    if patch and patch != "auto":
+        return patch
+    return latest_patch_prefix(_site_db(), queue_id=queue)
+
+
 @app.get("/tier-list")
 @app.get("/api/tier-list")
 def get_tier_list(
     queue: int = Query(default=2400),
-    patch: str = Query(default="16.10"),
+    patch: str | None = Query(default=None),
     min_games: int = Query(default=50, ge=1),
     min_pair_games: int = Query(default=15, ge=1),
 ) -> dict[str, Any]:
     return build_tier_list_payload(
         db=_site_db(),
         queue_id=queue,
-        patch_prefix=patch,
+        patch_prefix=_resolve_patch(patch, queue),
         min_games=min_games,
         min_pair_games=min_pair_games,
     )
@@ -86,14 +92,14 @@ def get_tier_list(
 def get_champion_augments(
     champion_id: int,
     queue: int = Query(default=2400),
-    patch: str = Query(default="16.10"),
+    patch: str | None = Query(default=None),
     min_games: int = Query(default=50, ge=1),
     min_pair_games: int = Query(default=15, ge=1),
 ) -> dict[str, Any]:
     payload = build_tier_list_payload(
         db=_site_db(),
         queue_id=queue,
-        patch_prefix=patch,
+        patch_prefix=_resolve_patch(patch, queue),
         min_games=min_games,
         min_pair_games=min_pair_games,
     )

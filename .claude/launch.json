@@ -1,0 +1,54 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "open-slide-ethereal",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "documents/open-slide-ethereal-items", "--", "--port", "5173"],
+      "port": 5173,
+      "autoPort": false
+    },
+    {
+      "name": "ethereal-dist",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5180", "--directory", "documents/open-slide-ethereal-items/dist"],
+      "port": 5180,
+      "autoPort": false
+    },
+    {
+      "name": "open-slide-final-project",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "documents/open-slide-final-project", "--", "--port", "5174"],
+      "port": 5174,
+      "autoPort": false
+    },
+    {
+      "name": "tier-list-docs",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8099", "--directory", "docs"],
+      "port": 8099,
+      "autoPort": false
+    },
+    {
+      "name": "tier-list-docs-alt",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8201", "--directory", "docs"],
+      "port": 8201,
+      "autoPort": false
+    },
+    {
+      "name": "tier-list-preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8778", "--directory", "outputs"],
+      "port": 8778,
+      "autoPort": false
+    },
+    {
+      "name": "repo-root",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8790", "--directory", "."],
+      "port": 8790,
+      "autoPort": false
+    }
+  ]
+}

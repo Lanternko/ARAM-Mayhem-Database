@@ -2,7 +2,7 @@
 
 > ARAM Mayhem 英雄勝率 tier list + Augment推薦 — 資料來自台服真實對局。
 
-🔗 **Tier List 網站**: **<https://lanternko.github.io/ARAM-Mayhem-Database/>**
+🔗 **Tier List 網站**: **<https://arammeta.com/>**
 
 ⭐ **覺得有用請按 Star ↗ 讓更多人看到**。
 

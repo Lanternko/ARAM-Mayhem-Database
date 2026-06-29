@@ -301,9 +301,12 @@ CHAMPION_BUILD_ARCHETYPE = {
     "Smolder": "ad_caster",
 }
 
-FORMULA_VERSION = "v9_manual_spell_adjustments"
+FORMULA_VERSION = "v12_poke_wave_review_overrides"
 EMPIRICAL_SCORE_CSV = Path("data/cache/champion_scores_empirical_merged.csv")
 SKILL_SEMANTIC_FEATURES_JSON = Path("data/cache/skill_semantic_features.json")
+CDRAGON_BIN_DIR = Path("data/cache/cdragon_bin")
+MANUAL_POKE_SCORE_OVERRIDES_CSV = Path("manual/poke_score_overrides.csv")
+MANUAL_WAVE_SCORE_OVERRIDES_CSV = Path("manual/wave_score_overrides.csv")
 
 HARD_CC_WORDS = (
     "stun",
@@ -2176,10 +2179,51 @@ ABILITY_REVIEW_OVERRIDES: dict[tuple[str, str], dict[str, float | str]] = {
 }
 
 
-# Champion-level score overrides are intentionally disabled for now.  The
-# current iteration should expose mechanism failures through debug output rather
-# than masking them with final-score patches.
-REVIEWED_OVERRIDES: dict[str, dict[str, float]] = {}
+_REVIEWED_OVERRIDES_CACHE: dict[str, dict[str, Any]] | None = None
+
+
+def reviewed_score_overrides() -> dict[str, dict[str, Any]]:
+    """Load champion-level reviewer corrections that cannot be inferred reliably."""
+    global _REVIEWED_OVERRIDES_CACHE
+    if _REVIEWED_OVERRIDES_CACHE is not None:
+        return _REVIEWED_OVERRIDES_CACHE
+    out: dict[str, dict[str, Any]] = {}
+    if MANUAL_POKE_SCORE_OVERRIDES_CSV.exists():
+        with MANUAL_POKE_SCORE_OVERRIDES_CSV.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                alias = str(row.get("champion_alias") or "").strip()
+                if not alias:
+                    continue
+                try:
+                    poke_score = float(row.get("poke_score") or 0.0)
+                except ValueError:
+                    continue
+                out.setdefault(alias, {}).update(
+                    {
+                        "poke_score": clamp_score(poke_score),
+                        "poke_bucket": str(row.get("reviewed_bucket") or "").strip().upper(),
+                        "poke_review_source": str(row.get("review_source") or MANUAL_POKE_SCORE_OVERRIDES_CSV.name),
+                    }
+                )
+    if MANUAL_WAVE_SCORE_OVERRIDES_CSV.exists():
+        with MANUAL_WAVE_SCORE_OVERRIDES_CSV.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                alias = str(row.get("champion_alias") or "").strip()
+                if not alias:
+                    continue
+                try:
+                    wave_score = float(row.get("wave_clear_score") or 0.0)
+                except ValueError:
+                    continue
+                out.setdefault(alias, {}).update(
+                    {
+                        "wave_clear_score": clamp_score(wave_score),
+                        "wave_bucket": str(row.get("reviewed_bucket") or "").strip().upper(),
+                        "wave_review_source": str(row.get("review_source") or MANUAL_WAVE_SCORE_OVERRIDES_CSV.name),
+                    }
+                )
+    _REVIEWED_OVERRIDES_CACHE = out
+    return out
 
 
 def clamp_score(value: float) -> float:
@@ -2218,6 +2262,7 @@ def apply_manual_spell_score_adjustments(
 _EMPIRICAL_FLOOR_CACHE: dict[str, tuple[float, float]] | None = None
 _EMPIRICAL_DAMAGE_MIX_CACHE: dict[str, tuple[float, float, float]] | None = None
 _SKILL_FEATURE_CACHE: dict[tuple[str, str], dict[str, Any]] | None = None
+_CDRAGON_ATTACK_STAT_CACHE: dict[str, dict[str, float]] = {}
 
 
 def empirical_floor_map() -> dict[str, tuple[float, float]]:
@@ -2301,6 +2346,13 @@ def norm(value: float, lo: float, hi: float) -> float:
     if hi <= lo:
         return 0.0
     return clamp01((value - lo) / (hi - lo))
+
+
+def float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def text_of(ability: dict[str, Any]) -> str:
@@ -3825,15 +3877,137 @@ def wave_skill_score(champion: dict[str, Any], ability: dict[str, Any]) -> dict[
     }
 
 
+def _modifiable_base(row: dict[str, Any], key: str) -> float:
+    value = row.get(key)
+    if isinstance(value, dict):
+        return float_or_zero(value.get("baseValue"))
+    return float_or_zero(value)
+
+
+def cdragon_attack_stats(alias: str) -> dict[str, float]:
+    if alias in _CDRAGON_ATTACK_STAT_CACHE:
+        return _CDRAGON_ATTACK_STAT_CACHE[alias]
+    path = CDRAGON_BIN_DIR / f"{alias.lower()}.json"
+    out: dict[str, float] = {}
+    if not path.exists():
+        _CDRAGON_ATTACK_STAT_CACHE[alias] = out
+        return out
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        _CDRAGON_ATTACK_STAT_CACHE[alias] = out
+        return out
+    if not isinstance(raw, dict):
+        _CDRAGON_ATTACK_STAT_CACHE[alias] = out
+        return out
+    for row in raw.values():
+        if (
+            not isinstance(row, dict)
+            or "baseDamageModifiable" not in row
+            or "attackRangeModifiable" not in row
+        ):
+            continue
+        out = {
+            "attackrange": _modifiable_base(row, "attackRangeModifiable"),
+            "attackdamage": _modifiable_base(row, "baseDamageModifiable"),
+            "attackdamageperlevel": _modifiable_base(row, "damagePerLevelModifiable"),
+            "attackspeed": _modifiable_base(row, "attackSpeedModifiable"),
+            "attackspeedperlevel": _modifiable_base(row, "attackSpeedPerLevelModifiable"),
+        }
+        break
+    _CDRAGON_ATTACK_STAT_CACHE[alias] = out
+    return out
+
+
+def role_attack_stat_defaults(tags: set[str]) -> dict[str, float]:
+    if "Marksman" in tags:
+        return {
+            "attackrange": 550.0,
+            "attackdamage": 59.0,
+            "attackdamageperlevel": 3.2,
+            "attackspeed": 0.66,
+            "attackspeedperlevel": 3.3,
+        }
+    if "Fighter" in tags or "Assassin" in tags:
+        return {
+            "attackrange": 175.0,
+            "attackdamage": 64.0,
+            "attackdamageperlevel": 4.0,
+            "attackspeed": 0.66,
+            "attackspeedperlevel": 3.0,
+        }
+    if "Mage" in tags or "Support" in tags:
+        return {
+            "attackrange": 525.0,
+            "attackdamage": 53.0,
+            "attackdamageperlevel": 3.0,
+            "attackspeed": 0.63,
+            "attackspeedperlevel": 2.0,
+        }
+    return {
+        "attackrange": 175.0,
+        "attackdamage": 62.0,
+        "attackdamageperlevel": 3.6,
+        "attackspeed": 0.63,
+        "attackspeedperlevel": 2.2,
+    }
+
+
+def native_attack_stats(champion: dict[str, Any]) -> dict[str, float]:
+    alias = str(champion.get("alias") or "")
+    tags = set(champion.get("tags") or [])
+    raw_stats = champion.get("stats") or {}
+    stats = raw_stats if isinstance(raw_stats, dict) else {}
+    out = {
+        "attackrange": float_or_zero(stats.get("attackrange")),
+        "attackdamage": float_or_zero(stats.get("attackdamage")),
+        "attackdamageperlevel": float_or_zero(stats.get("attackdamageperlevel")),
+        "attackspeed": float_or_zero(stats.get("attackspeed")),
+        "attackspeedperlevel": float_or_zero(stats.get("attackspeedperlevel")),
+    }
+    if any(value > 0.0 for value in out.values()):
+        return out
+    out = cdragon_attack_stats(alias)
+    if any(value > 0.0 for value in out.values()):
+        return out
+    return role_attack_stat_defaults(tags)
+
+
+def native_basic_attack_score(champion: dict[str, Any]) -> float:
+    stats = native_attack_stats(champion)
+    attack_range = float(stats.get("attackrange") or 0.0)
+    attack_damage = float(stats.get("attackdamage") or 0.0)
+    attack_damage_growth = float(stats.get("attackdamageperlevel") or 0.0)
+    attack_speed = float(stats.get("attackspeed") or 0.0)
+    attack_speed_growth = float(stats.get("attackspeedperlevel") or 0.0)
+
+    range_score = norm(attack_range, 125.0, 650.0)
+    ad_score = norm(attack_damage, 45.0, 78.0)
+    ad_growth_score = norm(attack_damage_growth, 2.0, 5.2)
+    attack_speed_score = clamp01(
+        0.65 * norm(attack_speed, 0.55, 0.72)
+        + 0.35 * norm(attack_speed_growth, 1.0, 4.5)
+    )
+    return clamp_score(
+        0.95
+        * clamp01(
+            0.42 * range_score
+            + 0.34 * ad_score
+            + 0.14 * ad_growth_score
+            + 0.10 * attack_speed_score
+        )
+    )
+
+
 def basic_attack_floor(champion: dict[str, Any]) -> float:
     alias = str(champion.get("alias") or "")
     tags = set(champion.get("tags") or [])
     ability_text = " ".join(text_of(ability) for ability in (champion.get("abilities") or []))
     ptext = passive_text(champion)
     full_text = f"{ability_text} {ptext}"
-    stats = champion.get("stats") or {}
-    attack_range = float(stats.get("attackrange") or 0.0) if isinstance(stats, dict) else 0.0
     empirical_dpm_norm, empirical_damage_norm = empirical_floor_map().get(alias, (0.0, 0.0))
+    native_score = native_basic_attack_score(champion)
+    attack_range = float(native_attack_stats(champion).get("attackrange") or 0.0)
 
     auto_attack_profile = (
         "Marksman" in tags
@@ -3843,8 +4017,6 @@ def basic_attack_floor(champion: dict[str, Any]) -> float:
             and (empirical_dpm_norm >= 0.45 or empirical_damage_norm >= 0.38)
         )
     )
-    if not auto_attack_profile:
-        return 0.0
 
     if "Marksman" in tags:
         aa_dps = 0.68
@@ -3892,7 +4064,8 @@ def basic_attack_floor(champion: dict[str, Any]) -> float:
             empirical_floor *= 0.96
     if "Marksman" not in tags and reset_onhit <= 0.0:
         heuristic_floor *= 0.78
-    floor = max(heuristic_floor, empirical_floor)
+    native_floor = native_score if auto_attack_profile else native_score * 0.72
+    floor = max(native_floor, heuristic_floor if auto_attack_profile else 0.0, empirical_floor)
     floor *= BASIC_ATTACK_FLOOR_MULTIPLIER.get(alias, 1.0)
     return clamp_score(floor)
 
@@ -4105,18 +4278,23 @@ def score_champion(
     top_wave = float(wave_skills[0]["score"]) if wave_skills else 0.0
     second_wave = float(wave_skills[1]["score"]) if len(wave_skills) > 1 else 0.0
     third_wave = float(wave_skills[2]["score"]) if len(wave_skills) > 2 else 0.0
-    st_floor = float(basic_attack_floor(champion))
+    basic_attack_score = float(basic_attack_floor(champion))
+    wave_skill_total = clamp_score(
+        WAVE_TOP3_WEIGHTS[0] * top_wave
+        + WAVE_TOP3_WEIGHTS[1] * second_wave
+        + WAVE_TOP3_WEIGHTS[2] * third_wave
+    )
     wave_total = clamp_score(
         max(
-            WAVE_TOP3_WEIGHTS[0] * top_wave
-            + WAVE_TOP3_WEIGHTS[1] * second_wave
-            + WAVE_TOP3_WEIGHTS[2] * third_wave,
-            st_floor,
+            wave_skill_total,
+            basic_attack_score,
         )
     )
     cc, damage, poke, sustain, frontline, evidence = legacy_aux_scores(champion)
     evidence["engage_score"] = [skill["note"] for skill in engage_skills[:3]]
     evidence["wave_clear_score"] = [skill["note"] for skill in wave_skills[:3]]
+    if basic_attack_score >= wave_skill_total and basic_attack_score > 0.0:
+        evidence["wave_clear_score"].append(f"AA:native:{basic_attack_score}")
 
     row = {
         "champion_id": int(champion["champion_id"]),
@@ -4128,6 +4306,7 @@ def score_champion(
         "build_items": " + ".join(build_record["items"]),
         "build_ap": float(build_record["ap"]),
         "build_bonus_ad": float(build_record["bonus_ad"]),
+        "basic_attack_score": basic_attack_score,
         "wave_clear_score": wave_total,
         "cc_score": clamp_score(cc),
         "engage_score": engage_total,
@@ -4137,7 +4316,7 @@ def score_champion(
         "frontline_score": clamp_score(frontline),
         "engage_top_spells": ",".join(str(skill["slot"]) for skill in engage_skills[:3]),
         "wave_top_spells": ",".join(str(skill["slot"]) for skill in wave_skills[:3]),
-        "st_floor": st_floor,
+        "st_floor": basic_attack_score,
         "semantic_formula_version": FORMULA_VERSION,
         "notes": "; ".join(
             f"{col.replace('_score', '')}={','.join(vals[:5])}"
@@ -4146,8 +4325,22 @@ def score_champion(
         ),
     }
 
-    for key, value in REVIEWED_OVERRIDES.get(str(champion.get("alias", "")), {}).items():
-        row[key] = float(value)
+    manual_override = reviewed_score_overrides().get(str(champion.get("alias", "")), {})
+    for key, value in manual_override.items():
+        if key in SCORE_COLUMNS:
+            row[key] = float(value)
+    if "poke_score" in manual_override:
+        manual_note = (
+            f"poke=manual_bucket:{manual_override.get('poke_bucket', '')}:"
+            f"{row['poke_score']}"
+        )
+        row["notes"] = "; ".join(part for part in (str(row.get("notes") or ""), manual_note) if part)
+    if "wave_clear_score" in manual_override:
+        manual_note = (
+            f"wave=manual_bucket:{manual_override.get('wave_bucket', '')}:"
+            f"{row['wave_clear_score']}"
+        )
+        row["notes"] = "; ".join(part for part in (str(row.get("notes") or ""), manual_note) if part)
 
     row["core_min_score"] = min(float(row[col]) for col in CORE_COLUMNS)
     row["core_mean_score"] = round(

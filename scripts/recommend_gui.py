@@ -26,6 +26,7 @@ import sys
 import threading
 import tkinter as tk
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -33,24 +34,42 @@ import click
 from aram_nn.icons import IconCache
 from aram_nn.lcu.client import (
     LCUClient, get_champion_summary, get_champ_select_session, get_current_summoner,
-    get_gameflow_phase,
+    get_gameflow_phase, get_gameflow_session,
 )
 from aram_nn.lcu.process import get_credentials
 from aram_nn.recommend import (
     ParsedSession, best_available_team_combos, describe_team_combo, load_composition_lr, load_lr,
-    parse_session, session_state_hash, suggest_for_cell,
+    load_synergy, parse_session, session_state_hash, suggest_for_cell,
 )
-from aram_nn.pair_synergy import PairSynergyStats, load_pair_synergy
+from aram_nn.pair_synergy import PairSynergyStats
+from aram_nn.role_synergy import RoleSynergyStats
 
 
 APP_NAME = "ARAMRecommender"
-DEFAULT_LR_MODEL = Path("models/tier2_mayhem/lr_weights.json")
-DEFAULT_VOCAB = Path("models/tier2_mayhem/tier2_checkpoint.champ_to_idx.json")
-DEFAULT_PAIR_STATS = Path("models/pair_synergy_16_10.json")
-DEFAULT_COMPOSITION_MODEL = Path("models/composition_lr_16_10_2026_05_21_dual_roles/model.pkl")
+# Explicit AppUserModelID.  The recommender is launched from source via a venv
+# pythonw copy (ARAMRecommender.exe); without an explicit id the live window's
+# taskbar identity is the interpreter's, which differs from the pinned shortcut
+# -> Windows shows TWO taskbar buttons.  Tagging both the process (here) and the
+# pinned .lnk with this same id makes the running window merge into the pin.
+APP_USER_MODEL_ID = "Lanternko.ARAMRecommender"
+# Pooled cross-patch + recency-weighted models (half-life 7d): pool 16.10-16.12
+# and weight recent games up so the current patch leads.  Verified +1.6pp acc
+# over the 16.10-pinned model on held-out 16.12 (scripts/train_composition_lr_pooled.py).
+DEFAULT_LR_MODEL = Path("models/composition_lr_pooled_recency_7d/lr_weights.json")
+DEFAULT_VOCAB = Path("models/composition_lr_pooled_recency_7d/champ_to_idx.json")
+# Champion x teammate-ROLE synergy (replaces raw champ-pair synergy, which was
+# winner's-curse noise: train->test r~0.17 vs r~0.37 for role-pooled — see
+# scripts/ablation_champ_role_persistence.py).  Lives in the model dir so it is
+# refreshed together with the pooled models.  load_synergy below still accepts a
+# legacy pair_synergy_*.json if one is passed explicitly.
+DEFAULT_SYNERGY_STATS = Path("models/composition_lr_pooled_recency_7d/role_synergy.json")
+DEFAULT_COMPOSITION_MODEL = Path("models/composition_lr_pooled_recency_7d/model.pkl")
 DEFAULT_CHAMPION_NAMES = Path("data/cache/champion_abilities.json")
+DEFAULT_TIER_PAYLOAD = Path("docs/api/tier-list.json")
 DEFAULT_APP_ICON = Path("docs/recommender-app-icon.ico")
 LIVE_CLIENT_ALL_GAME_DATA_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
+OVERWOLF_AUGMENT_EVENT = Path("data/overwolf/latest_augments.json")
+OVERWOLF_AUGMENT_LOG = Path("data/overwolf/augment_events.jsonl")
 
 
 def _project_root() -> Path:
@@ -88,6 +107,29 @@ def _icon_cache_dir() -> Path:
     return _resource_path("data/icons")
 
 
+def _log_gui_exception(context: str) -> None:
+    """Best-effort: append the current exception traceback to a log file.
+
+    The recommender runs under pythonw (no console), so an unhandled exception
+    inside a Tk callback otherwise vanishes to a discarded stderr.  Worse, if it
+    escapes the `_drain` loop it kills the reschedule and the overlay silently
+    freezes on its last good frame.  Capturing the traceback here makes such a
+    freeze diagnosable after the fact; failures to log are swallowed so logging
+    can never itself break the GUI.
+    """
+    try:
+        import traceback
+
+        stamp = datetime.now(timezone.utc).isoformat()
+        log_path = _icon_cache_dir().parent / "recommender_errors.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(f"\n----- {stamp}  {context} -----\n")
+            traceback.print_exc(file=fh)
+    except Exception:
+        pass
+
+
 def _set_window_icon(root: tk.Tk) -> None:
     icon_path = _resource_path(DEFAULT_APP_ICON)
     if not icon_path.exists():
@@ -118,6 +160,23 @@ def _enable_windows_dpi_awareness() -> None:
             pass
 
 
+def _set_app_user_model_id() -> None:
+    """Tag this process with an explicit AppUserModelID (Windows only).
+
+    Makes the live window merge with the pinned taskbar shortcut that carries
+    the same id, instead of appearing as a separate second taskbar button.
+    No-op off Windows or if the shell call is unavailable.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except Exception:
+        pass
+
+
 def load_fallback_champion_names() -> dict[int, str]:
     """Offline championId -> English alias map for --fake or LCU static misses."""
     path = _resource_path(DEFAULT_CHAMPION_NAMES)
@@ -144,6 +203,265 @@ def load_champion_alias_to_id() -> dict[str, int]:
     """Offline Data Dragon alias -> championId map for Live Client Data."""
     names = load_fallback_champion_names()
     return {alias.lower(): cid for cid, alias in names.items()}
+
+
+def _norm_key(value: object) -> str:
+    return str(value or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+class AugmentAdvisor:
+    """Small in-GUI augment scorer backed by the generated site payload."""
+
+    def __init__(self, payload_path: Path | None = None) -> None:
+        self.payload_path = _resolve_resource(payload_path, DEFAULT_TIER_PAYLOAD)
+        self.augments: dict[int, dict] = {}
+        self.champs: dict[int, dict] = {}
+        self.name_to_id: dict[str, int] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self.payload_path.exists():
+            return
+        try:
+            payload = json.loads(self.payload_path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+
+        raw_augs = payload.get("augs") or payload.get("augments") or {}
+        raw_champs = payload.get("champs") or payload.get("champions") or {}
+        self.augments = {int(k): v for k, v in raw_augs.items() if str(k).isdigit()}
+        self.champs = {int(k): v for k, v in raw_champs.items() if str(k).isdigit()}
+
+        for aid, meta in self.augments.items():
+            keys = {
+                aid,
+                meta.get("name"),
+                meta.get("name_zh"),
+                meta.get("name_en"),
+                meta.get("set"),
+                meta.get("set_zh"),
+                meta.get("set_en"),
+                meta.get("setSlug"),
+            }
+            for key in keys:
+                norm = _norm_key(key)
+                if norm:
+                    self.name_to_id[norm] = aid
+
+    def resolve_id(self, augment: dict) -> int | None:
+        raw = augment.get("raw")
+        candidates: list[object] = [
+            augment.get("id"),
+            augment.get("augment_id"),
+            augment.get("augmentId"),
+            augment.get("name"),
+        ]
+        if isinstance(raw, dict):
+            candidates.extend([
+                raw.get("id"),
+                raw.get("augment_id"),
+                raw.get("augmentId"),
+                raw.get("augment"),
+                raw.get("name"),
+                raw.get("displayName"),
+            ])
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            try:
+                aid = int(candidate)
+                if aid > 0:
+                    return aid
+            except (TypeError, ValueError):
+                pass
+            norm = _norm_key(candidate)
+            if norm in self.name_to_id:
+                return self.name_to_id[norm]
+        return None
+
+    def _champ_rows(self, champion_id: int) -> dict[int, dict]:
+        champ = self.champs.get(int(champion_id)) or {}
+        rows: dict[int, dict] = {}
+        for side in ("top", "bot"):
+            by_rarity = champ.get(side) or {}
+            if isinstance(by_rarity, dict):
+                groups = by_rarity.values()
+            else:
+                groups = [by_rarity]
+            for group in groups:
+                for row in group or []:
+                    try:
+                        rows[int(row.get("id") or row.get("augment_id"))] = row
+                    except (TypeError, ValueError):
+                        continue
+        return rows
+
+    def recommend(self, champion_id: int | None, offered: list[dict]) -> list[dict]:
+        if not offered:
+            return []
+        champ_rows = self._champ_rows(int(champion_id or 0)) if champion_id else {}
+        out: list[dict] = []
+        for index, augment in enumerate(offered, start=1):
+            aid = self.resolve_id(augment)
+            meta = self.augments.get(aid or -1, {})
+            row = champ_rows.get(aid or -1)
+            name = (
+                meta.get("name_zh")
+                or meta.get("name")
+                or meta.get("name_en")
+                or augment.get("name")
+                or f"option {index}"
+            )
+            out.append({
+                "slot": augment.get("slot") or f"option {index}",
+                "id": aid,
+                "name": name,
+                "raw_name": augment.get("name"),
+                "wr": (row or {}).get("wr"),
+                "lift": (row or {}).get("lift"),
+                "score": (row or {}).get("score"),
+                "games": int((row or {}).get("g") or (row or {}).get("games") or 0),
+            })
+        out.sort(key=lambda row: (
+            row["score"] is None,
+            -(float(row["score"]) if row["score"] is not None else -999.0),
+            -(float(row["wr"]) if row["wr"] is not None else -999.0),
+        ))
+        return out
+
+
+def _augment_event_path() -> Path:
+    candidates: list[Path] = []
+    env_latest = os.environ.get("ARAM_OVERWOLF_LATEST")
+    env_dir = os.environ.get("ARAM_OVERWOLF_DIR")
+    if env_latest:
+        candidates.append(Path(env_latest))
+    if env_dir:
+        candidates.append(Path(env_dir) / "latest_augments.json")
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.extend([
+            exe_dir.parent / OVERWOLF_AUGMENT_EVENT,
+            exe_dir / OVERWOLF_AUGMENT_EVENT,
+        ])
+    candidates.extend([
+        _project_root() / OVERWOLF_AUGMENT_EVENT,
+        Path.cwd() / OVERWOLF_AUGMENT_EVENT,
+    ])
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            path = path.resolve()
+        except OSError:
+            pass
+        if path in seen:
+            continue
+        seen.add(path)
+        if path.exists():
+            return path
+    return candidates[0]
+
+
+def _augment_log_path() -> Path:
+    latest = _augment_event_path()
+    candidate = latest.parent / "augment_events.jsonl"
+    if candidate.exists():
+        return candidate
+    return _project_root() / OVERWOLF_AUGMENT_LOG
+
+
+def _is_fragment_offer(event: dict) -> bool:
+    if str(event.get("type") or "") != "offer":
+        return False
+    augments = [aug for aug in event.get("augments") or [] if isinstance(aug, dict)]
+    if not augments:
+        return False
+    names = [str(aug.get("name") or "") for aug in augments]
+    return all(("碎片" in name or "fragment" in name.lower() or "shard" in name.lower()) for name in names)
+
+
+def _parse_event_time(value: object) -> datetime | None:
+    if not value:
+        return None
+    text = str(value).replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _event_from_record(record: dict, path: Path, stat_ns: int | None, *, recovered: bool = False) -> dict | None:
+    payload = record.get("payload") or {}
+    event = payload.get("event") or {}
+    if not isinstance(event, dict):
+        return None
+    return {
+        "path": str(path),
+        "mtime_ns": stat_ns,
+        "received_at": record.get("received_at"),
+        "type": event.get("type") or "unknown",
+        "augments": event.get("augments") or [],
+        "source": event.get("source") or payload.get("app") or "",
+        "recovered": recovered,
+    }
+
+
+def _latest_non_fragment_offer(before: datetime | None, max_age_sec: int = 180) -> dict | None:
+    path = _augment_log_path()
+    if not path.exists():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    for line in reversed(lines[-200:]):
+        try:
+            record = json.loads(line)
+        except Exception:
+            continue
+        event = _event_from_record(record, path, None, recovered=True)
+        if not event or event.get("type") != "offer" or _is_fragment_offer(event):
+            continue
+        event_time = _parse_event_time(event.get("received_at"))
+        if before and event_time:
+            age = (before - event_time).total_seconds()
+            if age < 0:
+                continue
+            if age > max_age_sec:
+                return None
+        return event
+    return None
+
+
+def read_latest_augment_event() -> dict | None:
+    path = _augment_event_path()
+    if not path.exists():
+        return None
+    try:
+        stat = path.stat()
+    except OSError:
+        stat = None
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "path": str(path),
+            "mtime_ns": stat.st_mtime_ns if stat else None,
+            "received_at": None,
+            "type": "error",
+            "augments": [],
+            "source": "bad_json",
+        }
+    event = _event_from_record(record, path, stat.st_mtime_ns if stat else None)
+    if event and _is_fragment_offer(event):
+        recovered = _latest_non_fragment_offer(_parse_event_time(event.get("received_at")))
+        if recovered:
+            return recovered
+    return event
 
 
 def _live_raw_champion_alias(raw_name: object) -> str:
@@ -221,6 +539,64 @@ def get_live_game_snapshot(alias_to_id: dict[str, int], timeout_sec: float = 1.0
         "active_champion_id": active_champion_id or my_team_ids[0],
         "names": names,
         "game_time": ((data.get("gameData") or {}).get("gameTime")),
+    }
+
+
+def get_gameflow_team_snapshot(session: dict | None, current_summoner: dict | None) -> dict | None:
+    """Read a full 5v5 composition from /lol-gameflow/v1/session.
+
+    Mayhem can enter gameflow InProgress while the ordinary champ-select
+    endpoint returns "No active delegate" and port 2999 is not ready yet.
+    In that window, gameflow.gameData already contains teamOne/teamTwo and
+    playerChampionSelections, which is enough for the recommender.
+    """
+    if not isinstance(session, dict):
+        return None
+    game_data = session.get("gameData") or {}
+    team_one = game_data.get("teamOne") or []
+    team_two = game_data.get("teamTwo") or []
+    if len(team_one) != 5 or len(team_two) != 5:
+        return None
+
+    current_puuid = str((current_summoner or {}).get("puuid") or "")
+    current_summoner_id = int((current_summoner or {}).get("summonerId") or 0)
+
+    def champion_ids(rows: list[dict]) -> list[int]:
+        return [int(row.get("championId") or 0) for row in rows]
+
+    def contains_current(rows: list[dict]) -> bool:
+        for row in rows:
+            if current_puuid and str(row.get("puuid") or "") == current_puuid:
+                return True
+            if current_summoner_id and int(row.get("summonerId") or 0) == current_summoner_id:
+                return True
+        return False
+
+    if contains_current(team_two):
+        my_rows, enemy_rows = team_two, team_one
+    else:
+        my_rows, enemy_rows = team_one, team_two
+
+    my_team_ids = champion_ids(my_rows)
+    enemy_team_ids = champion_ids(enemy_rows)
+    if any(cid <= 0 for cid in [*my_team_ids, *enemy_team_ids]):
+        return None
+
+    active_champion_id = my_team_ids[0]
+    for row in my_rows:
+        if current_puuid and str(row.get("puuid") or "") == current_puuid:
+            active_champion_id = int(row.get("championId") or active_champion_id)
+            break
+        if current_summoner_id and int(row.get("summonerId") or 0) == current_summoner_id:
+            active_champion_id = int(row.get("championId") or active_champion_id)
+            break
+
+    return {
+        "my_team_ids": my_team_ids,
+        "enemy_team_ids": enemy_team_ids,
+        "active_champion_id": active_champion_id,
+        "names": {},
+        "game_time": None,
     }
 
 
@@ -325,6 +701,11 @@ def poll_loop(
                             break
                         if phase == "InProgress":
                             snapshot = get_live_game_snapshot(alias_to_id)
+                            if snapshot is None:
+                                snapshot = get_gameflow_team_snapshot(
+                                    get_gameflow_session(lcu),
+                                    get_current_summoner(lcu),
+                                )
                             if snapshot is not None:
                                 state = (
                                     "ingame",
@@ -403,7 +784,7 @@ def fake_poll_loop(
     stop_event: threading.Event,
     q: queue.Queue,
     model,
-    pair_stats: PairSynergyStats | None,
+    pair_stats: PairSynergyStats | RoleSynergyStats | None,
     composition_model,
     interval: float = 3.0,
 ) -> None:
@@ -552,45 +933,6 @@ def _rating_copy_text(rating) -> str:
     return f"{rating.label}：{_fmt_rating(rating.value)}{detail}"
 
 
-def _strip_rating_prefix(label: str) -> str:
-    for prefix in ("高風險：", "風險：", "低點："):
-        if label.startswith(prefix):
-            return label.removeprefix(prefix)
-    return label
-
-
-def _is_risk_rating(rating) -> bool:
-    return rating.label.startswith(("高風險：", "風險：", "低點："))
-
-
-def _compact_rating_name(rating, combo=None, is_risk: bool = False) -> str:
-    label = _strip_rating_prefix(rating.label)
-    if label == "AD佔比":
-        detail = rating.detail or ""
-        share = getattr(combo, "ad_share", float("nan"))
-        if is_risk and not math.isnan(share):
-            if share >= 0.62:
-                return f"AD過高{detail}"
-            if share <= 0.38:
-                return f"AD過低{detail}"
-        if is_risk:
-            return f"AD佔比{detail}"
-        return "AD/AP均衡"
-    if label == "英雄強度" and is_risk:
-        return "英雄本體偏弱"
-    return label
-
-
-def _dedupe_keep_order(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for item in items:
-        if item and item not in seen:
-            seen.add(item)
-            out.append(item)
-    return out
-
-
 def _make_observer_window(root: tk.Tk) -> None:
     """Keep the overlay visible without activating the IME/input focus on Windows."""
     if sys.platform != "win32":
@@ -630,6 +972,10 @@ class RecommenderApp:
         self.icon_cache = icon_cache
         self.font_scale = 1.0
         self._last_render_args: tuple | None = None
+        self.active_champion_id: int | None = None
+        self.augment_advisor = AugmentAdvisor()
+        self.latest_augment_event: dict | None = None
+        self._last_augment_signature: tuple | None = None
 
         root.title("ARAM Recommender")
         _set_window_icon(root)
@@ -657,12 +1003,15 @@ class RecommenderApp:
         # (internal padding).  Asymmetric padding goes on the geometry
         # manager call (.pack / .grid).  We use that distinction to set
         # generous outer rhythm without bloating the labels themselves.
+        header_row = tk.Frame(root, bg=BG)
+        header_row.pack(fill="x", pady=(8, 0))
+        header_row.grid_columnconfigure(0, weight=1)
         self.header = tk.Label(
-            root, text="Loading…",
+            header_row, text="Loading...",
             bg=BG, fg=FG, font=self._font(FONT_HEAD),
             anchor="w", padx=12,
         )
-        self.header.pack(fill="x", pady=(8, 0))
+        self.header.grid(row=0, column=0, sticky="ew")
 
         self.subheader = tk.Label(
             root, text="",
@@ -676,6 +1025,14 @@ class RecommenderApp:
         # absolute ban on accent borders.
         tk.Frame(root, bg=DIVIDER, height=1).pack(fill="x", padx=12)
 
+        self.augment_panel = tk.Frame(root, bg=BG)
+        # Augment panel disabled: Overwolf bridge currently can't connect, so the
+        # "Best augment" line is stale noise.  Keep the frame attribute alive
+        # (referenced by _render_augment_panel / _apply_zoom) but don't pack or
+        # populate it.  Re-enable the three lines below once Overwolf is back.
+        # self.augment_panel.pack(fill="x", padx=12, pady=(6, 0))
+        # self._render_augment_panel()
+
         self.body = tk.Frame(root, bg=BG)
         self.body.pack(fill="both", expand=True, padx=12, pady=(8, 10))
 
@@ -685,6 +1042,8 @@ class RecommenderApp:
 
         # Begin draining the queue.
         self.root.after(100, self._drain)
+        # Augment polling disabled while the Overwolf bridge is offline.
+        # self.root.after(750, self._poll_augments)
 
     # ----- Queue handling -----
 
@@ -721,6 +1080,7 @@ class RecommenderApp:
         self._apply_zoom_geometry()
         self.header.config(font=self._font(FONT_HEAD))
         self.subheader.config(font=self._font(FONT_SUB))
+        # self._render_augment_panel()  # augment panel disabled (Overwolf offline)
         if self._last_render_args is not None:
             self._render(*self._last_render_args)
 
@@ -728,10 +1088,136 @@ class RecommenderApp:
         try:
             while True:
                 msg = self.q.get_nowait()
-                self._handle(msg)
+                try:
+                    self._handle(msg)
+                except Exception:
+                    # A single bad frame (edge-case champ-select state, missing
+                    # icon, unexpected None) must never escape the drain loop:
+                    # if it did, the `after` reschedule below would be skipped
+                    # and the overlay would freeze on its last good render while
+                    # the poll thread keeps queueing fresh updates.  Log the
+                    # frame and move on instead.
+                    _log_gui_exception(f"_handle kind={msg[0] if msg else '?'}")
         except queue.Empty:
             pass
-        self.root.after(150, self._drain)
+        finally:
+            # Reschedule unconditionally — the update loop must outlive any
+            # error above, otherwise the GUI silently stops refreshing.
+            self.root.after(150, self._drain)
+
+    def _poll_augments(self, force: bool = False) -> None:
+        event = read_latest_augment_event()
+        signature = None
+        if event is not None:
+            signature = (
+                event.get("path"),
+                event.get("mtime_ns"),
+                event.get("received_at"),
+                event.get("type"),
+                tuple(
+                    (aug.get("slot"), aug.get("name"), json.dumps(aug.get("raw"), sort_keys=True, default=str))
+                    for aug in event.get("augments") or []
+                    if isinstance(aug, dict)
+                ),
+            )
+        if force or signature != self._last_augment_signature:
+            self.latest_augment_event = event
+            self._last_augment_signature = signature
+            self._render_augment_panel()
+        if not force:
+            self.root.after(1000, self._poll_augments)
+
+    def _force_rescan_augments(self) -> None:
+        self._poll_augments(force=True)
+
+    def _render_augment_panel(self) -> None:
+        for widget in self.augment_panel.winfo_children():
+            widget.destroy()
+
+        event = self.latest_augment_event
+        if event is None:
+            text = "Augments: waiting for Overwolf"
+            fg = DIM
+        else:
+            event_type = str(event.get("type") or "unknown")
+            augments = [aug for aug in event.get("augments") or [] if isinstance(aug, dict)]
+            if event_type == "offer":
+                rows = self.augment_advisor.recommend(self.active_champion_id, augments)
+                if rows:
+                    best = rows[0]
+                    if best.get("id") is None:
+                        text = f"Augments detected: {best.get('raw_name') or best.get('name')} (unmapped)"
+                        fg = GOLD
+                    elif best.get("wr") is None:
+                        text = f"Best augment: {best['name']} (no champ data)"
+                        fg = GOLD
+                    else:
+                        lift = best.get("lift")
+                        lift_text = f", {_fmt_signed_pct(float(lift) * 100)}" if lift is not None else ""
+                        text = f"Best augment: {best['name']} ({_fmt_prob(float(best['wr']))}{lift_text})"
+                        fg = GREEN
+                else:
+                    text = "Augment offer detected, no options parsed"
+                    fg = GOLD
+            elif event_type == "picked":
+                names = [
+                    str(aug.get("name") or aug.get("slot") or "?")
+                    for aug in augments
+                ]
+                text = "Picked augments: " + (" / ".join(names[-3:]) if names else "detected")
+                fg = FG
+            elif event_type == "error":
+                text = "Augments: latest event unreadable"
+                fg = RED
+            else:
+                text = f"Augments: {event_type}"
+                fg = DIM
+
+        row = tk.Frame(self.augment_panel, bg=ROW, highlightthickness=1, highlightbackground=DIVIDER)
+        row.pack(fill="x")
+        tk.Button(
+            row,
+            text="Rescan",
+            command=self._force_rescan_augments,
+            bg=SURFACE,
+            fg=DIM,
+            activebackground=ROW,
+            activeforeground=FG,
+            relief="flat",
+            bd=0,
+            padx=6,
+            pady=1,
+            font=self._font(FONT_SECTION),
+            cursor="hand2",
+            takefocus=0,
+        ).pack(side="right", padx=(4, 6), pady=3)
+        tk.Label(
+            row,
+            text=text,
+            bg=ROW,
+            fg=fg,
+            font=self._font(FONT_SUB),
+            anchor="w",
+        ).pack(side="left", fill="x", expand=True, padx=8, pady=4)
+
+        if event is not None and event.get("type") == "offer":
+            rows = self.augment_advisor.recommend(
+                self.active_champion_id,
+                [aug for aug in event.get("augments") or [] if isinstance(aug, dict)],
+            )
+            detail = " > ".join(
+                str(row.get("name") or row.get("raw_name") or "?")
+                for row in rows[:3]
+            )
+            if detail:
+                tk.Label(
+                    row,
+                    text=detail,
+                    bg=ROW,
+                    fg=DIM,
+                    font=self._font(FONT_SECTION),
+                    anchor="e",
+                ).pack(side="right", padx=8, pady=4)
 
     def _handle(self, msg: tuple) -> None:
         kind = msg[0]
@@ -756,12 +1242,17 @@ class RecommenderApp:
             self._clear_body()
         elif kind == "suggestions":
             _, parsed, suggestions, *rest = msg
+            self.active_champion_id = int(parsed.my_current_id)
             combos = rest[0] if rest else []
             current_combo = rest[1] if len(rest) > 1 else None
             self._render(parsed, suggestions, combos, current_combo)
+            self._render_augment_panel()
         elif kind == "ingame":
             _, snapshot, current_combo, enemy_combo = msg
+            active = snapshot.get("active_champion_id")
+            self.active_champion_id = int(active) if active else None
             self._render_ingame(snapshot, current_combo, enemy_combo)
+            self._render_augment_panel()
 
     # ----- Rendering -----
 
@@ -788,7 +1279,9 @@ class RecommenderApp:
 
         combo_host = tk.Frame(self.body, bg=BG)
         combo_host.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 0))
-        self._render_combo_section(combo_host, combos, current_combo, wraplength=560)
+        self._render_combo_section(
+            combo_host, combos, pool=suggestions, owned_ids=parsed.my_team_ids, wraplength=560,
+        )
 
         left = tk.Frame(self.body, bg=BG)
         left.grid(row=1, column=0, sticky="new", padx=(0, 18), pady=(8, 0))
@@ -946,10 +1439,30 @@ class RecommenderApp:
     def _render_bench_table(self, parent, suggestions) -> None:
         bench = [s for s in suggestions if s.source == "bench"]
 
+        title_bar = tk.Frame(parent, bg=BG)
+        title_bar.pack(fill="x", pady=(0, 4))
         tk.Label(
-            parent, text="替補池",
+            title_bar, text="替補池",
             bg=BG, fg=DIM, anchor="w", font=self._font(FONT_SECTION),
-        ).pack(fill="x", pady=(0, 4))
+        ).pack(side="left")
+        bench_copy_btn = tk.Button(
+            title_bar,
+            text=COPY_ICON,
+            command=lambda pool=suggestions: self._copy_bench_top(pool, bench_copy_btn),
+            bg=SURFACE,
+            fg=FG,
+            activebackground=BEST_BG,
+            activeforeground=FG,
+            relief="flat",
+            bd=0,
+            width=2,
+            padx=5,
+            pady=1,
+            font=self._font(FONT_ICON),
+            cursor="hand2",
+            takefocus=0,
+        )
+        bench_copy_btn.pack(side="right")
 
         header = tk.Frame(parent, bg=BG)
         header.pack(fill="x", pady=(0, 2))
@@ -991,7 +1504,7 @@ class RecommenderApp:
             self._cell(row, 3, _fmt_signed_z(s.z_score), self._z_color(s.z_score), bg=row_bg, font=FONT_NUM)
             self._cell(row, 4, f"{marker}{name}", name_color, bg=row_bg, font=FONT_NAME_B if is_best else FONT_NAME)
 
-    def _render_combo_section(self, parent, combos, current_combo=None, wraplength: int = 260) -> None:
+    def _render_combo_section(self, parent, combos, pool=None, owned_ids=None, wraplength: int = 260) -> None:
         if not combos:
             return
 
@@ -1005,7 +1518,7 @@ class RecommenderApp:
         copy_btn = tk.Button(
             copy_bar,
             text=COPY_ICON,
-            command=lambda c=combos[0], current=current_combo: self._copy_combo(current, c, copy_btn),
+            command=lambda c=combos[0], p=pool, o=owned_ids: self._copy_combo(c, p, o, copy_btn),
             bg=SURFACE,
             fg=FG,
             activebackground=BEST_BG,
@@ -1099,49 +1612,107 @@ class RecommenderApp:
                     font=self._font(FONT_SECTION), anchor="e",
                 ).pack(side="right", padx=(3, 5), pady=2)
 
-    def _team_profile_clipboard_text(self, combo) -> str:
-        if combo is None:
-            return "當前勝率：n/a\n優勢：n/a | 風險：n/a"
-        win_rate = f"當前勝率：{_fmt_prob(combo.win_prob)}"
-        ratings = getattr(combo, "ratings", None)
-        if not ratings:
-            return win_rate
+    def _combo_substitute_ids(self, recommended_combo, pool, count: int = 2) -> list[int]:
+        """Champion ids for the top `count` available-pool picks not in the best-5.
 
-        advantages = _dedupe_keep_order([
-            _compact_rating_name(rating, combo)
-            for rating in ratings[:5]
-            if (
-                not _is_risk_rating(rating)
-                and rating.label not in {"英雄強度", "AD佔比"}
-            )
-        ])[:2]
+        Ranked by team fit (Suggestion.win_prob), the same order the bench
+        table shows, so the shared substitutes are the next picks to reach for
+        if one of the recommended five isn't available.
+        """
+        if not pool:
+            return []
+        chosen = set(recommended_combo.champion_ids)
+        known = [
+            s for s in pool
+            if s.is_known and not math.isnan(s.win_prob) and s.champion_id not in chosen
+        ]
+        known.sort(key=lambda s: s.win_prob, reverse=True)
+        return [int(s.champion_id) for s in known[:count]]
 
-        risks: list[str] = []
-        for rating in ratings[:5]:
-            if _is_risk_rating(rating):
-                risks.append(_compact_rating_name(rating, combo, is_risk=True))
-            elif rating.label == "AD佔比" and not math.isnan(rating.value) and rating.value < 2.05:
-                risks.append(_compact_rating_name(rating, combo, is_risk=True))
-            elif rating.label == "英雄強度" and not math.isnan(rating.value) and rating.value < 2.05:
-                risks.append(_compact_rating_name(rating, combo, is_risk=True))
+    def _combo_name(self, champion_id: int, owned: set[int]) -> str:
+        """Champion display name, tagged （已有）if the team already has it.
 
-        advantages_text = "、".join(advantages) if advantages else "n/a"
-        risks_text = "、".join(_dedupe_keep_order(risks)[:2]) if risks else "無明顯硬傷"
-        return f"{win_rate}\n優勢：{advantages_text} | 風險：{risks_text}"
+        owned is the current team's picks (parsed.my_team_ids): a recommended
+        champion in it is already locked in, an untagged one must be grabbed
+        from the shared bench.
+        """
+        name = self.id_to_name.get(champion_id, f"#{champion_id}")
+        return f"{name}（已有）" if int(champion_id) in owned else name
 
-    def _combo_clipboard_text(self, current_combo, recommended_combo) -> str:
-        names = [self.id_to_name.get(cid, f"#{cid}") for cid in recommended_combo.champion_ids]
-        delta = ""
+    def _combo_clipboard_text(self, recommended_combo, pool=None, owned_ids=None) -> str:
+        owned = {int(c) for c in (owned_ids or [])}
+        starters = [self._combo_name(cid, owned) for cid in recommended_combo.champion_ids]
+        win_line = f"✅勝率{_fmt_prob(recommended_combo.win_prob)}"
         if not math.isnan(recommended_combo.delta):
-            delta = f"，{_fmt_signed_pct(recommended_combo.delta * 100)}"
-        return (
-            f"{self._team_profile_clipboard_text(current_combo)}"
-            f"\n\nAI推薦隊伍：{', '.join(names)}（勝率：{_fmt_prob(recommended_combo.win_prob)}{delta}）"
-        )
+            win_line += f"（{_fmt_signed_pct(recommended_combo.delta * 100)}）"
+        lines = ["【AI推薦隊伍】", *starters, win_line]
+        sub_ids = self._combo_substitute_ids(recommended_combo, pool)
+        if sub_ids:
+            lines += ["【替補】", *[self._combo_name(cid, owned) for cid in sub_ids]]
+        return "\n".join(lines)
 
-    def _copy_combo(self, current_combo, recommended_combo, button: tk.Button | None = None) -> None:
+    def _copy_combo(self, recommended_combo, pool=None, owned_ids=None, button: tk.Button | None = None) -> None:
         self.root.clipboard_clear()
-        self.root.clipboard_append(self._combo_clipboard_text(current_combo, recommended_combo))
+        self.root.clipboard_append(self._combo_clipboard_text(recommended_combo, pool, owned_ids))
+        self.root.update_idletasks()
+        if button is not None:
+            button.config(text=COPIED_ICON, fg=GREEN)
+            self.root.after(
+                1200,
+                lambda: button.winfo_exists() and button.config(text=COPY_ICON, fg=FG),
+            )
+
+    def _champ_meta_wr(self, champion_id: int) -> float | None:
+        """Champion's real global meta win rate from the tier-list payload.
+
+        This is the same number the public tier list shows (bayes-smoothed,
+        matching its headline), and it is cell-independent — it does NOT
+        depend on the local player's current team.  Returns None if the
+        champion isn't in the payload (too few games / not visible).
+
+        Contrast with Suggestion.win_prob, which is the local team's predicted
+        win probability with the candidate swapped into *your* cell: that is
+        shifted by your team's baseline and only valid for your slot, so it is
+        meaningless to share with teammates.
+        """
+        champs = getattr(self.augment_advisor, "champs", {})
+        champ = champs.get(int(champion_id))
+        if not champ:
+            return None
+        wr = champ.get("wr")
+        try:
+            return float(wr) if wr is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _bench_top_clipboard_text(self, pool) -> str:
+        """Top 7 of the available pool for sharing with teammates.
+
+        Ordered by team fit (Suggestion.win_prob — the same order as the
+        bench table's MLΔ column), but each champion is annotated with its
+        real global meta win rate (_champ_meta_wr), not the baseline-shifted
+        per-cell win_prob.  The shared number is therefore cell-independent
+        and matches the public tier list, so a teammate eyeing the shared
+        reroll bench gets a trustworthy "is this champ strong right now"
+        signal instead of a number that only applies to your slot.
+        """
+        known = [s for s in pool if s.is_known and not math.isnan(s.win_prob)]
+        known.sort(key=lambda s: s.win_prob, reverse=True)
+        top = known[:7]
+        if not top:
+            return "可用池前7名：n/a"
+        lines = []
+        for i, s in enumerate(top, start=1):
+            name = self.id_to_name.get(s.champion_id, f"#{s.champion_id}")
+            wr = self._champ_meta_wr(s.champion_id)
+            wr_text = _fmt_prob(wr) if wr is not None else "—"
+            lines.append(f"{i}. {name} {wr_text}")
+        header = "可用池前7名（依對本隊提升排序，% 為該英雄 meta 勝率）："
+        return header + "\n" + "\n".join(lines)
+
+    def _copy_bench_top(self, pool, button: tk.Button | None = None) -> None:
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self._bench_top_clipboard_text(pool))
         self.root.update_idletasks()
         if button is not None:
             button.config(text=COPIED_ICON, fg=GREEN)
@@ -1239,12 +1810,16 @@ class RecommenderApp:
               help="Path to tier2_checkpoint.pt or champ_to_idx.json - used for champion vocab.")
 @click.option("--pair-stats", default=None,
               type=click.Path(path_type=Path, dir_okay=False),
-              help="Path to pair synergy JSON from scripts/build_pair_stats.py.")
+              help="Path to synergy JSON: role-pooled from build_role_synergy.py (default) "
+                   "or legacy pair from build_pair_stats.py. Schema is auto-detected.")
 @click.option("--composition-model", default=None,
               type=click.Path(path_type=Path, dir_okay=True),
               help="Path to composition LR model.pkl or its model directory. Used for primary ML swap deltas.")
-@click.option("--poll-interval", default=1.0, show_default=True, type=float,
-              help="Seconds between LCU polls while in ChampSelect.")
+@click.option("--poll-interval", default=0.35, show_default=True, type=float,
+              help="Seconds between LCU polls while in ChampSelect — drives how fast "
+                   "the overlay reacts to a bench reroll. LCU is local (127.0.0.1) so "
+                   "polling is cheap, and the recompute only fires on a real state change. "
+                   "Idle / in-game / reconnect paths stay floored at 2.0s regardless.")
 @click.option("--fake", is_flag=True, default=False,
               help="Demo mode: skip LCU, generate random champ-select states every 3s. "
                    "Useful to verify the GUI works without launching League.")
@@ -1262,10 +1837,11 @@ def main(
 ) -> None:
     """Tk GUI for the ARAM champ-select recommender."""
     _enable_windows_dpi_awareness()
+    _set_app_user_model_id()
 
     lr_model = _resolve_resource(lr_model, DEFAULT_LR_MODEL)
     vocab = _resolve_resource(vocab, DEFAULT_VOCAB)
-    pair_stats = _resolve_resource(pair_stats, DEFAULT_PAIR_STATS)
+    pair_stats = _resolve_resource(pair_stats, DEFAULT_SYNERGY_STATS)
     composition_model = _resolve_resource(composition_model, DEFAULT_COMPOSITION_MODEL)
 
     print(f"[gui] loading model from {lr_model}")
@@ -1282,13 +1858,20 @@ def main(
         print(f"[gui] WARN: composition model not found at {composition_model}; using old blend score")
     pair_model = None
     if pair_stats.exists():
-        pair_model = load_pair_synergy(pair_stats)
-        print(
-            f"[gui] pair synergy rows={len(pair_model.rows):,} "
-            f"patch={pair_model.patch_prefix} min_pair={pair_model.min_pair}"
-        )
+        pair_model = load_synergy(pair_stats)
+        if isinstance(pair_model, RoleSynergyStats):
+            print(
+                f"[gui] role synergy cells={len(pair_model.rows):,} "
+                f"roles={list(pair_model.roles)} champs={len(pair_model.role_by_champ)} "
+                f"min_cell={pair_model.min_pair}"
+            )
+        else:
+            print(
+                f"[gui] pair synergy rows={len(pair_model.rows):,} "
+                f"patch={pair_model.patch_prefix} min_pair={pair_model.min_pair}"
+            )
     else:
-        print(f"[gui] WARN: pair stats not found at {pair_stats}; old blend fallback will use LR only")
+        print(f"[gui] WARN: synergy stats not found at {pair_stats}; old blend fallback will use LR only")
 
     q: queue.Queue = queue.Queue()
     stop_event = threading.Event()

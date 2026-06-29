@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import psutil
 
@@ -23,13 +23,17 @@ DEFAULT_DB = ROOT / "data" / "lcu" / "games.db"
 DEFAULT_SEED_FILE = ROOT / "data" / "seeds" / "opgg_tw.txt"
 DEFAULT_LOG_DIR = ROOT / ".codex" / "logs" / "mayhem_lcu_watchdog"
 DEFAULT_STATE_FILE = ROOT / "data" / "monitor" / "mayhem_lcu_watchdog.jsonl"
+DEFAULT_STATIC_PUBLISH_STATE = ROOT / "data" / "site" / "static_publish_state.json"
+DEFAULT_STATIC_PUBLISH_LOG_DIR = ROOT / "data" / "site"
+DEFAULT_MODEL_REFRESH_STATE = ROOT / "data" / "site" / "model_refresh_state.json"
+DEFAULT_MODEL_REFRESH_LOG_DIR = ROOT / "data" / "site"
 LEAGUE_LOCKFILES = (
     Path(r"C:\Riot Games\League of Legends\lockfile"),
-    Path(r"D:\遊戲\Riot Games\League of Legends\lockfile"),
+    Path(r"D:\?\Riot Games\League of Legends\lockfile"),
     Path(r"D:\Riot Games\League of Legends\lockfile"),
 )
 DEFAULT_RIOT_CLIENTS = (
-    Path(r"D:\遊戲\Riot Games\Riot Client\RiotClientServices.exe"),
+    Path(r"D:\?\Riot Games\Riot Client\RiotClientServices.exe"),
     Path(r"C:\Riot Games\Riot Client\RiotClientServices.exe"),
     Path(r"D:\Riot Games\Riot Client\RiotClientServices.exe"),
 )
@@ -41,6 +45,14 @@ def utc_now() -> dt.datetime:
 
 def iso_now() -> str:
     return utc_now().isoformat()
+
+
+def background_python_executable() -> str:
+    if os.name != "nt":
+        return sys.executable
+    exe = Path(sys.executable)
+    pythonw = exe.with_name("pythonw.exe")
+    return str(pythonw) if pythonw.exists() else sys.executable
 
 
 def mb(rss: int | float) -> float:
@@ -65,14 +77,79 @@ def is_snowball_worker(proc: psutil.Process) -> bool:
         cmdline = proc.info.get("cmdline") or []
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return False
-    if name != "python.exe" or len(cmdline) < 4:
+    if name not in ("python.exe", "pythonw.exe") or len(cmdline) < 2:
         return False
-    script = str(cmdline[2]).replace("/", "\\")
+    normalized = [str(part).replace("/", "\\") for part in cmdline]
+    joined = " ".join(normalized)
+    return r"scripts\lcu_collector.py" in joined and "snowball" in normalized
+
+
+def is_static_site_publisher(proc: psutil.Process) -> bool:
+    try:
+        name = (proc.info.get("name") or "").lower()
+        cmdline = proc.info.get("cmdline") or []
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    if name not in ("python.exe", "pythonw.exe") or len(cmdline) < 2:
+        return False
+    joined = " ".join(str(part) for part in cmdline).replace("/", "\\")
     return (
-        str(cmdline[1]) == "-u"
-        and script.endswith(r"scripts\lcu_collector.py")
-        and str(cmdline[3]) == "snowball"
+        r"scripts\publish_static_site.py" in joined
+        and "--watch" in [str(part) for part in cmdline]
     )
+
+
+def static_site_publishers() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for proc in iter_processes():
+        if not is_static_site_publisher(proc):
+            continue
+        try:
+            rss = proc.info.get("memory_info").rss if proc.info.get("memory_info") else 0
+            rows.append(
+                {
+                    "pid": proc.info["pid"],
+                    "rss_mb": mb(rss),
+                    "cmdline": proc.info.get("cmdline") or [],
+                }
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return rows
+
+
+def is_model_refresher(proc: psutil.Process) -> bool:
+    try:
+        name = (proc.info.get("name") or "").lower()
+        cmdline = proc.info.get("cmdline") or []
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return False
+    if name not in ("python.exe", "pythonw.exe") or len(cmdline) < 2:
+        return False
+    joined = " ".join(str(part) for part in cmdline).replace("/", "\\")
+    return (
+        r"scripts\refresh_recommender_models.py" in joined
+        and "--watch" in [str(part) for part in cmdline]
+    )
+
+
+def model_refreshers() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for proc in iter_processes():
+        if not is_model_refresher(proc):
+            continue
+        try:
+            rss = proc.info.get("memory_info").rss if proc.info.get("memory_info") else 0
+            rows.append(
+                {
+                    "pid": proc.info["pid"],
+                    "rss_mb": mb(rss),
+                    "cmdline": proc.info.get("cmdline") or [],
+                }
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return rows
 
 
 def snowball_workers() -> list[dict[str, Any]]:
@@ -92,6 +169,17 @@ def snowball_workers() -> list[dict[str, Any]]:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return rows
+
+
+def worker_number_from_cmdline(cmdline: Sequence[Any]) -> int | None:
+    try:
+        parts = [str(part) for part in cmdline]
+        worker_id = parts[parts.index("--worker-id") + 1]
+        if len(worker_id) > 1 and worker_id[0].upper() == "W":
+            return int(worker_id[1:])
+    except (ValueError, IndexError, TypeError):
+        return None
+    return None
 
 
 def stop_snowball_workers(grace_sec: int = 5) -> list[int]:
@@ -119,12 +207,8 @@ def stop_extra_snowball_workers(keep: int, grace_sec: int = 5) -> list[int]:
             continue
         worker_num = 999
         try:
-            cmdline = proc.info.get("cmdline") or []
-            if "--worker-id" in cmdline:
-                worker_id = str(cmdline[cmdline.index("--worker-id") + 1])
-                if len(worker_id) > 1 and worker_id[0].upper() == "W":
-                    worker_num = int(worker_id[1:])
-        except (ValueError, IndexError, TypeError):
+            worker_num = worker_number_from_cmdline(proc.info.get("cmdline") or []) or 999
+        except (TypeError, ValueError):
             worker_num = 999
         workers.append((proc, worker_num))
 
@@ -361,7 +445,7 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
     out_path = args.log_dir / f"snowball_{worker_id}_{stamp}.out.log"
     err_path = args.log_dir / f"snowball_{worker_id}_{stamp}.err.log"
     cmd = [
-        sys.executable,
+        background_python_executable(),
         "-u",
         str(ROOT / "scripts" / "lcu_collector.py"),
         "snowball",
@@ -397,11 +481,90 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
         "--no-seed-apex",
         "--no-seed-riot-tier",
     ]
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     with out_path.open("ab") as out, err_path.open("ab") as err:
-        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err)
+        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err, creationflags=creationflags)
     return {
         "pid": proc.pid,
         "worker_id": worker_id,
+        "cmd": cmd,
+        "stdout": str(out_path),
+        "stderr": str(err_path),
+    }
+
+
+def ensure_static_site_publisher(args: argparse.Namespace) -> dict[str, Any] | None:
+    if not args.site_publisher or args.once:
+        return None
+    active = static_site_publishers()
+    if active:
+        return {"action": "static_site_publisher_already_running", "publishers": active}
+
+    args.static_publisher_log_dir.mkdir(parents=True, exist_ok=True)
+    out_path = args.static_publisher_log_dir / "static_publish.out.log"
+    err_path = args.static_publisher_log_dir / "static_publish.err.log"
+    cmd = [
+        background_python_executable(),
+        str(ROOT / "scripts" / "publish_static_site.py"),
+        "--watch",
+        "--threshold",
+        str(args.static_publish_threshold),
+        "--growth-ratio",
+        str(args.static_publish_growth_ratio),
+        "--interval-sec",
+        str(args.static_publish_interval_sec),
+        "--db",
+        str(args.db),
+        "--state",
+        str(args.static_publish_state),
+        "--patch-prefix",
+        args.static_publish_patch_prefix,
+    ]
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    with out_path.open("ab") as out, err_path.open("ab") as err:
+        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err, creationflags=creationflags)
+    return {
+        "action": "start_static_site_publisher",
+        "pid": proc.pid,
+        "cmd": cmd,
+        "stdout": str(out_path),
+        "stderr": str(err_path),
+    }
+
+
+def ensure_model_refresher(args: argparse.Namespace) -> dict[str, Any] | None:
+    if not args.model_refresher or args.once:
+        return None
+    active = model_refreshers()
+    if active:
+        return {"action": "model_refresher_already_running", "refreshers": active}
+
+    args.model_refresh_log_dir.mkdir(parents=True, exist_ok=True)
+    out_path = args.model_refresh_log_dir / "model_refresh.out.log"
+    err_path = args.model_refresh_log_dir / "model_refresh.err.log"
+    cmd = [
+        background_python_executable(),
+        str(ROOT / "scripts" / "refresh_recommender_models.py"),
+        "--watch",
+        "--threshold",
+        str(args.model_refresh_threshold),
+        "--growth-ratio",
+        str(args.model_refresh_growth_ratio),
+        "--interval-sec",
+        str(args.model_refresh_interval_sec),
+        "--min-current-games",
+        str(args.model_refresh_min_current_games),
+        "--db",
+        str(args.db),
+        "--state",
+        str(args.model_refresh_state),
+    ]
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    with out_path.open("ab") as out, err_path.open("ab") as err:
+        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err, creationflags=creationflags)
+    return {
+        "action": "start_model_refresher",
+        "pid": proc.pid,
         "cmd": cmd,
         "stdout": str(out_path),
         "stderr": str(err_path),
@@ -496,6 +659,12 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
     health = lcu_health()
     latest_age = latest_capture_age_min(args.db)
     actions: list[dict[str, Any]] = []
+    publisher_action = ensure_static_site_publisher(args)
+    if publisher_action:
+        actions.append(publisher_action)
+    refresher_action = ensure_model_refresher(args)
+    if refresher_action:
+        actions.append(refresher_action)
 
     if workers and not health["ok"]:
         stopped = stop_snowball_workers()
@@ -566,15 +735,25 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         actions.append({"action": "wait_for_lcu_ready", **ready})
 
     workers = snowball_workers()
+    worker_numbers = {
+        number
+        for worker in workers
+        if (number := worker_number_from_cmdline(worker.get("cmdline") or [])) is not None
+    }
+    missing_worker_numbers = [
+        idx for idx in range(1, args.workers + 1) if idx not in worker_numbers
+    ]
     if (
         len(workers) < args.workers
+        and missing_worker_numbers
         and health["ok"]
         and 0 < main_mb <= args.worker_start_max_client_mb
     ):
-        missing = args.workers - len(workers)
-        for idx in range(len(workers) + 1, len(workers) + missing + 1):
+        for offset, idx in enumerate(missing_worker_numbers[: args.workers - len(workers)]):
             started_worker = start_snowball_worker(args, idx)
             actions.append({"action": "start_worker", **started_worker})
+            if offset + 1 < min(len(missing_worker_numbers), args.workers - len(workers)):
+                time.sleep(5)
         workers = snowball_workers()
     elif not workers and health["ok"] and main_mb > args.worker_start_max_client_mb:
         actions.append(
@@ -599,6 +778,8 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         "league_main_mb": main_mb,
         "lcu": health,
         "workers": snowball_workers(),
+        "static_site_publishers": static_site_publishers(),
+        "model_refreshers": model_refreshers(),
         "latest_capture_age_min": latest_age,
         "actions": actions,
     }
@@ -615,7 +796,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--check-interval-sec", type=int, default=60)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--restart-client", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--degraded-workers", type=int, default=1)
     parser.add_argument("--degrade-client-mb", type=float, default=4500.0)
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
@@ -631,6 +812,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--player-requeue-cooldown-sec", type=int, default=45)
     parser.add_argument("--manual-seed-pending-cap", type=int, default=40)
     parser.add_argument("--max-depth", type=int, default=3)
+    parser.add_argument("--site-publisher", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--static-publish-threshold", type=int, default=0)
+    parser.add_argument("--static-publish-growth-ratio", type=float, default=0.10)
+    parser.add_argument("--static-publish-interval-sec", type=int, default=300)
+    parser.add_argument("--static-publish-patch-prefix", default="auto")
+    parser.add_argument("--static-publish-state", type=Path, default=DEFAULT_STATIC_PUBLISH_STATE)
+    parser.add_argument("--static-publisher-log-dir", type=Path, default=DEFAULT_STATIC_PUBLISH_LOG_DIR)
+    parser.add_argument("--model-refresher", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--model-refresh-threshold", type=int, default=0)
+    parser.add_argument("--model-refresh-growth-ratio", type=float, default=0.25)
+    parser.add_argument("--model-refresh-interval-sec", type=int, default=600)
+    parser.add_argument("--model-refresh-min-current-games", type=int, default=15000)
+    parser.add_argument("--model-refresh-state", type=Path, default=DEFAULT_MODEL_REFRESH_STATE)
+    parser.add_argument("--model-refresh-log-dir", type=Path, default=DEFAULT_MODEL_REFRESH_LOG_DIR)
     return parser.parse_args()
 
 
@@ -640,6 +835,10 @@ def main() -> int:
     args.seed_riot_id_file = args.seed_riot_id_file.resolve()
     args.log_dir = args.log_dir.resolve()
     args.state_file = args.state_file.resolve()
+    args.static_publish_state = args.static_publish_state.resolve()
+    args.static_publisher_log_dir = args.static_publisher_log_dir.resolve()
+    args.model_refresh_state = args.model_refresh_state.resolve()
+    args.model_refresh_log_dir = args.model_refresh_log_dir.resolve()
 
     while True:
         record = check_once(args)
@@ -652,3 +851,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

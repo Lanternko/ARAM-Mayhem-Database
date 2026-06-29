@@ -8,10 +8,42 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from build_semantic_ability_scores import build_scores_with_debug  # noqa: E402
+from build_semantic_ability_scores import build_scores_with_debug, basic_attack_floor  # noqa: E402
 
 
 ABILITY_JSON = ROOT / "data" / "cache" / "champion_abilities.json"
+
+
+class BasicAttackScoreTests(unittest.TestCase):
+    def test_basic_attack_score_uses_native_range_and_ad(self) -> None:
+        short_low_ad = {
+            "alias": "ShortLowAdFixture",
+            "tags": ["Mage"],
+            "stats": {
+                "attackrange": 425,
+                "attackdamage": 48,
+                "attackdamageperlevel": 2.4,
+                "attackspeed": 0.60,
+                "attackspeedperlevel": 1.5,
+            },
+            "abilities": [],
+            "passive": {},
+        }
+        long_high_ad = {
+            "alias": "LongHighAdFixture",
+            "tags": ["Mage"],
+            "stats": {
+                "attackrange": 650,
+                "attackdamage": 68,
+                "attackdamageperlevel": 4.4,
+                "attackspeed": 0.68,
+                "attackspeedperlevel": 3.5,
+            },
+            "abilities": [],
+            "passive": {},
+        }
+        self.assertGreater(basic_attack_floor(short_low_ad), 0.0)
+        self.assertGreater(basic_attack_floor(long_high_ad), basic_attack_floor(short_low_ad))
 
 
 @unittest.skipUnless(ABILITY_JSON.exists(), "champion_abilities.json is required for semantic score tests")
@@ -277,6 +309,18 @@ class SemanticScoreOrderingTests(unittest.TestCase):
         )
         self.assertAlmostEqual(float(karthus_p["engage_manual_adjustment"]), 0.7)
         self.assertGreater(float(karthus_p["engage_skill_score"]), float(karthus_p["engage_base_score"]))
+
+    def test_manual_poke_bucket_overrides_are_applied(self) -> None:
+        self.assertAlmostEqual(float(self.by_alias["Jayce"]["poke_score"]), 2.55)
+        self.assertAlmostEqual(float(self.by_alias["Kalista"]["poke_score"]), 0.9)
+        self.assertIn("poke=manual_bucket:S:2.55", self.by_alias["Jayce"]["notes"])
+        self.assertIn("poke=manual_bucket:C:0.9", self.by_alias["Kalista"]["notes"])
+
+    def test_manual_wave_bucket_overrides_are_applied(self) -> None:
+        self.assertAlmostEqual(float(self.by_alias["Taliyah"]["wave_clear_score"]), 1.8)
+        self.assertAlmostEqual(float(self.by_alias["Nami"]["wave_clear_score"]), 0.25)
+        self.assertIn("wave=manual_bucket:S:1.8", self.by_alias["Taliyah"]["notes"])
+        self.assertIn("wave=manual_bucket:F:0.25", self.by_alias["Nami"]["notes"])
 
 
 if __name__ == "__main__":

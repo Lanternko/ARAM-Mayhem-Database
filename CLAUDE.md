@@ -16,7 +16,7 @@ Repo 名留 `aram-winrate-nn` 是歷史包袱，**所有訓練 / tier list / 推
 - `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
 - `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（`games` + `crawl_seen` set + `crawl_queue` priority frontier）
 - `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`, `build_tier_list.py`
-- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://lanternko.github.io/ARAM-Mayhem-Database/
+- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://arammeta.com/
 - `src/aram_nn/site/` — 前後端分離層：公開 `games` DB schema、FastAPI backend、10k watermark sync、tier-list JSON payload API
 - `data/cache/` — `kiwi.bin.json` + `lol_stringtable_zh_tw.json` (CommunityDragon mirror, ~30 MB) 用來解析 Mayhem augment 中文敘述
 - 深度技術決策見 `PLAN.md`（v3，已經 Codex review）；部署流程見 `.claude/skills/deploy-tier-list/SKILL.md`
@@ -47,10 +47,10 @@ python -m aram_nn.ingest.snowball \
 python scripts/probe_user.py --region tw --riot-id "Name#TAG" --count 100
 
 # Tier list 網站 split build（部署 → `/deploy-tier-list` skill）
-python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
+python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
 
 # 舊 inline build 仍可用於臨時單檔測試；正式 deploy 不用這個模式
-python scripts/build_tier_list.py --site-url "https://lanternko.github.io/ARAM-Mayhem-Database/"
+python scripts/build_tier_list.py --site-url "https://arammeta.com/"
 
 # VM/backend API + local 10k watermark upload
 python scripts/site_api.py

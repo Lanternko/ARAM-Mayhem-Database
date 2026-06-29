@@ -1,6 +1,6 @@
 # 貢獻 Mayhem 對局資料
 
-這份指南給想要把自己跑出來的 Mayhem 對局資料貢獻到[公開 tier list](https://lanternko.github.io/ARAM-Mayhem-Database/) 的玩家。流程設計成**只送出無 PUUID 的安全檔**、**全程公開稽核**（每筆貢獻都是一個 GitHub Issue）。
+這份指南給想要把自己跑出來的 Mayhem 對局資料貢獻到[公開 tier list](https://arammeta.com/) 的玩家。流程設計成**只送出無 PUUID 的安全檔**、**全程公開稽核**（每筆貢獻都是一個 GitHub Issue）。
 
 ---
 
@@ -134,5 +134,5 @@ python scripts/lcu_collector.py merge-db --out-db data/lcu/games_merged.db --glo
 ## 法律 / 隱私
 
 - 你貢獻的資料只含 game_id（Riot 內部編號）、英雄 IDs、augment IDs、勝負 — **沒有任何 PUUID / 召喚師名稱 / 帳號識別**
-- 資料隨 [tier list 網站](https://lanternko.github.io/ARAM-Mayhem-Database/) 公開可下載（MIT License）
+- 資料隨 [tier list 網站](https://arammeta.com/) 公開可下載（MIT License）
 - 不會被用於訓練商業模型或轉售

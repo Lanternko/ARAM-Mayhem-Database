@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS games (
     duration_sec INTEGER NOT NULL,
     created_ms   INTEGER NOT NULL,
     captured_at  TEXT NOT NULL,
-    participants_json TEXT
+    participants_json TEXT,
+    participants_private_json TEXT
 );
 """
 
@@ -124,6 +125,21 @@ def _extract_augments(stats: dict) -> list[int]:
     return augments
 
 
+def _extract_summoner_spells(participant: dict, stats: dict) -> list[int]:
+    """Return the player's summoner spell IDs, sorted ascending.
+
+    ARAM/Mayhem forces Mark/Dash (id 32) plus one chosen spell.  Slot order
+    (spell1 vs spell2) is meaningless here — sort by id like champions so the
+    model never learns a spurious slot feature.
+    """
+    spells: list[int] = []
+    for aliases in (("spell1Id", "summoner1Id"), ("spell2Id", "summoner2Id")):
+        value = _to_int(_lookup_raw_value([participant, stats], aliases))
+        if value is not None and value > 0:
+            spells.append(value)
+    return sorted(spells)
+
+
 def _norm_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
@@ -183,6 +199,10 @@ def _build_participant_record(team_id: int, champion_id: int, raw: dict) -> dict
         "augments": _extract_augments(stats),
     }
 
+    spells = _extract_summoner_spells(raw, stats)
+    if spells:
+        record["spells"] = spells
+
     items = [item_id for item_id in item_slots if item_id > 0]
     if items:
         record["items"] = items
@@ -191,6 +211,40 @@ def _build_participant_record(team_id: int, champion_id: int, raw: dict) -> dict
     selected_stats = _extract_selected_stats(raw, stats, challenges)
     if selected_stats:
         record["stats"] = selected_stats
+
+    return record
+
+
+def _build_private_participant_record(
+    team_id: int,
+    champion_id: int,
+    raw: dict,
+    identity: dict | None = None,
+) -> dict:
+    """Build the local-only participant payload with player identity fields."""
+    record = _build_participant_record(team_id, champion_id, raw)
+    participant_id = _to_int(raw.get("participantId"))
+    if participant_id is not None:
+        record["participantId"] = participant_id
+
+    player = identity or {}
+    if player:
+        private_fields = {
+            "puuid": player.get("puuid"),
+            "gameName": player.get("gameName"),
+            "tagLine": player.get("tagLine"),
+            "summonerName": player.get("summonerName"),
+            "summonerId": player.get("summonerId"),
+            "accountId": player.get("accountId"),
+            "platformId": player.get("platformId"),
+            "currentPlatformId": player.get("currentPlatformId"),
+            "profileIcon": player.get("profileIcon"),
+        }
+        for key, value in private_fields.items():
+            if value not in (None, ""):
+                record[key] = value
+        if player.get("gameName") and player.get("tagLine"):
+            record["riotId"] = f"{player['gameName']}#{player['tagLine']}"
 
     return record
 
@@ -223,11 +277,39 @@ def _build_participant_payload(participants: list[dict]) -> list[dict]:
     return payload
 
 
+def _build_private_participant_payload(game: dict) -> list[dict]:
+    participants = game.get("participants") or []
+    identities = {
+        ident.get("participantId"): (ident.get("player") or {})
+        for ident in game.get("participantIdentities") or []
+        if isinstance(ident, dict)
+    }
+    payload: list[dict] = []
+    for participant in participants:
+        team_id = participant.get("teamId")
+        champion_id = participant.get("championId")
+        if team_id not in (100, 200) or champion_id is None:
+            continue
+        participant_id = participant.get("participantId")
+        payload.append(
+            _build_private_participant_record(
+                int(team_id),
+                int(champion_id),
+                participant,
+                identities.get(participant_id),
+            )
+        )
+    payload.sort(key=lambda row: (row["teamId"], row.get("participantId", 0), row["championId"]))
+    return payload
+
+
 def _ensure_games_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_SQL)
     columns = {str(row[1]) for row in con.execute("PRAGMA table_info(games)").fetchall()}
     if "participants_json" not in columns:
         con.execute("ALTER TABLE games ADD COLUMN participants_json TEXT")
+    if "participants_private_json" not in columns:
+        con.execute("ALTER TABLE games ADD COLUMN participants_private_json TEXT")
     con.commit()
 
 
@@ -334,6 +416,7 @@ def _parse_eog_block(eog: dict, target_queues: set[int], patch: str) -> dict | N
         "created_ms":  created_ms,
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "participants": sorted(payload, key=lambda row: (row["teamId"], row["championId"])),
+        "participants_private": sorted(payload, key=lambda row: (row["teamId"], row["championId"])),
     }
 
 
@@ -396,6 +479,7 @@ def _parse_game_detail(game: dict, target_queues: set[int]) -> dict | None:
         "created_ms":   int(game.get("gameCreation", 0)),
         "captured_at":  datetime.now(timezone.utc).isoformat(),
         "participants": _build_participant_payload(participants),
+        "participants_private": _build_private_participant_payload(game),
     }
 
 
@@ -425,8 +509,9 @@ def _save(con: sqlite3.Connection, record: dict, seen_ids: set[str]) -> bool:
             """
             INSERT OR IGNORE INTO games (
                 game_id, queue_id, patch, blue_champs, red_champs,
-                blue_wins, duration_sec, created_ms, captured_at, participants_json
-            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                blue_wins, duration_sec, created_ms, captured_at,
+                participants_json, participants_private_json
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 record["game_id"], record["queue_id"], record["patch"],
@@ -434,6 +519,7 @@ def _save(con: sqlite3.Connection, record: dict, seen_ids: set[str]) -> bool:
                 record["blue_wins"], record["duration_sec"],
                 record["created_ms"], record["captured_at"],
                 json.dumps(record.get("participants", []), separators=(",", ":")),
+                json.dumps(record.get("participants_private", []), ensure_ascii=False, separators=(",", ":")),
             ),
         )
         con.commit()

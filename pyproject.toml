@@ -25,6 +25,7 @@ aram-train = "aram_nn.train:main"
 aram-eval = "aram_nn.eval:main"
 aram-site-api = "aram_nn.site.api_cli:main"
 aram-site-sync = "aram_nn.site.sync_cli:main"
+aram-site-static-publish = "aram_nn.site.static_publish_cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
