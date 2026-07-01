@@ -15,8 +15,9 @@ Repo 名留 `aram-winrate-nn` 是歷史包袱，**所有訓練 / tier list / 推
 - `src/aram_nn/models/` — `logreg.py` / `deepsets.py`
 - `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
 - `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（`games` + `crawl_seen` set + `crawl_queue` priority frontier）
-- `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`, `build_tier_list.py`
-- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://arammeta.com/
+- `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`；tier-list builder 拆 3 檔：`build_tier_list.py`（CLI 入口 ~394 行 + `--shell-only`）+ `tierlist_engine.py`（勝率/augment/affinity/cluster 計算引擎 ~4.2k 行）+ `tierlist_render.py`（render_html / shell-only / payload dedup / OG·favicon 圖 ~1.5k 行）。`build_tier_list` 用 `globals().update(vars(tierlist_engine/render))` re-export 全部符號（含底線），所以舊的 `import build_tier_list` 完全不受影響。改計算改 engine、改前端輸出改 render
+- `scripts/templates/site.css` + `site.js` — 站台 CSS/JS 模板，`render_html` 讀檔注入（`_read_site_template`）。**build 必需，勿 `git clean`**；改前端編這兩檔，不是改內嵌字串
+- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://arammeta.com/。payload 的 item 物件已 dedup 成 top-level `itemLut`+`ddv`（嵌入處只留 `{id, ic:1}`+stats，前端 `rehydrateItems()` 還原 name/icon）；server `data-search` 只含英雄名，augment/item 詞由前端 `enrichSearchIndexes()` 從 payload 重建
 - `src/aram_nn/site/` — 前後端分離層：公開 `games` DB schema、FastAPI backend、10k watermark sync、tier-list JSON payload API
 - `data/cache/` — `kiwi.bin.json` + `lol_stringtable_zh_tw.json` (CommunityDragon mirror, ~30 MB) 用來解析 Mayhem augment 中文敘述
 - 深度技術決策見 `PLAN.md`（v3，已經 Codex review）；部署流程見 `.claude/skills/deploy-tier-list/SKILL.md`
@@ -48,6 +49,10 @@ python scripts/probe_user.py --region tw --riot-id "Name#TAG" --count 100
 
 # Tier list 網站 split build（部署 → `/deploy-tier-list` skill）
 python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
+
+# 改前端後「快速預覽」：重用現有 tier-list.json、跳過所有勝率/affinity 計算（~1.4s vs full build ~17min）
+# 只重生 index.html；改 site.css / site.js / 文案 / 專欄後用這個看效果，要刷新資料才跑上面的 full build
+python scripts/build_tier_list.py --shell-only --out docs/index.html
 
 # 舊 inline build 仍可用於臨時單檔測試；正式 deploy 不用這個模式
 python scripts/build_tier_list.py --site-url "https://arammeta.com/"
