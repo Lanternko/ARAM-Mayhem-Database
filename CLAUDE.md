@@ -13,6 +13,7 @@ Repo 名留 `aram-winrate-nn` 是歷史包袱，**所有訓練 / tier list / 推
 - `src/aram_nn/ingest/` — Riot API 爬蟲：`riot_client.py` / `snowball.py` / `extract.py`
 - `src/aram_nn/lcu/` — 本機 LCU collector / graph snowball：`process.py` / `client.py` / `poller.py` / `snowball.py`
 - `src/aram_nn/models/` — `logreg.py` / `deepsets.py`
+- `src/aram_nn/gamedata.py` — games.db 共用 loader（`iter_games` / `load_games_df` / `count_games`，read-only 連線），編碼 queue/patch 過濾、champs 升序、participants 解析等慣例；**新分析腳本從這裡 import，別再手刻 sqlite loader**。帶 participants 預設無序循序掃（~70s/patch）；`ordered=True` 是 seek-bound two-pass，只在真要時間序時用
 - `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
 - `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（`games` + `crawl_seen` set + `crawl_queue` priority frontier）
 - `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`；tier-list builder 拆 3 檔：`build_tier_list.py`（CLI 入口 ~394 行 + `--shell-only`）+ `tierlist_engine.py`（勝率/augment/affinity/cluster 計算引擎 ~4.2k 行）+ `tierlist_render.py`（render_html / shell-only / payload dedup / OG·favicon 圖 ~1.5k 行）。`build_tier_list` 用 `globals().update(vars(tierlist_engine/render))` re-export 全部符號（含底線），所以舊的 `import build_tier_list` 完全不受影響。改計算改 engine、改前端輸出改 render
@@ -134,6 +135,7 @@ Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 - **Never pass `--patch ""`** in PowerShell to CLI — PowerShell 5.1 會把空字串吃掉導致 Click argument shift；省略 `--patch` 即為全收（預設值已是空字串）。
 - **Never publish the tier-list site from `/site`** — GitHub Pages 「Deploy from a branch」只接受 `/(root)` 或 `/docs`；用 `/site` Save 不會生效。永遠輸出到 `docs/index.html`（`build_tier_list.py` 預設）。
 - **Never `git add -A` / `git add .` when deploying the site** — 工作樹常有未追蹤的 WIP scripts；只 stage `docs/index.html`、`docs/api/tier-list.json`，以及本輪生成且確認需要的 `docs/champion-roles.json` / `docs/og-image.png`。不要 stage `scripts/build_tier_list.py`，除非 generator change 本身也要發布。
+- **Never import a script from another script for shared code** — `from train_ability_nn import ...` 這類耦合已讓 3 支腳本被 30+ 支下游綁死、動一支壞一片。既有的凍結腳本不動；**新**共用函式一律進 `src/aram_nn/`（資料存取用現成的 `gamedata.py`），腳本只從 package import。
 
 ## Riot API 注意事項
 - Dev Key 每 24 小時過期，Python 端 401 / 403 都視為 key expired → 提示 regenerate
