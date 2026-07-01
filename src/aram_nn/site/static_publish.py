@@ -60,6 +60,10 @@ DEFAULT_DOC_PATHS = (
     # payload to site-relative paths; they must be committed alongside the HTML /
     # JSON or the live site would 404 on every self-hosted icon.
     Path("docs/assets/icons"),
+    # Hand-made article cover banners (專欄 首圖).  Referenced from the HTML as
+    # assets/covers/<file>; must be committed alongside the HTML or the live site
+    # 404s on any article that sets cover_image_*.
+    Path("docs/assets/covers"),
 )
 
 

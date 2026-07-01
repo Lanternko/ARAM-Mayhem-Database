@@ -21,6 +21,9 @@ The site's **專欄** tab is a list of self-contained data stories. Each article
     id: 'kebab-case-unique',          // also the reader's hash route
     date: '2026-06-28',               // YYYY-MM-DD; today
     kicker_zh: '操作係數', kicker_en: 'Skill-scaling',   // 2–4 char/word category chip
+    cover_motif: 'diverge',           // cover art: diverge | scatter | blade | tiers (see Cover art)
+    cover_accent: '#3aa0ff',          // hex theme colour for the cover + its glow
+    cover_zh: '吃操作|或屠低分', cover_en: 'SKILL|OR STOMP',  // poster hook; '|' = line break
     title_zh: '…', title_en: '…',
     summary_zh: '…', summary_en: '…', // one line; leads with the punchline + a number
     body_zh: `<p>…</p>`,              // HTML string (template literal — see constraints)
@@ -29,6 +32,16 @@ The site's **專欄** tab is a list of self-contained data stories. Each article
 ```
 
 Insert as the **FIRST** element of `ARTICLES` (newest first — the list renders in array order). Read the two or three existing objects (`id: 'scaling-snowball'`, `'draw-your-sword'`, `'skill-scaling'`) first; copy their rhythm rather than inventing a new shape.
+
+### Cover art (the 首圖) — auto-generated, no image files
+
+Each card and the reader both lead with a 16:9 vector poster built by `articleCover()` from three fields. **All three are optional** — omit them and you get a gold `tiers`-motif cover with the kicker as the hook — but a real article should set them:
+
+- `cover_motif` — a data-flavoured background that previews the piece. Reuse one: `diverge` (two trend lines splitting, for skill/up-vs-down findings), `scatter` (four-quadrant dot cloud, for champion maps), `blade` (a slash, for augment/attack pieces), `tiers` (mini S/A/B rows, for tier-list/basics). A new motif means adding a branch to `_coverMotif()` in `build_tier_list.py` — only do that if none fit.
+- `cover_accent` — hex colour for the headline glow + motif strokes; mirror the article's own accent (e.g. `#3aa0ff` good, `#e2574b` bad, site gold `#f5c518`).
+- `cover_zh` / `cover_en` — a SHORT poster hook (the descriptive title shows below the cover, so keep this punchy, 1–2 lines). Split lines with `|`. Font size auto-shrinks as the longest line grows. CJK 1 line ≤ ~5 chars looks best.
+
+**Hand-made banner override (`cover_image_zh` / `cover_image_en`)** — when an article has a designed 16:9 image (e.g. a Canva/PS banner), set these and they win over the vector cover (`articleCoverMedia()` picks image-if-present-else-SVG). Bilingual: the EN image shows in EN, ZH in ZH (the column re-renders on the language toggle). Keep the SVG fields too as a fallback. Workflow: drop the files in `docs/assets/covers/` (convention `<id>-zh.webp` / `<id>-en.webp`, ≲300 KB — resize to ~1600px wide + WebP), reference as `cover_image_zh: 'assets/covers/<id>-zh.webp'`. The build mirrors that dir into the preview, and the publisher already ships `docs/assets/covers` (`DEFAULT_DOC_PATHS` in `static_publish.py`). The card shows it `object-fit: cover`; the reader hero shows the **whole** banner (uncropped). See `docs/assets/covers/README.md`.
 
 ### Body HTML — only these building blocks (they have CSS; nothing else is styled)
 

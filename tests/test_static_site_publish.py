@@ -95,6 +95,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/api/champ-archetype-fit.json",
                 "docs/api/champ-empirical-axes.json",
                 "docs/assets/icons",
+                "docs/assets/covers",
             ],
         )
         self.assertEqual(result["comp_fit"]["built"], True)
