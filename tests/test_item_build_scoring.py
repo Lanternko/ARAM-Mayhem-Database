@@ -115,16 +115,17 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertNotIn("Morellonomicon", names)
         self.assertNotIn("Unending Despair", names)
 
-    def test_item_build_section_renders_three_ranked_recommendations(self) -> None:
-        source = (ROOT / "scripts" / "build_tier_list.py").read_text(encoding="utf-8")
+    def test_site_js_renders_item_build_sections(self) -> None:
+        # Frontend JS lives in scripts/templates/site.js since the 2026-06-30
+        # template extraction (render_html injects it via _read_site_template).
+        source = (ROOT / "scripts" / "templates" / "site.js").read_text(encoding="utf-8")
 
         self.assertIn("const bootInfo = info.boots || {}", source)
+        self.assertIn("const itemInfo = info.items || {}", source)
+        self.assertIn("const singleItemInfo = info.singleItems || {}", source)
+        self.assertIn("const itemClusterInfo = info.itemClusters || {}", source)
         self.assertIn("buildDetailTabSet('main'", source)
-        self.assertIn("buildDetailTabSet('items'", source)
-        self.assertIn("label: itemTabLabels.routes", source)
-        self.assertIn("label: itemTabLabels.single", source)
-        self.assertIn("label: itemTabLabels.pairs", source)
-        self.assertIn("label: itemTabLabels.boots", source)
+        self.assertIn("label: mainTabLabels.items", source)
 
     def test_boot_selector_keeps_only_recommendable_boots(self) -> None:
         item_meta = {
@@ -220,9 +221,13 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertEqual(opt_by_id[103]["lane"], "popular")  # most-picked 3rd item
         self.assertEqual(opt_by_id[104]["lane"], "winrate")  # high-LCB 3rd item
         self.assertGreater(opt_by_id[104]["smoothed_wr"], opt_by_id[103]["smoothed_wr"])
-        self.assertNotIn(201, opt_by_id)  # late items are not 3rd-item options
+        # 2026-06-17: options carry ALL pairing items clearing the pick-or-winrate
+        # bar (搭配裝備), not just 3rd items — late items appear, but the ranked
+        # popular/winrate lanes stay reserved for genuine 3rd-item picks.
+        self.assertIn(201, opt_by_id)
+        self.assertEqual(opt_by_id[201]["lane"], "")
 
-    def test_core_build_requires_real_six_item_completion(self) -> None:
+    def test_core_build_keyed_on_core2_rush_without_completion(self) -> None:
         item_meta = {
             item_id: {
                 "id": item_id, "name": f"Item {item_id}", "name_zh": f"Item {item_id}",
@@ -234,7 +239,9 @@ class ItemBuildScoringTests(unittest.TestCase):
             "id": 301, "name": "Boots", "name_zh": "Boots", "name_en": "Boots",
             "categories": ["Boots"], "price_total": 1100, "icon": "",
         }
-        # Core {101,102,103} is built often but never completed to 6 items.
+        # 2026-06-17: build cards are keyed on the core-2 rush observed in build
+        # order — a frequent (101,102) rush yields a card even when no game ever
+        # completes 6 items (the old core-3-from-completed-builds rule is gone).
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "games.db"
             self._build_games_db(db_path, [([101, 102, 103, 301], 40, 24)])
@@ -244,7 +251,11 @@ class ItemBuildScoringTests(unittest.TestCase):
                 core_min_games=10, min_confirm_games=3, winrate_min_games=10,
                 min_games=10, top_n=4,
             )
-        self.assertNotIn(1, clusters)
+        self.assertIn(1, clusters)
+        groups = clusters[1]["groups"]
+        self.assertTrue(groups)
+        self.assertEqual(groups[0]["core_ids"], (101, 102))
+        self.assertIn(103, {int(o["id"]) for o in groups[0]["options"]})
 
     def test_core_build_drops_oversized_item_beyond_six_slots(self) -> None:
         item_meta = {
@@ -380,12 +391,17 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertTrue(groups)
         grp = groups[0]
         # The shared rush is the earliest-built pair (101,102); 103 is the 3rd
-        # item; the frequent-but-late 999 is never core or a 3rd-item option.
+        # item; the frequent-but-late 999 is never part of the core rush.  Since
+        # 2026-06-17 late items DO appear as lane-less pairing options (搭配裝備)
+        # when they clear the pick-or-winrate bar, but the ranked "popular" lane
+        # stays with the genuine 3rd item.
         self.assertEqual(grp["core_ids"], (101, 102))
         self.assertEqual([int(it["id"]) for it in grp["core_items"]], [101, 102])
-        self.assertEqual({int(o["id"]) for o in grp["options"]}, {103})
-        self.assertNotIn(999, {int(o["id"]) for o in grp["options"]})
+        opt_by_id = {int(o["id"]): o for o in grp["options"]}
+        self.assertEqual(opt_by_id[103]["lane"], "popular")
         self.assertNotIn(999, {int(it["id"]) for it in grp["core_items"]})
+        self.assertIn(999, opt_by_id)
+        self.assertEqual(opt_by_id[999]["lane"], "")
 
     def test_display_patch_prefix_only_changes_public_label(self) -> None:
         self.assertEqual(tier_list.display_patch_prefix("16.11"), "26.11")
