@@ -18,6 +18,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
 [project.scripts]
 aram-ingest = "aram_nn.ingest.cli:main"
 aram-snowball = "aram_nn.ingest.snowball:main"
