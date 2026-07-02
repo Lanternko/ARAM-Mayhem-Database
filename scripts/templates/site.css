@@ -2221,6 +2221,11 @@
         color: #7c8794;
         margin-top: 1px;
         white-space: nowrap;
+        /* Safety net: a nowrap raw line longer than the card (huge n=) must
+           clip inside it, never widen the card row / the page. */
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .aug .alift {
         font-size: 9px;
@@ -2500,8 +2505,16 @@
             border-radius: 14px;
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
         }
-        body.rec-modal-open::before,
-        body.detail-modal-open::before {
+        /* The veil must live INSIDE the active view's stacking context: the
+           .view carries view-transition-name, which creates a stacking context
+           that traps the fixed side-panel (60) / detail-host (70) z-indexes.
+           A body::before veil sits in the ROOT context and paints ABOVE those
+           trapped modals — the modal ends up UNDER the veil and every tap
+           lands on body, so the page looks frozen (mobile has no Escape).
+           Anchored to the view, 55 < 60/70 resolves in the same context and
+           the modals correctly sit on top. */
+        body.rec-modal-open .view.is-active::before,
+        body.detail-modal-open .view.is-active::before {
             content: "";
             position: fixed;
             inset: 0;
@@ -2554,6 +2567,12 @@
         /* Lock to 6 champions per row on mobile (instead of auto-fill which
            packs 7-8 in and makes icons tiny). */
         .tier-grid { grid-template-columns: repeat(6, 1fr); gap: 5px; }
+        /* The 6-col rule above is sized for champion thumbnails; it ties with
+           .aug-tier-grid's minmax(112px) on specificity and wins on order,
+           squeezing 增幅榜 cards to ~56px — the .araw line then overflows the
+           card AND widens the page.  Re-assert a 3-col board (~113px cards,
+           matching the desktop 112px floor) after it. */
+        .aug-tier-grid { grid-template-columns: repeat(3, 1fr); }
         .detail-head {
             flex-direction: row;
             align-items: center;
@@ -2735,6 +2754,9 @@
         /* Pick-rate line stays visible on mobile — it's a single colour-coded
            token now.  Lift / games stay hover-only on desktop, off on mobile. */
         .aug .alift { font-size: 8px; margin-top: 0; }
+        /* Raw line shrinks with it; the base-rule ellipsis clips what the
+           ~58px detail-carousel cards can't fit. */
+        .aug .araw { font-size: 8px; margin-top: 0; }
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip { display: none; }
