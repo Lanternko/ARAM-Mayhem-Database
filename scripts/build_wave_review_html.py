@@ -11,8 +11,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCORE_CSV = ROOT / "data" / "cache" / "champion_semantic_scores.csv"
 ABILITY_JSON = ROOT / "data" / "cache" / "champion_abilities.json"
-REVIEW_CSV = ROOT / "documents" / "wave_score_bucket_review_2026_05_26.csv"
-OUT_HTML = ROOT / "documents" / "wave_score_bucket_review_2026_05_26.html"
+REVIEW_CSV = ROOT / "documents" / "reports" / "wave_score_bucket_review_2026_05_26.csv"
+OUT_HTML = ROOT / "documents" / "reports" / "wave_score_bucket_review_2026_05_26.html"
 
 
 BUCKETS = [

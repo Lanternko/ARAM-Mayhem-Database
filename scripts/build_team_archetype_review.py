@@ -153,11 +153,11 @@ def render_split(data: dict, title: str, lead: bool) -> str:
 
 
 @click.command()
-@click.option("--cross", default=Path("outputs/ablation_team_archetype_clusters_crosspatch.json"),
+@click.option("--cross", default=Path("outputs/ablation/ablation_team_archetype_clusters_crosspatch.json"),
               type=click.Path(path_type=Path), show_default=True)
-@click.option("--within", default=Path("outputs/ablation_team_archetype_clusters.json"),
+@click.option("--within", default=Path("outputs/ablation/ablation_team_archetype_clusters.json"),
               type=click.Path(path_type=Path), show_default=True)
-@click.option("--out", default=Path("documents/team_archetype_clusters_review.html"),
+@click.option("--out", default=Path("documents/reports/team_archetype_clusters_review.html"),
               type=click.Path(path_type=Path), show_default=True)
 def main(cross, within, out):
     sections = []
