@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CSV_PATH = ROOT / "documents" / "poke_score_bucket_review_2026_05_25.csv"
+CSV_PATH = ROOT / "documents" / "reports" / "poke_score_bucket_review_2026_05_25.csv"
 ABILITY_JSON = ROOT / "data" / "cache" / "champion_abilities.json"
-OUT_PATH = ROOT / "documents" / "poke_score_bucket_review_2026_05_25.html"
+OUT_PATH = ROOT / "documents" / "reports" / "poke_score_bucket_review_2026_05_25.html"
 
 
 BUCKETS = [
