@@ -899,15 +899,26 @@ def render_html(
         )
 
     og_patch_label = f"patch {display_patch}" if display_patch else "all patches"
-    og_title = header_title  # browser tab + share-card title = the brand
+    og_title = header_title  # share-card title = the brand
     og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
+    # Search snippet copy is deliberately separate from the share-card copy
+    # above: Google drops keyword-less titles / symbol-heavy descriptions and
+    # falls back to scraping nav text, so <title> + <meta description> carry
+    # the terms players actually search while og:*/twitter:* keep the brand
+    # card that Threads/Discord shares are known by.
+    patch_zh = f"版本 {display_patch} " if display_patch else ""
+    seo_title = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
+    seo_desc = (
+        f"基於 {total_games:,} 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、"
+        f"增幅勝率、出裝與組隊推薦，{patch_zh}持續更新。"
+    )
 
     meta_lines: list[str] = []
     meta_lines.append("<meta charset='utf-8'>")
     meta_lines.append(
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     )
-    meta_lines.append(f"<title>{og_title}</title>")
+    meta_lines.append(f"<title>{seo_title}</title>")
     favicon_version = favicon_asset_version()
     meta_lines.append(
         f"<link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v={favicon_version}'>"
@@ -915,7 +926,7 @@ def render_html(
     meta_lines.append(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
     )
-    meta_lines.append(f"<meta name='description' content=\"{og_desc}\">")
+    meta_lines.append(f"<meta name='description' content=\"{seo_desc}\">")
     if site_url:
         meta_lines.append(f"<link rel='canonical' href='{site_url}'>")
         meta_lines.append(f"<meta property='og:url' content='{site_url}'>")
@@ -934,6 +945,21 @@ def render_html(
         meta_lines.append("<meta name='twitter:card' content='summary'>")
     meta_lines.append(f"<meta name='twitter:title' content=\"{og_title}\">")
     meta_lines.append(f"<meta name='twitter:description' content=\"{og_desc}\">")
+    if site_url:
+        website_ld = {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": header_title,
+            "alternateName": seo_title,
+            "url": site_url,
+            "description": seo_desc,
+            "inLanguage": "zh-Hant",
+        }
+        meta_lines.append(
+            "<script type='application/ld+json'>"
+            + json.dumps(website_ld, ensure_ascii=False)
+            + "</script>"
+        )
 
     parts: list[str] = []
     parts.append("<!doctype html><html lang='zh-Hant'><head>")
@@ -1001,7 +1027,9 @@ def render_html(
         ("column", "專欄", "Column"),
         ("settings", "設定", "Settings"),
     )
-    parts.append("<header class='site-header'>")
+    # data-nosnippet: without it Google's snippet fallback scrapes the nav
+    # tabs / role chips / settings controls into the search result blurb.
+    parts.append("<header class='site-header' data-nosnippet>")
     parts.append("<div class='site-header-inner'>")
     parts.append(
         "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta'>"
@@ -1047,7 +1075,7 @@ def render_html(
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
     # Filter bar: role chips + free-text search + live "N shown" counter.
-    parts.append("<div class='filter-bar'>")
+    parts.append("<div class='filter-bar' data-nosnippet>")
     parts.append("<div class='role-chips'>")
     parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
     for role_en in ROLE_ORDER:
@@ -1257,7 +1285,7 @@ def render_html(
 
     # ---- View: 設定 (settings) — language + theme + changelog + about ----
     parts.append(
-        "<section class='view view-settings' id='view-settings' data-view='settings' role='tabpanel' aria-labelledby='tab-settings'>"
+        "<section class='view view-settings' id='view-settings' data-view='settings' role='tabpanel' aria-labelledby='tab-settings' data-nosnippet>"
     )
     parts.append("<div class='view-narrow'>")
     parts.append("<h2 class='section-head' data-i18n-zh='設定' data-i18n-en='Settings'>設定</h2>")
