@@ -921,6 +921,14 @@
        rarity-filter chip row above the category chips. ===== */
     .aug-tier-filters { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 20px; }
     .aug-tier-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+    /* content-visibility for the 增幅榜 board only (hundreds of .aug cards): skip
+       offscreen ones until scrolled near.  Scoped to the board grid so the detail
+       panel's horizontal-scroll .aug lists (flex: 0 0 92px) are untouched.  Card
+       height ~= 48px icon + 2-line name + wr/raw/pick lines + padding ~ 150px. */
+    .aug-tier-grid .aug {
+        content-visibility: auto;
+        contain-intrinsic-size: auto 150px;
+    }
     .aug.hidden { display: none; }
     .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
     .aug-rarity-chip.rarity-kGold.is-active { border-color: #f5c518; color: #ffe9a3; background: color-mix(in srgb, #f5c518 18%, transparent); }
@@ -930,6 +938,15 @@
         aspect-ratio: 1 / 1;
         border-radius: 8px;
         overflow: visible;
+        /* content-visibility: skip layout/paint for the ~170 offscreen champion
+           thumbnails until they scroll near the viewport, cutting the work every
+           filter / language / theme invalidation triggers.  contain-intrinsic-size
+           reserves each card's real footprint (grid cell is a ~72-110px square,
+           aspect-ratio 1/1) so the scrollbar + tier layout stay stable while cards
+           are still virtualized.  Note: .champ.hidden (display:none) filtering is
+           unaffected -- display:none removes the box entirely, ahead of this. */
+        content-visibility: auto;
+        contain-intrinsic-size: auto 96px;
         background: #1f2530;
         /* Champion thumbnail wears its tier's colour as a 2px frame.
            Non-OP tiers use a solid border; OP gets a prismatic gradient
@@ -1191,6 +1208,27 @@
         padding: 16px 18px 18px;
         position: relative;
         animation: slideDown .18s ease-out;
+    }
+    /* Two-phase open (INP): a skeleton is painted synchronously on click, then
+       replaced with the real content after a yield.  Reserve a plausible panel
+       height so swapping in the full detail does not shove the grid (no CLS). */
+    .detail-loading { min-height: 320px; }
+    .detail-skeleton {
+        height: 260px;
+        border-radius: 8px;
+        background: linear-gradient(100deg,
+            rgba(255,255,255,0.04) 30%,
+            rgba(255,255,255,0.09) 50%,
+            rgba(255,255,255,0.04) 70%);
+        background-size: 220% 100%;
+        animation: detailSkeletonSweep 1.1s ease-in-out infinite;
+    }
+    @keyframes detailSkeletonSweep {
+        from { background-position: 180% 0; }
+        to   { background-position: -80% 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .detail-skeleton { animation: none; }
     }
     .detail-close {
         position: absolute;
@@ -2431,8 +2469,7 @@
     @media (max-width: 700px) {
         /* Body padding is 0; .site-main owns content padding (see chrome CSS). */
         body.rec-modal-open,
-        body.detail-modal-open,
-        body.nav-drawer-open { overflow: hidden; }
+        body.detail-modal-open { overflow: hidden; }
         h1 { font-size: 18px; }
         .subtitle { font-size: 12px; }
         .title-patch { font-size: 12px; }
@@ -2839,7 +2876,10 @@
         display: flex;
         align-items: center;
         gap: 16px;
-        height: var(--header-h);
+        /* Fixed height, NOT var(--header-h): JS overwrites that var with the
+           measured header height (syncHeaderHeight) for sticky offsets, so
+           deriving our own height from it would feed back on itself. */
+        height: 56px;
         max-width: var(--container);
         width: 100%;
         margin: 0 auto;
@@ -2956,123 +2996,6 @@
     .site-header .lang-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
     .site-header .lang-toggle:active { transform: scale(0.96); transition-duration: var(--dur-1); }
 
-    /* ---- Mobile nav drawer (側欄) -----------------------------------------
-       The hamburger lives in the header (hidden on desktop). Under ~700px the
-       horizontal tabs + actions hide and this button slides #nav-drawer in from
-       the right; see the matching rules inside the 700px media query. */
-    .nav-burger {
-        display: none;
-        appearance: none;
-        margin-left: auto;
-        align-items: center;
-        justify-content: center;
-        width: 40px;
-        height: 40px;
-        padding: 0;
-        color: var(--text);
-        background: transparent;
-        border: 1px solid var(--border);
-        border-radius: var(--r-sm);
-        cursor: pointer;
-        transition: background-color var(--dur-2) var(--ease),
-                    border-color var(--dur-2) var(--ease),
-                    transform var(--dur-1) var(--ease);
-    }
-    .nav-burger:hover { background: var(--surface-2); border-color: var(--border-strong); }
-    .nav-burger:active { transform: scale(0.94); transition-duration: var(--dur-1); }
-    .nav-drawer-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 80;
-        background: rgba(0, 0, 0, 0.5);
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity var(--dur-2) var(--ease), visibility var(--dur-2) var(--ease);
-    }
-    .nav-drawer-backdrop.open { opacity: 1; visibility: visible; }
-    .nav-drawer {
-        position: fixed;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 81;
-        width: min(82vw, 320px);
-        display: flex;
-        flex-direction: column;
-        padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-        background: var(--surface);
-        border-left: 1px solid var(--border);
-        box-shadow: -18px 0 50px rgba(0, 0, 0, 0.45);
-        transform: translateX(100%);
-        visibility: hidden;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        transition: transform var(--dur-3) var(--ease), visibility var(--dur-3) var(--ease);
-    }
-    .nav-drawer.open { transform: translateX(0); visibility: visible; }
-    .nav-drawer-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 2px 2px 12px;
-        margin-bottom: 6px;
-        border-bottom: 1px solid var(--border);
-    }
-    .nav-drawer-brand { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-    .nav-drawer-brand .brand-logo { width: 24px; height: 24px; border-radius: 6px; }
-    .nav-drawer-brand .brand-title { font-size: 15px; font-weight: 700; }
-    .nav-drawer-close {
-        appearance: none;
-        flex-shrink: 0;
-        width: 34px;
-        height: 34px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        line-height: 1;
-        color: var(--text-muted);
-        background: transparent;
-        border: 0;
-        border-radius: var(--r-sm);
-        cursor: pointer;
-        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease);
-    }
-    .nav-drawer-close:hover { color: var(--text); background: var(--surface-2); }
-    .nav-drawer-list { display: flex; flex-direction: column; gap: 2px; }
-    .nav-drawer-item {
-        appearance: none;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        width: 100%;
-        padding: 12px;
-        font: inherit;
-        font-size: 15px;
-        font-weight: 600;
-        text-align: left;
-        text-decoration: none;
-        color: var(--text-muted);
-        background: transparent;
-        border: 0;
-        border-radius: var(--r-sm);
-        cursor: pointer;
-        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease);
-    }
-    .nav-drawer-item:hover { color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
-    .nav-drawer-item.active { color: var(--text); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-    .nav-drawer-foot {
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid var(--border);
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-    .nav-drawer-util { font-size: 13px; }
-    .nav-drawer-util svg { flex-shrink: 0; }
-
     /* Shared content rail: chrome + grid align to one max-width on wide
        monitors so the brand and GitHub star don't drift to far corners. */
     .site-main { max-width: var(--container); margin: 0 auto; padding: 24px 24px 64px; }
@@ -3171,11 +3094,34 @@
        generated-cover crop cap). */
     .article-hero--img { max-height: none; }
     .article-reader { max-width: 720px; margin: 0 auto; }
+    /* Back on the left, copy-link on the right — one row above the hero. */
+    .article-toolbar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; margin-bottom: 18px;
+    }
     .article-back {
-        display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+        display: inline-flex; align-items: center; gap: 6px;
         background: none; border: 0; color: var(--text-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
     }
     .article-back:hover { color: var(--text); }
+    .article-share {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 11px;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        color: var(--text-muted); font: inherit; font-size: 12px; font-weight: 600;
+        cursor: pointer;
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease),
+                    border-color var(--dur-2) var(--ease);
+    }
+    .article-share:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
+    .article-share.copied {
+        color: var(--accent-soft);
+        border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+    .article-share:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 2px; }
     .article-reader h1 { font-size: 28px; margin: 0 0 8px; line-height: 1.25; }
     .article-reader .article-meta { margin: 0 0 24px; padding: 0; }
     .article-body { font-size: 15px; line-height: 1.8; color: var(--text); }
@@ -3258,14 +3204,29 @@
     }
 
     @media (max-width: 700px) {
-        .site-header-inner { padding: 0 12px; gap: 10px; }
+        /* Two-row header: brand + actions on top, the primary tabs as a
+           full-bleed scrollable strip underneath.  Primary navigation stays
+           visible on mobile — no hamburger / drawer layer.  JS keeps
+           --header-h in sync with the real height (syncHeaderHeight), so the
+           sticky filter-bar offset follows automatically. */
+        .site-header-inner {
+            flex-wrap: wrap;
+            height: auto;
+            padding: 8px 12px 0;
+            gap: 0 10px;
+        }
         .brand-title { font-size: 15px; }
         .brand-patch { font-size: 11px; }
-        /* Collapse the horizontal nav + utility actions into #nav-drawer; the
-           hamburger replaces them on the right of the compact header. */
-        .nav-tabs,
-        .header-actions { display: none; }
-        .nav-burger { display: inline-flex; }
+        .header-actions { margin-left: auto; gap: 6px; }
+        .site-header .lang-toggle,
+        .site-header .gh-star { padding: 5px 8px; }
+        .nav-tabs {
+            order: 10;
+            flex-basis: 100%;
+            margin: 4px -12px 0;
+            padding: 0 12px;
+        }
+        .nav-tab { font-size: 13px; padding: 9px 11px 10px; }
         .site-main { padding: 16px 12px 48px; }
         .site-header .gh-star span { display: none; }
         .section-head { font-size: 19px; }
