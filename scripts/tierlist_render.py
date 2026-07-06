@@ -986,24 +986,14 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Hamburger (三條線) — opens the mobile nav drawer on narrow screens.
-    hamburger_icon = (
-        "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "aria-hidden='true'><path d='M3 6h18'></path><path d='M3 12h18'></path>"
-        "<path d='M3 18h18'></path></svg>"
-    )
     # Fixed top header: brand (left) + tab nav + language toggle + GitHub star.
     # Theme lives in the Settings view; 版本變動 (patch changes) has its own tab;
     # the language toggle sits in the header.  #site-title / #site-subtitle ids are
     # preserved so applyLanguage keeps driving the brand text + patch chip.  The
     # #updates-panel node lives in the 版本變動 view below, filled by renderUpdatesPanel().
-    # On narrow screens (<=700px) .nav-tabs + .header-actions hide and #nav-burger
-    # toggles #nav-drawer (built right after </header>), which mirrors the same
-    # [data-nav-tab] / [data-lang-toggle] hooks so no extra wiring is needed.
-    # Single source of truth for the primary tabs — the desktop header bar and
-    # the mobile drawer both iterate this, so a new tab can never land in one
-    # place but not the other.
+    # On narrow screens (<=700px) the header wraps to two rows: brand + actions
+    # on top, .nav-tabs as a full-bleed scrollable strip underneath — primary
+    # navigation is always visible, no hamburger/drawer layer.
     NAV_TABS = (
         ("home", "主頁", "Home"),
         ("augments", "增幅榜", "Augment Tier"),
@@ -1046,57 +1036,8 @@ def render_html(
         f"aria-label='GitHub' title='覺得有用請幫忙按 Star ⭐'>{gh_icon}<span>Star</span></a>"
     )
     parts.append("</div>")  # /header-actions
-    # Hamburger — hidden on desktop, shown <=700px where it toggles #nav-drawer.
-    parts.append(
-        "<button class='nav-burger' id='nav-burger' type='button' "
-        "aria-label='選單' aria-haspopup='true' aria-expanded='false' "
-        f"aria-controls='nav-drawer'>{hamburger_icon}</button>"
-    )
     parts.append("</div>")  # /site-header-inner
     parts.append("</header>")
-    # Mobile slide-in drawer (側欄): the header nav + actions collapse into here
-    # under ~700px.  Items reuse the global [data-nav-tab] delegation + the
-    # data-i18n text swap, so navigation / language wiring is shared with the
-    # desktop header — only open/close is new JS.
-    parts.append("<div class='nav-drawer-backdrop' id='nav-drawer-backdrop'></div>")
-    parts.append(
-        "<aside class='nav-drawer' id='nav-drawer' aria-hidden='true' aria-label='選單'>"
-    )
-    parts.append(
-        "<div class='nav-drawer-head'>"
-        "<span class='nav-drawer-brand'>"
-        "<img class='brand-logo' src='favicon.svg' alt=''>"
-        f"<span class='brand-title'>{header_title}</span>"
-        "</span>"
-        "<button class='nav-drawer-close' id='nav-drawer-close' type='button' "
-        "aria-label='關閉選單'>&times;</button>"
-        "</div>"
-    )
-    parts.append("<nav class='nav-drawer-list' aria-label='主要分頁'>")
-    for nav_key, nav_zh, nav_en in NAV_TABS:
-        parts.append(
-            f"<button class='nav-drawer-item' data-nav-tab='{nav_key}' type='button' "
-            f"data-i18n-zh='{nav_zh}' data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
-        )
-    parts.append("</nav>")
-    parts.append("<div class='nav-drawer-foot'>")
-    parts.append(
-        "<button class='nav-drawer-item nav-drawer-util lang-toggle' data-lang-toggle "
-        "type='button'>"
-        f"{globe_icon}"
-        "<span data-i18n-zh='切換語言 · English' data-i18n-en='Switch language · 中文'>"
-        "切換語言 · English</span>"
-        "</button>"
-    )
-    parts.append(
-        f"<a class='nav-drawer-item nav-drawer-util gh-star' href='{REPO_URL}' "
-        "target='_blank' rel='noopener'>"
-        f"{gh_icon}"
-        "<span data-i18n-zh='到 GitHub 按 Star ⭐' data-i18n-en='Star on GitHub ⭐'>"
-        "到 GitHub 按 Star ⭐</span></a>"
-    )
-    parts.append("</div>")  # /nav-drawer-foot
-    parts.append("</aside>")  # /nav-drawer
     parts.append("<main class='site-main'>")
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(

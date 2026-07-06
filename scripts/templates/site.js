@@ -33,6 +33,23 @@
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    // INP: hand the main thread back between chunks of startup work so no single
+    // task blocks input for the whole 17 MB payload's post-parse processing.
+    // Prefer the native scheduler yield (keeps this task's continuation ahead of
+    // unrelated tasks); fall back to a macrotask on browsers without it.
+    const yieldToMain = () => (
+        (typeof scheduler !== 'undefined' && scheduler.yield)
+            ? scheduler.yield()
+            : new Promise(r => setTimeout(r, 0))
+    );
+    // Run in browser idle time when available (background enrichment), else soon.
+    const whenIdle = (cb) => (
+        (typeof requestIdleCallback === 'function')
+            ? requestIdleCallback(cb, { timeout: 500 })
+            : setTimeout(cb, 0)
+    );
+
     // Capability dims we percentile-rank per champion (the building blocks of comp fit).
     const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'e_damage', 'e_tank', 'e_cc'];
     // The 6 comp archetypes. Each is a weighted blend of the capabilities that comp is
@@ -260,6 +277,13 @@
             </svg>
         `,
     };
+    // Chain-link glyph for the article copy-link button.
+    const LINK_ICON = `
+        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+            <path fill="currentColor" d="M7.05 8.95a3.06 3.06 0 0 0 4.33 0l2.12-2.12a3.06 3.06 0 1 0-4.33-4.33L8.1 3.57a.75.75 0 1 0 1.06 1.06l1.07-1.07a1.56 1.56 0 1 1 2.21 2.21l-2.12 2.12a1.56 1.56 0 0 1-2.21 0 .75.75 0 0 0-1.06 1.06Zm1.9-1.9a3.06 3.06 0 0 0-4.33 0L2.5 9.17a3.06 3.06 0 1 0 4.33 4.33l1.07-1.07a.75.75 0 1 0-1.06-1.06l-1.07 1.07a1.56 1.56 0 1 1-2.21-2.21l2.12-2.12a1.56 1.56 0 0 1 2.21 0 .75.75 0 0 0 1.06-1.06Z"/>
+        </svg>
+    `;
+    const BASE_TITLE = document.title;
     const HEADER_TITLE_ZH = __HEADER_TITLE_ZH__;
     const HEADER_TITLE_EN = __HEADER_TITLE_EN__;
     const SHORT_PATCH_ZH = __SHORT_PATCH_ZH__;
@@ -900,6 +924,12 @@
 
     function applySearchHighlights(root = document) {
         const q = currentSearchQuery();
+        // Empty query is the common case (grid open, no search): skip the
+        // per-card regex/compaction work and just clear any leftover hits cheaply.
+        if (!q || !String(q).trim()) {
+            root.querySelectorAll('[data-match-text].search-hit').forEach(card => card.classList.remove('search-hit'));
+            return;
+        }
         root.querySelectorAll('[data-match-text]').forEach(card => {
             card.classList.toggle('search-hit', searchMatchesText(card.getAttribute('data-match-text') || '', q));
         });
@@ -1249,6 +1279,10 @@
     }
 
     function renderDetail(cid) {
+        // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
+        // rows; ensure they are rehydrated (cheap no-op if already done or if the
+        // background warm pass reached this champ first).
+        rehydrateChamp(cid);
         const info = DATA.champs[cid];
         if (!info) {
             return `<div class="empty">${tr().detailEmpty}</div>`;
@@ -2554,6 +2588,7 @@
     }
     function renderColumnList() {
         columnArticle = null;
+        document.title = BASE_TITLE;
         if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
         const host = document.getElementById('column-host');
         if (!host) return;
@@ -2584,13 +2619,48 @@
         const host = document.getElementById('column-host');
         if (!host) return;
         const back = currentLang === 'en' ? 'Back to Column' : '返回專欄';
+        const share = currentLang === 'en' ? 'Copy link' : '複製連結';
         host.innerHTML = `<div class="article-reader">`
+            + `<div class="article-toolbar">`
             + `<button class="article-back" data-article-back type="button">← ${escHtml(back)}</button>`
+            + `<button class="article-share" data-article-share type="button" aria-live="polite">${LINK_ICON}<span>${escHtml(share)}</span></button>`
+            + `</div>`
             + `<div class="article-hero${articleField(a, 'cover_image') ? ' article-hero--img' : ''}">${articleCoverMedia(a, escHtml(a.id) + '-hero', 'xMinYMax slice')}</div>`
             + `<h1>${escHtml(articleField(a, 'title'))}</h1>`
             + `<div class="article-meta">${escHtml(articleField(a, 'kicker'))} · ${escHtml(a.date)}</div>`
             + `<div class="article-body">${articleField(a, 'body')}</div></div>`;
+        document.title = articleField(a, 'title') + ' · ' + BASE_TITLE;
         if (document.getElementById('scatter-host')) renderScalingSnowballChart();
+    }
+    // Copy the article's deep link.  Clipboard API first; hidden-textarea
+    // execCommand fallback keeps it working on http / older WebViews.
+    function copyArticleLink(btn) {
+        const url = location.href;
+        const done = () => {
+            const label = btn.querySelector('span');
+            if (!label) return;
+            const prev = label.textContent;
+            label.textContent = currentLang === 'en' ? 'Copied!' : '已複製！';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                label.textContent = prev;
+                btn.classList.remove('copied');
+            }, 1600);
+        };
+        const fallback = () => {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); done(); } catch {}
+            ta.remove();
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done).catch(fallback);
+        } else {
+            fallback();
+        }
     }
     // ---- Scaling x snowball scatter (rendered into the 'scaling-snowball' article) ----
     let _scatterRO = null, _scatterW = 0;
@@ -2705,6 +2775,21 @@
         if (!bar || !active) return;
         bar.style.setProperty('--ind-x', active.offsetLeft + 'px');
         bar.style.setProperty('--ind-w', active.offsetWidth + 'px');
+        // On the mobile tab strip the bar scrolls; keep the active tab in view.
+        if (bar.scrollWidth > bar.clientWidth + 4) {
+            const left = Math.max(0, active.offsetLeft - (bar.clientWidth - active.offsetWidth) / 2);
+            const smooth = document.documentElement.classList.contains('ui-ready')
+                && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+            bar.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
+        }
+    }
+    // The header is one row on desktop, two on mobile (brand row + tab strip).
+    // Sticky offsets (.filter-bar) read --header-h, so measure the real height
+    // instead of hardcoding it per breakpoint.
+    function syncHeaderHeight() {
+        const header = document.querySelector('.site-header');
+        if (!header) return;
+        document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
     }
     // Slide the segmented control's fill behind its active option.  Snaps by
     // default; pass animate=true (theme toggle) for the slide.  Skips while the
@@ -2722,6 +2807,21 @@
         thumb.style.width = active.offsetWidth + 'px';
         if (!animate) { void thumb.offsetWidth; thumb.style.transition = ''; }
     }
+    // Hash routes are '#<view>' plus one sub-level for the column
+    // ('#column/<article-id>') so individual articles have shareable URLs.
+    function parseHash() {
+        const raw = (location.hash || '').replace(/^#/, '');
+        const cut = raw.indexOf('/');
+        const view = cut === -1 ? raw : raw.slice(0, cut);
+        let sub = cut === -1 ? '' : raw.slice(cut + 1);
+        try { sub = decodeURIComponent(sub); } catch {}
+        return { view, sub };
+    }
+    function routeFromHash(instant) {
+        const { view, sub } = parseHash();
+        if (view === 'column') columnArticle = sub || null;
+        setActiveView(VIEWS.includes(view) ? view : 'home', instant);
+    }
     function setActiveView(name, instant) {
         if (!VIEWS.includes(name)) name = 'home';
         const apply = () => {
@@ -2731,16 +2831,13 @@
                 t.setAttribute('aria-selected', on ? 'true' : 'false');
                 t.tabIndex = on ? 0 : -1;  // roving tabindex (WAI-ARIA tabs)
             });
-            // Mirror the active highlight onto the mobile drawer items (plain
-            // buttons, not a tablist — so no aria-selected / roving tabindex).
-            document.querySelectorAll('.nav-drawer-item[data-nav-tab]').forEach(t => {
-                t.classList.toggle('active', t.getAttribute('data-nav-tab') === name);
-            });
             document.querySelectorAll('.view[data-view]').forEach(v => {
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
             if (name === 'column') {
                 columnArticle ? renderArticle(columnArticle) : renderColumnList();
+            } else {
+                document.title = BASE_TITLE;  // leaving an open article restores the base title
             }
             if (name === 'augments') {
                 renderAugmentTier();
@@ -2748,8 +2845,15 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            if (('#' + name) !== location.hash) {
-                try { history.replaceState(null, '', '#' + name); } catch { location.hash = name; }
+            // Column carries a sub-route so open articles stay linkable
+            // (#column/<article-id>).  Written AFTER the render above, so an
+            // invalid article id has already fallen back to the list and the
+            // hash self-normalises to #column.
+            const want = '#' + (name === 'column' && columnArticle
+                ? 'column/' + encodeURIComponent(columnArticle)
+                : name);
+            if (want !== location.hash) {
+                try { history.replaceState(null, '', want); } catch { location.hash = want.slice(1); }
             }
             window.scrollTo(0, 0);
             moveTabIndicator();
@@ -2878,6 +2982,11 @@
         syncDetailModalState();
     }
 
+    // Monotonic token: every open bumps it so a deferred heavy fill can detect
+    // that a newer open (or a close) superseded it and abort, avoiding a stale
+    // panel flashing in after the user already moved on.
+    let detailOpenToken = 0;
+
     function openDetailForChamp(champ, force = false) {
         const cid = champ.getAttribute('data-cid');
         const block = champ.closest('.tier-block');
@@ -2904,18 +3013,20 @@
             anchor.after(host);
         }
 
+        // ---- Two-phase open (INP) --------------------------------------------
+        // Detail open is the most frequent interaction and renderDetail builds a
+        // large HTML string.  Doing it inside the click handler is the second INP
+        // contributor.  Phase 1 (synchronous, cheap): mark selection + paint a
+        // skeleton sized to the panel so there is no CLS jump.  Phase 2 (after a
+        // yield): the heavy renderDetail fill + highlight/filter passes.
+        const token = ++detailOpenToken;
         const dialogAttrs = isMobileViewport()
             ? ` role="dialog" aria-modal="true" aria-labelledby="detail-title-${cid}"`
             : '';
-        host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
-        applySearchHighlights(host);
-        applyAugCatFilter(host);
+        host.innerHTML = `<div class="detail detail-loading"${dialogAttrs}><div class="detail-skeleton" aria-hidden="true"></div></div>`;
         champ.classList.add('detail-selected');
         detailSelected = cid;
         syncDetailModalState();
-        if (isMobileViewport()) {
-            host.querySelector('.detail-close')?.focus({ preventScroll: true });
-        }
         if (!force) {
             trackEvent('champion_detail_open', {
                 champion_id: cid,
@@ -2923,6 +3034,26 @@
                 tier: champ.getAttribute('data-tier') || '',
             });
         }
+
+        // Phase 2: fill the real content after handing the main thread back.
+        yieldToMain().then(() => {
+            // Abort if a newer open or a close superseded this one while we waited.
+            if (token !== detailOpenToken || detailSelected !== cid) return;
+            if (!host.isConnected) return;
+            try {
+                host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
+                // Skip the document-wide highlight / category sweeps when nothing
+                // is active — they walk every card for no effect otherwise.
+                if (filterState.q.trim()) applySearchHighlights(host);
+                if (augCatFilter.size) applyAugCatFilter(host);
+            } catch (err) {
+                console.error('detail render failed for champ', cid, err);
+                return;
+            }
+            if (isMobileViewport()) {
+                host.querySelector('.detail-close')?.focus({ preventScroll: true });
+            }
+        });
     }
 
     function openDetailByCid(cid) {
@@ -2950,38 +3081,16 @@
         renderSidePanel();
     }
 
-    // ---- Mobile nav drawer (側欄) open/close ----
-    const navBurger = document.getElementById('nav-burger');
-    const navDrawer = document.getElementById('nav-drawer');
-    const navDrawerBackdrop = document.getElementById('nav-drawer-backdrop');
-    function setNavDrawer(open) {
-        if (!navDrawer) return;
-        navDrawer.classList.toggle('open', open);
-        navDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
-        if (navDrawerBackdrop) navDrawerBackdrop.classList.toggle('open', open);
-        if (navBurger) navBurger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        document.body.classList.toggle('nav-drawer-open', open);
-    }
-
     document.addEventListener('click', (ev) => {
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
-            trackEvent('github_star_click', { location: ghStar.closest('.nav-drawer') ? 'drawer' : 'header' });
-            return;
-        }
-        if (ev.target.closest('#nav-burger')) {
-            setNavDrawer(!(navDrawer && navDrawer.classList.contains('open')));
-            return;
-        }
-        if (ev.target.closest('#nav-drawer-close') || ev.target.closest('#nav-drawer-backdrop')) {
-            setNavDrawer(false);
+            trackEvent('github_star_click', { location: 'header' });
             return;
         }
         const navTab = ev.target.closest('[data-nav-tab]');
         if (navTab) {
             const view = navTab.getAttribute('data-nav-tab');
             setActiveView(view);
-            setNavDrawer(false);  // navigating from the drawer dismisses it
             trackEvent('view_change', { view });
             return;
         }
@@ -2995,14 +3104,21 @@
         const articleCard = ev.target.closest('[data-article]');
         if (articleCard) {
             const id = articleCard.getAttribute('data-article');
-            renderArticle(id);
-            window.scrollTo(0, 0);
+            // Navigate via the hash (not a direct render) so the article gets a
+            // real history entry: browser Back returns to the list, and the URL
+            // is shareable as-is.
+            location.hash = 'column/' + encodeURIComponent(id);
             trackEvent('article_open', { id });
             return;
         }
         if (ev.target.closest('[data-article-back]')) {
-            renderColumnList();
-            window.scrollTo(0, 0);
+            location.hash = 'column';
+            return;
+        }
+        const shareBtn = ev.target.closest('[data-article-share]');
+        if (shareBtn) {
+            copyArticleLink(shareBtn);
+            trackEvent('article_share', { id: columnArticle });
             return;
         }
         const langBtn = ev.target.closest('[data-lang-toggle]');
@@ -3108,9 +3224,9 @@
     window.addEventListener('resize', () => {
         clearTimeout(resizeT);
         resizeT = setTimeout(() => {
-            if (!isMobileViewport()) setNavDrawer(false);  // never strand the drawer on desktop
             updateSearchPlaceholder();
             renderSidePanel();
+            syncHeaderHeight();  // header is 1 row on desktop, 2 on mobile
             moveTabIndicator();
             moveSegThumb();
             if (!detailSelected) return;
@@ -3159,18 +3275,27 @@
         });
     }
 
-    function rehydrateItems() {
-        // Restore the item identities (name + icon) that the build stripped into
-        // DATA.itemLut to shrink the payload (see _dedupe_item_objects).  Every
-        // embedded item was tagged "ic":1 with its id + per-row stats kept; we put
-        // name / name_zh / name_en / icon back in place so all downstream render
-        // code sees the original object shape.  Backward-compatible: a payload with
-        // no itemLut (full item objects) is left untouched.  Must run before
-        // enrichSearchIndexes() (which reads item names) and any renderDetail().
+    // Item rehydration, per champion.  The build stripped item identities
+    // (name + icon) into DATA.itemLut to shrink the payload (see
+    // _dedupe_item_objects); every embedded item was tagged "ic":1 with its id +
+    // per-row stats kept.  Walking the WHOLE DATA.champs tree eagerly at startup
+    // was a multi-hundred-ms main-thread block right when the shell looks
+    // interactive (top INP contributor).  Instead we rehydrate one champion at a
+    // time, idempotently: renderDetail / any item-name/icon reader calls
+    // rehydrateChamp(cid) first (cheap guard once done), and a background chunked
+    // pass warms the rest.  Backward-compatible: a payload with no itemLut (full
+    // item objects) is a no-op.
+    const _rehydratedChamps = new Set();
+    function rehydrateChamp(cid) {
         const lut = DATA.itemLut;
-        if (!lut) return;
+        if (!lut) return;                       // full-object payload: nothing to do
+        const key = String(cid);
+        if (_rehydratedChamps.has(key)) return; // idempotent guard
+        const info = (DATA.champs || {})[key];
+        _rehydratedChamps.add(key);             // mark before walk: missing champ is still "done"
+        if (!info) return;
         const ver = DATA.ddv || '';
-        function visit(node) {
+        (function visit(node) {
             if (Array.isArray(node)) {
                 for (let i = 0; i < node.length; i++) visit(node[i]);
             } else if (node && typeof node === 'object') {
@@ -3187,34 +3312,58 @@
                 }
                 for (const k in node) visit(node[k]);
             }
-        }
-        Object.values(DATA.champs || {}).forEach(visit);
+        })(info);
     }
 
-    function enrichSearchIndexes() {
-        document.querySelectorAll('.champ[data-cid]').forEach(champ => {
-            const cid = champ.getAttribute('data-cid');
-            const info = (DATA.champs || {})[String(cid)];
-            if (!info) return;
-            const terms = [champ.getAttribute('data-search') || ''];
-            addSearchTerm(terms, [info.name, info.name_zh, info.name_en, info.alias, info.tags || []]);
-            ['top', 'bot'].forEach(side => {
-                Object.values(info[side] || {}).forEach(rows => (rows || []).forEach(row => addAugmentSearchRow(terms, row)));
-                ['sets', 'items', 'singleItems', 'boots', 'itemClusters', 'augTypes'].forEach(key => {
-                    ((info[key] || {})[side] || []).forEach(row => addNamedSearchRow(terms, row));
-                });
+    // Build one champion card's search blob.  Reads item names, so rehydrateChamp
+    // for that cid MUST run first (the chunked pass below enriches each card right
+    // after rehydrating it, preserving that ordering guarantee).
+    function enrichChampCard(champ) {
+        const cid = champ.getAttribute('data-cid');
+        const info = (DATA.champs || {})[String(cid)];
+        if (!info) return;
+        const terms = [champ.getAttribute('data-search') || ''];
+        addSearchTerm(terms, [info.name, info.name_zh, info.name_en, info.alias, info.tags || []]);
+        ['top', 'bot'].forEach(side => {
+            Object.values(info[side] || {}).forEach(rows => (rows || []).forEach(row => addAugmentSearchRow(terms, row)));
+            ['sets', 'items', 'singleItems', 'boots', 'itemClusters', 'augTypes'].forEach(key => {
+                ((info[key] || {})[side] || []).forEach(row => addNamedSearchRow(terms, row));
             });
-            const seen = new Set();
-            const blob = terms
-                .flatMap(term => String(term).toLowerCase().split(/\\s+/))
-                .filter(term => {
-                    if (!term || seen.has(term)) return false;
-                    seen.add(term);
-                    return true;
-                })
-                .join(' ');
-            champ.setAttribute('data-search', blob);
         });
+        const seen = new Set();
+        const blob = terms
+            .flatMap(term => String(term).toLowerCase().split(/\\s+/))
+            .filter(term => {
+                if (!term || seen.has(term)) return false;
+                seen.add(term);
+                return true;
+            })
+            .join(' ');
+        champ.setAttribute('data-search', blob);
+    }
+
+    // Background pass: rehydrate + enrich every champion card in small chunks,
+    // yielding between chunks so we never hold the main thread long enough to
+    // stall a tap.  Grid filtering by champion name works BEFORE this settles
+    // (the server-rendered data-search already carries champion names); augment /
+    // item term search just gets progressively better as cards are enriched.
+    // Resilient: a chunk that throws is logged and skipped, never leaving init
+    // half-done silently.
+    async function warmChampIndexesInBackground() {
+        const cards = Array.from(document.querySelectorAll('.champ[data-cid]'));
+        const CHUNK = 16;
+        for (let i = 0; i < cards.length; i += CHUNK) {
+            const slice = cards.slice(i, i + CHUNK);
+            for (const champ of slice) {
+                try {
+                    rehydrateChamp(champ.getAttribute('data-cid'));
+                    enrichChampCard(champ);
+                } catch (err) {
+                    console.error('index warm failed for champ', champ.getAttribute('data-cid'), err);
+                }
+            }
+            if (i + CHUNK < cards.length) await yieldToMain();
+        }
     }
 
     try {
@@ -3222,40 +3371,51 @@
         if (savedLang === 'en' || savedLang === 'zh') currentLang = savedLang;
     } catch {}
 
-    rehydrateItems();
-    enrichSearchIndexes();
+    // First paint depends on the grid already being in the DOM (server-rendered).
+    // Do only the cheap, synchronous, interaction-critical setup now, yielding
+    // between steps; push the heavy per-champion index warm to idle/background.
     setRecommendMode(false);
     syncPickDecorations();
     renderSidePanel();
-    applyLanguage(currentLang);
+    // applyLanguage walks all 173 cards (updateChampCardCopy) + re-renders panels.
+    // The shell is server-rendered in zh (the default), so for zh it is a no-op
+    // re-write of identical text -- skip it and call only the two panel refreshes
+    // it would otherwise trigger at init (badges depend on filterState.role which
+    // starts empty; updates panel needs its first render).  For 'en' (a saved
+    // preference) the full localization walk must run, but it can go after a yield
+    // so it doesn't extend the first interaction-blocking task.
+    if (currentLang === 'en') {
+        await yieldToMain();
+        applyLanguage('en');
+    } else {
+        refreshSecondaryRoleBadges();
+        renderUpdatesPanel();
+    }
+    // Warm the search indexes in the background; do not await (keeps init moving).
+    whenIdle(() => { warmChampIndexesInBackground().catch(err => console.error('index warm pass failed', err)); });
 
     // ---- Chrome init: theme, tab routing ----
     try {
         const savedTheme = localStorage.getItem(THEME_KEY);
         applyTheme(savedTheme === 'light' ? 'light' : 'dark');
     } catch { applyTheme('dark'); }
-    (function initView() {
-        const start = (location.hash || '').replace('#', '');
-        setActiveView(VIEWS.includes(start) ? start : 'home', true);  // instant: no View Transition on first paint
-    })();
+    routeFromHash(true);  // instant: no View Transition on first paint
     // Position the sliding indicator/thumb now (base CSS has transition:none so
     // they snap), commit that layout with a reflow, THEN enable the transitions
     // so only later tab/theme changes animate -- never a grow-from-0 on load.
     // Synchronous (not requestAnimationFrame) so it still runs when the tab is
     // backgrounded / not painting (rAF callbacks are parked there).
+    syncHeaderHeight();
     moveTabIndicator();
     moveSegThumb();
     void document.documentElement.offsetWidth;  // reflow: commit initial geometry
     document.documentElement.classList.add('ui-ready');
     // Web fonts can resize tab/segment labels after load -- re-anchor once settled.
-    window.addEventListener('load', () => { moveTabIndicator(); moveSegThumb(); });
+    window.addEventListener('load', () => { syncHeaderHeight(); moveTabIndicator(); moveSegThumb(); });
     if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(() => { moveTabIndicator(); moveSegThumb(); });
+        document.fonts.ready.then(() => { syncHeaderHeight(); moveTabIndicator(); moveSegThumb(); });
     }
-    window.addEventListener('hashchange', () => {
-        const v = (location.hash || '').replace('#', '');
-        setActiveView(VIEWS.includes(v) ? v : 'home');
-    });
+    window.addEventListener('hashchange', () => routeFromHash());
     // WAI-ARIA tablist keyboard nav: arrows / Home / End move focus + activate.
     document.querySelector('.nav-tabs')?.addEventListener('keydown', (ev) => {
         const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
@@ -3277,6 +3437,13 @@
         const onHeaderScroll = () => siteHeaderEl.classList.toggle('scrolled', window.scrollY > 4);
         window.addEventListener('scroll', onHeaderScroll, { passive: true });
         onHeaderScroll();
+        // Keep --header-h pinned to the header's REAL height.  Debounced
+        // window-resize alone can sample a mid-reflow transient (e.g. a row
+        // briefly wrapping while crossing the 700px breakpoint) and then never
+        // correct itself; observing the element re-fires once layout settles.
+        if (window.ResizeObserver) {
+            new ResizeObserver(() => syncHeaderHeight()).observe(siteHeaderEl);
+        }
     }
 
     /* -----  Filter / search  --------------------------------------- */
@@ -3324,7 +3491,10 @@
                 closeDetail();
             }
         }
-        refreshSecondaryRoleBadges();
+        // NOTE: refreshSecondaryRoleBadges() is intentionally NOT called here.
+        // The badges depend ONLY on filterState.role, not the query, so running
+        // that full 173-card innerHTML walk on every keystroke was pure waste.
+        // It is now invoked exactly where role changes (the chip handler).
         applySearchHighlights();
     }
 
@@ -3341,6 +3511,9 @@
         if (!chip) return;
         filterState.role = chip.getAttribute('data-role') || '';
         setActiveChip(filterState.role);
+        // Role is the only input to the secondary-role badges, so refresh them
+        // here (the single role-change site) rather than on every applyFilters.
+        refreshSecondaryRoleBadges();
         applyFilters();
         trackEvent('role_filter_click', { role: filterState.role || 'all' });
     });
@@ -3351,11 +3524,6 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
-            if (navDrawer && navDrawer.classList.contains('open')) {
-                setNavDrawer(false);
-                if (navBurger) navBurger.focus();
-                return;
-            }
             if (detailSelected && isMobileViewport()) {
                 closeDetail();
                 return;
@@ -3425,17 +3593,25 @@
         positionSecondaryRoleTooltip(champ.querySelector('.alt-role-badge'));
     });
 
-    // Live search.
+    // Live search.  Debounced: applyFilters loops every tier-block x champ, so
+    // running it on each keystroke made typing the INP-heaviest text interaction.
+    // A ~120 ms trailing debounce coalesces a burst of keystrokes into one filter
+    // pass while still feeling live.  Escape stays immediate (below).
     const searchEl = document.getElementById('champ-search');
     if (searchEl) {
+        let searchDebounceT = null;
         searchEl.addEventListener('input', () => {
             filterState.q = searchEl.value || '';
-            applyFilters();
+            clearTimeout(searchDebounceT);
+            searchDebounceT = setTimeout(() => { searchDebounceT = null; applyFilters(); }, 120);
         });
         // Esc inside the search clears the filter and unfocuses, so the
-        // typical "open, search, escape back to grid" flow works.
+        // typical "open, search, escape back to grid" flow works.  Immediate:
+        // cancel any pending debounced pass and apply the cleared state now.
         searchEl.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape') {
+                clearTimeout(searchDebounceT);
+                searchDebounceT = null;
                 searchEl.value = '';
                 filterState.q = '';
                 applyFilters();
