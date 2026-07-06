@@ -149,6 +149,10 @@ Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 - Logit 必須對 swap-teams 反對稱：`logit(blue, red) = −logit(red, blue)`
 - acc > 65% = data leak，立刻檢查 split
 
+## 專案佈局（2026-07-06 整理）
+- 新分析輸出進 `outputs/<類別>/`（`ablation/` `figures/` `reviews/` `logs/`）、報告進 `documents/reports/`、匯出檔進 `documents/exports/`、共用程式進 `src/aram_nn/`；腳本不互相 import、根目錄不放新腳本 — why：`outputs/`/`documents/` 全 gitignore，分類只影響本機可讀性，不影響 git；`scripts/` 平鋪 99 個檔靠 `scripts/README.md` 索引導航，見該檔分類。
+- Harness 排程鏈 / 發布鏈 / 同步鏈總圖見 `OPERATIONS.md`，不在此重複。
+
 ## How to edit this file
 - Keep the whole file under 300 lines. If a new rule pushes past that, remove a stale one.
 - Every rule states Why in the same line or the next.
