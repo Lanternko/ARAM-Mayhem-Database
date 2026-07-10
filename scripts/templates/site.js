@@ -708,7 +708,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：灰→藍→黃→橙→紅，越紅越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：灰→藍→黃→琥珀→正橘，越橘越熱門。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -749,8 +749,12 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} 選取率 ${pick}，勝率${lift}`,
             secondaryRoleBadgePick: pick => `選取率 ${pick}`,
             secondaryRoleBadgeLift: lift => `勝率${lift}`,
-            // Card surface shows the bare % (colour = heat); full “選用率 …” stays in aria/tooltip.
+            // Card surface: bare pick % only (label lives in the left rarity rail).
             augPickLabel: pick => pick,
+            augSortWr: '勝率',
+            augSortPick: '選用率',
+            augSortWrAria: '依勝率排序此稀有度',
+            augSortPickAria: '依選用率排序此稀有度',
             augHotBadge: '熱門',
             augFilterAll: '全部',
             augFilterAllTip: '清除分類，顯示全部增幅',
@@ -838,7 +842,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card is colour-coded by popularity on a heat ramp: grey -> blue -> yellow -> orange -> red, redder = hotter.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card is colour-coded by popularity on a heat ramp: grey -> blue -> yellow -> amber -> orange, deeper orange = hotter.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -879,8 +883,12 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} pick ${pick}, WR ${lift}`,
             secondaryRoleBadgePick: pick => `pick ${pick}`,
             secondaryRoleBadgeLift: lift => `WR ${lift}`,
-            // Bare % on the card; “pick …” remains in aria/tooltip.
+            // Card surface: bare pick % only (label lives in the left rarity rail).
             augPickLabel: pick => pick,
+            augSortWr: 'WR',
+            augSortPick: 'Pick',
+            augSortWrAria: 'Sort this rarity by win rate',
+            augSortPickAria: 'Sort this rarity by pick rate',
             augHotBadge: 'Hot',
             augFilterAll: 'All',
             augFilterAllTip: 'Clear categories — show every augment',
@@ -1484,24 +1492,48 @@
             games: entry.g,
             note: onBoard ? copy.augChampsHint : '',
         });
-        // Row order: icon → name → one stats row (pick left, WR right) to save height/width.
+        // Card: icon → name → WR% → pick% (two bare numbers, stacked). Labels
+        // for 勝率 / 選用率 live in the left rarity rail (with sort controls).
         return `
             <div class="aug ${kind} rarity-${rarity} has-item-tip"
                  tabindex="0"
                  data-aug-id="${escHtml(String(entry.id))}"
+                 data-wr="${Number(entry.wr || 0)}"
+                 data-pick="${pickRate}"
                  data-match-text="${escHtml(matchText)}"
                  data-cats="${escHtml(cats)}"
                  aria-label="${escHtml(ariaLabel)}">
                 ${hotBadge}
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
-                <div class="aug-stats">
-                    <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
-                    <div class="awr">${pct(entry.wr)}</div>
-                </div>
+                <div class="awr wr-${wrToneTier(entry)}">${pct(entry.wr)}</div>
+                <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
+    }
+
+    /** Reorder .aug cards inside one rarity row by wr or pick (desc). */
+    function sortRarityAugList(row, sortKey) {
+        if (!row) return;
+        const list = row.querySelector('.aug-list');
+        if (!list) return;
+        const attr = sortKey === 'pick' ? 'data-pick' : 'data-wr';
+        const cards = Array.from(list.querySelectorAll('.aug[data-aug-id]'));
+        cards.sort((a, b) => {
+            const av = Number(a.getAttribute(attr) || 0);
+            const bv = Number(b.getAttribute(attr) || 0);
+            if (bv !== av) return bv - av;
+            // Stable-ish tie-break: keep existing DOM order via data-aug-id.
+            return String(a.getAttribute('data-aug-id') || '')
+                .localeCompare(String(b.getAttribute('data-aug-id') || ''), undefined, { numeric: true });
+        });
+        cards.forEach(card => list.appendChild(card));
+        row.querySelectorAll('.rlabel-sort').forEach(btn => {
+            const active = btn.getAttribute('data-sort') === sortKey;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     }
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
@@ -1528,6 +1560,28 @@
         if (pick >= 0.10) return 4;
         if (pick >= 0.05) return 3;
         if (pick >= 0.02) return 2;
+        return 1;
+    }
+    /**
+     * 5-step win-rate tone for .awr:
+     *   5 正綠 → 4 淺綠 → 3 無色 → 2 淺紅 → 1 深紅
+     * Prefer champion-relative lift when present; else WR vs 50%.
+     */
+    function wrToneTier(entry) {
+        const liftRaw = entry && entry.lift;
+        if (liftRaw != null && Number.isFinite(Number(liftRaw))) {
+            const L = Number(liftRaw);
+            if (L >= 0.03) return 5;   // +3pp+
+            if (L >= 0.01) return 4;   // +1–3pp
+            if (L > -0.01) return 3;   // ≈ flat
+            if (L > -0.03) return 2;   // −1–3pp
+            return 1;                 // −3pp+
+        }
+        const d = Number(entry && entry.wr || 0) - 0.5;
+        if (d >= 0.05) return 5;
+        if (d >= 0.02) return 4;
+        if (d > -0.02) return 3;
+        if (d > -0.05) return 2;
         return 1;
     }
     const RARITIES = [
@@ -1908,13 +1962,31 @@
                 : kind;
             return buildAugCard(e, cardKind);
         }).join('');
+        // The left control is a peer of .aug cards inside the same flex row —
+        // same height, same bottom two rows — so 勝率/選用率 line up with the
+        // WR/pick numbers. Structure mirrors a card: head (centered rarity) +
+        // two fixed-height foot rows (sort keys where other cards put stats).
+        const sortWr = escHtml(copy.augSortWr || '勝率');
+        const sortPick = escHtml(copy.augSortPick || '選用率');
+        const rail = `
+            <div class="rlabel-rail rlabel ${r.css}" role="group"
+                 aria-label="${escHtml(copy.rarityLabels[r.key])}">
+                <div class="rlabel-head">
+                    <div class="rlabel-name">${escHtml(copy.rarityLabels[r.key])}</div>
+                </div>
+                <button type="button" class="rlabel-sort is-active" data-sort="wr"
+                        aria-pressed="true"
+                        aria-label="${escHtml(copy.augSortWrAria || sortWr)}">${sortWr}</button>
+                <button type="button" class="rlabel-sort" data-sort="pick"
+                        aria-pressed="false"
+                        aria-label="${escHtml(copy.augSortPickAria || sortPick)}">${sortPick}</button>
+            </div>`;
         const body = cards
-            ? `<div class="aug-list">${cards}</div>`
-            : `<div class="aug-list empty-list">${copy.insufficient}</div>`;
+            ? `${rail}${cards}`
+            : `${rail}<div class="aug-list-empty">${copy.insufficient}</div>`;
         return `
-            <div class="rarity-row">
-                <div class="rlabel ${r.css}">${copy.rarityLabels[r.key]}</div>
-                ${body}
+            <div class="rarity-row" data-rarity="${escHtml(r.key)}">
+                <div class="aug-list">${body}</div>
             </div>
         `;
     }
@@ -3965,6 +4037,14 @@
         const detailClose = ev.target.closest('.detail-close');
         if (detailClose) {
             closeDetail();
+            return;
+        }
+        const augSortBtn = ev.target.closest('.rlabel-sort[data-sort]');
+        if (augSortBtn) {
+            const row = augSortBtn.closest('.rarity-row');
+            const key = augSortBtn.getAttribute('data-sort') || 'wr';
+            sortRarityAugList(row, key);
+            trackEvent('aug_rarity_sort', { sort: key, rarity: row && row.getAttribute('data-rarity') });
             return;
         }
         if (isMobileViewport() && ev.target.classList && ev.target.classList.contains('detail-host')) {
