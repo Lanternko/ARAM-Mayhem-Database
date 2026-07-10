@@ -3458,24 +3458,31 @@
         if (!header) return;
         document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
     }
-    // Path routes (shareable, no hash):
-    //   /                  home (brand)
-    //   /augments          augment tier
-    //   /changes           patch changes
-    //   /column            column list
-    //   /column/<id>       one article  e.g. /column/sprees-not-snowball
+    // Path routes (shareable, no hash).  English uses an /en prefix so a
+    // shared link opens in English without relying on localStorage:
+    //   /                  home (zh)
+    //   /en                home (en)
+    //   /augments          augment tier (zh)
+    //   /en/augments       augment tier (en)
+    //   /column/<id>       article (zh)
+    //   /en/column/<id>    article (en)
     // Legacy '#view' / '#column/id' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
-        if (!view || view === 'home') return '/';
+        const prefix = currentLang === 'en' ? '/en' : '';
+        if (!view || view === 'home') return prefix || '/';
         if (view === 'column' && sub) {
-            return '/column/' + encodeURIComponent(sub);
+            return prefix + '/column/' + encodeURIComponent(sub);
         }
-        return '/' + view;
+        return prefix + '/' + view;
+    }
+    function normalizePathname(pathname) {
+        let path = pathname || '/';
+        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1) || '/';
+        return path;
     }
     function parseRoute() {
-        let path = location.pathname || '/';
-        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+        let path = normalizePathname(location.pathname);
 
         // Legacy hash deep-links (bookmarks / old shares).
         const rawHash = (location.hash || '').replace(/^#/, '');
@@ -3485,32 +3492,40 @@
             let hSub = cut === -1 ? '' : rawHash.slice(cut + 1);
             try { hSub = decodeURIComponent(hSub); } catch {}
             if (VIEWS.includes(hView)) {
-                return { view: hView, sub: hView === 'column' ? (hSub || '') : '', legacyHash: true };
+                return {
+                    view: hView,
+                    sub: hView === 'column' ? (hSub || '') : '',
+                    urlLang: null,
+                    legacyHash: true,
+                };
             }
         }
 
         const segs = path.replace(/^\//, '').split('/').filter(Boolean);
-        if (!segs.length) return { view: 'home', sub: '', legacyHash: false };
-        // Treat /home as /
+        // Optional locale prefix: only "en" is explicit; bare paths are zh.
+        let urlLang = null;
+        if (segs[0] === 'en') {
+            urlLang = 'en';
+            segs.shift();
+        }
+        if (!segs.length) return { view: 'home', sub: '', urlLang, legacyHash: false };
+        // Treat /home and /en/home as /
         if (segs[0] === 'home' && segs.length === 1) {
-            return { view: 'home', sub: '', legacyHash: false };
+            return { view: 'home', sub: '', urlLang, legacyHash: false };
         }
         const view = segs[0];
-        if (!VIEWS.includes(view)) return { view: 'home', sub: '', legacyHash: false };
+        if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
         let sub = '';
         if (view === 'column' && segs.length > 1) {
             try { sub = decodeURIComponent(segs.slice(1).join('/')); } catch { sub = segs.slice(1).join('/'); }
         }
-        return { view, sub, legacyHash: false };
+        return { view, sub, urlLang, legacyHash: false };
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
         if (historyMode === 'none') return;
         const wantPath = pathForRoute(view, sub);
-        const curPath = location.pathname || '/';
-        const curNorm = (curPath.length > 1 && curPath.endsWith('/'))
-            ? curPath.slice(0, -1) || '/'
-            : curPath;
+        const curNorm = normalizePathname(location.pathname);
         const needPath = curNorm !== wantPath;
         const needClearHash = Boolean(location.hash);
         if (!needPath && !needClearHash) return;
@@ -3523,7 +3538,13 @@
         }
     }
     function routeFromLocation(instant, historyMode) {
-        const { view, sub, legacyHash } = parseRoute();
+        const { view, sub, legacyHash, urlLang } = parseRoute();
+        // URL is source of truth for language on navigation / popstate.
+        // (Boot may soft-apply a saved en preference on bare `/` only.)
+        const wantLang = urlLang === 'en' ? 'en' : 'zh';
+        if (wantLang !== currentLang) {
+            applyLanguage(wantLang, 'none');
+        }
         if (view === 'column') columnArticle = sub || null;
         else columnArticle = null;
         // Migrating an old #hash always replaceStates onto the clean path.
@@ -3603,7 +3624,9 @@
         try { localStorage.setItem(THEME_KEY, t); } catch {}
     }
 
-    function applyLanguage(nextLang) {
+    function applyLanguage(nextLang, historyMode) {
+        // historyMode: 'replace' (default, language toggle) | 'none' (URL already correct)
+        if (historyMode == null) historyMode = 'replace';
         currentLang = nextLang === 'en' ? 'en' : 'zh';
         const copy = tr();
         document.documentElement.lang = copy.htmlLang;
@@ -3621,8 +3644,6 @@
                 titleEl.setAttribute('aria-label', 'arammeta');
             }
         }
-        const subtitleEl = document.getElementById('site-subtitle');
-        if (subtitleEl) subtitleEl.textContent = copy.subtitle();
         updateSearchPlaceholder();
         const shownUnit = document.getElementById('shown-unit');
         if (shownUnit) shownUnit.textContent = copy.shownUnit;
@@ -3681,6 +3702,14 @@
         if (detailSelected) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (champ) openDetailForChamp(champ, true);
+        }
+        // Keep the path prefix in sync with language so shared links stay bilingual.
+        if (historyMode !== 'none') {
+            const active = document.querySelector('.view.is-active');
+            let view = (active && active.getAttribute('data-view')) || 'home';
+            if (!VIEWS.includes(view)) view = 'home';
+            const sub = (view === 'column' && columnArticle) ? columnArticle : '';
+            syncUrlToRoute(view, sub, historyMode);
         }
     }
 
@@ -4095,10 +4124,25 @@
         }
     }
 
-    try {
-        const savedLang = localStorage.getItem(LANG_KEY);
-        if (savedLang === 'en' || savedLang === 'zh') currentLang = savedLang;
-    } catch {}
+    // Language: URL `/en…` wins.  Bare paths are zh, except a soft preference
+    // on the home root `/` that rewrites to `/en` when the user last chose EN
+    // (so return visits remember English without breaking shared zh deep links).
+    {
+        const boot = parseRoute();
+        if (boot.urlLang === 'en') {
+            currentLang = 'en';
+        } else {
+            currentLang = 'zh';
+            try {
+                const p = normalizePathname(location.pathname);
+                if ((p === '/' || p === '') && localStorage.getItem(LANG_KEY) === 'en') {
+                    currentLang = 'en';
+                    // Rewrite before routeFromLocation so URL stays authoritative.
+                    try { history.replaceState(null, '', '/en' + (location.search || '')); } catch {}
+                }
+            } catch {}
+        }
+    }
 
     // First paint depends on the grid already being in the DOM (server-rendered).
     // Do only the cheap, synchronous, interaction-critical setup now, yielding
@@ -4110,12 +4154,13 @@
     // The shell is server-rendered in zh (the default), so for zh it is a no-op
     // re-write of identical text -- skip it and call only the two panel refreshes
     // it would otherwise trigger at init (badges depend on filterState.role which
-    // starts empty; updates panel needs its first render).  For 'en' (a saved
-    // preference) the full localization walk must run, but it can go after a yield
-    // so it doesn't extend the first interaction-blocking task.
+    // starts empty; updates panel needs its first render).  For 'en' the full
+    // localization walk must run, but it can go after a yield so it doesn't
+    // extend the first interaction-blocking task.  historyMode 'none': the
+    // following routeFromLocation will write the /en prefix if needed.
     if (currentLang === 'en') {
         await yieldToMain();
-        applyLanguage('en');
+        applyLanguage('en', 'none');
     } else {
         refreshSecondaryRoleBadges();
         renderUpdatesPanel();
