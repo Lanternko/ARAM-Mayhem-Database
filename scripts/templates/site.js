@@ -298,6 +298,91 @@
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [
         {
+            id: 'sprees-not-snowball',
+            date: '2026-07-07',
+            kicker_zh: '功率曲線', kicker_en: 'Power curve',
+            cover_motif: 'diverge', cover_accent: '#e2574b',
+            cover_zh: '連殺|≠滾雪球', cover_en: 'SPREES|≠ SNOWBALL',
+            title_zh: '你以為的滾雪球，不是滾雪球',
+            title_en: 'Kill sprees do not equal snowballing',
+            summary_zh: '連殺榜和「把比賽提早收掉」的相關性 ρ=−0.03，趨近於零。最快關門的是約瑞科和一排零連殺輔助；連殺王圖奇、劫反而贏得慢。',
+            summary_en: 'Correlation between the kill-spree axis and actually closing games early: rho = −0.03, essentially zero. The fastest closers are Yorick and a row of zero-spree supports, while spree kings like Twitch and Zed win slow.',
+            body_zh: `<p>上一篇〈英雄定位圖〉的 X 軸叫「滾雪球」——平均最大連殺與多殺的加權。當時我們埋了一句但書：「滾雪球量的是人頭爆發，不直接等於把比賽提早結束」。這次直接把這句話抓來驗證，結果但書才是主角。</p>
+<p>先定義「收官速度」：</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>收官速度 ＝ 該英雄勝局的中位時長 − 全體勝局中位（17.6 分）</b></p>
+<p>負值代表贏得比平均快。如果連殺真的會滾成提早勝利，連殺軸和收官速度應該高度相關 —— 實測 <b>Spearman ρ = −0.03</b>（n=173），<b>兩者完全無關</b>。連殺榜量的是「個人擊殺高光」，收官是「全隊」的事，資料說這是兩個獨立的能力。</p>
+<h2>誰真的把勝利收得快</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="約瑞科"><div class="art-meta"><div class="nm">約瑞科</div><div class="sb">勝局中位 16.7 分 · 42% 在 16 分內收掉 · 16,413 場</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="犽宿"><div class="art-meta"><div class="nm">犽宿</div><div class="sb">勝局中位 16.9 分 · 40% 在 16 分內 · 80,180 場</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="吉茵珂絲"><div class="art-meta"><div class="nm">吉茵珂絲</div><div class="sb">勝局中位 16.9 分 · 40% 在 16 分內 · 94,147 場</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="關"><div class="art-meta"><div class="nm">關</div><div class="sb">勝局中位 17.0 分 · 39% 在 16 分內 · 28,063 場</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="賽勒斯"><div class="art-meta"><div class="nm">賽勒斯</div><div class="sb">勝局中位 17.0 分 · 38% 在 16 分內 · 59,989 場</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
+<p>榜首是<b>約瑞科</b> —— 連殺榜第 147 名。他推塔、不收人頭，但他的勝局比全體中位快了近一分鐘。在大亂鬥，把兵線和塔滾起來，比把人頭滾起來收得快。吉茵珂絲是榜上唯一的連殺大戶（第 20 名）：她是少數兩邊都佔的例外，不是規則。</p>
+<h2>連殺王，卻贏得慢</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="圖奇"><div class="art-meta"><div class="nm">圖奇</div><div class="sb">連殺榜 #21 · 勝局中位 18.1 分 · 82,953 場</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="剛普朗克"><div class="art-meta"><div class="nm">剛普朗克</div><div class="sb">連殺榜 #9 · 勝局中位 17.9 分 · 70,797 場</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="劫"><div class="art-meta"><div class="nm">劫</div><div class="sb">連殺榜 #18 · 勝局中位 17.9 分 · 78,616 場</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="塔隆"><div class="art-meta"><div class="nm">塔隆</div><div class="sb">連殺榜 #22 · 勝局中位 17.9 分 · 40,747 場</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="梅爾"><div class="art-meta"><div class="nm">梅爾</div><div class="sb">連殺榜 #3 · 勝局中位 17.8 分 · 85,538 場</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
+<p>刺客和收割型射手農得出大連殺，但連殺沒有轉換成節奏 —— 他們的勝局反而拖得比平均長。最極端的是<b>薩科</b>：連殺不低（前 1/4），卻是全英雄倒數第 2 慢（+54s），而且等一下他還會在「最後期」榜再出現一次。</p>
+<h2>零連殺、最快關門的輔助</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="塔里克"><div class="art-meta"><div class="nm">塔里克</div><div class="sb">連殺榜 #166／173 · 勝局中位 17.1 分 · 21,564 場</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="索娜"><div class="art-meta"><div class="nm">索娜</div><div class="sb">連殺榜 #162 · 勝局中位 17.1 分 · 55,464 場</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="埃爾文"><div class="art-meta"><div class="nm">埃爾文</div><div class="sb">連殺榜 #171 · 勝局中位 17.1 分 · 20,796 場</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="露璐"><div class="art-meta"><div class="nm">露璐</div><div class="sb">連殺榜 #172 · 勝局中位 17.3 分 · 39,842 場</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="珍娜"><div class="art-meta"><div class="nm">珍娜</div><div class="sb">連殺榜 #169 · 勝局中位 17.4 分 · 41,546 場</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
+<p>這排是整篇的關鍵證據：塔里克、索娜、埃爾文的連殺全在倒數 12 名內，但他們的勝局收得比全體快 —— 因為<b>被輔助餵起來的隊伍會快速關門，連殺記在隊友頭上</b>。「滾雪球」是隊伍的事，連殺榜只記個人。</p>
+<h2>那，真正的前期怪／後期怪是誰？</h2>
+<p>比較乾淨的量法是把兩頭直接拉開：<b>左邊是 16 分內結束的局的勝率，右邊是拖過 22 分的局的勝率</b>（中間段刻意丟掉）。</p>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="鄂爾"><div class="art-meta"><div class="nm">鄂爾</div><div class="sb">41.0% → 57.1% · 22,905 場</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="薩科"><div class="art-meta"><div class="nm">薩科</div><div class="sb">38.0% → 51.0% · 40,300 場</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="圖奇"><div class="art-meta"><div class="nm">圖奇</div><div class="sb">41.6% → 54.4% · 38,266 場</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="瑟菈紛"><div class="art-meta"><div class="nm">瑟菈紛</div><div class="sb">63.4% → 50.1% · 40,015 場</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="赫威"><div class="art-meta"><div class="nm">赫威</div><div class="sb">61.8% → 49.3% · 27,456 場</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="賽恩"><div class="art-meta"><div class="nm">賽恩</div><div class="sb">63.6% → 51.9% · 31,327 場</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
+<p><b>鄂爾</b>是全場最大爬坡：他的神器升級等於白送隊友上千金的裝備屬性，快局 41% 慘輸、拖過 22 分變 57.1%，而且他同時是全場第 4 慢收官（+48s）—— 標準的「拖到後期才贏」。經典模式的大型資料集（8M 場、鑽石以上）也把鄂爾標成平手局爬坡最猛的英雄之一，兩個完全不同的資料集對到同一隻。<b>瑟菈紛</b>則是最大前期怪：16 分內結束的局她贏將近三分之二（63.4%），拖過 22 分就掉回五五波。而<b>薩科、圖奇</b>在這張榜再次出現 —— 連殺農得多、贏得慢、越後期越強，三個訊號指向同一個結論：他們的連殺是「拖出來的」，不是「滾出來的」。</p>
+<h2>一個誠實的但書</h2>
+<p>收官速度的效果量<b>不大</b>：全英雄的勝局中位只在全體中位 ±1 分鐘內晃 —— 時長是 10 個人共同決定的，單一英雄的影響天生會被稀釋。它也是<b>描述性</b>統計：長局不一定是他「拖」出來的，可能只是勢均力敵的局才拖得長。另外，前後期傾向會隨版本窗口變：卡薩丁上個窗口讀起來近乎平坦，這個窗口是 −3.3pp 的輕微前期傾向 —— 整條軸跨版本很穩（r≈0.86–0.93），但中期尖峰型的個別英雄要小心讀。</p>
+<p>資料：本機 games.db · queue 2400（Mayhem）· 版本 16.11–16.13 · 951,931 場（收集器邊跑邊寫，兩次掃描差 38 場）· 每英雄勝、敗局各 ≥500 場 · 收官速度＝勝局中位時長 − 全體勝局中位 17.6 分 · 連殺軸 vs 收官速度 Spearman ρ=−0.03 · 前後期＝WR(≥22 分) − WR(≤16 分)。</p>`,
+            body_en: `<p>The previous champion-map article used an X axis called "snowball" — a weighted average of largest killing spree and multi-kill. We buried a caveat back then: "snowball measures kill bursts, it does not directly mean ending games early." This time we put that sentence on trial, and the caveat turned out to be the whole story.</p>
+<p>First, define win tempo:</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>Win tempo = median duration of that champion's WINS − global median win (17.6 min)</b></p>
+<p>Negative = wins faster than average. If sprees really rolled into early wins, the spree axis and win tempo should correlate strongly. Measured: <b>Spearman rho = −0.03</b> (n=173) — <b>no relationship at all</b>. The spree axis measures personal kill highlights; closing a game is a team property. The data says these are two independent skills.</p>
+<h2>Who actually closes games fast</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="Yorick"><div class="art-meta"><div class="nm">Yorick</div><div class="sb">median win 16.7 min · 42% closed by 16 min · 16,413 games</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="Yasuo"><div class="art-meta"><div class="nm">Yasuo</div><div class="sb">median win 16.9 min · 40% by 16 min · 80,180 games</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="Jinx"><div class="art-meta"><div class="nm">Jinx</div><div class="sb">median win 16.9 min · 40% by 16 min · 94,147 games</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="Gwen"><div class="art-meta"><div class="nm">Gwen</div><div class="sb">median win 17.0 min · 39% by 16 min · 28,063 games</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="Sylas"><div class="art-meta"><div class="nm">Sylas</div><div class="sb">median win 17.0 min · 38% by 16 min · 59,989 games</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
+<p>The fastest closer is <b>Yorick</b> — spree rank 147. He pushes towers, not kill feeds, and his wins land almost a full minute under the global median. In ARAM, snowballing waves and towers closes games faster than snowballing kills. Jinx is the one big spree champ on the list (rank 20): she is the exception that holds both ends, not the rule.</p>
+<h2>Spree kings who win slow</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">spree rank #21 · median win 18.1 min · 82,953 games</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="Gangplank"><div class="art-meta"><div class="nm">Gangplank</div><div class="sb">spree rank #9 · median win 17.9 min · 70,797 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="Zed"><div class="art-meta"><div class="nm">Zed</div><div class="sb">spree rank #18 · median win 17.9 min · 78,616 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="Talon"><div class="art-meta"><div class="nm">Talon</div><div class="sb">spree rank #22 · median win 17.9 min · 40,747 games</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="Mel"><div class="art-meta"><div class="nm">Mel</div><div class="sb">spree rank #3 · median win 17.8 min · 85,538 games</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
+<p>Assassins and cleanup carries farm huge sprees, but the sprees do not convert into tempo — their wins actually run longer than average. The extreme case is <b>Shaco</b>: top-quarter sprees, yet the 2nd-slowest closer of all champions (+54s) — and he is about to show up again on the late-game board below.</p>
+<h2>Zero sprees, fastest closers: the supports</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="Taric"><div class="art-meta"><div class="nm">Taric</div><div class="sb">spree rank #166 of 173 · median win 17.1 min · 21,564 games</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="Sona"><div class="art-meta"><div class="nm">Sona</div><div class="sb">spree rank #162 · median win 17.1 min · 55,464 games</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="Ivern"><div class="art-meta"><div class="nm">Ivern</div><div class="sb">spree rank #171 · median win 17.1 min · 20,796 games</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">spree rank #172 · median win 17.3 min · 39,842 games</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="Janna"><div class="art-meta"><div class="nm">Janna</div><div class="sb">spree rank #169 · median win 17.4 min · 41,546 games</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
+<p>This row is the key evidence: Taric, Sona and Ivern all sit in the bottom 12 of the spree board, yet their wins close faster than average — because <b>a team fed by its enchanter closes fast while the kills land on someone else's scoreboard</b>. Snowballing is a team property; the spree board only credits individuals.</p>
+<h2>So who are the real early and late champions?</h2>
+<p>The cleaner measure pulls the two ends apart directly: <b>the left number is the win rate in games that end by 16 minutes, the right is in games past 22 minutes</b> (the middle is dropped on purpose).</p>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="Ornn"><div class="art-meta"><div class="nm">Ornn</div><div class="sb">41.0% → 57.1% · 22,905 games</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="Shaco"><div class="art-meta"><div class="nm">Shaco</div><div class="sb">38.0% → 51.0% · 40,300 games</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">41.6% → 54.4% · 38,266 games</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="Seraphine"><div class="art-meta"><div class="nm">Seraphine</div><div class="sb">63.4% → 50.1% · 40,015 games</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="Hwei"><div class="art-meta"><div class="nm">Hwei</div><div class="sb">61.8% → 49.3% · 27,456 games</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">63.6% → 51.9% · 31,327 games</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
+<p><b>Ornn</b> is the biggest climber in the game: his Masterwork upgrades hand teammates a thousand gold of free item stats, so he loses short games hard (41%) and wins long ones (57.1%) — and he is also the 4th-slowest closer (+48s). A classic "wins by dragging it out" profile. The big Summoner's Rift dataset (8M games, Diamond+) also flags Ornn as one of the strongest even-state climbers — two completely different datasets landing on the same champion. <b>Seraphine</b> is the biggest early-game monster: she wins nearly two thirds (63.4%) of games that end by 16 minutes, then falls back to a coin flip past 22. And <b>Shaco and Twitch</b> reappear here — big sprees, slow wins, stronger the later it gets. Three signals, one conclusion: their sprees are farmed in long games, not rolled into fast ones.</p>
+<h2>One honest caveat</h2>
+<p>The win-tempo effect is <b>small</b>: every champion's median win sits within about ±1 minute of the global median — game length is decided by ten players, so any one champion's influence is diluted by construction. It is also <b>descriptive</b>: a long game is not necessarily one he dragged out; even matchups simply run longer. And the early/late tilt shifts with the patch window: Kassadin read as nearly flat in the previous window and −3.3pp mildly early in this one — the axis is very stable across patches overall (r≈0.86–0.93), but read individual mid-game-spike champions with care.</p>
+<p>Data: local games.db · queue 2400 (Mayhem) · patches 16.11–16.13 · 951,931 games (collector writes while we scan; the two passes differ by 38 games) · ≥500 wins and ≥500 losses per champion · win tempo = median win duration − global median win 17.6 min · spree axis vs win tempo Spearman rho = −0.03 · early/late = WR(≥22 min) − WR(≤16 min).</p>`,
+        },
+        {
             id: 'skill-scaling',
             date: '2026-06-28',
             kicker_zh: '操作係數', kicker_en: 'Skill-scaling',
@@ -559,8 +644,10 @@
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · 英雄 lift ${lift} · 類型平均 ${avg} · WR ${wr} · ${games}場`,
             setMeta: (lift, avg, wr, games) => `英雄 ${lift} · 類型 ${avg} · WR ${wr} · ${games}場`,
             itemBuildTitle: (name, pick, lift) => `${name} 選取率 ${pick} 勝率${lift}`,
+            itemBuildCardTitle: (itemName, wr, pick, lift, games) => `${itemName} · WR ${wr} · 選取率 ${pick} · 勝率 ${lift} · ${games} 場`,
             itemClusterCardTitle: (name, wr, pick, lift, games, confirm, lane) => `${name}〔${lane}〕· 勝率 ${wr}（${lift}）· 選取率 ${pick} · 該選擇 ${games} 場 · 完整六件確認 ${confirm} 場`,
-            itemClusterLanes: { popular: { label: '熱門' }, winrate: { label: '高勝率' }, combined: { label: '綜合' } },
+            // Not map lanes — tags for why this option is highlighted in the build route.
+            itemClusterLanes: { popular: { label: '最常出' }, winrate: { label: '最高勝率' }, combined: { label: '綜合' } },
             itemClusterPick: (pick) => `${pick} 選取`,
             itemClusterGames: (games) => `${games} 場`,
             coreBuildShare: (pick) => `${pick} 選取率`,
@@ -569,6 +656,13 @@
             coreBuildTail: '常見後續',
             coreBuildTailTip: '這套常一起出、但選取率與勝率都未達上方「搭配裝備」門檻的裝備',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · 勝率 ${wr}（${lift}）· 選取率 ${pick} · ${games} 場`,
+            itemTipWr: '勝率',
+            itemTipPick: '選取率',
+            itemTipLift: '相對基準',
+            itemTipGames: '場次',
+            itemTipGold: '金',
+            itemTipConfirm: '完整六件確認',
+            itemTipLane: '標記',
             expected: value => ` · 預期 ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · 推薦度 ${fit} · 搭配 ${pairFit} · 陣容 ${comp} · ${confidence}`,
             leastFitLabel: '最不適配',
@@ -584,6 +678,14 @@
             augFilterAllTip: '清除分類，顯示全部增幅',
             augFilterNewTip: patch => `${patch} 新推出的增幅`,
             augFilterEmpty: '此分類沒有符合的增幅',
+            augChampsHint: '點擊查看適配英雄',
+            augChampsLiftHead: 'Lift 最高',
+            augChampsLiftSub: '拿了之後相對自身平均勝率提升最多',
+            augChampsPickHead: '選取率最高',
+            augChampsPickSub: '同稀有度出現時最常被選走',
+            augChampsGames: games => `${games} 場`,
+            augChampsEmpty: '樣本不足',
+            augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場，排序採保守下界`,
             overviewWrLabel: '綜合勝率',
             overviewGames: games => `${games} 場`,
             compFitTitle: '適配陣型',
@@ -666,8 +768,10 @@
             setTitle: (name, res, lift, avg, wr, games) => `${name} · residual ${res} · champion lift ${lift} · type average ${avg} · WR ${wr} · ${games} games`,
             setMeta: (lift, avg, wr, games) => `champ ${lift} · type ${avg} · WR ${wr} · ${games} games`,
             itemBuildTitle: (name, pick, lift) => `${name} pick ${pick}, WR ${lift}`,
+            itemBuildCardTitle: (itemName, wr, pick, lift, games) => `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`,
             itemClusterCardTitle: (name, wr, pick, lift, games, confirm, lane) => `${name} [${lane}] · WR ${wr} (${lift}) · pick ${pick} · ${games} core games · ${confirm} full-build confirmations`,
-            itemClusterLanes: { popular: { label: 'Popular' }, winrate: { label: 'High WR' }, combined: { label: 'Balanced' } },
+            // Not map lanes — tags for why this option is highlighted in the build route.
+            itemClusterLanes: { popular: { label: 'Most picked' }, winrate: { label: 'Best WR' }, combined: { label: 'Balanced' } },
             itemClusterPick: (pick) => `${pick} pick`,
             itemClusterGames: (games) => `${games}g`,
             coreBuildShare: (pick) => `${pick} pick`,
@@ -676,6 +780,13 @@
             coreBuildTail: 'Also common',
             coreBuildTailTip: 'Built with this core but below the pick-rate / win-rate bar of the items above',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
+            itemTipWr: 'Win rate',
+            itemTipPick: 'Pick rate',
+            itemTipLift: 'vs baseline',
+            itemTipGames: 'Games',
+            itemTipGold: 'gold',
+            itemTipConfirm: 'Full-build confirms',
+            itemTipLane: 'Highlight',
             expected: value => ` · expected ${value}`,
             recRowTitle: (name, fit, pairFit, comp, confidence) => `${name} · fit ${fit} · pair ${pairFit} · comp ${comp} · ${confidence}`,
             leastFitLabel: 'Least fit',
@@ -691,6 +802,14 @@
             augFilterAllTip: 'Clear categories — show every augment',
             augFilterNewTip: patch => `Augments introduced in ${patch}`,
             augFilterEmpty: 'No augments match this category',
+            augChampsHint: 'Click to see who fits it best',
+            augChampsLiftHead: 'Highest lift',
+            augChampsLiftSub: "biggest WR gain vs the champion's own average",
+            augChampsPickHead: 'Most picked',
+            augChampsPickSub: 'taken most often when offered at this rarity',
+            augChampsGames: games => `${games} games`,
+            augChampsEmpty: 'Not enough data',
+            augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games, ranked by a conservative lower bound`,
             overviewWrLabel: 'Overall WR',
             overviewGames: games => `${games} games`,
             compFitTitle: 'Comp fit',
@@ -888,6 +1007,300 @@
         return entry.name_zh || entry.name || entry.name_en || '';
     }
 
+    // ----- Rich item hover tooltips (LoL-style floating card) -----
+    // Source markup is rendered inside each host as .item-tip-src (display:none).
+    // A single fixed #item-float-tip clones that HTML on hover/focus so parent
+    // overflow:auto / overflow:hidden carousels never clip the popup.
+    function itemCatalogEntry(id) {
+        if (id === null || id === undefined || id === '') return null;
+        const m = (DATA.itemLut || {})[String(id)];
+        if (!m) return null;
+        const ver = DATA.ddv || '';
+        return {
+            id: String(id),
+            name_zh: m.z || '',
+            name_en: m.e || '',
+            desc_zh: m.dz || '',
+            desc_en: m.de || '',
+            price: Number(m.p || 0) || 0,
+            icon: ver
+                ? ('https://ddragon.leagueoflegends.com/cdn/' + ver + '/img/item/' + id + '.png')
+                : '',
+        };
+    }
+
+    function itemDisplayName(item) {
+        if (!item) return '';
+        if (item.name_zh || item.name_en || item.name) {
+            return currentLang === 'en'
+                ? (item.name_en || item.name || item.name_zh || '')
+                : (item.name_zh || item.name || item.name_en || '');
+        }
+        const cat = itemCatalogEntry(item.id);
+        if (!cat) return item.id ? ('#' + item.id) : '';
+        return currentLang === 'en'
+            ? (cat.name_en || cat.name_zh || '')
+            : (cat.name_zh || cat.name_en || '');
+    }
+
+    function itemDescription(item) {
+        if (!item) return '';
+        const direct = currentLang === 'en'
+            ? (item.desc_en || item.desc_zh || item.desc || '')
+            : (item.desc_zh || item.desc_en || item.desc || '');
+        if (direct) return String(direct);
+        const cat = itemCatalogEntry(item.id);
+        if (!cat) return '';
+        return currentLang === 'en'
+            ? (cat.desc_en || cat.desc_zh || '')
+            : (cat.desc_zh || cat.desc_en || '');
+    }
+
+    function itemGold(item) {
+        if (!item) return 0;
+        const direct = Number(item.price || item.price_total || 0);
+        if (direct > 0) return direct;
+        const cat = itemCatalogEntry(item.id);
+        return cat ? (cat.price || 0) : 0;
+    }
+
+    function itemIconUrl(item) {
+        if (!item) return '';
+        if (item.icon) return String(item.icon);
+        const cat = itemCatalogEntry(item.id);
+        return cat ? (cat.icon || '') : '';
+    }
+
+    function liftToneClass(lift) {
+        const v = Number(lift || 0);
+        if (v > 0.005) return 'is-good';
+        if (v < -0.005) return 'is-bad';
+        return 'is-even';
+    }
+
+    function formatItemDescHtml(desc) {
+        const text = String(desc || '').trim();
+        if (!text) return '';
+        // CommunityDragon plain text uses newlines between stat lines and passives.
+        return text
+            .split(/\n+/)
+            .map(line => line.trim())
+            .filter(Boolean)
+            .map(line => `<div class="item-tip-line">${escHtml(line)}</div>`)
+            .join('');
+    }
+
+    function buildItemTipHtml(opts = {}) {
+        const copy = tr();
+        const name = opts.name || '';
+        const items = Array.isArray(opts.items) ? opts.items.filter(Boolean) : [];
+        const iconUrls = (opts.icons && opts.icons.length)
+            ? opts.icons
+            : items.map(itemIconUrl).filter(Boolean);
+        const iconsHtml = iconUrls.length
+            ? `<div class="item-tip-icons">${iconUrls.map(src => (
+                `<img class="item-tip-icon" src="${escHtml(src)}" alt="" loading="lazy">`
+            )).join('')}</div>`
+            : '';
+
+        // Single-item gold; multi-item builds skip a combined price (ambiguous).
+        let goldHtml = '';
+        if (items.length === 1) {
+            const gold = itemGold(items[0]);
+            if (gold > 0) {
+                goldHtml = `<span class="item-tip-gold">${gold.toLocaleString()} ${escHtml(copy.itemTipGold || 'gold')}</span>`;
+            }
+        } else if (!items.length && opts.price > 0) {
+            goldHtml = `<span class="item-tip-gold">${Number(opts.price).toLocaleString()} ${escHtml(copy.itemTipGold || 'gold')}</span>`;
+        }
+        const subtitleHtml = opts.subtitle
+            ? `<div class="item-tip-sub">${escHtml(opts.subtitle)}</div>`
+            : '';
+
+        // Descriptions: full text for 1 item, compact name+desc for 2, names only beyond.
+        let bodyHtml = '';
+        if (items.length === 1) {
+            const descHtml = formatItemDescHtml(itemDescription(items[0]));
+            if (descHtml) bodyHtml = `<div class="item-tip-desc">${descHtml}</div>`;
+        } else if (items.length === 2) {
+            bodyHtml = `<div class="item-tip-parts">${items.map(it => {
+                const nm = itemDisplayName(it);
+                const descHtml = formatItemDescHtml(itemDescription(it));
+                return `<div class="item-tip-part">
+                    <div class="item-tip-part-name">${escHtml(nm)}</div>
+                    ${descHtml ? `<div class="item-tip-desc">${descHtml}</div>` : ''}
+                </div>`;
+            }).join('')}</div>`;
+        } else if (items.length > 2) {
+            const names = items.map(itemDisplayName).filter(Boolean);
+            if (names.length) {
+                bodyHtml = `<div class="item-tip-parts-list">${names.map(nm => (
+                    `<span class="item-tip-chip">${escHtml(nm)}</span>`
+                )).join('')}</div>`;
+            }
+        } else if (opts.desc) {
+            const descHtml = formatItemDescHtml(opts.desc);
+            if (descHtml) bodyHtml = `<div class="item-tip-desc">${descHtml}</div>`;
+        }
+
+        const rows = [];
+        if (opts.wr != null && opts.wr !== '') {
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
+        }
+        if (opts.pick != null && opts.pick !== '') {
+            const pickHeat = 'pick-' + pickTier(Number(opts.pickRate != null ? opts.pickRate : 0));
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
+        }
+        if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipLift || 'Lift')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.liftLabel))}</b></div>`);
+        }
+        if (opts.games != null && opts.games !== '') {
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipGames || 'Games')}</span><b>${escHtml(String(opts.games))}</b></div>`);
+        }
+        if (opts.confirm != null && opts.confirm !== '' && Number(opts.confirm) > 0) {
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipConfirm || 'Confirm')}</span><b>${escHtml(String(opts.confirm))}</b></div>`);
+        }
+        if (opts.lane) {
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipLane || 'Lane')}</span><b>${escHtml(String(opts.lane))}</b></div>`);
+        }
+        (opts.extraRows || []).forEach(row => {
+            if (!row || !row.label) return;
+            const cls = row.cls ? ` class="${escHtml(row.cls)}"` : '';
+            rows.push(`<div class="item-tip-row"><span>${escHtml(row.label)}</span><b${cls}>${escHtml(String(row.value ?? ''))}</b></div>`);
+        });
+        const statsHtml = rows.length
+            ? `<div class="item-tip-stats">${rows.join('')}</div>`
+            : '';
+        const noteHtml = opts.note
+            ? `<div class="item-tip-note">${escHtml(opts.note)}</div>`
+            : '';
+
+        return `
+            <div class="item-tip-card">
+                <div class="item-tip-head">
+                    ${iconsHtml}
+                    <div class="item-tip-head-text">
+                        <div class="item-tip-name">${escHtml(name)}</div>
+                        ${subtitleHtml}
+                        ${goldHtml}
+                    </div>
+                </div>
+                ${bodyHtml}
+                ${statsHtml}
+                ${noteHtml}
+            </div>
+        `;
+    }
+
+    function itemTipSource(html) {
+        // Hidden source node; floating layer clones this on hover/focus.
+        return `<div class="item-tip-src" hidden>${html}</div>`;
+    }
+
+    let _itemFloatTipEl = null;
+    let _itemFloatTipHideTimer = 0;
+    function ensureItemFloatTip() {
+        if (_itemFloatTipEl && document.body.contains(_itemFloatTipEl)) return _itemFloatTipEl;
+        const el = document.createElement('div');
+        el.id = 'item-float-tip';
+        el.className = 'item-float-tip';
+        el.setAttribute('role', 'tooltip');
+        el.hidden = true;
+        document.body.appendChild(el);
+        _itemFloatTipEl = el;
+        return el;
+    }
+
+    function hideItemFloatTip() {
+        if (_itemFloatTipHideTimer) {
+            clearTimeout(_itemFloatTipHideTimer);
+            _itemFloatTipHideTimer = 0;
+        }
+        const el = _itemFloatTipEl || document.getElementById('item-float-tip');
+        if (!el) return;
+        el.hidden = true;
+        el.classList.remove('is-visible', 'flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.style.maxHeight = '';
+        el.innerHTML = '';
+    }
+
+    function positionItemFloatTip(anchor) {
+        const el = ensureItemFloatTip();
+        if (!anchor || el.hidden) return;
+        const gap = 10;
+        const margin = 8;
+        const rect = anchor.getBoundingClientRect();
+        const vw = window.innerWidth || document.documentElement.clientWidth || 0;
+        const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+
+        // Natural content height first — no forced scrollbar for short tips.
+        el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.style.maxHeight = '';
+        el.style.left = '0px';
+        el.style.top = '0px';
+
+        let tipRect = el.getBoundingClientRect();
+        const maxH = Math.max(120, vh - margin * 2);
+        // Only clamp + scroll when content genuinely exceeds the viewport.
+        if (tipRect.height > maxH) {
+            el.style.maxHeight = maxH + 'px';
+            el.classList.add('is-scrollable');
+            tipRect = el.getBoundingClientRect();
+        }
+
+        let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+        left = Math.max(margin, Math.min(left, vw - tipRect.width - margin));
+
+        let top = rect.top - tipRect.height - gap;
+        let flipBelow = false;
+        if (top < margin) {
+            top = rect.bottom + gap;
+            flipBelow = true;
+        }
+        if (top + tipRect.height > vh - margin) {
+            // Prefer whichever side has more room.
+            const spaceAbove = rect.top - margin;
+            const spaceBelow = vh - rect.bottom - margin;
+            if (spaceBelow > spaceAbove) {
+                top = Math.min(rect.bottom + gap, vh - tipRect.height - margin);
+                flipBelow = true;
+            } else {
+                top = Math.max(margin, rect.top - tipRect.height - gap);
+                flipBelow = false;
+            }
+        }
+
+        el.style.left = Math.round(left) + 'px';
+        el.style.top = Math.round(top) + 'px';
+        el.classList.toggle('flip-below', flipBelow);
+        // Arrow horizontal alignment toward the anchor center.
+        const arrowX = rect.left + rect.width / 2 - left;
+        el.style.setProperty('--item-tip-arrow-x', Math.round(arrowX) + 'px');
+    }
+
+    function showItemFloatTip(anchor) {
+        if (!anchor) return;
+        const src = anchor.querySelector('.item-tip-src');
+        if (!src) return;
+        if (_itemFloatTipHideTimer) {
+            clearTimeout(_itemFloatTipHideTimer);
+            _itemFloatTipHideTimer = 0;
+        }
+        const el = ensureItemFloatTip();
+        el.innerHTML = src.innerHTML;
+        el.hidden = false;
+        el.classList.add('is-visible');
+        positionItemFloatTip(anchor);
+    }
+
+    function scheduleHideItemFloatTip() {
+        if (_itemFloatTipHideTimer) clearTimeout(_itemFloatTipHideTimer);
+        _itemFloatTipHideTimer = setTimeout(() => {
+            _itemFloatTipHideTimer = 0;
+            hideItemFloatTip();
+        }, 80);
+    }
+
     function compactSearchText(value) {
         return String(value || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '');
     }
@@ -955,21 +1368,12 @@
             aug?.setSlug,
             entry.id,
         ].filter(Boolean).join(' ');
-        const titleAttr = copy.augTitle(name, setName, pct(entry.wr), entry.g, desc);
-        const tooltip = `
-            <div class="aug-tip">
-                <div class="aug-tip-name">${escHtml(name)}</div>
-                ${setName ? `<div class="aug-tip-set">${copy.augSetLabel}: ${escHtml(setName)}</div>` : ''}
-                ${desc ? `<div class="aug-tip-desc">${escHtml(desc)}</div>` : ''}
-                <div class="aug-tip-stat">${copy.augTipStat(pct(entry.wr), signed(entry.lift), entry.g)}</div>
-            </div>
-        `;
-        // Augment card carries its own ARIA semantics so screen readers and
-        // keyboard users get the same info hover tooltip shows.
         // The 增幅榜 board's pick is "average appearances per game" (counts
         // multiplicity), a different scale than the champion-relative pick the
         // per-champion cards carry, so the board uses its own 熱門 cut + heat ramp.
         const onBoard = !!(opts && opts.board);
+        // Augment card carries its own ARIA semantics so screen readers and
+        // keyboard users get the same info hover tooltip shows.
         const pickRate = Number(entry.pick || 0);
         const pickPct = pct(pickRate);
         const isHot = pickRate >= (onBoard ? AUG_BOARD_HOT_PICK : AUG_HOT_PICK);
@@ -982,20 +1386,37 @@
         const rawLine = (currentLang === 'en' ? 'raw ' : '原始 ') + pct(rawWrVal) + ' · n=' + entry.g;
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc)
             + ' · ' + rawLine;
+        // Shared rich float tip (same card language as items).
+        const tipHtml = buildItemTipHtml({
+            name,
+            icons: icon ? [icon] : [],
+            subtitle: setName
+                ? `${copy.augSetLabel}: ${setName}`
+                : '',
+            desc,
+            wr: pct(entry.wr),
+            pick: pickPct,
+            pickRate,
+            lift: entry.lift,
+            liftLabel: signed(entry.lift),
+            games: entry.g,
+            note: onBoard ? copy.augChampsHint : '',
+        });
+        // Row order: icon → name (under icon) → WR / raw / pick.
         return `
-            <div class="aug ${kind} rarity-${rarity}"
+            <div class="aug ${kind} rarity-${rarity} has-item-tip"
                  tabindex="0"
+                 data-aug-id="${escHtml(String(entry.id))}"
                  data-match-text="${escHtml(matchText)}"
                  data-cats="${escHtml(cats)}"
-                 aria-label="${escHtml(ariaLabel)}"
-                 title="${escHtml(titleAttr)}">
+                 aria-label="${escHtml(ariaLabel)}">
                 ${hotBadge}
-                ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div style="width:48px;height:48px;margin:0 auto 4px;background:#2a3142;border-radius:6px"></div>'}
-                <div class="aname">${escHtml(name)}</div>
+                ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
+                <div class="aname"><span>${escHtml(name)}</span></div>
                 <div class="awr">${pct(entry.wr)}</div>
                 <div class="araw">${escHtml(rawLine)}</div>
                 <div class="alift pick-${augTierCls}">${copy.augPickLabel(pickPct)}</div>
-                ${tooltip}
+                ${itemTipSource(tipHtml)}
             </div>
         `;
     }
@@ -1205,6 +1626,9 @@
         });
         host.innerHTML = blocks.join('');
         applyAugTierFilters();
+        // Language toggle re-renders the board; keep an open champion popup in
+        // sync (no-op when closed).
+        renderAugChamps();
     }
     function applyAugTierFilters() {
         const host = document.getElementById('aug-tier-host');
@@ -1256,6 +1680,140 @@
             else augTierCats.add(cat);
             applyAugTierFilters();
             return;
+        }
+    });
+
+    // ----- 增幅榜: click an augment card -> which champions it fits best -----
+    // The payload's champ.top buckets ship the FULL ranked augment list per
+    // champion (build_champ_augment_picks keeps the whole bucket for the
+    // carousel), so inverting them client-side yields every champion×augment
+    // pair above the min-games floor — no extra payload needed.
+    let augChampsId = null;
+    let _augChampIdx = null;
+    function augChampIndex() {
+        if (_augChampIdx) return _augChampIdx;
+        const idx = new Map();
+        for (const cid in DATA.champs) {
+            const buckets = DATA.champs[cid].top || {};
+            for (const rar in buckets) {
+                (buckets[rar] || []).forEach(e => {
+                    const key = Number(e.id);
+                    let arr = idx.get(key);
+                    if (!arr) idx.set(key, arr = []);
+                    arr.push({
+                        cid,
+                        g: Number(e.g) || 0,
+                        wr: Number(e.wr) || 0,
+                        lift: Number(e.lift) || 0,
+                        // score = conservative LCB lift + small pick-stability
+                        // term (the same ranking the champion carousel uses).
+                        score: Number(e.score != null ? e.score : e.lift) || 0,
+                        pick: Number(e.pick) || 0,
+                    });
+                });
+            }
+        }
+        _augChampIdx = idx;
+        return idx;
+    }
+    const AUG_CHAMP_LIST_LIMIT = 8;
+    function buildAugChampRow(r, mode) {
+        const info = DATA.champs[r.cid] || {};
+        const val = mode === 'lift'
+            ? `<span class="augch-val ${r.lift >= 0 ? 'up' : 'down'}">${signed(r.lift)}</span>`
+            : `<span class="augch-val">${pct(r.pick)}</span>`;
+        const sub = mode === 'lift'
+            ? `WR ${pct(r.wr)} · n=${fmtInt(r.g)}`
+            : `n=${fmtInt(r.g)}`;
+        return `
+            <button type="button" class="augch-row" data-cid="${escHtml(String(r.cid))}">
+                ${info.image ? `<img loading="lazy" src="${info.image}" alt="">` : ''}
+                <span class="augch-nm">${escHtml(champName(info))}</span>
+                <span class="augch-meta">${escHtml(sub)}</span>
+                ${val}
+            </button>
+        `;
+    }
+    function renderAugChamps() {
+        const view = document.getElementById('view-augments');
+        if (!view) return;
+        let host = document.getElementById('augch-host');
+        const aug = augChampsId != null ? DATA.augs[augChampsId] : null;
+        document.body.classList.toggle('augch-open', Boolean(aug));
+        if (!aug) { if (host) host.remove(); return; }
+        if (!host) {
+            // Lives inside the augments view so its z-index resolves in the
+            // same stacking context as the view (see the veil comment in CSS).
+            host = document.createElement('div');
+            host.id = 'augch-host';
+            view.appendChild(host);
+        }
+        const copy = tr();
+        const rows = augChampIndex().get(Number(augChampsId)) || [];
+        const byLift = rows.slice().sort((a, b) => (b.score - a.score) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
+        const byPick = rows.slice().sort((a, b) => (b.pick - a.pick) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
+        const section = (head, subText, list, mode) => `
+            <div class="augch-col">
+                <div class="augch-colhead">${escHtml(head)}</div>
+                <div class="augch-colsub">${escHtml(subText)}</div>
+                ${list.length
+                    ? list.map(r => buildAugChampRow(r, mode)).join('')
+                    : `<div class="augch-empty">${escHtml(copy.augChampsEmpty)}</div>`}
+            </div>
+        `;
+        const setName = augSetName(aug);
+        const rarityLabel = copy.rarityLabels[aug.rarity] || '';
+        const statBits = [];
+        if (aug.wr != null) statBits.push(`WR ${pct(aug.wr)}`);
+        if (aug.lift != null) statBits.push(signed(aug.lift));
+        if (aug.g != null) statBits.push(copy.augChampsGames(fmtInt(aug.g)));
+        host.innerHTML = `
+            <div class="augch-card rarity-${escHtml(aug.rarity || '')}" role="dialog" aria-modal="true" aria-labelledby="augch-title">
+                <button type="button" class="augch-close" id="augch-close" aria-label="${escHtml(copy.updatesClose || 'close')}">×</button>
+                <div class="augch-head">
+                    ${aug.icon ? `<img class="augch-icon" src="${aug.icon}" alt="">` : ''}
+                    <div>
+                        <div class="augch-name" id="augch-title">${escHtml(augName(aug))}</div>
+                        <div class="augch-sub">${escHtml([rarityLabel, setName].filter(Boolean).join(' · '))}</div>
+                        <div class="augch-stat">${escHtml(statBits.join(' · '))}</div>
+                    </div>
+                </div>
+                <div class="augch-cols">
+                    ${section(copy.augChampsLiftHead, copy.augChampsLiftSub, byLift, 'lift')}
+                    ${section(copy.augChampsPickHead, copy.augChampsPickSub, byPick, 'pick')}
+                </div>
+                <div class="augch-foot">${escHtml(copy.augChampsFoot(DATA.min_games_per_pair || 15))}</div>
+            </div>
+        `;
+        const closeBtn = host.querySelector('#augch-close');
+        if (closeBtn) closeBtn.focus({ preventScroll: true });
+    }
+    function closeAugChamps() {
+        augChampsId = null;
+        renderAugChamps();
+    }
+    document.addEventListener('click', (ev) => {
+        if (augChampsId != null) {
+            if (ev.target.closest('#augch-close')) { closeAugChamps(); return; }
+            const row = ev.target.closest('.augch-row');
+            if (row) {
+                const cid = row.getAttribute('data-cid');
+                closeAugChamps();
+                openDetailByCid(cid);
+                trackEvent('aug_champs_champ_click', { champion_id: cid });
+                return;
+            }
+            const hostEl = document.getElementById('augch-host');
+            // Tap on the backdrop (the host itself) closes, same as the mobile
+            // champion-detail sheet.
+            if (hostEl && ev.target === hostEl) { closeAugChamps(); return; }
+            if (hostEl && hostEl.contains(ev.target)) return;
+        }
+        const card = ev.target.closest('#view-augments .aug[data-aug-id]');
+        if (card) {
+            augChampsId = card.getAttribute('data-aug-id');
+            renderAugChamps();
+            trackEvent('aug_champs_open', { augment_id: augChampsId });
         }
     });
 
@@ -1368,16 +1926,22 @@
                 `).join('')}</span>`
                 : '';
             if (pairItems.length) {
+                const tipHtml = buildItemTipHtml({
+                    name,
+                    items: pairItems.slice(0, 2),
+                    wr: entry.wr != null ? pct(entry.wr || 0) : '',
+                    pick: pct(entry.pick || 0),
+                    pickRate: Number(entry.pick || 0),
+                    lift: liftValue,
+                    liftLabel: signed(liftValue),
+                    games: entry.g || 0,
+                });
                 return `
-                    <span class="fit-chip-wrap" tabindex="0" aria-label="${escHtml(itemTitle)}">
+                    <span class="fit-chip-wrap has-item-tip" tabindex="0" aria-label="${escHtml(itemTitle)}">
                         <span class="fit-chip ${kind} item-build-chip">
                             ${itemIcons}<span class="fit-chip-label">${escHtml(name)}</span>
                         </span>
-                        <span class="fit-chip-tooltip" role="tooltip">
-                            <span class="fit-tip-name">${escHtml(name)}</span>
-                            <span class="fit-tip-pick">${escHtml(copy.secondaryRoleBadgePick(pct(entry.pick || 0)))}</span>
-                            <span class="fit-tip-lift ${liftClass}">${escHtml(copy.secondaryRoleBadgeLift(signed(liftValue)))}</span>
-                        </span>
+                        ${itemTipSource(tipHtml)}
                     </span>
                 `;
             }
@@ -1414,6 +1978,21 @@
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
                     : titleForItemCard(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games);
+                // Tip focuses on the coloured core items; flex slots stay as names only.
+                const coreItems = pairItems.filter(it => it && it.core !== false).slice(0, 3);
+                const tipItems = coreItems.length ? coreItems : pairItems.slice(0, 3);
+                const tipHtml = buildItemTipHtml({
+                    name,
+                    items: tipItems,
+                    wr: pct(entry.wr || 0),
+                    pick: pct(pickVal),
+                    pickRate: pickVal,
+                    lift: liftValue,
+                    liftLabel: signed(liftValue),
+                    games,
+                    confirm,
+                    lane: laneInfo ? laneInfo.label : lane,
+                });
                 const icons = Array.from({ length: 6 }, (_, i) => {
                     const item = pairItems[i];
                     const flexClass = item && item.core === false ? ' is-flex' : '';
@@ -1426,7 +2005,7 @@
                 const gamesText = copy.itemClusterGames ? copy.itemClusterGames(games) : `${games}`;
                 const pickText = copy.itemClusterPick ? copy.itemClusterPick(pct(pickVal)) : pct(pickVal);
                 return `
-                    <div class="item-build-card item-cluster-card lane-${lane}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(clusterTitle)}" aria-label="${escHtml(clusterTitle)}">
+                    <div class="item-build-card item-cluster-card lane-${lane} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(clusterTitle)}">
                         <div class="item-cluster-top">${laneBadge}<span class="cluster-games">${escHtml(gamesText)}</span></div>
                         <div class="item-build-icons">${icons}</div>
                         <div class="item-cluster-stats">
@@ -1434,6 +2013,7 @@
                             <span class="cluster-pick ${pickHeat}">${escHtml(pickText)}</span>
                         </div>
                         <div class="item-build-name"><span>${escHtml(name)}</span></div>
+                        ${itemTipSource(tipHtml)}
                     </div>
                 `;
             }
@@ -1446,7 +2026,18 @@
                 entry.g || 0,
             );
             const iconLimit = options.singleItem ? 1 : 2;
-            const icons = pairItems.slice(0, iconLimit).map(item => (
+            const tipItems = pairItems.slice(0, iconLimit);
+            const tipHtml = buildItemTipHtml({
+                name,
+                items: tipItems,
+                wr: pct(entry.wr || 0),
+                pick: pct(entry.pick || 0),
+                pickRate: Number(entry.pick || 0),
+                lift: liftValue,
+                liftLabel: signed(liftValue),
+                games: entry.g || 0,
+            });
+            const icons = tipItems.map(item => (
                 item.icon
                     ? `<img class="item-build-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
                     : '<span class="item-build-icon"></span>'
@@ -1461,11 +2052,12 @@
                 ? 'item-build-wr is-bad'
                 : 'item-build-wr';
             return `
-                <div class="${cardClass}" tabindex="0" data-match-text="${escHtml(matchText)}" title="${escHtml(titleAttr)}" aria-label="${escHtml(titleAttr)}">
+                <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
                     <div class="item-build-pick pick-${pickTier(Number(entry.pick || 0))}">${pct(entry.pick || 0)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
+                    ${itemTipSource(tipHtml)}
                 </div>
             `;
         };
@@ -1618,14 +2210,18 @@
             if (!groups.length) return emptyDetailSection(title, meta);
             const laneLabels = copy.itemClusterLanes || {};
             const iconImg = (item, cls) => {
-                const nm = escHtml((item && (item.name_zh || item.name)) || '');
-                return (item && item.icon)
-                    ? `<img class="${cls}" src="${escHtml(item.icon)}" alt="${nm}" title="${nm}" loading="lazy">`
+                const nm = escHtml(itemDisplayName(item));
+                return (item && itemIconUrl(item))
+                    ? `<img class="${cls}" src="${escHtml(itemIconUrl(item))}" alt="${nm}" loading="lazy">`
                     : `<span class="${cls}"></span>`;
             };
             const blocks = groups.map(grp => {
                 const core = Array.isArray(grp.core) ? grp.core : [];
-                const coreIcons = core.map(it => iconImg(it, 'cg-core-icon')).join('<span class="cg-arrow">▸</span>');
+                const coreIcons = core.map(it => {
+                    const nm = itemDisplayName(it);
+                    const tipHtml = buildItemTipHtml({ name: nm, items: [it] });
+                    return `<span class="cg-icon-host has-item-tip" tabindex="0" aria-label="${escHtml(nm)}">${iconImg(it, 'cg-core-icon')}${itemTipSource(tipHtml)}</span>`;
+                }).join('<span class="cg-arrow">▸</span>');
                 const options = (Array.isArray(grp.options) ? grp.options : []).map(o => {
                     const lift = Number(o.lift || 0);
                     const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
@@ -1633,21 +2229,42 @@
                     const pickHeat = 'pick-' + pickTier(pickVal);
                     const laneInfo = laneLabels[o.lane];
                     const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
+                    const optName = itemDisplayName(o) || o.name_zh || o.name || '';
                     const tip = copy.itemClusterCardTitle
-                        ? copy.itemClusterCardTitle(o.name_zh || o.name || '', pct(o.wr || 0), pct(pickVal), signed(lift), o.g || 0, o.exactGames || 0, laneInfo ? laneInfo.label : (o.lane || ''))
-                        : (o.name_zh || o.name || '');
+                        ? copy.itemClusterCardTitle(optName, pct(o.wr || 0), pct(pickVal), signed(lift), o.g || 0, o.exactGames || 0, laneInfo ? laneInfo.label : (o.lane || ''))
+                        : optName;
+                    const tipHtml = buildItemTipHtml({
+                        name: optName,
+                        items: [o],
+                        wr: pct(o.wr || 0),
+                        pick: pct(pickVal),
+                        pickRate: pickVal,
+                        lift,
+                        liftLabel: signed(lift),
+                        games: o.g || 0,
+                        confirm: o.exactGames || 0,
+                        lane: laneInfo ? laneInfo.label : (o.lane || ''),
+                    });
                     return `
-                        <div class="cg-option" tabindex="0" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">
+                        <div class="cg-option has-item-tip" tabindex="0" aria-label="${escHtml(tip)}">
                             ${iconImg(o, 'cg-option-icon')}
                             <span class="cg-option-wr ${wrSign}">${pct(o.wr || 0)}</span>
                             <span class="cg-option-pick ${pickHeat}">${pct(pickVal)}</span>
                             ${badge}
+                            ${itemTipSource(tipHtml)}
                         </div>`;
                 }).join('');
                 const tail = Array.isArray(grp.tail) ? grp.tail : [];
-                const tailTip = copy.coreBuildTailTip ? ` title="${escHtml(copy.coreBuildTailTip)}"` : '';
                 const tailBlock = tail.length
-                    ? `<div class="cg-tail"${tailTip}><span class="cg-tail-label">${copy.coreBuildTail || '收尾'}</span>${tail.map(it => iconImg(it, 'cg-tail-icon')).join('')}</div>`
+                    ? `<div class="cg-tail"><span class="cg-tail-label" title="${escHtml(copy.coreBuildTailTip || '')}">${copy.coreBuildTail || '收尾'}</span>${tail.map(it => {
+                        const nm = itemDisplayName(it);
+                        const tipHtml = buildItemTipHtml({
+                            name: nm,
+                            items: [it],
+                            note: copy.coreBuildTailTip || '',
+                        });
+                        return `<span class="cg-icon-host has-item-tip" tabindex="0" aria-label="${escHtml(nm)}">${iconImg(it, 'cg-tail-icon')}${itemTipSource(tipHtml)}</span>`;
+                    }).join('')}</div>`
                     : '';
                 const share = copy.coreBuildShare ? copy.coreBuildShare(pct(grp.pick || 0)) : pct(grp.pick || 0);
                 const coreLift = Number(grp.lift || 0);
@@ -1657,14 +2274,25 @@
                 const headTitle = copy.coreBuildHeadTitle
                     ? copy.coreBuildHeadTitle(grp.name_zh || grp.name || '', pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
                     : '';
+                const headTipHtml = buildItemTipHtml({
+                    name: grp.name_zh || grp.name || name || '',
+                    items: core,
+                    wr: grp.wr != null ? pct(grp.wr || 0) : '',
+                    pick: pct(grp.pick || 0),
+                    pickRate: Number(grp.pick || 0),
+                    lift: coreLift,
+                    liftLabel: signed(coreLift),
+                    games: grp.g || 0,
+                });
                 return `
                     <div class="core-group">
-                        <div class="cg-head"${headTitle ? ` title="${escHtml(headTitle)}"` : ''}>
+                        <div class="cg-head has-item-tip" tabindex="0"${headTitle ? ` aria-label="${escHtml(headTitle)}"` : ''}>
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
                                 ${wrHtml}
                                 <span class="cg-core-share pick-${pickTier(Number(grp.pick || 0))}">${escHtml(share)}</span>
                             </div>
+                            ${itemTipSource(headTipHtml)}
                         </div>
                         <div class="cg-options-label">${copy.coreBuildThird || '搭配裝備'}</div>
                         <div class="cg-options">${options}</div>
@@ -1706,12 +2334,23 @@
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
                 const pickVal = Number(entry.pick || 0);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
+                const tipHtml = buildItemTipHtml({
+                    name,
+                    items: pairItems.slice(0, 1),
+                    wr: pct(wr),
+                    pick: pct(pickVal),
+                    pickRate: pickVal,
+                    lift: liftValue,
+                    liftLabel: signed(liftValue),
+                    games: entry.g || 0,
+                });
                 return `
-                    <div class="boot-rail-row${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">
+                    <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
                         ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
                         <span class="boot-rail-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</span>
+                        ${itemTipSource(tipHtml)}
                     </div>`;
             }).join('');
             const metaHtml = meta ? `<span class="section-meta">${meta}</span>` : '';
@@ -3084,7 +3723,7 @@
     document.addEventListener('click', (ev) => {
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
-            trackEvent('github_star_click', { location: 'header' });
+            trackEvent('github_star_click', { location: 'footer' });
             return;
         }
         const navTab = ev.target.closest('[data-nav-tab]');
@@ -3309,6 +3948,9 @@
                     node.icon = ver
                         ? ('https://ddragon.leagueoflegends.com/cdn/' + ver + '/img/item/' + node.id + '.png')
                         : '';
+                    if (m.dz) node.desc_zh = m.dz;
+                    if (m.de) node.desc_en = m.de;
+                    if (m.p) node.price = m.p;
                 }
                 for (const k in node) visit(node[k]);
             }
@@ -3524,6 +4166,10 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            if (augChampsId != null) {
+                closeAugChamps();
+                return;
+            }
             if (detailSelected && isMobileViewport()) {
                 closeDetail();
                 return;
@@ -3561,10 +4207,46 @@
         aug.classList.toggle('flip-tip', rect.top < 160);
     }, { passive: true });
 
+    // Rich item float-tip: show on hover/focus of any .has-item-tip host.
+    document.addEventListener('mouseover', (ev) => {
+        const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        if (!host) return;
+        // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
+        showItemFloatTip(host);
+    }, { passive: true });
+    document.addEventListener('mouseout', (ev) => {
+        const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        if (!host) return;
+        const to = ev.relatedTarget;
+        if (to && host.contains(to)) return;
+        // Moving between nested hosts (core icon -> head) should not flicker off.
+        if (to && to.closest && to.closest('.has-item-tip')) return;
+        scheduleHideItemFloatTip();
+    }, { passive: true });
+    document.addEventListener('focusin', (ev) => {
+        const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        if (host) showItemFloatTip(host);
+    });
+    document.addEventListener('focusout', (ev) => {
+        const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        if (!host) return;
+        const to = ev.relatedTarget;
+        if (to && host.contains(to)) return;
+        if (to && to.closest && to.closest('.has-item-tip')) return;
+        scheduleHideItemFloatTip();
+    });
+    window.addEventListener('scroll', () => hideItemFloatTip(), { passive: true, capture: true });
+    window.addEventListener('resize', () => hideItemFloatTip(), { passive: true });
+
     document.addEventListener('mouseover', (ev) => {
         const fitChip = ev.target.closest && ev.target.closest('.fit-chip-wrap');
         if (fitChip) {
-            positionFitChipTooltip(fitChip);
+            // Item build chips now use the shared float tip; keep legacy
+            // positioning only for non-item fit chips that still embed
+            // .fit-chip-tooltip.
+            if (!fitChip.classList.contains('has-item-tip')) {
+                positionFitChipTooltip(fitChip);
+            }
             return;
         }
         const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
@@ -3580,7 +4262,9 @@
     document.addEventListener('focusin', (ev) => {
         const fitChip = ev.target.closest && ev.target.closest('.fit-chip-wrap');
         if (fitChip) {
-            positionFitChipTooltip(fitChip);
+            if (!fitChip.classList.contains('has-item-tip')) {
+                positionFitChipTooltip(fitChip);
+            }
             return;
         }
         const badge = ev.target.closest && ev.target.closest('.alt-role-badge');
