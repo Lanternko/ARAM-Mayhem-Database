@@ -111,11 +111,35 @@
             }
         }
     } catch (e) {}
-    // Official zh-CN champ/item names (ddragon) + compact trad→simp map + aug converts.
+    // Official zh-CN champ/item names (ddragon) + full trad→simp map + aug converts.
     let NAMES_ZH_CN = null;
     try {
         NAMES_ZH_CN = await loadSitePayload("api/names-zh-cn.json");
     } catch (e) { NAMES_ZH_CN = null; }
+    // Stamp CN fields onto payload objects once so every render path can read them
+    // without re-looking up maps (also survives code that still touches name_zh).
+    (function attachCnNames() {
+        if (!NAMES_ZH_CN) return;
+        const augsMap = NAMES_ZH_CN.augs || {};
+        const augs = DATA.augs || {};
+        for (const id of Object.keys(augsMap)) {
+            const a = augs[id];
+            if (!a) continue;
+            const row = augsMap[id];
+            if (row && row.n) a.name_cn = row.n;
+            if (row && row.d) a.desc_cn = row.d;
+            if (row && row.s) a.set_cn = row.s;
+        }
+        const itemsMap = NAMES_ZH_CN.items || {};
+        const descsMap = NAMES_ZH_CN.itemDescs || {};
+        const lut = DATA.itemLut || {};
+        for (const id of Object.keys(itemsMap)) {
+            const m = lut[id];
+            if (!m) continue;
+            m.c = itemsMap[id];
+            if (descsMap[id]) m.dc = descsMap[id];
+        }
+    })();
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1251,6 +1275,7 @@
         if (!aug) return '';
         if (currentLang === 'en') return aug.name_en || aug.name || '';
         if (currentLang === 'zh-CN') {
+            if (aug.name_cn) return aug.name_cn;
             const id = aid != null ? String(aid)
                 : (aug.id != null ? String(aug.id) : '');
             const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
@@ -1264,6 +1289,7 @@
         if (!aug) return '';
         if (currentLang === 'en') return aug.desc_en || aug.desc || '';
         if (currentLang === 'zh-CN') {
+            if (aug.desc_cn) return aug.desc_cn;
             const id = aid != null ? String(aid)
                 : (aug.id != null ? String(aug.id) : '');
             const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
@@ -1277,6 +1303,7 @@
         if (!aug) return '';
         if (currentLang === 'en') return aug.set_en || aug.set || '';
         if (currentLang === 'zh-CN') {
+            if (aug.set_cn) return aug.set_cn;
             const id = aid != null ? String(aid)
                 : (aug.id != null ? String(aug.id) : '');
             const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
@@ -1286,6 +1313,7 @@
         return aug.set_zh || aug.set || aug.set_en || '';
     }
 
+    // Augment-set / named-row label (NOT for item build cards — use itemRowDisplayName).
     function setEntryName(entry) {
         if (!entry) return '';
         if (currentLang === 'en') return entry.name_en || entry.name || '';
@@ -1306,8 +1334,10 @@
             id: String(id),
             name_zh: m.z || '',
             name_en: m.e || '',
+            name_cn: m.c || '',
             desc_zh: m.dz || '',
             desc_en: m.de || '',
+            desc_cn: m.dc || '',
             price: Number(m.p || 0) || 0,
             icon: ver
                 ? ('https://ddragon.leagueoflegends.com/cdn/' + ver + '/img/item/' + id + '.png')
@@ -1316,24 +1346,42 @@
     }
 
     function itemCnName(id) {
-        if (id == null || id === '' || !NAMES_ZH_CN || !NAMES_ZH_CN.items) return '';
-        return NAMES_ZH_CN.items[String(id)] || '';
+        if (id == null || id === '') return '';
+        const key = String(id);
+        const lut = DATA.itemLut && DATA.itemLut[key];
+        if (lut && lut.c) return lut.c;
+        if (NAMES_ZH_CN && NAMES_ZH_CN.items && NAMES_ZH_CN.items[key]) {
+            return NAMES_ZH_CN.items[key];
+        }
+        return '';
     }
     function itemCnDesc(id) {
-        if (id == null || id === '' || !NAMES_ZH_CN || !NAMES_ZH_CN.itemDescs) return '';
-        return NAMES_ZH_CN.itemDescs[String(id)] || '';
+        if (id == null || id === '') return '';
+        const key = String(id);
+        const lut = DATA.itemLut && DATA.itemLut[key];
+        if (lut && lut.dc) return lut.dc;
+        if (NAMES_ZH_CN && NAMES_ZH_CN.itemDescs && NAMES_ZH_CN.itemDescs[key]) {
+            return NAMES_ZH_CN.itemDescs[key];
+        }
+        return '';
     }
     function itemDisplayName(item) {
         if (!item) return '';
         if (currentLang === 'zh-CN') {
+            if (item.name_cn) return item.name_cn;
             const cn = itemCnName(item.id);
             if (cn) return cn;
+            // slug-only rows (rare)
+            if (item.slug && /^\d+$/.test(String(item.slug))) {
+                const bySlug = itemCnName(item.slug);
+                if (bySlug) return bySlug;
+            }
             if (item.name_zh || item.name || item.name_en) {
                 return t2s(item.name_zh || item.name || item.name_en || '');
             }
             const cat = itemCatalogEntry(item.id);
             if (!cat) return item.id ? ('#' + item.id) : '';
-            return t2s(cat.name_zh || cat.name_en || '');
+            return cat.name_cn || t2s(cat.name_zh || cat.name_en || '');
         }
         if (item.name_zh || item.name_en || item.name) {
             return currentLang === 'en'
@@ -1347,16 +1395,50 @@
             : (cat.name_zh || cat.name_en || '');
     }
 
+    // Item recommendation / build-card row: may be a single item or "A + B" pair.
+    // Always prefer composing official CN names from child item ids — TW labels
+    // like 芮蘭颶風箭 are not the same as CN 卢安娜的飓风 (t2s alone is wrong).
+    function itemRowDisplayName(entry) {
+        if (!entry) return '';
+        if (currentLang === 'en') {
+            return entry.name_en || entry.name || entry.name_zh || '';
+        }
+        const pairItems = Array.isArray(entry.items) ? entry.items : [];
+        if (currentLang === 'zh-CN') {
+            if (pairItems.length) {
+                const parts = pairItems.map(it => itemDisplayName(it)).filter(Boolean);
+                if (parts.length) return parts.join(' + ');
+            }
+            if (entry.slug) {
+                const slug = String(entry.slug);
+                if (/^\d+$/.test(slug)) {
+                    const cn = itemCnName(slug);
+                    if (cn) return cn;
+                } else if (slug.includes('+')) {
+                    const parts = slug.split('+').map(s => itemCnName(s.trim())).filter(Boolean);
+                    if (parts.length) return parts.join(' + ');
+                }
+            }
+            if (entry.id != null && entry.id !== '') {
+                const cn = itemCnName(entry.id);
+                if (cn) return cn;
+            }
+            return t2s(entry.name_zh || entry.name || entry.name_en || '');
+        }
+        return entry.name_zh || entry.name || entry.name_en || '';
+    }
+
     function itemDescription(item) {
         if (!item) return '';
         if (currentLang === 'zh-CN') {
+            if (item.desc_cn) return item.desc_cn;
             const cn = itemCnDesc(item.id);
             if (cn) return cn;
             const direct = item.desc_zh || item.desc || item.desc_en || '';
             if (direct) return t2s(String(direct));
             const cat = itemCatalogEntry(item.id);
             if (!cat) return '';
-            return t2s(cat.desc_zh || cat.desc_en || '');
+            return cat.desc_cn || t2s(cat.desc_zh || cat.desc_en || '');
         }
         const direct = currentLang === 'en'
             ? (item.desc_en || item.desc_zh || item.desc || '')
@@ -1632,14 +1714,25 @@
             entry?.name,
             entry?.name_zh,
             entry?.name_en,
+            entry?.name_cn,
             entry?.set,
             entry?.set_zh,
             entry?.set_en,
+            entry?.set_cn,
             entry?.slug,
         ];
-        (entry?.items || []).forEach(item => {
-            parts.push(item.name, item.name_zh, item.name_en, item.id);
-        });
+        // Always index official CN labels so simplified-mode search works.
+        if (entry && Array.isArray(entry.items)) {
+            entry.items.forEach(item => {
+                parts.push(item.name, item.name_zh, item.name_en, item.name_cn, item.id);
+                if (item && item.id != null) parts.push(itemCnName(item.id));
+            });
+        } else if (entry && entry.slug) {
+            String(entry.slug).split('+').forEach(s => {
+                const id = s.trim();
+                if (/^\d+$/.test(id)) parts.push(itemCnName(id));
+            });
+        }
         return parts.filter(Boolean).join(' ');
     }
 
@@ -2282,10 +2375,11 @@
             `;
         };
         const buildFitChip = (entry, kind) => {
-            const name = setEntryName(entry);
+            const pairItems = Array.isArray(entry.items) ? entry.items : [];
+            // Item chips carry .items; set chips don't — pick the right name helper.
+            const name = pairItems.length ? itemRowDisplayName(entry) : setEntryName(entry);
             const score = kind === 'bad' ? (entry.badScore ?? entry.res) : (entry.score ?? entry.res);
             const titleAttr = copy.setTitle(name, signed(entry.res), signed(entry.lift), signed(entry.avg), pct(entry.wr), entry.g);
-            const pairItems = Array.isArray(entry.items) ? entry.items : [];
             const liftValue = Number(entry.lift ?? entry.res ?? 0);
             const liftClass = liftValue > 0.0005 ? 'is-good' : (liftValue < -0.0005 ? 'is-bad' : 'is-even');
             const itemTitle = copy.itemBuildTitle(name, pct(entry.pick || 0), signed(liftValue));
@@ -2327,7 +2421,7 @@
             return `<div class="fit-chip-list">${rows.slice(0, 3).map(entry => buildFitChip(entry, kind)).join('')}</div>`;
         };
         const buildItemCard = (entry, options = {}) => {
-            const name = setEntryName(entry);
+            const name = itemRowDisplayName(entry);
             const pairItems = Array.isArray(entry.items) ? entry.items : [];
             const liftValue = Number(entry.lift ?? entry.res ?? 0);
             const titleForItemCard = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
@@ -2654,11 +2748,20 @@
                 const coreWrSign = coreLift > 0.005 ? 'is-good' : (coreLift < -0.005 ? 'is-bad' : 'is-even');
                 const wrText = copy.coreBuildWr ? copy.coreBuildWr(pct(grp.wr || 0)) : pct(grp.wr || 0);
                 const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrSign}">${escHtml(wrText)}</span>` : '';
+                const coreGroupName = (() => {
+                    if (currentLang === 'en') return grp.name_en || grp.name || grp.name_zh || '';
+                    if (currentLang === 'zh-CN') {
+                        const parts = core.map(it => itemDisplayName(it)).filter(Boolean);
+                        if (parts.length) return parts.join(' + ');
+                        return t2s(grp.name_zh || grp.name || '');
+                    }
+                    return grp.name_zh || grp.name || '';
+                })();
                 const headTitle = copy.coreBuildHeadTitle
-                    ? copy.coreBuildHeadTitle(grp.name_zh || grp.name || '', pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
+                    ? copy.coreBuildHeadTitle(coreGroupName, pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
                     : '';
                 const headTipHtml = buildItemTipHtml({
-                    name: grp.name_zh || grp.name || name || '',
+                    name: coreGroupName,
                     items: core,
                     wr: grp.wr != null ? pct(grp.wr || 0) : '',
                     pick: pct(grp.pick || 0),
@@ -2709,7 +2812,7 @@
                     : `${itemName} · WR ${wr} · 選取率 ${pick} · 勝率 ${lift} · ${games} 場`
             ));
             const items = rows.slice(0, railLimit).map((entry, idx) => {
-                const name = setEntryName(entry);
+                const name = itemRowDisplayName(entry);
                 const pairItems = Array.isArray(entry.items) ? entry.items : [];
                 const icon = pairItems[0] && pairItems[0].icon;
                 const wr = Number(entry.wr || 0);
@@ -3328,7 +3431,10 @@
         // late vs early (snowball/scaling means) — continuum, not a grade.
         const tempoHtml = `
             <div class="team-eval-block team-tempo" title="${escHtml(copy.teamTempoTip || '')}">
-                <div class="team-eval-h">${escHtml(copy.teamTempoTitle)}</div>
+                <div class="team-eval-h team-tempo-head">
+                    <span>${escHtml(copy.teamTempoTitle)}</span>
+                    <span class="team-tempo-lean">${escHtml(tempoLean)}</span>
+                </div>
                 <div class="team-tempo-row">
                     <span class="team-tempo-end is-early">${escHtml(copy.teamTempoEarly)}<small>${earlyN}</small></span>
                     <div class="team-tempo-track" role="img"
@@ -3339,7 +3445,6 @@
                     </div>
                     <span class="team-tempo-end is-late">${escHtml(copy.teamTempoLate)}<small>${lateN}</small></span>
                 </div>
-                <div class="team-tempo-lean">${escHtml(tempoLean)}</div>
             </div>`;
         return `
             <div class="team-eval">
@@ -3358,8 +3463,10 @@
                 </div>
                 <div class="team-eval-block">
                     <div class="team-eval-h">${escHtml(copy.teamDimsTitle)}</div>
-                    <div class="team-eval-radar">${radar}</div>
-                    <div class="team-comp-list">${dimRows}</div>
+                    <div class="team-dims-split">
+                        <div class="team-eval-radar">${radar}</div>
+                        <div class="team-comp-list">${dimRows}</div>
+                    </div>
                 </div>
                 ${tempoHtml}
             </div>
@@ -3558,17 +3665,25 @@
         if (currentLang === 'en') {
             return entity.name_en || entity.alias || entity.name || entity.id || '';
         }
-        // Prefer official CN champ name when id is present.
-        if (currentLang === 'zh-CN' && entity.id != null && NAMES_ZH_CN && NAMES_ZH_CN.champs) {
-            const cn = NAMES_ZH_CN.champs[String(entity.id)];
-            if (cn) return cn;
+        if (currentLang === 'zh-CN') {
+            const id = entity.id != null ? String(entity.id) : '';
+            // Champ / item / augment official CN when we have an id.
+            if (id && NAMES_ZH_CN) {
+                if (NAMES_ZH_CN.champs && NAMES_ZH_CN.champs[id]) return NAMES_ZH_CN.champs[id];
+                const itemCn = itemCnName(id);
+                if (itemCn) return itemCn;
+                const augRow = NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
+                if (augRow && augRow.n) return augRow.n;
+            }
+            if (entity.name_cn) return entity.name_cn;
+            // Compose from nested items (item-pair change rows).
+            if (Array.isArray(entity.items) && entity.items.length) {
+                const parts = entity.items.map(it => itemDisplayName(it)).filter(Boolean);
+                if (parts.length) return parts.join(' + ');
+            }
+            return t2s(entity.name_zh || entity.name || entity.name_en || entity.alias || id || '');
         }
-        if (currentLang === 'zh-CN' && entity.id != null && NAMES_ZH_CN && NAMES_ZH_CN.items) {
-            const cn = NAMES_ZH_CN.items[String(entity.id)];
-            if (cn) return cn;
-        }
-        const zh = entity.name_zh || entity.name || entity.name_en || entity.alias || entity.id || '';
-        return currentLang === 'zh-CN' ? t2s(String(zh)) : zh;
+        return entity.name_zh || entity.name || entity.name_en || entity.alias || entity.id || '';
     }
 
     function changeDeltaClass(value) {
@@ -4687,11 +4802,13 @@
                     node.name = zh;
                     node.name_zh = zh;
                     node.name_en = m.e || '';
+                    if (m.c) node.name_cn = m.c;
                     node.icon = ver
                         ? ('https://ddragon.leagueoflegends.com/cdn/' + ver + '/img/item/' + node.id + '.png')
                         : '';
                     if (m.dz) node.desc_zh = m.dz;
                     if (m.de) node.desc_en = m.de;
+                    if (m.dc) node.desc_cn = m.dc;
                     if (m.p) node.price = m.p;
                 }
                 for (const k in node) visit(node[k]);
