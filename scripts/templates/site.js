@@ -233,80 +233,93 @@
         _compFitCache = cols;
         return _compFitCache;
     }
-    // "Comp fit" tab: a radar of how well this champion fits each of the 6 comp
-    // archetypes (a champ can fit several), with the top fits called out as advice.
+    // Ability profile tab: 6-axis capability radar (left) + skill-scaling & early/late
+    // stage (right). Comp-archetype fit used to own this tab; it was demoted because
+    // most champions sit near 0pp and the radar looked empty — abilities + tempo are
+    // what players actually read. Strong archetype avoid/build signals still surface
+    // as a one-line footer when |delta| clears the empirical thresholds.
     function buildCompFit(info) {
         const copy = tr();
         const lang = currentLang === 'en' ? 'en' : 'zh';
         const comp = (info && info.comp) || {};
         const cap = compCapPct(comp);
-        let radar, adviceHtml, metaText;
-        const af = info && info.archFit;
-        const signedPp = d => ((d >= 0 ? '+' : '') + d.toFixed(1) + 'pp');
-        if (af && af.qualified && af.fit) {
-            // Empirical: signed WR delta when the OTHER 4 teammates lean each archetype.
-            const fits = COMP_FIT_DEFS.map(def => ({ def, name: def[lang].name, delta: Number((af.fit[def.key] || {}).delta || 0) }));
-            radar = compRadarSvg(fits.map(f => ({ label: f.name, delta: f.delta })), copy.compFitTitle, { signed: true, scale: 2 });
-            const best = [...fits].sort((a, b) => b.delta - a.delta).filter(f => f.delta >= COMP_FIT_EMP_POS).slice(0, 2);
-            const avoid = [...fits].sort((a, b) => a.delta - b.delta).filter(f => f.delta <= COMP_FIT_EMP_NEG).slice(0, 1);
-            const items = best.map(f =>
-                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(f.def[lang].desc)}</span></div>`);
-            avoid.forEach(f => items.push(
-                `<div class="comp-advice-item"><span class="ca-tag" style="color:#f0998a;border-color:rgba(226,87,75,.45)">${escHtml(copy.compFitAvoid)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(copy.compFitAvoidDesc)}</span></div>`));
-            adviceHtml = items.length ? `<div class="comp-advice">${items.join('')}</div>` : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
-            metaText = copy.compFitMetaEmp;
-        } else {
-            // Heuristic fallback (low sample): the champion's own ability blend, percentile-ranked.
-            const stats = compFitStats();
-            const fits = COMP_FIT_DEFS.map(def => {
-                const raw = compFitRaw(def, cap);
-                const arr = stats[def.key];
-                const n = arr ? arr.length : 0;
-                let lt = 0;
-                while (lt < n && arr[lt] < raw) lt += 1;
-                const pct = n < 2 ? 0 : Math.max(0, Math.min(1, lt / (n - 1)));
-                return { def, name: def[lang].name, pct };
-            });
-            const advice = [...fits].sort((a, b) => b.pct - a.pct).filter(f => f.pct >= COMP_FIT_ADVICE_THRESHOLD).slice(0, 3).map(f => f.def[lang]);
-            adviceHtml = advice.length
-                ? `<div class="comp-advice">${advice.map(a => `<div class="comp-advice-item"><span class="ca-tag">${escHtml(a.name)}</span><span class="ca-desc">${escHtml(a.desc)}</span></div>`).join('')}</div>`
-                : `<div class="comp-fit-empty">${escHtml(copy.compFitFlexible)}</div>`;
-            radar = compRadarSvg(fits.map(f => ({ label: f.name, pct: f.pct })), copy.compFitTitle);
-            metaText = copy.compFitMetaEst;
-        }
-        const abilities = ABILITY_BARS.map(a => {
-            const val = Math.round((cap[a.key] || 0) * 100);
-            return `<div class="ab-row"><span class="ab-label">${escHtml(a[lang])}</span><span class="ab-bar"><span style="width:${val}%"></span></span><span class="ab-val">${val}</span></div>`;
-        }).join('');
-        // Skill-scaling chip ("operation coefficient"): WR(high-skill lobbies) - WR(low-skill).
+        const abilityAxes = ABILITY_BARS.map(a => ({
+            label: a[lang],
+            pct: cap[a.key] || 0,
+        }));
+        const radar = compRadarSvg(abilityAxes, copy.compFitTitle);
+
+        // Skill-scaling ("operation coefficient"): WR(high-skill) − WR(low-skill).
         const ss = info && info.skillScaling;
-        let skillChip = '';
+        let skillCard = `<div class="cf-side-card cf-side-muted"><div class="cf-side-kicker">${escHtml(copy.compSkillTitle)}</div><div class="cf-side-empty">${escHtml(copy.compSkillMissing)}</div></div>`;
         if (ss && typeof ss.pp === 'number') {
             const strong = Math.abs(ss.z || 0) >= 2 && Math.abs(ss.pp) >= 2;
             const pos = ss.pp >= 0;
             const ppTxt = (pos ? '+' : '') + ss.pp.toFixed(1) + 'pp';
             const col = !strong ? '#9aa3ad' : (pos ? '#3aa0ff' : '#e2574b');
-            const lbl = lang === 'en'
-                ? (!strong ? 'skill-neutral' : pos ? 'rewards skill' : 'stomps low elo')
-                : (!strong ? '中性' : pos ? '吃操作' : '低分強勢');
-            const nameTxt = lang === 'en' ? 'Skill-scaling' : '操作係數';
-            const titleTxt = lang === 'en'
-                ? 'Win-rate in high-skill minus low-skill lobbies (top vs bottom 25% by lobby skill)'
-                : '高分局勝率 − 低分局勝率（依對局水平前 25% vs 後 25%）';
-            skillChip = `<span class="cf-skill" title="${escHtml(titleTxt)}">${escHtml(nameTxt)} <b style="color:${col}">${ppTxt}</b><span style="color:${col}">· ${escHtml(lbl)}</span></span>`;
+            const lbl = !strong ? copy.compSkillNeutral : (pos ? copy.compSkillHigh : copy.compSkillLow);
+            const gamesTxt = ss.g ? copy.compSkillGames(ss.g) : '';
+            skillCard = `
+                <div class="cf-side-card" title="${escHtml(copy.compSkillTip)}">
+                    <div class="cf-side-kicker">${escHtml(copy.compSkillTitle)}</div>
+                    <div class="cf-side-value" style="color:${col}">${escHtml(ppTxt)}</div>
+                    <div class="cf-side-label" style="color:${col}">${escHtml(lbl)}</div>
+                    ${gamesTxt ? `<div class="cf-side-sub">${escHtml(gamesTxt)}</div>` : ''}
+                </div>`;
         }
+
+        // Early (snowball) vs late (scaling) tempo — both already percentile-ranked.
+        const earlyPct = Math.round((cap.snowball || 0) * 100);
+        const latePct = Math.round((cap.scaling || 0) * 100);
+        const stageDiff = (cap.snowball || 0) - (cap.scaling || 0);
+        const STAGE_CUT = 0.12;
+        let stageKey = 'balanced';
+        if (stageDiff >= STAGE_CUT) stageKey = 'early';
+        else if (stageDiff <= -STAGE_CUT) stageKey = 'late';
+        const stageTitle = stageKey === 'early' ? copy.compStageEarly
+            : stageKey === 'late' ? copy.compStageLate
+            : copy.compStageBalanced;
+        const stageDesc = stageKey === 'early' ? copy.compStageEarlyDesc
+            : stageKey === 'late' ? copy.compStageLateDesc
+            : copy.compStageBalancedDesc;
+        const stageCard = `
+            <div class="cf-side-card">
+                <div class="cf-side-kicker">${escHtml(copy.compStageTitle)}</div>
+                <div class="cf-side-value cf-stage-${stageKey}">${escHtml(stageTitle)}</div>
+                <div class="cf-side-sub">${escHtml(stageDesc)}</div>
+                <div class="cf-stage-bars">
+                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageEarlyAxis)}</span><span class="ab-bar ab-bar-early"><span style="width:${earlyPct}%"></span></span><span class="ab-val">${earlyPct}</span></div>
+                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageLateAxis)}</span><span class="ab-bar ab-bar-late"><span style="width:${latePct}%"></span></span><span class="ab-val">${latePct}</span></div>
+                </div>
+            </div>`;
+
+        // Optional: only surface clear empirical archetype signals (most champs are ~0pp).
+        let adviceHtml = '';
+        const af = info && info.archFit;
+        if (af && af.qualified && af.fit) {
+            const signedPp = d => ((d >= 0 ? '+' : '') + d.toFixed(1) + 'pp');
+            const fits = COMP_FIT_DEFS.map(def => ({ def, name: def[lang].name, delta: Number((af.fit[def.key] || {}).delta || 0) }));
+            const best = [...fits].sort((a, b) => b.delta - a.delta).filter(f => f.delta >= COMP_FIT_EMP_POS).slice(0, 1);
+            const avoid = [...fits].sort((a, b) => a.delta - b.delta).filter(f => f.delta <= COMP_FIT_EMP_NEG).slice(0, 1);
+            const items = [];
+            best.forEach(f => items.push(
+                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(copy.compFitPrefer)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(f.def[lang].desc)}</span></div>`));
+            avoid.forEach(f => items.push(
+                `<div class="comp-advice-item"><span class="ca-tag ca-tag-avoid">${escHtml(copy.compFitAvoid)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(copy.compFitAvoidDesc)}</span></div>`));
+            if (items.length) adviceHtml = `<div class="comp-advice"><div class="cf-cap">${escHtml(copy.compFitFootnote)}</div>${items.join('')}</div>`;
+        }
+
         return `
             <div class="detail-section">
                 <div class="detail-section-head">
                     <h3>${escHtml(copy.compFitTitle)}</h3>
-                    <span class="section-meta">${escHtml(metaText)}</span>
-                    ${skillChip}
+                    <span class="section-meta">${escHtml(copy.compFitMeta)}</span>
                 </div>
                 <div class="comp-fit-main">
                     <div class="comp-fit-radar">${radar}</div>
-                    <div class="comp-fit-abilities">
-                        <div class="cf-cap">${escHtml(copy.compAbilityCap)}</div>
-                        ${abilities}
+                    <div class="comp-fit-side">
+                        ${skillCard}
+                        ${stageCard}
                     </div>
                 </div>
                 ${adviceHtml}
@@ -770,14 +783,29 @@
             augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場，排序採保守下界`,
             overviewWrLabel: '綜合勝率',
             overviewGames: games => `${games} 場`,
-            compFitTitle: '適配陣型',
-            compFitMeta: '左：適配陣型；右：英雄能力（皆為全英雄百分位）',
-            compFitMetaEmp: '左：實測適配（隊友走該型時的勝率差 pp，正=圍繞他組／負=該避免）；右：能力百分位',
-            compFitMetaEst: '左：適配陣型（出賽量不足，暫以能力推估）；右：能力百分位',
+            compFitTitle: '英雄能力',
+            compFitMeta: '左：六軸能力百分位；右：操作係數與對局節奏',
             compFitAvoid: '避免',
+            compFitPrefer: '適配',
             compFitAvoidDesc: '隊友角色重複，發揮變差',
+            compFitFootnote: '陣型備註（僅顯示顯著差值）',
             compAbilityCap: '英雄能力',
-            compFitFlexible: '綜合型，沒有特別突出的適配陣型，可彈性搭配各種陣容',
+            compSkillTitle: '操作係數',
+            compSkillTip: '高分局勝率 − 低分局勝率（依對局水平前 25% vs 後 25%）',
+            compSkillNeutral: '中性',
+            compSkillHigh: '吃操作',
+            compSkillLow: '低分強勢',
+            compSkillMissing: '樣本不足',
+            compSkillGames: g => `${g.toLocaleString('zh-TW')} 場`,
+            compStageTitle: '對局節奏',
+            compStageEarly: '前期型',
+            compStageLate: '後期型',
+            compStageBalanced: '均衡',
+            compStageEarlyDesc: '滾雪球強、後期相對弱 — 盡早結束',
+            compStageLateDesc: '後期拉高、前期偏弱 — 拖進中後期',
+            compStageBalancedDesc: '前後期差距不大',
+            compStageEarlyAxis: '前期',
+            compStageLateAxis: '後期',
         },
         en: {
             htmlLang: 'en',
@@ -904,14 +932,29 @@
             augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games, ranked by a conservative lower bound`,
             overviewWrLabel: 'Overall WR',
             overviewGames: games => `${games} games`,
-            compFitTitle: 'Comp fit',
-            compFitMeta: 'left: comp fit; right: abilities (both percentile across all champions)',
-            compFitMetaEmp: 'left: measured fit (WR delta when teammates lean each comp; + build around him / − avoid); right: ability percentiles',
-            compFitMetaEst: 'left: comp fit (low sample — estimated from abilities); right: ability percentiles',
+            compFitTitle: 'Abilities',
+            compFitMeta: 'left: 6-axis ability percentiles; right: skill-scaling & tempo',
             compFitAvoid: 'Avoid',
+            compFitPrefer: 'Fits',
             compFitAvoidDesc: 'redundant teammates — underperforms',
+            compFitFootnote: 'Comp notes (only clear deltas)',
             compAbilityCap: 'Abilities',
-            compFitFlexible: 'Flexible — no standout comp fit, slots into many comps',
+            compSkillTitle: 'Skill-scaling',
+            compSkillTip: 'WR in high-skill minus low-skill lobbies (top vs bottom 25% by lobby skill)',
+            compSkillNeutral: 'skill-neutral',
+            compSkillHigh: 'rewards skill',
+            compSkillLow: 'stomps low elo',
+            compSkillMissing: 'not enough data',
+            compSkillGames: g => `${g.toLocaleString('en-US')} games`,
+            compStageTitle: 'Game tempo',
+            compStageEarly: 'Early',
+            compStageLate: 'Late',
+            compStageBalanced: 'Balanced',
+            compStageEarlyDesc: 'Snowballs hard, fades late — close it out early',
+            compStageLateDesc: 'Scales up late, soft early — drag the game',
+            compStageBalancedDesc: 'No strong early/late lean',
+            compStageEarlyAxis: 'Early',
+            compStageLateAxis: 'Late',
         }
     };
     // Prefer /en path or stub-stashed locale over the zh SSR default.
@@ -2551,13 +2594,14 @@
             `;
         };
         const mainTabLabels = currentLang === 'en'
-            ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Comp fit' }
-            : { overview: '概覽', items: '出裝', augments: '增幅裝置', compfit: '適配陣型' };
+            ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Abilities' }
+            : { overview: '概覽', items: '出裝', augments: '增幅裝置', compfit: '英雄能力' };
         const bootItemTitle = currentLang === 'en' ? 'Recommended Boots' : '推薦鞋子';
         const bootItemMeta = currentLang === 'en' ? 'WR · pick' : '勝率 · 選取率';
         const spellRailTitle = currentLang === 'en' ? 'Summoner Spells' : '召喚師技能';
-        // Mayhem players carry two spells, so pick rates sum to ~200%.
-        const spellRailMeta = currentLang === 'en' ? 'WR · pick · 2 per player' : '勝率 · 選取率 · 每人 2 個';
+        // Mayhem players carry two spells, so pick rates sum to ~200% — that
+        // domain fact stays in code comments / tips, not the rail chrome.
+        const spellRailMeta = currentLang === 'en' ? 'WR · pick' : '勝率 · 選取率';
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
         const overviewTabContent = `
