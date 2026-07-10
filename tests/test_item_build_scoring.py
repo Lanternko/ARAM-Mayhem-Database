@@ -126,6 +126,9 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertIn("const itemClusterInfo = info.itemClusters || {}", source)
         self.assertIn("buildDetailTabSet('main'", source)
         self.assertIn("label: mainTabLabels.items", source)
+        # Negative-lift items with pick ≥ 10% must survive the common-trap slice.
+        self.assertIn("COMMON_TRAP_FORCE_MIN_PICK = 0.10", source)
+        self.assertIn("Math.max(maxRows, mustKeep.length)", source)
 
     def test_boot_selector_keeps_only_recommendable_boots(self) -> None:
         item_meta = {
