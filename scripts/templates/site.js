@@ -305,7 +305,7 @@
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
-    // home is brand/default; content tabs are augments / changes / column only.
+    // Primary tabs: home (英雄) / augments / changes / column. Brand also → home.
     const VIEWS = ['home', 'augments', 'changes', 'column'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
@@ -3565,8 +3565,7 @@
                 t.tabIndex = -1;
                 if (on) activeTab = t;
             });
-            // Roving tabindex: selected tab is focusable; on home (no tab)
-            // keep the first content tab reachable from the keyboard.
+            // Roving tabindex: the selected tab is the only focusable tab.
             if (activeTab) activeTab.tabIndex = 0;
             else if (tabs[0]) tabs[0].tabIndex = 0;
             document.querySelectorAll('.view[data-view]').forEach(v => {

@@ -1170,13 +1170,13 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Fixed top header: brand (= home) + content tabs + theme icon + language.
-    # 主頁 / 設定 are not tabs — brand returns home; theme toggles in-header.
-    # #site-title stays so applyLanguage can rewrite brand text if needed.
+    # Fixed top header: brand (= home) + primary tabs + theme + language.
+    # 「英雄」 is the home tier-list tab; brand also returns home.
     # Patch lives in the footer freshness line — not next to the wordmark.
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
+        ("home", "英雄", "Champions"),
         ("augments", "增幅", "Augment"),
         ("changes", "版本變動", "Patch Changes"),
         ("column", "專欄", "Column"),
@@ -1213,13 +1213,13 @@ def render_html(
     )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
     for i, (nav_key, nav_zh, nav_en) in enumerate(NAV_TABS):
-        # No tab is active on first paint (home is the default, via brand).
-        # First tab keeps tabindex=0 so the tablist stays keyboard-reachable.
+        # Home (= 英雄) is active on first paint; brand and this tab both land there.
+        is_home = nav_key == "home"
         parts.append(
-            f"<button class='nav-tab' id='tab-{nav_key}' "
+            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
             f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
-            f"aria-selected='false' "
-            f"tabindex='{'0' if i == 0 else '-1'}' "
+            f"aria-selected='{'true' if is_home else 'false'}' "
+            f"tabindex='{'0' if is_home else '-1'}' "
             f"data-i18n-zh='{nav_zh}' data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
         )
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
@@ -1244,7 +1244,8 @@ def render_html(
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
         "<section class='view view-home is-active' id='view-home' "
-        "data-view='home' aria-label='主頁'>"
+        "data-view='home' role='tabpanel' aria-labelledby='tab-home' "
+        "aria-label='英雄'>"
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
