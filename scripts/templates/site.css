@@ -3354,11 +3354,13 @@
            refuse to shrink, the grid overflows to ~600px, the page zooms out and
            icons render huge (~4 fit the viewport instead of 6). */
         .tier-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
-        /* The 6-col rule above is sized for champion thumbnails; it ties with
-           .aug-tier-grid's minmax(108px) on specificity and wins on order,
-           squeezing 增幅榜 cards too narrow.  Re-assert a 3-col board
-           after it so cards stay readable. */
-        .aug-tier-grid { grid-template-columns: repeat(3, 1fr); gap: 5px; }
+        /* .tier-grid is locked to 6 champ cols above; the board also has class
+           tier-grid, so re-assert a denser 增幅榜: 4 equal cols that may shrink
+           (minmax(0,1fr)), not auto-fill@100px which only fits 3 on ~390px phones. */
+        .tier-grid.aug-tier-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 4px;
+        }
         .detail-head {
             flex-direction: row;
             align-items: center;
@@ -3544,13 +3546,22 @@
         .aug .awr { font-size: 11px; min-height: 22px; }
         /* Pick bare % matches WR size on mobile. */
         .aug .alift { font-size: 11px; margin-top: 0; padding: 0 3px; }
-        .aug-tier-grid {
-            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-            gap: 5px;
+        /* Keep 4-col denser than the earlier 3-col lock; slightly smaller type
+           so 2-line zh names still fit ~75–90px tracks. */
+        .tier-grid.aug-tier-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 4px;
         }
         .aug-tier-grid .aug img,
-        .aug-tier-grid .aug .aicon-ph { height: 48px; padding: 4px 0 1px; }
-        .aug-tier-grid .aug .aname { min-height: 24px; padding: 1px 3px 2px; }
+        .aug-tier-grid .aug .aicon-ph { height: 44px; padding: 4px 0 0; }
+        .aug-tier-grid .aug .aname {
+            min-height: 22px;
+            padding: 1px 2px 2px;
+            font-size: 9.5px;
+            line-height: 1.15;
+        }
+        .aug-tier-grid .aug .awr,
+        .aug-tier-grid .aug .alift { font-size: 11px; }
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip,
