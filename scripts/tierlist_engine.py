@@ -787,6 +787,46 @@ def _icon_url(lcu_path: str) -> str:
     stripped = lcu_path.replace("/lol-game-data/assets/", "", 1).lower()
     return f"{CDRAGON_BASE}/{stripped}"
 
+# The plugins tree (CDRAGON_BASE) only ships the gray `_small` line-art augment
+# icons; the colored per-rarity art (silver / gold / prismatic, what the client
+# and sites like Blitz show) exists only in the raw game-asset dump under the
+# same relative path with a `_large` suffix.
+_GAME_ASSET_BASE = "https://raw.communitydragon.org/latest/game"
+
+def _augment_colored_icon_url(
+    small_icon_path: str,
+    listing_cache: dict[str, set[str]],
+) -> str:
+    """Colored variant of an augment's gray `_small` icon, or "".
+
+    Prefers `{name}_large.png`, falling back to suffixless `{name}.png`
+    (a few augments, e.g. drop_bear, ship their colored art that way).
+    Availability is checked against the game-asset dump's directory listing
+    (fetched once per directory and memoized in `listing_cache`); a listing
+    fetch failure just means every augment in that directory keeps its gray
+    icon.
+    """
+    rel = small_icon_path.replace("/lol-game-data/assets/", "", 1).lower()
+    dir_path, _, fname = rel.rpartition("/")
+    if not dir_path or not fname.endswith("_small.png"):
+        return ""
+    if dir_path not in listing_cache:
+        try:
+            resp = httpx.get(f"{_GAME_ASSET_BASE}/{dir_path}/", timeout=20)
+            resp.raise_for_status()
+            listing_cache[dir_path] = set(
+                re.findall(r'href="([^"/]+\.png)"', resp.text)
+            )
+        except Exception:
+            listing_cache[dir_path] = set()
+    for cand in (
+        fname.replace("_small.png", "_large.png"),
+        fname.replace("_small.png", ".png"),
+    ):
+        if cand in listing_cache[dir_path]:
+            return f"{_GAME_ASSET_BASE}/{dir_path}/{cand}"
+    return ""
+
 # New augments ship every patch and are described only in kiwi.bin.json +
 # the stringtable.  These files used to be cached forever, so once the cache was
 # written (patch 16.10) every later augment had a blank description — which broke
@@ -973,6 +1013,7 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     by_id: dict[int, dict] = {}
     set_by_augment = _augment_set_lookup()
     name_overrides_applied: list[tuple[int, str, str]] = []
+    colored_listing_cache: dict[str, set[str]] = {}
     for entry in rows:
         aug_id = entry.get("id")
         if aug_id is None:
@@ -995,13 +1036,18 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             entry.get("augmentSmallIconPath")
             or entry.get("augmentLargeIconPath")
         )
+        icon_url = _icon_url(icon_path) if icon_path else ""
+        if icon_path:
+            colored = _augment_colored_icon_url(icon_path, colored_listing_cache)
+            if colored:
+                icon_url = colored
         en_lookup_name = entry.get("nameTRA") or entry.get("name") or entry.get("simpleNameTRA") or ""
         set_infos = set_by_augment.get(_normalize_augment_name(en_lookup_name), [])
         by_id[aug_id] = {
             "name": name or f"#{aug_id}",
             "name_zh": name_zh or name or f"#{aug_id}",
             "name_en": name_en or name or f"#{aug_id}",
-            "icon": _icon_url(icon_path) if icon_path else "",
+            "icon": icon_url,
             "rarity": entry.get("rarity", ""),
             "desc": "",
             "desc_zh": "",
