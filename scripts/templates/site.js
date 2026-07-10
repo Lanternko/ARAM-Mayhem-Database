@@ -4,7 +4,7 @@
     // so shareable paths like /column/sprees-not-snowball open the right view.
     // Also restore locale: stubs set aram-spa-lang so /en… survives the bounce
     // even if path restore is delayed or partial.
-    let pendingBootLang = null;  // 'en' | 'zh' | null — applied before first paint work
+    let pendingBootLang = null;  // 'en' | 'zh' | 'zh-CN' | null — applied before first paint work
     try {
         const pending = sessionStorage.getItem('aram-spa-path');
         if (pending) {
@@ -13,58 +13,66 @@
             if (pending !== here) history.replaceState(null, '', pending);
         }
         const spaLang = sessionStorage.getItem('aram-spa-lang');
-        if (spaLang === 'en' || spaLang === 'zh') {
+        if (spaLang === 'en' || spaLang === 'zh' || spaLang === 'zh-CN') {
             pendingBootLang = spaLang;
             sessionStorage.removeItem('aram-spa-lang');
         }
     } catch {}
-    // URL `/en…` is authoritative (works for direct History visits too).
+    // URL locale prefix is authoritative (works for direct History visits too).
     try {
         let p = location.pathname || '/';
         if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1) || '/';
         if (p === '/en' || p.startsWith('/en/')) pendingBootLang = 'en';
+        else if (p === '/zh-CN' || p.startsWith('/zh-CN/')) pendingBootLang = 'zh-CN';
     } catch {}
-    // Flip chrome strings NOW (script is at end of <body>) so /en shares never
-    // flash a full Chinese shell while payload/init continues.  Full
+    // Flip chrome strings NOW (script is at end of <body>) so /en or /zh-CN shares
+    // never flash the wrong shell while payload/init continues.  Full
     // applyLanguage() still runs later for data-bound copy.
-    if (pendingBootLang === 'en') {
+    if (pendingBootLang === 'en' || pendingBootLang === 'zh-CN') {
         try {
-            document.documentElement.lang = 'en';
-            document.querySelectorAll('[data-i18n-zh]').forEach(el => {
-                const val = el.getAttribute('data-i18n-en');
-                if (val != null) el.textContent = val;
-            });
-            document.querySelectorAll('.chip[data-label-en]').forEach(chip => {
-                const val = chip.getAttribute('data-label-en');
-                if (val != null) chip.textContent = val;
-            });
+            document.documentElement.lang = pendingBootLang === 'en' ? 'en' : 'zh-Hans';
+            if (pendingBootLang === 'en') {
+                document.querySelectorAll('[data-i18n-zh]').forEach(el => {
+                    const val = el.getAttribute('data-i18n-en');
+                    if (val != null) el.textContent = val;
+                });
+                document.querySelectorAll('.chip[data-label-en]').forEach(chip => {
+                    const val = chip.getAttribute('data-label-en');
+                    if (val != null) chip.textContent = val;
+                });
+            }
             const toggleLabel = document.getElementById('lang-toggle-label');
-            if (toggleLabel) toggleLabel.textContent = '中';
+            if (toggleLabel) {
+                toggleLabel.textContent = pendingBootLang === 'en' ? 'English' : '简体中文';
+            }
             const toggle = document.getElementById('lang-toggle');
             if (toggle) {
-                toggle.title = '切換成中文';
-                toggle.setAttribute('aria-label', 'Switch language');
+                const lab = pendingBootLang === 'en' ? 'English' : '简体中文';
+                toggle.title = lab;
+                toggle.setAttribute('aria-label', 'Language / 語言: ' + lab);
             }
-            const search = document.getElementById('search');
-            if (search) {
-                search.placeholder = 'Search champions (ZH / EN)';
-                search.setAttribute('aria-label', 'Search champions');
-            }
-            const shownUnit = document.getElementById('shown-unit');
-            if (shownUnit) shownUnit.textContent = 'shown';
-            document.querySelectorAll('.tier-count-unit').forEach(el => {
-                el.textContent = 'shown';
-            });
-            const recMode = document.getElementById('recommend-mode');
-            if (recMode && recMode.getAttribute('aria-pressed') !== 'true') {
-                recMode.textContent = 'Teammate mode: Off';
-            }
-            const emptyTitle = document.getElementById('empty-title');
-            if (emptyTitle) emptyTitle.textContent = 'No champions match the current filters';
-            const emptyCopy = document.getElementById('empty-copy');
-            if (emptyCopy) {
-                emptyCopy.textContent =
-                    'Try a different role, or search by Chinese / English champion name.';
+            if (pendingBootLang === 'en') {
+                const search = document.getElementById('search');
+                if (search) {
+                    search.placeholder = 'Search champions (ZH / EN)';
+                    search.setAttribute('aria-label', 'Search champions');
+                }
+                const shownUnit = document.getElementById('shown-unit');
+                if (shownUnit) shownUnit.textContent = 'shown';
+                document.querySelectorAll('.tier-count-unit').forEach(el => {
+                    el.textContent = 'shown';
+                });
+                const recMode = document.getElementById('recommend-mode');
+                if (recMode && recMode.getAttribute('aria-pressed') !== 'true') {
+                    recMode.textContent = 'Teammate mode: Off';
+                }
+                const emptyTitle = document.getElementById('empty-title');
+                if (emptyTitle) emptyTitle.textContent = 'No champions match the current filters';
+                const emptyCopy = document.getElementById('empty-copy');
+                if (emptyCopy) {
+                    emptyCopy.textContent =
+                        'Try a different role, or search by Chinese / English champion name.';
+                }
             }
         } catch {}
     }
@@ -103,6 +111,11 @@
             }
         }
     } catch (e) {}
+    // Official zh-CN champ/item names (ddragon) + compact trad→simp map + aug converts.
+    let NAMES_ZH_CN = null;
+    try {
+        NAMES_ZH_CN = await loadSitePayload("api/names-zh-cn.json");
+    } catch (e) { NAMES_ZH_CN = null; }
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -245,11 +258,10 @@
     // as a one-line footer when |delta| clears the empirical thresholds.
     function buildCompFit(info) {
         const copy = tr();
-        const lang = currentLang === 'en' ? 'en' : 'zh';
         const comp = (info && info.comp) || {};
         const cap = compCapPct(comp);
         const abilityAxes = ABILITY_BARS.map(a => ({
-            label: a[lang],
+            label: pickLang(a.zh, a.en),
             pct: cap[a.key] || 0,
         }));
         const radar = compRadarSvg(abilityAxes, copy.compFitTitle);
@@ -303,14 +315,14 @@
         const af = info && info.archFit;
         if (af && af.qualified && af.fit) {
             const signedPp = d => ((d >= 0 ? '+' : '') + d.toFixed(1) + 'pp');
-            const fits = COMP_FIT_DEFS.map(def => ({ def, name: def[lang].name, delta: Number((af.fit[def.key] || {}).delta || 0) }));
+            const fits = COMP_FIT_DEFS.map(def => ({ def, name: pickLang(def.zh.name, def.en.name), delta: Number((af.fit[def.key] || {}).delta || 0) }));
             const best = [...fits].sort((a, b) => b.delta - a.delta).filter(f => f.delta >= COMP_FIT_EMP_POS).slice(0, 1);
             const avoid = [...fits].sort((a, b) => a.delta - b.delta).filter(f => f.delta <= COMP_FIT_EMP_NEG).slice(0, 1);
             const items = [];
             best.forEach(f => items.push(
-                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(copy.compFitPrefer)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(f.def[lang].desc)}</span></div>`));
+                `<div class="comp-advice-item"><span class="ca-tag">${escHtml(copy.compFitPrefer)}：${escHtml(pickLang(f.def.zh.name, f.def.en.name))} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(pickLang(f.def.zh.desc, f.def.en.desc))}</span></div>`));
             avoid.forEach(f => items.push(
-                `<div class="comp-advice-item"><span class="ca-tag ca-tag-avoid">${escHtml(copy.compFitAvoid)}：${escHtml(f.def[lang].name)} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(copy.compFitAvoidDesc)}</span></div>`));
+                `<div class="comp-advice-item"><span class="ca-tag ca-tag-avoid">${escHtml(copy.compFitAvoid)}：${escHtml(pickLang(f.def.zh.name, f.def.en.name))} ${signedPp(f.delta)}</span><span class="ca-desc">${escHtml(copy.compFitAvoidDesc)}</span></div>`));
             if (items.length) adviceHtml = `<div class="comp-advice"><div class="cf-cap">${escHtml(copy.compFitFootnote)}</div>${items.join('')}</div>`;
         }
 
@@ -700,8 +712,9 @@
             teamPairCover: (have, total) => `已知搭配 ${have}/${total} 組`,
             teamDimsTitle: '隊伍能力維度',
             teamCompTitle: '陣容組成',
-            teamLack: '偏弱',
-            teamOk: '充足',
+            teamDimBad: '偏弱',
+            teamDimMid: '普通',
+            teamDimGood: '充足',
             teamConfHigh: '可信度高',
             teamConfMid: '可信度中',
             teamConfLow: '樣本偏早',
@@ -872,8 +885,9 @@
             teamPairCover: (have, total) => `Pairs known ${have}/${total}`,
             teamDimsTitle: 'Team ability dims',
             teamCompTitle: 'Composition',
-            teamLack: 'Weak',
-            teamOk: 'OK',
+            teamDimBad: 'Poor',
+            teamDimMid: 'Fair',
+            teamDimGood: 'Strong',
             teamConfHigh: 'High confidence',
             teamConfMid: 'Medium confidence',
             teamConfLow: 'Early signal',
@@ -1006,19 +1020,74 @@
             compStageLateAxis: 'Late',
         }
     };
-    // Prefer /en path or stub-stashed locale over the zh SSR default.
-    let currentLang = pendingBootLang === 'en' ? 'en' : 'zh';
+    // Prefer URL / stub-stashed locale over the zh SSR default.
+    const LANG_OPTIONS = [
+        { id: 'zh', label: '繁體中文', short: '繁中', htmlLang: 'zh-Hant', prefix: '' },
+        { id: 'zh-CN', label: '简体中文', short: '简中', htmlLang: 'zh-Hans', prefix: '/zh-CN' },
+        { id: 'en', label: 'English', short: 'EN', htmlLang: 'en', prefix: '/en' },
+    ];
+    function normalizeLang(lang) {
+        if (lang === 'en') return 'en';
+        if (lang === 'zh-CN' || lang === 'zh_CN' || lang === 'zh-Hans' || lang === 'cn') return 'zh-CN';
+        return 'zh';
+    }
+    let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
     let filterState = { role: '', q: '' };
+    let _trZhCN = null;
 
+    function t2s(s) {
+        if (s == null || s === '') return s;
+        const map = (NAMES_ZH_CN && NAMES_ZH_CN.t2s) || null;
+        if (!map) return String(s);
+        let out = '';
+        for (const ch of String(s)) out += map[ch] || ch;
+        return out;
+    }
+    function localizeZhCN(value) {
+        if (value == null) return value;
+        if (typeof value === 'string') return t2s(value);
+        if (typeof value === 'number' || typeof value === 'boolean') return value;
+        if (typeof value === 'function') {
+            return function localizedFn(...args) {
+                return localizeZhCN(value.apply(this, args));
+            };
+        }
+        if (Array.isArray(value)) return value.map(localizeZhCN);
+        if (typeof value === 'object') {
+            const out = {};
+            for (const k of Object.keys(value)) out[k] = localizeZhCN(value[k]);
+            return out;
+        }
+        return value;
+    }
+    // Chinese UI string: keep traditional, or convert when in simplified mode.
+    function zhUi(s) {
+        return currentLang === 'zh-CN' ? t2s(s) : s;
+    }
+    // Pick EN vs ZH (auto-converts ZH → simplified when needed).
+    function pickLang(zh, en) {
+        return currentLang === 'en' ? en : zhUi(zh);
+    }
+    function langMeta(lang) {
+        const id = normalizeLang(lang || currentLang);
+        return LANG_OPTIONS.find(o => o.id === id) || LANG_OPTIONS[0];
+    }
     function tr() {
-        return COPY[currentLang] || COPY.zh;
+        if (currentLang === 'en') return COPY.en;
+        if (currentLang === 'zh-CN') {
+            if (!_trZhCN) _trZhCN = localizeZhCN(COPY.zh);
+            return _trZhCN;
+        }
+        return COPY.zh;
     }
 
     function roleLabel(role) {
-        const labels = ROLE_LABELS[currentLang] || ROLE_LABELS.zh;
-        return labels[role] || role || '';
+        const labels = ROLE_LABELS.zh || {};
+        const enLabels = ROLE_LABELS.en || {};
+        if (currentLang === 'en') return enLabels[role] || role;
+        return zhUi(labels[role] || role);
     }
 
     function styleLabel(info) {
@@ -1164,31 +1233,63 @@
         searchEl.setAttribute('aria-label', copy.searchAria);
     }
 
-    function champName(info) {
+    function champName(info, cid) {
         if (!info) return '';
-        return currentLang === 'en' ? (info.name_en || info.alias || info.name || '') : (info.name_zh || info.name || info.alias || '');
+        if (currentLang === 'en') return info.name_en || info.alias || info.name || '';
+        if (currentLang === 'zh-CN') {
+            const id = cid != null ? String(cid)
+                : (info.id != null ? String(info.id)
+                : (info.champion_id != null ? String(info.champion_id) : ''));
+            const cn = id && NAMES_ZH_CN && NAMES_ZH_CN.champs && NAMES_ZH_CN.champs[id];
+            if (cn) return cn;
+            return t2s(info.name_zh || info.name || info.alias || '');
+        }
+        return info.name_zh || info.name || info.alias || '';
     }
 
-    function augName(aug) {
+    function augName(aug, aid) {
         if (!aug) return '';
-        return currentLang === 'en' ? (aug.name_en || aug.name || '') : (aug.name_zh || aug.name || '');
+        if (currentLang === 'en') return aug.name_en || aug.name || '';
+        if (currentLang === 'zh-CN') {
+            const id = aid != null ? String(aid)
+                : (aug.id != null ? String(aug.id) : '');
+            const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
+            if (row && row.n) return row.n;
+            return t2s(aug.name_zh || aug.name || '');
+        }
+        return aug.name_zh || aug.name || '';
     }
 
-    function augDesc(aug) {
+    function augDesc(aug, aid) {
         if (!aug) return '';
         if (currentLang === 'en') return aug.desc_en || aug.desc || '';
+        if (currentLang === 'zh-CN') {
+            const id = aid != null ? String(aid)
+                : (aug.id != null ? String(aug.id) : '');
+            const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
+            if (row && row.d) return row.d;
+            return t2s(aug.desc_zh || aug.desc || '');
+        }
         return aug.desc_zh || aug.desc || '';
     }
 
-    function augSetName(aug) {
+    function augSetName(aug, aid) {
         if (!aug) return '';
         if (currentLang === 'en') return aug.set_en || aug.set || '';
+        if (currentLang === 'zh-CN') {
+            const id = aid != null ? String(aid)
+                : (aug.id != null ? String(aug.id) : '');
+            const row = id && NAMES_ZH_CN && NAMES_ZH_CN.augs && NAMES_ZH_CN.augs[id];
+            if (row && row.s) return row.s;
+            return t2s(aug.set_zh || aug.set || aug.set_en || '');
+        }
         return aug.set_zh || aug.set || aug.set_en || '';
     }
 
     function setEntryName(entry) {
         if (!entry) return '';
         if (currentLang === 'en') return entry.name_en || entry.name || '';
+        if (currentLang === 'zh-CN') return t2s(entry.name_zh || entry.name || entry.name_en || '');
         return entry.name_zh || entry.name || entry.name_en || '';
     }
 
@@ -1214,8 +1315,26 @@
         };
     }
 
+    function itemCnName(id) {
+        if (id == null || id === '' || !NAMES_ZH_CN || !NAMES_ZH_CN.items) return '';
+        return NAMES_ZH_CN.items[String(id)] || '';
+    }
+    function itemCnDesc(id) {
+        if (id == null || id === '' || !NAMES_ZH_CN || !NAMES_ZH_CN.itemDescs) return '';
+        return NAMES_ZH_CN.itemDescs[String(id)] || '';
+    }
     function itemDisplayName(item) {
         if (!item) return '';
+        if (currentLang === 'zh-CN') {
+            const cn = itemCnName(item.id);
+            if (cn) return cn;
+            if (item.name_zh || item.name || item.name_en) {
+                return t2s(item.name_zh || item.name || item.name_en || '');
+            }
+            const cat = itemCatalogEntry(item.id);
+            if (!cat) return item.id ? ('#' + item.id) : '';
+            return t2s(cat.name_zh || cat.name_en || '');
+        }
         if (item.name_zh || item.name_en || item.name) {
             return currentLang === 'en'
                 ? (item.name_en || item.name || item.name_zh || '')
@@ -1230,6 +1349,15 @@
 
     function itemDescription(item) {
         if (!item) return '';
+        if (currentLang === 'zh-CN') {
+            const cn = itemCnDesc(item.id);
+            if (cn) return cn;
+            const direct = item.desc_zh || item.desc || item.desc_en || '';
+            if (direct) return t2s(String(direct));
+            const cat = itemCatalogEntry(item.id);
+            if (!cat) return '';
+            return t2s(cat.desc_zh || cat.desc_en || '');
+        }
         const direct = currentLang === 'en'
             ? (item.desc_en || item.desc_zh || item.desc || '')
             : (item.desc_zh || item.desc_en || item.desc || '');
@@ -1535,11 +1663,11 @@
 
     function buildAugCard(entry, kind, opts) {
         const aug = DATA.augs[entry.id];
-        const name = aug ? augName(aug) : '#' + entry.id;
+        const name = aug ? augName(aug, entry.id) : '#' + entry.id;
         const icon = aug && aug.icon ? aug.icon : '';
         const rarity = aug ? (aug.rarity || '') : '';
-        const desc = augDesc(aug);
-        const setName = augSetName(aug);
+        const desc = augDesc(aug, entry.id);
+        const setName = augSetName(aug, entry.id);
         const copy = tr();
         const matchText = [
             name,
@@ -1599,7 +1727,7 @@
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
                 <div class="awr wr-${wrToneTier(entry)}">${pct(entry.wr)}</div>
-                <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
+                <div class="alift pick-${augTierCls}" title="${escHtml(pickLang(`選用率 ${pickPct}`, `pick ${pickPct}`))}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
@@ -1696,7 +1824,7 @@
     function augCatLabel(cat) {
         const lbl = (augCatMeta().labels || {})[cat];
         if (!lbl) return cat;
-        return currentLang === 'en' ? (lbl.en || lbl.zh || cat) : (lbl.zh || lbl.en || cat);
+        return currentLang === 'en' ? (lbl.en || lbl.zh || cat) : zhUi(lbl.zh || lbl.en || cat);
     }
     function buildAugCatChips() {
         const meta = augCatMeta();
@@ -1712,7 +1840,7 @@
             const tip = (cat === 'new' && meta.newPatch) ? ` title="${escHtml(copy.augFilterNewTip(meta.newPatch))}"` : '';
             chips.push(`<button type="button" class="aug-cat-chip cat-${cat}${active ? ' is-active' : ''}" data-cat="${cat}" aria-pressed="${active}"${tip}>${escHtml(augCatLabel(cat))}</button>`);
         });
-        return `<div class="aug-cat-bar" role="group" aria-label="${escHtml(currentLang === 'en' ? 'Augment categories' : '增幅分類')}">${chips.join('')}</div>`;
+        return `<div class="aug-cat-bar" role="group" aria-label="${escHtml(pickLang('增幅分類', 'Augment categories'))}">${chips.join('')}</div>`;
     }
     // Re-apply the active filter to every .aug card under `root`, syncing chip
     // pressed state and collapsing rarity rows that hold cards but match none.
@@ -1797,9 +1925,9 @@
         return entries;
     }
     function augRarityLabel(rar) {
-        if (!rar) return currentLang === 'en' ? 'All' : '全部';
+        if (!rar) return pickLang('全部', 'All');
         const l = AUG_RARITY_LABELS[rar];
-        return l ? (currentLang === 'en' ? l.en : l.zh) : rar;
+        return l ? pickLang(l.zh, l.en) : rar;
     }
     function buildAugTierFilters() {
         const host = document.getElementById('aug-tier-filters');
@@ -1812,13 +1940,13 @@
         const meta = augCatMeta();
         const order = Array.isArray(meta.order) ? meta.order : [];
         const allCat = augTierCats.size === 0;
-        const catChips = [`<button type="button" class="aug-cat-chip aug-cat-all${allCat ? ' is-active' : ''}" data-tcat="" aria-pressed="${allCat}">${escHtml(currentLang === 'en' ? 'All' : '全部')}</button>`]
+        const catChips = [`<button type="button" class="aug-cat-chip aug-cat-all${allCat ? ' is-active' : ''}" data-tcat="" aria-pressed="${allCat}">${escHtml(pickLang('全部', 'All'))}</button>`]
             .concat(order.map(cat => {
                 const on = augTierCats.has(cat);
                 return `<button type="button" class="aug-cat-chip cat-${cat}${on ? ' is-active' : ''}" data-tcat="${cat}" aria-pressed="${on}">${escHtml(augCatLabel(cat))}</button>`;
             })).join('');
-        const rarLbl = currentLang === 'en' ? 'Rarity' : '稀有度';
-        const catLbl = currentLang === 'en' ? 'Category' : '分類';
+        const rarLbl = pickLang('稀有度', 'Rarity');
+        const catLbl = pickLang('分類', 'Category');
         host.innerHTML =
             `<div class="aug-cat-bar aug-rarity-bar" role="group" aria-label="${escHtml(rarLbl)}">${rarChips}</div>`
             + `<div class="aug-cat-bar" role="group" aria-label="${escHtml(catLbl)}">${catChips}</div>`;
@@ -1832,12 +1960,12 @@
         const colors = tierMeta.colors || {};
         const entries = computeAugTiers(augTierEntries());
         if (!entries.length) {
-            host.innerHTML = `<div class="empty-state visible">${escHtml(currentLang === 'en' ? 'Augment win-rate data is not available yet.' : '尚無增幅勝率資料。')}</div>`;
+            host.innerHTML = `<div class="empty-state visible">${escHtml(pickLang('尚無增幅勝率資料。', 'Augment win-rate data is not available yet.'))}</div>`;
             return;
         }
         const byTier = {};
         entries.forEach(e => { (byTier[e.tier] = byTier[e.tier] || []).push(e); });
-        const unit = currentLang === 'en' ? '' : '個';
+        const unit = pickLang('個', '');
         const blocks = [];
         order.forEach(tier => {
             const list = byTier[tier];
@@ -1957,7 +2085,7 @@
         return `
             <button type="button" class="augch-row" data-cid="${escHtml(String(r.cid))}">
                 ${info.image ? `<img loading="lazy" src="${info.image}" alt="">` : ''}
-                <span class="augch-nm">${escHtml(champName(info))}</span>
+                <span class="augch-nm">${escHtml(champName(info, r.cid))}</span>
                 <span class="augch-meta">${escHtml(sub)}</span>
                 ${val}
             </button>
@@ -1990,7 +2118,7 @@
                     : `<div class="augch-empty">${escHtml(copy.augChampsEmpty)}</div>`}
             </div>
         `;
-        const setName = augSetName(aug);
+        const setName = augSetName(aug, augChampsId);
         const rarityLabel = copy.rarityLabels[aug.rarity] || '';
         const statBits = [];
         if (aug.wr != null) statBits.push(`WR ${pct(aug.wr)}`);
@@ -2002,7 +2130,7 @@
                 <div class="augch-head">
                     ${aug.icon ? `<img class="augch-icon" src="${aug.icon}" alt="">` : ''}
                     <div>
-                        <div class="augch-name" id="augch-title">${escHtml(augName(aug))}</div>
+                        <div class="augch-name" id="augch-title">${escHtml(augName(aug, augChampsId))}</div>
                         <div class="augch-sub">${escHtml([rarityLabel, setName].filter(Boolean).join(' · '))}</div>
                         <div class="augch-stat">${escHtml(statBits.join(' · '))}</div>
                     </div>
@@ -2102,15 +2230,11 @@
         const spellInfo = info.spells || {};
         const itemClusterInfo = info.itemClusters || {};
         const augTypeInfo = info.augTypes || {};
-        const augmentRankTitle = currentLang === 'en' ? 'Augment Ranking' : '增幅裝置排行';
-        const singleItemTitle = currentLang === 'en' ? 'Single Item Strength' : '單件裝備強度';
-        const singleItemMeta = currentLang === 'en'
-            ? 'counts any final-slot item; strongest first, swipe for more'
-            : '六格中出過就計入；由強到弱，右滑看更多';
-        const singleItemBadTitle = currentLang === 'en' ? 'Common Traps' : '常見但不推薦';
-        const singleItemBadMeta = currentLang === 'en'
-            ? 'negative-lift items people still build; pick ≥ 10% always listed'
-            : '負 lift 但仍常見；選取率 ≥ 10% 一律列出';
+        const augmentRankTitle = pickLang('增幅裝置排行', 'Augment Ranking');
+        const singleItemTitle = pickLang('單件裝備強度', 'Single Item Strength');
+        const singleItemMeta = pickLang('六格中出過就計入；由強到弱，右滑看更多', 'counts any final-slot item; strongest first, swipe for more');
+        const singleItemBadTitle = pickLang('常見但不推薦', 'Common Traps');
+        const singleItemBadMeta = pickLang('負 lift 但仍常見；選取率 ≥ 10% 一律列出', 'negative-lift items people still build; pick ≥ 10% always listed');
         const topRows = RARITIES.map(r => buildRarityRow(top[r.key], 'ranked', r)).join('');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
@@ -2118,7 +2242,7 @@
         const mateBot = [...pairs].slice(-mateLimit).reverse();
         const buildMateCard = (entry, kind) => {
             const mate = DATA.champs[String(entry.id)];
-            const name = mate ? champName(mate) : ('#' + entry.id);
+            const name = mate ? champName(mate, entry.id) : ('#' + entry.id);
             const image = mate && mate.image ? mate.image : '';
             const zText = `${entry.z >= 0 ? '+' : ''}${entry.z.toFixed(2)}`;
             const expectedText = entry.expected !== undefined ? copy.expected(pct(entry.expected)) : '';
@@ -2420,9 +2544,7 @@
             if (options.itemCarousel) {
                 const rows = (payload && payload.top) || [];
                 if (!rows.length) return '';
-                const itemMeta = currentLang === 'en'
-                    ? 'boots excluded; strongest first, swipe for more'
-                    : '不含鞋子；勝率分數由高到低，右滑看更多';
+                const itemMeta = pickLang('不含鞋子；勝率分數由高到低，右滑看更多', 'boots excluded; strongest first, swipe for more');
                 const displayMeta = (options.singleItem || options.itemCluster) && meta ? meta : itemMeta;
                 const metaHtml = `<span class="section-meta">${displayMeta}</span>`;
                 return `
@@ -2658,13 +2780,13 @@
         };
         const mainTabLabels = currentLang === 'en'
             ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Abilities' }
-            : { overview: '概覽', items: '出裝', augments: '增幅裝置', compfit: '英雄能力' };
-        const bootItemTitle = currentLang === 'en' ? 'Recommended Boots' : '推薦鞋子';
-        const bootItemMeta = currentLang === 'en' ? 'WR · pick' : '勝率 · 選取率';
-        const spellRailTitle = currentLang === 'en' ? 'Summoner Spells' : '召喚師技能';
+            : { overview: zhUi('概覽'), items: zhUi('出裝'), augments: zhUi('增幅裝置'), compfit: zhUi('英雄能力') };
+        const bootItemTitle = pickLang('推薦鞋子', 'Recommended Boots');
+        const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
+        const spellRailTitle = pickLang('召喚師技能', 'Summoner Spells');
         // Mayhem players carry two spells, so pick rates sum to ~200% — that
         // domain fact stays in code comments / tips, not the rail chrome.
-        const spellRailMeta = currentLang === 'en' ? 'WR · pick' : '勝率 · 選取率';
+        const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
         const overviewTabContent = `
@@ -2727,7 +2849,7 @@
             <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
             <div class="detail-head">
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
-                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info))}</span>
+                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>
                 ${buildDetailRoleTags(info)}
             </div>
             ${detailTabs}
@@ -2997,12 +3119,12 @@
         const enoughGames = row.minGames >= 60;
         const signal = Math.abs(row.zAvg || 0);
         if (strongCoverage && enoughGames && signal >= 1.0) {
-            return currentLang === 'en' ? 'High confidence' : '可信度高';
+            return pickLang('可信度高', 'High confidence');
         }
         if (row.coverageRatio >= 0.5 && row.minGames >= 40 && signal >= 0.6) {
-            return currentLang === 'en' ? 'Medium confidence' : '可信度中';
+            return pickLang('可信度中', 'Medium confidence');
         }
-        return currentLang === 'en' ? 'Early signal' : '樣本偏早';
+        return pickLang('樣本偏早', 'Early signal');
     }
 
     function compReasonLabel(row) {
@@ -3020,24 +3142,24 @@
         }
         if (value > 0.001) {
             if (row.beforeFrontGroup !== row.afterFrontGroup && row.afterFrontGroup !== '0 front') {
-                return currentLang === 'en' ? `adds frontline ${signed(value)}` : `補前排 ${signed(value)}`;
+                return pickLang(`補前排 ${signed(value)}`, `adds frontline ${signed(value)}`);
             }
             if (row.beforePokeGroup === 'poke lack' && row.afterPokeGroup === 'poke ok') {
-                return currentLang === 'en' ? `adds poke ${signed(value)}` : `補Poke ${signed(value)}`;
+                return pickLang(`補Poke ${signed(value)}`, `adds poke ${signed(value)}`);
             }
             if (row.beforeWaveGroup === 'wave lack' && row.afterWaveGroup === 'wave ok') {
-                return currentLang === 'en' ? `adds waveclear ${signed(value)}` : `補清兵 ${signed(value)}`;
+                return pickLang(`補清兵 ${signed(value)}`, `adds waveclear ${signed(value)}`);
             }
             if (row.beforeEngageGroup === 'engage lack' && row.afterEngageGroup === 'engage ok') {
-                return currentLang === 'en' ? `adds engage ${signed(value)}` : `補開戰 ${signed(value)}`;
+                return pickLang(`補開戰 ${signed(value)}`, `adds engage ${signed(value)}`);
             }
             if (row.beforeAllLacksGroup !== row.afterAllLacksGroup) {
-                return currentLang === 'en' ? `rounds team ${signed(value)}` : `補陣容 ${signed(value)}`;
+                return pickLang(`補陣容 ${signed(value)}`, `rounds team ${signed(value)}`);
             }
         }
-        if (abs < 0.001) return currentLang === 'en' ? 'team neutral' : '陣容中性';
-        if (value > 0) return currentLang === 'en' ? `team +${(value * 100).toFixed(1)}%` : `陣容加分 ${signed(value)}`;
-        return currentLang === 'en' ? `team ${(value * 100).toFixed(1)}%` : `陣容扣分 ${signed(value)}`;
+        if (abs < 0.001) return pickLang('陣容中性', 'team neutral');
+        if (value > 0) return pickLang(`陣容加分 ${signed(value)}`, `team +${(value * 100).toFixed(1)}%`);
+        return pickLang(`陣容扣分 ${signed(value)}`, `team ${(value * 100).toFixed(1)}%`);
     }
 
     function recMetaHtml(row, name) {
@@ -3045,7 +3167,7 @@
         const scoreClass = row.leastFit ? 'fit-worst' : recScoreClass(row.fitScore);
         const scoreLabel = row.leastFit
             ? copy.leastFitLabel
-            : (currentLang === 'en' ? 'Fit' : '推薦度');
+            : (pickLang('推薦度', 'Fit'));
         const confidence = confidenceLabel(row);
         const pairClass = row.pairFitScore >= 0 ? 'good' : 'bad';
         const compClass = row.compositionContribution > 0.001 ? 'good' : (row.compositionContribution < -0.001 ? 'bad' : 'muted');
@@ -3128,10 +3250,9 @@
         const estWr = Math.max(0.35, Math.min(0.65, estRaw));
 
         const cap = compCapPct(meanComp);
-        const lang = currentLang === 'en' ? 'en' : 'zh';
         // Roster radar: 前排 / 輸出 / 開戰 / 清兵 / 續航 / 控場.
         const abilityAxes = TEAM_RADAR_AXES.map(a => ({
-            label: a[lang],
+            label: pickLang(a.zh, a.en),
             pct: cap[a.key] || 0,
         }));
 
@@ -3173,22 +3294,25 @@
 
     function buildTeamEvalHtml(ids) {
         const copy = tr();
-        const lang = currentLang === 'en' ? 'en' : 'zh';
         const ev = evaluateFullTeam(ids);
         const confLabel = ev.confKey === 'high' ? copy.teamConfHigh
             : ev.confKey === 'mid' ? copy.teamConfMid
             : copy.teamConfLow;
         const wrTone = ev.estWr >= 0.53 ? 'is-good' : (ev.estWr <= 0.47 ? 'is-bad' : 'is-even');
         const radar = compRadarSvg(ev.abilityAxes, copy.teamDimsTitle);
-        // One block only: radar + 6 dim bars with 充足/偏弱 (same axes, no duplicate section).
-        const lacks = (ev.teamComp && ev.teamComp.lacks) || {};
+        // One block: radar + 6 dim bars graded 偏弱/普通/充足 by mean capability pct.
+        // Cuts align with bar fill: <40 偏弱 · 40–64 普通 · ≥65 充足.
         const dimRows = TEAM_RADAR_AXES.map(d => {
-            const isLack = !!lacks[d.key];
-            const fill = Math.round((ev.cap[d.key] || 0) * 100);
-            const tag = isLack ? copy.teamLack : copy.teamOk;
-            const tagCls = isLack ? 'is-lack' : 'is-ok';
-            return `<div class="team-comp-row ${tagCls}">
-                <span class="team-comp-name">${escHtml(d[lang])}</span>
+            const pct01 = Number(ev.cap[d.key] || 0);
+            const fill = Math.round(pct01 * 100);
+            let grade = 'mid';
+            if (pct01 < 0.40) grade = 'bad';
+            else if (pct01 >= 0.65) grade = 'good';
+            const tag = grade === 'bad' ? copy.teamDimBad
+                : grade === 'good' ? copy.teamDimGood
+                : copy.teamDimMid;
+            return `<div class="team-comp-row is-${grade}">
+                <span class="team-comp-name">${escHtml(pickLang(d.zh, d.en))}</span>
                 <span class="ab-bar"><span style="width:${fill}%"></span></span>
                 <span class="ab-val">${fill}</span>
                 <span class="team-comp-tag">${escHtml(tag)}</span>
@@ -3281,19 +3405,18 @@
         if (!showPanel) return;
 
         const chips = [];
-        teamPicks.forEach((cid, idx) => {
+        teamPicks.forEach(cid => {
             const info = DATA.champs[cid];
-            const name = info ? champName(info) : ('#' + cid);
+            const name = info ? champName(info, cid) : ('#' + cid);
             const image = info && info.image ? info.image : '';
             chips.push(
                 `<button class="pick-chip" type="button" data-remove-cid="${cid}" title="${escHtml(copy.removePick(name))}">` +
-                `<span class="ord">${idx + 1}</span>` +
                 (image ? `<img loading="lazy" src="${image}" alt="">` : '') +
                 `<span>${escHtml(name)}</span></button>`
             );
         });
         for (let i = teamPicks.length; i < MAX_TEAM_PICKS; i += 1) {
-            chips.push(`<div class="pick-chip empty"><span class="ord">${i + 1}</span>${copy.pickEmpty}</div>`);
+            chips.push(`<div class="pick-chip empty"><span>${copy.pickEmpty}</span></div>`);
         }
         slots.innerHTML = chips.join('');
 
@@ -3329,7 +3452,7 @@
 
         recList.innerHTML = recommendationDisplayRows(recs).map((row, idx) => {
             const info = DATA.champs[row.id];
-            const name = info ? champName(info) : ('#' + row.id);
+            const name = info ? champName(info, row.id) : ('#' + row.id);
             const image = info && info.image ? info.image : '';
             const confidence = confidenceLabel(row);
             const meta = recMetaHtml(row, name);
@@ -3353,7 +3476,7 @@
             const cid = champ.getAttribute('data-cid');
             const info = DATA.champs[cid];
             if (!info) return;
-            const name = champName(info);
+            const name = champName(info, cid);
             const alias = info.alias || '';
             const tier = champ.getAttribute('data-tier') || '';
             const wr = champ.getAttribute('data-wr') || '';
@@ -3398,7 +3521,7 @@
                 lift: 'lift',
             };
         }
-        return {
+        const zhLabels = {
             button: '版本變動',
             kicker: range,
             title: '這版誰變多了',
@@ -3423,17 +3546,29 @@
             uses: '次',
             lift: 'lift',
         };
+        return currentLang === 'zh-CN' ? localizeZhCN(zhLabels) : zhLabels;
     }
 
     function fmtInt(n) {
-        return Number(n || 0).toLocaleString(currentLang === 'en' ? 'en-US' : 'zh-TW');
+        return Number(n || 0).toLocaleString(currentLang === 'en' ? 'en-US' : (currentLang === 'zh-CN' ? 'zh-CN' : 'zh-TW'));
     }
 
     function localizedEntityName(entity) {
         if (!entity) return '';
-        return currentLang === 'en'
-            ? (entity.name_en || entity.alias || entity.name || entity.id || '')
-            : (entity.name_zh || entity.name || entity.name_en || entity.alias || entity.id || '');
+        if (currentLang === 'en') {
+            return entity.name_en || entity.alias || entity.name || entity.id || '';
+        }
+        // Prefer official CN champ name when id is present.
+        if (currentLang === 'zh-CN' && entity.id != null && NAMES_ZH_CN && NAMES_ZH_CN.champs) {
+            const cn = NAMES_ZH_CN.champs[String(entity.id)];
+            if (cn) return cn;
+        }
+        if (currentLang === 'zh-CN' && entity.id != null && NAMES_ZH_CN && NAMES_ZH_CN.items) {
+            const cn = NAMES_ZH_CN.items[String(entity.id)];
+            if (cn) return cn;
+        }
+        const zh = entity.name_zh || entity.name || entity.name_en || entity.alias || entity.id || '';
+        return currentLang === 'zh-CN' ? t2s(String(zh)) : zh;
     }
 
     function changeDeltaClass(value) {
@@ -3592,9 +3727,10 @@
     }
 
     function articleField(a, base) {
-        return currentLang === 'en'
-            ? (a[base + '_en'] || a[base + '_zh'] || '')
-            : (a[base + '_zh'] || a[base + '_en'] || '');
+        if (currentLang === 'en') return a[base + '_en'] || a[base + '_zh'] || '';
+        const zh = a[base + '_zh'] || a[base + '_en'] || '';
+        // body_* is HTML; still safe to run char-level t2s on tags/attributes that don't use trad chars.
+        return currentLang === 'zh-CN' ? t2s(zh) : zh;
     }
     // ---- Column cover art: an auto-generated 16:9 SVG "首圖" per article ----
     // We have no splash art, so each cover is a themed vector poster built from
@@ -3706,10 +3842,8 @@
         if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
         const host = document.getElementById('column-host');
         if (!host) return;
-        const head = currentLang === 'en' ? 'Articles' : '專欄';
-        const sub = currentLang === 'en'
-            ? 'The thinking behind the data, and how to play it.'
-            : '資料背後的思考與玩法解析。';
+        const head = pickLang('專欄', 'Articles');
+        const sub = pickLang('資料背後的思考與玩法解析。', 'The thinking behind the data, and how to play it.');
         const cards = ARTICLES.map(a => `
             <div class="article-card" data-article="${escHtml(a.id)}" role="button" tabindex="0"
                  aria-label="${escHtml(articleField(a, 'title'))}">
@@ -3732,8 +3866,8 @@
         if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
         const host = document.getElementById('column-host');
         if (!host) return;
-        const back = currentLang === 'en' ? 'Back to Articles' : '返回專欄';
-        const share = currentLang === 'en' ? 'Copy link' : '複製連結';
+        const back = pickLang('返回專欄', 'Back to Articles');
+        const share = pickLang('複製連結', 'Copy link');
         host.innerHTML = `<div class="article-reader">`
             + `<div class="article-toolbar">`
             + `<button class="article-back" data-article-back type="button">← ${escHtml(back)}</button>`
@@ -3759,7 +3893,7 @@
             const label = btn.querySelector('span');
             if (!label) return;
             const prev = label.textContent;
-            label.textContent = currentLang === 'en' ? 'Copied!' : '已複製！';
+            label.textContent = pickLang('已複製！', 'Copied!');
             btn.classList.add('copied');
             setTimeout(() => {
                 label.textContent = prev;
@@ -3803,7 +3937,7 @@
             if (!c) continue;
             const sx = Number(c.snowball), sy = Number(c.scaling);
             if (!isFinite(sx) || !isFinite(sy)) continue;
-            rows.push({ name: champName(info), img: info.image || '', wr: Number(info.wr) || 0, g: Number(info.g) || 0, sx, sy });
+            rows.push({ name: champName(info, cid), img: info.image || '', wr: Number(info.wr) || 0, g: Number(info.g) || 0, sx, sy });
         }
         if (!rows.length) { host.innerHTML = ''; return; }
         const xs = rows.map(r => r.sx), ys = rows.map(r => r.sy);
@@ -3839,10 +3973,11 @@
             }
         }
         const en = currentLang === 'en';
-        const q = en ? { tr: 'Snowball + late', tl: 'Late game', br: 'Snowball', bl: 'Neither' }
-                     : { tr: '滾雪球強 · 後期強', tl: '後期強', br: '滾雪球強', bl: '兩者皆弱' };
-        const xTitle = en ? 'Snowball  →' : '滾雪球能力  →';
-        const yTitle = en ? 'Late game  →' : '後期能力  →';
+        const q = en
+            ? { tr: 'Snowball + late', tl: 'Late game', br: 'Snowball', bl: 'Neither' }
+            : { tr: zhUi('滾雪球強 · 後期強'), tl: zhUi('後期強'), br: zhUi('滾雪球強'), bl: zhUi('兩者皆弱') };
+        const xTitle = en ? 'Snowball  →' : zhUi('滾雪球能力  →');
+        const yTitle = en ? 'Late game  →' : zhUi('後期能力  →');
         let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none">`;
         s += `<defs><clipPath id="sc-panel"><rect x="${M.l}" y="${M.t}" width="${PW}" height="${PH}" rx="12"/></clipPath></defs>`;
         s += `<rect x="${M.l}" y="${M.t}" width="${PW}" height="${PH}" rx="12" fill="var(--surface-sunken)" stroke="var(--border)"/>`;
@@ -3870,7 +4005,7 @@
             const ring = scatterWrColor(r.wr);
             const tip = en
                 ? `${r.name}  ·  late ${signed(r.sy)}  ·  snowball ${r.sx.toFixed(2)}  ·  WR ${pct(r.wr)}  ·  ${r.g} games`
-                : `${r.name}  ·  後期 ${signed(r.sy)}  ·  滾雪球 ${r.sx.toFixed(2)}  ·  勝率 ${pct(r.wr)}  ·  ${r.g}場`;
+                : zhUi(`${r.name}  ·  後期 ${signed(r.sy)}  ·  滾雪球 ${r.sx.toFixed(2)}  ·  勝率 ${pct(r.wr)}  ·  ${r.g}場`);
             imgs += `<img class="sc-dot" src="${escHtml(r.img)}" alt="" loading="lazy" title="${escHtml(tip)}" `
                 + `style="left:${pos[i][0].toFixed(1)}px;top:${pos[i][1].toFixed(1)}px;width:${ICON}px;height:${ICON}px;--ring:${ring}">`;
         });
@@ -3927,7 +4062,7 @@
     // Legacy '#view' / '#column/id' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
-        const prefix = currentLang === 'en' ? '/en' : '';
+        const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix || '/';
         if (view === 'column' && sub) {
             return prefix + '/column/' + encodeURIComponent(sub);
@@ -3960,10 +4095,13 @@
         }
 
         const segs = path.replace(/^\//, '').split('/').filter(Boolean);
-        // Optional locale prefix: only "en" is explicit; bare paths are zh.
+        // Optional locale prefix: "en" | "zh-CN"; bare paths are traditional zh.
         let urlLang = null;
         if (segs[0] === 'en') {
             urlLang = 'en';
+            segs.shift();
+        } else if (segs[0] === 'zh-CN') {
+            urlLang = 'zh-CN';
             segs.shift();
         }
         if (!segs.length) return { view: 'home', sub: '', urlLang, legacyHash: false };
@@ -3999,7 +4137,8 @@
         const { view, sub, legacyHash, urlLang } = parseRoute();
         // URL is source of truth for language on navigation / popstate.
         // (Boot may soft-apply a saved en preference on bare `/` only.)
-        const wantLang = urlLang === 'en' ? 'en' : 'zh';
+        // Explicit locale prefix wins; bare path = traditional zh.
+        const wantLang = urlLang ? normalizeLang(urlLang) : 'zh';
         if (wantLang !== currentLang) {
             applyLanguage(wantLang, 'none');
         }
@@ -4081,12 +4220,31 @@
         try { localStorage.setItem(THEME_KEY, t); } catch {}
     }
 
+    function syncLangMenu() {
+        const meta = langMeta(currentLang);
+        const toggle = document.getElementById('lang-toggle');
+        const toggleLabel = document.getElementById('lang-toggle-label');
+        if (toggle) {
+            toggle.title = meta.label;
+            toggle.setAttribute('aria-label', 'Language / 語言: ' + meta.label);
+        }
+        if (toggleLabel) toggleLabel.textContent = meta.label;
+        document.querySelectorAll('.lang-menu-list [data-lang]').forEach(btn => {
+            const on = btn.getAttribute('data-lang') === currentLang;
+            btn.classList.toggle('is-active', on);
+            if (on) btn.setAttribute('aria-current', 'true');
+            else btn.removeAttribute('aria-current');
+        });
+        const menu = document.getElementById('lang-menu');
+        if (menu) menu.open = false;
+    }
     function applyLanguage(nextLang, historyMode) {
         // historyMode: 'replace' (default, language toggle) | 'none' (URL already correct)
         if (historyMode == null) historyMode = 'replace';
-        currentLang = nextLang === 'en' ? 'en' : 'zh';
+        currentLang = normalizeLang(nextLang);
+        _trZhCN = null;  // rebuild simplified COPY proxy after lang change / names load
         const copy = tr();
-        document.documentElement.lang = copy.htmlLang;
+        document.documentElement.lang = langMeta(currentLang).htmlLang;
         try { localStorage.setItem(LANG_KEY, currentLang); } catch {}
 
         // Brand wordmark is structured HTML (aram + meta) shared in both langs;
@@ -4108,9 +4266,12 @@
             el.textContent = copy.tierUnit;
         });
         document.querySelectorAll('.chip').forEach(chip => {
-            chip.textContent = currentLang === 'en'
-                ? (chip.getAttribute('data-label-en') || chip.textContent || '')
-                : (chip.getAttribute('data-label-zh') || chip.textContent || '');
+            if (currentLang === 'en') {
+                chip.textContent = chip.getAttribute('data-label-en') || chip.textContent || '';
+            } else {
+                const zh = chip.getAttribute('data-label-zh') || chip.textContent || '';
+                chip.textContent = zhUi(zh);
+            }
         });
         const emptyTitle = document.getElementById('empty-title');
         if (emptyTitle) emptyTitle.textContent = copy.emptyTitle;
@@ -4124,21 +4285,17 @@
         if (sideSub) sideSub.innerHTML = copy.sideSub;
         const sideClose = document.getElementById('side-close');
         if (sideClose) sideClose.setAttribute('aria-label', copy.closeRecs);
-        const toggle = document.getElementById('lang-toggle');
-        const toggleLabel = document.getElementById('lang-toggle-label');
-        if (toggle) {
-            toggle.title = copy.langToggleTitle;
-            toggle.setAttribute('aria-label', copy.langToggleAria);
-        }
-        if (toggleLabel) toggleLabel.textContent = copy.langToggleLabel;
+        syncLangMenu();
         syncThemeToggleLabels();
 
         // Static chrome strings (nav tabs, augment placeholder) carry their
-        // own zh/en text via data-i18n-* attributes.
+        // own zh/en text via data-i18n-* attributes; zh-CN falls back to t2s(zh).
         document.querySelectorAll('[data-i18n-zh]').forEach(el => {
-            const val = currentLang === 'en'
-                ? el.getAttribute('data-i18n-en')
-                : el.getAttribute('data-i18n-zh');
+            let val;
+            if (currentLang === 'en') val = el.getAttribute('data-i18n-en');
+            else if (currentLang === 'zh-CN') {
+                val = el.getAttribute('data-i18n-zh-cn') || t2s(el.getAttribute('data-i18n-zh') || '');
+            } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
         if (document.getElementById('view-column')
@@ -4333,11 +4490,15 @@
             trackEvent('article_share', { id: columnArticle });
             return;
         }
-        const langBtn = ev.target.closest('[data-lang-toggle]');
-        if (langBtn) {
-            const nextLang = currentLang === 'en' ? 'zh' : 'en';
+        const langPick = ev.target.closest('.lang-menu-list [data-lang]');
+        if (langPick) {
+            const nextLang = normalizeLang(langPick.getAttribute('data-lang'));
             applyLanguage(nextLang);
             trackEvent('language_toggle', { language: nextLang });
+            return;
+        }
+        // Summary click opens/closes <details>; no language flip on the chrome itself.
+        if (ev.target.closest('#lang-menu summary')) {
             return;
         }
         const fabBtn = ev.target.closest('#rec-fab');
@@ -4589,20 +4750,25 @@
         }
     }
 
-    // Language: URL `/en…` + stub-stashed aram-spa-lang win (see pendingBootLang
+    // Language: URL locale prefix + stub-stashed aram-spa-lang win (see pendingBootLang
     // at top of file).  Bare paths are zh, except a soft preference on home `/`
-    // that rewrites to `/en` when the user last chose EN.
+    // that rewrites to the last chosen non-zh locale.
     {
         const boot = parseRoute();
-        if (boot.urlLang === 'en' || pendingBootLang === 'en') {
-            currentLang = 'en';
+        if (boot.urlLang) {
+            currentLang = normalizeLang(boot.urlLang);
+        } else if (pendingBootLang) {
+            currentLang = normalizeLang(pendingBootLang);
         } else {
             currentLang = 'zh';
             try {
                 const p = normalizePathname(location.pathname);
-                if ((p === '/' || p === '') && localStorage.getItem(LANG_KEY) === 'en') {
-                    currentLang = 'en';
-                    try { history.replaceState(null, '', '/en' + (location.search || '')); } catch {}
+                const saved = localStorage.getItem(LANG_KEY);
+                if ((p === '/' || p === '') && (saved === 'en' || saved === 'zh-CN')) {
+                    currentLang = normalizeLang(saved);
+                    try {
+                        history.replaceState(null, '', (langMeta(currentLang).prefix || '/') + (location.search || ''));
+                    } catch {}
                 }
             } catch {}
         }
@@ -4611,17 +4777,18 @@
     // First paint depends on the grid already being in the DOM (server-rendered).
     // Chrome was already flipped for /en at the top of this IIFE; applyLanguage
     // here finishes data-bound copy (cards, panels).  historyMode 'none': the
-    // following routeFromLocation will write the /en prefix if needed.
+    // following routeFromLocation will write the locale prefix if needed.
     setRecommendMode(false);
     syncPickDecorations();
     renderSidePanel();
-    if (currentLang === 'en') {
-        // No yield: English must land in the same turn as the first interactive
-        // frame so shared /en links never need a manual language toggle.
-        applyLanguage('en', 'none');
+    if (currentLang !== 'zh') {
+        // Non-default locale must land in the same turn as the first interactive
+        // frame so shared /en or /zh-CN links never need a manual language toggle.
+        applyLanguage(currentLang, 'none');
     } else {
         refreshSecondaryRoleBadges();
         renderUpdatesPanel();
+        syncLangMenu();
     }
     // Warm the search indexes in the background; do not await (keeps init moving).
     whenIdle(() => { warmChampIndexesInBackground().catch(err => console.error('index warm pass failed', err)); });

@@ -427,8 +427,12 @@ def _spa_deep_link_stub(
     og_img = og_image or ((origin + "/og-image.png") if origin.startswith("http") else "")
     esc = html.escape
     lang = html_lang if html_lang else "zh-Hant"
-    is_en = path == "/en" or path.startswith("/en/")
-    spa_lang = "en" if is_en else "zh"
+    if path == "/en" or path.startswith("/en/"):
+        spa_lang = "en"
+    elif path == "/zh-CN" or path.startswith("/zh-CN/"):
+        spa_lang = "zh-CN"
+    else:
+        spa_lang = "zh"
     og_bits = [
         f"<meta property='og:type' content='website'>",
         f"<meta property='og:title' content=\"{esc(title, quote=True)}\">",
@@ -542,6 +546,29 @@ def write_spa_path_shells(
             "Data notes and play guides",
             "en",
         ),
+        # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
+        (root / "zh-CN" / "index.html", "/zh-CN", "arammeta", "大乱斗强度榜", "zh-Hans"),
+        (
+            root / "zh-CN" / "augments" / "index.html",
+            "/zh-CN/augments",
+            "增幅 · arammeta",
+            "大乱斗增幅胜率",
+            "zh-Hans",
+        ),
+        (
+            root / "zh-CN" / "changes" / "index.html",
+            "/zh-CN/changes",
+            "版本变动 · arammeta",
+            "版本胜率变动",
+            "zh-Hans",
+        ),
+        (
+            root / "zh-CN" / "column" / "index.html",
+            "/zh-CN/column",
+            "专栏 · arammeta",
+            "数据背后的思考与玩法解析",
+            "zh-Hans",
+        ),
     ]
     for article_id, title in article_titles.items():
         route_specs.append(
@@ -560,6 +587,15 @@ def write_spa_path_shells(
                 f"{title} · arammeta",
                 title,
                 "en",
+            )
+        )
+        route_specs.append(
+            (
+                root / "zh-CN" / "column" / article_id / "index.html",
+                f"/zh-CN/column/{article_id}",
+                f"{title} · arammeta",
+                title,
+                "zh-Hans",
             )
         )
 
@@ -1289,11 +1325,20 @@ def render_html(
         f"{sun_icon}{moon_icon}"
         "</button>"
     )
+    # Language menu (aramkit-style <details> dropdown): 繁體 / 简体 / English.
     parts.append(
-        "<button class='icon-btn lang-toggle' id='lang-toggle' data-lang-toggle "
-        "type='button' title='Switch to English' aria-label='切換語言'>"
-        f"{globe_icon}<span id='lang-toggle-label'>EN</span>"
-        "</button>"
+        "<details class='lang-menu' id='lang-menu'>"
+        "<summary class='icon-btn lang-toggle' id='lang-toggle' "
+        "title='繁體中文' aria-label='語言: 繁體中文'>"
+        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
+        "</summary>"
+        "<div class='lang-menu-list' role='menu'>"
+        "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
+        "aria-current='true'>繁體中文</button>"
+        "<button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button>"
+        "<button type='button' role='menuitem' data-lang='en'>English</button>"
+        "</div>"
+        "</details>"
     )
     parts.append("</div>")  # /header-actions
     parts.append("</div>")  # /site-header-inner
