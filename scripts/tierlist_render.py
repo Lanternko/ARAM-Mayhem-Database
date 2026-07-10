@@ -394,6 +394,156 @@ def _read_site_template(name: str) -> str:
     return (Path(__file__).resolve().parent / "templates" / name).read_text(encoding="utf-8")
 
 
+def _site_base_href(site_url: str) -> str:
+    """Absolute site root ending in / for <base href>, or '' if unusable."""
+    raw = (site_url or "").strip()
+    if not raw:
+        return ""
+    # Accept "https://arammeta.com" or ".../" or a path prefix.
+    if "://" not in raw:
+        return "/" if raw == "/" else (raw.rstrip("/") + "/")
+    # scheme://host[/path]
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(raw)
+        if not p.scheme or not p.netloc:
+            return "/"
+        prefix = (p.path or "/").rstrip("/")
+        if not prefix:
+            prefix = ""
+        return f"{p.scheme}://{p.netloc}{prefix}/"
+    except Exception:
+        return raw if raw.endswith("/") else raw + "/"
+
+
+def discover_column_article_ids(site_js: str | None = None) -> list[str]:
+    """Article slugs from the ARTICLES array in site.js (shareable /column/<id>)."""
+    text = site_js if site_js is not None else _read_site_template("site.js")
+    m = re.search(r"const ARTICLES\s*=\s*\[(.*?)\n\s*\];", text, re.S)
+    if not m:
+        return []
+    # Only top-level `id: 'slug'` entries inside the array body.
+    return re.findall(r"(?m)^\s*id:\s*'([a-z0-9][a-z0-9-]*)'\s*,?\s*$", m.group(1))
+
+
+def _spa_deep_link_stub(
+    *,
+    site_url: str = "",
+    og_image: str = "",
+    canonical_path: str = "/",
+    title: str = "arammeta",
+    description: str = "",
+) -> str:
+    """Tiny GH Pages shell: stash path → bounce to / so the real SPA can boot.
+
+    Avoids copying the full ~500KB index.html to every clean path (repo bloat)
+    while still giving shareable URLs HTTP 200 + basic OG tags for crawlers.
+    The SPA restores `sessionStorage['aram-spa-path']` on boot.
+    """
+    base = _site_base_href(site_url) or "/"
+    origin = base.rstrip("/")
+    path = canonical_path if canonical_path.startswith("/") else "/" + canonical_path
+    canonical = (origin + path) if origin.startswith("http") else path
+    desc = description or title
+    og_img = og_image or ((origin + "/og-image.png") if origin.startswith("http") else "")
+    esc = html.escape
+    og_bits = [
+        f"<meta property='og:type' content='website'>",
+        f"<meta property='og:title' content=\"{esc(title, quote=True)}\">",
+        f"<meta property='og:description' content=\"{esc(desc, quote=True)}\">",
+        f"<meta property='og:url' content='{esc(canonical, quote=True)}'>",
+        f"<meta name='twitter:card' content='summary'>",
+        f"<meta name='twitter:title' content=\"{esc(title, quote=True)}\">",
+        f"<meta name='twitter:description' content=\"{esc(desc, quote=True)}\">",
+    ]
+    if og_img:
+        og_bits.append(f"<meta property='og:image' content='{esc(og_img, quote=True)}'>")
+        og_bits.append(f"<meta name='twitter:image' content='{esc(og_img, quote=True)}'>")
+    return (
+        "<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{esc(title)}</title>"
+        f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
+        + "".join(og_bits)
+        + "<script>"
+        "try{sessionStorage.setItem('aram-spa-path',"
+        "location.pathname+location.search+location.hash)}catch(e){}"
+        "location.replace('/');"
+        "</script>"
+        f"<meta http-equiv='refresh' content='0;url=/'>"
+        f"<noscript><a href='/'>arammeta</a></noscript>"
+        "</head><body></body></html>\n"
+    )
+
+
+def write_spa_path_shells(
+    index_path: Path,
+    *,
+    site_url: str = "",
+    og_image: str = "",
+) -> list[Path]:
+    """Write lightweight deep-link stubs + 404.html for clean path URLs.
+
+    History API routes like /column/<id> need *something* on GH Pages (no
+    rewrites).  Stubs return HTTP 200, carry basic OG tags for shares, then
+    bounce to / where site.js restores the path from sessionStorage.
+    """
+    index_path = Path(index_path)
+    if not index_path.is_file():
+        return []
+    root = index_path.parent
+
+    # Best-effort OG image from the main shell when caller did not pass one.
+    if not og_image and site_url:
+        og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
+
+    # Pull article titles from site.js for slightly better share cards.
+    site_js = _read_site_template("site.js")
+    article_titles: dict[str, str] = {}
+    for aid in discover_column_article_ids(site_js):
+        # Prefer zh title next to this id block.
+        m = re.search(
+            rf"id:\s*'{re.escape(aid)}'.*?title_zh:\s*'((?:\\'|[^'])*)'",
+            site_js,
+            re.S,
+        )
+        if m:
+            article_titles[aid] = m.group(1).replace("\\'", "'")
+
+    route_specs: list[tuple[Path, str, str, str]] = [
+        # (file, canonical_path, title, description)
+        (root / "404.html", "/", "arammeta", ""),
+        (root / "augments" / "index.html", "/augments", "增幅榜 · arammeta", "ARAM 大亂鬥增幅勝率榜"),
+        (root / "changes" / "index.html", "/changes", "版本變動 · arammeta", "版本勝率變動"),
+        (root / "column" / "index.html", "/column", "專欄 · arammeta", "資料背後的思考與玩法解析"),
+    ]
+    for article_id, title in article_titles.items():
+        route_specs.append(
+            (
+                root / "column" / article_id / "index.html",
+                f"/column/{article_id}",
+                f"{title} · arammeta",
+                title,
+            )
+        )
+
+    written: list[Path] = []
+    for dest, cpath, title, desc in route_specs:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(
+            _spa_deep_link_stub(
+                site_url=site_url,
+                og_image=og_image,
+                canonical_path=cpath,
+                title=title,
+                description=desc,
+            ),
+            encoding="utf-8",
+        )
+        written.append(dest)
+    return written
+
+
 def _dedupe_item_objects(payload: dict) -> None:
     """Hoist repeated item identities into a top-level lookup to shrink the payload.
 
@@ -953,6 +1103,11 @@ def render_html(
     )
     meta_lines.append(f"<meta name='description' content=\"{seo_desc}\">")
     if site_url:
+        # <base> keeps relative assets (api/, assets/, favicons) resolving from the
+        # site root when History API deep paths like /column/<id> are active.
+        base_href = _site_base_href(site_url)
+        if base_href:
+            meta_lines.append(f"<base href='{html.escape(base_href, quote=True)}'>")
         meta_lines.append(f"<link rel='canonical' href='{site_url}'>")
         meta_lines.append(f"<meta property='og:url' content='{site_url}'>")
     meta_lines.append("<meta property='og:type' content='website'>")
@@ -1039,27 +1194,39 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Fixed top header: brand (left) + tab nav + language toggle.
-    # Theme lives in the Settings view; 版本變動 (patch changes) has its own tab;
-    # the language toggle sits in the header.  #site-title / #site-subtitle ids are
-    # preserved so applyLanguage keeps driving the brand text + patch chip.  The
-    # #updates-panel node lives in the 版本變動 view below, filled by renderUpdatesPanel().
-    # On narrow screens (<=700px) the header wraps to two rows: brand + actions
-    # on top, .nav-tabs as a full-bleed scrollable strip underneath — primary
-    # navigation is always visible, no hamburger/drawer layer.
+    # Fixed top header: brand (= home) + content tabs + theme icon + language.
+    # 主頁 / 設定 are not tabs — brand returns home; theme toggles in-header.
+    # #site-title / #site-subtitle ids stay so applyLanguage drives brand text.
+    # On narrow screens (<=700px) the header wraps: brand + actions on top,
+    # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
-        ("home", "主頁", "Home"),
         ("augments", "增幅榜", "Augment Tier"),
         ("changes", "版本變動", "Patch Changes"),
         ("column", "專欄", "Column"),
-        ("settings", "設定", "Settings"),
+    )
+    sun_icon = (
+        "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='12' cy='12' r='4'></circle>"
+        "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
+        "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
+        "</svg>"
+    )
+    moon_icon = (
+        "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
+        "</svg>"
     )
     # data-nosnippet: without it Google's snippet fallback scrapes the nav
-    # tabs / role chips / settings controls into the search result blurb.
+    # tabs / role chips into the search result blurb.
     parts.append("<header class='site-header' data-nosnippet>")
     parts.append("<div class='site-header-inner'>")
     parts.append(
-        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta'>"
+        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
+        "title='主頁'>"
         "<img class='brand-logo' src='favicon.svg' alt=''>"
         "<span class='brand-text'>"
         f"<span class='brand-title' id='site-title'>{header_title}</span>"
@@ -1068,18 +1235,25 @@ def render_html(
         "</button>"
     )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
-    for nav_key, nav_zh, nav_en in NAV_TABS:
-        is_home = nav_key == "home"
+    for i, (nav_key, nav_zh, nav_en) in enumerate(NAV_TABS):
+        # No tab is active on first paint (home is the default, via brand).
+        # First tab keeps tabindex=0 so the tablist stays keyboard-reachable.
         parts.append(
-            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
+            f"<button class='nav-tab' id='tab-{nav_key}' "
             f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
-            f"aria-selected='{'true' if is_home else 'false'}' "
-            f"tabindex='{'0' if is_home else '-1'}' "
+            f"aria-selected='false' "
+            f"tabindex='{'0' if i == 0 else '-1'}' "
             f"data-i18n-zh='{nav_zh}' data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
         )
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
+    parts.append(
+        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
+        "type='button' title='切換淺色' aria-label='切換主題'>"
+        f"{sun_icon}{moon_icon}"
+        "</button>"
+    )
     parts.append(
         "<button class='icon-btn lang-toggle' id='lang-toggle' data-lang-toggle "
         "type='button' title='Switch to English' aria-label='切換語言'>"
@@ -1093,7 +1267,7 @@ def render_html(
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
         "<section class='view view-home is-active' id='view-home' "
-        "data-view='home' role='tabpanel' aria-labelledby='tab-home'>"
+        "data-view='home' aria-label='主頁'>"
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
@@ -1326,68 +1500,7 @@ def render_html(
         "</section>"
     )
 
-    # ---- View: 設定 (settings) — language + theme + changelog + about ----
-    parts.append(
-        "<section class='view view-settings' id='view-settings' data-view='settings' role='tabpanel' aria-labelledby='tab-settings' data-nosnippet>"
-    )
-    parts.append("<div class='view-narrow'>")
-    parts.append("<h2 class='section-head' data-i18n-zh='設定' data-i18n-en='Settings'>設定</h2>")
-    parts.append(
-        "<p class='section-sub' data-i18n-zh='主題與資料來源。' "
-        "data-i18n-en='Theme and data source.'>"
-        "主題與資料來源。</p>"
-    )
-    parts.append("<div class='settings-grid'>")
-    # Language toggle now lives in the fixed header (#lang-toggle); see site-header build above.
-    # Theme card — segmented dark / light control (new JS).
-    parts.append(
-        "<div class='setting-card'>"
-        "<h3 data-i18n-zh='主題' data-i18n-en='Theme'>主題</h3>"
-        "<p class='setting-desc' data-i18n-zh='深色為預設；淺色為初版，密集面板持續調整中。' "
-        "data-i18n-en='Dark is the default; light is a first pass and dense panels are still being tuned.'>"
-        "深色為預設；淺色為初版，密集面板持續調整中。</p>"
-        "<div class='segmented' id='theme-seg' role='group' aria-label='主題'>"
-        "<span class='seg-thumb' aria-hidden='true'></span>"
-        "<button type='button' data-theme-choice='dark' aria-pressed='true' data-i18n-zh='深色' data-i18n-en='Dark'>深色</button>"
-        "<button type='button' data-theme-choice='light' aria-pressed='false' data-i18n-zh='淺色' data-i18n-en='Light'>淺色</button>"
-        "</div>"
-        "</div>"
-    )
-    # About card.
-    parts.append("<div class='setting-card'>")
-    parts.append("<h3 data-i18n-zh='關於與資料來源' data-i18n-en='About &amp; data source'>關於與資料來源</h3>")
-    parts.append(
-        "<p class='setting-desc' data-i18n-zh='本站資料與更新資訊。' "
-        "data-i18n-en='Data and freshness information for this site.'>本站資料與更新資訊。</p>"
-    )
-    parts.append(
-        "<div class='about-row'><span class='k' data-i18n-zh='資料佇列' data-i18n-en='Queue'>資料佇列</span>"
-        f"<span class='v'>{html.escape(queue_label)} (queueId {queue_id})</span></div>"
-    )
-    if display_patch:
-        parts.append(
-            "<div class='about-row'><span class='k' data-i18n-zh='版本' data-i18n-en='Patch'>版本</span>"
-            f"<span class='v'>patch {html.escape(str(display_patch))}</span></div>"
-        )
-    if build_date:
-        parts.append(
-            "<div class='about-row'><span class='k' data-i18n-zh='更新時間' data-i18n-en='Updated'>更新時間</span>"
-            f"<span class='v'>{html.escape(build_date)}（{total_games:,}）</span></div>"
-        )
-    parts.append(
-        "<div class='about-row'><span class='k' data-i18n-zh='原始碼' data-i18n-en='Source'>原始碼</span>"
-        f"<span class='v'><a class='about-link' href='{REPO_URL}' target='_blank' rel='noopener'>GitHub ↗</a></span></div>"
-    )
-    parts.append(
-        "<p class='settings-disclaimer'>"
-        "This site isn't endorsed by Riot Games. League of Legends and Riot Games are "
-        "trademarks or registered trademarks of Riot Games, Inc. League of Legends © Riot Games, Inc."
-        "</p>"
-    )
-    parts.append("</div>")  # /about card
-    parts.append("</div>")  # /settings-grid
-    parts.append("</div>")  # /view-narrow
-    parts.append("</section>")  # /view-settings
+    # Theme + language live in the header; about / source sit in the home footer.
     parts.append("</main>")
 
     js = _read_site_template("site.js")
@@ -1519,7 +1632,10 @@ def _run_shell_only(
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+    mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     click.echo(
         f"[shell-only] wrote {out_path} ({len(html):,} chars) in {time.time() - t0:.2f}s — "
         f"reused {payload_path.name}, skipped all win-rate / affinity compute"
     )
+    if mirrors:
+        click.echo(f"[shell-only] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
