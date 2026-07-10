@@ -3298,7 +3298,9 @@
         slots.innerHTML = chips.join('');
 
         if (isFullTeam) {
-            note.textContent = pickNotice || copy.teamPickFullNote || '';
+            // Don't keep a sticky "max 5" notice once the roster is full.
+            pickNotice = '';
+            note.textContent = copy.teamPickFullNote || '';
             recList.innerHTML = buildTeamEvalHtml(teamPicks);
             return;
         }
