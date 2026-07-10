@@ -1860,14 +1860,14 @@
         right: 0;
         top: calc(100% + 8px);
         width: auto;
-        padding: 12px 13px 11px;
-        border-radius: 11px;
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        background: #0c0f14;
+        padding: 11px 12px 10px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: #101114;
         box-shadow:
-            0 10px 28px rgba(0, 0, 0, 0.55),
-            0 0 0 1px rgba(0, 0, 0, 0.35);
-        color: #c8ced8;
+            0 12px 28px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(0, 0, 0, 0.4);
+        color: #c2c7ce;
         font-size: 11px;
         line-height: 1.4;
         text-align: left;
@@ -1883,22 +1883,8 @@
         position: absolute;
         left: 22px;
         bottom: 100%;
-        border: 7px solid transparent;
-        border-bottom-color: #0c0f14;
-    }
-    .cf-stage-host-early .cf-stage-tip {
-        border-color: rgba(240, 160, 96, 0.28);
-        box-shadow:
-            0 10px 28px rgba(0, 0, 0, 0.55),
-            0 0 0 1px rgba(240, 160, 96, 0.08),
-            inset 0 1px 0 rgba(240, 160, 96, 0.08);
-    }
-    .cf-stage-host-late .cf-stage-tip {
-        border-color: rgba(127, 200, 255, 0.24);
-        box-shadow:
-            0 10px 28px rgba(0, 0, 0, 0.55),
-            0 0 0 1px rgba(127, 200, 255, 0.06),
-            inset 0 1px 0 rgba(127, 200, 255, 0.07);
+        border: 6px solid transparent;
+        border-bottom-color: #101114;
     }
     .cf-stage-host:hover .cf-stage-tip,
     .cf-stage-host:focus-visible .cf-stage-tip,
@@ -1911,83 +1897,89 @@
         align-items: baseline;
         justify-content: space-between;
         gap: 8px;
-        padding: 0 2px 8px;
+        padding: 0 1px 8px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         margin-bottom: 10px;
-        color: #8b919a;
+        color: #7a808a;
         font-size: 11px;
     }
     .cf-stage-tip-gap b {
         font-size: 13px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        color: #d7dde7;
+        color: #e8eaed;
     }
-    .cf-stage-tip-gap.is-early b { color: #f0a060; }
-    .cf-stage-tip-gap.is-late b { color: #7fc8ff; }
+    .cf-stage-tip-gap.is-early b { color: #e2a36e; }
+    .cf-stage-tip-gap.is-late b { color: #8ec4e8; }
     .cf-stage-tip-rail {
         display: grid;
         grid-template-columns: auto 1fr auto;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 6px;
+        gap: 8px;
+        margin-bottom: 8px;
     }
     .cf-stage-tip-rail-end {
         font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
         color: #6b7280;
     }
-    .cf-stage-tip-rail-end.is-early { color: #c48a55; }
-    .cf-stage-tip-rail-end.is-late { color: #6aa8d4; }
     .cf-stage-tip-rail-track {
         position: relative;
-        height: 6px;
+        height: 4px;
         border-radius: 99px;
-        background: linear-gradient(90deg, rgba(240, 160, 96, 0.55), rgba(120, 128, 140, 0.28) 40%, rgba(120, 128, 140, 0.28) 60%, rgba(127, 200, 255, 0.55));
+        /* Neutral slate track — accent only on the marker. */
+        background: #1c1f24;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
     }
     .cf-stage-tip-rail-band {
         position: absolute;
         left: 40%;
         width: 20%;
-        top: -2px;
-        bottom: -2px;
-        border-radius: 4px;
-        border: 1px dashed rgba(255, 255, 255, 0.18);
-        background: rgba(255, 255, 255, 0.04);
-        box-sizing: border-box;
+        top: 0;
+        bottom: 0;
+        border-radius: 99px;
+        /* Balanced band: soft fill, no dashed outline. */
+        background: rgba(255, 255, 255, 0.12);
     }
     .cf-stage-tip-rail-dot {
         position: absolute;
         top: 50%;
-        width: 10px;
-        height: 10px;
-        margin-left: -5px;
-        margin-top: -5px;
+        width: 9px;
+        height: 9px;
+        margin-left: -4.5px;
+        margin-top: -4.5px;
         border-radius: 50%;
-        background: #e8eaed;
-        border: 2px solid #0c0f14;
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+        background: #c2c7ce;
+        border: 2px solid #101114;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
     }
     .cf-stage-host-early .cf-stage-tip-rail-dot {
-        background: #f0a060;
-        box-shadow: 0 0 0 1px rgba(240, 160, 96, 0.45);
+        background: #e2a36e;
+        box-shadow: 0 0 0 1px rgba(226, 163, 110, 0.35);
     }
     .cf-stage-host-late .cf-stage-tip-rail-dot {
-        background: #7fc8ff;
-        box-shadow: 0 0 0 1px rgba(127, 200, 255, 0.4);
+        background: #8ec4e8;
+        box-shadow: 0 0 0 1px rgba(142, 196, 232, 0.32);
     }
     .cf-stage-tip-meta {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        color: #a8aeb8;
-        font-size: 11px;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
         font-variant-numeric: tabular-nums;
         margin-bottom: 8px;
     }
-    .cf-stage-tip-meta .cf-stage-tip-dot {
-        color: #5c6370;
-        user-select: none;
+    .cf-stage-tip-pr {
+        color: #8b919a;
+        font-size: 11px;
+    }
+    .cf-stage-tip-rank {
+        color: #e8eaed;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
     }
     .cf-stage-tip-foot {
         color: #6b7280;
@@ -2014,7 +2006,16 @@
         border-bottom-color: #f4f6f9;
     }
     [data-theme="light"] .cf-stage-tip-foot { color: #6b7280; }
+    [data-theme="light"] .cf-stage-tip-rail-track {
+        background: #e4e7ec;
+        box-shadow: inset 0 0 0 1px rgba(15, 20, 28, 0.06);
+    }
+    [data-theme="light"] .cf-stage-tip-rail-band {
+        background: rgba(15, 20, 28, 0.08);
+    }
     [data-theme="light"] .cf-stage-tip-rail-dot { border-color: #f4f6f9; }
+    [data-theme="light"] .cf-stage-tip-pr { color: #6b7280; }
+    [data-theme="light"] .cf-stage-tip-rank { color: #1a1d21; }
     .cf-cap {
         font-size: 11px;
         color: #6b7280;
