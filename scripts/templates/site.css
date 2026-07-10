@@ -1773,6 +1773,7 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
+        overflow: visible;
     }
     .cf-side-card {
         padding: 12px 14px;
@@ -1829,6 +1830,295 @@
         gap: 7px;
         margin-top: 10px;
     }
+
+    /* Game-tempo card hover panel (early type is the visual reference). */
+    .cf-side-card.cf-stage-host {
+        position: relative;
+        cursor: help;
+        outline: none;
+        transition: border-color 0.14s ease-out, background 0.14s ease-out;
+    }
+    .cf-side-card.cf-stage-host-early:hover,
+    .cf-side-card.cf-stage-host-early:focus-visible {
+        border-color: rgba(240, 160, 96, 0.42);
+        background: rgba(240, 160, 96, 0.06);
+    }
+    .cf-side-card.cf-stage-host-late:hover,
+    .cf-side-card.cf-stage-host-late:focus-visible {
+        border-color: rgba(127, 200, 255, 0.38);
+        background: rgba(127, 200, 255, 0.05);
+    }
+    .cf-side-card.cf-stage-host-balanced:hover,
+    .cf-side-card.cf-stage-host-balanced:focus-visible {
+        border-color: rgba(194, 199, 206, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+    }
+    .cf-stage-tip {
+        /* Drop below the card so side-panel overflow does not clip a left flyout. */
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 8px);
+        width: auto;
+        padding: 12px 13px 11px;
+        border-radius: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: #0c0f14;
+        box-shadow:
+            0 10px 28px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(0, 0, 0, 0.35);
+        color: #c8ced8;
+        font-size: 11px;
+        line-height: 1.4;
+        text-align: left;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-3px);
+        transition: opacity 0.14s cubic-bezier(0.16, 1, 0.3, 1),
+                    transform 0.14s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 60;
+    }
+    .cf-stage-tip::before {
+        content: "";
+        position: absolute;
+        left: 22px;
+        bottom: 100%;
+        border: 7px solid transparent;
+        border-bottom-color: #0c0f14;
+    }
+    .cf-stage-host-early .cf-stage-tip {
+        border-color: rgba(240, 160, 96, 0.28);
+        box-shadow:
+            0 10px 28px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(240, 160, 96, 0.08),
+            inset 0 1px 0 rgba(240, 160, 96, 0.08);
+    }
+    .cf-stage-host-late .cf-stage-tip {
+        border-color: rgba(127, 200, 255, 0.24);
+        box-shadow:
+            0 10px 28px rgba(0, 0, 0, 0.55),
+            0 0 0 1px rgba(127, 200, 255, 0.06),
+            inset 0 1px 0 rgba(127, 200, 255, 0.07);
+    }
+    .cf-stage-host:hover .cf-stage-tip,
+    .cf-stage-host:focus-visible .cf-stage-tip,
+    .cf-stage-host:focus-within .cf-stage-tip {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .cf-stage-tip-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 4px;
+    }
+    .cf-stage-tip-type {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: #e8eaed;
+    }
+    .cf-stage-host-early .cf-stage-tip-type { color: #f0a060; }
+    .cf-stage-host-late .cf-stage-tip-type { color: #7fc8ff; }
+    .cf-stage-host-balanced .cf-stage-tip-type { color: #c2c7ce; }
+    .cf-stage-tip-rank {
+        flex: 0 0 auto;
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #e8eaed;
+        opacity: 0.92;
+    }
+    .cf-stage-host-early .cf-stage-tip-rank {
+        color: #f5c08a;
+        background: rgba(240, 160, 96, 0.12);
+        border: 1px solid rgba(240, 160, 96, 0.22);
+        border-radius: 999px;
+        padding: 1px 8px 2px;
+        font-size: 12px;
+    }
+    .cf-stage-host-late .cf-stage-tip-rank {
+        color: #a8d8ff;
+        background: rgba(127, 200, 255, 0.10);
+        border: 1px solid rgba(127, 200, 255, 0.20);
+        border-radius: 999px;
+        padding: 1px 8px 2px;
+        font-size: 12px;
+    }
+    .cf-stage-tip-lead {
+        color: #8b919a;
+        font-size: 11px;
+        line-height: 1.45;
+        margin-bottom: 10px;
+    }
+    .cf-stage-tip-wrs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .cf-stage-tip-wr {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 7px 8px 8px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .cf-stage-tip-wr.is-early {
+        border-color: rgba(240, 160, 96, 0.18);
+        background: rgba(240, 160, 96, 0.07);
+    }
+    .cf-stage-tip-wr.is-late {
+        border-color: rgba(127, 200, 255, 0.14);
+        background: rgba(127, 200, 255, 0.05);
+    }
+    .cf-stage-tip-wr-k {
+        font-size: 10px;
+        color: #8b919a;
+        letter-spacing: 0.02em;
+    }
+    .cf-stage-tip-wr-v {
+        font-size: 18px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        color: #e8eaed;
+    }
+    .cf-stage-tip-wr.is-early .cf-stage-tip-wr-v { color: #f0a060; }
+    .cf-stage-tip-wr.is-late .cf-stage-tip-wr-v { color: #7fc8ff; }
+    .cf-stage-tip-wr-bar {
+        display: block;
+        height: 4px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+        margin-top: 2px;
+    }
+    .cf-stage-tip-wr-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: 99px;
+        background: #7a808a;
+    }
+    .cf-stage-tip-wr.is-early .cf-stage-tip-wr-bar > span {
+        background: linear-gradient(90deg, #c47a40, #f0a060);
+    }
+    .cf-stage-tip-wr.is-late .cf-stage-tip-wr-bar > span {
+        background: linear-gradient(90deg, #4a8fc4, #7fc8ff);
+    }
+    .cf-stage-tip-gap {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 2px 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        margin-bottom: 10px;
+        color: #8b919a;
+        font-size: 11px;
+    }
+    .cf-stage-tip-gap b {
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #d7dde7;
+    }
+    .cf-stage-tip-gap.is-early b { color: #f0a060; }
+    .cf-stage-tip-gap.is-late b { color: #7fc8ff; }
+    .cf-stage-tip-rail {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+    .cf-stage-tip-rail-end {
+        font-size: 10px;
+        color: #6b7280;
+    }
+    .cf-stage-tip-rail-end.is-early { color: #c48a55; }
+    .cf-stage-tip-rail-end.is-late { color: #6aa8d4; }
+    .cf-stage-tip-rail-track {
+        position: relative;
+        height: 6px;
+        border-radius: 99px;
+        background: linear-gradient(90deg, rgba(240, 160, 96, 0.55), rgba(120, 128, 140, 0.28) 40%, rgba(120, 128, 140, 0.28) 60%, rgba(127, 200, 255, 0.55));
+    }
+    .cf-stage-tip-rail-band {
+        position: absolute;
+        left: 40%;
+        width: 20%;
+        top: -2px;
+        bottom: -2px;
+        border-radius: 4px;
+        border: 1px dashed rgba(255, 255, 255, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        box-sizing: border-box;
+    }
+    .cf-stage-tip-rail-dot {
+        position: absolute;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        margin-left: -5px;
+        margin-top: -5px;
+        border-radius: 50%;
+        background: #e8eaed;
+        border: 2px solid #0c0f14;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+    }
+    .cf-stage-host-early .cf-stage-tip-rail-dot {
+        background: #f0a060;
+        box-shadow: 0 0 0 1px rgba(240, 160, 96, 0.45);
+    }
+    .cf-stage-host-late .cf-stage-tip-rail-dot {
+        background: #7fc8ff;
+        box-shadow: 0 0 0 1px rgba(127, 200, 255, 0.4);
+    }
+    .cf-stage-tip-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        color: #a8aeb8;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 8px;
+    }
+    .cf-stage-tip-meta .cf-stage-tip-dot {
+        color: #5c6370;
+        user-select: none;
+    }
+    .cf-stage-tip-foot {
+        color: #6b7280;
+        font-size: 10px;
+        line-height: 1.45;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 7px;
+    }
+
+    [data-theme="light"] .cf-stage-tip {
+        background: #f4f6f9;
+        border-color: rgba(15, 20, 28, 0.1);
+        color: #3a4250;
+        box-shadow: 0 10px 24px rgba(15, 20, 28, 0.12);
+    }
+    [data-theme="light"] .cf-stage-tip::before {
+        border-bottom-color: #f4f6f9;
+    }
+    [data-theme="light"] .cf-stage-tip-type { color: #1c222c; }
+    [data-theme="light"] .cf-stage-host-early .cf-stage-tip-type { color: #c06a28; }
+    [data-theme="light"] .cf-stage-tip-lead,
+    [data-theme="light"] .cf-stage-tip-foot { color: #6b7280; }
+    [data-theme="light"] .cf-stage-tip-wr {
+        background: rgba(15, 20, 28, 0.03);
+        border-color: rgba(15, 20, 28, 0.06);
+    }
+    [data-theme="light"] .cf-stage-tip-wr-v { color: #1c222c; }
+    [data-theme="light"] .cf-stage-tip-rail-dot { border-color: #f4f6f9; }
     .cf-cap {
         font-size: 11px;
         color: #6b7280;
@@ -2263,14 +2553,14 @@
         min-height: 24px;
         border-top: 1px solid rgba(255,255,255,0.08);
         border-bottom: 1px solid rgba(255,255,255,0.08);
-        color: #6bd16b;
+        color: #c7cede; /* even / unknown; is-good / is-bad override */
         font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
-    .item-build-wr.is-bad {
-        color: #ff8a8a;
-    }
+    .item-build-wr.is-good { color: #6bd16b; }
+    .item-build-wr.is-bad { color: #ff8a8a; }
+    .item-build-wr.is-even { color: #c7cede; }
     .item-build-pick {
         display: flex;
         align-items: center;
@@ -3364,6 +3654,7 @@
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip,
+        .cf-stage-tip,
         .item-float-tip { display: none !important; }
         /* Touch-target floor (WCAG 2.5.5).  Chips were 4×10 padding on 11px
            font ≈ 32 px tall.  Bump to a real 44 px tap area without growing
