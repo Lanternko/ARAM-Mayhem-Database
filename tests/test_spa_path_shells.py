@@ -39,9 +39,23 @@ class SpaPathShellTests(unittest.TestCase):
             description="guide",
         )
         self.assertIn("sessionStorage.setItem('aram-spa-path'", html)
+        self.assertIn("sessionStorage.setItem('aram-spa-lang','zh')", html)
         self.assertIn("location.replace('/')", html)
         self.assertIn("https://arammeta.com/column/how-to-read", html)
         self.assertIn("og:image", html)
+
+    def test_deep_link_stub_stashes_en_lang(self) -> None:
+        html = _spa_deep_link_stub(
+            site_url="https://arammeta.com/",
+            og_image="https://arammeta.com/og-image.png",
+            canonical_path="/en/augments",
+            title="Augments · arammeta",
+            description="augments",
+            html_lang="en",
+        )
+        self.assertIn("sessionStorage.setItem('aram-spa-lang','en')", html)
+        self.assertIn("lang='en'", html)
+        self.assertIn("/en/augments", html)
 
     def test_write_spa_path_shells_creates_article_stub(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -60,6 +74,15 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertLess(article.stat().st_size, 4_000)  # stub, not full SPA
             self.assertIn("/column/sprees-not-snowball", body)
             self.assertIn("aram-spa-path", body)
+            # English locale mirrors for shareable /en… links.
+            en_home = root / "en" / "index.html"
+            self.assertTrue(en_home.is_file())
+            self.assertIn("/en", en_home.read_text(encoding="utf-8"))
+            en_article = root / "en" / "column" / "sprees-not-snowball" / "index.html"
+            self.assertTrue(en_article.is_file())
+            en_body = en_article.read_text(encoding="utf-8")
+            self.assertIn("/en/column/sprees-not-snowball", en_body)
+            self.assertIn("lang='en'", en_body)
 
 
 if __name__ == "__main__":
