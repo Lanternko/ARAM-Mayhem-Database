@@ -2591,7 +2591,12 @@
             gap: 8px 10px;
             align-items: center;
         }
-        #recommend-mode { grid-column: 1 / -1; width: 100%; }
+        /* Mobile: teammate mode + search are rarely used on phone; role chips
+           stay. Desktop keeps the full filter-tools row. */
+        .filter-tools,
+        #recommend-mode,
+        .search-wrap,
+        .shown-count { display: none !important; }
         .tool-btn { min-height: 36px; }
         .updates-panel {
             margin: 0 0 14px;
