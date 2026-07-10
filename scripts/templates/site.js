@@ -255,6 +255,41 @@
         while (lt < n && arr[lt] < v) lt += 1;  // count champions strictly weaker
         return Math.max(0, Math.min(1, lt / (n - 1)));
     }
+    // Early/late tempo ranks: score = late_wr − early_wr (+ = late-leaning).
+    // PR 40–60 (inclusive) → balanced; outside → early/late with direction rank.
+    const STAGE_PR_LO = 40;
+    const STAGE_PR_HI = 60;
+    let _stageTempoCache = null;
+    function stageTempoStats() {
+        if (_stageTempoCache) return _stageTempoCache;
+        const rows = [];
+        Object.entries(DATA.champs || {}).forEach(([cid, info]) => {
+            const c = info && info.comp;
+            if (!c) return;
+            const e = Number(c.early_wr), l = Number(c.late_wr);
+            if (!Number.isFinite(e) || !Number.isFinite(l)) return;
+            rows.push({ cid: String(cid), score: l - e });
+        });
+        rows.sort((a, b) => a.score - b.score || a.cid.localeCompare(b.cid)); // early → late
+        const byCid = {};
+        const n = rows.length;
+        rows.forEach((r, i) => {
+            const pr = n <= 1 ? 50 : Math.round((i / (n - 1)) * 100);
+            byCid[r.cid] = {
+                score: r.score,
+                pr,
+                earlyRank: i + 1,  // 1 = most early
+                lateRank: n - i,   // 1 = most late
+                n,
+            };
+        });
+        _stageTempoCache = { byCid, n };
+        return _stageTempoCache;
+    }
+    function stageTempoFor(cid) {
+        if (cid == null || cid === '') return null;
+        return stageTempoStats().byCid[String(cid)] || null;
+    }
     // Raw comp-fit score: weighted blend of a champion's capability percentiles.
     function compFitRaw(def, capPct) {
         let s = 0;
@@ -287,7 +322,7 @@
     // most champions sit near 0pp and the radar looked empty — abilities + tempo are
     // what players actually read. Strong archetype avoid/build signals still surface
     // as a one-line footer when |delta| clears the empirical thresholds.
-    function buildCompFit(info) {
+    function buildCompFit(info, cid) {
         const copy = tr();
         const comp = (info && info.comp) || {};
         const cap = compCapPct(comp);
@@ -317,22 +352,30 @@
         }
 
         // Early/late tempo = win rate when the game ends early (≤16min) vs late (≥22min).
-        // Bars + numbers are absolute WR% (not champion percentiles / not kill-spree snowball).
+        // Bars + numbers are absolute WR%. Label uses all-champ PR of (late−early):
+        // PR 40–60 = balanced; outside that band → early/late + direction rank (#1 most extreme).
         const earlyWr = Number(comp.early_wr);
         const lateWr = Number(comp.late_wr);
         const hasStageWr = Number.isFinite(earlyWr) && Number.isFinite(lateWr);
         const earlyPct = hasStageWr ? Math.round(earlyWr * 100) : 0;
         const latePct = hasStageWr ? Math.round(lateWr * 100) : 0;
-        // + = better in short games; cut ~3pp so only clear leans label as early/late type.
-        const STAGE_CUT = 0.03;
-        const stageDiff = hasStageWr ? (earlyWr - lateWr) : 0;
+        const stageMeta = hasStageWr ? stageTempoFor(cid) : null;
         let stageKey = 'balanced';
-        if (hasStageWr && stageDiff >= STAGE_CUT) stageKey = 'early';
-        else if (hasStageWr && stageDiff <= -STAGE_CUT) stageKey = 'late';
+        if (stageMeta) {
+            if (stageMeta.pr < STAGE_PR_LO) stageKey = 'early';
+            else if (stageMeta.pr > STAGE_PR_HI) stageKey = 'late';
+        }
+        const stageRank = stageMeta
+            ? (stageKey === 'early' ? stageMeta.earlyRank
+                : stageKey === 'late' ? stageMeta.lateRank : null)
+            : null;
         const stageTitle = !hasStageWr ? copy.compSkillMissing
             : stageKey === 'early' ? copy.compStageEarly
             : stageKey === 'late' ? copy.compStageLate
             : copy.compStageBalanced;
+        const stageTitleHtml = stageRank != null
+            ? `${escHtml(stageTitle)}<span class="cf-stage-rank">#${stageRank}</span>`
+            : escHtml(stageTitle);
         const stageDesc = !hasStageWr ? ''
             : stageKey === 'early' ? copy.compStageEarlyDesc
             : stageKey === 'late' ? copy.compStageLateDesc
@@ -340,7 +383,7 @@
         const stageCard = `
             <div class="cf-side-card" title="${escHtml(copy.compStageTip || '')}">
                 <div class="cf-side-kicker">${escHtml(copy.compStageTitle)}</div>
-                <div class="cf-side-value cf-stage-${stageKey}">${escHtml(stageTitle)}</div>
+                <div class="cf-side-value cf-stage-${stageKey}">${stageTitleHtml}</div>
                 ${stageDesc ? `<div class="cf-side-sub">${escHtml(stageDesc)}</div>` : ''}
                 <div class="cf-stage-bars">
                     <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageEarlyAxis)}</span><span class="ab-bar ab-bar-early"><span style="width:${earlyPct}%"></span></span><span class="ab-val">${hasStageWr ? earlyPct + '%' : '—'}</span></div>
@@ -786,7 +829,7 @@
             setSectionTitle: '增幅裝置系列相性',
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
-            itemSectionMeta: '不含鞋子；選取 ≥1% · 最多 8 組 · 依強度排序',
+            itemSectionMeta: '不含鞋子；選取 ≥1% · 最多 8 組 · 強度為主並保留最高出場',
             itemClusterSectionTitle: '',
             // Empty on purpose: core / 搭配裝備 / 常見後續 labels + per-item WR·pick
             // already carry the structure; the long methodology caption was noise.
@@ -881,10 +924,10 @@
             compStageBalanced: '均衡',
             compStageEarlyDesc: '短局勝率高、長局相對弱 — 盡早結束',
             compStageLateDesc: '長局勝率高、短局偏弱 — 拖進中後期',
-            compStageBalancedDesc: '短局長局勝率差不多',
+            compStageBalancedDesc: '全英雄 PR40–60：短局長局差距不明顯',
             compStageEarlyAxis: '前期',
             compStageLateAxis: '後期',
-            compStageTip: '前期＝比賽 ≤16 分結束時的勝率；後期＝≥22 分結束時的勝率',
+            compStageTip: '前期＝≤16 分結束勝率；後期＝≥22 分結束勝率。依全英雄 late−early 百分位：PR40–60 為均衡；兩端為前期／後期型並顯示該方向排名（#1＝最偏）',
         },
         en: {
             htmlLang: 'en',
@@ -960,7 +1003,7 @@
             setSectionTitle: 'Augment Sets',
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
-            itemSectionMeta: 'boots excluded; pick ≥1% · up to 8 · strongest first',
+            itemSectionMeta: 'boots excluded; pick ≥1% · up to 8 · strength first, keep top pick',
             itemClusterSectionTitle: '',
             // Empty on purpose — see zh itemClusterSectionMeta note.
             itemClusterSectionMeta: '',
@@ -1054,10 +1097,10 @@
             compStageBalanced: 'Balanced',
             compStageEarlyDesc: 'Higher WR in short games — close it out early',
             compStageLateDesc: 'Higher WR in long games — drag into mid/late',
-            compStageBalancedDesc: 'Similar WR in short and long games',
+            compStageBalancedDesc: 'PR40–60 among all champs — no clear early/late lean',
             compStageEarlyAxis: 'Early',
             compStageLateAxis: 'Late',
-            compStageTip: 'Early = WR when game ends ≤16 min; Late = WR when game ends ≥22 min',
+            compStageTip: 'Early = WR when game ends ≤16 min; Late = ≥22 min. Classified by percentile of late−early across all champs: PR40–60 balanced; outside that band labeled Early/Late with direction rank (#1 = most extreme)',
         }
     };
     // Prefer URL / stub-stashed locale over the zh SSR default.
@@ -2671,20 +2714,55 @@
             return selected;
         };
         // First-two item pairs: payload often ships 50–100+ rows (incl. 0.1% noise).
-        // Keep only meaningfully picked combos and hard-cap the wall of cards.
+        // Strength-first, but force-keep the most-picked routes so meta isn't buried.
         const ITEM_PAIR_MAX_ROWS = 8;
         const ITEM_PAIR_MIN_PICK = 0.01;       // prefer ≥1% pick
         const ITEM_PAIR_MIN_PICK_FALLBACK = 0.005; // then ≥0.5%
+        const ITEM_PAIR_GUARANTEE_PICK = 2;    // always include top-N by pick among the pool
         const selectItemPairRows = (payload) => {
             const rows = (payload && payload.top) || [];
             if (!rows.length) return [];
             const pickOf = (e) => Number(e.pick || 0);
-            let filtered = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK);
-            if (filtered.length < 4) {
-                filtered = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK_FALLBACK);
+            const keyOf = (e) => {
+                if (e.slug != null && e.slug !== '') return `s:${e.slug}`;
+                const ids = Array.isArray(e.items)
+                    ? e.items.map(it => String(it && (it.id != null ? it.id : it.name || ''))).join('+')
+                    : '';
+                if (ids) return `i:${ids}`;
+                return `n:${e.name_zh || e.name_en || e.name || ''}|${pickOf(e)}|${e.g || 0}`;
+            };
+            let pool = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK);
+            if (pool.length < 4) {
+                pool = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK_FALLBACK);
             }
-            if (filtered.length < 3) filtered = rows;
-            return filtered.slice(0, ITEM_PAIR_MAX_ROWS);
+            if (pool.length < 3) pool = rows.slice();
+            // pool keeps payload strength order.
+            const selected = [];
+            const seen = new Set();
+            const add = (e) => {
+                const k = keyOf(e);
+                if (seen.has(k)) return false;
+                seen.add(k);
+                selected.push(e);
+                return true;
+            };
+            // Guarantee highest-pick routes among the pool (usually meta openers).
+            const byPick = pool.slice().sort((a, b) => (
+                pickOf(b) - pickOf(a)
+                || (Number(b.g || 0) - Number(a.g || 0))
+            ));
+            for (const e of byPick.slice(0, ITEM_PAIR_GUARANTEE_PICK)) add(e);
+            // Fill remaining slots by strength order.
+            for (const e of pool) {
+                if (selected.length >= ITEM_PAIR_MAX_ROWS) break;
+                add(e);
+            }
+            // Display still strongest-first (popular-but-weaker land later in the 8).
+            const strengthRank = new Map(pool.map((e, i) => [keyOf(e), i]));
+            selected.sort((a, b) => (
+                (strengthRank.get(keyOf(a)) ?? 999) - (strengthRank.get(keyOf(b)) ?? 999)
+            ));
+            return selected;
         };
         const buildAffinitySection = (title, meta, payload, options = {}) => {
             if (options.itemCarousel) {
@@ -2692,8 +2770,8 @@
                 if (options.itemPairGrid) rows = selectItemPairRows(payload);
                 if (!rows.length) return '';
                 const pairMeta = pickLang(
-                    '不含鞋子；選取 ≥1% · 最多 8 組 · 依強度排序',
-                    'boots excluded; pick ≥1% · up to 8 · strongest first',
+                    '不含鞋子；選取 ≥1% · 最多 8 組 · 強度為主並保留最高出場',
+                    'boots excluded; pick ≥1% · up to 8 · strength first, keep top pick',
                 );
                 const itemMeta = pickLang('不含鞋子；勝率分數由高到低，右滑看更多', 'boots excluded; strongest first, swipe for more');
                 const displayMeta = options.itemPairGrid
@@ -2980,7 +3058,7 @@
                 { itemCarousel: true, itemPairGrid: true },
             )}
         `;
-        const compFitTabContent = buildCompFit(info);
+        const compFitTabContent = buildCompFit(info, cid);
         const augmentTabContent = `
             <div class="detail-section">
                 <span class="section-meta augment-strength-meta">

@@ -1815,6 +1815,14 @@
     .cf-stage-early { color: #f0a060; }
     .cf-stage-late { color: #7fc8ff; }
     .cf-stage-balanced { color: #c2c7ce; }
+    .cf-stage-rank {
+        margin-left: 0.35em;
+        font-size: 0.78em;
+        font-weight: 700;
+        opacity: 0.88;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.01em;
+    }
     .cf-stage-bars {
         display: flex;
         flex-direction: column;
