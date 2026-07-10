@@ -551,8 +551,8 @@ def write_spa_path_shells(
         (
             root / "zh-CN" / "augments" / "index.html",
             "/zh-CN/augments",
-            "增幅 · arammeta",
-            "大乱斗增幅胜率",
+            "海克斯 · arammeta",
+            "大乱斗海克斯胜率",
             "zh-Hans",
         ),
         (
@@ -1269,11 +1269,13 @@ def render_html(
     # Patch lives in the footer freshness line — not next to the wordmark.
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
+    # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
+    # that does not t2s-convert — CN / aramkit call it 海克斯.
     NAV_TABS = (
-        ("home", "英雄", "Champions"),
-        ("augments", "增幅", "Augments"),
-        ("changes", "版本變動", "Patch Changes"),
-        ("column", "專欄", "Articles"),
+        ("home", "英雄", "Champions", None),
+        ("augments", "增幅", "Augments", "海克斯"),
+        ("changes", "版本變動", "Patch Changes", None),
+        ("column", "專欄", "Articles", None),
     )
     sun_icon = (
         "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -1306,15 +1308,18 @@ def render_html(
         "</button>"
     )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
-    for i, (nav_key, nav_zh, nav_en) in enumerate(NAV_TABS):
+    for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
         # Home (= 英雄) is active on first paint; brand and this tab both land there.
         is_home = nav_key == "home"
+        zh_cn_attr = (
+            f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
+        )
         parts.append(
             f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
             f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
             f"aria-selected='{'true' if is_home else 'false'}' "
             f"tabindex='{'0' if is_home else '-1'}' "
-            f"data-i18n-zh='{nav_zh}' data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
+            f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
         )
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
@@ -1545,7 +1550,7 @@ def render_html(
     parts.append(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
         "<div class='view-narrow'>"
-        "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-en='Augments'>增幅</h2>"
+        "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments'>增幅</h2>"
         "<div class='aug-tier-filters' id='aug-tier-filters'></div>"
         "<div id='aug-tier-host'></div>"
         "</div>"

@@ -1077,13 +1077,33 @@
     let filterState = { role: '', q: '' };
     let _trZhCN = null;
 
+    // Product term (aramkit / CN client): 增幅(裝置) → 海克斯.
+    // Protect rune names like 冰川增幅 (Glacial Augment) from the bare replace.
+    function cnUiTerms(s) {
+        if (s == null || s === '') return s;
+        let t = String(s);
+        const locks = [];
+        t = t.replace(/冰川增幅/g, () => {
+            const i = locks.length;
+            locks.push('冰川增幅');
+            return `\uE000${i}\uE001`;
+        });
+        t = t.replace(/增幅裝置/g, '海克斯').replace(/增幅装置/g, '海克斯');
+        t = t.replace(/增幅/g, '海克斯');
+        t = t.replace(/\uE000(\d+)\uE001/g, (_, i) => locks[+i] || '');
+        return t;
+    }
     function t2s(s) {
         if (s == null || s === '') return s;
         const map = (NAMES_ZH_CN && NAMES_ZH_CN.t2s) || null;
-        if (!map) return String(s);
-        let out = '';
-        for (const ch of String(s)) out += map[ch] || ch;
-        return out;
+        let out = String(s);
+        if (map) {
+            let built = '';
+            for (const ch of out) built += map[ch] || ch;
+            out = built;
+        }
+        // Always apply product-term remap for zh-CN callers (safe no-op on EN).
+        return cnUiTerms(out);
     }
     function localizeZhCN(value) {
         if (value == null) return value;
@@ -4452,7 +4472,8 @@
             let val;
             if (currentLang === 'en') val = el.getAttribute('data-i18n-en');
             else if (currentLang === 'zh-CN') {
-                val = el.getAttribute('data-i18n-zh-cn') || t2s(el.getAttribute('data-i18n-zh') || '');
+                val = el.getAttribute('data-i18n-zh-cn')
+                    || t2s(el.getAttribute('data-i18n-zh') || '');
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
