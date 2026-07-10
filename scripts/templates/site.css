@@ -636,8 +636,24 @@
         flex-wrap: nowrap;
         align-items: stretch;
         gap: 6px;
-        margin: 14px 0 10px;
+        margin: 10px 0 6px;
         min-width: 0;
+    }
+    .side-panel.is-full-team .pick-slots {
+        margin: 8px 0 4px;
+    }
+    .side-panel.is-full-team .side-sub {
+        font-size: 11px;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .side-panel.is-full-team .pick-note {
+        min-height: 0;
+        margin-bottom: 6px;
+        font-size: 10px;
     }
     .pick-chip {
         display: inline-flex;
@@ -646,8 +662,8 @@
         gap: 4px;
         flex: 1 1 0;
         min-width: 0;
-        min-height: 36px;
-        padding: 5px 6px;
+        min-height: 32px;
+        padding: 4px 5px;
         border-radius: 999px;
         border: 1px solid #30363d;
         background: #1b2030;
@@ -696,31 +712,31 @@
         line-height: 1.6;
         padding: 8px 0 4px;
     }
-    /* Full 5-man team evaluation (replaces rec-list when MAX_TEAM_PICKS reached). */
+    /* Full 5-man team evaluation — dense layout so one viewport can show all. */
     .team-eval {
         display: grid;
-        gap: 14px;
+        gap: 8px;
     }
     .team-eval-wr {
         text-align: center;
-        padding: 14px 12px 12px;
-        border-radius: 12px;
+        padding: 10px 10px 8px;
+        border-radius: 10px;
         background: var(--surface-2, #1b2030);
         border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .team-wr-num {
-        font-size: 32px;
+        font-size: 26px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        line-height: 1.1;
+        line-height: 1.05;
         letter-spacing: -0.02em;
     }
     .team-eval-wr.is-good .team-wr-num { color: #22c55e; }
     .team-eval-wr.is-bad .team-wr-num { color: #ff4d5e; }
     .team-eval-wr.is-even .team-wr-num { color: var(--text, #e6e8ea); }
     .team-wr-label {
-        margin-top: 4px;
-        font-size: 12px;
+        margin-top: 2px;
+        font-size: 11px;
         font-weight: 600;
         color: var(--text-muted, #9aa0a6);
     }
@@ -728,8 +744,8 @@
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 6px 12px;
-        margin-top: 10px;
+        gap: 4px 10px;
+        margin-top: 6px;
         font-size: 11px;
         color: var(--text-secondary, #c4c8ce);
         font-variant-numeric: tabular-nums;
@@ -750,42 +766,51 @@
     [data-theme="light"] .team-delta.tone-neg-1 { color: #d98992; }
     [data-theme="light"] .team-delta.tone-neg-2 { color: #d32f3f; }
     .team-wr-meta {
-        margin-top: 8px;
-        font-size: 11px;
+        margin-top: 5px;
+        font-size: 10px;
         color: var(--text-dim, #6a6f77);
     }
     .team-eval-block {
-        padding: 10px 10px 12px;
-        border-radius: 12px;
+        padding: 8px 8px 9px;
+        border-radius: 10px;
         background: var(--surface-2, #1b2030);
         border: 1px solid rgba(255, 255, 255, 0.05);
     }
     .team-eval-h {
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         color: var(--text-muted, #9aa0a6);
-        margin: 0 0 8px;
+        margin: 0 0 6px;
+    }
+    /* Radar left + dim bars right — halves the vertical stack. */
+    .team-dims-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+        gap: 6px 10px;
+        align-items: center;
     }
     .team-eval-radar {
-        margin: 0 -4px 8px;
+        margin: 0;
+        min-width: 0;
     }
     .team-eval-radar .comp-radar {
         display: block;
         width: 100%;
         height: auto;
-        max-height: 240px;
+        max-height: 168px;
     }
     .team-ability-bars,
     .team-comp-list {
         display: grid;
-        gap: 6px;
+        gap: 4px;
+        min-width: 0;
     }
     .team-comp-row {
         display: grid;
-        grid-template-columns: 40px 1fr 28px auto;
-        gap: 8px;
+        grid-template-columns: 32px 1fr 24px auto;
+        gap: 5px;
         align-items: center;
-        font-size: 11px;
+        font-size: 10px;
     }
     .team-comp-row .ab-val {
         text-align: right;
@@ -800,9 +825,21 @@
     .team-comp-tag {
         font-size: 10px;
         font-weight: 700;
-        padding: 2px 6px;
+        padding: 1px 5px;
         border-radius: 999px;
         white-space: nowrap;
+    }
+    /* Narrow panel / mobile modal: stack dims if split gets too tight. */
+    @media (max-width: 420px) {
+        .team-dims-split {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .team-eval-radar .comp-radar {
+            max-height: 180px;
+            margin: 0 auto;
+            max-width: 220px;
+        }
     }
     /* Dim grade: 偏弱 / 普通 / 充足 (bad / mid / good) from mean capability pct. */
     .team-comp-row.is-bad .team-comp-tag {
@@ -841,21 +878,28 @@
         background: linear-gradient(90deg, #22c55e, #86efac);
     }
     /* Dual-endpoint early↔late continuum (not a good/bad grade). */
+    .team-tempo-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+    }
     .team-tempo-row {
         display: grid;
         grid-template-columns: auto 1fr auto;
-        gap: 10px;
+        gap: 8px;
         align-items: center;
     }
     .team-tempo-end {
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
+        flex-direction: row;
+        align-items: baseline;
+        gap: 4px;
         font-size: 11px;
         font-weight: 700;
         color: var(--text-muted, #9aa0a6);
-        min-width: 2.5em;
+        min-width: 0;
         line-height: 1.2;
     }
     .team-tempo-end small {
@@ -870,7 +914,7 @@
     .team-tempo-end.is-late small { color: #a78bfa; }
     .team-tempo-track {
         position: relative;
-        height: 12px;
+        height: 10px;
         border-radius: 999px;
         background: rgba(255, 255, 255, 0.06);
         overflow: visible;
@@ -886,8 +930,8 @@
     }
     .team-tempo-mid {
         position: absolute;
-        top: -3px;
-        bottom: -3px;
+        top: -2px;
+        bottom: -2px;
         left: 50%;
         width: 1px;
         transform: translateX(-0.5px);
@@ -897,9 +941,9 @@
     .team-tempo-marker {
         position: absolute;
         top: 50%;
-        width: 14px;
-        height: 14px;
-        margin-left: -7px;
+        width: 12px;
+        height: 12px;
+        margin-left: -6px;
         transform: translateY(-50%);
         border-radius: 50%;
         background: var(--text, #e6e8ea);
@@ -908,11 +952,12 @@
         z-index: 1;
     }
     .team-tempo-lean {
-        margin-top: 8px;
-        text-align: center;
+        margin: 0;
+        text-align: right;
         font-size: 11px;
         font-weight: 600;
         color: var(--text-secondary, #c4c8ce);
+        white-space: nowrap;
     }
     [data-theme="light"] .team-tempo-track {
         background: rgba(0, 0, 0, 0.06);
@@ -3536,13 +3581,16 @@
         z-index: 80;
         min-width: 132px;
         padding: 4px;
-        background: var(--surface-1);
+        /* Solid panel — never use undefined tokens like --surface-1 (was transparent). */
+        background: var(--surface-raised, #1a1d21);
         border: 1px solid var(--border-strong);
         border-radius: var(--r-md, 10px);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.2);
         display: flex;
         flex-direction: column;
         gap: 2px;
+        isolation: isolate;
+        opacity: 1;
     }
     .site-header .lang-menu-list [data-lang] {
         appearance: none;
