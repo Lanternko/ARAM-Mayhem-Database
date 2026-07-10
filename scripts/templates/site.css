@@ -1992,15 +1992,16 @@
     .cf-stage-tip-foot {
         color: #6b7280;
         font-size: 10px;
-        line-height: 1.45;
+        line-height: 1.5;
         border-top: 1px solid rgba(255, 255, 255, 0.05);
         padding-top: 7px;
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 4px;
     }
     .cf-stage-tip-foot-line {
         display: block;
+        white-space: normal;
     }
 
     [data-theme="light"] .cf-stage-tip {

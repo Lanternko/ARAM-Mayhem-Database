@@ -380,7 +380,7 @@
             : stageKey === 'early' ? copy.compStageEarlyDesc
             : stageKey === 'late' ? copy.compStageLateDesc
             : copy.compStageBalancedDesc;
-        // Hover tip: only non-card info (gap, PR rail, PR/rank-of-N, defs). No type/desc/WR redo.
+        // Hover tip: only unique info (gap, PR rail, PR). Type / #rank / WR already on card.
         let stageTipHtml = '';
         if (hasStageWr) {
             const gapPp = (earlyWr - lateWr) * 100; // + = early stronger
@@ -388,12 +388,6 @@
             const gapCls = Math.abs(gapPp) < 0.05 ? 'is-even'
                 : (gapPp > 0 ? 'is-early' : 'is-late');
             const pr = stageMeta ? stageMeta.pr : 50;
-            const nAll = stageMeta ? stageMeta.n : 0;
-            const rankTxt = stageRank != null && nAll
-                ? (copy.compStageTipRank
-                    ? copy.compStageTipRank(stageRank, nAll)
-                    : `#${stageRank} / ${nAll}`)
-                : '';
             const prTxt = copy.compStageTipPr ? copy.compStageTipPr(pr) : `PR ${pr}`;
             const markerLeft = Math.max(2, Math.min(98, pr));
             const footLines = Array.isArray(copy.compStageTipFootLines)
@@ -418,7 +412,6 @@
                     </div>
                     <div class="cf-stage-tip-meta">
                         <span>${escHtml(prTxt)}</span>
-                        ${rankTxt ? `<span class="cf-stage-tip-dot">·</span><span>${escHtml(rankTxt)}</span>` : ''}
                     </div>
                     ${footHtml ? `<div class="cf-stage-tip-foot">${footHtml}</div>` : ''}
                 </div>`;
@@ -973,12 +966,11 @@
             compStageEarlyAxis: '前期',
             compStageLateAxis: '後期',
             compStageTip: '前期＝≤16 分結束勝率；後期＝≥22 分結束勝率。依全英雄 late−early 百分位：PR40–60 為均衡；兩端為前期／後期型並顯示該方向排名（#1＝最偏）',
-            compStageTipGap: '差距（前期 − 後期）',
+            compStageTipGap: '差距',
             compStageTipPr: pr => `PR ${pr}`,
-            compStageTipRank: (rank, n) => `排名 #${rank}／${n}`,
             compStageTipFootLines: [
                 '前期 ≤16 分結束 · 後期 ≥22 分結束',
-                'PR40–60 為均衡 · #1＝該方向最偏',
+                'PR <40 前期 · 40–60 均衡 · >60 後期',
             ],
         },
         en: {
@@ -1153,12 +1145,11 @@
             compStageEarlyAxis: 'Early',
             compStageLateAxis: 'Late',
             compStageTip: 'Early = WR when game ends ≤16 min; Late = ≥22 min. Classified by percentile of late−early across all champs: PR40–60 balanced; outside that band labeled Early/Late with direction rank (#1 = most extreme)',
-            compStageTipGap: 'Gap (early − late)',
+            compStageTipGap: 'Gap',
             compStageTipPr: pr => `PR ${pr}`,
-            compStageTipRank: (rank, n) => `Rank #${rank} / ${n}`,
             compStageTipFootLines: [
                 'Early ≤16 min · Late ≥22 min',
-                'PR40–60 balanced · #1 = most extreme in that direction',
+                'PR <40 early · 40–60 balanced · >60 late',
             ],
         }
     };
