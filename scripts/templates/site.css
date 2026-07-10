@@ -2984,7 +2984,6 @@
     .brand {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
         text-decoration: none;
         color: var(--text);
         flex-shrink: 0;
@@ -2993,31 +2992,15 @@
         cursor: pointer;
         padding: 0;
         font: inherit;
-    }
-    .brand-logo {
-        width: 30px;
-        height: 30px;
-        display: block;
-        border-radius: 8px;
-        flex-shrink: 0;
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
-    }
-    :root[data-theme="light"] .brand-logo {
-        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
-    }
-    .brand-text {
-        display: flex;
-        align-items: center;
-        gap: 9px;
         min-width: 0;
     }
-    /* Latin brand face only — Outfit is geometric and reads as a product mark
-       rather than body UI. Weight split on aram/meta is the designed wordmark. */
+    /* Latin brand face only — Outfit reads as a product mark, not body UI.
+       Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
         font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
-        font-size: 18px;
+        font-size: 19px;
         font-weight: 600;
-        letter-spacing: -0.03em;
+        letter-spacing: -0.035em;
         line-height: 1;
         white-space: nowrap;
         color: var(--text);
@@ -3030,20 +3013,8 @@
         font-weight: 700;
         color: var(--text);
     }
-    .brand-patch {
-        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        font-variant-numeric: tabular-nums lining-nums;
-        color: var(--text-muted);
-        background: var(--surface-2);
-        border: 1px solid var(--border-strong);
-        padding: 3px 8px;
-        border-radius: 999px;
-        white-space: nowrap;
-        line-height: 1.2;
-    }
+    .brand:hover .brand-aram { color: var(--text-secondary, var(--text-muted)); }
+    .brand:hover .brand-meta { color: var(--text); }
     .nav-tabs {
         position: relative;
         display: flex;
@@ -3308,10 +3279,7 @@
             padding: 8px 12px 0;
             gap: 0 10px;
         }
-        .brand-title { font-size: 16px; }
-        .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
-        .brand-patch { font-size: 10px; padding: 2px 7px; }
-        .brand-text { gap: 7px; }
+        .brand-title { font-size: 17px; }
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }

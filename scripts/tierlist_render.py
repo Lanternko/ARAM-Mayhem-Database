@@ -1147,9 +1147,6 @@ def render_html(
     # renames, update REPO_URL below.
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
     short_patch = display_patch if display_patch else "all patches"
-    # Header chip: bilingual label so bare "26.13" is not floating next to brand.
-    patch_chip_zh = f"版本 {display_patch}" if display_patch else "全版本"
-    patch_chip_en = f"Patch {display_patch}" if display_patch else "All patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -1175,7 +1172,8 @@ def render_html(
     )
     # Fixed top header: brand (= home) + content tabs + theme icon + language.
     # 主頁 / 設定 are not tabs — brand returns home; theme toggles in-header.
-    # #site-title / #site-subtitle ids stay so applyLanguage drives brand text.
+    # #site-title stays so applyLanguage can rewrite brand text if needed.
+    # Patch lives in the footer freshness line — not next to the wordmark.
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
@@ -1206,15 +1204,10 @@ def render_html(
     parts.append(
         "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
         "title='主頁'>"
-        # Same flat die as tab favicon — sharper at 28px than the old isometric SVG.
-        f"<img class='brand-logo' src='mayhem-single-die-icon.png?v={favicon_version}' alt='' width='30' height='30'>"
-        "<span class='brand-text'>"
-        # Structured wordmark: weight contrast on "meta" (data/meta reading of ARAM).
-        # Both languages share the Latin brand; applyLanguage leaves the HTML intact.
+        # Wordmark only in the header — no icon, no patch chip (favicon stays for the tab).
+        # Weight split on aram/meta; both langs share the Latin mark.
         "<span class='brand-title' id='site-title' aria-label='arammeta'>"
         "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
-        "</span>"
-        f"<span class='brand-patch' id='site-subtitle'>{html.escape(patch_chip_zh)}</span>"
         "</span>"
         "</button>"
     )
