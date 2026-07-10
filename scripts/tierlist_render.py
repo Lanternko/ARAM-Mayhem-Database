@@ -439,6 +439,31 @@ def _dedupe_item_objects(payload: dict) -> None:
 
     visit(payload.get("champs"))
     if lut:
+        # Attach gold cost + cleaned item text so the site can show rich hover
+        # cards without re-embedding descriptions on every build row.
+        try:
+            item_meta = load_item_metadata(
+                cache_dir=Path("data/cache"),
+                ddragon_version=version or None,
+            )
+        except Exception:
+            item_meta = {}
+        for iid, entry in lut.items():
+            try:
+                meta = item_meta.get(int(iid)) or {}
+            except (TypeError, ValueError):
+                meta = {}
+            if not meta:
+                continue
+            price = int(meta.get("price_total") or 0)
+            if price > 0:
+                entry["p"] = price
+            dz = str(meta.get("desc_zh") or "").strip()
+            de = str(meta.get("desc_en") or "").strip()
+            if dz:
+                entry["dz"] = dz
+            if de:
+                entry["de"] = de
         payload["itemLut"] = lut
         payload["ddv"] = version
 
@@ -984,7 +1009,9 @@ def render_html(
         "&display=swap' rel='stylesheet'>"
     )
     parts.append(f"<style>{css}</style></head><body>")
-    # Header: title + subtitle on the left, language toggle + GitHub star on the right.
+    # Header: brand + tab nav + language toggle.  GitHub star lives in the
+    # page footer (with tier cutoffs / freshness) so it reads as a quiet
+    # open-source credit instead of a header CTA.
     # The repo name is the canonical project URL; if the user later forks /
     # renames, update REPO_URL below.
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
@@ -1000,7 +1027,7 @@ def render_html(
         "</svg>"
     )
     gh_icon = (
-        "<svg viewBox='0 0 16 16' width='14' height='14' fill='currentColor' "
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='currentColor' "
         "aria-hidden='true'><path d='M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1"
         "-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1."
         "23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-."
@@ -1012,7 +1039,7 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Fixed top header: brand (left) + tab nav + language toggle + GitHub star.
+    # Fixed top header: brand (left) + tab nav + language toggle.
     # Theme lives in the Settings view; 版本變動 (patch changes) has its own tab;
     # the language toggle sits in the header.  #site-title / #site-subtitle ids are
     # preserved so applyLanguage keeps driving the brand text + patch chip.  The
@@ -1058,10 +1085,6 @@ def render_html(
         "type='button' title='Switch to English' aria-label='切換語言'>"
         f"{globe_icon}<span id='lang-toggle-label'>EN</span>"
         "</button>"
-    )
-    parts.append(
-        f"<a class='gh-star' href='{REPO_URL}' target='_blank' rel='noopener' "
-        f"aria-label='GitHub' title='覺得有用請幫忙按 Star ⭐'>{gh_icon}<span>Star</span></a>"
     )
     parts.append("</div>")  # /header-actions
     parts.append("</div>")  # /site-header-inner
@@ -1208,6 +1231,26 @@ def render_html(
         parts.append(
             f"<div class='freshness' id='freshness-copy'>{date_str}（{total_games:,} 場） · {patch_label}</div>"
         )
+    # Footer open-source control: pill affordance so it reads as clickable,
+    # still sits with freshness meta (not a header CTA).
+    star_glyph = (
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='currentColor' "
+        "aria-hidden='true'><path d='M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 "
+        "4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 "
+        "1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L"
+        ".818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 "
+        "8 .25Z'></path></svg>"
+    )
+    parts.append(
+        f"<a class='gh-star' href='{REPO_URL}' target='_blank' rel='noopener' "
+        "aria-label='Star on GitHub' title='覺得有用請幫忙按 Star'>"
+        f"{gh_icon}"
+        "<span class='gh-star-label' data-i18n-zh='開源於 GitHub' "
+        "data-i18n-en='Open source on GitHub'>開源於 GitHub</span>"
+        f"<span class='gh-star-cta' aria-hidden='true'>{star_glyph}"
+        "<span data-i18n-zh='Star' data-i18n-en='Star'>Star</span></span>"
+        "</a>"
+    )
     parts.append(
         "<div class='disclaimer'>"
         "This site isn't endorsed by Riot Games and doesn't reflect the views "
