@@ -1113,13 +1113,11 @@ def render_html(
     og_patch_label = f"patch {display_patch}" if display_patch else "all patches"
     og_title = header_title  # share-card title = the brand
     og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
-    # Search snippet copy is deliberately separate from the share-card copy
-    # above: Google drops keyword-less titles / symbol-heavy descriptions and
-    # falls back to scraping nav text, so <title> + <meta description> carry
-    # the terms players actually search while og:*/twitter:* keep the brand
-    # card that Threads/Discord shares are known by.
+    # Browser tab / brand title is just "arammeta". SEO keywords live in
+    # <meta description> + JSON-LD alternateName (not the tab chrome).
     patch_zh = f"版本 {display_patch} " if display_patch else ""
-    seo_title = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
+    page_title = header_title  # always "arammeta"
+    seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
         f"基於 {total_games:,} 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、"
         f"增幅勝率、出裝與組隊推薦，{patch_zh}持續更新。"
@@ -1130,7 +1128,7 @@ def render_html(
     meta_lines.append(
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     )
-    meta_lines.append(f"<title>{seo_title}</title>")
+    meta_lines.append(f"<title>{html.escape(page_title)}</title>")
     favicon_version = favicon_asset_version()
     meta_lines.append(
         f"<link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v={favicon_version}'>"
@@ -1167,7 +1165,7 @@ def render_html(
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": header_title,
-            "alternateName": seo_title,
+            "alternateName": seo_alternate,
             "url": site_url,
             "description": seo_desc,
             "inLanguage": "zh-Hant",
