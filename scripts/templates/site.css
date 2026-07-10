@@ -1906,115 +1906,12 @@
         opacity: 1;
         transform: translateY(0);
     }
-    .cf-stage-tip-head {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 4px;
-    }
-    .cf-stage-tip-type {
-        font-size: 14px;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-        color: #e8eaed;
-    }
-    .cf-stage-host-early .cf-stage-tip-type { color: #f0a060; }
-    .cf-stage-host-late .cf-stage-tip-type { color: #7fc8ff; }
-    .cf-stage-host-balanced .cf-stage-tip-type { color: #c2c7ce; }
-    .cf-stage-tip-rank {
-        flex: 0 0 auto;
-        font-size: 13px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        color: #e8eaed;
-        opacity: 0.92;
-    }
-    .cf-stage-host-early .cf-stage-tip-rank {
-        color: #f5c08a;
-        background: rgba(240, 160, 96, 0.12);
-        border: 1px solid rgba(240, 160, 96, 0.22);
-        border-radius: 999px;
-        padding: 1px 8px 2px;
-        font-size: 12px;
-    }
-    .cf-stage-host-late .cf-stage-tip-rank {
-        color: #a8d8ff;
-        background: rgba(127, 200, 255, 0.10);
-        border: 1px solid rgba(127, 200, 255, 0.20);
-        border-radius: 999px;
-        padding: 1px 8px 2px;
-        font-size: 12px;
-    }
-    .cf-stage-tip-lead {
-        color: #8b919a;
-        font-size: 11px;
-        line-height: 1.45;
-        margin-bottom: 10px;
-    }
-    .cf-stage-tip-wrs {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-    .cf-stage-tip-wr {
-        display: flex;
-        flex-direction: column;
-        gap: 3px;
-        padding: 7px 8px 8px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-    }
-    .cf-stage-tip-wr.is-early {
-        border-color: rgba(240, 160, 96, 0.18);
-        background: rgba(240, 160, 96, 0.07);
-    }
-    .cf-stage-tip-wr.is-late {
-        border-color: rgba(127, 200, 255, 0.14);
-        background: rgba(127, 200, 255, 0.05);
-    }
-    .cf-stage-tip-wr-k {
-        font-size: 10px;
-        color: #8b919a;
-        letter-spacing: 0.02em;
-    }
-    .cf-stage-tip-wr-v {
-        font-size: 18px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        line-height: 1.1;
-        color: #e8eaed;
-    }
-    .cf-stage-tip-wr.is-early .cf-stage-tip-wr-v { color: #f0a060; }
-    .cf-stage-tip-wr.is-late .cf-stage-tip-wr-v { color: #7fc8ff; }
-    .cf-stage-tip-wr-bar {
-        display: block;
-        height: 4px;
-        border-radius: 99px;
-        background: rgba(255, 255, 255, 0.06);
-        overflow: hidden;
-        margin-top: 2px;
-    }
-    .cf-stage-tip-wr-bar > span {
-        display: block;
-        height: 100%;
-        border-radius: 99px;
-        background: #7a808a;
-    }
-    .cf-stage-tip-wr.is-early .cf-stage-tip-wr-bar > span {
-        background: linear-gradient(90deg, #c47a40, #f0a060);
-    }
-    .cf-stage-tip-wr.is-late .cf-stage-tip-wr-bar > span {
-        background: linear-gradient(90deg, #4a8fc4, #7fc8ff);
-    }
     .cf-stage-tip-gap {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 8px;
-        padding: 6px 2px 8px;
+        padding: 0 2px 8px;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         margin-bottom: 10px;
         color: #8b919a;
@@ -2098,6 +1995,12 @@
         line-height: 1.45;
         border-top: 1px solid rgba(255, 255, 255, 0.05);
         padding-top: 7px;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+    .cf-stage-tip-foot-line {
+        display: block;
     }
 
     [data-theme="light"] .cf-stage-tip {
@@ -2109,15 +2012,7 @@
     [data-theme="light"] .cf-stage-tip::before {
         border-bottom-color: #f4f6f9;
     }
-    [data-theme="light"] .cf-stage-tip-type { color: #1c222c; }
-    [data-theme="light"] .cf-stage-host-early .cf-stage-tip-type { color: #c06a28; }
-    [data-theme="light"] .cf-stage-tip-lead,
     [data-theme="light"] .cf-stage-tip-foot { color: #6b7280; }
-    [data-theme="light"] .cf-stage-tip-wr {
-        background: rgba(15, 20, 28, 0.03);
-        border-color: rgba(15, 20, 28, 0.06);
-    }
-    [data-theme="light"] .cf-stage-tip-wr-v { color: #1c222c; }
     [data-theme="light"] .cf-stage-tip-rail-dot { border-color: #f4f6f9; }
     .cf-cap {
         font-size: 11px;
