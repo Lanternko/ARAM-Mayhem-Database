@@ -370,6 +370,9 @@ def main(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     click.echo(f"[tierlist] wrote {out_path}  ({out_path.stat().st_size:,} bytes)")
+    mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
+    if mirrors:
+        click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
 
     # Hand-made article cover banners live (committed) under docs/assets/covers
     # and are referenced as assets/covers/<file>.  Mirror them into the build

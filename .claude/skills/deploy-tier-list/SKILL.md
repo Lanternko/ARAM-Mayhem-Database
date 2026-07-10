@@ -1,9 +1,9 @@
 ---
 name: deploy-tier-list
-description: "Rebuild docs/index.html from data/lcu/games.db and publish to GitHub Pages (Lanternko/ARAM-Mayhem-Database, branch main, folder /docs). Use when the user wants to refresh / publish / deploy / update the tier list site, ship new patch data, or push augment-winrate changes online. Triggers on: deploy tier list, publish tier list, update tier list site, refresh site, rebuild site, push to pages, ship to pages, ship tier list, 更新網站, 更新 tier list, 重新部署, 重建網站, 把 tier list 推上去, 部署 tier list, /deploy-tier-list."
+description: "Full data rebuild of docs/index.html + docs/api/*.json from data/lcu/games.db and publish to GitHub Pages (Lanternko/ARAM-Mayhem-Database, branch main, folder /docs). Use when the user wants to refresh patch stats, ship new game data, or push a complete tier-list rebuild. Triggers on: deploy tier list, publish tier list, update tier list site, refresh site, rebuild site, push to pages, ship to pages, ship tier list, full deploy, 更新網站, 更新 tier list, 重新部署, 重建網站, 把 tier list 推上去, 部署 tier list, /deploy-tier-list. Do NOT trigger for CSS/JS/copy-only ships — use deploy-shell instead."
 metadata:
-  version: "1.1"
-  last_updated: "2026-07-08"
+  version: "1.2"
+  last_updated: "2026-07-10"
   status: active
   scope: project
 ---
@@ -23,12 +23,17 @@ ARAM Mayhem tier-list site is published via **GitHub Pages → branch `main` →
 
 ## When to invoke
 
-Auto-trigger on any rephrase of "deploy/update/publish the tier list site". Explicit `/deploy-tier-list` always invokes.
+Auto-trigger on any rephrase of "deploy/update/publish the tier list site" **when game data must refresh**. Explicit `/deploy-tier-list` always invokes.
+
+**Hand off to `deploy-shell`** (do not run the full rebuild) when:
+- The user only changed CSS / JS / copy / layout / `scripts/templates/*`.
+- They say shell-only / frontend-only / CSS-only / 只改前端 / 不重建資料.
+- See `.claude/skills/deploy-shell/SKILL.md`.
 
 **Don't trigger** when:
-- The user only changed the build script (CSS / layout tweaks) and hasn't asked to push — just rebuild locally so they can review.
+- The user only changed templates and hasn't asked to push — just run a local `--shell-only` preview so they can review.
 - The user is asking about deploy *mechanics* ("how do I…") — answer with text, don't push.
-- `data/lcu/games.db` is mid-write by a running collector — refuse and tell the user to stop the collector first (writing while open SQLite can corrupt).
+- `data/lcu/games.db` is mid-write by a running collector — for a *full* data rebuild, prefer waiting or warn; concurrent WAL readers usually work (the watchdog already publishes while snowball runs) but refuse if the user wants a guaranteed clean snapshot.
 
 ## The canonical command
 
@@ -47,31 +52,11 @@ Defaults the script already applies (do not override unless the user asks):
 
 Leave `--patch-prefix` at its `auto` default for normal deploys — it already targets the current patch. Only pass an explicit `16.NN` when the user wants a *specific past* patch ("用 16.11 重新出一份"); never pin the current patch by hand (that's what went stale before). Override `--queue 450` if the user explicitly asks for ARAM, but warn that ARAM sample is currently tiny (~139 games).
 
-## Frontend-only deploys — the `--shell-only` trap
+## Frontend-only deploys → use `deploy-shell`
 
-For a CSS / JS / copy fix the data hasn't changed, so a full rebuild (~17 min of win-rate + affinity compute) is wasteful and `--shell-only` (reuses the existing `docs/api/tier-list.json`, ~0.5 s) is tempting. **It is deploy-safe ONLY if you pass the full production flag set.** With bare `--shell-only --out docs/index.html`, `render_html` receives empty `site_url` / `cloudflare_analytics_token`, so it **silently drops**:
+For a CSS / JS / copy fix the data hasn't changed. A full rebuild is currently **~40–50 min** (16.13 has 500k+ games × multiple full DB scans); `--shell-only` reuses `docs/api/tier-list.json` in **~0.5–2 s**.
 
-- `og:image`, `og:url`, `twitter:image`, `<link rel=canonical>` → Threads / social link previews break (Threads is ~28% of traffic).
-- the Cloudflare Web Analytics beacon (`cloudflareinsights`) → daily view stats (~2k/day) go dark.
-
-The diff `--stat` still looks tiny (just your CSS lines), so the loss is easy to miss. The safe off-cycle shell-only command mirrors `static_publish.build_split_site` — pass **every** metadata flag:
-
-```powershell
-python scripts/build_tier_list.py --shell-only --out docs/index.html `
-  --site-url "https://arammeta.com/" `
-  --payload-url "api/tier-list.json" `
-  --queue 2400 `
-  --cloudflare-analytics-token 483cb89af9ee4d1da31ce69cee310b49
-```
-
-Then **verify metadata survived before committing** — compare tokens against `HEAD:docs/index.html`:
-
-```bash
-diff <(git show HEAD:docs/index.html | grep -oE "og:image[^']*|rel='canonical'|cloudflareinsights") \
-     <(grep -oE "og:image[^']*|rel='canonical'|cloudflareinsights" docs/index.html)
-```
-
-The only expected diff on a CSS-only change is the headline game count (it re-queries the live DB); `og:image` / `canonical` / `cloudflareinsights` must all still be present. A shell-only deploy stages **only `docs/index.html`** (the payload + comp-fit/axes JSON are untouched — do not re-stage them).
+**Do not improvise shell-only from this skill.** Follow `.claude/skills/deploy-shell/SKILL.md` end-to-end (canonical flag set + metadata gate + stage only `docs/index.html`). Bare `--shell-only` without `--site-url` / `--cloudflare-analytics-token` **silently** strips OG/canonical tags and the Cloudflare analytics beacon.
 
 ## Comp-fit radar + empirical ability axes (split deploys only)
 
@@ -106,7 +91,8 @@ The watchdog's `publish_static_site.py` does all of these automatically before e
 #    Inline single-file build: just docs/index.html.
 #    Split build (the deploy the watchdog uses): all four artifacts below,
 #    plus docs/assets/icons if new self-hosted icons were downloaded this round.
-git add docs/index.html docs/api/tier-list.json docs/api/champ-archetype-fit.json docs/api/champ-empirical-axes.json
+git add docs/index.html docs/404.html docs/augments docs/changes docs/column docs/settings
+git add docs/api/tier-list.json docs/api/champ-archetype-fit.json docs/api/champ-empirical-axes.json
 
 # 3. Commit. Message convention: "Refresh tier list <date>" or
 #    "Refresh tier list <patch>" if a new patch is the reason.
@@ -143,7 +129,7 @@ Do **not** poll or curl the live URL — Pages CDN caches aggressively and a 200
 - **Never** force-push to `main` — Pages live URL would temporarily 404 and Discord/Twitter previews could break.
 - **Never** edit `docs/index.html` by hand and commit — it's a build artifact; changes get clobbered next rebuild.
 - **Never** drop `--site-url` — `og:url` / `<link rel=canonical>` would point to nothing, breaking social previews.
-- **Never** deploy a bare `--shell-only` build — without `--site-url` **and** `--cloudflare-analytics-token` it silently strips OG/Twitter/canonical tags and the Cloudflare analytics beacon, and the `--stat` diff hides the loss. Use the full flag set in "the `--shell-only` trap" section and verify the metadata tokens survived before committing. Shell-only is otherwise fine for a data-unchanged frontend fix.
+- **Never** deploy a bare `--shell-only` build from this skill — hand off to `deploy-shell`, which owns the safe flag set + metadata gate.
 - **Never** swap `/docs` for `/site` — GitHub Pages only supports `/(root)` and `/docs` in branch mode (we hit this once already; see commit `3806df6`).
 - **Never** ship a split deploy that updates `docs/api/tier-list.json` but forgets `docs/api/champ-archetype-fit.json` — the comp-fit radar would 404 and every champion falls back to the heuristic estimate. Rebuild it from the fresh tier-list.json and stage it in the same commit.
 - **Never** ship a split deploy that forgets `docs/api/champ-empirical-axes.json` — the `後期` / `滾雪球` ability bars would 404 and silently read 0 for every champion. Rebuild it from the fresh tier-list.json and stage it in the same commit (it is the fourth required artifact alongside the HTML, tier-list.json, and the comp-fit radar).
