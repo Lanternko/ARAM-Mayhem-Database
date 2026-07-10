@@ -380,8 +380,64 @@
             : stageKey === 'early' ? copy.compStageEarlyDesc
             : stageKey === 'late' ? copy.compStageLateDesc
             : copy.compStageBalancedDesc;
+        // Rich hover panel (early type is the design reference: warm rank + dual WR + PR rail).
+        let stageTipHtml = '';
+        if (hasStageWr) {
+            const gapPp = (earlyWr - lateWr) * 100; // + = early stronger
+            const gapTxt = (gapPp >= 0 ? '+' : '') + gapPp.toFixed(1) + ' pp';
+            const gapCls = Math.abs(gapPp) < 0.05 ? 'is-even'
+                : (gapPp > 0 ? 'is-early' : 'is-late');
+            const pr = stageMeta ? stageMeta.pr : 50;
+            const nAll = stageMeta ? stageMeta.n : 0;
+            const rankTxt = stageRank != null && nAll
+                ? (copy.compStageTipRank
+                    ? copy.compStageTipRank(stageRank, nAll)
+                    : `#${stageRank} / ${nAll}`)
+                : '';
+            const prTxt = copy.compStageTipPr ? copy.compStageTipPr(pr) : `PR ${pr}`;
+            // PR rail: marker at pr%; balanced band 40–60 as mid zone.
+            const markerLeft = Math.max(2, Math.min(98, pr));
+            stageTipHtml = `
+                <div class="cf-stage-tip" role="tooltip">
+                    <div class="cf-stage-tip-head">
+                        <span class="cf-stage-tip-type">${escHtml(stageTitle)}</span>
+                        ${stageRank != null ? `<span class="cf-stage-tip-rank">#${stageRank}</span>` : ''}
+                    </div>
+                    ${stageDesc ? `<div class="cf-stage-tip-lead">${escHtml(stageDesc)}</div>` : ''}
+                    <div class="cf-stage-tip-wrs">
+                        <div class="cf-stage-tip-wr is-early">
+                            <span class="cf-stage-tip-wr-k">${escHtml(copy.compStageEarlyAxis)}</span>
+                            <span class="cf-stage-tip-wr-v">${earlyPct}%</span>
+                            <span class="cf-stage-tip-wr-bar"><span style="width:${earlyPct}%"></span></span>
+                        </div>
+                        <div class="cf-stage-tip-wr is-late">
+                            <span class="cf-stage-tip-wr-k">${escHtml(copy.compStageLateAxis)}</span>
+                            <span class="cf-stage-tip-wr-v">${latePct}%</span>
+                            <span class="cf-stage-tip-wr-bar"><span style="width:${latePct}%"></span></span>
+                        </div>
+                    </div>
+                    <div class="cf-stage-tip-gap ${gapCls}">
+                        <span>${escHtml(copy.compStageTipGap || 'Gap')}</span>
+                        <b>${escHtml(gapTxt)}</b>
+                    </div>
+                    <div class="cf-stage-tip-rail" aria-hidden="true">
+                        <span class="cf-stage-tip-rail-end is-early">${escHtml(copy.compStageEarlyAxis)}</span>
+                        <div class="cf-stage-tip-rail-track">
+                            <span class="cf-stage-tip-rail-band"></span>
+                            <span class="cf-stage-tip-rail-dot" style="left:${markerLeft}%"></span>
+                        </div>
+                        <span class="cf-stage-tip-rail-end is-late">${escHtml(copy.compStageLateAxis)}</span>
+                    </div>
+                    <div class="cf-stage-tip-meta">
+                        <span>${escHtml(prTxt)}</span>
+                        ${rankTxt ? `<span class="cf-stage-tip-dot">·</span><span>${escHtml(rankTxt)}</span>` : ''}
+                    </div>
+                    <div class="cf-stage-tip-foot">${escHtml(copy.compStageTipFoot || copy.compStageTip || '')}</div>
+                </div>`;
+        }
         const stageCard = `
-            <div class="cf-side-card" title="${escHtml(copy.compStageTip || '')}">
+            <div class="cf-side-card cf-stage-host cf-stage-host-${stageKey}" tabindex="0"
+                 aria-label="${escHtml(copy.compStageTitle + ' · ' + stageTitle + (stageRank != null ? ' #' + stageRank : ''))}">
                 <div class="cf-side-kicker">${escHtml(copy.compStageTitle)}</div>
                 <div class="cf-side-value cf-stage-${stageKey}">${stageTitleHtml}</div>
                 ${stageDesc ? `<div class="cf-side-sub">${escHtml(stageDesc)}</div>` : ''}
@@ -389,6 +445,7 @@
                     <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageEarlyAxis)}</span><span class="ab-bar ab-bar-early"><span style="width:${earlyPct}%"></span></span><span class="ab-val">${hasStageWr ? earlyPct + '%' : '—'}</span></div>
                     <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageLateAxis)}</span><span class="ab-bar ab-bar-late"><span style="width:${latePct}%"></span></span><span class="ab-val">${hasStageWr ? latePct + '%' : '—'}</span></div>
                 </div>
+                ${stageTipHtml}
             </div>`;
 
         // Optional: only surface clear empirical archetype signals (most champs are ~0pp).
@@ -928,6 +985,10 @@
             compStageEarlyAxis: '前期',
             compStageLateAxis: '後期',
             compStageTip: '前期＝≤16 分結束勝率；後期＝≥22 分結束勝率。依全英雄 late−early 百分位：PR40–60 為均衡；兩端為前期／後期型並顯示該方向排名（#1＝最偏）',
+            compStageTipGap: '差距（前期 − 後期）',
+            compStageTipPr: pr => `PR ${pr}`,
+            compStageTipRank: (rank, n) => `排名 #${rank}／${n}`,
+            compStageTipFoot: '前期 ≤16 分結束 · 後期 ≥22 分結束 · PR40–60 為均衡 · #1＝該方向最偏',
         },
         en: {
             htmlLang: 'en',
@@ -1101,6 +1162,10 @@
             compStageEarlyAxis: 'Early',
             compStageLateAxis: 'Late',
             compStageTip: 'Early = WR when game ends ≤16 min; Late = ≥22 min. Classified by percentile of late−early across all champs: PR40–60 balanced; outside that band labeled Early/Late with direction rank (#1 = most extreme)',
+            compStageTipGap: 'Gap (early − late)',
+            compStageTipPr: pr => `PR ${pr}`,
+            compStageTipRank: (rank, n) => `Rank #${rank} / ${n}`,
+            compStageTipFoot: 'Early ≤16 min · Late ≥22 min · PR40–60 balanced · #1 = most extreme in that direction',
         }
     };
     // Prefer URL / stub-stashed locale over the zh SSR default.
@@ -2592,9 +2657,11 @@
                 () => '<span class="item-build-icon"></span>'
             ).join('');
             const cardClass = options.singleItem ? 'item-build-card single-item-card' : 'item-build-card';
-            const wrClass = options.singleItem && !options.bootItem && liftValue < -0.0005
-                ? 'item-build-wr is-bad'
-                : 'item-build-wr';
+            // Color WR vs champion baseline (lift), not absolute WR — a "top" pair
+            // can still sit under the champ's overall WR (e.g. popular traps).
+            const wrSign = liftValue > 0.005 ? 'is-good'
+                : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+            const wrClass = `item-build-wr ${wrSign}`;
             return `
                 <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}">
                     <div class="item-build-icons">${paddedIcons}</div>
