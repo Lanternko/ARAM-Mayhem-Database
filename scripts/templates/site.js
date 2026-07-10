@@ -87,15 +87,18 @@
             }
         }
     } catch (e) { ARCHFIT = null; }
-    // Empirical ability axes (scaling/snowball + empirical damage/tank/cc bars) merged into comp.
+    // Empirical ability axes merged into comp (radar bars + early/late tempo card).
     try {
         const AXES = await loadSitePayload("api/champ-empirical-axes.json");
         if (AXES && AXES.champs && DATA.champs) {
             for (const cid in AXES.champs) {
                 const c = DATA.champs[cid], a = AXES.champs[cid];
                 if (c && c.comp && a) {
+                    // Tempo card (early/late) still uses scaling/snowball.
                     c.comp.scaling = a.scaling; c.comp.snowball = a.snowball;
+                    // Radar polygon: damage/tank/cc + gold + fight presence.
                     c.comp.e_damage = a.e_damage; c.comp.e_tank = a.e_tank; c.comp.e_cc = a.e_cc;
+                    c.comp.e_gold = a.e_gold; c.comp.e_participate = a.e_participate;
                 }
             }
         }
@@ -121,7 +124,7 @@
     );
 
     // Capability dims we percentile-rank per champion (the building blocks of comp fit).
-    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'e_damage', 'e_tank', 'e_cc'];
+    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'e_damage', 'e_tank', 'e_cc', 'e_gold', 'e_participate'];
     // The 6 comp archetypes. Each is a weighted blend of the capabilities that comp is
     // built around — a champion's fit = how much it supplies those, ranked across all champs.
     // The 6 aren't mutually exclusive (a champ can fit several); together they span most comps.
@@ -137,13 +140,15 @@
     const COMP_FIT_EMP_POS = 0.4;   // empirical delta pp to call a comp a fit ("build this around him")
     const COMP_FIT_EMP_NEG = -0.4;  // empirical delta pp to call a comp one to avoid (redundant teammates)
     // Raw-ability bars shown beside the radar (champion capability percentiles, not comp fit).
+    // Six-axis ability radar (percentiles). Early/late tempo lives in the side card,
+    // not on the polygon — gold + fight presence are more readable on a radar.
     const ABILITY_BARS = [
-        { key: 'e_damage', zh: '傷害', en: 'Damage' },
-        { key: 'e_tank',   zh: '坦度', en: 'Tank' },
-        { key: 'e_cc',     zh: '控場', en: 'CC' },
-        { key: 'sustain', zh: '恢復', en: 'Sustain' },
-        { key: 'scaling',  zh: '後期', en: 'Scaling' },
-        { key: 'snowball', zh: '滾雪球', en: 'Snowball' },
+        { key: 'e_damage',      zh: '傷害', en: 'Damage' },
+        { key: 'e_tank',        zh: '坦度', en: 'Tank' },
+        { key: 'e_cc',          zh: '控場', en: 'CC' },
+        { key: 'sustain',       zh: '恢復', en: 'Sustain' },
+        { key: 'e_gold',        zh: '金錢', en: 'Gold' },
+        { key: 'e_participate', zh: '參團', en: 'Fight' },
     ];
     // Per-dim sorted value list across all champions, computed once (DATA.champs is static).
     let _compNormCache = null;
@@ -683,9 +688,24 @@
             emptyCopy: '換個角色篩選，或試試英雄中／英文名。',
             freshness: () => `${DATE_STR_ZH}（${TOTAL_GAMES} 場） · ${PATCH_LABEL}`,
             sideTitle: '推薦組合排行',
-            sideSub: '依歷史搭配排序，並修正傷害比例與陣容缺口。<br>推薦度越高越適合；可信度是資料穩定度摘要。',
+            sideSub: '選 1～4 隻看誰適合補進來；選滿 5 隻改看整隊估計勝率與能力維度。',
+            sideTitleFull: '五人陣容評估',
+            sideSubFull: '依英雄基準勝率、兩兩搭配 lift 與陣容組成估計；維度為隊內平均百分位。',
             closeRecs: '關閉推薦組合',
-            openRecs: n => `看推薦組合 (${n})`,
+            openRecs: n => n >= 5 ? `看陣容評估 (${n})` : `看推薦組合 (${n})`,
+            teamEstWr: '估計勝率',
+            teamBaseWr: '英雄均值',
+            teamPairLift: '搭配 lift',
+            teamCompAdj: '陣容修正',
+            teamPairCover: (have, total) => `已知搭配 ${have}/${total} 組`,
+            teamDimsTitle: '隊伍能力維度',
+            teamCompTitle: '陣容組成',
+            teamLack: '偏弱',
+            teamOk: '充足',
+            teamConfHigh: '可信度高',
+            teamConfMid: '可信度中',
+            teamConfLow: '樣本偏早',
+            teamPickFullNote: '已選滿 5 隻 · 以下為整隊評估（非再推薦第 6 人）',
             langToggleLabel: 'EN',
             langToggleTitle: 'Switch to English',
             langToggleAria: '切換語言',
@@ -696,10 +716,10 @@
             removePick: name => `移除 ${name}`,
             pickEmpty: '尚未選擇',
             maxOnly: n => `最多只能選 ${n} 隻英雄。`,
-            pickNoteEmpty: n => `最多選 ${n} 隻；先看推薦度，再看原因與樣本。`,
+            pickNoteEmpty: n => `最多選 ${n} 隻；未滿 5 隻時看推薦補位，選滿後看整隊勝率與維度。`,
             pickNotePartial: want => `目前這組選角的完整資料較少，先用已知搭配排序。`,
             pickNoteReady: (want, minGames) => `已選 ${want}/${MAX_TEAM_PICKS} 隻；pair 門檻 >= ${minGames} 場。`,
-            panelEmpty: '先開啟「選擇你的隊友」，再從英雄列表點 1~4 隻英雄。系統會排出最適合補進來的英雄。',
+            panelEmpty: '先開啟「選擇你的隊友」，再從英雄列表點 1～5 隻英雄。未滿 5 隻時排出最適合補進來的英雄；選滿後顯示整隊估計勝率與能力維度。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
@@ -833,9 +853,24 @@
             emptyCopy: 'Try a different role, or search by Chinese / English champion name.',
             freshness: () => `Updated ${BUILD_DATE} (${TOTAL_GAMES} games) · ${PATCH_LABEL}`,
             sideTitle: 'Recommended teammates',
-            sideSub: 'Ranked by teammate fit, then adjusted for damage mix and team gaps.<br>Higher fit is better; confidence summarizes data stability.',
+            sideSub: 'Pick 1–4 to rank fill-ins; pick all 5 for full-team win-rate and ability dims.',
+            sideTitleFull: '5-man team evaluation',
+            sideSubFull: 'Estimated from champion baselines, pair lifts, and composition tables; dims are mean percentiles.',
             closeRecs: 'Close recommendations',
-            openRecs: n => `Open recommendations (${n})`,
+            openRecs: n => n >= 5 ? `Open team eval (${n})` : `Open recommendations (${n})`,
+            teamEstWr: 'Est. win rate',
+            teamBaseWr: 'Champ avg',
+            teamPairLift: 'Pair lift',
+            teamCompAdj: 'Comp adj.',
+            teamPairCover: (have, total) => `Pairs known ${have}/${total}`,
+            teamDimsTitle: 'Team ability dims',
+            teamCompTitle: 'Composition',
+            teamLack: 'Weak',
+            teamOk: 'OK',
+            teamConfHigh: 'High confidence',
+            teamConfMid: 'Medium confidence',
+            teamConfLow: 'Early signal',
+            teamPickFullNote: 'Full roster of 5 · team evaluation (not a 6th pick list)',
             langToggleLabel: '中',
             langToggleTitle: '切換成中文',
             langToggleAria: 'Switch language',
@@ -846,10 +881,10 @@
             removePick: name => `Remove ${name}`,
             pickEmpty: 'Empty',
             maxOnly: n => `You can only pick up to ${n} champions.`,
-            pickNoteEmpty: n => `Pick up to ${n}; read fit first, then reason and sample size.`,
+            pickNoteEmpty: n => `Pick up to ${n}. Under 5 shows fill-in ranks; at 5 shows full-team WR and dims.`,
             pickNotePartial: want => `This selected group has less complete data, so the list uses known teammate fits first.`,
             pickNoteReady: (want, minGames) => `${want}/${MAX_TEAM_PICKS} picked; pair threshold >= ${minGames} games.`,
-            panelEmpty: 'Turn on teammate mode, then click 1-4 champions in the grid. The site will rank the best additions.',
+            panelEmpty: 'Turn on teammate mode, then click 1–5 champions. Under 5 ranks the best additions; at 5 shows estimated team win rate and ability dims.',
             panelNoData: 'This combination does not have enough pair data yet.',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
@@ -2060,8 +2095,8 @@
             : '六格中出過就計入；由強到弱，右滑看更多';
         const singleItemBadTitle = currentLang === 'en' ? 'Common Traps' : '常見但不推薦';
         const singleItemBadMeta = currentLang === 'en'
-            ? 'high-pick negative-lift items; commonly built, but they drag this champion below baseline'
-            : '高出場但負 lift；很多人出，但相對該英雄 baseline 會拉低勝率';
+            ? 'negative-lift items people still build; pick ≥ 10% always listed'
+            : '負 lift 但仍常見；選取率 ≥ 10% 一律列出';
         const topRows = RARITIES.map(r => buildRarityRow(top[r.key], 'ranked', r)).join('');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
@@ -2285,19 +2320,33 @@
                 </div>
             `;
         };
+        // Common traps: default top-N by pick, but force-keep every negative-lift
+        // item with pick ≥ 10% (e.g. Malzahar Void Staff at ~11.6% would otherwise
+        // fall off a maxRows=4 list behind hotter traps like Shadowflame / Deathcap).
+        const COMMON_TRAP_FORCE_MIN_PICK = 0.10;
         const selectCommonTrapRows = (payload, maxRows = 4) => {
             const sourceRows = (payload && (payload.popularBad || payload.bot)) || [];
             const badRows = sourceRows
                 .filter(entry => Number(entry.lift ?? 0) <= -0.01);
             if (!badRows.length) return [];
-            return [...badRows]
-                .sort((a, b) => (
-                    Number(b.pick ?? b.pick_rate ?? 0) - Number(a.pick ?? a.pick_rate ?? 0)
-                    || Number(b.g ?? b.games ?? 0) - Number(a.g ?? a.games ?? 0)
-                    || Number(a.lift ?? 0) - Number(b.lift ?? 0)
-                    || String(a.name_en || '').localeCompare(String(b.name_en || ''))
-                ))
-                .slice(0, maxRows);
+            const pickOf = (entry) => Number(entry.pick ?? entry.pick_rate ?? 0);
+            const gamesOf = (entry) => Number(entry.g ?? entry.games ?? 0);
+            const sortByPick = (a, b) => (
+                pickOf(b) - pickOf(a)
+                || gamesOf(b) - gamesOf(a)
+                || Number(a.lift ?? 0) - Number(b.lift ?? 0)
+                || String(a.name_en || '').localeCompare(String(b.name_en || ''))
+            );
+            const mustKeep = badRows
+                .filter(entry => pickOf(entry) >= COMMON_TRAP_FORCE_MIN_PICK)
+                .sort(sortByPick);
+            const optional = badRows
+                .filter(entry => pickOf(entry) < COMMON_TRAP_FORCE_MIN_PICK)
+                .sort(sortByPick);
+            // Expand past maxRows when force-keeps alone exceed it.
+            const limit = Math.max(maxRows, mustKeep.length);
+            const fill = Math.max(0, limit - mustKeep.length);
+            return mustKeep.concat(optional.slice(0, fill));
         };
         const closeFitRows = (rows, minRows = 1, maxRows = 3, options = {}) => {
             if (!rows || !rows.length) return [];
@@ -2672,7 +2721,18 @@
     }
 
     const REC_LIST_LIMIT = 12;
-    const MAX_TEAM_PICKS = 4;
+    // Full ARAM roster is 5. Under 5 → rank fill-ins; at 5 → evaluate the team.
+    const MAX_TEAM_PICKS = 5;
+    const TEAM_PAIR_TOTAL = (MAX_TEAM_PICKS * (MAX_TEAM_PICKS - 1)) / 2; // C(5,2)=10
+    const TEAM_COMP_DIMS = [
+        { key: 'front', zh: '前排', en: 'Front' },
+        { key: 'engage', zh: '開戰', en: 'Engage' },
+        { key: 'poke', zh: '消耗', en: 'Poke' },
+        { key: 'wave', zh: '清兵', en: 'Wave' },
+        { key: 'cc', zh: '控場', en: 'CC' },
+        { key: 'sustain', zh: '續航', en: 'Sustain' },
+        { key: 'damage', zh: '輸出', en: 'Damage' },
+    ];
     let detailSelected = null;
     let recommendMode = false;
     let recModalOpen = false;
@@ -2767,6 +2827,9 @@
         });
         const allLacks = Object.values(lacks).filter(Boolean).length;
         return {
+            adShare,
+            lacks,
+            sums,
             adBin: adBin(adShare),
             frontGroup: frontGroup(frontCount * projection),
             mageGroup: countGroup(roles.Mage * projection),
@@ -2989,6 +3052,136 @@
         return rows;
     }
 
+    /**
+     * Full 5-man roster evaluation for the side panel.
+     * estWr ≈ mean(champ WR) + mean(known pair lifts) + composition table score.
+     * Dims = mean capability percentiles across the five champions.
+     */
+    function evaluateFullTeam(ids) {
+        const list = (ids || []).map(String).filter(Boolean);
+        let wrSum = 0;
+        let wrN = 0;
+        const meanComp = {};
+        COMP_STAT_KEYS.forEach(k => { meanComp[k] = 0; });
+        list.forEach(cid => {
+            const info = DATA.champs[cid];
+            if (!info) return;
+            if (Number.isFinite(Number(info.wr))) {
+                wrSum += Number(info.wr);
+                wrN += 1;
+            }
+            const comp = info.comp || {};
+            COMP_STAT_KEYS.forEach(k => {
+                meanComp[k] += Number(comp[k] || 0);
+            });
+        });
+        const nChamp = Math.max(1, wrN || list.length);
+        COMP_STAT_KEYS.forEach(k => { meanComp[k] /= nChamp; });
+        const baseWr = wrN ? wrSum / wrN : 0.5;
+
+        let liftSum = 0;
+        let pairN = 0;
+        let minGames = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < list.length; i += 1) {
+            const pairs = (DATA.champs[list[i]] && DATA.champs[list[i]].pairs) || [];
+            const byId = new Map(pairs.map(p => [String(p.id), p]));
+            for (let j = i + 1; j < list.length; j += 1) {
+                const p = byId.get(list[j]);
+                if (!p) continue;
+                liftSum += Number(p.lift || 0);
+                pairN += 1;
+                minGames = Math.min(minGames, Number(p.g || 0) || 0);
+            }
+        }
+        const pairLift = pairN ? liftSum / pairN : 0;
+        const compositionScore = teamCompositionScore(list);
+        const teamComp = teamComposition(list);
+        // Soft clamp so noisy pair stacks don't print absurd 70%+ estimates.
+        const estRaw = baseWr + pairLift + compositionScore;
+        const estWr = Math.max(0.35, Math.min(0.65, estRaw));
+
+        const cap = compCapPct(meanComp);
+        const lang = currentLang === 'en' ? 'en' : 'zh';
+        const abilityAxes = ABILITY_BARS.map(a => ({
+            label: a[lang],
+            pct: cap[a.key] || 0,
+        }));
+
+        let confKey = 'low';
+        if (pairN >= 8 && minGames >= 40) confKey = 'high';
+        else if (pairN >= 5 && minGames >= 25) confKey = 'mid';
+
+        return {
+            baseWr,
+            pairLift,
+            compositionScore,
+            estWr,
+            pairN,
+            pairTotal: TEAM_PAIR_TOTAL,
+            minGames: Number.isFinite(minGames) ? minGames : 0,
+            confKey,
+            abilityAxes,
+            teamComp,
+            meanComp,
+            cap,
+        };
+    }
+
+    function buildTeamEvalHtml(ids) {
+        const copy = tr();
+        const lang = currentLang === 'en' ? 'en' : 'zh';
+        const ev = evaluateFullTeam(ids);
+        const confLabel = ev.confKey === 'high' ? copy.teamConfHigh
+            : ev.confKey === 'mid' ? copy.teamConfMid
+            : copy.teamConfLow;
+        const wrTone = ev.estWr >= 0.53 ? 'is-good' : (ev.estWr <= 0.47 ? 'is-bad' : 'is-even');
+        const radar = compRadarSvg(ev.abilityAxes, copy.teamDimsTitle);
+        const abilityBars = ABILITY_BARS.map(a => {
+            const pctVal = Math.round((ev.cap[a.key] || 0) * 100);
+            return `<div class="ab-row team-ab-row"><span class="ab-label">${escHtml(a[lang])}</span><span class="ab-bar"><span style="width:${pctVal}%"></span></span><span class="ab-val">${pctVal}</span></div>`;
+        }).join('');
+        const lacks = (ev.teamComp && ev.teamComp.lacks) || {};
+        const compRows = TEAM_COMP_DIMS.map(d => {
+            // Lack flags come from teamComposition() (sum vs threshold scaled to roster size).
+            const isLack = !!lacks[d.key];
+            // Bar fill: percentile of mean per-champ raw among the roster.
+            const fill = Math.round((ev.cap[d.key] || 0) * 100);
+            const tag = isLack ? copy.teamLack : copy.teamOk;
+            const tagCls = isLack ? 'is-lack' : 'is-ok';
+            return `<div class="team-comp-row ${tagCls}">
+                <span class="team-comp-name">${escHtml(d[lang])}</span>
+                <span class="ab-bar"><span style="width:${fill}%"></span></span>
+                <span class="team-comp-tag">${escHtml(tag)}</span>
+            </div>`;
+        }).join('');
+        return `
+            <div class="team-eval">
+                <div class="team-eval-wr ${wrTone}">
+                    <div class="team-wr-num">${pct(ev.estWr)}</div>
+                    <div class="team-wr-label">${escHtml(copy.teamEstWr)}</div>
+                    <div class="team-wr-breakdown">
+                        <span>${escHtml(copy.teamBaseWr)} ${pct(ev.baseWr)}</span>
+                        <span>${escHtml(copy.teamPairLift)} ${signed(ev.pairLift)}</span>
+                        <span>${escHtml(copy.teamCompAdj)} ${signed(ev.compositionScore)}</span>
+                    </div>
+                    <div class="team-wr-meta">
+                        ${escHtml(copy.teamPairCover(ev.pairN, ev.pairTotal))}
+                        · ${escHtml(confLabel)}
+                    </div>
+                </div>
+                <div class="team-eval-block">
+                    <div class="team-eval-h">${escHtml(copy.teamDimsTitle)}</div>
+                    <div class="team-eval-radar">${radar}</div>
+                    <div class="team-ability-bars">${abilityBars}</div>
+                </div>
+                <div class="team-eval-block">
+                    <div class="team-eval-h">${escHtml(copy.teamCompTitle)}</div>
+                    <div class="team-comp-list">${compRows}</div>
+                </div>
+            </div>
+        `;
+    }
+
     function renderSidePanel() {
         const copy = tr();
         const shell = document.querySelector('.app-shell');
@@ -3000,15 +3193,30 @@
         if (!shell || !panel || !slots || !note || !recList) return;
 
         const showPanel = recommendMode && teamPicks.length > 0;
+        const isFullTeam = teamPicks.length >= MAX_TEAM_PICKS;
         const isMobile = window.matchMedia('(max-width: 700px)').matches;
         if (!showPanel || !isMobile) recModalOpen = false;
         shell.classList.toggle('with-side-panel', showPanel && !isMobile);
         document.body.classList.toggle('rec-modal-open', showPanel && isMobile && recModalOpen);
         panel.classList.toggle('is-modal-open', showPanel && isMobile && recModalOpen);
         panel.classList.toggle('is-hidden', !showPanel || (isMobile && !recModalOpen));
+        panel.classList.toggle('is-full-team', showPanel && isFullTeam);
         if (fab) {
             fab.classList.toggle('is-hidden', !(showPanel && isMobile && !recModalOpen));
             fab.textContent = copy.openRecs(teamPicks.length);
+        }
+        // Title / subtitle swap when the roster is complete.
+        const sideTitle = document.getElementById('side-title');
+        const sideSub = document.getElementById('side-sub');
+        if (sideTitle) {
+            sideTitle.textContent = isFullTeam
+                ? (copy.sideTitleFull || copy.sideTitle)
+                : copy.sideTitle;
+        }
+        if (sideSub) {
+            sideSub.innerHTML = isFullTeam
+                ? (copy.sideSubFull || copy.sideSub)
+                : copy.sideSub;
         }
         if (!showPanel) return;
 
@@ -3028,6 +3236,12 @@
             chips.push(`<div class="pick-chip empty"><span class="ord">${i + 1}</span>${copy.pickEmpty}</div>`);
         }
         slots.innerHTML = chips.join('');
+
+        if (isFullTeam) {
+            note.textContent = pickNotice || copy.teamPickFullNote || '';
+            recList.innerHTML = buildTeamEvalHtml(teamPicks);
+            return;
+        }
 
         const recs = aggregateRecommendations();
         const want = teamPicks.length;
@@ -3063,7 +3277,7 @@
             return `
                 <button class="rec-row${row.leastFit ? ' least-fit' : ''}" type="button" data-cid="${row.id}" title="${escHtml(title)}">
                     <span class="rec-rank">${idx + 1}</span>
-                    ${image ? `<img loading="lazy" src="${image}" alt="">` : '<div style="width:40px;height:40px;border-radius:8px;background:#2a3142"></div>'}
+                    ${image ? `<img loading="lazy" src="${image}" alt="">` : '<div style="width:40px;height:40px;border-radius:8px;background:var(--hover)"></div>'}
                     <span class="rec-main">
                         <span class="rec-meta">${meta}</span>
                     </span>
