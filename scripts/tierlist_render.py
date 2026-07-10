@@ -513,7 +513,7 @@ def write_spa_path_shells(
     route_specs: list[tuple[Path, str, str, str]] = [
         # (file, canonical_path, title, description)
         (root / "404.html", "/", "arammeta", ""),
-        (root / "augments" / "index.html", "/augments", "增幅榜 · arammeta", "ARAM 大亂鬥增幅勝率榜"),
+        (root / "augments" / "index.html", "/augments", "增幅 · arammeta", "ARAM 大亂鬥增幅勝率"),
         (root / "changes" / "index.html", "/changes", "版本變動 · arammeta", "版本勝率變動"),
         (root / "column" / "index.html", "/column", "專欄 · arammeta", "資料背後的思考與玩法解析"),
     ]
@@ -1200,7 +1200,7 @@ def render_html(
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
-        ("augments", "增幅榜", "Augment"),
+        ("augments", "增幅", "Augment"),
         ("changes", "版本變動", "Patch Changes"),
         ("column", "專欄", "Column"),
     )
@@ -1464,10 +1464,7 @@ def render_html(
     parts.append(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
         "<div class='view-narrow'>"
-        "<h2 class='section-head' data-i18n-zh='增幅榜' data-i18n-en='Augment'>增幅榜</h2>"
-        "<p class='section-sub' data-i18n-zh='每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。' "
-        "data-i18n-en='Overall win-rate of every augment, tiered by win-rate rank within its own rarity. More games = more reliable.'>"
-        "每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。</p>"
+        "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-en='Augment'>增幅</h2>"
         "<div class='aug-tier-filters' id='aug-tier-filters'></div>"
         "<div id='aug-tier-host'></div>"
         "</div>"
