@@ -380,7 +380,7 @@
             : stageKey === 'early' ? copy.compStageEarlyDesc
             : stageKey === 'late' ? copy.compStageLateDesc
             : copy.compStageBalancedDesc;
-        // Rich hover panel (early type is the design reference: warm rank + dual WR + PR rail).
+        // Hover tip: only non-card info (gap, PR rail, PR/rank-of-N, defs). No type/desc/WR redo.
         let stageTipHtml = '';
         if (hasStageWr) {
             const gapPp = (earlyWr - lateWr) * 100; // + = early stronger
@@ -395,27 +395,15 @@
                     : `#${stageRank} / ${nAll}`)
                 : '';
             const prTxt = copy.compStageTipPr ? copy.compStageTipPr(pr) : `PR ${pr}`;
-            // PR rail: marker at pr%; balanced band 40–60 as mid zone.
             const markerLeft = Math.max(2, Math.min(98, pr));
+            const footLines = Array.isArray(copy.compStageTipFootLines)
+                ? copy.compStageTipFootLines
+                : [copy.compStageTipFoot || copy.compStageTip || ''];
+            const footHtml = footLines.filter(Boolean).map(line => (
+                `<div class="cf-stage-tip-foot-line">${escHtml(line)}</div>`
+            )).join('');
             stageTipHtml = `
                 <div class="cf-stage-tip" role="tooltip">
-                    <div class="cf-stage-tip-head">
-                        <span class="cf-stage-tip-type">${escHtml(stageTitle)}</span>
-                        ${stageRank != null ? `<span class="cf-stage-tip-rank">#${stageRank}</span>` : ''}
-                    </div>
-                    ${stageDesc ? `<div class="cf-stage-tip-lead">${escHtml(stageDesc)}</div>` : ''}
-                    <div class="cf-stage-tip-wrs">
-                        <div class="cf-stage-tip-wr is-early">
-                            <span class="cf-stage-tip-wr-k">${escHtml(copy.compStageEarlyAxis)}</span>
-                            <span class="cf-stage-tip-wr-v">${earlyPct}%</span>
-                            <span class="cf-stage-tip-wr-bar"><span style="width:${earlyPct}%"></span></span>
-                        </div>
-                        <div class="cf-stage-tip-wr is-late">
-                            <span class="cf-stage-tip-wr-k">${escHtml(copy.compStageLateAxis)}</span>
-                            <span class="cf-stage-tip-wr-v">${latePct}%</span>
-                            <span class="cf-stage-tip-wr-bar"><span style="width:${latePct}%"></span></span>
-                        </div>
-                    </div>
                     <div class="cf-stage-tip-gap ${gapCls}">
                         <span>${escHtml(copy.compStageTipGap || 'Gap')}</span>
                         <b>${escHtml(gapTxt)}</b>
@@ -432,7 +420,7 @@
                         <span>${escHtml(prTxt)}</span>
                         ${rankTxt ? `<span class="cf-stage-tip-dot">·</span><span>${escHtml(rankTxt)}</span>` : ''}
                     </div>
-                    <div class="cf-stage-tip-foot">${escHtml(copy.compStageTipFoot || copy.compStageTip || '')}</div>
+                    ${footHtml ? `<div class="cf-stage-tip-foot">${footHtml}</div>` : ''}
                 </div>`;
         }
         const stageCard = `
@@ -988,7 +976,10 @@
             compStageTipGap: '差距（前期 − 後期）',
             compStageTipPr: pr => `PR ${pr}`,
             compStageTipRank: (rank, n) => `排名 #${rank}／${n}`,
-            compStageTipFoot: '前期 ≤16 分結束 · 後期 ≥22 分結束 · PR40–60 為均衡 · #1＝該方向最偏',
+            compStageTipFootLines: [
+                '前期 ≤16 分結束 · 後期 ≥22 分結束',
+                'PR40–60 為均衡 · #1＝該方向最偏',
+            ],
         },
         en: {
             htmlLang: 'en',
@@ -1165,7 +1156,10 @@
             compStageTipGap: 'Gap (early − late)',
             compStageTipPr: pr => `PR ${pr}`,
             compStageTipRank: (rank, n) => `Rank #${rank} / ${n}`,
-            compStageTipFoot: 'Early ≤16 min · Late ≥22 min · PR40–60 balanced · #1 = most extreme in that direction',
+            compStageTipFootLines: [
+                'Early ≤16 min · Late ≥22 min',
+                'PR40–60 balanced · #1 = most extreme in that direction',
+            ],
         }
     };
     // Prefer URL / stub-stashed locale over the zh SSR default.
