@@ -1476,7 +1476,7 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 8px 20px;
+        gap: 12px 24px;
     }
     .comp-fit-radar {
         flex: 1 1 250px;
@@ -1488,12 +1488,60 @@
         max-width: 320px;
         margin: 0 auto;
     }
-    .comp-fit-abilities {
-        flex: 1 1 190px;
-        min-width: 180px;
+    .comp-fit-side {
+        flex: 1 1 200px;
+        min-width: 190px;
+        max-width: 280px;
         display: flex;
         flex-direction: column;
-        gap: 9px;
+        gap: 10px;
+    }
+    .cf-side-card {
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+    }
+    .cf-side-card.cf-side-muted {
+        opacity: 0.72;
+    }
+    .cf-side-kicker {
+        font-size: 11px;
+        color: #6b7280;
+        letter-spacing: 0.02em;
+        margin-bottom: 4px;
+    }
+    .cf-side-value {
+        font-size: 22px;
+        font-weight: 700;
+        line-height: 1.15;
+        font-variant-numeric: tabular-nums;
+        color: #e8eaed;
+    }
+    .cf-side-label {
+        font-size: 13px;
+        font-weight: 600;
+        margin-top: 2px;
+    }
+    .cf-side-sub {
+        font-size: 11px;
+        color: #8b919a;
+        margin-top: 4px;
+        line-height: 1.4;
+    }
+    .cf-side-empty {
+        font-size: 13px;
+        color: #6b7280;
+        padding: 4px 0 2px;
+    }
+    .cf-stage-early { color: #f0a060; }
+    .cf-stage-late { color: #7fc8ff; }
+    .cf-stage-balanced { color: #c2c7ce; }
+    .cf-stage-bars {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        margin-top: 10px;
     }
     .cf-cap {
         font-size: 11px;
@@ -1523,6 +1571,12 @@
         background: linear-gradient(90deg, #3aa0ff, #7fc8ff);
         border-radius: 999px;
     }
+    .ab-bar-early > span {
+        background: linear-gradient(90deg, #c47a3a, #f0a060);
+    }
+    .ab-bar-late > span {
+        background: linear-gradient(90deg, #3aa0ff, #7fc8ff);
+    }
     .ab-val {
         flex: 0 0 24px;
         text-align: right;
@@ -1546,6 +1600,9 @@
         color: #cfe4ff;
         font-weight: 600;
         margin-right: 6px;
+    }
+    .comp-advice-item .ca-tag-avoid {
+        color: #f0998a;
     }
     .comp-advice-item .ca-desc {
         color: #9aa0a6;
