@@ -1208,10 +1208,11 @@
        rarity-filter chip row above the category chips. ===== */
     .aug-tier-filters { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 20px; }
     /* Compact board: tighter card gap + shorter icon→name plinth so the grid
-       doesn't read as loose empty chrome. */
+       doesn't read as loose empty chrome.  Floor ~86px so phones / narrow
+       tablets already fit 4 before the mobile fixed-col override kicks in. */
     .aug-tier-grid {
-        grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-        gap: 6px;
+        grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+        gap: 5px;
     }
     /* content-visibility for the 增幅榜 board only (hundreds of .aug cards): skip
        offscreen ones until scrolled near.  Scoped to the board grid so the detail
@@ -1220,6 +1221,11 @@
         content-visibility: auto;
         contain-intrinsic-size: auto 148px;
         border-radius: 8px;
+        /* Grid items default min-width:auto (= min-content).  Long zh names or
+           light-theme disc icons can inflate min-content and overflow the track
+           so the row effectively shows ~3 fat cards.  Zero the floor. */
+        min-width: 0;
+        max-width: 100%;
     }
     .aug-tier-grid .aug img,
     .aug-tier-grid .aug .aicon-ph {
@@ -1237,6 +1243,17 @@
     }
     .aug-tier-grid .aug .alift {
         font-size: 10.5px;
+    }
+    /* Narrow / tablet portrait: guarantee ≥4 cols even if auto-fill floor
+       undershoots (padding + scrollbar can leave only 3×108px tracks). */
+    @media (max-width: 900px) {
+        .tier-grid.aug-tier-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 4px !important;
+        }
+        .tier-grid.aug-tier-grid > .aug {
+            min-width: 0 !important;
+        }
     }
     .aug.hidden { display: none; }
     .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
@@ -3355,11 +3372,18 @@
            icons render huge (~4 fit the viewport instead of 6). */
         .tier-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
         /* .tier-grid is locked to 6 champ cols above; the board also has class
-           tier-grid, so re-assert a denser 增幅榜: 4 equal cols that may shrink
-           (minmax(0,1fr)), not auto-fill@100px which only fits 3 on ~390px phones. */
+           tier-grid.  Force a denser 增幅榜 (5 equal cols that may shrink).
+           !important: beats any later .tier-grid / auto-fill floor that made
+           phones stick at ~3 wide cards. */
         .tier-grid.aug-tier-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 4px;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 3px !important;
+        }
+        .tier-grid.aug-tier-grid > .aug {
+            min-width: 0 !important;
+            max-width: none;
+            width: auto;
+            flex: none;
         }
         .detail-head {
             flex-direction: row;
@@ -3546,22 +3570,21 @@
         .aug .awr { font-size: 11px; min-height: 22px; }
         /* Pick bare % matches WR size on mobile. */
         .aug .alift { font-size: 11px; margin-top: 0; padding: 0 3px; }
-        /* Keep 4-col denser than the earlier 3-col lock; slightly smaller type
-           so 2-line zh names still fit ~75–90px tracks. */
+        /* Re-assert denser board + compact type for ~70–80px tracks. */
         .tier-grid.aug-tier-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 4px;
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+            gap: 3px !important;
         }
         .aug-tier-grid .aug img,
-        .aug-tier-grid .aug .aicon-ph { height: 44px; padding: 4px 0 0; }
+        .aug-tier-grid .aug .aicon-ph { height: 40px; padding: 3px 0 0; }
         .aug-tier-grid .aug .aname {
-            min-height: 22px;
-            padding: 1px 2px 2px;
-            font-size: 9.5px;
+            min-height: 20px;
+            padding: 0 2px 2px;
+            font-size: 9px;
             line-height: 1.15;
         }
         .aug-tier-grid .aug .awr,
-        .aug-tier-grid .aug .alift { font-size: 11px; }
+        .aug-tier-grid .aug .alift { font-size: 10.5px; }
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip,
@@ -4130,10 +4153,10 @@
        no longer blend into a pale plinth. */
     [data-theme="light"] .aug img,
     [data-theme="light"] .aug .aicon-ph {
-        width: 48px;
-        height: 48px;
-        margin: 12px auto 6px;
-        padding: 5px;
+        width: 44px;
+        height: 44px;
+        margin: 6px auto 2px;
+        padding: 4px;
         box-sizing: border-box;
         border-radius: 50%;
         object-fit: contain;
@@ -4146,10 +4169,10 @@
     }
     [data-theme="light"] .aug-tier-grid .aug img,
     [data-theme="light"] .aug-tier-grid .aug .aicon-ph {
-        width: 54px;
-        height: 54px;
-        margin: 12px auto 8px;
-        padding: 6px;
+        width: 42px;
+        height: 42px;
+        margin: 5px auto 1px;
+        padding: 4px;
     }
     /* Detail popup header icon (.augch-icon) uses the same disc treatment
        in base CSS (always-on) — no light-only override needed. */
