@@ -1,4 +1,16 @@
 
+    // GitHub Pages deep-link bootstrap: lightweight path shells (and 404.html)
+    // stash the intended URL then bounce to /.  Restore before any route read
+    // so shareable paths like /column/sprees-not-snowball open the right view.
+    try {
+        const pending = sessionStorage.getItem('aram-spa-path');
+        if (pending) {
+            sessionStorage.removeItem('aram-spa-path');
+            const here = location.pathname + location.search + location.hash;
+            if (pending !== here) history.replaceState(null, '', pending);
+        }
+    } catch {}
+
     async function loadSitePayload(url) {
         const response = await fetch(url, { cache: 'no-cache' });
         if (!response.ok) {
@@ -293,7 +305,8 @@
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
-    const VIEWS = ['home', 'augments', 'changes', 'column', 'settings'];
+    // home is brand/default; content tabs are augments / changes / column only.
+    const VIEWS = ['home', 'augments', 'changes', 'column'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [
@@ -605,6 +618,10 @@
             langToggleLabel: 'EN',
             langToggleTitle: 'Switch to English',
             langToggleAria: '切換語言',
+            themeToLightTitle: '切換淺色',
+            themeToLightAria: '切換成淺色主題',
+            themeToDarkTitle: '切換深色',
+            themeToDarkAria: '切換成深色主題',
             removePick: name => `移除 ${name}`,
             pickEmpty: '尚未選擇',
             maxOnly: n => `最多只能選 ${n} 隻英雄。`,
@@ -729,6 +746,10 @@
             langToggleLabel: '中',
             langToggleTitle: '切換成中文',
             langToggleAria: 'Switch language',
+            themeToLightTitle: 'Switch to light',
+            themeToLightAria: 'Switch to light theme',
+            themeToDarkTitle: 'Switch to dark',
+            themeToDarkAria: 'Switch to dark theme',
             removePick: name => `Remove ${name}`,
             pickEmpty: 'Empty',
             maxOnly: n => `You can only pick up to ${n} champions.`,
@@ -3269,8 +3290,13 @@
     }
     // Copy the article's deep link.  Clipboard API first; hidden-textarea
     // execCommand fallback keeps it working on http / older WebViews.
+    // Prefer a clean path URL (no hash) so shared links look like
+    // https://arammeta.com/column/sprees-not-snowball
     function copyArticleLink(btn) {
-        const url = location.href;
+        const path = columnArticle
+            ? pathForRoute('column', columnArticle)
+            : pathForRoute('column');
+        const url = location.origin + path;
         const done = () => {
             const label = btn.querySelector('span');
             if (!label) return;
@@ -3406,8 +3432,14 @@
     // widths can change (language switch, resize, fonts load).
     function moveTabIndicator() {
         const bar = document.querySelector('.nav-tabs');
-        const active = bar && bar.querySelector('.nav-tab.active');
-        if (!bar || !active) return;
+        if (!bar) return;
+        const active = bar.querySelector('.nav-tab.active');
+        // Home has no tab selected — collapse the underline so it does not
+        // stick under a stale tab.
+        if (!active) {
+            bar.style.setProperty('--ind-w', '0px');
+            return;
+        }
         bar.style.setProperty('--ind-x', active.offsetLeft + 'px');
         bar.style.setProperty('--ind-w', active.offsetWidth + 'px');
         // On the mobile tab strip the bar scrolls; keep the active tab in view.
@@ -3426,52 +3458,103 @@
         if (!header) return;
         document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
     }
-    // Slide the segmented control's fill behind its active option.  Snaps by
-    // default; pass animate=true (theme toggle) for the slide.  Skips while the
-    // control is hidden / not yet laid out (offsetWidth 0) so a hidden or
-    // prematurely-measured seg never collapses the thumb to width 0 -- it keeps
-    // its last good geometry until the seg is genuinely visible.
-    function moveSegThumb(seg, animate) {
-        seg = seg || document.getElementById('theme-seg');
-        if (!seg) return;
-        const active = seg.querySelector('button.active') || seg.querySelector('button');
-        const thumb = seg.querySelector('.seg-thumb');
-        if (!active || !thumb || !active.offsetWidth) return;
-        if (!animate) thumb.style.transition = 'none';
-        thumb.style.left = (active.offsetLeft - seg.clientLeft) + 'px';
-        thumb.style.width = active.offsetWidth + 'px';
-        if (!animate) { void thumb.offsetWidth; thumb.style.transition = ''; }
+    // Path routes (shareable, no hash):
+    //   /                  home (brand)
+    //   /augments          augment tier
+    //   /changes           patch changes
+    //   /column            column list
+    //   /column/<id>       one article  e.g. /column/sprees-not-snowball
+    // Legacy '#view' / '#column/id' hashes (and old /settings) migrate once
+    // on load so old links still open the right panel.
+    function pathForRoute(view, sub) {
+        if (!view || view === 'home') return '/';
+        if (view === 'column' && sub) {
+            return '/column/' + encodeURIComponent(sub);
+        }
+        return '/' + view;
     }
-    // Hash routes are '#<view>' plus one sub-level for the column
-    // ('#column/<article-id>') so individual articles have shareable URLs.
-    function parseHash() {
-        const raw = (location.hash || '').replace(/^#/, '');
-        const cut = raw.indexOf('/');
-        const view = cut === -1 ? raw : raw.slice(0, cut);
-        let sub = cut === -1 ? '' : raw.slice(cut + 1);
-        try { sub = decodeURIComponent(sub); } catch {}
-        return { view, sub };
+    function parseRoute() {
+        let path = location.pathname || '/';
+        if (path.length > 1 && path.endsWith('/')) path = path.slice(0, -1);
+
+        // Legacy hash deep-links (bookmarks / old shares).
+        const rawHash = (location.hash || '').replace(/^#/, '');
+        if (rawHash) {
+            const cut = rawHash.indexOf('/');
+            const hView = cut === -1 ? rawHash : rawHash.slice(0, cut);
+            let hSub = cut === -1 ? '' : rawHash.slice(cut + 1);
+            try { hSub = decodeURIComponent(hSub); } catch {}
+            if (VIEWS.includes(hView)) {
+                return { view: hView, sub: hView === 'column' ? (hSub || '') : '', legacyHash: true };
+            }
+        }
+
+        const segs = path.replace(/^\//, '').split('/').filter(Boolean);
+        if (!segs.length) return { view: 'home', sub: '', legacyHash: false };
+        // Treat /home as /
+        if (segs[0] === 'home' && segs.length === 1) {
+            return { view: 'home', sub: '', legacyHash: false };
+        }
+        const view = segs[0];
+        if (!VIEWS.includes(view)) return { view: 'home', sub: '', legacyHash: false };
+        let sub = '';
+        if (view === 'column' && segs.length > 1) {
+            try { sub = decodeURIComponent(segs.slice(1).join('/')); } catch { sub = segs.slice(1).join('/'); }
+        }
+        return { view, sub, legacyHash: false };
     }
-    function routeFromHash(instant) {
-        const { view, sub } = parseHash();
+    function syncUrlToRoute(view, sub, historyMode) {
+        // historyMode: 'push' | 'replace' | 'none'
+        if (historyMode === 'none') return;
+        const wantPath = pathForRoute(view, sub);
+        const curPath = location.pathname || '/';
+        const curNorm = (curPath.length > 1 && curPath.endsWith('/'))
+            ? curPath.slice(0, -1) || '/'
+            : curPath;
+        const needPath = curNorm !== wantPath;
+        const needClearHash = Boolean(location.hash);
+        if (!needPath && !needClearHash) return;
+        const url = wantPath + (location.search || '');
+        try {
+            if (historyMode === 'push' && needPath) history.pushState(null, '', url);
+            else history.replaceState(null, '', url);
+        } catch {
+            // file:// or locked history — ignore; in-page state still updates.
+        }
+    }
+    function routeFromLocation(instant, historyMode) {
+        const { view, sub, legacyHash } = parseRoute();
         if (view === 'column') columnArticle = sub || null;
-        setActiveView(VIEWS.includes(view) ? view : 'home', instant);
+        else columnArticle = null;
+        // Migrating an old #hash always replaceStates onto the clean path.
+        const mode = legacyHash ? 'replace' : (historyMode || 'replace');
+        setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode);
     }
-    function setActiveView(name, instant) {
-        if (!VIEWS.includes(name)) name = 'home';
+    function setActiveView(name, instant, historyMode) {
+        // Old /settings bookmarks land on home (settings chrome was removed).
+        if (name === 'settings' || !VIEWS.includes(name)) name = 'home';
+        if (historyMode == null) historyMode = 'replace';
         const apply = () => {
-            document.querySelectorAll('.nav-tab[data-nav-tab]').forEach(t => {
+            const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
+            let activeTab = null;
+            tabs.forEach(t => {
                 const on = t.getAttribute('data-nav-tab') === name;
                 t.classList.toggle('active', on);
                 t.setAttribute('aria-selected', on ? 'true' : 'false');
-                t.tabIndex = on ? 0 : -1;  // roving tabindex (WAI-ARIA tabs)
+                t.tabIndex = -1;
+                if (on) activeTab = t;
             });
+            // Roving tabindex: selected tab is focusable; on home (no tab)
+            // keep the first content tab reachable from the keyboard.
+            if (activeTab) activeTab.tabIndex = 0;
+            else if (tabs[0]) tabs[0].tabIndex = 0;
             document.querySelectorAll('.view[data-view]').forEach(v => {
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
             if (name === 'column') {
                 columnArticle ? renderArticle(columnArticle) : renderColumnList();
             } else {
+                columnArticle = null;
                 document.title = BASE_TITLE;  // leaving an open article restores the base title
             }
             if (name === 'augments') {
@@ -3480,33 +3563,33 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            // Column carries a sub-route so open articles stay linkable
-            // (#column/<article-id>).  Written AFTER the render above, so an
-            // invalid article id has already fallen back to the list and the
-            // hash self-normalises to #column.
-            const want = '#' + (name === 'column' && columnArticle
-                ? 'column/' + encodeURIComponent(columnArticle)
-                : name);
-            if (want !== location.hash) {
-                try { history.replaceState(null, '', want); } catch { location.hash = want.slice(1); }
-            }
+            // Path is written AFTER render so an invalid article id that fell
+            // back to the list normalises to /column (not a 404 path).
+            const sub = (name === 'column' && columnArticle) ? columnArticle : '';
+            syncUrlToRoute(name, sub, historyMode);
             window.scrollTo(0, 0);
             moveTabIndicator();
-            moveSegThumb();  // settings seg is measurable only while its view is visible
         };
         // Cross-fade the panel via the View Transitions API; root is pinned so the
         // header and the scrollTo above don't animate.  Skip on first paint
         // (instant) and for reduced-motion / unsupported browsers.
         const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (instant || reduce || !document.startViewTransition) { apply(); return; }
-        // Flag the VT so .vt-running suppresses the indicator/thumb CSS tweens
-        // while the snapshots are captured; clear it once the VT settles.
+        // Flag the VT so .vt-running suppresses the indicator CSS tween while
+        // the snapshots are captured; clear it once the VT settles.
         const root = document.documentElement;
         root.classList.add('vt-running');
         document.startViewTransition(apply).finished.finally(() => {
             root.classList.remove('vt-running');
-            moveSegThumb();  // seg is laid out now if we landed on settings; snap the thumb
         });
+    }
+    function syncThemeToggleLabels() {
+        const btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        const copy = tr();
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+        btn.title = isLight ? copy.themeToDarkTitle : copy.themeToLightTitle;
+        btn.setAttribute('aria-label', isLight ? copy.themeToDarkAria : copy.themeToLightAria);
     }
     function applyTheme(theme) {
         const t = theme === 'light' ? 'light' : 'dark';
@@ -3516,12 +3599,7 @@
         root.classList.add('no-theme-transition');
         root.setAttribute('data-theme', t);
         setTimeout(() => root.classList.remove('no-theme-transition'), 60);
-        document.querySelectorAll('#theme-seg [data-theme-choice]').forEach(b => {
-            const on = b.getAttribute('data-theme-choice') === t;
-            b.classList.toggle('active', on);
-            b.setAttribute('aria-pressed', on ? 'true' : 'false');
-        });
-        moveSegThumb(undefined, true);  // animate the fill across on theme toggle
+        syncThemeToggleLabels();
         try { localStorage.setItem(THEME_KEY, t); } catch {}
     }
 
@@ -3565,9 +3643,10 @@
             toggle.setAttribute('aria-label', copy.langToggleAria);
         }
         if (toggleLabel) toggleLabel.textContent = copy.langToggleLabel;
+        syncThemeToggleLabels();
 
-        // Static chrome strings (nav tabs, settings, augment placeholder) carry
-        // their own zh/en text via data-i18n-* attributes.
+        // Static chrome strings (nav tabs, augment placeholder) carry their
+        // own zh/en text via data-i18n-* attributes.
         document.querySelectorAll('[data-i18n-zh]').forEach(el => {
             const val = currentLang === 'en'
                 ? el.getAttribute('data-i18n-en')
@@ -3584,7 +3663,6 @@
         }
 
         moveTabIndicator();
-        moveSegThumb();
         updateChampCardCopy();
         refreshSecondaryRoleBadges();
         renderUpdatesPanel();
@@ -3695,7 +3773,7 @@
         // The detail host lives inside the home tier grid; callers can fire from
         // the Settings changelog or a recommend row, so always surface the home
         // view first or the panel would open in a hidden view (invisible).
-        setActiveView('home');
+        setActiveView('home', false, 'push');
         const champ = document.querySelector(`.champ[data-cid="${cid}"]:not(.hidden)`);
         if (!champ) return;
         openDetailForChamp(champ);
@@ -3725,13 +3803,15 @@
         const navTab = ev.target.closest('[data-nav-tab]');
         if (navTab) {
             const view = navTab.getAttribute('data-nav-tab');
-            setActiveView(view);
+            setActiveView(view, false, 'push');
             trackEvent('view_change', { view });
             return;
         }
-        const themeBtn = ev.target.closest('[data-theme-choice]');
-        if (themeBtn) {
-            const theme = themeBtn.getAttribute('data-theme-choice');
+        const themeToggle = ev.target.closest('[data-theme-toggle]');
+        if (themeToggle) {
+            const cur = document.documentElement.getAttribute('data-theme') === 'light'
+                ? 'light' : 'dark';
+            const theme = cur === 'light' ? 'dark' : 'light';
             applyTheme(theme);
             trackEvent('theme_toggle', { theme });
             return;
@@ -3739,15 +3819,16 @@
         const articleCard = ev.target.closest('[data-article]');
         if (articleCard) {
             const id = articleCard.getAttribute('data-article');
-            // Navigate via the hash (not a direct render) so the article gets a
-            // real history entry: browser Back returns to the list, and the URL
-            // is shareable as-is.
-            location.hash = 'column/' + encodeURIComponent(id);
+            // Push a clean path so Back returns to the list and the URL is
+            // shareable as https://arammeta.com/column/<id> (no hash).
+            columnArticle = id;
+            setActiveView('column', false, 'push');
             trackEvent('article_open', { id });
             return;
         }
         if (ev.target.closest('[data-article-back]')) {
-            location.hash = 'column';
+            columnArticle = null;
+            setActiveView('column', false, 'push');
             return;
         }
         const shareBtn = ev.target.closest('[data-article-share]');
@@ -4037,7 +4118,7 @@
         const savedTheme = localStorage.getItem(THEME_KEY);
         applyTheme(savedTheme === 'light' ? 'light' : 'dark');
     } catch { applyTheme('dark'); }
-    routeFromHash(true);  // instant: no View Transition on first paint
+    routeFromLocation(true, 'replace');  // instant: no View Transition on first paint
     // Position the sliding indicator/thumb now (base CSS has transition:none so
     // they snap), commit that layout with a reflow, THEN enable the transitions
     // so only later tab/theme changes animate -- never a grow-from-0 on load.
@@ -4045,15 +4126,19 @@
     // backgrounded / not painting (rAF callbacks are parked there).
     syncHeaderHeight();
     moveTabIndicator();
-    moveSegThumb();
     void document.documentElement.offsetWidth;  // reflow: commit initial geometry
     document.documentElement.classList.add('ui-ready');
-    // Web fonts can resize tab/segment labels after load -- re-anchor once settled.
-    window.addEventListener('load', () => { syncHeaderHeight(); moveTabIndicator(); moveSegThumb(); });
+    // Web fonts can resize tab labels after load -- re-anchor once settled.
+    window.addEventListener('load', () => { syncHeaderHeight(); moveTabIndicator(); });
     if (document.fonts && document.fonts.ready) {
-        document.fonts.ready.then(() => { syncHeaderHeight(); moveTabIndicator(); moveSegThumb(); });
+        document.fonts.ready.then(() => { syncHeaderHeight(); moveTabIndicator(); });
     }
-    window.addEventListener('hashchange', () => routeFromHash());
+    // Browser Back/Forward for path routes (and any leftover hash→path migration).
+    window.addEventListener('popstate', () => routeFromLocation(false, 'none'));
+    // Old shared links still use #column/id — migrate if hash changes mid-session.
+    window.addEventListener('hashchange', () => {
+        if (location.hash) routeFromLocation(false, 'replace');
+    });
     // WAI-ARIA tablist keyboard nav: arrows / Home / End move focus + activate.
     document.querySelector('.nav-tabs')?.addEventListener('keydown', (ev) => {
         const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
@@ -4067,7 +4152,7 @@
         if (!next) return;
         ev.preventDefault();
         next.focus();
-        setActiveView(next.getAttribute('data-nav-tab'));
+        setActiveView(next.getAttribute('data-nav-tab'), false, 'push');
     });
     // Scroll-aware header: lift it once content scrolls underneath.
     const siteHeaderEl = document.querySelector('.site-header');

@@ -84,7 +84,7 @@
         font-family: "Noto Serif TC", "Source Han Serif TC",
                      "PingFang TC", "PMingLiU", "Songti TC", serif;
     }
-    .subtitle { color: #9aa0a6; font-size: 13px; }
+    .subtitle { color: var(--text-muted); font-size: 13px; }
     .title-patch {
         font-family: "Noto Sans TC", -apple-system, "Segoe UI",
                      "Microsoft JhengHei", "PingFang TC", sans-serif;
@@ -2936,7 +2936,7 @@
     }
     .nav-tab:focus-visible,
     .brand:focus-visible,
-    .segmented button:focus-visible,
+    .theme-toggle:focus-visible,
     .article-card:focus-visible,
     .article-back:focus-visible {
         outline: 2px solid var(--accent-soft);
@@ -3056,16 +3056,16 @@
         transition: none;
     }
     .ui-ready .nav-ind { transition: left var(--dur-3) var(--ease), width var(--dur-3) var(--ease); }
-    /* During a tab View Transition the indicator/thumb are morphed by the VT
-       (nav-ind as its own snapshot group, seg-thumb inside the panel snapshot).
-       Suppress their CSS transitions then, so the real elements jump to the final
-       geometry the new snapshot captures, instead of the CSS tween and the VT
-       fighting and stranding the indicator mid-slide. */
-    .vt-running .nav-ind, .vt-running .seg-thumb { transition: none; }
+    /* During a tab View Transition the indicator is morphed by the VT.
+       Suppress its CSS transition then, so the real element jumps to the
+       final geometry the new snapshot captures. */
+    .vt-running .nav-ind { transition: none; }
     .nav-tab:active,
     .chip:active,
-    .segmented button:active { transform: scale(0.96); transition-duration: var(--dur-1); }
+    .theme-toggle:active,
+    .site-header .lang-toggle:active { transform: scale(0.96); transition-duration: var(--dur-1); }
     .header-actions { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .site-header .theme-toggle,
     .site-header .lang-toggle {
         width: auto; min-width: 0; padding: 6px 10px;
         background: transparent;
@@ -3075,8 +3075,16 @@
         font-size: 12px; font-weight: 600;
         transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
     }
+    .site-header .theme-toggle {
+        padding: 6px 8px;
+        line-height: 0;
+    }
+    /* Dark → show sun (switch to light); light → show moon (switch to dark). */
+    .site-header .theme-toggle .icon-moon { display: none; }
+    [data-theme="light"] .site-header .theme-toggle .icon-sun { display: none; }
+    [data-theme="light"] .site-header .theme-toggle .icon-moon { display: block; }
+    .site-header .theme-toggle:hover,
     .site-header .lang-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
-    .site-header .lang-toggle:active { transform: scale(0.96); transition-duration: var(--dur-1); }
 
     /* Shared content rail: chrome + grid align to one max-width on wide
        monitors so the brand and header actions don't drift to far corners. */
@@ -3241,38 +3249,6 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* Settings. */
-    .settings-grid { display: flex; flex-direction: column; gap: 16px; }
-    .setting-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
-    .setting-card h3 { margin: 0 0 4px; font-size: 16px; }
-    .setting-card .setting-desc { margin: 0 0 14px; color: var(--text-muted); font-size: 13px; }
-    .segmented { position: relative; display: inline-flex; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
-    /* Sliding fill behind the active option (JS sets left/width in moveSegThumb).
-       transition:none until .ui-ready so it doesn't slide in from the left edge on
-       first paint; spring easing gives the toggle a tactile settle. */
-    .seg-thumb {
-        position: absolute; z-index: 0;
-        top: 3px; bottom: 3px; left: 0; width: 0;
-        background: var(--accent); border-radius: 7px;
-        pointer-events: none;
-        transition: none;
-    }
-    .ui-ready .seg-thumb { transition: left var(--dur-2) var(--ease-spring), width var(--dur-2) var(--ease-spring); }
-    .segmented button {
-        position: relative; z-index: 1;
-        appearance: none; border: 0; background: none; color: var(--text-muted);
-        font: inherit; font-size: 13px; font-weight: 600; padding: 7px 16px; border-radius: 7px; cursor: pointer;
-        transition: color 0.12s;
-    }
-    .segmented button.active { color: var(--accent-on); }
-    .about-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 13px; }
-    .about-row:first-of-type { border-top: 0; }
-    .about-row .k { color: var(--text-muted); }
-    .about-row .v { color: var(--text); font-weight: 600; text-align: right; }
-    .about-link { color: var(--accent-soft); text-decoration: none; font-weight: 600; }
-    .settings-disclaimer { margin: 14px 0 0; color: var(--text-dim); font-size: 11px; line-height: 1.6; }
-    .setting-card .updates-panel { margin-top: 12px; }
-
     /* Re-stick the home filter bar just below the fixed header, and make it
        the same frosted-glass material so the chrome reads as one band. */
     .view-home .filter-bar {
@@ -3300,6 +3276,7 @@
         .brand-title { font-size: 15px; }
         .brand-patch { font-size: 11px; }
         .header-actions { margin-left: auto; gap: 6px; }
+        .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }
         .nav-tabs {
             order: 10;
@@ -3340,15 +3317,15 @@
         box-shadow: 0 1px 2px rgba(31, 41, 55, 0.06);
     }
     /* ===== Light theme: curated overrides for the legacy dark surfaces.
-       The chrome above themes via vars; these cover the home tier-list so
-       light mode reads as intentional.  The detail panel / recommend
-       side-panel stay dark cards (their dense internals use hardcoded light
-       text); we only force their inherited base colour light so nothing goes
-       dark-on-dark — a deliberate first-pass scope. ===== */
+       Chrome (header/nav/settings/column) already uses theme vars.  These
+       overrides retarget the tier-list, 增幅榜, champion detail panel, and
+       recommend side-panel so light mode is a real palette throughout. ===== */
     /* .filter-bar is frosted glass in both themes now (see .view-home .filter-bar). */
     [data-theme="light"] .chip:not(.active) { background: var(--chip-bg); color: var(--text-muted); }
+    [data-theme="light"] .chip:not(.active):hover { background: #e2e6ee; }
     [data-theme="light"] .search { background: #ffffff; color: var(--text); border: 1px solid var(--border-strong); }
     [data-theme="light"] .shown-count { color: var(--text-muted); }
+    [data-theme="light"] .shown-count #shown-n { color: var(--text); }
     [data-theme="light"] .tier-count,
     [data-theme="light"] .tier-count-unit,
     [data-theme="light"] .tier-count-num { color: var(--text-muted); }
@@ -3368,8 +3345,431 @@
     }
     [data-theme="light"] .empty-state { color: var(--text-muted); }
     [data-theme="light"] .empty-state strong { color: var(--text); }
-    [data-theme="light"] .detail,
-    [data-theme="light"] .side-panel { color: #e6e8eb; }
+
+    /* --- Home champion tiles --- */
+    [data-theme="light"] .champ {
+        background: var(--surface);
+    }
+    [data-theme="light"] .tier-block[data-tier="OP"] .champ {
+        background:
+            linear-gradient(#ffffff, #ffffff) padding-box,
+            linear-gradient(135deg,
+                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+        background-size: auto, 220% 220%;
+        box-shadow: 0 0 8px rgba(180, 140, 230, 0.35);
+    }
+    [data-theme="light"] .tier-block[data-tier="T1"] .champ {
+        background:
+            linear-gradient(#ffffff, #ffffff) padding-box,
+            linear-gradient(135deg,
+                #ffb380 0%,
+                #ff5a3c 32%,
+                #c8262c 62%,
+                #ff8050 100%) border-box;
+        background-size: auto, 220% 220%;
+        box-shadow: 0 0 6px rgba(255, 90, 60, 0.28);
+    }
+    [data-theme="light"] .tier-block[data-tier="OP"] {
+        background:
+            radial-gradient(ellipse 70% 60% at 50% 60%,
+                rgba(160, 120, 220, 0.08) 0%, transparent 75%);
+    }
+    [data-theme="light"] .tier-block[data-tier="T1"] {
+        background:
+            radial-gradient(ellipse 70% 60% at 50% 60%,
+                rgba(255, 120, 80, 0.07) 0%, transparent 75%);
+    }
+
+    /* --- Augment cards (board + detail carousel) --- */
+    [data-theme="light"] .aug {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: 0 1px 2px rgba(31, 41, 55, 0.06);
+    }
+    /* Dark circular disc under the icon (Riot client style) so prismatic /
+       pastel augment art stays legible on light cards — transparent PNG edges
+       no longer blend into a pale plinth. */
+    [data-theme="light"] .aug img,
+    [data-theme="light"] .aug .aicon-ph {
+        width: 48px;
+        height: 48px;
+        margin: 12px auto 6px;
+        padding: 5px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        object-fit: contain;
+        background:
+            radial-gradient(circle at 50% 42%, #222836 0%, #12151c 62%, #07090d 100%);
+        box-shadow:
+            0 0 0 2px #2c3444,
+            0 0 0 4px rgba(70, 80, 100, 0.28),
+            0 2px 8px rgba(0, 0, 0, 0.28);
+    }
+    [data-theme="light"] .aug-tier-grid .aug img,
+    [data-theme="light"] .aug-tier-grid .aug .aicon-ph {
+        width: 54px;
+        height: 54px;
+        margin: 12px auto 8px;
+        padding: 6px;
+    }
+    /* Detail popup header icon (.augch-icon) uses the same disc treatment
+       in base CSS (always-on) — no light-only override needed. */
+    [data-theme="light"] .aug .aname {
+        color: var(--text);
+        background: transparent;
+        border-bottom-color: var(--border);
+    }
+    [data-theme="light"] .aug .awr {
+        border-bottom-color: var(--border);
+    }
+    [data-theme="light"] .aug .alift {
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .aug.good .awr { color: #1f9a4a; }
+    [data-theme="light"] .aug.bad  .awr { color: #d64545; }
+    [data-theme="light"] .aug .alift.pick-1 { color: #6b7280; }
+    [data-theme="light"] .aug .alift.pick-2 { color: #2b7fc4; }
+    [data-theme="light"] .aug .alift.pick-3 { color: #b88912; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #d06a12; font-weight: 600; }
+    [data-theme="light"] .aug .alift.pick-5 { color: #c73d18; font-weight: 700; }
+
+    /* Category + rarity filter chips */
+    [data-theme="light"] .aug-cat-chip:not(.is-active) {
+        background: var(--chip-bg);
+        color: var(--text-muted);
+        border-color: var(--border);
+    }
+    [data-theme="light"] .aug-cat-chip:not(.is-active):hover {
+        background: #e2e6ee;
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
+    [data-theme="light"] .aug-rarity-chip.rarity-kPrismatic.is-active {
+        border-color: #a855f7;
+        color: #6b21a8;
+        background: color-mix(in srgb, #d36bff 18%, #ffffff);
+    }
+    [data-theme="light"] .aug-rarity-chip.rarity-kGold.is-active {
+        border-color: #c99600;
+        color: #7a5a00;
+        background: color-mix(in srgb, #f5c518 22%, #ffffff);
+    }
+    [data-theme="light"] .aug-rarity-chip.rarity-kSilver.is-active {
+        border-color: #8b939e;
+        color: #3f4754;
+        background: color-mix(in srgb, #c0c5cc 28%, #ffffff);
+    }
+
+    /* --- Champion detail panel --- */
+    [data-theme="light"] .detail {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border);
+        box-shadow: 0 10px 32px rgba(31, 41, 55, 0.08);
+    }
+    [data-theme="light"] .detail-skeleton {
+        background: linear-gradient(100deg,
+            rgba(0, 0, 0, 0.04) 30%,
+            rgba(0, 0, 0, 0.08) 50%,
+            rgba(0, 0, 0, 0.04) 70%);
+        background-size: 220% 100%;
+    }
+    [data-theme="light"] .detail-close,
+    [data-theme="light"] .side-close,
+    [data-theme="light"] .rec-fab {
+        background: var(--surface-2);
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
+    [data-theme="light"] .detail-close:hover,
+    [data-theme="light"] .side-close:hover {
+        background: var(--chip-bg);
+        border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+    }
+    [data-theme="light"] .detail-avatar {
+        border-color: var(--border-strong);
+        box-shadow: 0 2px 8px rgba(31, 41, 55, 0.12);
+    }
+    [data-theme="light"] .detail-role-tag {
+        color: var(--text-muted);
+        background: var(--chip-bg);
+        border-color: var(--border);
+    }
+    [data-theme="light"] .detail-tab-list {
+        border-bottom-color: var(--border);
+    }
+    [data-theme="light"] .detail-tab-label {
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .detail-tab-label:hover {
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.03);
+    }
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-list .detail-tab-label:nth-child(1),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-list .detail-tab-label:nth-child(2),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-list .detail-tab-label:nth-child(3),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-list .detail-tab-label:nth-child(4),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-list .detail-tab-label:nth-child(5),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+        color: #1565c0;
+        border-bottom-color: #2563eb;
+        background: rgba(37, 99, 235, 0.08);
+    }
+    [data-theme="light"] .detail-section + .detail-section {
+        border-top-color: var(--border);
+    }
+    [data-theme="light"] .section-meta,
+    [data-theme="light"] .ovr-meta,
+    [data-theme="light"] .cg-options-label,
+    [data-theme="light"] .cg-tail-label,
+    [data-theme="light"] .cg-core-share,
+    [data-theme="light"] .cg-arrow,
+    [data-theme="light"] .ab-val,
+    [data-theme="light"] .cf-cap {
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .ovr-wr { color: var(--text); }
+    [data-theme="light"] .ab-label { color: var(--text-muted); }
+    [data-theme="light"] .ab-bar { background: rgba(0, 0, 0, 0.06); }
+    [data-theme="light"] .cf-skill {
+        border-color: var(--border-strong);
+        background: var(--chip-bg);
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .overview-split,
+    [data-theme="light"] .cg-tail {
+        border-top-color: var(--border);
+    }
+    @media (max-width: 760px) {
+        [data-theme="light"] .overview-split > .overview-rail-col {
+            border-top-color: var(--border);
+        }
+    }
+    [data-theme="light"] .meta-help {
+        background: var(--surface);
+        color: var(--text-muted);
+        border-color: var(--border-strong);
+    }
+    [data-theme="light"] .aug-set-summary {
+        background: rgba(14, 165, 233, 0.10);
+        border-color: rgba(14, 165, 233, 0.28);
+        color: #0c4a6e;
+    }
+    [data-theme="light"] .aug-set-summary.bad {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.24);
+        color: #991b1b;
+    }
+    [data-theme="light"] .fit-chip {
+        background: rgba(34, 197, 94, 0.10);
+        border-color: rgba(34, 197, 94, 0.28);
+        color: #166534;
+    }
+    [data-theme="light"] .fit-card {
+        background: var(--surface-2);
+        border-color: var(--border);
+    }
+    [data-theme="light"] .fit-card.good {
+        border-color: rgba(34, 197, 94, 0.28);
+        background: linear-gradient(180deg, rgba(34, 197, 94, 0.08), var(--surface) 42%);
+    }
+    [data-theme="light"] .fit-card.bad {
+        border-color: rgba(239, 68, 68, 0.24);
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.06), var(--surface) 42%);
+    }
+    [data-theme="light"] .fit-name { color: var(--text); }
+
+    /* Build / boot surfaces inside detail */
+    [data-theme="light"] .core-group {
+        background: var(--surface-2);
+        border-color: rgba(34, 140, 60, 0.22);
+    }
+    [data-theme="light"] .cg-option {
+        background: var(--surface);
+        border-color: var(--border);
+    }
+    [data-theme="light"] .cg-core-icon,
+    [data-theme="light"] .cg-option-icon,
+    [data-theme="light"] .boot-rail-icon,
+    [data-theme="light"] .cg-tail-icon,
+    [data-theme="light"] .item-build-icon {
+        background: #1a1f2a;
+    }
+    [data-theme="light"] .boot-rail-row {
+        background: var(--surface-2);
+        border-color: var(--border);
+    }
+    [data-theme="light"] .boot-rail-row.is-top {
+        background: color-mix(in srgb, #22c55e 9%, var(--surface));
+        border-color: rgba(34, 140, 60, 0.35);
+    }
+    [data-theme="light"] .boot-rail-name { color: var(--text); }
+    [data-theme="light"] .boot-rail-pick,
+    [data-theme="light"] .item-build-pick,
+    [data-theme="light"] .cluster-pick,
+    [data-theme="light"] .cluster-games {
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .item-build-card {
+        background: var(--surface);
+        border-color: rgba(34, 140, 60, 0.28);
+        color: var(--text);
+        box-shadow: 0 1px 2px rgba(31, 41, 55, 0.05);
+    }
+    [data-theme="light"] .item-build-icons {
+        background: var(--surface-2);
+    }
+    [data-theme="light"] .item-build-name { color: var(--text); }
+    [data-theme="light"] .item-build-wr,
+    [data-theme="light"] .item-cluster-stats {
+        border-color: var(--border);
+    }
+    [data-theme="light"] .item-cluster-stats .item-build-wr,
+    [data-theme="light"] .cluster-pick {
+        border-color: var(--border);
+    }
+    [data-theme="light"] .item-build-wr.is-good,
+    [data-theme="light"] .cg-core-wr.is-good,
+    [data-theme="light"] .cg-option-wr.is-good,
+    [data-theme="light"] .boot-rail-wr.is-good { color: #1f9a4a; }
+    [data-theme="light"] .item-build-wr.is-bad,
+    [data-theme="light"] .cg-core-wr.is-bad,
+    [data-theme="light"] .cg-option-wr.is-bad,
+    [data-theme="light"] .boot-rail-wr.is-bad { color: #d64545; }
+    [data-theme="light"] .item-build-wr.is-even,
+    [data-theme="light"] .cg-core-wr.is-even,
+    [data-theme="light"] .cg-option-wr.is-even,
+    [data-theme="light"] .boot-rail-wr.is-even { color: var(--text-muted); }
+    [data-theme="light"] .item-pair-icon-wrap {
+        background: #1a1f2a;
+        border-color: var(--border-strong);
+    }
+    [data-theme="light"] .lane-badge.lane-popular {
+        background: rgba(37, 99, 235, 0.12);
+        color: #1d4ed8;
+    }
+    [data-theme="light"] .lane-badge.lane-winrate {
+        background: rgba(34, 197, 94, 0.12);
+        color: #166534;
+    }
+    [data-theme="light"] .lane-badge.lane-combined {
+        background: rgba(0, 0, 0, 0.05);
+        color: var(--text-muted);
+    }
+    /* Pick heat ramp — deeper on white so it still reads. */
+    [data-theme="light"] .cluster-pick.pick-1,
+    [data-theme="light"] .cg-option-pick.pick-1,
+    [data-theme="light"] .item-build-pick.pick-1,
+    [data-theme="light"] .boot-rail-pick.pick-1,
+    [data-theme="light"] .cg-core-share.pick-1 { color: #6b7280; }
+    [data-theme="light"] .cluster-pick.pick-2,
+    [data-theme="light"] .cg-option-pick.pick-2,
+    [data-theme="light"] .item-build-pick.pick-2,
+    [data-theme="light"] .boot-rail-pick.pick-2,
+    [data-theme="light"] .cg-core-share.pick-2 { color: #2b7fc4; }
+    [data-theme="light"] .cluster-pick.pick-3,
+    [data-theme="light"] .cg-option-pick.pick-3,
+    [data-theme="light"] .item-build-pick.pick-3,
+    [data-theme="light"] .boot-rail-pick.pick-3,
+    [data-theme="light"] .cg-core-share.pick-3 { color: #b88912; }
+    [data-theme="light"] .cluster-pick.pick-4,
+    [data-theme="light"] .cg-option-pick.pick-4,
+    [data-theme="light"] .item-build-pick.pick-4,
+    [data-theme="light"] .boot-rail-pick.pick-4,
+    [data-theme="light"] .cg-core-share.pick-4 { color: #d06a12; }
+    [data-theme="light"] .cluster-pick.pick-5,
+    [data-theme="light"] .cg-option-pick.pick-5,
+    [data-theme="light"] .item-build-pick.pick-5,
+    [data-theme="light"] .boot-rail-pick.pick-5,
+    [data-theme="light"] .cg-core-share.pick-5 { color: #c73d18; }
+
+    /* Recommend side panel */
+    [data-theme="light"] .side-panel {
+        background: var(--surface);
+        border-color: var(--border);
+        color: var(--text);
+        box-shadow: 0 10px 32px rgba(31, 41, 55, 0.10);
+    }
+
+    /* --- 版本變動 (patch changes) --- */
+    [data-theme="light"] .updates-panel {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+    }
+    [data-theme="light"] .updates-kicker {
+        color: var(--accent-soft);
+    }
+    [data-theme="light"] .updates-title {
+        color: var(--text);
+    }
+    [data-theme="light"] .updates-close {
+        background: var(--surface-2);
+        border-color: var(--border-strong);
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .updates-close:hover {
+        background: var(--chip-bg);
+        border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+        color: var(--text);
+    }
+    [data-theme="light"] .updates-list li {
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .updates-list li::before {
+        background: var(--accent);
+    }
+    [data-theme="light"] .change-chip {
+        color: var(--text-muted);
+        background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+    }
+    [data-theme="light"] .change-tab {
+        background: var(--chip-bg);
+        border-color: var(--border);
+        color: var(--text-muted);
+    }
+    [data-theme="light"] .change-tab:hover {
+        background: #e2e6ee;
+        border-color: var(--border-strong);
+        color: var(--text);
+    }
+    [data-theme="light"] .change-tab.active {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--accent-on);
+    }
+    [data-theme="light"] .change-column-title {
+        color: var(--text);
+    }
+    [data-theme="light"] .change-row {
+        background: var(--surface);
+        border-color: var(--border);
+        box-shadow: 0 1px 2px rgba(31, 41, 55, 0.04);
+    }
+    [data-theme="light"] button.change-row:hover {
+        border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+        background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    }
+    [data-theme="light"] .change-icon,
+    [data-theme="light"] .change-duo img {
+        background: #1a1f2a;
+    }
+    /* Stacked duo icons: hairline must match light card, not dark #11151d. */
+    [data-theme="light"] .change-duo img + img {
+        box-shadow: -2px 0 0 var(--surface);
+    }
+    [data-theme="light"] .change-name {
+        color: var(--text);
+    }
+    [data-theme="light"] .change-meta {
+        color: var(--text-dim);
+    }
+    [data-theme="light"] .change-empty {
+        color: var(--text-muted);
+    }
+    /* .change-delta.up/.down keep their green/red pills — already readable. */
 
     /* ===== 增幅榜 → 適配英雄 popup (click an augment card on the board).
        The host doubles as the backdrop and lives INSIDE #view-augments so its
@@ -3636,7 +4036,23 @@
         gap: 12px;
         margin: 0 30px 12px 0;
     }
-    .augch-icon { width: 56px; height: 56px; flex: 0 0 auto; }
+    /* Icon sits on a dark circular disc (Riot client style) so prismatic /
+       pastel art stays legible on both light and dark card surfaces. */
+    .augch-icon {
+        width: 56px;
+        height: 56px;
+        flex: 0 0 auto;
+        padding: 6px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        object-fit: contain;
+        background:
+            radial-gradient(circle at 50% 42%, #222836 0%, #12151c 62%, #07090d 100%);
+        box-shadow:
+            0 0 0 2px #2c3444,
+            0 0 0 4px rgba(70, 80, 100, 0.28),
+            0 2px 8px rgba(0, 0, 0, 0.28);
+    }
     .augch-name { color: var(--text); font-size: 17px; font-weight: 700; }
     .augch-sub { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
     .augch-stat { margin-top: 2px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
