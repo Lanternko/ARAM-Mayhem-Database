@@ -629,36 +629,49 @@
         font-size: 12px;
         line-height: 1.55;
     }
+    /* Always one horizontal row of up to 5 pick chips (full ARAM roster). */
     .pick-slots {
         display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 6px;
         margin: 14px 0 10px;
+        min-width: 0;
     }
     .pick-chip {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        justify-content: center;
+        gap: 4px;
+        flex: 1 1 0;
+        min-width: 0;
         min-height: 36px;
-        padding: 6px 10px;
+        padding: 5px 6px;
         border-radius: 999px;
         border: 1px solid #30363d;
         background: #1b2030;
         color: #e6e8eb;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
         font-family: inherit;
         cursor: pointer;
     }
     .pick-chip img {
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         border-radius: 999px;
         display: block;
         object-fit: cover;
         background: #2a3142;
         border: 1px solid rgba(255,255,255,0.08);
         flex-shrink: 0;
+    }
+    /* Name / empty label: shrink + ellipsis so 5 chips stay on one line. */
+    .pick-chip > span:not(.ord) {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .pick-chip.empty {
         border-style: dashed;
@@ -667,15 +680,15 @@
         cursor: default;
     }
     .pick-chip .ord {
-        width: 18px;
-        height: 18px;
+        width: 16px;
+        height: 16px;
         border-radius: 999px;
         background: #f5d780;
         color: #231802;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         flex-shrink: 0;
     }
@@ -733,6 +746,21 @@
         color: var(--text-secondary, #c4c8ce);
         font-variant-numeric: tabular-nums;
     }
+    .team-wr-breakdown .team-delta {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    /* 陣容搭配 / pair lift: 正綠 → 淺綠 → 無色 → 淺紅 → 正紅 */
+    .team-delta.tone-pos-2 { color: #22c55e; }
+    .team-delta.tone-pos-1 { color: #86efac; }
+    .team-delta.tone-zero  { color: var(--text-secondary, #c4c8ce); font-weight: 600; }
+    .team-delta.tone-neg-1 { color: #f0a8b0; }
+    .team-delta.tone-neg-2 { color: #ff4d5e; }
+    [data-theme="light"] .team-delta.tone-pos-2 { color: #15803d; }
+    [data-theme="light"] .team-delta.tone-pos-1 { color: #3d9b5f; }
+    [data-theme="light"] .team-delta.tone-zero  { color: var(--text-muted); }
+    [data-theme="light"] .team-delta.tone-neg-1 { color: #d98992; }
+    [data-theme="light"] .team-delta.tone-neg-2 { color: #d32f3f; }
     .team-wr-meta {
         margin-top: 8px;
         font-size: 11px;
@@ -764,16 +792,18 @@
         display: grid;
         gap: 6px;
     }
-    .team-ab-row,
     .team-comp-row {
         display: grid;
-        grid-template-columns: 52px 1fr 36px;
+        grid-template-columns: 40px 1fr 28px auto;
         gap: 8px;
         align-items: center;
         font-size: 11px;
     }
-    .team-comp-row {
-        grid-template-columns: 40px 1fr auto;
+    .team-comp-row .ab-val {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-secondary, #c4c8ce);
+        font-weight: 600;
     }
     .team-comp-name {
         color: var(--text-muted, #9aa0a6);
@@ -810,6 +840,94 @@
     }
     .team-comp-row.is-lack .ab-bar > span {
         background: linear-gradient(90deg, #f0a070, #ff8a1a);
+    }
+    /* Dual-endpoint early↔late continuum (not a good/bad grade). */
+    .team-tempo-row {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 10px;
+        align-items: center;
+    }
+    .team-tempo-end {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted, #9aa0a6);
+        min-width: 2.5em;
+        line-height: 1.2;
+    }
+    .team-tempo-end small {
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-dim, #6a6f77);
+    }
+    .team-tempo-end.is-early { color: #7fc8ff; }
+    .team-tempo-end.is-late { color: #c4a0ff; }
+    .team-tempo-end.is-early small { color: #5fa6e0; }
+    .team-tempo-end.is-late small { color: #a78bfa; }
+    .team-tempo-track {
+        position: relative;
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: visible;
+    }
+    .team-tempo-grad {
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(90deg,
+            rgba(127, 200, 255, 0.45) 0%,
+            rgba(255, 255, 255, 0.08) 50%,
+            rgba(196, 160, 255, 0.45) 100%);
+    }
+    .team-tempo-mid {
+        position: absolute;
+        top: -3px;
+        bottom: -3px;
+        left: 50%;
+        width: 1px;
+        transform: translateX(-0.5px);
+        background: rgba(255, 255, 255, 0.22);
+        pointer-events: none;
+    }
+    .team-tempo-marker {
+        position: absolute;
+        top: 50%;
+        width: 14px;
+        height: 14px;
+        margin-left: -7px;
+        transform: translateY(-50%);
+        border-radius: 50%;
+        background: var(--text, #e6e8ea);
+        border: 2px solid var(--surface-raised, #2a2e34);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12), 0 2px 8px rgba(0, 0, 0, 0.35);
+        z-index: 1;
+    }
+    .team-tempo-lean {
+        margin-top: 8px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary, #c4c8ce);
+    }
+    [data-theme="light"] .team-tempo-track {
+        background: rgba(0, 0, 0, 0.06);
+    }
+    [data-theme="light"] .team-tempo-grad {
+        background: linear-gradient(90deg,
+            rgba(37, 99, 235, 0.28) 0%,
+            rgba(0, 0, 0, 0.04) 50%,
+            rgba(124, 58, 237, 0.28) 100%);
+    }
+    [data-theme="light"] .team-tempo-marker {
+        background: var(--text);
+        border-color: #ffffff;
+        box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(31, 41, 55, 0.18);
     }
     .rec-row {
         display: grid;
@@ -2978,7 +3096,9 @@
         .rec-fab { display: none; }
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
-        .pick-slots { gap: 6px; }
+        .pick-slots { gap: 4px; }
+        .pick-chip { font-size: 10px; padding: 4px 5px; min-height: 34px; }
+        .pick-chip img { width: 18px; height: 18px; }
         .search-wrap { max-width: none; min-width: 0; }
         .search { max-width: none; min-width: 0; }
         .shown-count { justify-self: end; font-size: 12px; }
