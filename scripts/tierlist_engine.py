@@ -370,8 +370,18 @@ AD_BRUISER_ITEM_KEYWORDS = (
 )
 
 HEARTSTEEL_ITEM_IDS = {3084, 223084, 323084}
-# Quest: Icathia's Fall combines Sunfire Aegis + Hollow Radiance into this reward item.
-AUGMENT_GATED_ITEM_IDS = {223069}
+# Augment quest / anvil rewards — not shop-buildable core items. Exclude from
+# build recs and 版本變動 item ladders so they don't crowd out real purchases.
+# IDs cover base + mode-remapped catalogue variants (CDragon often keeps several).
+AUGMENT_GATED_ITEM_IDS = frozenset({
+    223069,  # Void Immolation (Icathia's Fall / Sunfire+Hollow fuse)
+    228002,  # Wooglet's Witchcap
+    1111,    # Jarvan I's
+    4403,    # The Golden Spatula
+    224403,  # The Golden Spatula (mode id)
+    664403,  # The Golden Spatula (mode id)
+    994403,  # Golden Spatula (LCU / live Mayhem id)
+})
 ROLE_RANGED_ALIAS_OVERRIDES = {"Kayle"}
 HEARTSTEEL_TANK_FOLLOWUP_STYLES = {"tank"}
 HEARTSTEEL_BRUISER_FOLLOWUP_STYLES = {
@@ -3258,10 +3268,23 @@ def _compute_core_item_patch_stats(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                selected_ids = _participant_recommendable_item_ids(
-                    participant.get("items") or participant.get("itemSlots") or [],
-                    item_meta,
-                )
+                # Core completed items only (no boots / guardian starters /
+                # anti-heal components / augment-gated quest rewards). Matches the
+                # site copy on 版本變動 and keeps regular-ARAM starters out.
+                raw_ids = participant.get("items") or participant.get("itemSlots") or []
+                selected_ids: list[int] = []
+                seen_ids: set[int] = set()
+                for raw_id in raw_ids:
+                    try:
+                        item_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if item_id <= 0 or item_id in seen_ids:
+                        continue
+                    if not _is_recommendable_core_item(item_meta.get(item_id)):
+                        continue
+                    selected_ids.append(item_id)
+                    seen_ids.add(item_id)
                 if not selected_ids:
                     continue
                 player_won = 1 if (team_id == 100) == blue_won else 0
