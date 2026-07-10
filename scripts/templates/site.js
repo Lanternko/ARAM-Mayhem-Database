@@ -786,7 +786,7 @@
             setSectionTitle: '增幅裝置系列相性',
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
-            itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
+            itemSectionMeta: '不含鞋子；選取 ≥1% · 最多 8 組 · 依強度排序',
             itemClusterSectionTitle: '',
             // Empty on purpose: core / 搭配裝備 / 常見後續 labels + per-item WR·pick
             // already carry the structure; the long methodology caption was noise.
@@ -853,12 +853,12 @@
             augFilterEmpty: '此分類沒有符合的增幅',
             augChampsHint: '點擊查看適配英雄',
             augChampsLiftHead: 'Lift 最高',
-            augChampsLiftSub: '拿了之後相對自身平均勝率提升最多',
+            augChampsLiftSub: '排序＝勝率提升值（小樣本會往下壓）',
             augChampsPickHead: '選取率最高',
             augChampsPickSub: '同稀有度出現時最常被選走',
             augChampsGames: games => `${games} 場`,
             augChampsEmpty: '樣本不足',
-            augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場，排序採保守下界`,
+            augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場`,
             overviewWrLabel: '綜合勝率',
             overviewGames: games => `${games} 場`,
             compFitTitle: '英雄能力',
@@ -960,7 +960,7 @@
             setSectionTitle: 'Augment Sets',
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
-            itemSectionMeta: 'boots excluded; left to right is #1 to #3',
+            itemSectionMeta: 'boots excluded; pick ≥1% · up to 8 · strongest first',
             itemClusterSectionTitle: '',
             // Empty on purpose — see zh itemClusterSectionMeta note.
             itemClusterSectionMeta: '',
@@ -1026,12 +1026,12 @@
             augFilterEmpty: 'No augments match this category',
             augChampsHint: 'Click to see who fits it best',
             augChampsLiftHead: 'Highest lift',
-            augChampsLiftSub: "biggest WR gain vs the champion's own average",
+            augChampsLiftSub: 'sorted by WR lift (small samples demoted)',
             augChampsPickHead: 'Most picked',
             augChampsPickSub: 'taken most often when offered at this rarity',
             augChampsGames: games => `${games} games`,
             augChampsEmpty: 'Not enough data',
-            augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games, ranked by a conservative lower bound`,
+            augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games`,
             overviewWrLabel: 'Overall WR',
             overviewGames: games => `${games} games`,
             compFitTitle: 'Abilities',
@@ -2650,12 +2650,35 @@
             }
             return selected;
         };
+        // First-two item pairs: payload often ships 50–100+ rows (incl. 0.1% noise).
+        // Keep only meaningfully picked combos and hard-cap the wall of cards.
+        const ITEM_PAIR_MAX_ROWS = 8;
+        const ITEM_PAIR_MIN_PICK = 0.01;       // prefer ≥1% pick
+        const ITEM_PAIR_MIN_PICK_FALLBACK = 0.005; // then ≥0.5%
+        const selectItemPairRows = (payload) => {
+            const rows = (payload && payload.top) || [];
+            if (!rows.length) return [];
+            const pickOf = (e) => Number(e.pick || 0);
+            let filtered = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK);
+            if (filtered.length < 4) {
+                filtered = rows.filter(e => pickOf(e) >= ITEM_PAIR_MIN_PICK_FALLBACK);
+            }
+            if (filtered.length < 3) filtered = rows;
+            return filtered.slice(0, ITEM_PAIR_MAX_ROWS);
+        };
         const buildAffinitySection = (title, meta, payload, options = {}) => {
             if (options.itemCarousel) {
-                const rows = (payload && payload.top) || [];
+                let rows = (payload && payload.top) || [];
+                if (options.itemPairGrid) rows = selectItemPairRows(payload);
                 if (!rows.length) return '';
+                const pairMeta = pickLang(
+                    '不含鞋子；選取 ≥1% · 最多 8 組 · 依強度排序',
+                    'boots excluded; pick ≥1% · up to 8 · strongest first',
+                );
                 const itemMeta = pickLang('不含鞋子；勝率分數由高到低，右滑看更多', 'boots excluded; strongest first, swipe for more');
-                const displayMeta = (options.singleItem || options.itemCluster) && meta ? meta : itemMeta;
+                const displayMeta = options.itemPairGrid
+                    ? pairMeta
+                    : ((options.singleItem || options.itemCluster) && meta ? meta : itemMeta);
                 const metaHtml = `<span class="section-meta">${displayMeta}</span>`;
                 return `
                     <div class="detail-section">
