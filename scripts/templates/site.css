@@ -7,20 +7,23 @@
        "[data-theme=light]"). ===== */
     :root {
         color-scheme: dark;
-        --bg: #0e1116;
-        --surface: #161a22;
-        --surface-2: #1b2030;
-        --surface-sunken: #11151d;
-        --surface-raised: #21262d;
-        --chip-bg: #1f2530;
-        --overlay: #232936;
-        --text: #e6e8eb;
+        /* Near-black charcoal with a faint cool slate bias (tool-site dark,
+           not violet/luxury). Reference direction: TFT Academy-style
+           #0a0b0d → #0e151d, gold accent on neutral black. */
+        --bg: #0a0b0d;
+        --surface: #101114;
+        --surface-2: #161a20;
+        --surface-sunken: #0b0d0f;
+        --surface-raised: #1a1d21;
+        --chip-bg: #1a1d21;
+        --overlay: #1e2329;
+        --text: #e8eaed;
         --text-muted: #9aa0a6;
         --text-dim: #6b7280;
         /* Translucent-white borders read as a top-lit edge and auto-adapt to
            every elevation + the light theme (premium-dark technique). */
-        --border: rgba(255, 255, 255, 0.085);
-        --border-strong: rgba(255, 255, 255, 0.14);
+        --border: rgba(255, 255, 255, 0.09);
+        --border-strong: rgba(255, 255, 255, 0.15);
         --accent: #f5c518;
         --accent-soft: #f5d780;
         --accent-on: #14110a;
@@ -29,7 +32,7 @@
         --r-sm: 8px;
         --r-md: 12px;
         --r-lg: 16px;
-        --shadow: 0 18px 50px rgba(0,0,0,0.45);
+        --shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
         /* One ease-out curve + a 4-step duration scale = coherent motion. */
         --ease: cubic-bezier(0.16, 1, 0.3, 1);
         --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -74,6 +77,12 @@
         font-family: "Noto Sans TC", -apple-system, "Segoe UI",
                      "Microsoft JhengHei", "PingFang TC", sans-serif;
         padding: 0;
+    }
+    /* Soft vertical wash: pure near-black most of the way, then a faint cool
+       slate at the footer — same idea as TFT Academy's body gradient, without
+       a colored radial that reads as purple/luxury. */
+    :root:not([data-theme="light"]) body {
+        background: linear-gradient(#0a0b0d, #0a0b0d 74%, #0e151d) 0 0 / cover no-repeat fixed;
     }
     h1 { margin: 0; font-weight: 600; font-size: 22px; line-height: 1.1; }
     /* Mincho-only captions — opt-in serif for the three small metadata
@@ -160,9 +169,9 @@
         align-items: center;
         gap: 6px;
         padding: 6px 12px;
-        background: #21262d;
-        color: #c9d1d9;
-        border: 1px solid #30363d;
+        background: var(--surface-raised);
+        color: var(--text);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 12px;
         font-weight: 500;
@@ -175,7 +184,7 @@
         font: inherit;
     }
     .icon-btn:hover,
-    .gh-star:hover { background: #30363d; border-color: #58606b; }
+    .gh-star:hover { background: var(--overlay); border-color: var(--border-strong); }
     .icon-btn svg,
     .gh-star svg { flex-shrink: 0; }
     .gh-star {
@@ -203,7 +212,7 @@
         align-items: center;
         margin: 0 0 20px;
         padding: 10px 12px;
-        background: #161a22;
+        background: var(--surface);
         border-radius: 10px;
         box-shadow: 0 8px 18px -10px rgba(0, 0, 0, 0.7);
     }
@@ -214,8 +223,8 @@
     }
     .chip {
         padding: 5px 12px;
-        background: #1f2530;
-        color: #c5cad3;
+        background: var(--chip-bg);
+        color: var(--text-muted);
         border: 1px solid transparent;
         border-radius: 18px;
         font-size: 12px;
@@ -224,7 +233,7 @@
         font-family: inherit;
         transition: background 0.1s;
     }
-    .chip:hover { background: #2a3142; }
+    .chip:hover { background: var(--overlay); }
     .chip.active {
         background: var(--role-color, #f5c518);
         color: #0e1116;
@@ -251,9 +260,9 @@
         justify-content: center;
         min-height: 34px;
         padding: 6px 12px;
-        background: #21262d;
-        color: #e6e8eb;
-        border: 1px solid #30363d;
+        background: var(--surface-raised);
+        color: var(--text);
+        border: 1px solid var(--border);
         border-radius: 6px;
         font-size: 12px;
         font-weight: 600;
@@ -261,7 +270,7 @@
         cursor: pointer;
         transition: background 0.12s, border-color 0.12s, color 0.12s;
     }
-    .tool-btn:hover { background: #2a3142; border-color: #58606b; }
+    .tool-btn:hover { background: var(--overlay); border-color: var(--border-strong); }
     .tool-btn.active {
         background: #f5d780;
         border-color: #f5d780;
@@ -521,9 +530,9 @@
         width: 100%;
         height: 40px;
         padding: 0 12px 0 30px;
-        background: rgba(2, 6, 23, 0.72);
-        color: #e6e8eb;
-        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: color-mix(in oklab, var(--surface-sunken) 88%, transparent);
+        color: var(--text);
+        border: 1px solid var(--border);
         border-radius: 12px;
         font-size: 14px;
         font-family: inherit;
@@ -968,7 +977,7 @@
            unaffected -- display:none removes the box entirely, ahead of this. */
         content-visibility: auto;
         contain-intrinsic-size: auto 96px;
-        background: #1f2530;
+        background: var(--chip-bg);
         /* Champion thumbnail wears its tier's colour as a 2px frame.
            Non-OP tiers use a solid border; OP gets a prismatic gradient
            via the .tier-block[data-tier="OP"] .champ rule below. */
@@ -1784,7 +1793,7 @@
     }
     /* Pick-rate ("選取率") on every item surface uses the same cool->hot
        popularity ramp as the augment cards (`.aug .alift.pick-*`): a classic
-       heat ramp grey -> blue -> yellow -> orange -> red, so the five steps stay
+       heat ramp grey -> blue -> yellow -> amber -> orange, so the five steps stay
        clearly distinct.  Tier from pickTier() — absolute 2/5/10/20% cuts, so a
        60%-pick boot reads hot red and a 1%-pick combo reads grey, consistently
        across clusters / options / items / boots. */
@@ -1792,7 +1801,7 @@
     .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #5fa6e0; }
     .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #ecc34a; }
     .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #ef8b2b; }
-    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #e8552d; }
+    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #ff8a1a; }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -2392,9 +2401,17 @@
         font-variant-numeric: tabular-nums;
         border-bottom: 1px solid rgba(255,255,255,0.08);
         box-sizing: border-box;
+        color: var(--text-secondary); /* wr-3 無色 default */
     }
-    .aug.good .awr { color: #6bd16b; }
-    .aug.bad  .awr { color: #ff8a8a; }
+    /* WR tone: 正綠 → 淺綠 → 無色 → 淺紅 → 正紅.
+       Bad side stays pure red (not orange — orange is reserved for pick heat).
+       wr-2 is desaturated pink-red; wr-1 is brighter saturated red so the step
+       is obvious on dark chrome without looking brown/muddy. */
+    .aug .awr.wr-5 { color: #22c55e; } /* 正綠 */
+    .aug .awr.wr-4 { color: #86efac; } /* 淺綠 */
+    .aug .awr.wr-3 { color: var(--text-secondary); font-weight: 600; } /* 無色 */
+    .aug .awr.wr-2 { color: #f0a8b0; } /* 淺紅：粉紅偏淡 */
+    .aug .awr.wr-1 { color: #ff4d5e; } /* 正紅：飽和、明顯比 wr-2 重 */
     .aug .alift {
         flex: 0 0 var(--aug-stat-h);
         display: flex;
@@ -2402,7 +2419,8 @@
         justify-content: center;
         height: var(--aug-stat-h);
         min-height: var(--aug-stat-h);
-        font-size: 10px;
+        font-size: 12px; /* match .awr; was 10px and felt small */
+        font-weight: 600;
         color: var(--text-muted);
         margin-top: 0;
         padding: 0 4px;
@@ -2411,13 +2429,12 @@
         box-sizing: border-box;
         /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick bare % heat ramp (labels live on the left rail). Tier cuts:
-       pickTier() for champion-relative cards, augBoardPickTier() for 增幅榜. */
-    .aug .alift.pick-1 { color: #7c8794; }
+    /* Pick heat: grey → blue → yellow → amber → 正橘 (top tier; no deep red). */
+    .aug .alift.pick-1 { color: #7c8794; font-weight: 500; }
     .aug .alift.pick-2 { color: #5fa6e0; }
     .aug .alift.pick-3 { color: #ecc34a; }
-    .aug .alift.pick-4 { color: #ef8b2b; font-weight: 600; }
-    .aug .alift.pick-5 { color: #e8552d; font-weight: 700; }
+    .aug .alift.pick-4 { color: #f0a040; font-weight: 700; }
+    .aug .alift.pick-5 { color: #ff8a1a; font-weight: 700; }
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -2991,8 +3008,8 @@
         .aug .aicon-ph { height: 52px; padding: 6px 0 3px; }
         .aug .aname { font-size: 9.5px; min-height: 28px; padding: 4px 3px 5px; }
         .aug .awr { font-size: 11px; min-height: 22px; }
-        /* Pick bare % stays visible on mobile (heat colour). */
-        .aug .alift { font-size: 9px; margin-top: 0; padding: 4px 3px 6px; }
+        /* Pick bare % matches WR size on mobile. */
+        .aug .alift { font-size: 11px; margin-top: 0; padding: 0 3px; }
         .aug-tier-grid {
             grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
             gap: 8px;
@@ -3149,8 +3166,8 @@
         transition: color 0.14s, background-color 0.14s;
     }
     .nav-tab:hover { color: var(--text); background: color-mix(in srgb, var(--text) 7%, transparent); }
-    /* Active reads heavier than hover: a soft accent wash + the shared underline. */
-    .nav-tab.active { color: var(--text); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    /* Keep the active fill neutral; the gold underline already carries state. */
+    .nav-tab.active { color: var(--text); background: color-mix(in oklab, var(--surface-raised) 72%, transparent); }
     /* One shared underline that slides between tabs (JS sets --ind-x / --ind-w in
        moveTabIndicator).  It's a real element, not a ::after, so it can carry a
        view-transition-name and morph ABOVE the frozen root snapshot during a tab
@@ -3374,7 +3391,6 @@
         box-shadow: none;
         margin: 0 0 20px;
     }
-
     @media (max-width: 700px) {
         /* Two-row header: brand + actions on top, the primary tabs as a
            full-bleed scrollable strip underneath.  Primary navigation stays
@@ -3548,13 +3564,16 @@
     [data-theme="light"] .rlabel-sort.is-active {
         background: rgba(0, 0, 0, 0.16);
     }
-    [data-theme="light"] .aug.good .awr { color: #1f9a4a; }
-    [data-theme="light"] .aug.bad  .awr { color: #d64545; }
-    [data-theme="light"] .aug .alift.pick-1 { color: #6b7280; }
+    [data-theme="light"] .aug .awr.wr-5 { color: #15803d; } /* 正綠 */
+    [data-theme="light"] .aug .awr.wr-4 { color: #3d9b5f; } /* 淺綠 */
+    [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
+    [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
+    [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
+    [data-theme="light"] .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
     [data-theme="light"] .aug .alift.pick-2 { color: #2b7fc4; }
     [data-theme="light"] .aug .alift.pick-3 { color: #b88912; }
-    [data-theme="light"] .aug .alift.pick-4 { color: #d06a12; font-weight: 600; }
-    [data-theme="light"] .aug .alift.pick-5 { color: #c73d18; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #d4891a; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-5 { color: #c45f00; font-weight: 700; }
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active) {
@@ -3804,7 +3823,7 @@
     [data-theme="light"] .cg-option-pick.pick-5,
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
-    [data-theme="light"] .cg-core-share.pick-5 { color: #c73d18; }
+    [data-theme="light"] .cg-core-share.pick-5 { color: #c45f00; }
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -4106,7 +4125,7 @@
     .item-tip-row > b.pick-2 { color: #5fa6e0; }
     .item-tip-row > b.pick-3 { color: #ecc34a; }
     .item-tip-row > b.pick-4 { color: #ef8b2b; }
-    .item-tip-row > b.pick-5 { color: #e8552d; }
+    .item-tip-row > b.pick-5 { color: #ff8a1a; }
     #augch-host {
         position: fixed;
         inset: 0;
@@ -4260,4 +4279,3 @@
             animation: none !important;
         }
     }
-    
