@@ -930,7 +930,7 @@
        panel's horizontal-scroll .aug lists are untouched. */
     .aug-tier-grid .aug {
         content-visibility: auto;
-        contain-intrinsic-size: auto 176px;
+        contain-intrinsic-size: auto 168px;
         border-radius: 10px;
     }
     .aug-tier-grid .aug img,
@@ -945,13 +945,10 @@
         line-height: 1.3;
     }
     .aug-tier-grid .aug .awr {
-        min-height: 30px;
         font-size: 12.5px;
     }
     .aug-tier-grid .aug .alift {
-        padding: 5px 6px 9px;
         font-size: 10.5px;
-        margin-top: 0;
     }
     .aug.hidden { display: none; }
     .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
@@ -2193,38 +2190,115 @@
     .rarity-row.cat-empty { display: none; }
     .rarity-row {
         display: grid;
-        grid-template-columns: 56px 1fr;
+        /* Wider rail: rarity name + 勝率 / 選用率 sort keys. */
+        grid-template-columns: 58px 1fr;
         gap: 10px;
-        align-items: start;
+        /* Stretch so the left rail matches card height and can pin
+           勝率/選用率 to the same baseline as the card stat rows. */
+        align-items: stretch;
         margin-bottom: 10px;
         min-width: 0;
     }
+    /* Shared height token: left-rail sort keys + card WR/pick rows. */
+    .rarity-row,
+    .aug {
+        --aug-stat-h: 28px;
+    }
+    /* Left rail: 彩色 fills icon+name; 勝率 / 選用率 sit on the bottom two
+       rows, pixel-aligned with .awr / .alift on every card. */
+    .rlabel-rail,
     .rlabel {
         font-size: 11px;
         font-weight: 700;
-        padding: 5px 6px;
-        border-radius: 5px;
+        padding: 0;
+        border-radius: 9px;
         text-align: center;
-        color: #0e1116;
-        letter-spacing: 0.3px;
+        color: var(--accent-on);
+        letter-spacing: 0.2px;
         align-self: stretch;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 0;
+        position: relative;
+        overflow: hidden;
+        min-height: 0;
+        box-sizing: border-box;
+    }
+    .rlabel-name {
+        flex: 1 1 auto;
         display: flex;
         align-items: center;
         justify-content: center;
-        position: relative;
-        overflow: hidden;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.2;
+        padding: 6px 4px;
+        min-height: 0;
     }
-    .rlabel.prismatic {
+    .rlabel-sort {
+        appearance: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 var(--aug-stat-h);
+        width: 100%;
+        height: var(--aug-stat-h);
+        margin: 0;
+        padding: 0 2px;
+        border: 0;
+        border-radius: 0;
+        border-top: 1px solid rgba(0, 0, 0, 0.10);
+        font: inherit;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 1;
+        color: inherit;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.10);
+        opacity: 0.78;
+        box-sizing: border-box;
+        transition: opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease),
+                    box-shadow var(--dur-1) var(--ease);
+    }
+    .rlabel-sort:hover {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.16);
+    }
+    .rlabel-sort.is-active {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.22);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+    }
+    .rlabel-sort:focus-visible {
+        outline: 2px solid rgba(37, 99, 235, 0.65);
+        outline-offset: -2px;
+    }
+    .rlabel.prismatic,
+    .rlabel-rail.prismatic {
         background: linear-gradient(135deg,#ffffff 0%,#e7d5ff 25%,#bcd6ff 50%,#ffd5ec 75%,#fff1c8 100%);
         background-size: 220% 220%;
         animation: prismShift 6s ease-in-out infinite;
         color: #2a1a4a;
         box-shadow: 0 0 6px rgba(220,180,255,0.5), inset 0 0 0 1px rgba(255,255,255,0.6);
     }
-    .rlabel.gold     { background: linear-gradient(135deg,#ffe87a,#f5c518,#d99908); color: #3a2600; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
-    .rlabel.silver   { background: linear-gradient(135deg,#eef0f4,#c0c5cc,#9aa0a6); color: #2a2e35; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); }
+    .rlabel.gold,
+    .rlabel-rail.gold {
+        background: linear-gradient(135deg,#ffe87a,#f5c518,#d99908);
+        color: #3a2600;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+    }
+    .rlabel.silver,
+    .rlabel-rail.silver {
+        background: linear-gradient(135deg,#eef0f4,#c0c5cc,#9aa0a6);
+        color: #2a2e35;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+    }
     .aug-list {
         display: flex;
+        align-items: stretch;
         gap: 10px;
         min-width: 0;
         overflow-x: auto;
@@ -2232,7 +2306,9 @@
         scroll-snap-type: x proximity;
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
-        padding: 0 4px 8px 0;
+        /* No vertical padding: rail height must equal card height for alignment. */
+        padding: 0 4px 0 0;
+        margin-bottom: 8px;
         -webkit-overflow-scrolling: touch;
     }
     .aug-list::-webkit-scrollbar { height: 7px; }
@@ -2241,45 +2317,53 @@
         background: rgba(148, 163, 184, 0.35);
         border-radius: 999px;
     }
-    .aug-list.empty-list { color: #6b7280; font-size: 11px; padding: 8px 0; }
-    /* Augment card shares the .item-build-card vocabulary: full-bleed icon
-       plinth on top, hairline-bounded win-rate row, name pinned to the bottom.
-       Rarity reads from the coloured icon art itself (plus the rarity-row
-       grouping in the detail panel), so the card carries no rarity chrome. */
+    .aug-list.empty-list {
+        color: var(--text-dim);
+        font-size: 11px;
+        padding: 8px 0;
+        align-items: center;
+    }
+    /* Augment card: icon → name (flex grow) → WR% → pick%.  Stat rows use the
+       same --aug-stat-h as the left-rail sort keys so 勝率 lines up with 65%. */
     .aug {
         flex: 0 0 100px;
+        align-self: stretch;
         scroll-snap-align: start;
-        /* icon → name → WR → pick */
-        display: grid;
-        grid-template-rows: auto auto auto auto;
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
-        background: #11151d;
+        background: var(--surface-sunken);
         border-radius: 9px;
         text-align: center;
         position: relative;
         border: 1px solid rgba(255,255,255,0.08);
+        min-height: 0;
     }
     .aug img,
     .aug .aicon-ph {
         display: block;
+        flex: 0 0 auto;
         width: 100%;
         height: 62px;
         padding: 8px 0 4px;
         object-fit: contain;
-        background: #0f131b;
+        background: var(--surface-deep);
+        box-sizing: border-box;
     }
-    /* Name sits directly under the icon (requested), stats stack below. */
+    /* Name absorbs any height delta across the row so WR/pick stay bottom-pinned. */
     .aug .aname {
+        flex: 1 1 auto;
         display: flex;
         align-items: center;
         justify-content: center;
         min-height: 32px;
         padding: 5px 5px 6px;
         font-size: 10.5px;
-        color: #e6e8eb;
+        color: var(--text);
         line-height: 1.3;
-        background: #0f131b;
+        background: var(--surface-deep);
         border-bottom: 1px solid rgba(255,255,255,0.06);
+        box-sizing: border-box;
     }
     .aug .aname span {
         display: -webkit-box;
@@ -2288,31 +2372,38 @@
         overflow: hidden;
     }
     .aug .awr {
+        flex: 0 0 var(--aug-stat-h);
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 28px;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
+        height: var(--aug-stat-h);
+        min-height: var(--aug-stat-h);
         font-size: 12px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        box-sizing: border-box;
     }
     .aug.good .awr { color: #6bd16b; }
     .aug.bad  .awr { color: #ff8a8a; }
     .aug .alift {
+        flex: 0 0 var(--aug-stat-h);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: var(--aug-stat-h);
+        min-height: var(--aug-stat-h);
         font-size: 10px;
-        color: #9aa0a6;
+        color: var(--text-muted);
         margin-top: 0;
-        padding: 5px 4px 7px;
-        line-height: 1.25;
+        padding: 0 4px;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        box-sizing: border-box;
+        /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick-rate line is colour-coded by popularity on a classic cool->hot heat
-       ramp: grey -> blue -> yellow -> orange -> red (熱門), so the five steps are
-       easy to tell apart.  The hot red (#e8552d) is a deeper, more orange shade
-       than the win-rate red of `.awr` (#ff6b6b) and always carries the 選用率
-       label, so popularity still reads distinct from win rate.  Tier cuts are
-       per-surface: pickTier() for the champion-relative cards, augBoardPickTier()
-       for the 增幅榜 board (whose pick is appearances-per-game). */
+    /* Pick bare % heat ramp (labels live on the left rail). Tier cuts:
+       pickTier() for champion-relative cards, augBoardPickTier() for 增幅榜. */
     .aug .alift.pick-1 { color: #7c8794; }
     .aug .alift.pick-2 { color: #5fa6e0; }
     .aug .alift.pick-3 { color: #ecc34a; }
@@ -2768,8 +2859,38 @@
            space.  The coloured icon art encodes rarity per card, and row order
            (prismatic → gold → silver) is fixed, so which row is which stays
            obvious. */
-        .rarity-row { grid-template-columns: 1fr; gap: 4px; }
-        .rlabel { display: none; }
+        /* Mobile: left rail becomes a compact horizontal strip above the row. */
+        .rarity-row {
+            grid-template-columns: 1fr;
+            gap: 6px;
+            align-items: start;
+        }
+        .rlabel-rail,
+        .rlabel {
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 6px;
+            padding: 5px 8px;
+            align-self: stretch;
+            height: auto;
+        }
+        .rlabel-name {
+            flex: 0 0 auto;
+            padding: 0 4px 0 0;
+            margin-right: 2px;
+        }
+        .rlabel-sort {
+            flex: 0 0 auto;
+            width: auto;
+            min-width: 3.2em;
+            height: auto;
+            min-height: 28px;
+            padding: 4px 8px;
+            border-top: 0;
+            border-radius: 5px;
+        }
         /* Each rarity row is a horizontal carousel; show five cards at a
            glance, then let the rest continue off-canvas for swipe. */
         .aug-list {
@@ -2886,9 +3007,8 @@
         .aug img,
         .aug .aicon-ph { height: 52px; padding: 6px 0 3px; }
         .aug .aname { font-size: 9.5px; min-height: 28px; padding: 4px 3px 5px; }
-        .aug .awr { font-size: 11px; min-height: 24px; }
-        /* Pick-rate line stays visible on mobile — it's a single colour-coded
-           token now.  Lift / games stay hover-only on desktop, off on mobile. */
+        .aug .awr { font-size: 11px; min-height: 22px; }
+        /* Pick bare % stays visible on mobile (heat colour). */
         .aug .alift { font-size: 9px; margin-top: 0; padding: 4px 3px 6px; }
         .aug-tier-grid {
             grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
@@ -3003,7 +3123,7 @@
        Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
         font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
-        font-size: 19px;
+        font-size: 23px;
         font-weight: 600;
         letter-spacing: -0.035em;
         line-height: 1;
@@ -3036,7 +3156,7 @@
         background: none;
         color: var(--text-muted);
         font: inherit;
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 600;
         padding: 7px 14px;
         border-radius: 8px;
@@ -3284,7 +3404,7 @@
             padding: 8px 12px 0;
             gap: 0 10px;
         }
-        .brand-title { font-size: 17px; }
+        .brand-title { font-size: 20px; }
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }
@@ -3294,7 +3414,7 @@
             margin: 4px -12px 0;
             padding: 0 12px;
         }
-        .nav-tab { font-size: 13px; padding: 9px 11px 10px; }
+        .nav-tab { font-size: 14px; padding: 9px 11px 10px; }
         .site-main { padding: 16px 12px 48px; }
         .section-head { font-size: 19px; }
         .article-reader h1 { font-size: 23px; }
@@ -3435,6 +3555,15 @@
     }
     [data-theme="light"] .aug .alift {
         color: var(--text-muted);
+    }
+    [data-theme="light"] .rlabel-sort {
+        background: rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="light"] .rlabel-sort:hover {
+        background: rgba(0, 0, 0, 0.12);
+    }
+    [data-theme="light"] .rlabel-sort.is-active {
+        background: rgba(0, 0, 0, 0.16);
     }
     [data-theme="light"] .aug.good .awr { color: #1f9a4a; }
     [data-theme="light"] .aug.bad  .awr { color: #d64545; }
@@ -4899,8 +5028,12 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} 選取率 ${pick}，勝率${lift}`,
             secondaryRoleBadgePick: pick => `選取率 ${pick}`,
             secondaryRoleBadgeLift: lift => `勝率${lift}`,
-            // Card surface shows the bare % (colour = heat); full “選用率 …” stays in aria/tooltip.
+            // Card surface: bare pick % only (label lives in the left rarity rail).
             augPickLabel: pick => pick,
+            augSortWr: '勝率',
+            augSortPick: '選用率',
+            augSortWrAria: '依勝率排序此稀有度',
+            augSortPickAria: '依選用率排序此稀有度',
             augHotBadge: '熱門',
             augFilterAll: '全部',
             augFilterAllTip: '清除分類，顯示全部增幅',
@@ -5029,8 +5162,12 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} pick ${pick}, WR ${lift}`,
             secondaryRoleBadgePick: pick => `pick ${pick}`,
             secondaryRoleBadgeLift: lift => `WR ${lift}`,
-            // Bare % on the card; “pick …” remains in aria/tooltip.
+            // Card surface: bare pick % only (label lives in the left rarity rail).
             augPickLabel: pick => pick,
+            augSortWr: 'WR',
+            augSortPick: 'Pick',
+            augSortWrAria: 'Sort this rarity by win rate',
+            augSortPickAria: 'Sort this rarity by pick rate',
             augHotBadge: 'Hot',
             augFilterAll: 'All',
             augFilterAllTip: 'Clear categories — show every augment',
@@ -5634,24 +5771,48 @@
             games: entry.g,
             note: onBoard ? copy.augChampsHint : '',
         });
-        // Row order: icon → name → one stats row (pick left, WR right) to save height/width.
+        // Card: icon → name → WR% → pick% (two bare numbers, stacked). Labels
+        // for 勝率 / 選用率 live in the left rarity rail (with sort controls).
         return `
             <div class="aug ${kind} rarity-${rarity} has-item-tip"
                  tabindex="0"
                  data-aug-id="${escHtml(String(entry.id))}"
+                 data-wr="${Number(entry.wr || 0)}"
+                 data-pick="${pickRate}"
                  data-match-text="${escHtml(matchText)}"
                  data-cats="${escHtml(cats)}"
                  aria-label="${escHtml(ariaLabel)}">
                 ${hotBadge}
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
-                <div class="aug-stats">
-                    <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
-                    <div class="awr">${pct(entry.wr)}</div>
-                </div>
+                <div class="awr">${pct(entry.wr)}</div>
+                <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
+    }
+
+    /** Reorder .aug cards inside one rarity row by wr or pick (desc). */
+    function sortRarityAugList(row, sortKey) {
+        if (!row) return;
+        const list = row.querySelector('.aug-list');
+        if (!list) return;
+        const attr = sortKey === 'pick' ? 'data-pick' : 'data-wr';
+        const cards = Array.from(list.querySelectorAll('.aug[data-aug-id]'));
+        cards.sort((a, b) => {
+            const av = Number(a.getAttribute(attr) || 0);
+            const bv = Number(b.getAttribute(attr) || 0);
+            if (bv !== av) return bv - av;
+            // Stable-ish tie-break: keep existing DOM order via data-aug-id.
+            return String(a.getAttribute('data-aug-id') || '')
+                .localeCompare(String(b.getAttribute('data-aug-id') || ''), undefined, { numeric: true });
+        });
+        cards.forEach(card => list.appendChild(card));
+        row.querySelectorAll('.rlabel-sort').forEach(btn => {
+            const active = btn.getAttribute('data-sort') === sortKey;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     }
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
@@ -6061,9 +6222,21 @@
         const body = cards
             ? `<div class="aug-list">${cards}</div>`
             : `<div class="aug-list empty-list">${copy.insufficient}</div>`;
+        // Left rail: rarity name + clickable sort keys (勝率 / 選用率). Cards
+        // themselves only show the two bare percentages stacked.
+        const sortWr = escHtml(copy.augSortWr || '勝率');
+        const sortPick = escHtml(copy.augSortPick || '選用率');
         return `
-            <div class="rarity-row">
-                <div class="rlabel ${r.css}">${copy.rarityLabels[r.key]}</div>
+            <div class="rarity-row" data-rarity="${escHtml(r.key)}">
+                <div class="rlabel-rail rlabel ${r.css}">
+                    <div class="rlabel-name">${escHtml(copy.rarityLabels[r.key])}</div>
+                    <button type="button" class="rlabel-sort is-active" data-sort="wr"
+                            aria-pressed="true"
+                            aria-label="${escHtml(copy.augSortWrAria || sortWr)}">${sortWr}</button>
+                    <button type="button" class="rlabel-sort" data-sort="pick"
+                            aria-pressed="false"
+                            aria-label="${escHtml(copy.augSortPickAria || sortPick)}">${sortPick}</button>
+                </div>
                 ${body}
             </div>
         `;
@@ -8115,6 +8288,14 @@
         const detailClose = ev.target.closest('.detail-close');
         if (detailClose) {
             closeDetail();
+            return;
+        }
+        const augSortBtn = ev.target.closest('.rlabel-sort[data-sort]');
+        if (augSortBtn) {
+            const row = augSortBtn.closest('.rarity-row');
+            const key = augSortBtn.getAttribute('data-sort') || 'wr';
+            sortRarityAugList(row, key);
+            trackEvent('aug_rarity_sort', { sort: key, rarity: row && row.getAttribute('data-rarity') });
             return;
         }
         if (isMobileViewport() && ev.target.classList && ev.target.classList.contains('detail-host')) {
