@@ -78,9 +78,14 @@
     }
 
     async function loadSitePayload(url) {
-        const response = await fetch(url, { cache: 'no-cache' });
+        // Always resolve from site root. Relative "api/..." breaks under
+        // /zh-CN/… and /en/… deep-link shells (would 404 as /zh-CN/api/…).
+        const resolved = (url.startsWith('http') || url.startsWith('/'))
+            ? url
+            : ('/' + String(url).replace(/^\.?\//, ''));
+        const response = await fetch(resolved, { cache: 'no-cache' });
         if (!response.ok) {
-            throw new Error(`payload ${response.status}: ${url}`);
+            throw new Error(`payload ${response.status}: ${resolved}`);
         }
         return await response.json();
     }
@@ -102,8 +107,10 @@
             for (const cid in AXES.champs) {
                 const c = DATA.champs[cid], a = AXES.champs[cid];
                 if (c && c.comp && a) {
-                    // Tempo card (early/late) still uses scaling/snowball.
+                    // Tempo card: early/late end-game WR (≤16min / ≥22min).
+                    // Keep scaling/snowball for the scatter article + archive metrics.
                     c.comp.scaling = a.scaling; c.comp.snowball = a.snowball;
+                    c.comp.early_wr = a.early_wr; c.comp.late_wr = a.late_wr;
                     // Radar polygon: damage/tank/cc + gold + fight presence.
                     c.comp.e_damage = a.e_damage; c.comp.e_tank = a.e_tank; c.comp.e_cc = a.e_cc;
                     c.comp.e_gold = a.e_gold; c.comp.e_participate = a.e_participate;
@@ -161,7 +168,7 @@
     );
 
     // Capability dims we percentile-rank per champion (the building blocks of comp fit).
-    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'e_damage', 'e_tank', 'e_cc', 'e_gold', 'e_participate'];
+    const COMP_STAT_KEYS = ['front', 'engage', 'poke', 'magic', 'phys', 'sustain', 'cc', 'wave', 'damage', 'scaling', 'snowball', 'early_wr', 'late_wr', 'e_damage', 'e_tank', 'e_cc', 'e_gold', 'e_participate'];
     // The 6 comp archetypes. Each is a weighted blend of the capabilities that comp is
     // built around — a champion's fit = how much it supplies those, ranked across all champs.
     // The 6 aren't mutually exclusive (a champ can fit several); together they span most comps.
@@ -309,28 +316,35 @@
                 </div>`;
         }
 
-        // Early (snowball) vs late (scaling) tempo — both already percentile-ranked.
-        const earlyPct = Math.round((cap.snowball || 0) * 100);
-        const latePct = Math.round((cap.scaling || 0) * 100);
-        const stageDiff = (cap.snowball || 0) - (cap.scaling || 0);
-        const STAGE_CUT = 0.12;
+        // Early/late tempo = win rate when the game ends early (≤16min) vs late (≥22min).
+        // Bars + numbers are absolute WR% (not champion percentiles / not kill-spree snowball).
+        const earlyWr = Number(comp.early_wr);
+        const lateWr = Number(comp.late_wr);
+        const hasStageWr = Number.isFinite(earlyWr) && Number.isFinite(lateWr);
+        const earlyPct = hasStageWr ? Math.round(earlyWr * 100) : 0;
+        const latePct = hasStageWr ? Math.round(lateWr * 100) : 0;
+        // + = better in short games; cut ~3pp so only clear leans label as early/late type.
+        const STAGE_CUT = 0.03;
+        const stageDiff = hasStageWr ? (earlyWr - lateWr) : 0;
         let stageKey = 'balanced';
-        if (stageDiff >= STAGE_CUT) stageKey = 'early';
-        else if (stageDiff <= -STAGE_CUT) stageKey = 'late';
-        const stageTitle = stageKey === 'early' ? copy.compStageEarly
+        if (hasStageWr && stageDiff >= STAGE_CUT) stageKey = 'early';
+        else if (hasStageWr && stageDiff <= -STAGE_CUT) stageKey = 'late';
+        const stageTitle = !hasStageWr ? copy.compSkillMissing
+            : stageKey === 'early' ? copy.compStageEarly
             : stageKey === 'late' ? copy.compStageLate
             : copy.compStageBalanced;
-        const stageDesc = stageKey === 'early' ? copy.compStageEarlyDesc
+        const stageDesc = !hasStageWr ? ''
+            : stageKey === 'early' ? copy.compStageEarlyDesc
             : stageKey === 'late' ? copy.compStageLateDesc
             : copy.compStageBalancedDesc;
         const stageCard = `
-            <div class="cf-side-card">
+            <div class="cf-side-card" title="${escHtml(copy.compStageTip || '')}">
                 <div class="cf-side-kicker">${escHtml(copy.compStageTitle)}</div>
                 <div class="cf-side-value cf-stage-${stageKey}">${escHtml(stageTitle)}</div>
-                <div class="cf-side-sub">${escHtml(stageDesc)}</div>
+                ${stageDesc ? `<div class="cf-side-sub">${escHtml(stageDesc)}</div>` : ''}
                 <div class="cf-stage-bars">
-                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageEarlyAxis)}</span><span class="ab-bar ab-bar-early"><span style="width:${earlyPct}%"></span></span><span class="ab-val">${earlyPct}</span></div>
-                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageLateAxis)}</span><span class="ab-bar ab-bar-late"><span style="width:${latePct}%"></span></span><span class="ab-val">${latePct}</span></div>
+                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageEarlyAxis)}</span><span class="ab-bar ab-bar-early"><span style="width:${earlyPct}%"></span></span><span class="ab-val">${hasStageWr ? earlyPct + '%' : '—'}</span></div>
+                    <div class="ab-row"><span class="ab-label">${escHtml(copy.compStageLateAxis)}</span><span class="ab-bar ab-bar-late"><span style="width:${latePct}%"></span></span><span class="ab-val">${hasStageWr ? latePct + '%' : '—'}</span></div>
                 </div>
             </div>`;
 
@@ -749,7 +763,7 @@
             teamTempoEarlyLean: '偏前期發力',
             teamTempoLateLean: '偏後期發力',
             teamTempoBalanced: '前後期均衡',
-            teamTempoTip: '只標示隊伍適合的發力時段，前期／後期本身無好壞。',
+            teamTempoTip: '前期＝短局（≤16 分）勝率均值；後期＝長局（≥22 分）勝率均值。數字是勝率%，前後期本身無好壞。',
             langToggleLabel: 'EN',
             langToggleTitle: 'Switch to English',
             langToggleAria: '切換語言',
@@ -865,11 +879,12 @@
             compStageEarly: '前期型',
             compStageLate: '後期型',
             compStageBalanced: '均衡',
-            compStageEarlyDesc: '滾雪球強、後期相對弱 — 盡早結束',
-            compStageLateDesc: '後期拉高、前期偏弱 — 拖進中後期',
-            compStageBalancedDesc: '前後期差距不大',
+            compStageEarlyDesc: '短局勝率高、長局相對弱 — 盡早結束',
+            compStageLateDesc: '長局勝率高、短局偏弱 — 拖進中後期',
+            compStageBalancedDesc: '短局長局勝率差不多',
             compStageEarlyAxis: '前期',
             compStageLateAxis: '後期',
+            compStageTip: '前期＝比賽 ≤16 分結束時的勝率；後期＝≥22 分結束時的勝率',
         },
         en: {
             htmlLang: 'en',
@@ -922,7 +937,7 @@
             teamTempoEarlyLean: 'Early-leaning',
             teamTempoLateLean: 'Late-leaning',
             teamTempoBalanced: 'Balanced timing',
-            teamTempoTip: 'Where this roster tends to spike — early/late is not better or worse.',
+            teamTempoTip: 'Early = mean WR in short games (≤16 min); Late = mean WR in long games (≥22 min). Numbers are win rates; early/late is not better or worse.',
             langToggleLabel: '中',
             langToggleTitle: '切換成中文',
             langToggleAria: 'Switch language',
@@ -1037,11 +1052,12 @@
             compStageEarly: 'Early',
             compStageLate: 'Late',
             compStageBalanced: 'Balanced',
-            compStageEarlyDesc: 'Snowballs hard, fades late — close it out early',
-            compStageLateDesc: 'Scales up late, soft early — drag the game',
-            compStageBalancedDesc: 'No strong early/late lean',
+            compStageEarlyDesc: 'Higher WR in short games — close it out early',
+            compStageLateDesc: 'Higher WR in long games — drag into mid/late',
+            compStageBalancedDesc: 'Similar WR in short and long games',
             compStageEarlyAxis: 'Early',
             compStageLateAxis: 'Late',
+            compStageTip: 'Early = WR when game ends ≤16 min; Late = WR when game ends ≥22 min',
         }
     };
     // Prefer URL / stub-stashed locale over the zh SSR default.
@@ -3363,17 +3379,21 @@
         if (pairN >= 8 && minGames >= 40) confKey = 'high';
         else if (pairN >= 5 && minGames >= 25) confKey = 'mid';
 
-        // Early (snowball) vs late (scaling): continuum only — not good/bad.
-        const earlyPct = Math.max(0, Math.min(1, Number(cap.snowball || 0)));
-        const latePct = Math.max(0, Math.min(1, Number(cap.scaling || 0)));
+        // Early/late tempo from mean short-game / long-game WR (not kill-spree snowball).
+        const earlyWr = Number(meanComp.early_wr);
+        const lateWr = Number(meanComp.late_wr);
+        const hasTempoWr = Number.isFinite(earlyWr) && Number.isFinite(lateWr);
+        const earlyPct = hasTempoWr ? Math.max(0, Math.min(1, earlyWr)) : 0.5;
+        const latePct = hasTempoWr ? Math.max(0, Math.min(1, lateWr)) : 0.5;
         const tempoSum = earlyPct + latePct;
         // Marker 0 = pure early, 1 = pure late; balanced rosters sit near 0.5.
         const tempoPos = tempoSum > 1e-6 ? latePct / tempoSum : 0.5;
-        const TEMPO_CUT = 0.12;
-        const tempoDiff = latePct - earlyPct; // + = late-leaning
+        // Absolute WR% points: ~3pp tilt counts as a lean (same cut as champ stage card).
+        const TEMPO_CUT = 0.03;
+        const tempoDiff = hasTempoWr ? (lateWr - earlyWr) : 0; // + = late-leaning
         let tempoKey = 'balanced';
-        if (tempoDiff >= TEMPO_CUT) tempoKey = 'late';
-        else if (tempoDiff <= -TEMPO_CUT) tempoKey = 'early';
+        if (hasTempoWr && tempoDiff >= TEMPO_CUT) tempoKey = 'late';
+        else if (hasTempoWr && tempoDiff <= -TEMPO_CUT) tempoKey = 'early';
 
         return {
             baseWr,
@@ -3428,7 +3448,7 @@
             : ev.tempoKey === 'late' ? copy.teamTempoLateLean
             : copy.teamTempoBalanced;
         // Dual-endpoint bar: left=前期, right=後期. Marker is relative weight of
-        // late vs early (snowball/scaling means) — continuum, not a grade.
+        // late vs early WR — continuum, not a grade.
         const tempoHtml = `
             <div class="team-eval-block team-tempo" title="${escHtml(copy.teamTempoTip || '')}">
                 <div class="team-eval-h team-tempo-head">
