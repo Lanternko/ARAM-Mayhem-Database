@@ -2994,20 +2994,55 @@
         padding: 0;
         font: inherit;
     }
-    .brand-logo { width: 28px; height: 28px; display: block; border-radius: 7px; }
-    .brand-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-    .brand-title { font-size: 17px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
-    .brand-patch {
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
-        font-size: 12px;
+    .brand-logo {
+        width: 30px;
+        height: 30px;
+        display: block;
+        border-radius: 8px;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+    :root[data-theme="light"] .brand-logo {
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+    }
+    .brand-text {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+    }
+    /* Latin brand face only — Outfit is geometric and reads as a product mark
+       rather than body UI. Weight split on aram/meta is the designed wordmark. */
+    .brand-title {
+        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-size: 18px;
         font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        white-space: nowrap;
+        color: var(--text);
+    }
+    .brand-aram {
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+    .brand-meta {
+        font-weight: 700;
+        color: var(--text);
+    }
+    .brand-patch {
+        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
         font-variant-numeric: tabular-nums lining-nums;
-        color: var(--accent-soft);
-        background: color-mix(in srgb, var(--accent) 14%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-        padding: 1px 7px;
+        color: var(--text-muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border-strong);
+        padding: 3px 8px;
         border-radius: 999px;
         white-space: nowrap;
+        line-height: 1.2;
     }
     .nav-tabs {
         position: relative;
@@ -3273,8 +3308,10 @@
             padding: 8px 12px 0;
             gap: 0 10px;
         }
-        .brand-title { font-size: 15px; }
-        .brand-patch { font-size: 11px; }
+        .brand-title { font-size: 16px; }
+        .brand-logo { width: 28px; height: 28px; border-radius: 7px; }
+        .brand-patch { font-size: 10px; padding: 2px 7px; }
+        .brand-text { gap: 7px; }
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }

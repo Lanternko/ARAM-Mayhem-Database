@@ -175,51 +175,28 @@ def write_og_image(
     img.convert("RGB").save(out_path, "PNG", optimize=True)
 
 def write_favicon_svg(out_path: Path) -> None:
-    """Write a compact site favicon inspired by the Mayhem prismatic dice mark."""
+    """Write a compact favicon matching the flat Mayhem die mark (readable at 16–32px)."""
+    # Flat die on rounded square — same language as mayhem-single-die-icon.png.
+    # Avoid the old isometric cube + orbit (muddy at header/favicon sizes).
     svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
   <defs>
-    <linearGradient id='bg' x1='32' y1='24' x2='224' y2='232' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#0d1122'/>
-      <stop offset='0.55' stop-color='#090d1d'/>
-      <stop offset='1' stop-color='#05070f'/>
+    <linearGradient id='die' x1='72' y1='56' x2='196' y2='208' gradientUnits='userSpaceOnUse'>
+      <stop offset='0' stop-color='#f7fbff'/>
+      <stop offset='0.45' stop-color='#d7e8ff'/>
+      <stop offset='1' stop-color='#e8d6ff'/>
     </linearGradient>
-    <linearGradient id='sheen' x1='58' y1='62' x2='194' y2='192' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#fbf7ff'/>
-      <stop offset='0.22' stop-color='#8ef2ff'/>
-      <stop offset='0.48' stop-color='#f5b6ff'/>
-      <stop offset='0.72' stop-color='#ffe8ad'/>
-      <stop offset='1' stop-color='#7ddfff'/>
-    </linearGradient>
-    <linearGradient id='orbit' x1='30' y1='188' x2='228' y2='110' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#f180ff'/>
-      <stop offset='0.45' stop-color='#fff7ef'/>
-      <stop offset='1' stop-color='#9f78ff'/>
-    </linearGradient>
-    <filter id='softGlow' x='-40%' y='-40%' width='180%' height='180%'>
-      <feGaussianBlur stdDeviation='4' result='blur'/>
-      <feMerge>
-        <feMergeNode in='blur'/>
-        <feMergeNode in='SourceGraphic'/>
-      </feMerge>
-    </filter>
   </defs>
-  <rect x='8' y='8' width='240' height='240' rx='34' fill='url(#bg)'/>
-  <rect x='8' y='8' width='240' height='240' rx='34' fill='none' stroke='rgba(255,255,255,0.18)' stroke-width='3'/>
-  <g filter='url(#softGlow)' stroke='url(#sheen)' stroke-width='3.5' stroke-linejoin='round'>
-    <path d='M128 56 69 94l59 34 59-34-59-38Z' fill='rgba(255,248,255,0.88)'/>
-    <path d='M69 94v69l59 35v-70L69 94Z' fill='rgba(232,220,255,0.78)'/>
-    <path d='M187 94v69l-59 35v-70l59-34Z' fill='rgba(244,205,255,0.8)'/>
+  <rect x='8' y='8' width='240' height='240' rx='52' fill='#0b0f1a'/>
+  <rect x='48' y='48' width='160' height='160' rx='36' fill='url(#die)'
+        stroke='rgba(255,255,255,0.55)' stroke-width='6'/>
+  <g fill='#0b0f1a'>
+    <circle cx='96' cy='96' r='14'/>
+    <circle cx='160' cy='96' r='14'/>
+    <circle cx='96' cy='128' r='14'/>
+    <circle cx='160' cy='128' r='14'/>
+    <circle cx='96' cy='160' r='14'/>
+    <circle cx='160' cy='160' r='14'/>
   </g>
-  <g fill='#090d1d'>
-    <ellipse cx='128' cy='101' rx='11' ry='8'/>
-    <ellipse cx='91' cy='122' rx='10' ry='14' transform='rotate(-24 91 122)'/>
-    <ellipse cx='108' cy='164' rx='10' ry='14' transform='rotate(-24 108 164)'/>
-    <ellipse cx='153' cy='142' rx='10' ry='14' transform='rotate(24 153 142)'/>
-    <ellipse cx='171' cy='122' rx='10' ry='14' transform='rotate(24 171 122)'/>
-  </g>
-  <path d='M31 181c26 21 59 29 95 27 38-2 72-15 101-49' fill='none' stroke='#05070f' stroke-width='18' stroke-linecap='round'/>
-  <path d='M27 177c26 21 59 29 95 27 38-2 72-15 101-49' fill='none' stroke='url(#orbit)' stroke-width='11' stroke-linecap='round' filter='url(#softGlow)'/>
-  <path d='M191 64l5 14 14 5-14 5-5 14-5-14-14-5 14-5 5-14Z' fill='#fff3d5' filter='url(#softGlow)'/>
 </svg>
 """
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1150,16 +1127,15 @@ def render_html(
             ga_measurement_id=ga_measurement_id,
         )
     )
-    # Webfonts: Noto Sans TC for everything by default; Noto Serif TC only
-    # for a couple of small captions (subtitle, panel meta, augment lift)
-    # where the mincho gives a "footnote" feel without hurting legibility.
-    # `display=swap` lets system fallback paint immediately; weights pruned
-    # to what each face actually uses on the page.
+    # Webfonts: Outfit = Latin brand wordmark only; Noto Sans TC = UI body;
+    # Noto Serif TC = a few footnote captions (subtitle / panel meta / aug lift).
+    # `display=swap` lets system fallback paint immediately.
     parts.append(
         "<link rel='preconnect' href='https://fonts.googleapis.com'>"
         "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
         "<link href='https://fonts.googleapis.com/css2"
-        "?family=Noto+Sans+TC:wght@400;500;600;700"
+        "?family=Outfit:wght@500;600;700"
+        "&family=Noto+Sans+TC:wght@400;500;600;700"
         "&family=Noto+Serif+TC:wght@400;500"
         "&display=swap' rel='stylesheet'>"
     )
@@ -1171,6 +1147,9 @@ def render_html(
     # renames, update REPO_URL below.
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
     short_patch = display_patch if display_patch else "all patches"
+    # Header chip: bilingual label so bare "26.13" is not floating next to brand.
+    patch_chip_zh = f"版本 {display_patch}" if display_patch else "全版本"
+    patch_chip_en = f"Patch {display_patch}" if display_patch else "All patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -1227,10 +1206,15 @@ def render_html(
     parts.append(
         "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
         "title='主頁'>"
-        "<img class='brand-logo' src='favicon.svg' alt=''>"
+        # Same flat die as tab favicon — sharper at 28px than the old isometric SVG.
+        f"<img class='brand-logo' src='mayhem-single-die-icon.png?v={favicon_version}' alt='' width='30' height='30'>"
         "<span class='brand-text'>"
-        f"<span class='brand-title' id='site-title'>{header_title}</span>"
-        f"<span class='brand-patch' id='site-subtitle'>{short_patch}</span>"
+        # Structured wordmark: weight contrast on "meta" (data/meta reading of ARAM).
+        # Both languages share the Latin brand; applyLanguage leaves the HTML intact.
+        "<span class='brand-title' id='site-title' aria-label='arammeta'>"
+        "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
+        "</span>"
+        f"<span class='brand-patch' id='site-subtitle'>{html.escape(patch_chip_zh)}</span>"
         "</span>"
         "</button>"
     )
