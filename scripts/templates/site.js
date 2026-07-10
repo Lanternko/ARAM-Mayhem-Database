@@ -588,7 +588,7 @@
     const COPY = {
         zh: {
             htmlLang: 'zh-Hant',
-            subtitle: () => `${SHORT_PATCH_ZH}`,
+            subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
             searchPlaceholderDesktop: '搜尋英雄（中 / 英）   Ctrl+F',
             searchPlaceholderMobile: '搜尋英雄（中 / 英）',
             searchAria: '搜尋英雄',
@@ -716,7 +716,7 @@
         },
         en: {
             htmlLang: 'en',
-            subtitle: () => `${SHORT_PATCH_ZH}`,
+            subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
             searchPlaceholderDesktop: 'Search champions (ZH / EN)   Ctrl+F',
             searchPlaceholderMobile: 'Search champions (ZH / EN)',
             searchAria: 'Search champions',
@@ -3609,10 +3609,20 @@
         document.documentElement.lang = copy.htmlLang;
         try { localStorage.setItem(LANG_KEY, currentLang); } catch {}
 
+        // Brand wordmark is structured HTML (aram + meta) shared in both langs;
+        // only rewrite when headers diverge from the Latin mark.
         const titleEl = document.getElementById('site-title');
-        if (titleEl) titleEl.textContent = currentLang === 'en' ? HEADER_TITLE_EN : HEADER_TITLE_ZH;
+        if (titleEl) {
+            const nextTitle = currentLang === 'en' ? HEADER_TITLE_EN : HEADER_TITLE_ZH;
+            if (nextTitle !== 'arammeta') {
+                titleEl.textContent = nextTitle;
+            } else if (!titleEl.querySelector('.brand-meta')) {
+                titleEl.innerHTML = "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>";
+                titleEl.setAttribute('aria-label', 'arammeta');
+            }
+        }
         const subtitleEl = document.getElementById('site-subtitle');
-        if (subtitleEl) subtitleEl.innerHTML = copy.subtitle();
+        if (subtitleEl) subtitleEl.textContent = copy.subtitle();
         updateSearchPlaceholder();
         const shownUnit = document.getElementById('shown-unit');
         if (shownUnit) shownUnit.textContent = copy.shownUnit;
