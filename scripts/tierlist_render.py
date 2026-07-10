@@ -1200,7 +1200,7 @@ def render_html(
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
-        ("augments", "增幅榜", "Augment Tier"),
+        ("augments", "增幅榜", "Augment"),
         ("changes", "版本變動", "Patch Changes"),
         ("column", "專欄", "Column"),
     )
@@ -1464,7 +1464,7 @@ def render_html(
     parts.append(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
         "<div class='view-narrow'>"
-        "<h2 class='section-head' data-i18n-zh='增幅榜' data-i18n-en='Augment Tier'>增幅榜</h2>"
+        "<h2 class='section-head' data-i18n-zh='增幅榜' data-i18n-en='Augment'>增幅榜</h2>"
         "<p class='section-sub' data-i18n-zh='每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。' "
         "data-i18n-en='Overall win-rate of every augment, tiered by win-rate rank within its own rarity. More games = more reliable.'>"
         "每個增幅的整體勝率，依「同稀有度內」勝率排名分級；場數越多越可靠。</p>"
