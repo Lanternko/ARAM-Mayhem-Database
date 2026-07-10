@@ -2189,53 +2189,58 @@
     .aug.cat-hidden { display: none; }
     .rarity-row.cat-empty { display: none; }
     .rarity-row {
-        display: grid;
-        /* Wider rail: rarity name + 勝率 / 選用率 sort keys. */
-        grid-template-columns: 58px 1fr;
-        gap: 10px;
-        /* Stretch so the left rail matches card height and can pin
-           勝率/選用率 to the same baseline as the card stat rows. */
-        align-items: stretch;
         margin-bottom: 10px;
         min-width: 0;
     }
     /* Shared height token: left-rail sort keys + card WR/pick rows. */
     .rarity-row,
-    .aug {
+    .aug-list,
+    .aug,
+    .rlabel-rail {
         --aug-stat-h: 28px;
     }
-    /* Left rail: 彩色 fills icon+name; 勝率 / 選用率 sit on the bottom two
-       rows, pixel-aligned with .awr / .alift on every card. */
+    /*
+      Left control is a PEER card inside .aug-list (not a separate grid column).
+      Same flex column recipe as .aug:
+        rlabel-head  ≈ icon + name (flex-grow, centered label)
+        rlabel-sort  ≈ .awr / .alift (fixed --aug-stat-h each)
+      Being in the same flex row guarantees identical height → perfect align.
+    */
     .rlabel-rail,
     .rlabel {
-        font-size: 11px;
-        font-weight: 700;
-        padding: 0;
-        border-radius: 9px;
-        text-align: center;
-        color: var(--accent-on);
-        letter-spacing: 0.2px;
+        flex: 0 0 72px;
         align-self: stretch;
+        scroll-snap-align: start;
         display: flex;
         flex-direction: column;
-        align-items: stretch;
-        justify-content: flex-start;
-        gap: 0;
-        position: relative;
         overflow: hidden;
+        border-radius: 9px;
+        text-align: center;
+        position: relative;
         min-height: 0;
         box-sizing: border-box;
+        color: var(--accent-on);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.2px;
     }
-    .rlabel-name {
+    .rlabel-head {
         flex: 1 1 auto;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 11px;
-        font-weight: 800;
-        line-height: 1.2;
-        padding: 6px 4px;
         min-height: 0;
+        padding: 8px 4px;
+        box-sizing: border-box;
+        /* Matches the dark icon+name plinth height region of data cards;
+           colour comes from the rarity gradient on .rlabel-rail itself. */
+        border-bottom: 1px solid rgba(0, 0, 0, 0.10);
+    }
+    .rlabel-name {
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.25;
+        padding: 0 2px;
     }
     .rlabel-sort {
         appearance: none;
@@ -2245,23 +2250,28 @@
         flex: 0 0 var(--aug-stat-h);
         width: 100%;
         height: var(--aug-stat-h);
+        min-height: var(--aug-stat-h);
         margin: 0;
         padding: 0 2px;
         border: 0;
         border-radius: 0;
         border-top: 1px solid rgba(0, 0, 0, 0.10);
         font: inherit;
-        font-size: 10px;
+        font-size: 11px;
         font-weight: 700;
         letter-spacing: 0;
         line-height: 1;
         color: inherit;
         cursor: pointer;
         background: rgba(0, 0, 0, 0.10);
-        opacity: 0.78;
+        opacity: 0.82;
         box-sizing: border-box;
         transition: opacity var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease),
                     box-shadow var(--dur-1) var(--ease);
+    }
+    /* Mirror .awr border between the two foot rows. */
+    .rlabel-sort[data-sort="wr"] {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.10);
     }
     .rlabel-sort:hover {
         opacity: 1;
@@ -2269,8 +2279,8 @@
     }
     .rlabel-sort.is-active {
         opacity: 1;
-        background: rgba(0, 0, 0, 0.22);
-        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+        background: rgba(0, 0, 0, 0.24);
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
     }
     .rlabel-sort:focus-visible {
         outline: 2px solid rgba(37, 99, 235, 0.65);
@@ -2306,9 +2316,7 @@
         scroll-snap-type: x proximity;
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
-        /* No vertical padding: rail height must equal card height for alignment. */
-        padding: 0 4px 0 0;
-        margin-bottom: 8px;
+        padding: 0 4px 8px 0;
         -webkit-overflow-scrolling: touch;
     }
     .aug-list::-webkit-scrollbar { height: 7px; }
@@ -2317,14 +2325,15 @@
         background: rgba(148, 163, 184, 0.35);
         border-radius: 999px;
     }
-    .aug-list.empty-list {
+    .aug-list-empty {
+        flex: 1 1 auto;
+        align-self: center;
         color: var(--text-dim);
         font-size: 11px;
-        padding: 8px 0;
-        align-items: center;
+        padding: 8px 4px;
     }
-    /* Augment card: icon → name (flex grow) → WR% → pick%.  Stat rows use the
-       same --aug-stat-h as the left-rail sort keys so 勝率 lines up with 65%. */
+    /* Augment card: icon → name (flex grow) → WR% → pick%.
+       Foot rows share --aug-stat-h with .rlabel-sort so they share a baseline. */
     .aug {
         flex: 0 0 100px;
         align-self: stretch;
@@ -2859,45 +2868,19 @@
            space.  The coloured icon art encodes rarity per card, and row order
            (prismatic → gold → silver) is fixed, so which row is which stays
            obvious. */
-        /* Mobile: left rail becomes a compact horizontal strip above the row. */
-        .rarity-row {
-            grid-template-columns: 1fr;
-            gap: 6px;
-            align-items: start;
-        }
-        .rlabel-rail,
-        .rlabel {
-            flex-direction: row;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: flex-start;
-            gap: 6px;
-            padding: 5px 8px;
-            align-self: stretch;
-            height: auto;
-        }
-        .rlabel-name {
-            flex: 0 0 auto;
-            padding: 0 4px 0 0;
-            margin-right: 2px;
-        }
-        .rlabel-sort {
-            flex: 0 0 auto;
-            width: auto;
-            min-width: 3.2em;
-            height: auto;
-            min-height: 28px;
-            padding: 4px 8px;
-            border-top: 0;
-            border-radius: 5px;
-        }
-        /* Each rarity row is a horizontal carousel; show five cards at a
-           glance, then let the rest continue off-canvas for swipe. */
+        /* Each rarity row is a horizontal carousel; rail stays a peer card. */
         .aug-list {
             gap: 4px;
             padding-bottom: 6px;
             scroll-snap-type: x mandatory;
         }
+        .rlabel-rail,
+        .rlabel {
+            flex-basis: 56px;
+            min-width: 52px;
+        }
+        .rlabel-name { font-size: 11px; }
+        .rlabel-sort { font-size: 9.5px; }
         .aug {
             flex-basis: calc((100% - 16px) / 5);
             min-width: 58px;
@@ -3123,7 +3106,7 @@
        Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
         font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
-        font-size: 23px;
+        font-size: 26px;
         font-weight: 600;
         letter-spacing: -0.035em;
         line-height: 1;
@@ -3156,7 +3139,7 @@
         background: none;
         color: var(--text-muted);
         font: inherit;
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 600;
         padding: 7px 14px;
         border-radius: 8px;
@@ -3404,7 +3387,7 @@
             padding: 8px 12px 0;
             gap: 0 10px;
         }
-        .brand-title { font-size: 20px; }
+        .brand-title { font-size: 22px; }
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }
@@ -3414,7 +3397,7 @@
             margin: 4px -12px 0;
             padding: 0 12px;
         }
-        .nav-tab { font-size: 14px; padding: 9px 11px 10px; }
+        .nav-tab { font-size: 15px; padding: 9px 11px 10px; }
         .site-main { padding: 16px 12px 48px; }
         .section-head { font-size: 19px; }
         .article-reader h1 { font-size: 23px; }
