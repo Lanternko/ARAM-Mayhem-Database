@@ -410,12 +410,14 @@ def _spa_deep_link_stub(
     canonical_path: str = "/",
     title: str = "arammeta",
     description: str = "",
+    html_lang: str = "zh-Hant",
 ) -> str:
     """Tiny GH Pages shell: stash path → bounce to / so the real SPA can boot.
 
     Avoids copying the full ~500KB index.html to every clean path (repo bloat)
     while still giving shareable URLs HTTP 200 + basic OG tags for crawlers.
-    The SPA restores `sessionStorage['aram-spa-path']` on boot.
+    The SPA restores `sessionStorage['aram-spa-path']` (and locale via
+    `aram-spa-lang` when the path is under /en…) on boot.
     """
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
@@ -424,6 +426,9 @@ def _spa_deep_link_stub(
     desc = description or title
     og_img = og_image or ((origin + "/og-image.png") if origin.startswith("http") else "")
     esc = html.escape
+    lang = html_lang if html_lang else "zh-Hant"
+    is_en = path == "/en" or path.startswith("/en/")
+    spa_lang = "en" if is_en else "zh"
     og_bits = [
         f"<meta property='og:type' content='website'>",
         f"<meta property='og:title' content=\"{esc(title, quote=True)}\">",
@@ -437,14 +442,17 @@ def _spa_deep_link_stub(
         og_bits.append(f"<meta property='og:image' content='{esc(og_img, quote=True)}'>")
         og_bits.append(f"<meta name='twitter:image' content='{esc(og_img, quote=True)}'>")
     return (
-        "<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        f"<!doctype html><html lang='{esc(lang, quote=True)}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{esc(title)}</title>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         + "".join(og_bits)
         + "<script>"
-        "try{sessionStorage.setItem('aram-spa-path',"
-        "location.pathname+location.search+location.hash)}catch(e){}"
+        "try{"
+        "sessionStorage.setItem('aram-spa-path',"
+        "location.pathname+location.search+location.hash);"
+        f"sessionStorage.setItem('aram-spa-lang','{spa_lang}');"
+        "}catch(e){}"
         "location.replace('/');"
         "</script>"
         f"<meta http-equiv='refresh' content='0;url=/'>"
@@ -487,12 +495,53 @@ def write_spa_path_shells(
         if m:
             article_titles[aid] = m.group(1).replace("\\'", "'")
 
-    route_specs: list[tuple[Path, str, str, str]] = [
-        # (file, canonical_path, title, description)
-        (root / "404.html", "/", "arammeta", ""),
-        (root / "augments" / "index.html", "/augments", "增幅 · arammeta", "ARAM 大亂鬥增幅勝率"),
-        (root / "changes" / "index.html", "/changes", "版本變動 · arammeta", "版本勝率變動"),
-        (root / "column" / "index.html", "/column", "專欄 · arammeta", "資料背後的思考與玩法解析"),
+    # (dest, canonical_path, title, description, html_lang)
+    route_specs: list[tuple[Path, str, str, str, str]] = [
+        (root / "404.html", "/", "arammeta", "", "zh-Hant"),
+        (
+            root / "augments" / "index.html",
+            "/augments",
+            "增幅 · arammeta",
+            "ARAM 大亂鬥增幅勝率",
+            "zh-Hant",
+        ),
+        (
+            root / "changes" / "index.html",
+            "/changes",
+            "版本變動 · arammeta",
+            "版本勝率變動",
+            "zh-Hant",
+        ),
+        (
+            root / "column" / "index.html",
+            "/column",
+            "專欄 · arammeta",
+            "資料背後的思考與玩法解析",
+            "zh-Hant",
+        ),
+        # English locale prefix mirrors (shareable /en… links).
+        (root / "en" / "index.html", "/en", "arammeta", "ARAM Mayhem tier list", "en"),
+        (
+            root / "en" / "augments" / "index.html",
+            "/en/augments",
+            "Augments · arammeta",
+            "ARAM Mayhem augment win rates",
+            "en",
+        ),
+        (
+            root / "en" / "changes" / "index.html",
+            "/en/changes",
+            "Patch Changes · arammeta",
+            "Patch-over-patch win-rate shifts",
+            "en",
+        ),
+        (
+            root / "en" / "column" / "index.html",
+            "/en/column",
+            "Articles · arammeta",
+            "Data notes and play guides",
+            "en",
+        ),
     ]
     for article_id, title in article_titles.items():
         route_specs.append(
@@ -501,11 +550,21 @@ def write_spa_path_shells(
                 f"/column/{article_id}",
                 f"{title} · arammeta",
                 title,
+                "zh-Hant",
+            )
+        )
+        route_specs.append(
+            (
+                root / "en" / "column" / article_id / "index.html",
+                f"/en/column/{article_id}",
+                f"{title} · arammeta",
+                title,
+                "en",
             )
         )
 
     written: list[Path] = []
-    for dest, cpath, title, desc in route_specs:
+    for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(
             _spa_deep_link_stub(
@@ -514,6 +573,7 @@ def write_spa_path_shells(
                 canonical_path=cpath,
                 title=title,
                 description=desc,
+                html_lang=html_lang,
             ),
             encoding="utf-8",
         )
@@ -1177,9 +1237,9 @@ def render_html(
     # .nav-tabs as a full-bleed scrollable strip underneath.
     NAV_TABS = (
         ("home", "英雄", "Champions"),
-        ("augments", "增幅", "Augment"),
+        ("augments", "增幅", "Augments"),
         ("changes", "版本變動", "Patch Changes"),
-        ("column", "專欄", "Column"),
+        ("column", "專欄", "Articles"),
     )
     sun_icon = (
         "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -1442,7 +1502,7 @@ def render_html(
     parts.append(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
         "<div class='view-narrow'>"
-        "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-en='Augment'>增幅</h2>"
+        "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-en='Augments'>增幅</h2>"
         "<div class='aug-tier-filters' id='aug-tier-filters'></div>"
         "<div id='aug-tier-host'></div>"
         "</div>"

@@ -2,6 +2,9 @@
     // GitHub Pages deep-link bootstrap: lightweight path shells (and 404.html)
     // stash the intended URL then bounce to /.  Restore before any route read
     // so shareable paths like /column/sprees-not-snowball open the right view.
+    // Also restore locale: stubs set aram-spa-lang so /en… survives the bounce
+    // even if path restore is delayed or partial.
+    let pendingBootLang = null;  // 'en' | 'zh' | null — applied before first paint work
     try {
         const pending = sessionStorage.getItem('aram-spa-path');
         if (pending) {
@@ -9,7 +12,62 @@
             const here = location.pathname + location.search + location.hash;
             if (pending !== here) history.replaceState(null, '', pending);
         }
+        const spaLang = sessionStorage.getItem('aram-spa-lang');
+        if (spaLang === 'en' || spaLang === 'zh') {
+            pendingBootLang = spaLang;
+            sessionStorage.removeItem('aram-spa-lang');
+        }
     } catch {}
+    // URL `/en…` is authoritative (works for direct History visits too).
+    try {
+        let p = location.pathname || '/';
+        if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1) || '/';
+        if (p === '/en' || p.startsWith('/en/')) pendingBootLang = 'en';
+    } catch {}
+    // Flip chrome strings NOW (script is at end of <body>) so /en shares never
+    // flash a full Chinese shell while payload/init continues.  Full
+    // applyLanguage() still runs later for data-bound copy.
+    if (pendingBootLang === 'en') {
+        try {
+            document.documentElement.lang = 'en';
+            document.querySelectorAll('[data-i18n-zh]').forEach(el => {
+                const val = el.getAttribute('data-i18n-en');
+                if (val != null) el.textContent = val;
+            });
+            document.querySelectorAll('.chip[data-label-en]').forEach(chip => {
+                const val = chip.getAttribute('data-label-en');
+                if (val != null) chip.textContent = val;
+            });
+            const toggleLabel = document.getElementById('lang-toggle-label');
+            if (toggleLabel) toggleLabel.textContent = '中';
+            const toggle = document.getElementById('lang-toggle');
+            if (toggle) {
+                toggle.title = '切換成中文';
+                toggle.setAttribute('aria-label', 'Switch language');
+            }
+            const search = document.getElementById('search');
+            if (search) {
+                search.placeholder = 'Search champions (ZH / EN)';
+                search.setAttribute('aria-label', 'Search champions');
+            }
+            const shownUnit = document.getElementById('shown-unit');
+            if (shownUnit) shownUnit.textContent = 'shown';
+            document.querySelectorAll('.tier-count-unit').forEach(el => {
+                el.textContent = 'shown';
+            });
+            const recMode = document.getElementById('recommend-mode');
+            if (recMode && recMode.getAttribute('aria-pressed') !== 'true') {
+                recMode.textContent = 'Teammate mode: Off';
+            }
+            const emptyTitle = document.getElementById('empty-title');
+            if (emptyTitle) emptyTitle.textContent = 'No champions match the current filters';
+            const emptyCopy = document.getElementById('empty-copy');
+            if (emptyCopy) {
+                emptyCopy.textContent =
+                    'Try a different role, or search by Chinese / English champion name.';
+            }
+        } catch {}
+    }
 
     async function loadSitePayload(url) {
         const response = await fetch(url, { cache: 'no-cache' });
@@ -639,7 +697,9 @@
             itemSectionTitle: '最強前兩件出裝',
             itemSectionMeta: '不含鞋子，左到右為第 1 到第 3 推薦',
             itemClusterSectionTitle: '',
-            itemClusterSectionMeta: '依出裝順序分群：核心＝最先做的兩件（從提早結束的場次推回）；「搭配裝備」列出與核心常一起出、且選取率或勝率達標的所有裝備（各附勝率／選取率）；收尾為其餘常見後續',
+            // Empty on purpose: core / 搭配裝備 / 常見後續 labels + per-item WR·pick
+            // already carry the structure; the long methodology caption was noise.
+            itemClusterSectionMeta: '',
             augTypeSectionTitle: '推薦增幅裝置傾向',
             augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
             relativeBest: '相對最佳',
@@ -689,7 +749,8 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} 選取率 ${pick}，勝率${lift}`,
             secondaryRoleBadgePick: pick => `選取率 ${pick}`,
             secondaryRoleBadgeLift: lift => `勝率${lift}`,
-            augPickLabel: pick => `選用率 ${pick}`,
+            // Card surface shows the bare % (colour = heat); full “選用率 …” stays in aria/tooltip.
+            augPickLabel: pick => pick,
             augHotBadge: '熱門',
             augFilterAll: '全部',
             augFilterAllTip: '清除分類，顯示全部增幅',
@@ -767,7 +828,8 @@
             itemSectionTitle: 'Best First Two Items',
             itemSectionMeta: 'boots excluded; left to right is #1 to #3',
             itemClusterSectionTitle: '',
-            itemClusterSectionMeta: 'grouped by build order: core = the first 2 items built (inferred from games that ended early); the "other items" row lists every item commonly paired with the core that clears a pick-rate or win-rate bar (each with its win/pick rate); finish = other common follow-ups',
+            // Empty on purpose — see zh itemClusterSectionMeta note.
+            itemClusterSectionMeta: '',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
             augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
             relativeBest: 'Relative Best',
@@ -817,7 +879,8 @@
             secondaryRoleBadgeTitle: (style, pick, lift) => `${style} pick ${pick}, WR ${lift}`,
             secondaryRoleBadgePick: pick => `pick ${pick}`,
             secondaryRoleBadgeLift: lift => `WR ${lift}`,
-            augPickLabel: pick => `pick ${pick}`,
+            // Bare % on the card; “pick …” remains in aria/tooltip.
+            augPickLabel: pick => pick,
             augHotBadge: 'Hot',
             augFilterAll: 'All',
             augFilterAllTip: 'Clear categories — show every augment',
@@ -843,7 +906,8 @@
             compFitFlexible: 'Flexible — no standout comp fit, slots into many comps',
         }
     };
-    let currentLang = 'zh';
+    // Prefer /en path or stub-stashed locale over the zh SSR default.
+    let currentLang = pendingBootLang === 'en' ? 'en' : 'zh';
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
     let filterState = { role: '', q: '' };
@@ -1420,7 +1484,7 @@
             games: entry.g,
             note: onBoard ? copy.augChampsHint : '',
         });
-        // Row order: icon → name (under icon) → WR → pick.
+        // Row order: icon → name → one stats row (pick left, WR right) to save height/width.
         return `
             <div class="aug ${kind} rarity-${rarity} has-item-tip"
                  tabindex="0"
@@ -1431,8 +1495,10 @@
                 ${hotBadge}
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
-                <div class="awr">${pct(entry.wr)}</div>
-                <div class="alift pick-${augTierCls}">${copy.augPickLabel(pickPct)}</div>
+                <div class="aug-stats">
+                    <div class="alift pick-${augTierCls}" title="${escHtml(currentLang === 'en' ? `pick ${pickPct}` : `選用率 ${pickPct}`)}">${copy.augPickLabel(pickPct)}</div>
+                    <div class="awr">${pct(entry.wr)}</div>
+                </div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
@@ -3248,7 +3314,7 @@
         if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
         const host = document.getElementById('column-host');
         if (!host) return;
-        const head = currentLang === 'en' ? 'Column' : '專欄';
+        const head = currentLang === 'en' ? 'Articles' : '專欄';
         const sub = currentLang === 'en'
             ? 'The thinking behind the data, and how to play it.'
             : '資料背後的思考與玩法解析。';
@@ -3274,7 +3340,7 @@
         if (_scatterRO) { _scatterRO.disconnect(); _scatterRO = null; }
         const host = document.getElementById('column-host');
         if (!host) return;
-        const back = currentLang === 'en' ? 'Back to Column' : '返回專欄';
+        const back = currentLang === 'en' ? 'Back to Articles' : '返回專欄';
         const share = currentLang === 'en' ? 'Copy link' : '複製連結';
         host.innerHTML = `<div class="article-reader">`
             + `<div class="article-toolbar">`
@@ -4123,12 +4189,12 @@
         }
     }
 
-    // Language: URL `/en…` wins.  Bare paths are zh, except a soft preference
-    // on the home root `/` that rewrites to `/en` when the user last chose EN
-    // (so return visits remember English without breaking shared zh deep links).
+    // Language: URL `/en…` + stub-stashed aram-spa-lang win (see pendingBootLang
+    // at top of file).  Bare paths are zh, except a soft preference on home `/`
+    // that rewrites to `/en` when the user last chose EN.
     {
         const boot = parseRoute();
-        if (boot.urlLang === 'en') {
+        if (boot.urlLang === 'en' || pendingBootLang === 'en') {
             currentLang = 'en';
         } else {
             currentLang = 'zh';
@@ -4136,7 +4202,6 @@
                 const p = normalizePathname(location.pathname);
                 if ((p === '/' || p === '') && localStorage.getItem(LANG_KEY) === 'en') {
                     currentLang = 'en';
-                    // Rewrite before routeFromLocation so URL stays authoritative.
                     try { history.replaceState(null, '', '/en' + (location.search || '')); } catch {}
                 }
             } catch {}
@@ -4144,21 +4209,15 @@
     }
 
     // First paint depends on the grid already being in the DOM (server-rendered).
-    // Do only the cheap, synchronous, interaction-critical setup now, yielding
-    // between steps; push the heavy per-champion index warm to idle/background.
+    // Chrome was already flipped for /en at the top of this IIFE; applyLanguage
+    // here finishes data-bound copy (cards, panels).  historyMode 'none': the
+    // following routeFromLocation will write the /en prefix if needed.
     setRecommendMode(false);
     syncPickDecorations();
     renderSidePanel();
-    // applyLanguage walks all 173 cards (updateChampCardCopy) + re-renders panels.
-    // The shell is server-rendered in zh (the default), so for zh it is a no-op
-    // re-write of identical text -- skip it and call only the two panel refreshes
-    // it would otherwise trigger at init (badges depend on filterState.role which
-    // starts empty; updates panel needs its first render).  For 'en' the full
-    // localization walk must run, but it can go after a yield so it doesn't
-    // extend the first interaction-blocking task.  historyMode 'none': the
-    // following routeFromLocation will write the /en prefix if needed.
     if (currentLang === 'en') {
-        await yieldToMain();
+        // No yield: English must land in the same turn as the first interactive
+        // frame so shared /en links never need a manual language toggle.
         applyLanguage('en', 'none');
     } else {
         refreshSecondaryRoleBadges();
