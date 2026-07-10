@@ -1128,6 +1128,36 @@ def _ddragon_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
             continue
     return ids
 
+def clean_item_description(raw_html: str | None) -> str:
+    """Strip Riot item HTML into compact plain text for site tooltips.
+
+    Keeps line breaks between stats / passive blocks so the frontend can render
+    them as separate rows without shipping raw <mainText> markup.
+    """
+    if not raw_html:
+        return ""
+    text = str(raw_html)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    # Drop known Riot wrapper / scaling tags but keep their text content.
+    text = re.sub(
+        r"</?(?:mainText|stats|passive|active|attention|rules|status|"
+        r"scaleAP|scaleAD|scaleHealth|scaleMana|scaleArmor|scaleMR|"
+        r"physicalDamage|magicDamage|trueDamage|OnHit|speed|shield|"
+        r"healing|lifeSteal|keywordMajor|keyword|rarityMythic|rarityLegendary|"
+        r"rarityGeneric|ornnBonus|flavorText)(?:\s[^>]*)?>",
+        "",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n[ \t]+", "\n", text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def load_item_metadata(
     cache_dir: Path | None = None,
     ddragon_version: str | None = None,
@@ -1167,6 +1197,8 @@ def load_item_metadata(
             "name_en": row.get("name") or zh_row.get("name") or f"#{item_id}",
             "categories": list(row.get("categories") or zh_row.get("categories") or []),
             "price_total": price_total,
+            "desc_zh": clean_item_description(zh_row.get("description") or row.get("description")),
+            "desc_en": clean_item_description(row.get("description") or zh_row.get("description")),
             "icon": (
                 f"https://ddragon.leagueoflegends.com/cdn/{ddragon_version}/img/item/{item_id}.png"
                 if item_id in ddragon_ids

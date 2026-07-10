@@ -1380,12 +1380,9 @@
         const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
         const augTierCls = onBoard ? augBoardPickTier(pickRate) : pickTier(pickRate);
         const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
-        // rawWr is the unsmoothed win rate; fall back to the headline for older
-        // payloads built before rawWr was emitted.
-        const rawWrVal = (entry.rawWr != null ? entry.rawWr : entry.wr);
-        const rawLine = (currentLang === 'en' ? 'raw ' : '原始 ') + pct(rawWrVal) + ' · n=' + entry.g;
-        const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc)
-            + ' · ' + rawLine;
+        // rawWr stays in the payload for sorting/debug, but the card no longer
+        // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
+        const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
         // Shared rich float tip (same card language as items).
         const tipHtml = buildItemTipHtml({
             name,
@@ -1402,7 +1399,7 @@
             games: entry.g,
             note: onBoard ? copy.augChampsHint : '',
         });
-        // Row order: icon → name (under icon) → WR / raw / pick.
+        // Row order: icon → name (under icon) → WR → pick.
         return `
             <div class="aug ${kind} rarity-${rarity} has-item-tip"
                  tabindex="0"
@@ -1414,7 +1411,6 @@
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
                 <div class="awr">${pct(entry.wr)}</div>
-                <div class="araw">${escHtml(rawLine)}</div>
                 <div class="alift pick-${augTierCls}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>

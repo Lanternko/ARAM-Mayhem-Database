@@ -920,14 +920,38 @@
        with a wider grid (aug cards carry more text than champ thumbnails) and a
        rarity-filter chip row above the category chips. ===== */
     .aug-tier-filters { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 20px; }
-    .aug-tier-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+    /* Slightly wider tiles + gap so icon/name/WR don't feel squashed flat. */
+    .aug-tier-grid {
+        grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+        gap: 12px;
+    }
     /* content-visibility for the 增幅榜 board only (hundreds of .aug cards): skip
        offscreen ones until scrolled near.  Scoped to the board grid so the detail
-       panel's horizontal-scroll .aug lists (flex: 0 0 92px) are untouched.  Card
-       height ~= 56px icon plinth + wr/raw/pick lines + 2-line name ~ 150px. */
+       panel's horizontal-scroll .aug lists are untouched. */
     .aug-tier-grid .aug {
         content-visibility: auto;
-        contain-intrinsic-size: auto 150px;
+        contain-intrinsic-size: auto 176px;
+        border-radius: 10px;
+    }
+    .aug-tier-grid .aug img,
+    .aug-tier-grid .aug .aicon-ph {
+        height: 70px;
+        padding: 10px 0 6px;
+    }
+    .aug-tier-grid .aug .aname {
+        min-height: 36px;
+        padding: 6px 7px 7px;
+        font-size: 11px;
+        line-height: 1.3;
+    }
+    .aug-tier-grid .aug .awr {
+        min-height: 30px;
+        font-size: 12.5px;
+    }
+    .aug-tier-grid .aug .alift {
+        padding: 5px 6px 9px;
+        font-size: 10.5px;
+        margin-top: 0;
     }
     .aug.hidden { display: none; }
     .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
@@ -2223,14 +2247,14 @@
        Rarity reads from the coloured icon art itself (plus the rarity-row
        grouping in the detail panel), so the card carries no rarity chrome. */
     .aug {
-        flex: 0 0 92px;
+        flex: 0 0 100px;
         scroll-snap-align: start;
-        /* icon → name → WR → raw → pick */
+        /* icon → name → WR → pick */
         display: grid;
-        grid-template-rows: auto auto auto auto auto;
+        grid-template-rows: auto auto auto auto;
         overflow: hidden;
         background: #11151d;
-        border-radius: 8px;
+        border-radius: 9px;
         text-align: center;
         position: relative;
         border: 1px solid rgba(255,255,255,0.08);
@@ -2239,8 +2263,8 @@
     .aug .aicon-ph {
         display: block;
         width: 100%;
-        height: 56px;
-        padding: 4px 0;
+        height: 62px;
+        padding: 8px 0 4px;
         object-fit: contain;
         background: #0f131b;
     }
@@ -2249,11 +2273,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 26px;
-        padding: 3px 4px 4px;
-        font-size: 10px;
+        min-height: 32px;
+        padding: 5px 5px 6px;
+        font-size: 10.5px;
         color: #e6e8eb;
-        line-height: 1.25;
+        line-height: 1.3;
         background: #0f131b;
         border-bottom: 1px solid rgba(255,255,255,0.06);
     }
@@ -2267,34 +2291,20 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 24px;
-        border-top: 1px solid rgba(255,255,255,0.08);
+        min-height: 28px;
         border-bottom: 1px solid rgba(255,255,255,0.08);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
     .aug.good .awr { color: #6bd16b; }
     .aug.bad  .awr { color: #ff8a8a; }
-    /* Raw (unsmoothed) winrate + sample size, shown beneath the in-CI headline
-       so the displayed number is always backed by what the raw sample supports. */
-    .aug .araw {
-        font-size: 9px;
-        color: #7c8794;
-        margin-top: 3px;
-        padding: 0 3px;
-        white-space: nowrap;
-        /* Safety net: a nowrap raw line longer than the card (huge n=) must
-           clip inside it, never widen the card row / the page. */
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
     .aug .alift {
-        font-size: 9px;
+        font-size: 10px;
         color: #9aa0a6;
-        margin-top: 1px;
-        padding: 0 3px;
+        margin-top: 0;
+        padding: 5px 4px 7px;
+        line-height: 1.25;
     }
     /* Pick-rate line is colour-coded by popularity on a classic cool->hot heat
        ramp: grey -> blue -> yellow -> orange -> red (熱門), so the five steps are
@@ -2690,9 +2700,8 @@
         .tier-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
         /* The 6-col rule above is sized for champion thumbnails; it ties with
            .aug-tier-grid's minmax(112px) on specificity and wins on order,
-           squeezing 增幅榜 cards to ~56px — the .araw line then overflows the
-           card AND widens the page.  Re-assert a 3-col board (~113px cards,
-           matching the desktop 112px floor) after it. */
+           squeezing 增幅榜 cards too narrow.  Re-assert a 3-col board
+           (~113px cards, matching the desktop 112px floor) after it. */
         .aug-tier-grid { grid-template-columns: repeat(3, 1fr); }
         .detail-head {
             flex-direction: row;
@@ -2870,15 +2879,18 @@
         .mate-card .mmeta .mmeta-z,
         .mate-card .mmeta .mmeta-games { display: none; }
         .aug img,
-        .aug .aicon-ph { height: 44px; }
-        .aug .aname { font-size: 9px; min-height: 22px; padding: 2px 3px 4px; }
-        .aug .awr { font-size: 10px; }
+        .aug .aicon-ph { height: 52px; padding: 6px 0 3px; }
+        .aug .aname { font-size: 9.5px; min-height: 28px; padding: 4px 3px 5px; }
+        .aug .awr { font-size: 11px; min-height: 24px; }
         /* Pick-rate line stays visible on mobile — it's a single colour-coded
            token now.  Lift / games stay hover-only on desktop, off on mobile. */
-        .aug .alift { font-size: 8px; margin-top: 0; }
-        /* Raw line shrinks with it; the base-rule ellipsis clips what the
-           ~58px detail-carousel cards can't fit. */
-        .aug .araw { font-size: 8px; margin-top: 0; }
+        .aug .alift { font-size: 9px; margin-top: 0; padding: 4px 3px 6px; }
+        .aug-tier-grid {
+            grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+            gap: 8px;
+        }
+        .aug-tier-grid .aug img,
+        .aug-tier-grid .aug .aicon-ph { height: 58px; }
         .aug-tip,
         .alt-role-tooltip,
         .fit-chip-tooltip,
