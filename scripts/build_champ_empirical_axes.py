@@ -1,34 +1,18 @@
-"""Build per-champion empirical ability axes: scaling + snowball.
+"""Build per-champion empirical ability axes for the ability radar + stage cards.
 
-These replace the engage/poke ability BARS on the site (engage/poke are now
-redundant with the empirical comp-fit radar's dive/poke axes; they stay as
-internal inputs to the archetype math).  Unlike the kit-semantic bars
-(damage/tank/cc/sustain), these two are measured from real games:
+Measured from real games (raw values; frontend percentile-ranks via compNorm):
 
-  scaling  = WR(games >= late_min) - WR(games <= early_max), per champion: a
-             base-rate-REMOVED late-game tilt ("does this champ win MORE as the
-             game runs long, net of its own overall strength?").  Uses FIXED
-             duration cuts (default >=22min vs <=16min), NOT a median split --
-             the ARAM/Mayhem median (~17min) lands on many champs' mid-game power
-             spike, so a median cut shoves that spike into the "short" bucket and
-             mis-reads spike champs (e.g. Kassadin) as anti-scalers.  Games in the
-             (early_max, late_min) middle are dropped on purpose.  Absolute
-             late-WR was rejected as the metric: it is mostly base rate (corr ~0.5
-             with overall WR; Kassadin's late-specific lift is ~0), so it would
-             just re-skin the tier/WR shown elsewhere.  (caveat: duration is
-             endogenous -- long games skew toward even/comeback games -- a limit
-             no public WR-by-duration proxy escapes.)
+  scaling  = WR(games >= late_min) - WR(games <= early_max). Fixed duration cuts
+             (default >=22min vs <=16min), not a median split — feeds the
+             early/late *tempo card*, not the radar polygon.
   snowball = 0.6 * avg(largest_killing_spree) + 0.4 * avg(largest_multi_kill).
-             "Snowball / multi-kill carry potential."  Gold income was rejected
-             (confounded by game length + redundant with damage); kill streaks
-             and multi-kills are the direct signal the user asked for.
+             Also feeds the tempo card only.
+  e_damage / e_tank / e_cc = per-min volumes (dmg to champs / self-mitigated / cc time).
+  e_gold   = gold_earned per minute (economy pressure).
+  e_participate = (kills + assists) per minute (參團 / fight presence; same
+             definition as the champion-radar 參戰 axis).
 
-Output docs/api/champ-empirical-axes.json carries RAW values; the frontend
-percentile-ranks them across champions (compNorm), same as every other bar, so
-a champion below --min-games (rare in the pooled window) just reads low.
-Sanity (pooled 16.10-12): scaling top = Ornn/Yuumi/Belveth/Smolder (true late
-scalers), bottom = early-snowball champs (Yorick/Yasuo/Seraphine); snowball top =
-Samira/Pyke/assassins, bottom = enchanters.
+Sustain stays the kit-semantic score (LCU has no shield field).
 """
 from __future__ import annotations
 
@@ -82,14 +66,13 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
     print(f"[2/3] accumulating per-champ (median {median_dur}s, late>={late_min}s / "
           f"early<={early_max}s, {len(dur)} games) ...", flush=True)
     # scaling: [late_g, late_w, early_g, early_w]; snowball: [g, sum_spree, sum_multi, sum_kills]
-    # perf: [g, sum_dmg_pm, sum_mit_pm, sum_cc_pm] -- per-min empirical bars (damage/tank/cc).
+    # perf: [g, sum_dmg_pm, sum_mit_pm, sum_cc_pm, sum_gold_pm, sum_ka_pm]
     # NOTE no sustain here: LCU stats lack a shield field, so total_heal misses shield-enchanters
     # (Lulu/Karma read near-zero) and over-credits self-heal bruisers; sustain stays the semantic
-    # score in the comp vector.  These feed NEW comp keys; the semantic damage/cc/front are
-    # untouched so the archetype radar/artifact are unaffected.
+    # score in the comp vector.
     scal = defaultdict(lambda: [0, 0, 0, 0])
     snow = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
-    perf = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
+    perf = defaultdict(lambda: [0, 0.0, 0.0, 0.0, 0.0, 0.0])
     for d, b, pj in zip(dur, bw, pjs):
         parts = json.loads(pj) if isinstance(pj, str) else pj
         late = d >= late_min
@@ -115,6 +98,8 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
             pf[1] += (st.get("total_damage_dealt_to_champions", 0) or 0) / mins
             pf[2] += (st.get("damage_self_mitigated", 0) or 0) / mins
             pf[3] += (st.get("total_time_cc_dealt", 0) or 0) / mins
+            pf[4] += (st.get("gold_earned", 0) or 0) / mins
+            pf[5] += ((st.get("kills", 0) or 0) + (st.get("assists", 0) or 0)) / mins
 
     print("[3/3] writing artifact ...", flush=True)
     champs_meta = json.loads(Path("docs/api/tier-list.json").read_text(encoding="utf-8")).get("champs", {})
@@ -133,10 +118,12 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
         champs_out[str(cid)] = {
             "scaling": round(scaling, 4) if scaling is not None else None,
             "snowball": round(snowball, 4) if snowball is not None else None,
-            # per-min empirical bars (damage to champs / self-mitigated / cc time); frontend percentile-ranks them
+            # per-min empirical bars; frontend percentile-ranks them
             "e_damage": round(pf[1] / pf[0], 2) if enough else None,
             "e_tank": round(pf[2] / pf[0], 2) if enough else None,
             "e_cc": round(pf[3] / pf[0], 3) if enough else None,
+            "e_gold": round(pf[4] / pf[0], 2) if enough else None,
+            "e_participate": round(pf[5] / pf[0], 3) if enough else None,
             "late_wr": round(s[1] / s[0], 4) if s[0] else None,
             "early_wr": round(s[3] / s[2], 4) if s[2] else None,
             "avg_spree": round(sn[1] / sn[0], 3) if sn[0] else None,
@@ -146,14 +133,16 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
 
     artifact = {
         "kind": SCHEMA_KIND,
-        "version": 2,
+        "version": 3,
         "source_parquet": str(data),
         "median_duration_sec": median_dur,
         "n_games": len(dur),
         "params": {"late_min_sec": late_min, "early_max_sec": early_max,
                    "min_bucket": min_bucket, "min_games": min_games,
                    "scaling": f"WR(>={late_min}s) - WR(<={early_max}s)",
-                   "snowball": f"{SNOWBALL_SPREE_W}*spree + {SNOWBALL_MULTI_W}*multi"},
+                   "snowball": f"{SNOWBALL_SPREE_W}*spree + {SNOWBALL_MULTI_W}*multi",
+                   "e_gold": "gold_earned / min",
+                   "e_participate": "(kills + assists) / min"},
         "champs": champs_out,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -172,6 +161,8 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
     print("damage top (dpm-to-champs):", "  ".join(f"{n}:{v:.0f}" for n, v in top("e_damage", True, 5)))
     print("tank top (self-mitigated/min):", "  ".join(f"{n}:{v:.0f}" for n, v in top("e_tank", True, 5)))
     print("cc top (cc-time/min):", "  ".join(f"{n}:{v:.1f}" for n, v in top("e_cc", True, 5)))
+    print("gold top (gpm):", "  ".join(f"{n}:{v:.0f}" for n, v in top("e_gold", True, 5)))
+    print("participate top (ka/min):", "  ".join(f"{n}:{v:.2f}" for n, v in top("e_participate", True, 5)))
 
 
 if __name__ == "__main__":

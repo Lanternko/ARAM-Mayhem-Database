@@ -695,6 +695,122 @@
         line-height: 1.6;
         padding: 8px 0 4px;
     }
+    /* Full 5-man team evaluation (replaces rec-list when MAX_TEAM_PICKS reached). */
+    .team-eval {
+        display: grid;
+        gap: 14px;
+    }
+    .team-eval-wr {
+        text-align: center;
+        padding: 14px 12px 12px;
+        border-radius: 12px;
+        background: var(--surface-2, #1b2030);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .team-wr-num {
+        font-size: 32px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+    .team-eval-wr.is-good .team-wr-num { color: #22c55e; }
+    .team-eval-wr.is-bad .team-wr-num { color: #ff4d5e; }
+    .team-eval-wr.is-even .team-wr-num { color: var(--text, #e6e8ea); }
+    .team-wr-label {
+        margin-top: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .team-wr-breakdown {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px 12px;
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--text-secondary, #c4c8ce);
+        font-variant-numeric: tabular-nums;
+    }
+    .team-wr-meta {
+        margin-top: 8px;
+        font-size: 11px;
+        color: var(--text-dim, #6a6f77);
+    }
+    .team-eval-block {
+        padding: 10px 10px 12px;
+        border-radius: 12px;
+        background: var(--surface-2, #1b2030);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .team-eval-h {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-muted, #9aa0a6);
+        margin: 0 0 8px;
+    }
+    .team-eval-radar {
+        margin: 0 -4px 8px;
+    }
+    .team-eval-radar .comp-radar {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 240px;
+    }
+    .team-ability-bars,
+    .team-comp-list {
+        display: grid;
+        gap: 6px;
+    }
+    .team-ab-row,
+    .team-comp-row {
+        display: grid;
+        grid-template-columns: 52px 1fr 36px;
+        gap: 8px;
+        align-items: center;
+        font-size: 11px;
+    }
+    .team-comp-row {
+        grid-template-columns: 40px 1fr auto;
+    }
+    .team-comp-name {
+        color: var(--text-muted, #9aa0a6);
+        font-weight: 600;
+    }
+    .team-comp-tag {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 999px;
+        white-space: nowrap;
+    }
+    .team-comp-row.is-ok .team-comp-tag {
+        color: #86efac;
+        background: rgba(34, 197, 94, 0.12);
+    }
+    .team-comp-row.is-lack .team-comp-tag {
+        color: #fca5a5;
+        background: rgba(239, 68, 68, 0.12);
+    }
+    .team-ability-bars .ab-bar,
+    .team-comp-row .ab-bar {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+    }
+    .team-ability-bars .ab-bar > span,
+    .team-comp-row .ab-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #3aa0ff, #7fc8ff);
+    }
+    .team-comp-row.is-lack .ab-bar > span {
+        background: linear-gradient(90deg, #f0a070, #ff8a1a);
+    }
     .rec-row {
         display: grid;
         grid-template-columns: 22px 40px 1fr;
