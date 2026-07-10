@@ -147,8 +147,8 @@
         { key: 'e_tank',        zh: '坦度', en: 'Tank' },
         { key: 'e_cc',          zh: '控場', en: 'CC' },
         { key: 'sustain',       zh: '恢復', en: 'Sustain' },
-        { key: 'e_gold',        zh: '金錢', en: 'Gold' },
         { key: 'e_participate', zh: '參團', en: 'Fight' },
+        { key: 'e_gold',        zh: '金錢', en: 'Gold' },
     ];
     // Per-dim sorted value list across all champions, computed once (DATA.champs is static).
     let _compNormCache = null;
@@ -696,7 +696,7 @@
             teamEstWr: '估計勝率',
             teamBaseWr: '英雄均值',
             teamPairLift: '搭配 lift',
-            teamCompAdj: '陣容修正',
+            teamCompAdj: '陣容搭配',
             teamPairCover: (have, total) => `已知搭配 ${have}/${total} 組`,
             teamDimsTitle: '隊伍能力維度',
             teamCompTitle: '陣容組成',
@@ -706,6 +706,13 @@
             teamConfMid: '可信度中',
             teamConfLow: '樣本偏早',
             teamPickFullNote: '已選滿 5 隻 · 以下為整隊評估（非再推薦第 6 人）',
+            teamTempoTitle: '發力節奏',
+            teamTempoEarly: '前期',
+            teamTempoLate: '後期',
+            teamTempoEarlyLean: '偏前期發力',
+            teamTempoLateLean: '偏後期發力',
+            teamTempoBalanced: '前後期均衡',
+            teamTempoTip: '只標示隊伍適合的發力時段，前期／後期本身無好壞。',
             langToggleLabel: 'EN',
             langToggleTitle: 'Switch to English',
             langToggleAria: '切換語言',
@@ -861,7 +868,7 @@
             teamEstWr: 'Est. win rate',
             teamBaseWr: 'Champ avg',
             teamPairLift: 'Pair lift',
-            teamCompAdj: 'Comp adj.',
+            teamCompAdj: 'Comp fit',
             teamPairCover: (have, total) => `Pairs known ${have}/${total}`,
             teamDimsTitle: 'Team ability dims',
             teamCompTitle: 'Composition',
@@ -871,6 +878,13 @@
             teamConfMid: 'Medium confidence',
             teamConfLow: 'Early signal',
             teamPickFullNote: 'Full roster of 5 · team evaluation (not a 6th pick list)',
+            teamTempoTitle: 'Power timing',
+            teamTempoEarly: 'Early',
+            teamTempoLate: 'Late',
+            teamTempoEarlyLean: 'Early-leaning',
+            teamTempoLateLean: 'Late-leaning',
+            teamTempoBalanced: 'Balanced timing',
+            teamTempoTip: 'Where this roster tends to spike — early/late is not better or worse.',
             langToggleLabel: '中',
             langToggleTitle: '切換成中文',
             langToggleAria: 'Switch language',
@@ -2724,15 +2738,18 @@
     // Full ARAM roster is 5. Under 5 → rank fill-ins; at 5 → evaluate the team.
     const MAX_TEAM_PICKS = 5;
     const TEAM_PAIR_TOTAL = (MAX_TEAM_PICKS * (MAX_TEAM_PICKS - 1)) / 2; // C(5,2)=10
-    const TEAM_COMP_DIMS = [
+    // Team-eval 6-axis radar + composition rows (roster-level, not per-champ tempo).
+    // Order: 前排、輸出、開戰、清兵、續航、控場.
+    // (User list had 輸出 twice; 6th axis is 控場 — say if 消耗/poke is preferred.)
+    const TEAM_RADAR_AXES = [
         { key: 'front', zh: '前排', en: 'Front' },
-        { key: 'engage', zh: '開戰', en: 'Engage' },
-        { key: 'poke', zh: '消耗', en: 'Poke' },
-        { key: 'wave', zh: '清兵', en: 'Wave' },
-        { key: 'cc', zh: '控場', en: 'CC' },
-        { key: 'sustain', zh: '續航', en: 'Sustain' },
         { key: 'damage', zh: '輸出', en: 'Damage' },
+        { key: 'engage', zh: '開戰', en: 'Engage' },
+        { key: 'wave', zh: '清兵', en: 'Wave' },
+        { key: 'sustain', zh: '續航', en: 'Sustain' },
+        { key: 'cc', zh: '控場', en: 'CC' },
     ];
+    const TEAM_COMP_DIMS = TEAM_RADAR_AXES;
     let detailSelected = null;
     let recommendMode = false;
     let recModalOpen = false;
@@ -2860,6 +2877,16 @@
 
     function clampAbs(value, maxAbs) {
         return Math.max(-maxAbs, Math.min(maxAbs, value));
+    }
+
+    /** Progressive green/red for signed pp-like values (pair lift, 陣容搭配). */
+    function signedToneClass(x) {
+        const v = Number(x) || 0;
+        if (v >= 0.02) return 'tone-pos-2';   // strong green
+        if (v >= 0.005) return 'tone-pos-1';  // light green
+        if (v > -0.005) return 'tone-zero';   // neutral
+        if (v > -0.02) return 'tone-neg-1';   // light red
+        return 'tone-neg-2';                  // strong red
     }
 
     function damageMixScore(comp) {
@@ -3102,7 +3129,8 @@
 
         const cap = compCapPct(meanComp);
         const lang = currentLang === 'en' ? 'en' : 'zh';
-        const abilityAxes = ABILITY_BARS.map(a => ({
+        // Roster radar: 前排 / 輸出 / 開戰 / 清兵 / 續航 / 控場.
+        const abilityAxes = TEAM_RADAR_AXES.map(a => ({
             label: a[lang],
             pct: cap[a.key] || 0,
         }));
@@ -3110,6 +3138,18 @@
         let confKey = 'low';
         if (pairN >= 8 && minGames >= 40) confKey = 'high';
         else if (pairN >= 5 && minGames >= 25) confKey = 'mid';
+
+        // Early (snowball) vs late (scaling): continuum only — not good/bad.
+        const earlyPct = Math.max(0, Math.min(1, Number(cap.snowball || 0)));
+        const latePct = Math.max(0, Math.min(1, Number(cap.scaling || 0)));
+        const tempoSum = earlyPct + latePct;
+        // Marker 0 = pure early, 1 = pure late; balanced rosters sit near 0.5.
+        const tempoPos = tempoSum > 1e-6 ? latePct / tempoSum : 0.5;
+        const TEMPO_CUT = 0.12;
+        const tempoDiff = latePct - earlyPct; // + = late-leaning
+        let tempoKey = 'balanced';
+        if (tempoDiff >= TEMPO_CUT) tempoKey = 'late';
+        else if (tempoDiff <= -TEMPO_CUT) tempoKey = 'early';
 
         return {
             baseWr,
@@ -3124,6 +3164,10 @@
             teamComp,
             meanComp,
             cap,
+            earlyPct,
+            latePct,
+            tempoPos,
+            tempoKey,
         };
     }
 
@@ -3136,24 +3180,43 @@
             : copy.teamConfLow;
         const wrTone = ev.estWr >= 0.53 ? 'is-good' : (ev.estWr <= 0.47 ? 'is-bad' : 'is-even');
         const radar = compRadarSvg(ev.abilityAxes, copy.teamDimsTitle);
-        const abilityBars = ABILITY_BARS.map(a => {
-            const pctVal = Math.round((ev.cap[a.key] || 0) * 100);
-            return `<div class="ab-row team-ab-row"><span class="ab-label">${escHtml(a[lang])}</span><span class="ab-bar"><span style="width:${pctVal}%"></span></span><span class="ab-val">${pctVal}</span></div>`;
-        }).join('');
+        // One block only: radar + 6 dim bars with 充足/偏弱 (same axes, no duplicate section).
         const lacks = (ev.teamComp && ev.teamComp.lacks) || {};
-        const compRows = TEAM_COMP_DIMS.map(d => {
-            // Lack flags come from teamComposition() (sum vs threshold scaled to roster size).
+        const dimRows = TEAM_RADAR_AXES.map(d => {
             const isLack = !!lacks[d.key];
-            // Bar fill: percentile of mean per-champ raw among the roster.
             const fill = Math.round((ev.cap[d.key] || 0) * 100);
             const tag = isLack ? copy.teamLack : copy.teamOk;
             const tagCls = isLack ? 'is-lack' : 'is-ok';
             return `<div class="team-comp-row ${tagCls}">
                 <span class="team-comp-name">${escHtml(d[lang])}</span>
                 <span class="ab-bar"><span style="width:${fill}%"></span></span>
+                <span class="ab-val">${fill}</span>
                 <span class="team-comp-tag">${escHtml(tag)}</span>
             </div>`;
         }).join('');
+        const earlyN = Math.round((ev.earlyPct || 0) * 100);
+        const lateN = Math.round((ev.latePct || 0) * 100);
+        const markerPct = Math.max(4, Math.min(96, (ev.tempoPos || 0.5) * 100));
+        const tempoLean = ev.tempoKey === 'early' ? copy.teamTempoEarlyLean
+            : ev.tempoKey === 'late' ? copy.teamTempoLateLean
+            : copy.teamTempoBalanced;
+        // Dual-endpoint bar: left=前期, right=後期. Marker is relative weight of
+        // late vs early (snowball/scaling means) — continuum, not a grade.
+        const tempoHtml = `
+            <div class="team-eval-block team-tempo" title="${escHtml(copy.teamTempoTip || '')}">
+                <div class="team-eval-h">${escHtml(copy.teamTempoTitle)}</div>
+                <div class="team-tempo-row">
+                    <span class="team-tempo-end is-early">${escHtml(copy.teamTempoEarly)}<small>${earlyN}</small></span>
+                    <div class="team-tempo-track" role="img"
+                         aria-label="${escHtml(copy.teamTempoTitle)}: ${escHtml(tempoLean)}">
+                        <div class="team-tempo-grad"></div>
+                        <div class="team-tempo-mid"></div>
+                        <div class="team-tempo-marker" style="left:${markerPct.toFixed(1)}%"></div>
+                    </div>
+                    <span class="team-tempo-end is-late">${escHtml(copy.teamTempoLate)}<small>${lateN}</small></span>
+                </div>
+                <div class="team-tempo-lean">${escHtml(tempoLean)}</div>
+            </div>`;
         return `
             <div class="team-eval">
                 <div class="team-eval-wr ${wrTone}">
@@ -3161,8 +3224,8 @@
                     <div class="team-wr-label">${escHtml(copy.teamEstWr)}</div>
                     <div class="team-wr-breakdown">
                         <span>${escHtml(copy.teamBaseWr)} ${pct(ev.baseWr)}</span>
-                        <span>${escHtml(copy.teamPairLift)} ${signed(ev.pairLift)}</span>
-                        <span>${escHtml(copy.teamCompAdj)} ${signed(ev.compositionScore)}</span>
+                        <span>${escHtml(copy.teamPairLift)} <b class="team-delta ${signedToneClass(ev.pairLift)}">${signed(ev.pairLift)}</b></span>
+                        <span>${escHtml(copy.teamCompAdj)} <b class="team-delta ${signedToneClass(ev.compositionScore)}">${signed(ev.compositionScore)}</b></span>
                     </div>
                     <div class="team-wr-meta">
                         ${escHtml(copy.teamPairCover(ev.pairN, ev.pairTotal))}
@@ -3172,12 +3235,9 @@
                 <div class="team-eval-block">
                     <div class="team-eval-h">${escHtml(copy.teamDimsTitle)}</div>
                     <div class="team-eval-radar">${radar}</div>
-                    <div class="team-ability-bars">${abilityBars}</div>
+                    <div class="team-comp-list">${dimRows}</div>
                 </div>
-                <div class="team-eval-block">
-                    <div class="team-eval-h">${escHtml(copy.teamCompTitle)}</div>
-                    <div class="team-comp-list">${compRows}</div>
-                </div>
+                ${tempoHtml}
             </div>
         `;
     }
