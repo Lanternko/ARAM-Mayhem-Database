@@ -4353,12 +4353,9 @@
      * Landscape splash + cover fill, then ~1.38× zoom into the face band so
      * the portrait reads large (previous height-first crop was too wide/small).
      * transform-origin upper-left keeps the head in frame while zooming.
-     * Facing (look into the board): default splash faces RIGHT.
-     *   Ally  → no flip (face right / center)
-     *   Enemy → flip wrap (face left / center)
-     * is-source-mirrored = splash actually faces LEFT (set in crop editor):
-     *   Ally  → flip (correct to face right)
-     *   Enemy → no flip (already faces left)
+     * Both sides use natural art orientation (no enemy flip).
+     * is-source-mirrored = splash actually faces LEFT (crop editor): flip once
+     * so portrait matches the default right-facing crop intent.
      * Crop vars: --slot-art-x / --slot-art-y / --slot-art-zoom
      */
     .draft-slot-art-wrap {
@@ -4368,16 +4365,9 @@
         pointer-events: none;
         background: #0c0e14;
     }
-    /* Default right-facing source: only enemy is mirrored. */
-    .draft-side.is-enemy .draft-slot-art-wrap:not(.is-source-mirrored) {
+    /* Left-facing source (editor toggle): flip so portrait faces right. */
+    .draft-slot-art-wrap.is-source-mirrored {
         transform: scaleX(-1);
-    }
-    /* Left-facing source (editor toggle): flip ally; leave enemy as-is. */
-    .draft-side.is-ally .draft-slot-art-wrap.is-source-mirrored {
-        transform: scaleX(-1);
-    }
-    .draft-side.is-enemy .draft-slot-art-wrap.is-source-mirrored {
-        transform: none;
     }
     .draft-slot.is-filled:hover .draft-slot-art {
         filter: brightness(1.08);

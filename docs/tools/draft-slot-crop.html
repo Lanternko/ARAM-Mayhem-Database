@@ -255,16 +255,9 @@
       inset: 0;
       overflow: hidden;
     }
-    /* Default: source faces RIGHT → ally plain, enemy flipped. */
-    .slot-preview.is-enemy:not(.is-source-mirrored) .art-wrap {
+    /* Both sides natural orientation; only flip when source art faces left. */
+    .slot-preview.is-source-mirrored .art-wrap {
       transform: scaleX(-1);
-    }
-    /* Source faces LEFT (toggle) → ally flipped, enemy plain. */
-    .slot-preview.is-ally.is-source-mirrored .art-wrap {
-      transform: scaleX(-1);
-    }
-    .slot-preview.is-enemy.is-source-mirrored .art-wrap {
-      transform: none;
     }
     .slot-preview img {
       position: absolute;
@@ -414,8 +407,8 @@
   <script>
 (function () {
   const LS_KEY = 'arammeta-draft-slot-crops-v1';
-  // Default: splash faces RIGHT → Ally looks right, Enemy is auto-mirrored left.
-  // mirror:true means the *source* faces LEFT (user correction).
+  // Default: splash faces RIGHT. Both ally/enemy use natural orientation.
+  // mirror:true means the *source* faces LEFT (user correction → flip once).
   const DEFAULTS = { x: 22, y: 20, zoom: 1.38, mirror: false };
 
   let champs = []; // {cid, alias, name_zh, name_en, image, splash}

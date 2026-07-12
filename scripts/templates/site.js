@@ -4227,29 +4227,41 @@
      * Per-champ crop overrides: docs/api/draft-slot-crops.json (editor at
      * docs/tools/draft-slot-crop.html).
      */
+    /** Fandom full HD is often 6–10k px; browsers drop some <img> loads. Cap width. */
+    function draftScaleFandomHdUrl(url) {
+        const u = String(url || '');
+        if (!/static\.wikia\.nocookie\.net/i.test(u)) return u;
+        if (/scale-to-width-down/i.test(u)) return u;
+        // .../revision/latest?cb=… → .../revision/latest/scale-to-width-down/1600?cb=…
+        return u.replace(/\/revision\/latest(?=\?|$)/i, '/revision/latest/scale-to-width-down/1600');
+    }
+
+    function draftCdragonSplashUrl(alias) {
+        const low = String(alias || '').toLowerCase();
+        if (!low) return '';
+        return (
+            'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/'
+            + `global/default/assets/characters/${low}/skins/base/images/`
+            + `${low}_splash_uncentered_0.jpg`
+        );
+    }
+
     function draftSlotArtUrl(info, cid) {
         if (!info) return '';
         const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
-        // 1) Wiki HD local (or Universe remote) from docs/api/draft-splash-hd.json
-        //    Prefer local assets/draft-splash-hd/{cid}.jpg (often 4k–10k).
+        // 1) Wiki HD (or Universe remote) from docs/api/draft-splash-hd.json
+        //    Prefer remote Fandom with scale-to-width-down for reliable bar loads.
         if (DRAFT_SPLASH_HD && DRAFT_SPLASH_HD.byCid) {
             const hit = DRAFT_SPLASH_HD.byCid[String(cid != null ? cid : info.id || '')];
             if (hit && hit.url) {
                 const u = String(hit.url);
-                if (/^https?:\/\//i.test(u)) return u;
+                if (/^https?:\/\//i.test(u)) return draftScaleFandomHdUrl(u);
                 // site-relative path → absolute against origin (not <base href>)
                 return `${window.location.origin}/${u.replace(/^\.?\//, '')}`;
             }
         }
         // 2) CommunityDragon uncentered splash (1215×717)
-        if (alias) {
-            const low = alias.toLowerCase();
-            return (
-                'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/'
-                + `global/default/assets/characters/${low}/skins/base/images/`
-                + `${low}_splash_uncentered_0.jpg`
-            );
-        }
+        if (alias) return draftCdragonSplashUrl(alias);
         // 3) Data Dragon fallback
         if (alias) {
             return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`;
@@ -4292,18 +4304,26 @@
             const art = draftSlotArtUrl(info, cid);
             const icon = info && info.image ? info.image : '';
             const alias = String((info && (info.alias || info.name_en)) || '').replace(/[^A-Za-z0-9]/g, '');
+            const cdragonSplash = draftCdragonSplashUrl(alias);
             const ddragonSplash = alias
                 ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`
                 : '';
             // Fandom Wiki CDN 404s when Referer is arammeta.com — strip referrer.
-            // Cascade on error: DDragon splash → square icon.
-            const fb1 = ddragonSplash || icon;
-            const fb2 = icon && ddragonSplash ? icon : '';
-            const onerr = fb1
-                ? (fb2
-                    ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(fb2)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(fb1)}'"`
-                    : ` onerror="this.onerror=null;this.src='${escHtml(fb1)}';this.classList.add('is-icon-fallback')"`)
-                : '';
+            // Cascade: CDragon → DDragon → square icon (skip urls equal to primary).
+            const chain = [cdragonSplash, ddragonSplash, icon].filter(
+                (u) => u && u !== art
+            );
+            // Unique preserve order
+            const seen = new Set();
+            const fbs = [];
+            chain.forEach((u) => {
+                if (!seen.has(u)) { seen.add(u); fbs.push(u); }
+            });
+            let onerr = '';
+            if (fbs.length) {
+                const payload = escHtml(JSON.stringify(fbs));
+                onerr = ` data-draft-fb="${payload}" onerror="(function(el){try{var q=JSON.parse(el.getAttribute('data-draft-fb')||'[]');if(!q.length){el.onerror=null;el.classList.add('is-icon-fallback');return;}var n=q.shift();el.setAttribute('data-draft-fb',JSON.stringify(q));if(!q.length)el.classList.add('is-icon-fallback');el.src=n;}catch(e){el.onerror=null;el.classList.add('is-icon-fallback');}})(this)"`;
+            }
             const cropStyle = draftSlotCropStyle(cid);
             const mirrored = DRAFT_SLOT_CROPS && draftSlotCropFor(cid).mirror
                 ? ' is-source-mirrored' : '';
@@ -4311,7 +4331,7 @@
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
                 + (art
-                    /* Wrap handles side facing; is-source-mirrored flips when splash faces left. */
+                    /* is-source-mirrored flips when splash faces left (crop editor). */
                     ? `<span class="draft-slot-art-wrap${mirrored}" aria-hidden="true">`
                         + `<img class="draft-slot-art" loading="lazy" decoding="async" `
                         + `referrerpolicy="no-referrer" src="${escHtml(art)}" alt="" `
