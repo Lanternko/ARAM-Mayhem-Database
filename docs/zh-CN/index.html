@@ -2451,16 +2451,14 @@
         border-left: 1px solid rgba(255, 255, 255, 0.08);
         color: #9aa3b8;
     }
-    /* Pick-rate ("選取率") — single-hue amber intensity ramp (not multi-hue
-       grey/blue/yellow/orange).  Multi-hue forced readers to decode three
-       color families beside green/red WR; one warm family reads as "how hot"
-       at a glance.  Weight steps reinforce the ladder.  Tier cuts still from
-       pickTier() / spellPickTier(). */
-    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #7c8794; font-weight: 500; }
-    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #a8895c; font-weight: 500; }
-    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #d4a04a; font-weight: 600; }
-    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Pick-rate ("選取率") — yellow → light-yellow → white → gray ladder.
+       Cold = muted gray, hot = solid yellow.  No blue/orange rainbow; WR
+       keeps green/red.  Tier cuts still from pickTier() / spellPickTier(). */
+    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #6b7280; font-weight: 500; }
+    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #e8d48a; font-weight: 700; }
+    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #f0c94a; font-weight: 700; }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -3089,12 +3087,12 @@
         box-sizing: border-box;
         /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick heat: single-hue amber intensity (muted → warm → 正橘). */
-    .aug .alift.pick-1 { color: #7c8794; font-weight: 500; }
-    .aug .alift.pick-2 { color: #a8895c; font-weight: 500; }
-    .aug .alift.pick-3 { color: #d4a04a; font-weight: 600; }
-    .aug .alift.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .aug .alift.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Pick heat: 黃 → 淺黃 → 白 → 灰 (hot → cold). */
+    .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
+    .aug .alift.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .aug .alift.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .aug .alift.pick-4 { color: #e8d48a; font-weight: 700; }
+    .aug .alift.pick-5 { color: #f0c94a; font-weight: 700; }
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -4020,7 +4018,7 @@
         width: 100%;
         max-width: 1800px;
         margin: 0 auto;
-        --pick-color: #3aa0ff;
+        --pick-color: var(--accent);
     }
     .draft-shell.is-target-enemy { --pick-color: #ef4444; }
     .draft-mode-tabs {
@@ -4140,9 +4138,9 @@
         border-radius: 12px;
         padding: 8px;
         min-width: 0;
-        --side-color: #3aa0ff;
+        --side-color: var(--accent);
     }
-    .draft-side.is-enemy { --side-color: #ef4444; }
+    .draft-side.is-enemy { --side-color: #e07a82; }
     .draft-side.is-targeting { border-color: var(--border-strong); box-shadow: none; }
     .draft-side-select {
         display: flex;
@@ -4311,13 +4309,14 @@
     }
     .draft-pool {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
-        gap: 7px;
-        max-height: min(58vh, 640px);
+        grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+        gap: 8px;
+        max-height: min(68vh, 720px);
         overflow: auto;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
-        padding: 3px;
+        padding: 2px;
+        background: color-mix(in srgb, var(--surface, #11151d) 58%, transparent);
     }
     .draft-pool .panel-empty { grid-column: 1 / -1; }
     .draft-champ {
@@ -4388,7 +4387,7 @@
         border-color: var(--pool-ring, #3aa0ff);
         box-shadow: 0 0 0 1px color-mix(in srgb, var(--pool-ring, #3aa0ff) 40%, transparent);
     }
-    .draft-champ.is-ally { --pool-ring: #3aa0ff; }
+    .draft-champ.is-ally { --pool-ring: var(--accent); }
     .draft-champ.is-enemy { --pool-ring: #ef4444; }
     .draft-champ.is-ally::after,
     .draft-champ.is-enemy::after {
@@ -4405,10 +4404,9 @@
     }
     .draft-result {
         min-width: 0;
-        background: var(--surface, #11151d);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 12px;
-        padding: 12px 14px;
+        background: transparent;
+        border: 0;
+        padding: 0;
     }
     /* The team-eval component was sized for the narrow side card; in the wide
        draft panel give it room deliberately: radar pinned left at fixed width,
@@ -4484,6 +4482,22 @@
             gap: 6px;
             max-height: 46vh;
         }
+    }
+    @media (max-width: 900px) {
+        .draft-analysis-intro {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .draft-analysis-intro p { max-width: none; text-align: left; }
+        .draft-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+        .view-draft.is-active { padding-inline: 10px; }
+        .draft-mode-tabs { gap: 16px; }
+        .draft-metric { min-height: 100px; padding: 11px 10px; }
+        .draft-metric-value { font-size: 22px; }
+        .draft-metric-note { font-size: 9px; }
     }
     /* The 專欄 view is wider than the other narrow views so the card grid can
        run 3-up like an editorial guide index; the reader self-caps at 720. */
@@ -4827,11 +4841,12 @@
     [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
     [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
     [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
-    [data-theme="light"] .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-2 { color: #9a7340; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-3 { color: #b87a12; font-weight: 600; }
-    [data-theme="light"] .aug .alift.pick-4 { color: #c45f00; font-weight: 700; }
-    [data-theme="light"] .aug .alift.pick-5 { color: #a84a00; font-weight: 700; }
+    /* Light theme: no pure white (vanishes on paper); darken the ladder. */
+    [data-theme="light"] .aug .alift.pick-1 { color: #9ca3af; font-weight: 500; }
+    [data-theme="light"] .aug .alift.pick-2 { color: #6b7280; font-weight: 500; }
+    [data-theme="light"] .aug .alift.pick-3 { color: #374151; font-weight: 600; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #b88912; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-5 { color: #a67c00; font-weight: 700; }
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active) {
@@ -5056,32 +5071,32 @@
         background: rgba(0, 0, 0, 0.05);
         color: var(--text-muted);
     }
-    /* Pick heat — single-hue amber, deeper on white so it still reads. */
+    /* Light: 灰 → 深灰 → 近黑白 → 淺黃 → 黃 (same order, paper-safe). */
     [data-theme="light"] .cluster-pick.pick-1,
     [data-theme="light"] .cg-option-pick.pick-1,
     [data-theme="light"] .item-build-pick.pick-1,
     [data-theme="light"] .boot-rail-pick.pick-1,
-    [data-theme="light"] .cg-core-share.pick-1 { color: #6b7280; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-1 { color: #9ca3af; font-weight: 500; }
     [data-theme="light"] .cluster-pick.pick-2,
     [data-theme="light"] .cg-option-pick.pick-2,
     [data-theme="light"] .item-build-pick.pick-2,
     [data-theme="light"] .boot-rail-pick.pick-2,
-    [data-theme="light"] .cg-core-share.pick-2 { color: #9a7340; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-2 { color: #6b7280; font-weight: 500; }
     [data-theme="light"] .cluster-pick.pick-3,
     [data-theme="light"] .cg-option-pick.pick-3,
     [data-theme="light"] .item-build-pick.pick-3,
     [data-theme="light"] .boot-rail-pick.pick-3,
-    [data-theme="light"] .cg-core-share.pick-3 { color: #b87a12; font-weight: 600; }
+    [data-theme="light"] .cg-core-share.pick-3 { color: #374151; font-weight: 600; }
     [data-theme="light"] .cluster-pick.pick-4,
     [data-theme="light"] .cg-option-pick.pick-4,
     [data-theme="light"] .item-build-pick.pick-4,
     [data-theme="light"] .boot-rail-pick.pick-4,
-    [data-theme="light"] .cg-core-share.pick-4 { color: #c45f00; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-4 { color: #b88912; font-weight: 700; }
     [data-theme="light"] .cluster-pick.pick-5,
     [data-theme="light"] .cg-option-pick.pick-5,
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
-    [data-theme="light"] .cg-core-share.pick-5 { color: #a84a00; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-5 { color: #a67c00; font-weight: 700; }
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -5378,12 +5393,12 @@
         font-size: 10.5px;
         line-height: 1.4;
     }
-    /* Co-opt the shared single-hue pick ramp on tip values. */
-    .item-tip-row > b.pick-1 { color: #7c8794; font-weight: 500; }
-    .item-tip-row > b.pick-2 { color: #a8895c; font-weight: 500; }
-    .item-tip-row > b.pick-3 { color: #d4a04a; font-weight: 600; }
-    .item-tip-row > b.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .item-tip-row > b.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Co-opt the shared 黃/白/灰 pick ladder on tip values. */
+    .item-tip-row > b.pick-1 { color: #6b7280; font-weight: 500; }
+    .item-tip-row > b.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .item-tip-row > b.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .item-tip-row > b.pick-4 { color: #e8d48a; font-weight: 700; }
+    .item-tip-row > b.pick-5 { color: #f0c94a; font-weight: 700; }
     #augch-host {
         position: fixed;
         inset: 0;
@@ -6458,7 +6473,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度以單一琥珀系深淺上色：越亮橘、字重越重＝越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：黃→淺黃→白→灰，越黃越熱門。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -6654,7 +6669,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card uses a single amber intensity ramp: brighter/bolder orange = hotter.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate colour: yellow → light yellow → white → gray (yellower = hotter).',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -7590,10 +7605,10 @@
         return 1;
     }
     // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
-    // Single-hue amber intensity ramp shared by augment cards AND every item
-    // surface (clusters / options / items / boots / spells / tips). Absolute
-    // cuts (2/5/10/20%) so the colour means the same thing everywhere; tier 5
-    // (>=20%) lines up with the augment 熱門 badge.
+    // Yellow→white→gray popularity ladder shared by augment cards AND every
+    // item surface (clusters / options / items / boots / spells / tips).
+    // Absolute cuts (2/5/10/20%) so the colour means the same thing everywhere;
+    // tier 5 (>=20%) lines up with the augment 熱門 badge.
     function pickTier(pick) {
         if (pick >= 0.20) return 5;
         if (pick >= 0.10) return 4;
