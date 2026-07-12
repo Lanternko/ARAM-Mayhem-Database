@@ -1357,7 +1357,9 @@ def render_html(
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
-    # Filter bar: role chips + free-text search + live "N shown" counter.
+    # Role chips + teammate toggle scroll away with the page.  Search lives
+    # in a separate sticky rail (sibling of the tall tier list) so it can pin
+    # under the site header without trapping the role chips.
     parts.append("<div class='filter-bar' data-nosnippet>")
     parts.append("<div class='role-chips'>")
     parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
@@ -1375,6 +1377,8 @@ def render_html(
         '<button class="tool-btn" id="recommend-mode" type="button" '
         'aria-pressed="false">選擇你的隊友：關</button>'
     )
+    parts.append("</div>")  # /filter-tools
+    parts.append("</div>")  # /filter-bar
     # Search input wrapped in a label with an inline magnifier SVG sitting
     # in the input's left padding (the wrapper is positioned, the input
     # has padding-left to clear the icon).
@@ -1385,6 +1389,7 @@ def render_html(
         "<circle cx='11' cy='11' r='7'></circle>"
         "<line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg>"
     )
+    parts.append("<div class='search-rail' data-nosnippet>")
     parts.append(
         "<label class='search-wrap'>"
         f"{search_icon}"
@@ -1397,8 +1402,7 @@ def render_html(
         f'<span class="shown-count"><span id="shown-n">{len(records)}</span> / {len(records)} '
         "<span id='shown-unit'>隻</span></span>"
     )
-    parts.append("</div>")  # /filter-tools
-    parts.append("</div>")  # /filter-bar
+    parts.append("</div>")  # /search-rail
 
     for tier in TIER_ORDER:
         entries = by_tier[tier]

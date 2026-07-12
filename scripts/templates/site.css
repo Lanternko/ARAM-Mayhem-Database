@@ -199,23 +199,45 @@
     .lang-toggle { min-width: 56px; justify-content: center; }
     .lang-toggle span { font-size: 12px; letter-spacing: 0; }
     .lang-menu { position: relative; display: inline-flex; }
-    /* Filter bar: role chips + free-text search + live count. */
+    /* Filter bar: role chips + teammate toggle.  Scrolls away with the page
+       so it does not cover champion detail tabs while reading builds. */
     .filter-bar {
-        /* Sticky: keep filters reachable so Ctrl+F focus never scrolls the
-           page up.  z-index 30 sits above cards (1-4), below the rec FAB (40),
-           tooltips (50+) and the mobile modals (55-70). */
-        position: sticky;
-        top: 0;
-        z-index: 30;
+        position: static;
+        z-index: auto;
         display: flex;
         flex-wrap: wrap;
         gap: 12px;
         align-items: center;
-        margin: 0 0 20px;
+        margin: 0 0 10px;
         padding: 10px 12px;
-        background: var(--surface);
+        background: transparent;
         border-radius: 10px;
-        box-shadow: 0 8px 18px -10px rgba(0, 0, 0, 0.7);
+        box-shadow: none;
+    }
+    /* Sticky search only — semi-transparent glass under the site header.
+       Sibling of the tall tier list (not nested in short .filter-bar) so the
+       sticky containing block spans the whole main column. */
+    .search-rail {
+        position: sticky;
+        top: var(--header-h, 56px);
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 8px 12px;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        -webkit-backdrop-filter: saturate(180%) blur(14px);
+        backdrop-filter: saturate(180%) blur(14px);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: none;
+    }
+    .search-rail .search-wrap {
+        flex: 1 1 auto;
+        max-width: 420px;
+        min-width: 160px;
     }
     .role-chips {
         display: flex;
@@ -1629,6 +1651,19 @@
         opacity: 0;
         pointer-events: none;
     }
+    /* Sticky rail for main champ tabs (概覽 / 出裝 / …).  Sub-tabs do not
+       use this wrapper class path.  top sits under header + sticky search. */
+    .detail-main-tabs > .detail-tab-rail {
+        position: sticky;
+        top: calc(var(--header-h, 56px) + var(--search-rail-h, 0px));
+        z-index: 25;
+        background: color-mix(in srgb, #1b2030 92%, transparent);
+        -webkit-backdrop-filter: saturate(180%) blur(12px);
+        backdrop-filter: saturate(180%) blur(12px);
+        margin: 0 -6px;
+        padding: 0 6px;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
     .detail-tab-list {
         display: flex;
         align-items: center;
@@ -1637,6 +1672,9 @@
         overflow-x: auto;
         border-bottom: 1px solid rgba(255,255,255,0.08);
         scrollbar-width: none;
+    }
+    .detail-main-tabs > .detail-tab-rail .detail-tab-list {
+        border-bottom: 0;
     }
     .detail-tab-list::-webkit-scrollbar {
         display: none;
@@ -1665,12 +1703,12 @@
         outline: 2px solid rgba(107,209,255,0.45);
         outline-offset: -2px;
     }
-    .detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(1),
-    .detail-tabset > .detail-tab-input:nth-of-type(2):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(2),
-    .detail-tabset > .detail-tab-input:nth-of-type(3):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(3),
-    .detail-tabset > .detail-tab-input:nth-of-type(4):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(4),
-    .detail-tabset > .detail-tab-input:nth-of-type(5):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(5),
-    .detail-tabset > .detail-tab-input:nth-of-type(6):focus-visible ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+    .detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
+    .detail-tabset > .detail-tab-input:nth-of-type(2):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
+    .detail-tabset > .detail-tab-input:nth-of-type(3):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(3),
+    .detail-tabset > .detail-tab-input:nth-of-type(4):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
+    .detail-tabset > .detail-tab-input:nth-of-type(5):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
+    .detail-tabset > .detail-tab-input:nth-of-type(6):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
         outline: 2px solid rgba(107,209,255,0.45);
         outline-offset: -2px;
     }
@@ -1693,12 +1731,12 @@
         font-size: 11px;
         font-weight: 700;
     }
-    .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-list .detail-tab-label:nth-child(1),
-    .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-list .detail-tab-label:nth-child(2),
-    .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-list .detail-tab-label:nth-child(3),
-    .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-list .detail-tab-label:nth-child(4),
-    .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-list .detail-tab-label:nth-child(5),
-    .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+    .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
+    .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
+    .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(3),
+    .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
+    .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
+    .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
         color: #7fc8ff;
         border-bottom-color: #3aa0ff;
         background: rgba(58,160,255,0.08);
@@ -3244,8 +3282,7 @@
             padding: 0 0 2px;
         }
         .page-actions .gh-star { width: auto; }
-        /* Filter bar wraps tighter; search input becomes full-width on
-           its own row. */
+        /* Filter bar wraps tighter on phone; role chips stay. */
         .filter-bar { padding: 8px; gap: 8px; position: static; box-shadow: none; }
         .role-chips { gap: 4px; }
         .chip { padding: 4px 10px; font-size: 11px; }
@@ -3258,11 +3295,17 @@
             align-items: center;
         }
         /* Mobile: teammate mode + search are rarely used on phone; role chips
-           stay. Desktop keeps the full filter-tools row. */
+           stay. Desktop keeps search-rail + recommend. */
         .filter-tools,
         #recommend-mode,
+        .search-rail,
         .search-wrap,
         .shown-count { display: none !important; }
+        /* Inside the fixed detail sheet the scroller is .detail-host, so pin
+           main tabs to the sheet top (search rail is hidden on mobile). */
+        .detail-host .detail-main-tabs > .detail-tab-rail {
+            top: 0;
+        }
         .tool-btn { min-height: 36px; }
         .updates-panel {
             margin: 0 0 14px;
@@ -3643,9 +3686,9 @@
     .site-header {
         position: sticky;
         top: 0;
-        /* z 45: above page content + the sticky filter-bar (30) and rec FAB
-           (40), below the mobile modals / backdrops (55-70) so detail and
-           recommend overlays cover the header. */
+        /* z 45: above page content + sticky search-rail (30) / detail tabs
+           (25) and rec FAB (40), below the mobile modals / backdrops (55-70)
+           so detail and recommend overlays cover the header. */
         z-index: 45;
         background: color-mix(in srgb, var(--bg) 72%, transparent);
         -webkit-backdrop-filter: saturate(180%) blur(14px);
@@ -3656,7 +3699,10 @@
     /* Opaque-ish fallback where backdrop-filter is unsupported. */
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         .site-header,
-        .view-home .filter-bar { background: color-mix(in srgb, var(--bg) 94%, transparent); }
+        .view-home .search-rail,
+        .detail-main-tabs > .detail-tab-rail {
+            background: color-mix(in srgb, var(--bg) 94%, transparent);
+        }
     }
     /* Lift the header once the page scrolls under it (JS toggles .scrolled). */
     .site-header.scrolled {
@@ -4012,23 +4058,22 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* Re-stick the home filter bar just below the fixed header, and make it
-       the same frosted-glass material so the chrome reads as one band. */
+    /* Search rail already owns the sticky glass chrome; filter-bar stays static. */
     .view-home .filter-bar {
-        top: var(--header-h);
-        background: color-mix(in srgb, var(--bg) 72%, transparent);
-        -webkit-backdrop-filter: saturate(180%) blur(14px);
-        backdrop-filter: saturate(180%) blur(14px);
-        border: 1px solid var(--border);
+        top: auto;
+        background: transparent;
+        border: 0;
         box-shadow: none;
-        margin: 0 0 20px;
+        margin: 0 0 10px;
+    }
+    .view-home .search-rail {
+        top: var(--header-h);
     }
     @media (max-width: 700px) {
         /* Two-row header: brand + actions on top, the primary tabs as a
            full-bleed scrollable strip underneath.  Primary navigation stays
            visible on mobile — no hamburger / drawer layer.  JS keeps
-           --header-h in sync with the real height (syncHeaderHeight), so the
-           sticky filter-bar offset follows automatically. */
+           --header-h in sync with the real height (syncHeaderHeight). */
         .site-header-inner {
             flex-wrap: wrap;
             height: auto;
@@ -4081,7 +4126,11 @@
        Chrome (header/nav/settings/column) already uses theme vars.  These
        overrides retarget the tier-list, 增幅榜, champion detail panel, and
        recommend side-panel so light mode is a real palette throughout. ===== */
-    /* .filter-bar is frosted glass in both themes now (see .view-home .filter-bar). */
+    /* .search-rail is frosted glass in both themes (sticky search under header). */
+    [data-theme="light"] .detail-main-tabs > .detail-tab-rail {
+        background: color-mix(in srgb, var(--surface) 92%, transparent);
+        border-bottom-color: var(--border);
+    }
     [data-theme="light"] .chip:not(.active) { background: var(--chip-bg); color: var(--text-muted); }
     [data-theme="light"] .chip:not(.active):hover { background: #e2e6ee; }
     [data-theme="light"] .search { background: #ffffff; color: var(--text); border: 1px solid var(--border-strong); }
@@ -4279,12 +4328,12 @@
         color: var(--text);
         background: rgba(0, 0, 0, 0.03);
     }
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-list .detail-tab-label:nth-child(1),
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-list .detail-tab-label:nth-child(2),
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-list .detail-tab-label:nth-child(3),
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-list .detail-tab-label:nth-child(4),
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-list .detail-tab-label:nth-child(5),
-    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-list .detail-tab-label:nth-child(6) {
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(3),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
+    [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
         color: #1565c0;
         border-bottom-color: #2563eb;
         background: rgba(37, 99, 235, 0.08);

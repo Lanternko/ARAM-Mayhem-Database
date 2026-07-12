@@ -3072,10 +3072,14 @@
                 const inputId = `${name}-${tab.key}`;
                 return `<section class="detail-tab-panel" role="tabpanel" aria-labelledby="${inputId}-label">${tab.content}</section>`;
             }).join('');
+            // Outer .detail-tab-rail is the sticky surface; the list keeps
+            // overflow-x:auto (overflow on the sticky element itself breaks pin).
             return `
                 <div class="detail-tabset ${extraClass}">
                     ${inputs}
-                    <div class="detail-tab-list" role="tablist">${labels}</div>
+                    <div class="detail-tab-rail">
+                        <div class="detail-tab-list" role="tablist">${labels}</div>
+                    </div>
                     <div class="detail-tab-panels">${panels}</div>
                 </div>
             `;
@@ -4362,12 +4366,22 @@
         }
     }
     // The header is one row on desktop, two on mobile (brand row + tab strip).
-    // Sticky offsets (.filter-bar) read --header-h, so measure the real height
-    // instead of hardcoding it per breakpoint.
+    // Sticky search rail + champion detail tabs read --header-h /
+    // --search-rail-h, so measure real heights instead of hardcoding.
     function syncHeaderHeight() {
         const header = document.querySelector('.site-header');
-        if (!header) return;
-        document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+        if (header) {
+            document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+        }
+        const rail = document.querySelector('.view-home .search-rail');
+        let railH = 0;
+        if (rail) {
+            const st = getComputedStyle(rail);
+            if (st.display !== 'none' && st.visibility !== 'hidden') {
+                railH = Math.ceil(rail.getBoundingClientRect().height);
+            }
+        }
+        document.documentElement.style.setProperty('--search-rail-h', railH + 'px');
     }
     // Path routes (shareable, no hash).  English uses an /en prefix so a
     // shared link opens in English without relying on localStorage:
@@ -5168,6 +5182,10 @@
         if (window.ResizeObserver) {
             new ResizeObserver(() => syncHeaderHeight()).observe(siteHeaderEl);
         }
+    }
+    const searchRailEl = document.querySelector('.view-home .search-rail');
+    if (searchRailEl && window.ResizeObserver) {
+        new ResizeObserver(() => syncHeaderHeight()).observe(searchRailEl);
     }
 
     /* -----  Filter / search  --------------------------------------- */
