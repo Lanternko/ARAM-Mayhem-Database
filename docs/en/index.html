@@ -1,4 +1,4 @@
-<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712162731'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712162731'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/en'><meta property='og:url' content='https://arammeta.com/en'><meta property='og:type' content='website'><meta property='og:title' content="arammeta"><meta property='og:description' content="ARAM Mayhem tier list"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="arammeta"><meta name='twitter:description' content="ARAM Mayhem tier list"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783845396' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712162731'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712162731'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/en'><meta property='og:url' content='https://arammeta.com/en'><meta property='og:type' content='website'><meta property='og:title' content="arammeta"><meta property='og:description' content="ARAM Mayhem tier list"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="arammeta"><meta name='twitter:description' content="ARAM Mayhem tier list"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783849607' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
     /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
        the palette.  New chrome (header, nav, views, settings, column) is
        authored entirely against these vars so both themes are correct.  The
@@ -4353,8 +4353,13 @@
      * Landscape splash + cover fill, then ~1.38× zoom into the face band so
      * the portrait reads large (previous height-first crop was too wide/small).
      * transform-origin upper-left keeps the head in frame while zooming.
-     * Enemy mirrors the WRAP so head lands right and faces into the board.
-     * Per-champ overrides can later set --slot-art-x / --slot-art-y / --slot-art-zoom.
+     * Facing (look into the board): default splash faces RIGHT.
+     *   Ally  → no flip (face right / center)
+     *   Enemy → flip wrap (face left / center)
+     * is-source-mirrored = splash actually faces LEFT (set in crop editor):
+     *   Ally  → flip (correct to face right)
+     *   Enemy → no flip (already faces left)
+     * Crop vars: --slot-art-x / --slot-art-y / --slot-art-zoom
      */
     .draft-slot-art-wrap {
         position: absolute;
@@ -4363,8 +4368,16 @@
         pointer-events: none;
         background: #0c0e14;
     }
-    .draft-side.is-enemy .draft-slot-art-wrap {
+    /* Default right-facing source: only enemy is mirrored. */
+    .draft-side.is-enemy .draft-slot-art-wrap:not(.is-source-mirrored) {
         transform: scaleX(-1);
+    }
+    /* Left-facing source (editor toggle): flip ally; leave enemy as-is. */
+    .draft-side.is-ally .draft-slot-art-wrap.is-source-mirrored {
+        transform: scaleX(-1);
+    }
+    .draft-side.is-enemy .draft-slot-art-wrap.is-source-mirrored {
+        transform: none;
     }
     .draft-slot.is-filled:hover .draft-slot-art {
         filter: brightness(1.08);
@@ -6215,7 +6228,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783845396");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783849607");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -6324,6 +6337,24 @@
             attachCnNames();
         }).catch(() => { NAMES_ZH_CN = null; });
     }
+    // Per-champ draft lock-in crop map (from tools/draft-slot-crop.html).
+    // Non-blocking; re-render slots when it arrives.
+    let DRAFT_SLOT_CROPS = null;
+    // High-res splash map (Universe 1920×1080+ vs Data Dragon 1215×717).
+    let DRAFT_SPLASH_HD = null;
+    function refreshDraftSlotsIfOpen() {
+        if (document.querySelector('.view-draft')) {
+            try { renderDraftSlots('ally'); renderDraftSlots('enemy'); } catch {}
+        }
+    }
+    loadSitePayload('api/draft-slot-crops.json').then(d => {
+        DRAFT_SLOT_CROPS = d || null;
+        refreshDraftSlotsIfOpen();
+    }).catch(() => { DRAFT_SLOT_CROPS = null; });
+    loadSitePayload('api/draft-splash-hd.json').then(d => {
+        DRAFT_SPLASH_HD = d || null;
+        refreshDraftSlotsIfOpen();
+    }).catch(() => { DRAFT_SPLASH_HD = null; });
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -10319,14 +10350,60 @@
      * Loading 308×560 in a short wide bar forces a razor-thin vertical crop that
      * routinely shears heads; splash ~1215×717 matches the bar aspect so the
      * full head can stay in frame.
+     * Per-champ crop overrides: docs/api/draft-slot-crops.json (editor at
+     * docs/tools/draft-slot-crop.html).
      */
-    function draftSlotArtUrl(info) {
+    function draftSlotArtUrl(info, cid) {
         if (!info) return '';
         const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
+        // 1) Wiki HD local (or Universe remote) from docs/api/draft-splash-hd.json
+        //    Prefer local assets/draft-splash-hd/{cid}.jpg (often 4k–10k).
+        if (DRAFT_SPLASH_HD && DRAFT_SPLASH_HD.byCid) {
+            const hit = DRAFT_SPLASH_HD.byCid[String(cid != null ? cid : info.id || '')];
+            if (hit && hit.url) {
+                const u = String(hit.url);
+                if (/^https?:\/\//i.test(u)) return u;
+                // site-relative path → absolute against origin (not <base href>)
+                return `${window.location.origin}/${u.replace(/^\.?\//, '')}`;
+            }
+        }
+        // 2) CommunityDragon uncentered splash (1215×717)
+        if (alias) {
+            const low = alias.toLowerCase();
+            return (
+                'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/'
+                + `global/default/assets/characters/${low}/skins/base/images/`
+                + `${low}_splash_uncentered_0.jpg`
+            );
+        }
+        // 3) Data Dragon fallback
         if (alias) {
             return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`;
         }
         return info.image || '';
+    }
+
+    function draftSlotCropFor(cid) {
+        const map = DRAFT_SLOT_CROPS;
+        const d = (map && map.default) || {};
+        const c = (map && map.champs && map.champs[String(cid)]) || {};
+        return {
+            x: Number(c.x != null ? c.x : d.x),
+            y: Number(c.y != null ? c.y : d.y),
+            zoom: Number(c.zoom != null ? c.zoom : d.zoom),
+            // mirror=true ⇒ source art faces LEFT (editor toggle). Default false = faces RIGHT.
+            mirror: !!(c.mirror != null ? c.mirror : d.mirror),
+        };
+    }
+
+    function draftSlotCropStyle(cid) {
+        if (!DRAFT_SLOT_CROPS) return '';
+        const { x, y, zoom } = draftSlotCropFor(cid);
+        const parts = [];
+        if (Number.isFinite(x)) parts.push(`--slot-art-x:${x}%`);
+        if (Number.isFinite(y)) parts.push(`--slot-art-y:${y}%`);
+        if (Number.isFinite(zoom)) parts.push(`--slot-art-zoom:${zoom}`);
+        return parts.length ? ` style="${parts.join(';')}"` : '';
     }
 
     function renderDraftSlots(side) {
@@ -10338,18 +10415,30 @@
         list.forEach((cid) => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const art = draftSlotArtUrl(info);
+            const art = draftSlotArtUrl(info, cid);
             const icon = info && info.image ? info.image : '';
+            const alias = String((info && (info.alias || info.name_en)) || '').replace(/[^A-Za-z0-9]/g, '');
+            const ddragonSplash = alias
+                ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`
+                : '';
+            // Cascade: HD → DDragon splash → square icon
+            const onerr = icon
+                ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(ddragonSplash || icon)}'"`
+                : (ddragonSplash
+                    ? ` onerror="this.onerror=null;this.src='${escHtml(ddragonSplash)}'"`
+                    : '');
+            const cropStyle = draftSlotCropStyle(cid);
+            const mirrored = DRAFT_SLOT_CROPS && draftSlotCropFor(cid).mirror
+                ? ' is-source-mirrored' : '';
             chips.push(
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
                 + (art
-                    /* Art wrap owns the mirror for enemy; img always head-left crop. */
-                    ? `<span class="draft-slot-art-wrap" aria-hidden="true">`
+                    /* Wrap handles side facing; is-source-mirrored flips when splash faces left. */
+                    ? `<span class="draft-slot-art-wrap${mirrored}" aria-hidden="true">`
                         + `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
-                        + (icon
-                            ? `onerror="this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')"`
-                            : '')
+                        + cropStyle
+                        + onerr
                         + `></span>`
                     : '<span class="draft-slot-ph" aria-hidden="true"></span>')
                 + `<span class="draft-slot-shade" aria-hidden="true"></span>`

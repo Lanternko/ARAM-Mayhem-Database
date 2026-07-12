@@ -1,0 +1,1395 @@
+{
+  "version": 1,
+  "default": {
+    "x": 22,
+    "y": 20,
+    "zoom": 1.38,
+    "mirror": false
+  },
+  "champs": {
+    "1": {
+      "x": 100,
+      "y": 24.4,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Annie",
+      "name_zh": "安妮"
+    },
+    "2": {
+      "x": 93.7,
+      "y": 18.1,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Olaf",
+      "name_zh": "歐拉夫"
+    },
+    "3": {
+      "x": 53.3,
+      "y": 2.8,
+      "zoom": 2.46,
+      "mirror": false,
+      "alias": "Galio",
+      "name_zh": "加里歐"
+    },
+    "4": {
+      "x": 100,
+      "y": 5.8,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "TwistedFate",
+      "name_zh": "逆命"
+    },
+    "5": {
+      "x": 62.8,
+      "y": 9.2,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "XinZhao",
+      "name_zh": "趙信"
+    },
+    "6": {
+      "x": 64.2,
+      "y": 0,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Urgot",
+      "name_zh": "烏爾加特"
+    },
+    "7": {
+      "x": 51.9,
+      "y": 1,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Leblanc",
+      "name_zh": "勒布朗"
+    },
+    "8": {
+      "x": 96.5,
+      "y": 15.7,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Vladimir",
+      "name_zh": "弗拉迪米爾"
+    },
+    "9": {
+      "x": 21.9,
+      "y": 30.9,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Fiddlesticks",
+      "name_zh": "費德提克"
+    },
+    "10": {
+      "x": 86.1,
+      "y": 21.7,
+      "zoom": 2.24,
+      "mirror": false,
+      "alias": "Kayle",
+      "name_zh": "凱爾"
+    },
+    "11": {
+      "x": 93.4,
+      "y": 18,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "MasterYi",
+      "name_zh": "易大師"
+    },
+    "12": {
+      "x": 68.4,
+      "y": 39.5,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "Alistar",
+      "name_zh": "亞歷斯塔"
+    },
+    "13": {
+      "x": 87,
+      "y": 38.1,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Ryze",
+      "name_zh": "雷茲"
+    },
+    "14": {
+      "x": 83.8,
+      "y": 8.7,
+      "zoom": 2.56,
+      "mirror": false,
+      "alias": "Sion",
+      "name_zh": "賽恩"
+    },
+    "15": {
+      "x": 60.8,
+      "y": 0,
+      "zoom": 2.46,
+      "mirror": false,
+      "alias": "Sivir",
+      "name_zh": "希維爾"
+    },
+    "16": {
+      "x": 39.8,
+      "y": 2.6,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Soraka",
+      "name_zh": "索拉卡"
+    },
+    "17": {
+      "x": 69.1,
+      "y": 3.7,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Teemo",
+      "name_zh": "提摩"
+    },
+    "18": {
+      "x": 92.3,
+      "y": 18.5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Tristana",
+      "name_zh": "崔絲塔娜"
+    },
+    "19": {
+      "x": 60.4,
+      "y": 53.2,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Warwick",
+      "name_zh": "沃維克"
+    },
+    "20": {
+      "x": 72.1,
+      "y": 80.1,
+      "zoom": 2.7,
+      "mirror": false,
+      "alias": "Nunu",
+      "name_zh": "努努和威朗普"
+    },
+    "21": {
+      "x": 97.1,
+      "y": 34.8,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "MissFortune",
+      "name_zh": "好運姐"
+    },
+    "22": {
+      "x": 84.1,
+      "y": 10.6,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Ashe",
+      "name_zh": "艾希"
+    },
+    "23": {
+      "x": 88.2,
+      "y": 4,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Tryndamere",
+      "name_zh": "泰達米爾"
+    },
+    "24": {
+      "x": 92.1,
+      "y": 18.8,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Jax",
+      "name_zh": "賈克斯"
+    },
+    "25": {
+      "x": 86.6,
+      "y": 23.2,
+      "zoom": 3.24,
+      "mirror": false,
+      "alias": "Morgana",
+      "name_zh": "魔甘娜"
+    },
+    "26": {
+      "x": 51.2,
+      "y": 13.6,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Zilean",
+      "name_zh": "極靈"
+    },
+    "27": {
+      "x": 88.1,
+      "y": 14.4,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Singed",
+      "name_zh": "辛吉德"
+    },
+    "28": {
+      "x": 48.4,
+      "y": 0,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Evelynn",
+      "name_zh": "伊芙琳"
+    },
+    "29": {
+      "x": 51.4,
+      "y": 25.5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Twitch",
+      "name_zh": "圖奇"
+    },
+    "30": {
+      "x": 75,
+      "y": 3.2,
+      "zoom": 2.16,
+      "mirror": false,
+      "alias": "Karthus",
+      "name_zh": "卡爾瑟斯"
+    },
+    "31": {
+      "x": 79.2,
+      "y": 25.8,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Chogath",
+      "name_zh": "科加斯"
+    },
+    "32": {
+      "x": 91.9,
+      "y": 20,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Amumu",
+      "name_zh": "阿姆姆"
+    },
+    "33": {
+      "x": 91.1,
+      "y": 37.6,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Rammus",
+      "name_zh": "拉姆斯"
+    },
+    "34": {
+      "x": 59.1,
+      "y": 28.2,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Anivia",
+      "name_zh": "艾妮維亞"
+    },
+    "35": {
+      "x": 92.2,
+      "y": 6.6,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Shaco",
+      "name_zh": "薩科"
+    },
+    "36": {
+      "x": 65.3,
+      "y": 2.7,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "DrMundo",
+      "name_zh": "蒙多醫生"
+    },
+    "37": {
+      "x": 98,
+      "y": 7.2,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Sona",
+      "name_zh": "索娜"
+    },
+    "38": {
+      "x": 76.2,
+      "y": 2.2,
+      "zoom": 2.04,
+      "mirror": false,
+      "alias": "Kassadin",
+      "name_zh": "卡薩丁"
+    },
+    "39": {
+      "x": 50,
+      "y": 0,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Irelia",
+      "name_zh": "伊瑞莉雅"
+    },
+    "40": {
+      "x": 100,
+      "y": 24.5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Janna",
+      "name_zh": "珍娜"
+    },
+    "41": {
+      "x": 100,
+      "y": 11.3,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Gangplank",
+      "name_zh": "剛普朗克"
+    },
+    "42": {
+      "x": 89.5,
+      "y": 20.1,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Corki",
+      "name_zh": "庫奇"
+    },
+    "43": {
+      "x": 100,
+      "y": 11.7,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Karma",
+      "name_zh": "卡瑪"
+    },
+    "44": {
+      "x": 96.2,
+      "y": 0,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Taric",
+      "name_zh": "塔里克"
+    },
+    "45": {
+      "x": 59.2,
+      "y": 20,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Veigar",
+      "name_zh": "維迦"
+    },
+    "48": {
+      "x": 73.3,
+      "y": 16.9,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Trundle",
+      "name_zh": "特朗德"
+    },
+    "50": {
+      "x": 81.1,
+      "y": 2.8,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Swain",
+      "name_zh": "斯溫"
+    },
+    "51": {
+      "x": 92,
+      "y": 13.1,
+      "zoom": 1.52,
+      "mirror": false,
+      "alias": "Caitlyn",
+      "name_zh": "凱特琳"
+    },
+    "53": {
+      "x": 87.2,
+      "y": 28,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Blitzcrank",
+      "name_zh": "布里茨"
+    },
+    "54": {
+      "x": 84.5,
+      "y": 73.3,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Malphite",
+      "name_zh": "墨菲特"
+    },
+    "55": {
+      "x": 69.6,
+      "y": 36.1,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Katarina",
+      "name_zh": "卡特蓮娜"
+    },
+    "56": {
+      "x": 75.8,
+      "y": 47.1,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Nocturne",
+      "name_zh": "夜曲"
+    },
+    "57": {
+      "x": 85.4,
+      "y": 31.7,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Maokai",
+      "name_zh": "茂凱"
+    },
+    "58": {
+      "x": 71.3,
+      "y": 1.9,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Renekton",
+      "name_zh": "雷尼克頓"
+    },
+    "59": {
+      "x": 81.6,
+      "y": 3.7,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "JarvanIV",
+      "name_zh": "嘉文四世"
+    },
+    "60": {
+      "x": 98.9,
+      "y": 10.6,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Elise",
+      "name_zh": "伊莉絲"
+    },
+    "61": {
+      "x": 95.4,
+      "y": 0,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Orianna",
+      "name_zh": "奧莉安娜"
+    },
+    "62": {
+      "x": 83.1,
+      "y": 9,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "MonkeyKing",
+      "name_zh": "悟空"
+    },
+    "63": {
+      "x": 96.5,
+      "y": 22.9,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Brand",
+      "name_zh": "布蘭德"
+    },
+    "64": {
+      "x": 73.4,
+      "y": 10.2,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "LeeSin",
+      "name_zh": "李星"
+    },
+    "67": {
+      "x": 92.1,
+      "y": 12.4,
+      "zoom": 3.02,
+      "mirror": false,
+      "alias": "Vayne",
+      "name_zh": "汎"
+    },
+    "68": {
+      "x": 83.3,
+      "y": 0,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Rumble",
+      "name_zh": "藍寶"
+    },
+    "69": {
+      "x": 100,
+      "y": 26.3,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Cassiopeia",
+      "name_zh": "卡莎碧雅"
+    },
+    "72": {
+      "x": 45.4,
+      "y": 89.4,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Skarner",
+      "name_zh": "史加納"
+    },
+    "74": {
+      "x": 100,
+      "y": 34,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Heimerdinger",
+      "name_zh": "漢默丁格"
+    },
+    "75": {
+      "x": 79.1,
+      "y": 14.9,
+      "zoom": 2.04,
+      "mirror": false,
+      "alias": "Nasus",
+      "name_zh": "納瑟斯"
+    },
+    "76": {
+      "x": 96.5,
+      "y": 1.4,
+      "zoom": 1.98,
+      "mirror": false,
+      "alias": "Nidalee",
+      "name_zh": "奈德麗"
+    },
+    "77": {
+      "x": 48.3,
+      "y": 0,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Udyr",
+      "name_zh": "烏迪爾"
+    },
+    "78": {
+      "x": 89.1,
+      "y": 9.9,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Poppy",
+      "name_zh": "波比"
+    },
+    "79": {
+      "x": 84.8,
+      "y": 14.5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Gragas",
+      "name_zh": "古拉格斯"
+    },
+    "80": {
+      "x": 46.8,
+      "y": 13.3,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Pantheon",
+      "name_zh": "潘森"
+    },
+    "81": {
+      "x": 81.9,
+      "y": 23.1,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Ezreal",
+      "name_zh": "伊澤瑞爾"
+    },
+    "82": {
+      "x": 42.1,
+      "y": 0,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Mordekaiser",
+      "name_zh": "魔鬥凱薩"
+    },
+    "83": {
+      "x": 79.5,
+      "y": 1.5,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Yorick",
+      "name_zh": "約瑞科"
+    },
+    "84": {
+      "x": 43.9,
+      "y": 0,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Akali",
+      "name_zh": "阿卡莉"
+    },
+    "85": {
+      "x": 100,
+      "y": 21.1,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Kennen",
+      "name_zh": "凱能"
+    },
+    "86": {
+      "x": 100,
+      "y": 29.4,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Garen",
+      "name_zh": "蓋倫"
+    },
+    "89": {
+      "x": 84.2,
+      "y": 5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Leona",
+      "name_zh": "雷歐娜"
+    },
+    "90": {
+      "x": 85.1,
+      "y": 5.9,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Malzahar",
+      "name_zh": "馬爾札哈"
+    },
+    "91": {
+      "x": 84.5,
+      "y": 17,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Talon",
+      "name_zh": "塔隆"
+    },
+    "92": {
+      "x": 83.4,
+      "y": 12.3,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Riven",
+      "name_zh": "雷玟"
+    },
+    "96": {
+      "x": 100,
+      "y": 64.4,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "KogMaw",
+      "name_zh": "寇格魔"
+    },
+    "98": {
+      "x": 81.4,
+      "y": 3.3,
+      "zoom": 1.66,
+      "mirror": false,
+      "alias": "Shen",
+      "name_zh": "慎"
+    },
+    "99": {
+      "x": 84.4,
+      "y": 8,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Lux",
+      "name_zh": "拉克絲"
+    },
+    "101": {
+      "x": 53.9,
+      "y": 0.9,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Xerath",
+      "name_zh": "齊勒斯"
+    },
+    "102": {
+      "x": 56.3,
+      "y": 2.4,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "Shyvana",
+      "name_zh": "希瓦娜"
+    },
+    "103": {
+      "x": 70.8,
+      "y": 15.2,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Ahri",
+      "name_zh": "阿璃"
+    },
+    "104": {
+      "x": 75.1,
+      "y": 0,
+      "zoom": 1.52,
+      "mirror": false,
+      "alias": "Graves",
+      "name_zh": "葛雷夫"
+    },
+    "105": {
+      "x": 93.6,
+      "y": 7.7,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Fizz",
+      "name_zh": "飛斯"
+    },
+    "106": {
+      "x": 68.5,
+      "y": 0,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Volibear",
+      "name_zh": "弗力貝爾"
+    },
+    "107": {
+      "x": 73.8,
+      "y": 18.1,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Rengar",
+      "name_zh": "雷葛爾"
+    },
+    "110": {
+      "x": 44.5,
+      "y": 0,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Varus",
+      "name_zh": "法洛士"
+    },
+    "111": {
+      "x": 97.3,
+      "y": 3.2,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Nautilus",
+      "name_zh": "納帝魯斯"
+    },
+    "112": {
+      "x": 46.9,
+      "y": 13.9,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Viktor",
+      "name_zh": "維克特"
+    },
+    "113": {
+      "x": 55.1,
+      "y": 2.2,
+      "zoom": 1.92,
+      "mirror": false,
+      "alias": "Sejuani",
+      "name_zh": "史瓦妮"
+    },
+    "114": {
+      "x": 72.4,
+      "y": 2.5,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Fiora",
+      "name_zh": "菲歐拉"
+    },
+    "115": {
+      "x": 100,
+      "y": 41.2,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Ziggs",
+      "name_zh": "希格斯"
+    },
+    "117": {
+      "x": 88.8,
+      "y": 39.5,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Lulu",
+      "name_zh": "露璐"
+    },
+    "119": {
+      "x": 100,
+      "y": 23.8,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Draven",
+      "name_zh": "達瑞文"
+    },
+    "120": {
+      "x": 69.3,
+      "y": 0,
+      "zoom": 2.28,
+      "mirror": false,
+      "alias": "Hecarim",
+      "name_zh": "赫克林"
+    },
+    "121": {
+      "x": 84,
+      "y": 55.1,
+      "zoom": 2.52,
+      "mirror": false,
+      "alias": "Khazix",
+      "name_zh": "卡力斯"
+    },
+    "122": {
+      "x": 58.1,
+      "y": 0,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Darius",
+      "name_zh": "達瑞斯"
+    },
+    "126": {
+      "x": 89.9,
+      "y": 19.1,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Jayce",
+      "name_zh": "杰西"
+    },
+    "127": {
+      "x": 82.8,
+      "y": 13.3,
+      "zoom": 1.98,
+      "mirror": false,
+      "alias": "Lissandra",
+      "name_zh": "麗珊卓"
+    },
+    "131": {
+      "x": 90.5,
+      "y": 36.3,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Diana",
+      "name_zh": "黛安娜"
+    },
+    "133": {
+      "x": 77.6,
+      "y": 30.1,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "Quinn",
+      "name_zh": "葵恩"
+    },
+    "134": {
+      "x": 44.4,
+      "y": 16.4,
+      "zoom": 2.1,
+      "mirror": false,
+      "alias": "Syndra",
+      "name_zh": "星朵拉"
+    },
+    "136": {
+      "x": 82.1,
+      "y": 0,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "AurelionSol",
+      "name_zh": "翱銳龍獸"
+    },
+    "141": {
+      "x": 67.9,
+      "y": 54,
+      "zoom": 1.92,
+      "mirror": false,
+      "alias": "Kayn",
+      "name_zh": "慨影"
+    },
+    "142": {
+      "x": 45,
+      "y": 13.5,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Zoe",
+      "name_zh": "柔依"
+    },
+    "143": {
+      "x": 78.7,
+      "y": 22.3,
+      "zoom": 1.92,
+      "mirror": false,
+      "alias": "Zyra",
+      "name_zh": "枷蘿"
+    },
+    "145": {
+      "x": 36.3,
+      "y": 7.6,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Kaisa",
+      "name_zh": "凱莎"
+    },
+    "147": {
+      "x": 42.1,
+      "y": 2.9,
+      "zoom": 1.76,
+      "mirror": false,
+      "alias": "Seraphine",
+      "name_zh": "瑟菈紛"
+    },
+    "150": {
+      "x": 100,
+      "y": 59.9,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Gnar",
+      "name_zh": "吶兒"
+    },
+    "154": {
+      "x": 100,
+      "y": 48.6,
+      "zoom": 1.24,
+      "mirror": false,
+      "alias": "Zac",
+      "name_zh": "札克"
+    },
+    "157": {
+      "x": 87.6,
+      "y": 34.6,
+      "zoom": 2.22,
+      "mirror": false,
+      "alias": "Yasuo",
+      "name_zh": "犽宿"
+    },
+    "161": {
+      "x": 59.2,
+      "y": 33.9,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Velkoz",
+      "name_zh": "威寇茲"
+    },
+    "163": {
+      "x": 88,
+      "y": 5.7,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Taliyah",
+      "name_zh": "塔莉雅"
+    },
+    "164": {
+      "x": 100,
+      "y": 3.7,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Camille",
+      "name_zh": "卡蜜兒"
+    },
+    "166": {
+      "x": 70,
+      "y": 54.2,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Akshan",
+      "name_zh": "埃可尚"
+    },
+    "200": {
+      "x": 49.8,
+      "y": 2.4,
+      "zoom": 2.82,
+      "mirror": false,
+      "alias": "Belveth",
+      "name_zh": "貝爾薇斯"
+    },
+    "201": {
+      "x": 96.8,
+      "y": 6.3,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "Braum",
+      "name_zh": "布郎姆"
+    },
+    "202": {
+      "x": 71.4,
+      "y": 3.8,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Jhin",
+      "name_zh": "燼"
+    },
+    "203": {
+      "x": 64.9,
+      "y": 25.5,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Kindred",
+      "name_zh": "鏡爪"
+    },
+    "221": {
+      "x": 58.8,
+      "y": 12.5,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Zeri",
+      "name_zh": "婕莉"
+    },
+    "222": {
+      "x": 86.7,
+      "y": 11.5,
+      "zoom": 2.66,
+      "mirror": false,
+      "alias": "Jinx",
+      "name_zh": "吉茵珂絲"
+    },
+    "223": {
+      "x": 100,
+      "y": 34.1,
+      "zoom": 1.32,
+      "mirror": false,
+      "alias": "TahmKench",
+      "name_zh": "貪啃奇"
+    },
+    "233": {
+      "x": 50.3,
+      "y": 24.7,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Briar",
+      "name_zh": "布蕾爾"
+    },
+    "234": {
+      "x": 78.7,
+      "y": 5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Viego",
+      "name_zh": "維爾戈"
+    },
+    "235": {
+      "x": 49.8,
+      "y": 8.8,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Senna",
+      "name_zh": "姍娜"
+    },
+    "236": {
+      "x": 82.7,
+      "y": 31.2,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Lucian",
+      "name_zh": "路西恩"
+    },
+    "238": {
+      "x": 92.1,
+      "y": 8,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Zed",
+      "name_zh": "劫"
+    },
+    "240": {
+      "x": 100,
+      "y": 0,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Kled",
+      "name_zh": "克雷德"
+    },
+    "245": {
+      "x": 100,
+      "y": 14.5,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Ekko",
+      "name_zh": "艾克"
+    },
+    "246": {
+      "x": 34,
+      "y": 10.7,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Qiyana",
+      "name_zh": "姬亞娜"
+    },
+    "254": {
+      "x": 86.9,
+      "y": 21.5,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Vi",
+      "name_zh": "菲艾"
+    },
+    "266": {
+      "x": 75.4,
+      "y": 8,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Aatrox",
+      "name_zh": "厄薩斯"
+    },
+    "267": {
+      "x": 100,
+      "y": 16.2,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Nami",
+      "name_zh": "娜米"
+    },
+    "268": {
+      "x": 93.3,
+      "y": 10.3,
+      "zoom": 2.16,
+      "mirror": false,
+      "alias": "Azir",
+      "name_zh": "阿祈爾"
+    },
+    "350": {
+      "x": 36.6,
+      "y": 6.5,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Yuumi",
+      "name_zh": "悠咪"
+    },
+    "360": {
+      "x": 54.5,
+      "y": 8,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Samira",
+      "name_zh": "煞蜜拉"
+    },
+    "412": {
+      "x": 79.7,
+      "y": 19.4,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Thresh",
+      "name_zh": "瑟雷西"
+    },
+    "420": {
+      "x": 77,
+      "y": 0,
+      "zoom": 1.98,
+      "mirror": false,
+      "alias": "Illaoi",
+      "name_zh": "伊羅旖"
+    },
+    "421": {
+      "x": 67.3,
+      "y": 29.4,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "RekSai",
+      "name_zh": "雷珂煞"
+    },
+    "427": {
+      "x": 49,
+      "y": 1.3,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Ivern",
+      "name_zh": "埃爾文"
+    },
+    "429": {
+      "x": 84.5,
+      "y": 10.4,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Kalista",
+      "name_zh": "克黎思妲"
+    },
+    "432": {
+      "x": 80.7,
+      "y": 19.1,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Bard",
+      "name_zh": "巴德"
+    },
+    "497": {
+      "x": 38.2,
+      "y": 0,
+      "zoom": 2.22,
+      "mirror": false,
+      "alias": "Rakan",
+      "name_zh": "銳空"
+    },
+    "498": {
+      "x": 88.8,
+      "y": 24.7,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Xayah",
+      "name_zh": "剎雅"
+    },
+    "516": {
+      "x": 50.4,
+      "y": 23.9,
+      "zoom": 1.68,
+      "mirror": false,
+      "alias": "Ornn",
+      "name_zh": "鄂爾"
+    },
+    "517": {
+      "x": 49.1,
+      "y": 14,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Sylas",
+      "name_zh": "賽勒斯"
+    },
+    "518": {
+      "x": 39.2,
+      "y": 13.1,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Neeko",
+      "name_zh": "妮可"
+    },
+    "523": {
+      "x": 60.9,
+      "y": 5.6,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Aphelios",
+      "name_zh": "亞菲利歐"
+    },
+    "526": {
+      "x": 55.5,
+      "y": 14.7,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Rell",
+      "name_zh": "銳兒"
+    },
+    "555": {
+      "x": 41.6,
+      "y": 23,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Pyke",
+      "name_zh": "派克"
+    },
+    "711": {
+      "x": 77,
+      "y": 19.1,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Vex",
+      "name_zh": "薇可絲"
+    },
+    "777": {
+      "x": 58.6,
+      "y": 4.1,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Yone",
+      "name_zh": "犽凝"
+    },
+    "799": {
+      "x": 46,
+      "y": 4.5,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Ambessa",
+      "name_zh": "安比薩"
+    },
+    "800": {
+      "x": 31.4,
+      "y": 0,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Mel",
+      "name_zh": "梅爾"
+    },
+    "804": {
+      "x": 76,
+      "y": 9.4,
+      "zoom": 1.52,
+      "mirror": false,
+      "alias": "Yunara",
+      "name_zh": "尤娜拉"
+    },
+    "805": {
+      "x": 82.4,
+      "y": 0,
+      "zoom": 1.56,
+      "mirror": false,
+      "alias": "Locke",
+      "name_zh": "洛克"
+    },
+    "875": {
+      "x": 45.5,
+      "y": 0,
+      "zoom": 2,
+      "mirror": false,
+      "alias": "Sett",
+      "name_zh": "賽特"
+    },
+    "876": {
+      "x": 41.7,
+      "y": 13.8,
+      "zoom": 1.88,
+      "mirror": false,
+      "alias": "Lillia",
+      "name_zh": "莉莉亞"
+    },
+    "887": {
+      "x": 48.1,
+      "y": 6,
+      "zoom": 1.62,
+      "mirror": false,
+      "alias": "Gwen",
+      "name_zh": "關"
+    },
+    "888": {
+      "x": 78,
+      "y": 5.4,
+      "zoom": 1.8,
+      "mirror": false,
+      "alias": "Renata",
+      "name_zh": "睿娜妲"
+    },
+    "893": {
+      "x": 43.8,
+      "y": 4.4,
+      "zoom": 1.58,
+      "mirror": false,
+      "alias": "Aurora",
+      "name_zh": "歐羅拉"
+    },
+    "895": {
+      "x": 70.9,
+      "y": 25.7,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "Nilah",
+      "name_zh": "淣菈"
+    },
+    "897": {
+      "x": 34,
+      "y": 5.3,
+      "zoom": 1.74,
+      "mirror": false,
+      "alias": "KSante",
+      "name_zh": "卡桑帝"
+    },
+    "901": {
+      "x": 41,
+      "y": 15.1,
+      "zoom": 1.44,
+      "mirror": false,
+      "alias": "Smolder",
+      "name_zh": "史矛德"
+    },
+    "902": {
+      "x": 47.9,
+      "y": 10.5,
+      "zoom": 1.5,
+      "mirror": false,
+      "alias": "Milio",
+      "name_zh": "米里歐"
+    },
+    "904": {
+      "x": 58.2,
+      "y": 0.7,
+      "zoom": 1.86,
+      "mirror": false,
+      "alias": "Zaahen",
+      "name_zh": "薩亨"
+    },
+    "910": {
+      "x": 87.1,
+      "y": 8.4,
+      "zoom": 1.38,
+      "mirror": false,
+      "alias": "Hwei",
+      "name_zh": "赫威"
+    },
+    "950": {
+      "x": 27.2,
+      "y": 58.4,
+      "zoom": 1.3,
+      "mirror": false,
+      "alias": "Naafiri",
+      "name_zh": "娜菲芮"
+    }
+  }
+}

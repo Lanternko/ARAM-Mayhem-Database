@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Draft slot crop editor · arammeta</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0b0d;
+      --surface: #12151c;
+      --surface-2: #1a1d24;
+      --border: rgba(255,255,255,0.1);
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #f5c518;
+      --accent-on: #14110a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 13px/1.45 system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr) 300px;
+      height: 100vh;
+    }
+    header.bar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header.bar h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    header.bar .grow { flex: 1; }
+    header.bar .status { color: var(--muted); font-size: 12px; }
+    button, .btn {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 7px 12px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: var(--accent-on);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    button:hover { filter: brightness(1.08); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .list-pane, .edit-pane, .side-pane {
+      min-height: 0;
+      overflow: auto;
+    }
+    .list-pane {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: #0d0f14;
+    }
+    .list-pane .search {
+      margin: 10px;
+      width: calc(100% - 20px);
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+    .list-meta {
+      padding: 0 12px 8px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .champ-list {
+      list-style: none;
+      margin: 0;
+      padding: 0 6px 12px;
+      overflow: auto;
+      flex: 1;
+    }
+    .champ-list li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .champ-list li:hover { background: rgba(255,255,255,0.04); }
+    .champ-list li.is-active {
+      background: color-mix(in srgb, var(--accent) 18%, transparent);
+      outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+    .champ-list li.has-crop .dot {
+      background: var(--accent);
+    }
+    .champ-list img {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+    .champ-list .nm { flex: 1; min-width: 0; }
+    .champ-list .nm strong { display: block; font-size: 12px; }
+    .champ-list .nm span { color: var(--muted); font-size: 10px; }
+    .champ-list .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3a3f48;
+      flex: none;
+    }
+    .edit-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 16px;
+      overflow: auto;
+    }
+    .edit-title {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .edit-title h2 { margin: 0; font-size: 18px; }
+    .edit-title span { color: var(--muted); }
+    .stage {
+      display: grid;
+      gap: 12px;
+    }
+    .stage-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    /* Interactive viewport = same crop as live draft slot */
+    .viewport {
+      position: relative;
+      width: min(100%, 720px);
+      aspect-ratio: 2.2 / 1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0c0e14;
+      border: 1px solid var(--border);
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+    }
+    .viewport.is-dragging { cursor: grabbing; }
+    .viewport .art-wrap {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    .viewport.is-mirrored .art-wrap {
+      transform: scaleX(-1);
+    }
+    .viewport img.art {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: var(--x, 22%) var(--y, 20%);
+      transform: scale(var(--z, 1.38));
+      transform-origin: var(--x, 22%) var(--y, 20%);
+      pointer-events: none;
+      user-select: none;
+    }
+    .viewport .hint {
+      position: absolute;
+      left: 10px;
+      bottom: 8px;
+      z-index: 2;
+      font-size: 11px;
+      color: rgba(255,255,255,0.75);
+      text-shadow: 0 1px 4px #000;
+      pointer-events: none;
+    }
+    .viewport .cross {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(to right, transparent 49.5%, rgba(245,197,24,0.35) 49.5%, rgba(245,197,24,0.35) 50.5%, transparent 50.5%),
+        linear-gradient(to bottom, transparent 49.5%, rgba(245,197,24,0.35) 49.5%, rgba(245,197,24,0.35) 50.5%, transparent 50.5%);
+      opacity: 0.5;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 64px 1fr 56px;
+      gap: 8px 10px;
+      align-items: center;
+      max-width: 720px;
+    }
+    .controls label { color: var(--muted); font-size: 12px; }
+    .controls input[type="range"] { width: 100%; }
+    .controls output {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--text);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-width: 720px;
+    }
+    .side-pane {
+      border-left: 1px solid var(--border);
+      padding: 14px;
+      background: #0d0f14;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .preview-block h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .slot-preview {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 2.2 / 1;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0c0e14;
+      border: 1px solid var(--border);
+    }
+    .slot-preview .art-wrap {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    /* Default: source faces RIGHT → ally plain, enemy flipped. */
+    .slot-preview.is-enemy:not(.is-source-mirrored) .art-wrap {
+      transform: scaleX(-1);
+    }
+    /* Source faces LEFT (toggle) → ally flipped, enemy plain. */
+    .slot-preview.is-ally.is-source-mirrored .art-wrap {
+      transform: scaleX(-1);
+    }
+    .slot-preview.is-enemy.is-source-mirrored .art-wrap {
+      transform: none;
+    }
+    .slot-preview img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: var(--x, 22%) var(--y, 20%);
+      transform: scale(var(--z, 1.38));
+      transform-origin: var(--x, 22%) var(--y, 20%);
+    }
+    .slot-preview .name {
+      position: absolute;
+      left: 10px;
+      bottom: 8px;
+      z-index: 1;
+      font-weight: 800;
+      font-size: 12px;
+      text-shadow: 0 1px 8px #000;
+    }
+    .slot-preview.is-enemy .name {
+      left: auto;
+      right: 10px;
+    }
+    .slot-preview .shade {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(0,0,0,0.55), transparent 50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .slot-preview.is-enemy .shade {
+      background: linear-gradient(270deg, rgba(0,0,0,0.55), transparent 50%);
+    }
+    button.is-on {
+      background: color-mix(in srgb, var(--accent) 28%, var(--surface-2));
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .help {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .help code {
+      font-size: 10px;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .empty-edit {
+      color: var(--muted);
+      padding: 40px 8px;
+    }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 220px minmax(0, 1fr); }
+      .side-pane { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="bar">
+      <h1>Draft slot crop editor</h1>
+      <span class="status" id="status">loading…</span>
+      <div class="grow"></div>
+      <button type="button" id="btn-load">匯入 JSON</button>
+      <button type="button" id="btn-export" class="primary">存檔下載</button>
+      <input type="file" id="file-in" accept="application/json,.json" hidden />
+    </header>
+
+    <aside class="list-pane">
+      <input class="search" id="search" type="search" placeholder="搜尋英雄（中 / 英）" autocomplete="off" />
+      <div class="list-meta" id="list-meta">—</div>
+      <ul class="champ-list" id="champ-list"></ul>
+    </aside>
+
+    <main class="edit-pane" id="edit-pane">
+      <div class="empty-edit" id="empty-edit">從左側選一個英雄開始標註裁切。</div>
+      <div id="editor" hidden>
+        <div class="edit-title">
+          <h2 id="ed-name">—</h2>
+          <span id="ed-sub">—</span>
+        </div>
+        <div class="stage">
+          <div class="stage-label">拖曳平移 · 滾輪縮放 · 對齊即時預覽</div>
+          <div class="viewport" id="viewport" title="拖曳移動 · 滾輪縮放">
+            <div class="art-wrap" id="stage-wrap">
+              <img class="art" id="stage-art" alt="" draggable="false" />
+            </div>
+            <div class="cross" aria-hidden="true"></div>
+            <div class="hint">預設朝右（Ally）· 拖曳移動 · 滾輪縮放</div>
+          </div>
+        </div>
+        <div class="controls">
+          <label for="rng-x">X %</label>
+          <input id="rng-x" type="range" min="0" max="100" step="0.5" />
+          <output id="out-x">22</output>
+          <label for="rng-y">Y %</label>
+          <input id="rng-y" type="range" min="0" max="100" step="0.5" />
+          <output id="out-y">20</output>
+          <label for="rng-z">Zoom</label>
+          <input id="rng-z" type="range" min="1" max="4.5" step="0.01" />
+          <output id="out-z">1.38</output>
+        </div>
+        <div class="actions">
+          <button type="button" id="btn-mirror" title="原圖朝左時開啟，讓 Ally 仍朝右">鏡像翻轉</button>
+          <button type="button" id="btn-reset">重置此英雄</button>
+          <button type="button" id="btn-apply-default">套用 default</button>
+          <button type="button" id="btn-set-default">把目前值設成 default</button>
+          <button type="button" id="btn-clear">清除此英雄覆寫</button>
+        </div>
+        <p class="help">
+          預設：立繪<strong>朝右</strong>（Ally）；敵方自動鏡像朝左。
+          若這隻原圖其實朝左，按 <strong>鏡像翻轉</strong> 修正。
+          存檔下載 <code>draft-slot-crops.json</code> → 放到
+          <code>docs/api/draft-slot-crops.json</code>。
+        </p>
+      </div>
+    </main>
+
+    <aside class="side-pane">
+      <div class="preview-block">
+        <h3>Ally preview（應朝右）</h3>
+        <div class="slot-preview is-ally" id="prev-ally">
+          <div class="art-wrap"><img id="prev-ally-img" alt="" /></div>
+          <div class="shade"></div>
+          <div class="name" id="prev-ally-name">—</div>
+        </div>
+      </div>
+      <div class="preview-block">
+        <h3>Enemy preview（應朝左）</h3>
+        <div class="slot-preview is-enemy" id="prev-enemy">
+          <div class="art-wrap"><img id="prev-enemy-img" alt="" /></div>
+          <div class="shade"></div>
+          <div class="name" id="prev-enemy-name">—</div>
+        </div>
+      </div>
+      <p class="help">
+        <code>x/y/zoom</code> = 裁切；<code>mirror</code> = 原圖朝左時為 true。
+        Ally 朝右、Enemy 朝左為目標。
+      </p>
+    </aside>
+  </div>
+
+  <script>
+(function () {
+  const LS_KEY = 'arammeta-draft-slot-crops-v1';
+  // Default: splash faces RIGHT → Ally looks right, Enemy is auto-mirrored left.
+  // mirror:true means the *source* faces LEFT (user correction).
+  const DEFAULTS = { x: 22, y: 20, zoom: 1.38, mirror: false };
+
+  let champs = []; // {cid, alias, name_zh, name_en, image, splash}
+  let crops = { version: 1, default: { ...DEFAULTS }, champs: {} };
+  let activeCid = null;
+  let dirty = false;
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $('status');
+  const listEl = $('champ-list');
+  const listMeta = $('list-meta');
+  const searchEl = $('search');
+  const editor = $('editor');
+  const emptyEdit = $('empty-edit');
+  const viewport = $('viewport');
+  const stageArt = $('stage-art');
+
+  let SPLASH_HD = null; // docs/api/draft-splash-hd.json
+
+  function splashUrl(alias, cid) {
+    if (SPLASH_HD && SPLASH_HD.byCid && cid != null && SPLASH_HD.byCid[String(cid)]) {
+      const hit = SPLASH_HD.byCid[String(cid)];
+      if (hit && hit.url) {
+        const u = String(hit.url);
+        if (/^https?:\/\//i.test(u)) return u;
+        // tool is under /tools/ → local assets live at ../assets/...
+        if (u.startsWith('assets/')) return '../' + u;
+        return u;
+      }
+      if (hit.remoteUrl) return hit.remoteUrl;
+    }
+    const a = String(alias || '').replace(/[^A-Za-z0-9]/g, '');
+    if (!a) return '';
+    const low = a.toLowerCase();
+    return (
+      'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/'
+      + `global/default/assets/characters/${low}/skins/base/images/`
+      + `${low}_splash_uncentered_0.jpg`
+    );
+  }
+
+  function setStatus(msg) {
+    statusEl.textContent = msg;
+  }
+
+  function markDirty() {
+    dirty = true;
+    setStatus('未存檔變更 · localStorage 已備份');
+    persistLocal();
+  }
+
+  function persistLocal() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(crops)); } catch {}
+  }
+
+  function loadLocal() {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  }
+
+  function normalizeCrop(c) {
+    const d = crops.default || DEFAULTS;
+    const src = c || d;
+    return {
+      x: clamp(Number(src.x ?? d.x), 0, 100),
+      y: clamp(Number(src.y ?? d.y), 0, 100),
+      zoom: clamp(Number(src.zoom ?? d.zoom), 1, 4.5),
+      mirror: !!(src.mirror != null ? src.mirror : d.mirror),
+    };
+  }
+
+  function clamp(n, lo, hi) {
+    if (!Number.isFinite(n)) return lo;
+    return Math.min(hi, Math.max(lo, n));
+  }
+
+  function getCrop(cid) {
+    const d = crops.default || DEFAULTS;
+    const over = (crops.champs && crops.champs[String(cid)]) || {};
+    return normalizeCrop({ ...d, ...over });
+  }
+
+  function setCrop(cid, partial) {
+    const cur = getCrop(cid);
+    const merged = {
+      x: partial.x != null ? partial.x : cur.x,
+      y: partial.y != null ? partial.y : cur.y,
+      zoom: partial.zoom != null ? partial.zoom : cur.zoom,
+      mirror: partial.mirror != null ? !!partial.mirror : cur.mirror,
+    };
+    const c = normalizeCrop(merged);
+    crops.champs[String(cid)] = {
+      x: round1(c.x),
+      y: round1(c.y),
+      zoom: round2(c.zoom),
+      mirror: !!c.mirror,
+    };
+    return c;
+  }
+
+  function round1(n) { return Math.round(n * 10) / 10; }
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  function applyCssVars(el, crop) {
+    if (!el) return;
+    el.style.setProperty('--x', `${crop.x}%`);
+    el.style.setProperty('--y', `${crop.y}%`);
+    el.style.setProperty('--z', String(crop.zoom));
+  }
+
+  function applyMirrorUi(crop) {
+    const on = !!crop.mirror;
+    viewport.classList.toggle('is-mirrored', on);
+    $('prev-ally').classList.toggle('is-source-mirrored', on);
+    $('prev-enemy').classList.toggle('is-source-mirrored', on);
+    const btn = $('btn-mirror');
+    btn.classList.toggle('is-on', on);
+    btn.textContent = on ? '鏡像翻轉 · ON（原圖朝左）' : '鏡像翻轉';
+  }
+
+  function activeChamp() {
+    return champs.find(c => c.cid === activeCid) || null;
+  }
+
+  function renderList() {
+    const q = (searchEl.value || '').trim().toLowerCase();
+    const filtered = !q ? champs : champs.filter(c => {
+      const blob = `${c.name_zh} ${c.name_en} ${c.alias} ${c.cid}`.toLowerCase();
+      return blob.includes(q);
+    });
+    const nOver = Object.keys(crops.champs || {}).length;
+    listMeta.textContent = `${filtered.length} 英雄 · ${nOver} 已標註覆寫`;
+    listEl.innerHTML = filtered.map(c => {
+      const over = crops.champs && crops.champs[c.cid];
+      const has = !!over;
+      const mir = !!(over && over.mirror);
+      return (
+        `<li data-cid="${c.cid}" class="${c.cid === activeCid ? 'is-active' : ''} ${has ? 'has-crop' : ''}">`
+        + `<img src="${c.image}" alt="" loading="lazy" style="${mir ? 'transform:scaleX(-1)' : ''}" />`
+        + `<div class="nm"><strong>${esc(c.name_zh || c.name_en)}</strong>`
+        + `<span>${esc(c.name_en || c.alias)} · ${c.cid}${mir ? ' · 鏡像' : ''}</span></div>`
+        + `<span class="dot" title="${has ? (mir ? '已覆寫 + 鏡像' : '已覆寫') : '用 default'}"></span>`
+        + `</li>`
+      );
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[ch]));
+  }
+
+  function selectChamp(cid) {
+    activeCid = String(cid);
+    const c = activeChamp();
+    if (!c) return;
+    emptyEdit.hidden = true;
+    editor.hidden = false;
+    $('ed-name').textContent = c.name_zh || c.name_en;
+    $('ed-sub').textContent = `${c.name_en || c.alias} · id ${c.cid}`;
+    stageArt.src = c.splash;
+    $('prev-ally-img').src = c.splash;
+    $('prev-enemy-img').src = c.splash;
+    $('prev-ally-name').textContent = c.name_zh || c.name_en;
+    $('prev-enemy-name').textContent = c.name_zh || c.name_en;
+    const crop = getCrop(c.cid);
+    syncControls(crop);
+    applyAllPreviews(crop);
+    renderList();
+  }
+
+  function syncControls(crop) {
+    $('rng-x').value = crop.x;
+    $('rng-y').value = crop.y;
+    $('rng-z').value = crop.zoom;
+    $('out-x').textContent = round1(crop.x);
+    $('out-y').textContent = round1(crop.y);
+    $('out-z').textContent = round2(crop.zoom);
+    applyMirrorUi(crop);
+  }
+
+  function applyAllPreviews(crop) {
+    applyCssVars(viewport, crop);
+    applyCssVars($('prev-ally'), crop);
+    applyCssVars($('prev-enemy'), crop);
+    applyMirrorUi(crop);
+  }
+
+  function readControls() {
+    const cur = activeCid ? getCrop(activeCid) : DEFAULTS;
+    return normalizeCrop({
+      x: Number($('rng-x').value),
+      y: Number($('rng-y').value),
+      zoom: Number($('rng-z').value),
+      mirror: cur.mirror,
+    });
+  }
+
+  function onControlChange() {
+    if (!activeCid) return;
+    const crop = setCrop(activeCid, readControls());
+    syncControls(crop);
+    applyAllPreviews(crop);
+    markDirty();
+    renderList();
+  }
+
+  // Drag to pan → adjust x/y
+  let drag = null;
+  viewport.addEventListener('pointerdown', (ev) => {
+    if (!activeCid) return;
+    viewport.setPointerCapture(ev.pointerId);
+    viewport.classList.add('is-dragging');
+    const crop = getCrop(activeCid);
+    drag = {
+      x0: ev.clientX,
+      y0: ev.clientY,
+      cx: crop.x,
+      cy: crop.y,
+      z: crop.zoom,
+    };
+  });
+  viewport.addEventListener('pointermove', (ev) => {
+    if (!drag || !activeCid) return;
+    const rect = viewport.getBoundingClientRect();
+    // Low gain so small pointer moves don't jump the crop (was ~35×).
+    // Higher zoom → even slower pan so fine face alignment stays possible.
+    const sens = 8 / Math.max(1, drag.z);
+    const dx = (ev.clientX - drag.x0) / Math.max(1, rect.width);
+    const dy = (ev.clientY - drag.y0) / Math.max(1, rect.height);
+    // When source is mirrored, invert X so drag still feels natural.
+    const mir = getCrop(activeCid).mirror ? -1 : 1;
+    // Drag right → show more left of image → decrease x (object-position)
+    const next = setCrop(activeCid, {
+      x: drag.cx - mir * dx * sens * 100,
+      y: drag.cy - dy * sens * 100,
+      zoom: drag.z,
+    });
+    syncControls(next);
+    applyAllPreviews(next);
+  });
+  function endDrag(ev) {
+    if (!drag) return;
+    drag = null;
+    viewport.classList.remove('is-dragging');
+    if (activeCid) markDirty();
+    renderList();
+  }
+  viewport.addEventListener('pointerup', endDrag);
+  viewport.addEventListener('pointercancel', endDrag);
+
+  viewport.addEventListener('wheel', (ev) => {
+    if (!activeCid) return;
+    ev.preventDefault();
+    const crop = getCrop(activeCid);
+    const delta = ev.deltaY > 0 ? -0.06 : 0.06;
+    const next = setCrop(activeCid, {
+      x: crop.x,
+      y: crop.y,
+      zoom: crop.zoom + delta,
+    });
+    syncControls(next);
+    applyAllPreviews(next);
+    markDirty();
+    renderList();
+  }, { passive: false });
+
+  ['rng-x', 'rng-y', 'rng-z'].forEach(id => {
+    $(id).addEventListener('input', onControlChange);
+  });
+
+  listEl.addEventListener('click', (ev) => {
+    const li = ev.target.closest('li[data-cid]');
+    if (li) selectChamp(li.getAttribute('data-cid'));
+  });
+  searchEl.addEventListener('input', renderList);
+
+  $('btn-mirror').addEventListener('click', () => {
+    if (!activeCid) return;
+    const cur = getCrop(activeCid);
+    const next = setCrop(activeCid, { mirror: !cur.mirror });
+    syncControls(next);
+    applyAllPreviews(next);
+    markDirty();
+    renderList();
+    setStatus(next.mirror
+      ? '鏡像 ON：原圖視為朝左 · Ally 會翻轉朝右'
+      : '鏡像 OFF：原圖視為朝右（預設）');
+  });
+  $('btn-reset').addEventListener('click', () => {
+    if (!activeCid) return;
+    const next = setCrop(activeCid, crops.default || DEFAULTS);
+    syncControls(next);
+    applyAllPreviews(next);
+    markDirty();
+    renderList();
+  });
+  $('btn-apply-default').addEventListener('click', () => {
+    if (!activeCid) return;
+    delete crops.champs[String(activeCid)];
+    const next = getCrop(activeCid);
+    syncControls(next);
+    applyAllPreviews(next);
+    markDirty();
+    renderList();
+  });
+  $('btn-clear').addEventListener('click', () => {
+    if (!activeCid) return;
+    delete crops.champs[String(activeCid)];
+    const next = getCrop(activeCid);
+    syncControls(next);
+    applyAllPreviews(next);
+    markDirty();
+    renderList();
+  });
+  $('btn-set-default').addEventListener('click', () => {
+    const c = readControls();
+    crops.default = {
+      x: round1(c.x),
+      y: round1(c.y),
+      zoom: round2(c.zoom),
+      mirror: false,
+    };
+    markDirty();
+    setStatus(`default 已更新 → ${crops.default.x}/${crops.default.y}/${crops.default.zoom} · mirror=false`);
+  });
+
+  function exportJson() {
+    // Attach alias for readability
+    const out = {
+      version: 1,
+      default: { ...normalizeCrop(crops.default) },
+      champs: {},
+    };
+    out.default.x = round1(out.default.x);
+    out.default.y = round1(out.default.y);
+    out.default.zoom = round2(out.default.zoom);
+    out.default.mirror = false;
+    Object.entries(crops.champs || {}).forEach(([cid, crop]) => {
+      const ch = champs.find(c => c.cid === cid);
+      const n = normalizeCrop({ ...(crops.default || DEFAULTS), ...crop });
+      out.champs[cid] = {
+        x: round1(n.x),
+        y: round1(n.y),
+        zoom: round2(n.zoom),
+        mirror: !!n.mirror,
+        alias: ch ? ch.alias : undefined,
+        name_zh: ch ? ch.name_zh : undefined,
+      };
+    });
+    const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'draft-slot-crops.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    dirty = false;
+    setStatus(`已下載 draft-slot-crops.json · 覆寫 ${Object.keys(out.champs).length} 隻 · 請放到 docs/api/`);
+    persistLocal();
+  }
+
+  $('btn-export').addEventListener('click', exportJson);
+  $('btn-load').addEventListener('click', () => $('file-in').click());
+  $('file-in').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      crops = {
+        version: 1,
+        default: normalizeCrop(data.default || DEFAULTS),
+        champs: data.champs || {},
+      };
+      crops.default.mirror = false;
+      Object.keys(crops.champs).forEach(cid => {
+        const n = normalizeCrop({ ...crops.default, ...crops.champs[cid] });
+        crops.champs[cid] = {
+          x: round1(n.x),
+          y: round1(n.y),
+          zoom: round2(n.zoom),
+          mirror: !!n.mirror,
+        };
+      });
+      persistLocal();
+      renderList();
+      if (activeCid) selectChamp(activeCid);
+      setStatus(`已匯入 ${file.name} · 覆寫 ${Object.keys(crops.champs).length} 隻`);
+    } catch (e) {
+      setStatus('匯入失敗：' + (e.message || e));
+    }
+    ev.target.value = '';
+  });
+
+  async function boot() {
+    setStatus('載入英雄清單…');
+    let payload;
+    try {
+      const res = await fetch('../api/tier-list.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error(res.statusText);
+      payload = await res.json();
+    } catch (e) {
+      setStatus('無法載入 tier-list.json：' + (e.message || e));
+      return;
+    }
+
+    try {
+      const hdRes = await fetch('../api/draft-splash-hd.json', { cache: 'no-cache' });
+      if (hdRes.ok) SPLASH_HD = await hdRes.json();
+    } catch { SPLASH_HD = null; }
+
+    champs = Object.entries(payload.champs || {}).map(([cid, info]) => {
+      const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
+      return {
+        cid: String(cid),
+        alias,
+        name_zh: info.name_zh || info.name || '',
+        name_en: info.name_en || alias,
+        image: info.image || '',
+        splash: splashUrl(alias, cid),
+        wr: Number(info.wr) || 0,
+      };
+    }).sort((a, b) => b.wr - a.wr);
+
+    // Prefer localStorage (in-progress), else shipped api file
+    const local = loadLocal();
+    if (local && local.champs) {
+      crops = {
+        version: 1,
+        default: normalizeCrop(local.default || DEFAULTS),
+        champs: local.champs || {},
+      };
+      setStatus(`已還原 localStorage · 覆寫 ${Object.keys(crops.champs).length} 隻`);
+    } else {
+      try {
+        const res = await fetch('../api/draft-slot-crops.json', { cache: 'no-cache' });
+        if (res.ok) {
+          const data = await res.json();
+          crops = {
+            version: 1,
+            default: normalizeCrop(data.default || DEFAULTS),
+            champs: data.champs || {},
+          };
+          setStatus(`已載入 api/draft-slot-crops.json · 覆寫 ${Object.keys(crops.champs).length} 隻`);
+        } else {
+          setStatus(`英雄 ${champs.length} · 使用預設裁切`);
+        }
+      } catch {
+        setStatus(`英雄 ${champs.length} · 使用預設裁切`);
+      }
+    }
+
+    renderList();
+    if (champs[0]) selectChamp(champs[0].cid);
+  }
+
+  boot();
+})();
+  </script>
+</body>
+</html>
