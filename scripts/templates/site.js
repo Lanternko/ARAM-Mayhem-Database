@@ -889,6 +889,15 @@
             draftAllyEval: '我方陣容',
             draftEnemyEval: '對手陣容',
             draftVs: 'VS',
+            draftMetricAlly: '我方勝率',
+            draftMetricAllyRaw: '我方原始勝率',
+            draftMetricEnemyRaw: '對方原始勝率',
+            draftMetricMatchup: '我方綜合勝率',
+            draftMetricTeamNote: '英雄均值 + 搭配 + 陣容',
+            draftMetricRawNote: '所選英雄的平均勝率',
+            draftMetricEnemyNote: '對手英雄的平均勝率',
+            draftMetricMatchupNote: '≈ 0.5 +（我方勝率 − 對方勝率）',
+            draftMetricEmpty: '尚未選角',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
@@ -910,7 +919,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：灰→藍→黃→琥珀→正橘，越橘越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度以單一琥珀系深淺上色：越亮橘、字重越重＝越熱門。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -1077,6 +1086,15 @@
             draftAllyEval: 'Ally composition',
             draftEnemyEval: 'Enemy composition',
             draftVs: 'VS',
+            draftMetricAlly: 'Ally win rate',
+            draftMetricAllyRaw: 'Ally raw win rate',
+            draftMetricEnemyRaw: 'Opponent raw win rate',
+            draftMetricMatchup: 'Ally matchup win rate',
+            draftMetricTeamNote: 'mean + pairs + composition',
+            draftMetricRawNote: 'mean of selected champions',
+            draftMetricEnemyNote: 'mean of opponent champions',
+            draftMetricMatchupNote: '≈ 0.5 + (ally win rate − opponent win rate)',
+            draftMetricEmpty: 'No picks yet',
             draftOnOtherSide: 'Already on the other team.',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
@@ -1097,7 +1115,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card is colour-coded by popularity on a heat ramp: grey -> blue -> yellow -> amber -> orange, deeper orange = hotter.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card uses a single amber intensity ramp: brighter/bolder orange = hotter.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -2033,10 +2051,10 @@
         return 1;
     }
     // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
-    // the cool->hot colour ramp shared by augment cards AND every item surface
-    // (clusters / core-build options / first-two & single items / boots / core
-    // rush share).  Absolute cuts (2/5/10/20%) so the colour means the same
-    // thing everywhere; tier 5 (>=20%) lines up with the augment 熱門 badge.
+    // Single-hue amber intensity ramp shared by augment cards AND every item
+    // surface (clusters / options / items / boots / spells / tips). Absolute
+    // cuts (2/5/10/20%) so the colour means the same thing everywhere; tier 5
+    // (>=20%) lines up with the augment 熱門 badge.
     function pickTier(pick) {
         if (pick >= 0.20) return 5;
         if (pick >= 0.10) return 4;
@@ -3236,6 +3254,7 @@
     let teamPicks = []; // ally picks (also used by recommendation helpers)
     let enemyPicks = [];
     let draftSide = 'ally'; // which side the champ list adds to
+    let draftView = 'draft'; // central Draft pane or Draft Analysis pane
     let draftRole = '';
     let draftQuery = '';
     let pickNotice = '';
@@ -3872,6 +3891,69 @@
         host.dataset.ready = '1';
     }
 
+    function draftMetricValue(value) {
+        return Number.isFinite(Number(value)) ? pct(Number(value)) : '—';
+    }
+
+    function draftMetricTone(value) {
+        if (!Number.isFinite(Number(value))) return 'is-empty';
+        if (Number(value) >= 0.53) return 'is-good';
+        if (Number(value) <= 0.47) return 'is-bad';
+        return 'is-even';
+    }
+
+    function buildDraftMetricsHtml() {
+        const copy = tr();
+        const mu = evaluateMatchup(teamPicks, enemyPicks);
+        const cards = [
+            {
+                key: 'ally-est',
+                label: copy.draftMetricAlly,
+                value: mu.ally && mu.ally.estWr,
+                note: mu.ally ? copy.draftMetricTeamNote : copy.draftMetricEmpty,
+            },
+            {
+                key: 'ally-raw',
+                label: copy.draftMetricAllyRaw,
+                value: mu.ally && mu.ally.baseWr,
+                note: mu.ally ? copy.draftMetricRawNote : copy.draftMetricEmpty,
+            },
+            {
+                key: 'enemy-raw',
+                label: copy.draftMetricEnemyRaw,
+                value: mu.enemy && mu.enemy.baseWr,
+                note: mu.enemy ? copy.draftMetricEnemyNote : copy.draftMetricEmpty,
+            },
+            {
+                key: 'matchup',
+                label: copy.draftMetricMatchup,
+                value: mu.ally && mu.enemy ? mu.matchupWr : null,
+                note: mu.ally && mu.enemy ? copy.draftMetricMatchupNote : copy.draftMetricEmpty,
+            },
+        ];
+        return cards.map(card => `
+            <div class="draft-metric ${card.key} ${draftMetricTone(card.value)}">
+                <span class="draft-metric-label">${escHtml(card.label)}</span>
+                <strong class="draft-metric-value">${draftMetricValue(card.value)}</strong>
+                <span class="draft-metric-note">${escHtml(card.note || '')}</span>
+            </div>`).join('');
+    }
+
+    function renderDraftView() {
+        const active = draftView === 'analysis' ? 'analysis' : 'draft';
+        draftView = active;
+        document.querySelectorAll('[data-draft-view]').forEach(btn => {
+            const isActive = btn.getAttribute('data-draft-view') === active;
+            btn.classList.toggle('is-active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+        document.querySelectorAll('[data-draft-pane]').forEach(pane => {
+            const isActive = pane.getAttribute('data-draft-pane') === active;
+            pane.classList.toggle('is-active', isActive);
+            pane.hidden = !isActive;
+        });
+    }
+
     function buildDraftResultHtml() {
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
@@ -3921,31 +4003,19 @@
         renderDraftSlots('ally');
         renderDraftSlots('enemy');
         renderDraftChampList();
+        renderDraftView();
 
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
         const allyWrEl = document.getElementById('draft-ally-wr');
         const enemyWrEl = document.getElementById('draft-enemy-wr');
-        const vsbarEl = document.getElementById('draft-vsbar');
+        const metricsEl = document.getElementById('draft-metrics');
         const resultEl = document.getElementById('draft-result');
         if (allyWrEl) {
             allyWrEl.textContent = mu.ally ? pct(mu.ally.estWr) : '—';
         }
         if (enemyWrEl) {
             enemyWrEl.textContent = mu.enemy ? pct(mu.enemy.estWr) : '—';
-        }
-        if (vsbarEl) {
-            if (mu.matchupWr != null && enemyPicks.length) {
-                const tone = mu.matchupWr >= 0.53 ? 'is-good' : (mu.matchupWr <= 0.47 ? 'is-bad' : 'is-even');
-                vsbarEl.innerHTML = `
-                    <span class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</span>
-                    <span class="draft-vs-wr ${tone}">${pct(mu.matchupWr)}</span>
-                    <span class="draft-vs-sub">${escHtml(copy.draftMatchupWr || '')}</span>`;
-                vsbarEl.title = copy.draftMatchupNote || '';
-                vsbarEl.hidden = false;
-            } else {
-                vsbarEl.hidden = true;
-            }
         }
         const shellEl = shell.querySelector('.draft-shell');
         if (shellEl) shellEl.classList.toggle('is-target-enemy', draftSide === 'enemy');
@@ -3956,6 +4026,7 @@
         document.querySelectorAll('.draft-side').forEach(el => {
             el.classList.toggle('is-targeting', el.getAttribute('data-draft-side') === draftSide);
         });
+        if (metricsEl) metricsEl.innerHTML = buildDraftMetricsHtml();
         if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
 
         const searchEl = document.getElementById('draft-search');
@@ -5212,6 +5283,13 @@
             updatesOpen = false;
             renderUpdatesPanel();
             trackEvent('updates_close', {});
+            return;
+        }
+        const draftViewBtn = ev.target.closest('[data-draft-view]');
+        if (draftViewBtn) {
+            draftView = draftViewBtn.getAttribute('data-draft-view') === 'analysis' ? 'analysis' : 'draft';
+            renderDraftView();
+            trackEvent('draft_view', { view: draftView });
             return;
         }
         const draftTarget = ev.target.closest('[data-draft-target]');
