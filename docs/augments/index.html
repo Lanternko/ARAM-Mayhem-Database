@@ -4484,6 +4484,12 @@
         }
     }
     @media (max-width: 900px) {
+        .view-draft.is-active {
+            width: calc(100% + 48px);
+            max-width: calc(100% + 48px);
+            margin-left: -24px;
+            padding-inline: 14px;
+        }
         .draft-analysis-intro {
             align-items: flex-start;
             flex-direction: column;
@@ -4493,7 +4499,12 @@
         .draft-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 520px) {
-        .view-draft.is-active { padding-inline: 10px; }
+        .view-draft.is-active {
+            width: calc(100% + 24px);
+            max-width: calc(100% + 24px);
+            margin-left: -12px;
+            padding-inline: 10px;
+        }
         .draft-mode-tabs { gap: 16px; }
         .draft-metric { min-height: 100px; padding: 11px 10px; }
         .draft-metric-value { font-size: 22px; }
@@ -9446,11 +9457,13 @@
     }
 
     function draftMetricValue(value) {
-        return Number.isFinite(Number(value)) ? pct(Number(value)) : '—';
+        return value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+            ? '—'
+            : pct(Number(value));
     }
 
     function draftMetricTone(value) {
-        if (!Number.isFinite(Number(value))) return 'is-empty';
+        if (value === null || value === undefined || value === '' || !Number.isFinite(Number(value))) return 'is-empty';
         if (Number(value) >= 0.53) return 'is-good';
         if (Number(value) <= 0.47) return 'is-bad';
         return 'is-even';
