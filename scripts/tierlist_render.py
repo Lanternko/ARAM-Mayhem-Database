@@ -2,6 +2,7 @@
 HTML shell, --shell-only fast preview, OG/favicon images, icon localization."""
 from __future__ import annotations
 import os as _os, sys as _sys
+import time
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import tierlist_engine as _eng  # noqa: E402,F401
 globals().update({_k: _v for _k, _v in vars(_eng).items() if not _k.startswith('__')})
@@ -430,6 +431,107 @@ PAYLOAD_PAIRS_EACH_SIDE = 12
 PAYLOAD_ITEM_PAIR_ROWS = 16
 PAYLOAD_SINGLE_ITEM_ROWS = 16
 
+# Keep the initial tier-list payload focused on the grid, global augment index,
+# Draft, and recommendation data.  These fields are only needed after a user
+# opens one champion, so ship them as one small JSON shard per champion.
+CHAMPION_DETAIL_FIELDS = (
+    "bot",
+    "sets",
+    "items",
+    "singleItems",
+    "boots",
+    "spells",
+    "itemClusters",
+    "augTypes",
+)
+
+# Draft Analysis final WR uses the same Composition LR as the local recommender
+# (identity + team composition features).  Weights are exported as a compact JSON
+# bundle at site-build time so the static page never imports sklearn/torch.
+# Matchup formula (recommend_gui.predict_matchup_prob):
+#   P(ally wins) = sigmoid(logit_ally − logit_enemy + intercept)
+DRAFT_COMPOSITION_LR_DIR = Path("models/composition_lr_pooled_recency_7d")
+
+
+def load_draft_composition_lr_payload(
+    model_dir: Path = DRAFT_COMPOSITION_LR_DIR,
+) -> dict | None:
+    """Export Composition LR + champion profiles for browser 5v5 inference.
+
+    Loaded only while building the site.  The bundle is ~60KB and contains no
+    player data.  Prefer this over the old DeepSets export: the LR is what the
+    recommender auto-refreshes and currently tracks the live patch.
+    """
+    model_dir = Path(model_dir)
+    if not (model_dir / "model.pkl").exists():
+        return None
+    try:
+        from aram_nn.recommend import (
+            AD_BINS,
+            CORE_COLUMNS,
+            ENGAGE_GROUPS,
+            FRONT_GROUPS,
+            LACK_THRESHOLDS,
+            POKE_GROUPS,
+            ROLE_COLUMNS,
+            SCORE_COLUMNS,
+            WAVE_GROUPS,
+            load_composition_lr,
+        )
+
+        model = load_composition_lr(model_dir)
+        trained_through = None
+        summary_path = model_dir / "summary.json"
+        if summary_path.exists():
+            try:
+                summary = json.loads(summary_path.read_text(encoding="utf-8"))
+                trained_through = summary.get("current_patch")
+            except Exception:
+                trained_through = None
+
+        profiles: dict[str, dict] = {}
+        for cid, profile in model.profiles.items():
+            profiles[str(int(cid))] = {
+                "scores": {
+                    name: round(float(profile.scores[name]), 6) for name in SCORE_COLUMNS
+                },
+                "roles": {
+                    role: round(float(profile.roles[role]), 6) for role in ROLE_COLUMNS
+                },
+                "physical_dpm": round(float(profile.physical_dpm), 4),
+                "magic_dpm": round(float(profile.magic_dpm), 4),
+                "true_dpm": round(float(profile.true_dpm), 4),
+            }
+
+        return {
+            "kind": "composition_lr",
+            "source_model": model_dir.name,
+            "trained_through_patch": trained_through,
+            "intercept": round(float(model.intercept), 8),
+            "coef": [round(float(v), 8) for v in model.coef.tolist()],
+            "feature_names": list(model.feature_names),
+            "champ_to_idx": {str(int(k)): int(v) for k, v in model.champ_to_idx.items()},
+            "profiles": profiles,
+            "meta": {
+                "score_columns": list(SCORE_COLUMNS),
+                "core_columns": list(CORE_COLUMNS),
+                "role_columns": list(ROLE_COLUMNS),
+                "lack_thresholds": {k: float(v) for k, v in LACK_THRESHOLDS.items()},
+                "ad_bins": list(AD_BINS),
+                "front_groups": list(FRONT_GROUPS),
+                "wave_groups": list(WAVE_GROUPS),
+                "engage_groups": list(ENGAGE_GROUPS),
+                "poke_groups": list(POKE_GROUPS),
+            },
+        }
+    except Exception as exc:
+        click.echo(f"[tierlist] WARN: unable to export Draft Composition LR: {exc}")
+        return None
+
+
+# Back-compat alias used by older call sites / notes.
+load_draft_nn_payload = load_draft_composition_lr_payload
+
 
 def slim_site_payload(payload: dict) -> dict:
     """In-place shrink of the public tier-list payload for faster first load.
@@ -506,6 +608,61 @@ def slim_site_payload(payload: dict) -> dict:
                     if row.get("peerScope") == "global":
                         row.pop("peerScope", None)
     return {"before_rows": before_rows, "after_rows": after_rows, "champs": len(champs)}
+
+
+def split_champion_detail_payloads(payload: dict) -> dict[str, dict]:
+    """Move detail-only champion fields out of the initial site payload.
+
+    The returned mapping is ready to be written as ``champions/<cid>.json``.
+    Re-running this on an already-split payload is a no-op.
+    """
+    details: dict[str, dict] = {}
+    for cid, info in (payload.get("champs") or {}).items():
+        if not isinstance(info, dict):
+            continue
+        detail = {
+            key: info.pop(key)
+            for key in CHAMPION_DETAIL_FIELDS
+            if key in info
+        }
+        if detail:
+            details[str(cid)] = detail
+    return details
+
+
+def champion_detail_base_url(payload_url: str) -> str:
+    """Return the sibling ``champions`` URL for a tier-list payload URL."""
+    clean = (payload_url or "api/tier-list.json").split("#", 1)[0].split("?", 1)[0]
+    parent = clean.rsplit("/", 1)[0] if "/" in clean else ""
+    return f"{parent}/champions" if parent else "champions"
+
+
+def write_champion_detail_shards(
+    payload: dict,
+    *,
+    payload_out_path: Path,
+    payload_url: str,
+    version: str,
+) -> dict[str, int]:
+    """Split and write per-champion detail JSON next to the main payload."""
+    details = split_champion_detail_payloads(payload)
+    payload["detailBase"] = champion_detail_base_url(payload_url)
+    payload["detailVersion"] = version
+    if not details:
+        return {"champs": 0, "bytes": 0}
+
+    detail_dir = payload_out_path.parent / "champions"
+    detail_dir.mkdir(parents=True, exist_ok=True)
+    total_bytes = 0
+    for cid, detail in details.items():
+        out = detail_dir / f"{cid}.json"
+        out.write_text(
+            json.dumps(detail, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        total_bytes += out.stat().st_size
+
+    return {"champs": len(details), "bytes": total_bytes}
 
 
 def versioned_payload_url(payload_url: str, version: str) -> str:
@@ -896,8 +1053,206 @@ def _dedupe_item_objects(payload: dict) -> None:
                 entry["dz"] = dz
             if de:
                 entry["de"] = de
+            # Style slug + filter role for 單件裝備強度 chips (shell can also
+            # backfill via enrich_item_lut_styles on older payloads).
+            _attach_item_style_fields(entry, meta)
         payload["itemLut"] = lut
         payload["ddv"] = version
+
+
+def _item_filter_role_for_style(slug: str) -> str | None:
+    """Map item_style slug → site role chip key for single-item filters.
+
+    Assassin is explicit here (ad_assassin is not in ROLE_FROM_ITEM_STYLE).
+    Marksman styles always map to Marksman for item filtering (unlike secondary
+    role inference, which may reclassify melee champions as Fighter).
+    """
+    if not slug:
+        return None
+    if slug == "ad_assassin":
+        return "Assassin"
+    if slug in MARKSMAN_ITEM_STYLES:
+        return "Marksman"
+    return ROLE_FROM_ITEM_STYLE.get(slug)
+
+
+# ARAM Guardian starters sit under ITEM_MIN_TOTAL_GOLD so item_style_infos
+# intentionally skips them — but they still appear in 單件裝備強度 and need
+# role chips.  IDs match GUARDIAN_STARTER_ITEM_IDS in tierlist_engine.
+_GUARDIAN_ITEM_FILTER_ROLES: dict[int, tuple[str, ...]] = {
+    2051: ("Tank",),       # Guardian's Horn / 保衛者號角
+    3112: ("Mage",),       # Guardian's Orb / 保衛者冰玉
+    3177: ("Fighter",),    # Guardian's Blade / 保衛者之刃
+    3184: ("Marksman",),   # Guardian's Hammer / 保衛者戰鎚 (AD + lifesteal)
+}
+
+
+def _ordered_filter_roles(roles: list[str] | tuple[str, ...]) -> list[str]:
+    """Stable unique roles in site ROLE_ORDER."""
+    seen: set[str] = set()
+    out: list[str] = []
+    order = list(ROLE_ORDER) if "ROLE_ORDER" in globals() else [
+        "Assassin", "Fighter", "Mage", "Marksman", "Support", "Tank",
+    ]
+    rank = {r: i for i, r in enumerate(order)}
+    for role in sorted({str(r) for r in roles if r}, key=lambda r: (rank.get(r, 99), r)):
+        if role not in seen:
+            seen.add(role)
+            out.append(role)
+    return out
+
+
+def item_filter_roles_for_item(item: dict | None) -> list[str]:
+    """Roles an item should match in 單件裝備強度 filter chips (may be multi).
+
+    Separate from item_style_infos (affinity still uses one primary style):
+    - Guardian starters get explicit roles despite the gold floor
+    - Crit + AP hybrids (e.g. 殞落之祭 Rite of Ruin) match both Marksman & Mage
+    """
+    if not item:
+        return []
+    try:
+        iid = int(item.get("id") or 0)
+    except (TypeError, ValueError):
+        iid = 0
+
+    fixed = _GUARDIAN_ITEM_FILTER_ROLES.get(iid)
+    if fixed:
+        return list(fixed)
+
+    categories = set(str(c) for c in (item.get("categories") or []))
+    name = f"{item.get('name_en', '')} {item.get('name', '')}".lower()
+    is_spell = "SpellDamage" in categories or "ability power" in name
+    is_support = (
+        "HealAndShieldPower" in categories
+        or any(word in name for word in SUPPORT_ITEM_KEYWORDS)
+    )
+
+    # Name-fallback for alternate Guardian catalogue ids (e.g. 22xxxx mirrors).
+    if "guardian's" in name or "保衛者" in str(item.get("name") or ""):
+        if "SpellDamage" in categories:
+            return ["Mage"]
+        if "LifeSteal" in categories or "SpellVamp" in categories:
+            return ["Marksman"]
+        if {"ArmorPenetration", "Lethality"} & categories:
+            return ["Assassin"]
+        if "Damage" in categories:
+            return ["Fighter"]
+        if {"Health", "HealthRegen", "Armor", "SpellBlock"} & categories:
+            return ["Tank"]
+
+    # Crit + AP hybrid completed items: show under both 射手 and 法師.
+    if (
+        not is_support
+        and "CriticalStrike" in categories
+        and is_spell
+        and int(item.get("price_total") or 0) >= ITEM_MIN_TOTAL_GOLD
+    ):
+        return _ordered_filter_roles(["Marksman", "Mage"])
+
+    styles = item_style_infos(item)
+    if not styles:
+        return []
+    role = _item_filter_role_for_style(str(styles[0].get("slug") or ""))
+    return [role] if role else []
+
+
+def _attach_item_style_fields(entry: dict, meta: dict | None) -> None:
+    if not entry or not meta:
+        return
+    styles = item_style_infos(meta)
+    if styles:
+        slug = str(styles[0].get("slug") or "")
+        if slug:
+            entry["s"] = slug
+    roles = item_filter_roles_for_item(meta)
+    if roles:
+        # Space-joined so the client can split the same way as data-item-role.
+        entry["r"] = " ".join(roles)
+
+
+def _item_role_overrides_path() -> Path:
+    # Canonical human-labeled map (from exports/item-role-annotator.html).
+    return Path(__file__).resolve().parent / "item_role_filter_overrides.json"
+
+
+def load_item_role_filter_label_file(path: Path | None = None) -> dict:
+    """Load hand-labeled item→role JSON (overrides + optional full_map)."""
+    p = path or _item_role_overrides_path()
+    if not p.exists():
+        return {}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _normalize_filter_role_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        parts = value.split()
+    elif isinstance(value, (list, tuple, set)):
+        parts = [str(x) for x in value]
+    else:
+        return []
+    return _ordered_filter_roles(parts)
+
+
+def build_item_role_filter_map(
+    *,
+    ddragon_version: str | None = None,
+    cache_dir: Path | None = None,
+    overrides_path: Path | None = None,
+) -> dict[str, list[str]]:
+    """itemId → filter role list for 單件裝備強度 chips (injected into shell).
+
+    1. Auto-classify from CommunityDragon / style heuristics (no games.db)
+    2. Overlay ``full_map`` from scripts/item_role_filter_overrides.json if present
+    3. Overlay ``overrides`` (hand diffs) last — empty list removes the item from
+       all role chips
+
+    Safe for shell-only deploys (does not touch tier-list.json).
+    """
+    try:
+        item_meta = load_item_metadata(
+            cache_dir=cache_dir or Path("data/cache"),
+            ddragon_version=ddragon_version or None,
+        )
+    except Exception:
+        item_meta = {}
+    out: dict[str, list[str]] = {}
+    for iid, meta in item_meta.items():
+        # Ensure id is present for guardian / name fallbacks.
+        if isinstance(meta, dict) and meta.get("id") is None:
+            meta = {**meta, "id": iid}
+        roles = item_filter_roles_for_item(meta)
+        if roles:
+            out[str(int(iid))] = roles
+
+    data = load_item_role_filter_label_file(overrides_path)
+    if not data:
+        return out
+
+    full_map = data.get("full_map") if isinstance(data.get("full_map"), dict) else {}
+    for key, value in full_map.items():
+        roles = _normalize_filter_role_list(value)
+        kid = str(key)
+        if roles:
+            out[kid] = roles
+        else:
+            out.pop(kid, None)
+
+    overrides = data.get("overrides") if isinstance(data.get("overrides"), dict) else {}
+    for key, value in overrides.items():
+        roles = _normalize_filter_role_list(value)
+        kid = str(key)
+        if roles:
+            out[kid] = roles
+        else:
+            out.pop(kid, None)
+    return out
 
 
 def render_html(
@@ -1343,6 +1698,7 @@ def render_html(
                 "clamp": RECOMMENDATION_DAMAGE_MIX_CLAMP,
             },
         },
+        "draftModel": load_draft_composition_lr_payload(),
     }
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
@@ -1352,10 +1708,25 @@ def render_html(
         f"[tierlist] slimmed payload rows {slim_stats['before_rows']:,} → "
         f"{slim_stats['after_rows']:,} across {slim_stats['champs']} champs"
     )
-    # Cache-bust the split JSON so browsers can store the multi-MB payload
-    # without serving a stale file after the next publish.
+    # Cache-bust both the initial payload and its per-champion detail shards.
+    # A timestamp suffix matters when multiple publishes happen on one day.
+    payload_version = ""
     if payload_url and build_date:
-        payload_url = versioned_payload_url(payload_url, build_date.replace("-", ""))
+        payload_version = f"{build_date.replace('-', '')}-{int(time.time())}"
+        payload_url = versioned_payload_url(payload_url, payload_version)
+
+    shard_stats = {"champs": 0, "bytes": 0}
+    if payload_out_path is not None and payload_url:
+        shard_stats = write_champion_detail_shards(
+            payload,
+            payload_out_path=payload_out_path,
+            payload_url=payload_url,
+            version=payload_version,
+        )
+        click.echo(
+            f"[tierlist] wrote {shard_stats['champs']} champion detail shards "
+            f"({shard_stats['bytes']:,} bytes total)"
+        )
     payload_json = json.dumps(payload, ensure_ascii=False)
     if payload_out_path is not None:
         payload_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1819,9 +2190,9 @@ def render_html(
         "<div class='draft-analysis-intro'>"
         "<div><span class='draft-analysis-kicker' data-i18n-zh='雙方陣容評估' data-i18n-en='ROSTER EVALUATION'>雙方陣容評估</span>"
         "<h2 data-i18n-zh='Draft Analysis' data-i18n-en='Draft Analysis'>Draft Analysis</h2></div>"
-        "<p data-i18n-zh='原始勝率是英雄均值；我方勝率加入已知搭配與陣容組成，綜合勝率只在雙方都有選角時顯示。' "
-        "data-i18n-en='Raw win rate is the champion mean. Ally win rate adds known pair and composition signals; matchup win rate appears once both sides have picks.'>"
-        "原始勝率是英雄均值；我方勝率加入已知搭配與陣容組成，綜合勝率只在雙方都有選角時顯示。</p>"
+        "<p data-i18n-zh='雙方各選至少 1 隻即可比較雷達與強度；最終 AI 勝率需雙方各 5 隻。' "
+        "data-i18n-en='Pick at least one champion per side to compare radar and strength; final AI win rate needs five per side.'>"
+        "雙方各選至少 1 隻即可比較雷達與強度；最終 AI 勝率需雙方各 5 隻。</p>"
         "</div>"
         "<div class='draft-metrics' id='draft-metrics'></div>"
         "<div class='draft-result' id='draft-result'></div>"
@@ -1910,6 +2281,17 @@ def render_html(
             ensure_ascii=False,
         ),
     )
+    # Compact id→role map for 出裝 → 單件裝備強度 filter chips.  Regenerated on
+    # every shell-only build from CDragon cache (no games.db); empty object if
+    # the catalogue is unavailable so the client simply hides the chip bar.
+    js = js.replace(
+        "__ITEM_ROLES__",
+        json.dumps(
+            build_item_role_filter_map(ddragon_version=ddragon_version or None),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    )
     parts.append(f"<script>{js}</script>")
     parts.append("</body></html>")
     return "".join(parts)
@@ -1941,7 +2323,21 @@ def _run_shell_only(
         raise click.ClickException(
             f"--shell-only needs an existing payload at {payload_path}; run a full build first."
         )
-    payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    payload_text = payload_path.read_text(encoding="utf-8")
+    payload = json.loads(payload_text)
+    # Always (re)export Draft model on shell-only so migrations
+    # (DeepSets → Composition LR) land without a multi-minute data rebuild.
+    draft_model = load_draft_composition_lr_payload()
+    if draft_model is not None:
+        prev_kind = (payload.get("draftModel") or {}).get("kind")
+        payload["draftModel"] = draft_model
+        if prev_kind and prev_kind != draft_model.get("kind"):
+            click.echo(
+                f"[shell-only] draftModel {prev_kind} → {draft_model.get('kind')} "
+                f"({draft_model.get('source_model')})"
+            )
+    elif not payload.get("draftModel"):
+        click.echo("[shell-only] WARN: Draft Composition LR unavailable; final WR disabled")
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
@@ -1951,8 +2347,25 @@ def _run_shell_only(
     # multi-minute data rebuild.
     before_bytes = payload_path.stat().st_size
     slim_stats = slim_site_payload(payload)
+    if not build_date:
+        build_date = _dt.date.today().isoformat()
+    payload_ver = build_date.replace("-", "")
+    try:
+        payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
+    except OSError:
+        pass
+    resolved_payload_url = versioned_payload_url(
+        payload_url or "api/tier-list.json",
+        payload_ver,
+    )
+    shard_stats = write_champion_detail_shards(
+        payload,
+        payload_out_path=payload_path,
+        payload_url=resolved_payload_url,
+        version=payload_ver,
+    )
     slim_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    if len(slim_json.encode("utf-8")) < before_bytes:
+    if slim_json != payload_text or shard_stats["champs"]:
         payload_path.write_text(slim_json, encoding="utf-8")
         click.echo(
             f"[shell-only] slimmed {payload_path.name}: "
@@ -2003,22 +2416,8 @@ def _run_shell_only(
         if str(k).lstrip("-").isdigit()
     }
 
-    if not build_date:
-        build_date = _dt.date.today().isoformat()
     if not og_image and site_url:
         og_image = site_url.rstrip("/") + "/og-image.png" + f"?v={build_date.replace('-', '')}-thumb"
-
-    # Version stamp from payload mtime so shell-only still busts CDN/browser
-    # cache after an in-place slim (build_date alone may not change).
-    payload_ver = build_date.replace("-", "")
-    try:
-        payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
-    except OSError:
-        pass
-    resolved_payload_url = versioned_payload_url(
-        payload_url or "api/tier-list.json",
-        payload_ver,
-    )
 
     html = render_html(
         records, champ_meta,

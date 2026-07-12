@@ -27,10 +27,18 @@
         --accent: #f5c518;
         --accent-soft: #f5d780;
         --accent-on: #14110a;
-        /* 必出 highlighter (disabled — leave vars for easy re-enable)
-        --pick5-marker-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 18' preserveAspectRatio='none'%3E%3Cpath d='M3.5 8.6C18 6.4 44 7.2 66 5.9 86 4.8 104 3.9 116.5 3.2L118 8.8C104 10.6 85 11.8 62 13 42 14.1 20 15.3 4.5 16.2 2.2 14.3 2 10.4 3.5 8.6Z' fill='%23ffe14a' fill-opacity='.38'/%3E%3C/svg%3E");
+        /* 必出 (pick-5) highlighter — gpu_tracker style: tilted gradient
+           (97deg) with uneven translucent stops (light → dense → light) and
+           soft fade-out ends, so it reads as a wide soft marker wash, not a
+           hard CSS band.  -dark stays constant for always-dark surfaces
+           (item tips). */
+        --pick5-marker-dark: linear-gradient(97deg,
+            transparent 0 2%,
+            rgba(255, 222, 89, 0.24) 5%,
+            rgba(255, 222, 89, 0.38) 50%,
+            rgba(255, 222, 89, 0.22) 95%,
+            transparent 98% 100%);
         --pick5-marker: var(--pick5-marker-dark);
-        */
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -64,9 +72,13 @@
         --accent: #e0a500;
         --accent-soft: #9a7100;
         --accent-on: #14110a;
-        /* Paper highlighter (disabled)
-        --pick5-marker: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 18' preserveAspectRatio='none'%3E%3Cpath d='M3.5 8.6C18 6.4 44 7.2 66 5.9 86 4.8 104 3.9 116.5 3.2L118 8.8C104 10.6 85 11.8 62 13 42 14.1 20 15.3 4.5 16.2 2.2 14.3 2 10.4 3.5 8.6Z' fill='%23ffdf2e' fill-opacity='.5'/%3E%3C/svg%3E");
-        */
+        /* Paper highlighter: same soft wash, denser ink for white paper. */
+        --pick5-marker: linear-gradient(97deg,
+            transparent 0 2%,
+            rgba(255, 214, 20, 0.30) 5%,
+            rgba(255, 214, 20, 0.48) 50%,
+            rgba(255, 214, 20, 0.28) 95%,
+            transparent 98% 100%);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -2490,23 +2502,22 @@
     .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6e8eb; font-weight: 600; }
     .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #e8d48a; font-weight: 700; }
     .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker (disabled)
+    /* 必出 marker: soft highlighter wash (--pick5-marker) over the digits.
+       Length capped near the number width so wide flex cells don't stretch
+       it into a bar. */
     .cluster-pick.pick-5,
     .cg-option-pick.pick-5,
     .item-build-pick.pick-5,
     .boot-rail-pick.pick-5,
     .cg-core-share.pick-5 {
-        color: #f0c94a;
-        font-weight: 700;
-        padding: 0 2px;
-        background-image: linear-gradient(
-            transparent 0 58%,
-            rgba(240, 201, 74, 0.32) 58% 100%
-        );
-        -webkit-box-decoration-break: clone;
-        box-decoration-break: clone;
+        padding: 0 3px;
+        background-image: var(--pick5-marker);
+        background-repeat: no-repeat;
+        background-position: center calc(50% + 0.12em);
+        background-size: min(100%, 3.8em) 0.85em;
     }
-    */
+    /* Right-aligned cell: anchor the swipe to the digits, not the cell. */
+    .boot-rail-pick.pick-5 { background-position: right calc(50% + 0.12em); }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -3179,19 +3190,13 @@
     .aug .alift.pick-3 { color: #e6e8eb; font-weight: 600; }
     .aug .alift.pick-4 { color: #e8d48a; font-weight: 700; }
     .aug .alift.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker (disabled)
+    /* 必出 marker — same soft wash as the pick ladder (see .cluster-pick). */
     .aug .alift.pick-5 {
-        color: #f0c94a;
-        font-weight: 700;
-        padding: 0 2px;
-        background-image: linear-gradient(
-            transparent 0 58%,
-            rgba(240, 201, 74, 0.32) 58% 100%
-        );
-        -webkit-box-decoration-break: clone;
-        box-decoration-break: clone;
+        background-image: var(--pick5-marker);
+        background-repeat: no-repeat;
+        background-position: center calc(50% + 0.12em);
+        background-size: min(100%, 3.8em) 0.85em;
     }
-    */
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -4537,6 +4542,136 @@
         margin-bottom: 8px;
     }
     .draft-eval-block.is-enemy .draft-eval-label { color: #ff9aa5; }
+
+    /* ---- Draft Analysis: dual-team radar overlay + dual bar compare ---- */
+    .draft-matchup {
+        display: grid;
+        gap: 18px;
+        min-width: 0;
+    }
+    @media (min-width: 901px) {
+        .draft-matchup {
+            grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.15fr);
+            gap: 20px 28px;
+            align-items: start;
+        }
+    }
+    .draft-matchup-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+    .draft-matchup-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .draft-matchup-legend {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim, #6a6f77);
+    }
+    .draft-leg {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .draft-leg i {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+    }
+    .draft-leg.is-ally { color: #7fc8ff; }
+    .draft-leg.is-ally i { background: #3aa0ff; box-shadow: 0 0 0 1px rgba(58, 160, 255, 0.35); }
+    .draft-leg.is-enemy { color: #f0998a; }
+    .draft-leg.is-enemy i { background: #e2574b; box-shadow: 0 0 0 1px rgba(226, 87, 75, 0.35); }
+    .draft-matchup-svg {
+        min-width: 0;
+    }
+    .draft-matchup-svg .comp-radar {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 280px;
+        margin: 0 auto;
+    }
+    .draft-cmp-list {
+        display: grid;
+        gap: 10px;
+        min-width: 0;
+    }
+    .draft-cmp-row {
+        display: grid;
+        grid-template-columns: minmax(64px, 88px) minmax(0, 1fr);
+        gap: 6px 12px;
+        align-items: center;
+    }
+    .draft-cmp-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+        line-height: 1.25;
+    }
+    .draft-cmp-bars {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+    }
+    .draft-cmp-track {
+        position: relative;
+        height: 9px;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--text, #e6e8eb) 6%, transparent);
+        overflow: hidden;
+    }
+    .draft-cmp-fill {
+        display: block;
+        height: 100%;
+        border-radius: 4px;
+        min-width: 0;
+        transition: width 120ms var(--ease-out, ease);
+    }
+    .draft-cmp-track.is-ally .draft-cmp-fill {
+        background: linear-gradient(90deg, rgba(58, 160, 255, 0.55), rgba(58, 160, 255, 0.95));
+    }
+    .draft-cmp-track.is-enemy .draft-cmp-fill {
+        background: linear-gradient(90deg, rgba(226, 87, 75, 0.5), rgba(226, 87, 75, 0.95));
+    }
+    .draft-cmp-val {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 9px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        color: var(--text, #e6e8ea);
+        text-shadow: 0 0 4px rgba(0, 0, 0, 0.55);
+        pointer-events: none;
+    }
+    [data-theme="light"] .draft-cmp-val {
+        text-shadow: 0 0 3px rgba(255, 255, 255, 0.85);
+        color: var(--text);
+    }
+    [data-theme="light"] .draft-cmp-track {
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+    }
+    @media (max-width: 520px) {
+        .draft-cmp-row {
+            grid-template-columns: 56px minmax(0, 1fr);
+            gap: 6px 8px;
+        }
+        .draft-cmp-track { height: 8px; }
+        .draft-matchup-svg .comp-radar { max-height: 240px; }
+    }
     .draft-rec-list {
         display: flex;
         flex-direction: column;
@@ -4957,19 +5092,7 @@
     [data-theme="light"] .aug .alift.pick-3 { color: #374151; font-weight: 600; }
     [data-theme="light"] .aug .alift.pick-4 { color: #b88912; font-weight: 700; }
     [data-theme="light"] .aug .alift.pick-5 { color: #a67c00; font-weight: 700; }
-    /* 必出 marker (disabled)
-    [data-theme="light"] .aug .alift.pick-5 {
-        color: #a67c00;
-        font-weight: 700;
-        padding: 0 2px;
-        background-image: linear-gradient(
-            transparent 0 58%,
-            rgba(240, 190, 40, 0.35) 58% 100%
-        );
-        box-shadow: none;
-        text-shadow: none;
-    }
-    */
+    /* 必出 marker itself flips via --pick5-marker in :root[data-theme="light"]. */
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
@@ -5222,23 +5345,7 @@
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
     [data-theme="light"] .cg-core-share.pick-5 { color: #a67c00; font-weight: 700; }
-    /* 必出 marker (disabled)
-    [data-theme="light"] .cluster-pick.pick-5,
-    [data-theme="light"] .cg-option-pick.pick-5,
-    [data-theme="light"] .item-build-pick.pick-5,
-    [data-theme="light"] .boot-rail-pick.pick-5,
-    [data-theme="light"] .cg-core-share.pick-5 {
-        color: #a67c00;
-        font-weight: 700;
-        padding: 0 2px;
-        background-image: linear-gradient(
-            transparent 0 58%,
-            rgba(240, 190, 40, 0.35) 58% 100%
-        );
-        box-shadow: none;
-        text-shadow: none;
-    }
-    */
+    /* 必出 marker itself flips via --pick5-marker in :root[data-theme="light"]. */
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -5541,21 +5648,16 @@
     .item-tip-row > b.pick-3 { color: #e6e8eb; font-weight: 600; }
     .item-tip-row > b.pick-4 { color: #e8d48a; font-weight: 700; }
     .item-tip-row > b.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker (disabled)
+    /* 必出 marker — tip card is always dark, so pin the dark wash (the
+       themed --pick5-marker would flip to the paper color in light mode).
+       Right-aligned column → anchor the wash to the digits' right edge. */
     .item-tip-row > b.pick-5 {
-        color: #f0c94a;
-        font-weight: 700;
-        padding: 0 2px;
-        background-image: linear-gradient(
-            transparent 0 58%,
-            rgba(240, 201, 74, 0.32) 58% 100%
-        );
-        box-shadow: none;
-        text-shadow: none;
-        -webkit-box-decoration-break: clone;
-        box-decoration-break: clone;
+        padding: 0 3px;
+        background-image: var(--pick5-marker-dark);
+        background-repeat: no-repeat;
+        background-position: right calc(50% + 0.12em);
+        background-size: min(100%, 3.8em) 0.85em;
     }
-    */
     #augch-host {
         position: fixed;
         inset: 0;
