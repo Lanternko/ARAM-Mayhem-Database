@@ -1585,10 +1585,10 @@ def render_html(
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
-    # Role chips + teammate toggle scroll away with the page.  Search lives
-    # in a separate sticky rail (sibling of the tall tier list) so it can pin
-    # under the site header without trapping the role chips.
-    parts.append("<div class='filter-bar' data-nosnippet>")
+    # One-row chrome: role chips (scroll away) + sticky search on the right.
+    # Wrapper is a flex row so they share a single baseline on desktop.
+    parts.append("<div class='filter-chrome' data-nosnippet>")
+    parts.append("<div class='filter-bar'>")
     parts.append("<div class='role-chips'>")
     parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
     for role_en in ROLE_ORDER:
@@ -1600,7 +1600,6 @@ def render_html(
             f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
     )
     parts.append("</div>")  # /role-chips
-    # Teammate / draft picking lives on the Draft tab — not on the home filter bar.
     parts.append("</div>")  # /filter-bar
     # Search input wrapped in a label with an inline magnifier SVG sitting
     # in the input's left padding (the wrapper is positioned, the input
@@ -1612,7 +1611,7 @@ def render_html(
         "<circle cx='11' cy='11' r='7'></circle>"
         "<line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg>"
     )
-    parts.append("<div class='search-rail' data-nosnippet>")
+    parts.append("<div class='search-rail'>")
     parts.append(
         "<label class='search-wrap'>"
         f"{search_icon}"
@@ -1626,6 +1625,7 @@ def render_html(
         "<span id='shown-unit'>隻</span></span>"
     )
     parts.append("</div>")  # /search-rail
+    parts.append("</div>")  # /filter-chrome
 
     for tier in TIER_ORDER:
         entries = by_tier[tier]

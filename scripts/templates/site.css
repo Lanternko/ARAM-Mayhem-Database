@@ -199,25 +199,35 @@
     .lang-toggle { min-width: 56px; justify-content: center; }
     .lang-toggle span { font-size: 12px; letter-spacing: 0; }
     .lang-menu { position: relative; display: inline-flex; }
-    /* Filter bar: role chips + teammate toggle.  Scrolls away with the page
-       so it does not cover champion detail tabs while reading builds. */
+    /* Single-row filter chrome: chips left, search+count right (desktop).
+       Search rail stays sticky so chips can scroll away without a second row. */
+    .filter-chrome {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 12px 16px;
+        margin: 0 0 16px;
+        min-width: 0;
+    }
     .filter-bar {
         position: static;
         z-index: auto;
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         gap: 12px;
         align-items: center;
-        margin: 0 0 10px;
-        padding: 10px 12px;
+        margin: 0;
+        padding: 0;
         background: transparent;
-        border-radius: 10px;
+        border-radius: 0;
         box-shadow: none;
+        flex: 1 1 auto;
+        min-width: 0;
     }
-    /* Sticky search only — sibling of the tall tier list so pin lasts for the
-       whole main column.  The rail itself is a transparent full-width flex
-       row (pointer-events: none) so it does NOT paint a frosted slab over
-       champion icon/title; only the input + count get glass + hit targets. */
+    .filter-bar .role-chips {
+        flex-wrap: nowrap;
+        min-width: 0;
+    }
     .search-rail {
         position: sticky;
         top: var(--header-h, 56px);
@@ -226,8 +236,9 @@
         align-items: center;
         justify-content: flex-end;
         gap: 8px;
-        margin: 0 0 12px;
-        padding: 4px 0;
+        margin: 0;
+        padding: 0;
+        flex: 0 0 auto;
         background: transparent;
         border: 0;
         box-shadow: none;
@@ -237,9 +248,10 @@
     }
     .search-rail .search-wrap {
         pointer-events: auto;
-        flex: 0 1 320px;
-        max-width: min(320px, 42vw);
-        min-width: 160px;
+        flex: 0 1 280px;
+        width: min(280px, 32vw);
+        max-width: 280px;
+        min-width: 150px;
         background: color-mix(in srgb, var(--bg) 78%, transparent);
         -webkit-backdrop-filter: saturate(180%) blur(14px);
         backdrop-filter: saturate(180%) blur(14px);
@@ -3347,8 +3359,10 @@
             padding: 0 0 2px;
         }
         .page-actions .gh-star { width: auto; }
-        /* Filter bar wraps tighter on phone; role chips stay. */
-        .filter-bar { padding: 8px; gap: 8px; position: static; box-shadow: none; }
+        /* Filter chrome: chips only on phone (search hidden below). */
+        .filter-chrome { flex-wrap: wrap; margin-bottom: 10px; gap: 8px; }
+        .filter-bar { padding: 0; gap: 8px; position: static; box-shadow: none; }
+        .filter-bar .role-chips { flex-wrap: wrap; }
         .role-chips { gap: 4px; }
         .chip { padding: 4px 10px; font-size: 11px; }
         .filter-tools {
@@ -4416,18 +4430,22 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* Search rail owns sticky pin; filter-bar stays static (no glass slab). */
+    /* One-row chrome; search rail owns sticky pin (chips scroll away). */
+    .view-home .filter-chrome {
+        margin-bottom: 16px;
+    }
     .view-home .filter-bar {
         top: auto;
         background: transparent;
         border: 0;
         box-shadow: none;
-        margin: 0 0 10px;
+        margin: 0;
     }
     .view-home .search-rail {
         top: var(--header-h);
         background: transparent;
         border: 0;
+        margin: 0;
     }
     @media (max-width: 700px) {
         /* Two-row header: brand + actions on top, the primary tabs as a
