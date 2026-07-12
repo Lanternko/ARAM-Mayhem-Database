@@ -3058,7 +3058,7 @@
             }
             return `${goodSection || ''}${badSection || ''}`;
         };
-        const buildDetailTabSet = (scope, tabs, extraClass = '') => {
+        const buildDetailTabSet = (scope, tabs, extraClass = '', stickyLeadHtml = '') => {
             const name = `detail-${scope}-${cid}`;
             const inputs = tabs.map((tab, idx) => {
                 const inputId = `${name}-${tab.key}`;
@@ -3072,12 +3072,14 @@
                 const inputId = `${name}-${tab.key}`;
                 return `<section class="detail-tab-panel" role="tabpanel" aria-labelledby="${inputId}-label">${tab.content}</section>`;
             }).join('');
-            // Outer .detail-tab-rail is the sticky surface; the list keeps
-            // overflow-x:auto (overflow on the sticky element itself breaks pin).
+            // Outer .detail-tab-rail is the sticky surface (champ head + tabs for
+            // main set).  List keeps overflow-x:auto — overflow on the sticky
+            // element itself breaks pin in some browsers.
             return `
                 <div class="detail-tabset ${extraClass}">
                     ${inputs}
                     <div class="detail-tab-rail">
+                        ${stickyLeadHtml}
                         <div class="detail-tab-list" role="tablist">${labels}</div>
                     </div>
                     <div class="detail-tab-panels">${panels}</div>
@@ -3145,21 +3147,23 @@
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
         `;
-        const detailTabs = buildDetailTabSet('main', [
-            { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
-            { key: 'items', label: mainTabLabels.items, content: itemTabContent },
-            { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
-            { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
-        ], 'detail-main-tabs');
-        return `
+        // Champ icon + name live inside the sticky rail with the main tabs so
+        // they pin together under the site header (and floating search chip).
+        const stickyLeadHtml = `
             <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
             <div class="detail-head">
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
                 <span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>
                 ${buildDetailRoleTags(info)}
             </div>
-            ${detailTabs}
         `;
+        const detailTabs = buildDetailTabSet('main', [
+            { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
+            { key: 'items', label: mainTabLabels.items, content: itemTabContent },
+            { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
+            { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
+        ], 'detail-main-tabs', stickyLeadHtml);
+        return detailTabs;
     }
 
     const REC_LIST_LIMIT = 12;
