@@ -26,10 +26,10 @@ for _m in (_eng, _rnd):
 @click.option("--min-pair-games", type=int, default=15, help="Min games per (champ, augment) pair")
 @click.option("--min-synergy-games", type=int, default=40,
               help="Min games per same-team champion pair for synergy / recommendation ranking")
-@click.option("--top-n", type=int, default=0,
-              help="Max best augments per rarity; 0 keeps all qualifying augments")
-@click.option("--bot-n", type=int, default=0,
-              help="Max worst augments per rarity; 0 keeps all qualifying augments")
+@click.option("--top-n", type=int, default=16,
+              help="Max best augments per rarity (default 16; 0 keeps all — bloats payload)")
+@click.option("--bot-n", type=int, default=12,
+              help="Max worst augments per rarity (default 12; 0 keeps all — bloats payload)")
 @click.option("--site-url", default="",
               help="Canonical URL (used for OG og:url + <link rel=canonical>), e.g. https://user.github.io/repo/")
 @click.option("--og-image", default="",

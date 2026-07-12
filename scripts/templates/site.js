@@ -80,52 +80,26 @@
     async function loadSitePayload(url) {
         // Always resolve from site root. Relative "api/..." breaks under
         // /zh-CN/… and /en/… deep-link shells (would 404 as /zh-CN/api/…).
+        // Keep ?v= cache-bust query from the build (do not strip).
         const resolved = (url.startsWith('http') || url.startsWith('/'))
             ? url
             : ('/' + String(url).replace(/^\.?\//, ''));
-        const response = await fetch(resolved, { cache: 'no-cache' });
+        // Default HTTP cache: tier-list.json is multi-MB; `no-cache` forced a
+        // revalidation on every visit and dominated /zh-CN bounce load time.
+        // Build stamps the URL with ?v=YYYYMMDD so publishes still bust cache.
+        const response = await fetch(resolved);
         if (!response.ok) {
             throw new Error(`payload ${response.status}: ${resolved}`);
         }
         return await response.json();
     }
     const DATA = __PAYLOAD__;
-    // Empirical champion x team-archetype fit (decoupled artifact; absence -> heuristic fallback).
+    // Empirical secondary artifacts: fetch in parallel (not waterfall).  Names
+    // for zh-CN are optional for first paint (t2s fallback works); load them
+    // after the main payload without blocking the dual-API path when unused.
     let ARCHFIT = null;
-    try {
-        ARCHFIT = await loadSitePayload("api/champ-archetype-fit.json");
-        if (ARCHFIT && ARCHFIT.champs && DATA.champs) {
-            for (const cid in ARCHFIT.champs) {
-                if (DATA.champs[cid]) DATA.champs[cid].archFit = ARCHFIT.champs[cid];
-            }
-        }
-    } catch (e) { ARCHFIT = null; }
-    // Empirical ability axes merged into comp (radar bars + early/late tempo card).
-    try {
-        const AXES = await loadSitePayload("api/champ-empirical-axes.json");
-        if (AXES && AXES.champs && DATA.champs) {
-            for (const cid in AXES.champs) {
-                const c = DATA.champs[cid], a = AXES.champs[cid];
-                if (c && c.comp && a) {
-                    // Tempo card: early/late end-game WR (≤16min / ≥22min).
-                    // Keep scaling/snowball for the scatter article + archive metrics.
-                    c.comp.scaling = a.scaling; c.comp.snowball = a.snowball;
-                    c.comp.early_wr = a.early_wr; c.comp.late_wr = a.late_wr;
-                    // Radar polygon: damage/tank/cc + gold + fight presence.
-                    c.comp.e_damage = a.e_damage; c.comp.e_tank = a.e_tank; c.comp.e_cc = a.e_cc;
-                    c.comp.e_gold = a.e_gold; c.comp.e_participate = a.e_participate;
-                }
-            }
-        }
-    } catch (e) {}
-    // Official zh-CN champ/item names (ddragon) + full trad→simp map + aug converts.
     let NAMES_ZH_CN = null;
-    try {
-        NAMES_ZH_CN = await loadSitePayload("api/names-zh-cn.json");
-    } catch (e) { NAMES_ZH_CN = null; }
-    // Stamp CN fields onto payload objects once so every render path can read them
-    // without re-looking up maps (also survives code that still touches name_zh).
-    (function attachCnNames() {
+    function attachCnNames() {
         if (!NAMES_ZH_CN) return;
         const augsMap = NAMES_ZH_CN.augs || {};
         const augs = DATA.augs || {};
@@ -146,7 +120,48 @@
             m.c = itemsMap[id];
             if (descsMap[id]) m.dc = descsMap[id];
         }
-    })();
+    }
+    function mergeArchFit(src) {
+        if (!src || !src.champs || !DATA.champs) return;
+        for (const cid in src.champs) {
+            if (DATA.champs[cid]) DATA.champs[cid].archFit = src.champs[cid];
+        }
+    }
+    function mergeAxes(src) {
+        if (!src || !src.champs || !DATA.champs) return;
+        for (const cid in src.champs) {
+            const c = DATA.champs[cid], a = src.champs[cid];
+            if (c && c.comp && a) {
+                // Tempo card: early/late end-game WR (≤16min / ≥22min).
+                // Keep scaling/snowball for the scatter article + archive metrics.
+                c.comp.scaling = a.scaling; c.comp.snowball = a.snowball;
+                c.comp.early_wr = a.early_wr; c.comp.late_wr = a.late_wr;
+                // Radar polygon: damage/tank/cc + gold + fight presence.
+                c.comp.e_damage = a.e_damage; c.comp.e_tank = a.e_tank; c.comp.e_cc = a.e_cc;
+                c.comp.e_gold = a.e_gold; c.comp.e_participate = a.e_participate;
+            }
+        }
+    }
+    // Prefer loading names when the boot locale is already zh-CN (share links);
+    // otherwise defer so / and /en don't wait on ~110KB of CN dictionaries.
+    const wantCnNamesEarly = pendingBootLang === 'zh-CN';
+    const secondaryFetches = [
+        loadSitePayload('api/champ-archetype-fit.json').then(d => { ARCHFIT = d; mergeArchFit(d); }).catch(() => { ARCHFIT = null; }),
+        loadSitePayload('api/champ-empirical-axes.json').then(mergeAxes).catch(() => {}),
+    ];
+    if (wantCnNamesEarly) {
+        secondaryFetches.push(
+            loadSitePayload('api/names-zh-cn.json').then(d => { NAMES_ZH_CN = d; attachCnNames(); }).catch(() => { NAMES_ZH_CN = null; })
+        );
+    }
+    await Promise.all(secondaryFetches);
+    if (!wantCnNamesEarly) {
+        // Non-blocking: official CN names arrive after first interactive frame.
+        loadSitePayload('api/names-zh-cn.json').then(d => {
+            NAMES_ZH_CN = d;
+            attachCnNames();
+        }).catch(() => { NAMES_ZH_CN = null; });
+    }
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -521,7 +536,7 @@
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / changes / column. Brand also → home.
-    const VIEWS = ['home', 'augments', 'changes', 'column'];
+    const VIEWS = ['home', 'augments', 'draft', 'changes', 'column'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [
@@ -866,8 +881,15 @@
             pickNoteEmpty: n => `最多選 ${n} 隻；未滿 5 隻時看推薦補位，選滿後看整隊勝率與維度。`,
             pickNotePartial: want => `目前這組選角的完整資料較少，先用已知搭配排序。`,
             pickNoteReady: (want, minGames) => `已選 ${want}/${MAX_TEAM_PICKS} 隻；pair 門檻 >= ${minGames} 場。`,
-            panelEmpty: '先開啟「選擇你的隊友」，再從英雄列表點 1～5 隻英雄。未滿 5 隻時排出最適合補進來的英雄；選滿後顯示整隊估計勝率與能力維度。',
+            panelEmpty: '到 Draft 分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
+            draftEmpty: '點右側列表加入我方英雄；需要時切到「對手」再選敵方（可選）。',
+            draftMatchupWr: '我方勝率（對陣）',
+            draftMatchupNote: '≈ 0.5 +（我方估計 − 對手估計）；兩邊皆依英雄均值 + 搭配 lift + 陣容組成。',
+            draftAllyEval: '我方陣容',
+            draftEnemyEval: '對手陣容',
+            draftVs: 'VS',
+            draftOnOtherSide: '這隻已在另一邊陣容裡。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -3183,9 +3205,13 @@
     ];
     const TEAM_COMP_DIMS = TEAM_RADAR_AXES;
     let detailSelected = null;
-    let recommendMode = false;
+    let recommendMode = false; // legacy home teammate mode — always off; Draft tab owns picks
     let recModalOpen = false;
-    let teamPicks = [];
+    let teamPicks = []; // ally picks (also used by recommendation helpers)
+    let enemyPicks = [];
+    let draftSide = 'ally'; // which side the champ list adds to
+    let draftRole = '';
+    let draftQuery = '';
     let pickNotice = '';
 
     function zFmt(x) {
@@ -3682,6 +3708,265 @@
                 ${tempoHtml}
             </div>
         `;
+    }
+
+    /** Ally vs optional enemy: matchup WR ≈ 0.5 + (allyEst − enemyEst). */
+    function evaluateMatchup(allyIds, enemyIds) {
+        const ally = allyIds && allyIds.length ? evaluateFullTeam(allyIds) : null;
+        const enemy = enemyIds && enemyIds.length ? evaluateFullTeam(enemyIds) : null;
+        let matchupWr = null;
+        if (ally && enemy) {
+            matchupWr = Math.max(0.35, Math.min(0.65, 0.5 + (ally.estWr - enemy.estWr)));
+        } else if (ally) {
+            matchupWr = ally.estWr;
+        }
+        return { ally, enemy, matchupWr };
+    }
+
+    function draftPickList(side) {
+        return side === 'enemy' ? enemyPicks : teamPicks;
+    }
+
+    function renderDraftSlots(side) {
+        const host = document.getElementById(side === 'enemy' ? 'draft-enemy-slots' : 'draft-ally-slots');
+        if (!host) return;
+        const copy = tr();
+        const list = draftPickList(side);
+        const chips = [];
+        list.forEach((cid, i) => {
+            const info = DATA.champs[cid];
+            const name = info ? champName(info, cid) : ('#' + cid);
+            const image = info && info.image ? info.image : '';
+            chips.push(
+                `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
+                + `title="${escHtml(copy.removePick(name))}">`
+                + (image ? `<img loading="lazy" src="${image}" alt="">` : '')
+                + `<span class="draft-slot-rank">${i + 1}</span>`
+                + `<span class="draft-slot-name">${escHtml(name)}</span>`
+                + `</button>`
+            );
+        });
+        for (let i = list.length; i < MAX_TEAM_PICKS; i += 1) {
+            chips.push(
+                `<button class="draft-slot is-empty" type="button" data-draft-target="${side}">`
+                + `<span class="draft-slot-rank">${i + 1}</span>`
+                + `<span class="draft-slot-name">${escHtml(copy.pickEmpty)}</span>`
+                + `</button>`
+            );
+        }
+        host.innerHTML = chips.join('');
+    }
+
+    function draftChampRows() {
+        const q = (draftQuery || '').trim();
+        const role = draftRole || '';
+        const allySet = new Set(teamPicks);
+        const enemySet = new Set(enemyPicks);
+        return Object.entries(DATA.champs || {})
+            .map(([cid, info]) => ({
+                cid: String(cid),
+                info,
+                wr: Number(info.wr) || 0,
+                name: champName(info, cid),
+            }))
+            .filter(row => {
+                if (role && !(row.info.tags || []).includes(role)) return false;
+                if (!q) return true;
+                const blob = [
+                    row.name,
+                    row.info.name_en || '',
+                    row.info.alias || '',
+                    row.info.name_zh || '',
+                    row.cid,
+                ].join(' ');
+                return searchMatchesText(blob, q);
+            })
+            .sort((a, b) => b.wr - a.wr);
+    }
+
+    function renderDraftChampList() {
+        const host = document.getElementById('draft-champ-list');
+        if (!host) return;
+        const copy = tr();
+        const allySet = new Set(teamPicks);
+        const enemySet = new Set(enemyPicks);
+        const rows = draftChampRows();
+        if (!rows.length) {
+            host.innerHTML = `<div class="panel-empty">${escHtml(copy.emptyCopy)}</div>`;
+            return;
+        }
+        host.innerHTML = rows.map(row => {
+            const onAlly = allySet.has(row.cid);
+            const onEnemy = enemySet.has(row.cid);
+            let state = '';
+            if (onAlly) state = 'is-ally';
+            else if (onEnemy) state = 'is-enemy';
+            const image = row.info.image || '';
+            const wrTxt = pct(row.wr);
+            return (
+                `<button type="button" class="draft-champ-row ${state}" data-draft-pick="${row.cid}" role="option">`
+                + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-champ-ph"></span>')
+                + `<span class="draft-champ-name">${escHtml(row.name)}</span>`
+                + `<span class="draft-champ-wr">${wrTxt}</span>`
+                + `</button>`
+            );
+        }).join('');
+    }
+
+    function renderDraftRoleChips() {
+        const host = document.getElementById('draft-role-chips');
+        if (!host || host.dataset.ready === '1') {
+            if (host) {
+                host.querySelectorAll('.chip').forEach(c => {
+                    c.classList.toggle('active', (c.getAttribute('data-role') || '') === draftRole);
+                });
+            }
+            return;
+        }
+        const roles = [
+            { role: '', zh: '★ All', en: '★ All' },
+            { role: 'Assassin', zh: '刺客', en: 'Assassin' },
+            { role: 'Fighter', zh: '戰士', en: 'Fighter' },
+            { role: 'Mage', zh: '法師', en: 'Mage' },
+            { role: 'Marksman', zh: '射手', en: 'Marksman' },
+            { role: 'Support', zh: '輔助', en: 'Support' },
+            { role: 'Tank', zh: '坦克', en: 'Tank' },
+        ];
+        host.innerHTML = roles.map(r => {
+            const label = pickLang(r.zh, r.en);
+            const active = (draftRole || '') === r.role ? ' active' : '';
+            return `<button type="button" class="chip${active}" data-draft-role="${escHtml(r.role)}">${escHtml(label)}</button>`;
+        }).join('');
+        host.dataset.ready = '1';
+    }
+
+    function buildDraftResultHtml() {
+        const copy = tr();
+        const mu = evaluateMatchup(teamPicks, enemyPicks);
+        if (!teamPicks.length && !enemyPicks.length) {
+            return `<div class="panel-empty">${escHtml(copy.draftEmpty || copy.panelEmpty)}</div>`;
+        }
+        const parts = [];
+        if (mu.matchupWr != null && enemyPicks.length) {
+            const tone = mu.matchupWr >= 0.53 ? 'is-good' : (mu.matchupWr <= 0.47 ? 'is-bad' : 'is-even');
+            parts.push(`
+                <div class="draft-matchup-hero team-eval-wr ${tone}">
+                    <div class="team-wr-num">${pct(mu.matchupWr)}</div>
+                    <div class="team-wr-label">${escHtml(copy.draftMatchupWr || '我方勝率（對陣）')}</div>
+                    <div class="team-wr-meta">${escHtml(copy.draftMatchupNote || '')}</div>
+                </div>`);
+        }
+        if (mu.ally) {
+            parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
+        }
+        if (mu.enemy) {
+            parts.push(`<div class="draft-eval-block is-enemy"><div class="draft-eval-label">${escHtml(copy.draftEnemyEval || '對手陣容')}</div>${buildTeamEvalHtml(enemyPicks)}</div>`);
+        }
+        if (pickNotice) {
+            parts.unshift(`<div class="pick-note">${escHtml(pickNotice)}</div>`);
+        }
+        // Recommendations when ally not full and no focus on enemy-only.
+        if (teamPicks.length > 0 && teamPicks.length < MAX_TEAM_PICKS && draftSide === 'ally') {
+            const recs = aggregateRecommendations();
+            if (recs.length) {
+                const recHtml = recommendationDisplayRows(recs).map((row, idx) => {
+                    const info = DATA.champs[row.id];
+                    const name = info ? champName(info, row.id) : ('#' + row.id);
+                    const image = info && info.image ? info.image : '';
+                    return (
+                        `<button type="button" class="rec-row draft-rec-row" data-draft-pick="${row.id}">`
+                        + `<span class="rec-rank">${idx + 1}</span>`
+                        + (image ? `<img loading="lazy" src="${image}" alt="">` : '')
+                        + `<span class="rec-name">${escHtml(name)}</span>`
+                        + `</button>`
+                    );
+                }).join('');
+                parts.push(`
+                    <div class="draft-eval-block">
+                        <div class="draft-eval-label">${escHtml(copy.sideTitle)}</div>
+                        <div class="draft-rec-list">${recHtml}</div>
+                    </div>`);
+            }
+        }
+        return parts.join('') || `<div class="panel-empty">${escHtml(copy.draftEmpty || '')}</div>`;
+    }
+
+    function renderDraft() {
+        const shell = document.querySelector('.view-draft');
+        if (!shell) return;
+        renderDraftRoleChips();
+        renderDraftSlots('ally');
+        renderDraftSlots('enemy');
+        renderDraftChampList();
+
+        const copy = tr();
+        const mu = evaluateMatchup(teamPicks, enemyPicks);
+        const allyWrEl = document.getElementById('draft-ally-wr');
+        const enemyWrEl = document.getElementById('draft-enemy-wr');
+        const matchupEl = document.getElementById('draft-matchup');
+        const resultEl = document.getElementById('draft-result');
+        if (allyWrEl) {
+            allyWrEl.textContent = mu.ally ? pct(mu.ally.estWr) : '—';
+        }
+        if (enemyWrEl) {
+            enemyWrEl.textContent = mu.enemy ? pct(mu.enemy.estWr) : '—';
+        }
+        if (matchupEl) {
+            if (mu.matchupWr != null && enemyPicks.length) {
+                const tone = mu.matchupWr >= 0.53 ? 'is-good' : (mu.matchupWr <= 0.47 ? 'is-bad' : 'is-even');
+                matchupEl.innerHTML = `
+                    <div class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</div>
+                    <div class="draft-vs-wr ${tone}">${pct(mu.matchupWr)}</div>
+                    <div class="draft-vs-sub">${escHtml(copy.draftMatchupWr || '')}</div>`;
+                matchupEl.classList.add('has-matchup');
+            } else {
+                matchupEl.innerHTML = `<div class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</div>`;
+                matchupEl.classList.remove('has-matchup');
+            }
+        }
+        document.querySelectorAll('.draft-side-select').forEach(btn => {
+            const t = btn.getAttribute('data-draft-target');
+            btn.classList.toggle('is-active', t === draftSide);
+        });
+        document.querySelectorAll('.draft-side').forEach(el => {
+            el.classList.toggle('is-targeting', el.getAttribute('data-draft-side') === draftSide);
+        });
+        if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
+
+        const searchEl = document.getElementById('draft-search');
+        if (searchEl && searchEl.value !== draftQuery) searchEl.value = draftQuery;
+    }
+
+    function setDraftSide(side) {
+        draftSide = side === 'enemy' ? 'enemy' : 'ally';
+        pickNotice = '';
+        renderDraft();
+    }
+
+    function toggleDraftPick(cid) {
+        cid = String(cid);
+        pickNotice = '';
+        const list = draftPickList(draftSide);
+        const other = draftSide === 'enemy' ? teamPicks : enemyPicks;
+        const idx = list.indexOf(cid);
+        if (idx !== -1) {
+            list.splice(idx, 1);
+        } else if (other.includes(cid)) {
+            pickNotice = tr().draftOnOtherSide || tr().maxOnly(MAX_TEAM_PICKS);
+        } else if (list.length >= MAX_TEAM_PICKS) {
+            pickNotice = tr().maxOnly(MAX_TEAM_PICKS);
+        } else {
+            list.push(cid);
+        }
+        // Keep teamPicks as ally for aggregateRecommendations.
+        renderDraft();
+    }
+
+    function clearDraft() {
+        teamPicks = [];
+        enemyPicks = [];
+        pickNotice = '';
+        renderDraft();
     }
 
     function renderSidePanel() {
@@ -4513,6 +4798,9 @@
             if (name === 'augments') {
                 renderAugmentTier();
             }
+            if (name === 'draft') {
+                renderDraft();
+            }
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
@@ -4665,13 +4953,14 @@
     }
 
     function setRecommendMode(next) {
-        recommendMode = Boolean(next);
-        if (!recommendMode) recModalOpen = false;
+        // Home teammate mode retired — Draft tab owns roster picks.
+        recommendMode = false;
+        recModalOpen = false;
         const btn = document.getElementById('recommend-mode');
         if (!btn) return;
-        btn.classList.toggle('active', recommendMode);
-        btn.setAttribute('aria-pressed', recommendMode ? 'true' : 'false');
-        btn.textContent = recommendMode ? tr().recModeOn : tr().recModeOff;
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.hidden = true;
     }
 
     function syncDetailModalState() {
@@ -4900,13 +5189,46 @@
             trackEvent('updates_close', {});
             return;
         }
-        const modeBtn = ev.target.closest('#recommend-mode');
-        if (modeBtn) {
-            const nextMode = !recommendMode;
-            setRecommendMode(nextMode);
+        const draftTarget = ev.target.closest('[data-draft-target]');
+        if (draftTarget) {
+            setDraftSide(draftTarget.getAttribute('data-draft-target') || 'ally');
+            trackEvent('draft_side', { side: draftSide });
+            return;
+        }
+        const draftRemove = ev.target.closest('[data-draft-remove]');
+        if (draftRemove) {
+            const side = draftRemove.getAttribute('data-draft-remove') || 'ally';
+            const cid = draftRemove.getAttribute('data-cid');
+            const list = draftPickList(side);
+            const idx = list.indexOf(cid);
+            if (idx !== -1) list.splice(idx, 1);
             pickNotice = '';
-            renderSidePanel();
-            trackEvent('recommend_mode_toggle', { enabled: nextMode });
+            renderDraft();
+            trackEvent('draft_pick_remove', { side, champion_id: cid });
+            return;
+        }
+        const draftPick = ev.target.closest('[data-draft-pick]');
+        if (draftPick) {
+            const cid = draftPick.getAttribute('data-draft-pick');
+            toggleDraftPick(cid);
+            trackEvent('draft_pick_toggle', { side: draftSide, champion_id: cid, ally: teamPicks.length, enemy: enemyPicks.length });
+            return;
+        }
+        const draftRoleBtn = ev.target.closest('[data-draft-role]');
+        if (draftRoleBtn) {
+            draftRole = draftRoleBtn.getAttribute('data-draft-role') || '';
+            const host = document.getElementById('draft-role-chips');
+            if (host) host.dataset.ready = '1';
+            host?.querySelectorAll('.chip').forEach(c => {
+                c.classList.toggle('active', (c.getAttribute('data-draft-role') || '') === draftRole);
+            });
+            renderDraftChampList();
+            trackEvent('draft_role_filter', { role: draftRole || 'all' });
+            return;
+        }
+        if (ev.target.closest('#draft-clear')) {
+            clearDraft();
+            trackEvent('draft_clear', {});
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');
@@ -4916,10 +5238,11 @@
             pickNotice = '';
             syncPickDecorations();
             renderSidePanel();
+            if (document.querySelector('.view-draft.is-active')) renderDraft();
             trackEvent('team_pick_remove', { champion_id: removedCid, picks: teamPicks.length });
             return;
         }
-        const recRow = ev.target.closest('.rec-row');
+        const recRow = ev.target.closest('.rec-row:not(.draft-rec-row)');
         if (recRow) {
             recModalOpen = false;
             renderSidePanel();
@@ -4930,13 +5253,14 @@
         }
         const champ = ev.target.closest('.champ');
         if (!champ) return;
-        const cid = champ.getAttribute('data-cid');
-        if (recommendMode) {
-            toggleTeamPick(cid);
-            trackEvent('team_pick_toggle', { champion_id: cid, picks: teamPicks.length });
-            return;
-        }
         openDetailForChamp(champ);
+    });
+
+    // Draft search input (debounced like home search).
+    document.getElementById('draft-search')?.addEventListener('input', (ev) => {
+        draftQuery = ev.target.value || '';
+        clearTimeout(window.__draftSearchT);
+        window.__draftSearchT = setTimeout(() => renderDraftChampList(), 80);
     });
 
     // When viewport width changes, the row containing the selected champ
