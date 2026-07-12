@@ -56,9 +56,9 @@
       "name_zh": "烏爾加特"
     },
     "7": {
-      "x": 51.9,
-      "y": 1,
-      "zoom": 1.44,
+      "x": 44.4,
+      "y": 0,
+      "zoom": 1.26,
       "mirror": false,
       "alias": "Leblanc",
       "name_zh": "勒布朗"
@@ -88,7 +88,7 @@
       "name_zh": "凱爾"
     },
     "11": {
-      "x": 93.4,
+      "x": 100,
       "y": 18,
       "zoom": 1.44,
       "mirror": false,
@@ -152,9 +152,9 @@
       "name_zh": "崔絲塔娜"
     },
     "19": {
-      "x": 60.4,
-      "y": 53.2,
-      "zoom": 1.56,
+      "x": 86.3,
+      "y": 41.6,
+      "zoom": 1.14,
       "mirror": false,
       "alias": "Warwick",
       "name_zh": "沃維克"
@@ -184,9 +184,9 @@
       "name_zh": "艾希"
     },
     "23": {
-      "x": 88.2,
-      "y": 4,
-      "zoom": 1.8,
+      "x": 100,
+      "y": 4.3,
+      "zoom": 1.5,
       "mirror": false,
       "alias": "Tryndamere",
       "name_zh": "泰達米爾"
@@ -321,8 +321,8 @@
     },
     "40": {
       "x": 100,
-      "y": 24.5,
-      "zoom": 1.62,
+      "y": 22.7,
+      "zoom": 1.68,
       "mirror": false,
       "alias": "Janna",
       "name_zh": "珍娜"
@@ -376,9 +376,9 @@
       "name_zh": "特朗德"
     },
     "50": {
-      "x": 81.1,
-      "y": 2.8,
-      "zoom": 1.8,
+      "x": 84.9,
+      "y": 0,
+      "zoom": 1.56,
       "mirror": false,
       "alias": "Swain",
       "name_zh": "斯溫"
@@ -448,9 +448,9 @@
       "name_zh": "嘉文四世"
     },
     "60": {
-      "x": 98.9,
-      "y": 10.6,
-      "zoom": 1.68,
+      "x": 92.6,
+      "y": 11.3,
+      "zoom": 1.92,
       "mirror": false,
       "alias": "Elise",
       "name_zh": "伊莉絲"
@@ -488,9 +488,9 @@
       "name_zh": "李星"
     },
     "67": {
-      "x": 92.1,
-      "y": 12.4,
-      "zoom": 3.02,
+      "x": 98.8,
+      "y": 11.7,
+      "zoom": 2,
       "mirror": false,
       "alias": "Vayne",
       "name_zh": "汎"
@@ -528,9 +528,9 @@
       "name_zh": "漢默丁格"
     },
     "75": {
-      "x": 79.1,
-      "y": 14.9,
-      "zoom": 2.04,
+      "x": 83.6,
+      "y": 13.3,
+      "zoom": 1.62,
       "mirror": false,
       "alias": "Nasus",
       "name_zh": "納瑟斯"
@@ -544,9 +544,9 @@
       "name_zh": "奈德麗"
     },
     "77": {
-      "x": 48.3,
+      "x": 56.6,
       "y": 0,
-      "zoom": 1.8,
+      "zoom": 1.44,
       "mirror": false,
       "alias": "Udyr",
       "name_zh": "烏迪爾"
@@ -784,9 +784,9 @@
       "name_zh": "希格斯"
     },
     "117": {
-      "x": 88.8,
-      "y": 39.5,
-      "zoom": 1.8,
+      "x": 95.6,
+      "y": 40.5,
+      "zoom": 1.38,
       "mirror": false,
       "alias": "Lulu",
       "name_zh": "露璐"
@@ -816,9 +816,9 @@
       "name_zh": "卡力斯"
     },
     "122": {
-      "x": 58.1,
+      "x": 57.3,
       "y": 0,
-      "zoom": 1.8,
+      "zoom": 1.56,
       "mirror": false,
       "alias": "Darius",
       "name_zh": "達瑞斯"
@@ -880,9 +880,9 @@
       "name_zh": "慨影"
     },
     "142": {
-      "x": 45,
-      "y": 13.5,
-      "zoom": 1.5,
+      "x": 40,
+      "y": 7.2,
+      "zoom": 1.32,
       "mirror": false,
       "alias": "Zoe",
       "name_zh": "柔依"
@@ -936,9 +936,9 @@
       "name_zh": "犽宿"
     },
     "161": {
-      "x": 59.2,
-      "y": 33.9,
-      "zoom": 1.5,
+      "x": 51.7,
+      "y": 33.5,
+      "zoom": 1.14,
       "mirror": false,
       "alias": "Velkoz",
       "name_zh": "威寇茲"
@@ -1017,8 +1017,8 @@
     },
     "223": {
       "x": 100,
-      "y": 34.1,
-      "zoom": 1.32,
+      "y": 35.5,
+      "zoom": 1.08,
       "mirror": false,
       "alias": "TahmKench",
       "name_zh": "貪啃奇"
@@ -1120,9 +1120,9 @@
       "name_zh": "阿祈爾"
     },
     "350": {
-      "x": 36.6,
-      "y": 6.5,
-      "zoom": 1.68,
+      "x": 28.9,
+      "y": 0,
+      "zoom": 1.26,
       "mirror": false,
       "alias": "Yuumi",
       "name_zh": "悠咪"
@@ -1160,9 +1160,9 @@
       "name_zh": "雷珂煞"
     },
     "427": {
-      "x": 49,
-      "y": 1.3,
-      "zoom": 1.44,
+      "x": 64.3,
+      "y": 0,
+      "zoom": 1.2,
       "mirror": false,
       "alias": "Ivern",
       "name_zh": "埃爾文"
@@ -1192,9 +1192,9 @@
       "name_zh": "銳空"
     },
     "498": {
-      "x": 88.8,
-      "y": 24.7,
-      "zoom": 1.8,
+      "x": 68.7,
+      "y": 26.8,
+      "zoom": 1.92,
       "mirror": false,
       "alias": "Xayah",
       "name_zh": "剎雅"
@@ -1232,17 +1232,17 @@
       "name_zh": "亞菲利歐"
     },
     "526": {
-      "x": 55.5,
-      "y": 14.7,
-      "zoom": 1.56,
+      "x": 51.4,
+      "y": 9,
+      "zoom": 2.34,
       "mirror": false,
       "alias": "Rell",
       "name_zh": "銳兒"
     },
     "555": {
-      "x": 41.6,
-      "y": 23,
-      "zoom": 1.38,
+      "x": 37.1,
+      "y": 19.3,
+      "zoom": 1.2,
       "mirror": false,
       "alias": "Pyke",
       "name_zh": "派克"
@@ -1384,9 +1384,9 @@
       "name_zh": "赫威"
     },
     "950": {
-      "x": 27.2,
-      "y": 58.4,
-      "zoom": 1.3,
+      "x": 13.1,
+      "y": 53.4,
+      "zoom": 1.12,
       "mirror": false,
       "alias": "Naafiri",
       "name_zh": "娜菲芮"
