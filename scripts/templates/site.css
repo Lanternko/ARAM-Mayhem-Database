@@ -2459,26 +2459,19 @@
     .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6e8eb; font-weight: 600; }
     .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #e8d48a; font-weight: 700; }
     .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 (pick-5): yellow highlighter-pen stroke on the % number. */
+    /* 必出 (pick-5): quiet marker — lower-third stroke only, no glow / no row wash. */
     .cluster-pick.pick-5,
     .cg-option-pick.pick-5,
     .item-build-pick.pick-5,
     .boot-rail-pick.pick-5,
     .cg-core-share.pick-5 {
-        color: #fff6c2;
-        font-weight: 800;
-        padding: 0 4px 1px;
-        border-radius: 2px;
+        color: #f0c94a;
+        font-weight: 700;
+        padding: 0 2px;
         background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.08em,
-            rgba(255, 224, 50, 0.78) 0.08em,
-            rgba(255, 236, 100, 0.52) 0.68em,
-            transparent 0.68em
+            transparent 0 58%,
+            rgba(240, 201, 74, 0.32) 58% 100%
         );
-        box-shadow: 0 0 10px rgba(255, 220, 40, 0.2);
-        text-shadow: 0 0 6px rgba(255, 230, 80, 0.35);
         -webkit-box-decoration-break: clone;
         box-decoration-break: clone;
     }
@@ -2545,25 +2538,6 @@
         outline: none;
     }
     .boot-rail-row.is-top { border-color: rgba(107, 209, 107, 0.32); background: #11151d; }
-    /* 必出 row: soft highlighter wash + name marker when pick hits top tier. */
-    .boot-rail-row:has(> .boot-rail-pick.pick-5) {
-        border-color: rgba(255, 220, 50, 0.38);
-        background: linear-gradient(100deg, rgba(255, 220, 50, 0.14) 0%, #11151d 62%);
-        box-shadow: inset 0 0 0 1px rgba(255, 230, 80, 0.06);
-    }
-    .boot-rail-row:has(> .boot-rail-pick.pick-5) .boot-rail-name {
-        color: #fff6c2;
-        background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.1em,
-            rgba(255, 224, 50, 0.55) 0.1em,
-            rgba(255, 236, 100, 0.32) 0.65em,
-            transparent 0.65em
-        );
-        -webkit-box-decoration-break: clone;
-        box-decoration-break: clone;
-    }
     .boot-rail-row:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); }
     .boot-rail-icon { width: 32px; height: 32px; border-radius: 6px; background: #2a3142; object-fit: contain; flex: 0 0 auto; }
     .boot-rail-name { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #e6e8eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2855,6 +2829,44 @@
     .detail-col-heading h3 { margin: 0; }
     .detail-col.best h3 { color: #6bd16b; }
     .detail-col.worst h3 { color: #ff6b6b; }
+    /* Single-item strength filter (出裝 tab): All + 6 roles + 常見. */
+    .item-role-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 12px;
+    }
+    .item-role-chip {
+        padding: 4px 11px;
+        background: #1f2530;
+        color: #c5cad3;
+        border: 1px solid #2f3645;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background 0.1s, border-color 0.1s, color 0.1s;
+        --role-color: #9aa0a6;
+    }
+    .item-role-chip:hover { background: #2a3142; border-color: #3a4252; }
+    .item-role-chip.is-active {
+        background: var(--role-color);
+        color: #0e1116;
+        border-color: var(--role-color);
+    }
+    .item-role-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .item-role-chip.role-Assassin { --role-color: #ef4444; }
+    .item-role-chip.role-Fighter  { --role-color: #f97316; }
+    .item-role-chip.role-Mage     { --role-color: #3b82f6; }
+    .item-role-chip.role-Marksman { --role-color: #22c55e; }
+    .item-role-chip.role-Support  { --role-color: #ec4899; }
+    .item-role-chip.role-Tank     { --role-color: #a855f7; }
+    .item-role-chip.role-common   { --role-color: #f5c518; }
+    .single-item-card.item-filter-hidden { display: none; }
+    .item-filter-empty { margin: 4px 0 8px; }
+
     /* Augment category filter chips (above the per-champion ranking).  OR
        multi-select; .is-active fills with the per-category accent. */
     .aug-cat-bar {
@@ -3134,22 +3146,14 @@
     .aug .alift.pick-2 { color: #9aa3b2; font-weight: 500; }
     .aug .alift.pick-3 { color: #e6e8eb; font-weight: 600; }
     .aug .alift.pick-4 { color: #e8d48a; font-weight: 700; }
-    .aug .alift.pick-5 { color: #f0c94a; font-weight: 700; }
     .aug .alift.pick-5 {
-        color: #fff6c2;
-        font-weight: 800;
-        padding: 0 4px 1px;
-        border-radius: 2px;
+        color: #f0c94a;
+        font-weight: 700;
+        padding: 0 2px;
         background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.08em,
-            rgba(255, 224, 50, 0.78) 0.08em,
-            rgba(255, 236, 100, 0.52) 0.68em,
-            transparent 0.68em
+            transparent 0 58%,
+            rgba(240, 201, 74, 0.32) 58% 100%
         );
-        box-shadow: 0 0 10px rgba(255, 220, 40, 0.2);
-        text-shadow: 0 0 6px rgba(255, 230, 80, 0.35);
         -webkit-box-decoration-break: clone;
         box-decoration-break: clone;
     }
@@ -4918,27 +4922,26 @@
     [data-theme="light"] .aug .alift.pick-3 { color: #374151; font-weight: 600; }
     [data-theme="light"] .aug .alift.pick-4 { color: #b88912; font-weight: 700; }
     [data-theme="light"] .aug .alift.pick-5 {
-        color: #5c4300;
-        font-weight: 800;
+        color: #a67c00;
+        font-weight: 700;
+        padding: 0 2px;
         background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.08em,
-            rgba(255, 214, 40, 0.72) 0.08em,
-            rgba(255, 230, 90, 0.48) 0.68em,
-            transparent 0.68em
+            transparent 0 58%,
+            rgba(240, 190, 40, 0.35) 58% 100%
         );
         box-shadow: none;
         text-shadow: none;
     }
 
     /* Category + rarity filter chips */
-    [data-theme="light"] .aug-cat-chip:not(.is-active) {
+    [data-theme="light"] .aug-cat-chip:not(.is-active),
+    [data-theme="light"] .item-role-chip:not(.is-active) {
         background: var(--chip-bg);
         color: var(--text-muted);
         border-color: var(--border);
     }
-    [data-theme="light"] .aug-cat-chip:not(.is-active):hover {
+    [data-theme="light"] .aug-cat-chip:not(.is-active):hover,
+    [data-theme="light"] .item-role-chip:not(.is-active):hover {
         background: #e2e6ee;
         border-color: var(--border-strong);
         color: var(--text);
@@ -5181,34 +5184,15 @@
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
     [data-theme="light"] .cg-core-share.pick-5 {
-        color: #5c4300;
-        font-weight: 800;
+        color: #a67c00;
+        font-weight: 700;
+        padding: 0 2px;
         background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.08em,
-            rgba(255, 214, 40, 0.72) 0.08em,
-            rgba(255, 230, 90, 0.48) 0.68em,
-            transparent 0.68em
+            transparent 0 58%,
+            rgba(240, 190, 40, 0.35) 58% 100%
         );
         box-shadow: none;
         text-shadow: none;
-    }
-    [data-theme="light"] .boot-rail-row:has(> .boot-rail-pick.pick-5) {
-        border-color: rgba(180, 140, 20, 0.4);
-        background: linear-gradient(100deg, rgba(255, 220, 50, 0.22) 0%, var(--surface) 62%);
-        box-shadow: none;
-    }
-    [data-theme="light"] .boot-rail-row:has(> .boot-rail-pick.pick-5) .boot-rail-name {
-        color: #5c4300;
-        background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.1em,
-            rgba(255, 214, 40, 0.55) 0.1em,
-            rgba(255, 230, 90, 0.3) 0.65em,
-            transparent 0.65em
-        );
     }
 
     /* Recommend side panel */
@@ -5512,20 +5496,15 @@
     .item-tip-row > b.pick-3 { color: #e6e8eb; font-weight: 600; }
     .item-tip-row > b.pick-4 { color: #e8d48a; font-weight: 700; }
     .item-tip-row > b.pick-5 {
-        color: #fff6c2;
-        font-weight: 800;
-        padding: 0 4px 1px;
-        border-radius: 2px;
+        color: #f0c94a;
+        font-weight: 700;
+        padding: 0 2px;
         background-image: linear-gradient(
-            to top,
-            transparent 0,
-            transparent 0.08em,
-            rgba(255, 224, 50, 0.78) 0.08em,
-            rgba(255, 236, 100, 0.52) 0.68em,
-            transparent 0.68em
+            transparent 0 58%,
+            rgba(240, 201, 74, 0.32) 58% 100%
         );
-        box-shadow: 0 0 10px rgba(255, 220, 40, 0.2);
-        text-shadow: 0 0 6px rgba(255, 230, 80, 0.35);
+        box-shadow: none;
+        text-shadow: none;
         -webkit-box-decoration-break: clone;
         box-decoration-break: clone;
     }
