@@ -1,4 +1,4 @@
-<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>專欄 · arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712162731'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712162731'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/column'><meta property='og:url' content='https://arammeta.com/column'><meta property='og:type' content='website'><meta property='og:title' content="專欄 · arammeta"><meta property='og:description' content="資料背後的思考與玩法解析"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="專欄 · arammeta"><meta name='twitter:description' content="資料背後的思考與玩法解析"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783849607' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
+<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>專欄 · arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712162731'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712162731'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/column'><meta property='og:url' content='https://arammeta.com/column'><meta property='og:type' content='website'><meta property='og:title' content="專欄 · arammeta"><meta property='og:description' content="資料背後的思考與玩法解析"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="專欄 · arammeta"><meta name='twitter:description' content="資料背後的思考與玩法解析"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783864609' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
     /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
        the palette.  New chrome (header, nav, views, settings, column) is
        authored entirely against these vars so both themes are correct.  The
@@ -6228,7 +6228,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783849607");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783864609");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -10421,12 +10421,15 @@
             const ddragonSplash = alias
                 ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`
                 : '';
-            // Cascade: HD → DDragon splash → square icon
-            const onerr = icon
-                ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(ddragonSplash || icon)}'"`
-                : (ddragonSplash
-                    ? ` onerror="this.onerror=null;this.src='${escHtml(ddragonSplash)}'"`
-                    : '');
+            // Fandom Wiki CDN 404s when Referer is arammeta.com — strip referrer.
+            // Cascade on error: DDragon splash → square icon.
+            const fb1 = ddragonSplash || icon;
+            const fb2 = icon && ddragonSplash ? icon : '';
+            const onerr = fb1
+                ? (fb2
+                    ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(fb2)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(fb1)}'"`
+                    : ` onerror="this.onerror=null;this.src='${escHtml(fb1)}';this.classList.add('is-icon-fallback')"`)
+                : '';
             const cropStyle = draftSlotCropStyle(cid);
             const mirrored = DRAFT_SLOT_CROPS && draftSlotCropFor(cid).mirror
                 ? ' is-source-mirrored' : '';
@@ -10436,7 +10439,8 @@
                 + (art
                     /* Wrap handles side facing; is-source-mirrored flips when splash faces left. */
                     ? `<span class="draft-slot-art-wrap${mirrored}" aria-hidden="true">`
-                        + `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
+                        + `<img class="draft-slot-art" loading="lazy" decoding="async" `
+                        + `referrerpolicy="no-referrer" src="${escHtml(art)}" alt="" `
                         + cropStyle
                         + onerr
                         + `></span>`

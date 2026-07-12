@@ -4295,12 +4295,15 @@
             const ddragonSplash = alias
                 ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`
                 : '';
-            // Cascade: HD → DDragon splash → square icon
-            const onerr = icon
-                ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(ddragonSplash || icon)}'"`
-                : (ddragonSplash
-                    ? ` onerror="this.onerror=null;this.src='${escHtml(ddragonSplash)}'"`
-                    : '');
+            // Fandom Wiki CDN 404s when Referer is arammeta.com — strip referrer.
+            // Cascade on error: DDragon splash → square icon.
+            const fb1 = ddragonSplash || icon;
+            const fb2 = icon && ddragonSplash ? icon : '';
+            const onerr = fb1
+                ? (fb2
+                    ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(fb2)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(fb1)}'"`
+                    : ` onerror="this.onerror=null;this.src='${escHtml(fb1)}';this.classList.add('is-icon-fallback')"`)
+                : '';
             const cropStyle = draftSlotCropStyle(cid);
             const mirrored = DRAFT_SLOT_CROPS && draftSlotCropFor(cid).mirror
                 ? ' is-source-mirrored' : '';
@@ -4310,7 +4313,8 @@
                 + (art
                     /* Wrap handles side facing; is-source-mirrored flips when splash faces left. */
                     ? `<span class="draft-slot-art-wrap${mirrored}" aria-hidden="true">`
-                        + `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
+                        + `<img class="draft-slot-art" loading="lazy" decoding="async" `
+                        + `referrerpolicy="no-referrer" src="${escHtml(art)}" alt="" `
                         + cropStyle
                         + onerr
                         + `></span>`
