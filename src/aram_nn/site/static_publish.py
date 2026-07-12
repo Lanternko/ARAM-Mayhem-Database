@@ -47,6 +47,9 @@ COMP_FIT_PARQUET_CANDIDATES = (
 DEFAULT_DOC_PATHS = (
     Path("docs/index.html"),
     Path("docs/api/tier-list.json"),
+    # Per-champion detail shards are loaded on demand from the tier-list shell.
+    # They must be staged atomically with the summary payload that references them.
+    Path("docs/api/champions"),
     # Empirical comp-fit radar -- a decoupled artifact the frontend fetches on its
     # own.  A NEW required file: if a deploy omits it the live site's fetch 404s
     # and every champion silently falls back to the heuristic ("estimated") radar.
@@ -64,6 +67,11 @@ DEFAULT_DOC_PATHS = (
     # assets/covers/<file>; must be committed alongside the HTML or the live site
     # 404s on any article that sets cover_image_*.
     Path("docs/assets/covers"),
+    # The site's app script, emitted as an external cacheable asset (stable
+    # filename, content-hash ?v= in the HTML).  A NEW required file: if a deploy
+    # omits it the freshly published index.html loads a stale script (or 404s on
+    # a first-ever deploy) and the SPA never boots.
+    Path("docs/assets/site.js"),
 )
 
 

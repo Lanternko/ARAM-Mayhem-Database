@@ -363,6 +363,7 @@ def main(
         payload_url=payload_url,
         icon_assets_dir=out_path.parent / "assets" / "icons",
         aug_global=aug_global,
+        script_assets_dir=out_path.parent / "assets",
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")

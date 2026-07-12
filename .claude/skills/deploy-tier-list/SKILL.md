@@ -92,6 +92,9 @@ The watchdog's `publish_static_site.py` does all of these automatically before e
 #    Split build (the deploy the watchdog uses): all four artifacts below,
 #    plus docs/assets/icons if new self-hosted icons were downloaded this round.
 git add docs/index.html docs/404.html docs/augments docs/changes docs/column docs/settings
+# The externally-cached app script: REQUIRED with every index.html ship (the
+# HTML references it by content-hash ?v=).
+git add docs/assets/site.js
 git add docs/api/tier-list.json docs/api/champ-archetype-fit.json docs/api/champ-empirical-axes.json
 
 # 3. Commit. Message convention: "Refresh tier list <date>" or
