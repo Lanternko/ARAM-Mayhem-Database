@@ -1287,6 +1287,7 @@ def render_html(
     payload_url: str = "",
     icon_assets_dir: Path | None = None,
     aug_global: dict[int, dict] | None = None,
+    script_assets_dir: Path | None = None,
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -1821,17 +1822,28 @@ def render_html(
         )
     # Webfonts: Outfit = Latin brand wordmark only; Noto Sans TC = UI body;
     # Noto Serif TC = a few footnote captions (subtitle / panel meta / aug lift).
-    # `display=swap` lets system fallback paint immediately.
-    parts.append(
-        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
-        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
-        "<link href='https://fonts.googleapis.com/css2"
+    # `display=swap` lets system fallback paint immediately.  The stylesheet is
+    # loaded async (preload → flip to stylesheet onload): a render-blocking
+    # cross-origin CSS fetch held first paint hostage to fonts.googleapis.com
+    # while every glyph already has a swap fallback anyway.
+    _fonts_css_url = (
+        "https://fonts.googleapis.com/css2"
         "?family=Outfit:wght@500;600;700"
         "&family=Noto+Sans+TC:wght@400;500;600;700"
         "&family=Noto+Serif+TC:wght@400;500"
-        "&display=swap' rel='stylesheet'>"
+        "&display=swap"
     )
-    parts.append(f"<style>{css}</style></head><body>")
+    parts.append(
+        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
+        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+        f"<link rel='preload' as='style' href='{_fonts_css_url}' "
+        "onload=\"this.onload=null;this.rel='stylesheet'\">"
+        f"<noscript><link rel='stylesheet' href='{_fonts_css_url}'></noscript>"
+    )
+    # __SITE_JS_PRELOAD_SLOT__ is replaced at the end of this function: when the
+    # site script is emitted as an external asset its content hash isn't known
+    # yet while the <head> is being assembled.
+    parts.append(f"__SITE_JS_PRELOAD_SLOT__<style>{css}</style></head><body>")
     # Header: brand + tab nav + language toggle.  GitHub star lives in the
     # page footer (with tier cutoffs / freshness) so it reads as a quiet
     # open-source credit instead of a header CTA.
@@ -2181,9 +2193,6 @@ def render_html(
         "</div>"
         "<div class='draft-pool' id='draft-champ-list' role='listbox' "
         "aria-label='英雄列表' aria-multiselectable='true'></div>"
-        "<p class='draft-help' data-i18n-zh='連續點選：先填我方 5 隻，滿了自動接續選對手。已選英雄會在兩側 roster 與中央池同步標記。' "
-        "data-i18n-en='Click continuously: fill 5 allies first, then auto-continue into the enemy roster. Selected champions stay marked in both rosters and the pool.'>"
-        "連續點選：先填我方 5 隻，滿了自動接續選對手。已選英雄會在兩側 roster 與中央池同步標記。</p>"
         "</section>"
         "<section class='draft-pane' id='draft-pane-analysis' data-draft-pane='analysis' "
         "role='tabpanel' aria-labelledby='draft-mode-analysis' hidden>"
@@ -2289,9 +2298,49 @@ def render_html(
             separators=(",", ":"),
         ),
     )
-    parts.append(f"<script>{js}</script>")
+    # Split builds emit the app script as an external asset so the 15 full-SPA
+    # shell copies (/, /en, /zh-CN, tab paths) share ONE browser-cached file
+    # instead of each re-shipping ~100 KB gzip of inline JS on every visit.
+    # The URL is resolved against window.location.origin at runtime — the same
+    # rule loadSitePayload uses — so local previews load the LOCAL script even
+    # though production HTML carries <base href='https://arammeta.com/'>, and
+    # the /en/... shells resolve to the root asset instead of /en/assets/....
+    # Stable filename + content-hash ?v= mirrors the tier-list.json convention:
+    # a stale shell copy keeps working (query is ignored by the static host)
+    # and the cache busts only when the script actually changes.
+    site_js_preload = ""
+    if script_assets_dir is not None and payload_url:
+        import hashlib
+
+        script_assets_dir.mkdir(parents=True, exist_ok=True)
+        script_path = script_assets_dir / "site.js"
+        script_path.write_text(js, encoding="utf-8")
+        js_ver = hashlib.sha1(js.encode("utf-8")).hexdigest()[:12]
+        js_url_expr = f"window.location.origin+'/assets/site.js?v={js_ver}'"
+        # Head: start the download during HTML parse (an inline injector because
+        # a plain <link rel='preload'> href would resolve through <base> to the
+        # production origin in local previews).
+        site_js_preload = (
+            "<script>(function(){var l=document.createElement('link');"
+            "l.rel='preload';l.as='script';"
+            f"l.href={js_url_expr};"
+            "document.head.appendChild(l);})()</script>"
+        )
+        # End of body: DOM is fully parsed here, and the injected script only
+        # executes after its download completes — same timing guarantees as the
+        # old inline end-of-body script.
+        parts.append(
+            "<script>(function(){var s=document.createElement('script');"
+            f"s.src={js_url_expr};"
+            "document.head.appendChild(s);})()</script>"
+        )
+        click.echo(
+            f"[tierlist] wrote {script_path}  ({script_path.stat().st_size:,} bytes, v={js_ver})"
+        )
+    else:
+        parts.append(f"<script>{js}</script>")
     parts.append("</body></html>")
-    return "".join(parts)
+    return "".join(parts).replace("__SITE_JS_PRELOAD_SLOT__", site_js_preload, 1)
 
 
 def _run_shell_only(
@@ -2428,6 +2477,7 @@ def _run_shell_only(
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
+        script_assets_dir=out_path.parent / "assets",
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
