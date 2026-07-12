@@ -282,7 +282,10 @@
     body.detail-open .search-rail {
         top: var(--header-h, 56px);
         z-index: 31;
-        margin: 0;
+        /* Keep the chip on the right when the filter row leaves the viewport.
+           `margin: 0` resets the base auto margin and sends it back to the
+           main column's left edge, over the champion avatar. */
+        margin: 0 0 16px auto;
         /* Match .detail-tab-rail head row vertical padding so the input
            sits level with the avatar (same sticky top, not stacked). */
         padding: 10px 10px 0 0;
