@@ -1711,7 +1711,8 @@
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
-            const pickHeat = 'pick-' + pickTier(Number(opts.pickRate != null ? opts.pickRate : 0));
+            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
+            const pickHeat = 'pick-' + tierFn(Number(opts.pickRate != null ? opts.pickRate : 0));
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
         if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
@@ -3044,6 +3045,8 @@
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
+            // Spells need wider absolute cuts than items (see spellPickTier).
+            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
@@ -3057,6 +3060,7 @@
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
                 const pickVal = Number(entry.pick || 0);
+                const pickHeat = `pick-${tierFn(pickVal)}`;
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
@@ -3064,6 +3068,7 @@
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
+                    pickTierFn: tierFn,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games: entry.g || 0,
@@ -3073,7 +3078,7 @@
                         ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
-                        <span class="boot-rail-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</span>
+                        <span class="boot-rail-pick ${pickHeat}">${pct(pickVal)}</span>
                         ${itemTipSource(tipHtml)}
                     </div>`;
             }).join('');
@@ -3151,7 +3156,11 @@
                 </div>
                 <div class="overview-rail-col">
                     ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
-                    ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, { limit: 5, extraClass: 'spell-rail-section' })}
+                    ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
+                        limit: 5,
+                        extraClass: 'spell-rail-section',
+                        pickTierFn: spellPickTier,
+                    })}
                 </div>
             </div>
         `;
