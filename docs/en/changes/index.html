@@ -3983,6 +3983,296 @@
     @keyframes vt-in { from { opacity: 0; transform: translateY(8px); } }
     @keyframes vt-out { to { opacity: 0; transform: translateY(-6px); } }
     .view-narrow { max-width: 920px; margin: 0 auto; }
+
+    /* ===== Draft tab: ally + optional enemy, WR + traits ===== */
+    .draft-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 1280px;
+        margin: 0 auto;
+    }
+    .draft-teams {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: stretch;
+    }
+    .draft-side {
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 10px 12px 12px;
+        min-width: 0;
+    }
+    .draft-side.is-targeting {
+        border-color: color-mix(in srgb, #3aa0ff 55%, var(--border, #30363d));
+        box-shadow: 0 0 0 1px color-mix(in srgb, #3aa0ff 25%, transparent);
+    }
+    .draft-side.is-enemy.is-targeting {
+        border-color: color-mix(in srgb, #ef4444 50%, var(--border, #30363d));
+        box-shadow: 0 0 0 1px color-mix(in srgb, #ef4444 22%, transparent);
+    }
+    .draft-side-head { margin-bottom: 8px; }
+    .draft-side-select {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+    .draft-side-select:hover { background: rgba(255,255,255,0.04); }
+    .draft-side-select.is-active {
+        background: rgba(58, 160, 255, 0.1);
+    }
+    .draft-side.is-enemy .draft-side-select.is-active {
+        background: rgba(239, 68, 68, 0.1);
+    }
+    .draft-side-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text, #e6e8eb);
+    }
+    .draft-side-wr {
+        font-size: 16px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: #7fc8ff;
+    }
+    .draft-side.is-enemy .draft-side-wr { color: #ff9aa5; }
+    .draft-slots {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .draft-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-height: 72px;
+        padding: 6px 4px;
+        border-radius: 10px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.18);
+        color: #9aa0a6;
+        font: inherit;
+        cursor: pointer;
+        min-width: 0;
+    }
+    .draft-slot.is-filled {
+        border-style: solid;
+        border-color: rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.04);
+        color: var(--text, #e6e8eb);
+    }
+    .draft-slot img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+    .draft-slot-rank {
+        font-size: 10px;
+        font-weight: 700;
+        color: #6b7280;
+    }
+    .draft-slot-name {
+        font-size: 10px;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .draft-matchup-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 88px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--bg, #0e1116) 70%, #1b2030);
+        border: 1px solid var(--border, #30363d);
+    }
+    .draft-vs-label {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #9aa0a6;
+    }
+    .draft-vs-wr {
+        font-size: 22px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    .draft-vs-wr.is-good { color: #7ddc8a; }
+    .draft-vs-wr.is-bad { color: #ff9aa5; }
+    .draft-vs-wr.is-even { color: #e6e8eb; }
+    .draft-vs-sub {
+        font-size: 10px;
+        color: #9aa0a6;
+        text-align: center;
+        max-width: 7em;
+        line-height: 1.25;
+    }
+    .draft-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+        gap: 14px;
+        align-items: start;
+    }
+    .draft-picker {
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 10px;
+        min-width: 0;
+    }
+    .draft-picker-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .draft-search-wrap {
+        flex: 1 1 180px;
+        min-width: 140px;
+    }
+    .draft-search { width: 100%; max-width: none; }
+    .draft-role-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .draft-role-chips .chip {
+        padding: 4px 10px;
+        font-size: 11px;
+    }
+    .draft-champ-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: min(62vh, 640px);
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
+    .draft-champ-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .draft-champ-row:hover { background: rgba(255,255,255,0.05); }
+    .draft-champ-row.is-ally {
+        background: rgba(58, 160, 255, 0.12);
+        outline: 1px solid rgba(58, 160, 255, 0.28);
+    }
+    .draft-champ-row.is-enemy {
+        background: rgba(239, 68, 68, 0.1);
+        outline: 1px solid rgba(239, 68, 68, 0.28);
+    }
+    .draft-champ-row img,
+    .draft-champ-ph {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: #1b2030;
+    }
+    .draft-champ-name {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .draft-champ-wr {
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #7fc8ff;
+    }
+    .draft-result {
+        min-width: 0;
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 12px;
+        max-height: min(70vh, 720px);
+        overflow: auto;
+    }
+    .draft-eval-block + .draft-eval-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+    .draft-eval-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #9aa0a6;
+        margin-bottom: 8px;
+    }
+    .draft-eval-block.is-enemy .draft-eval-label { color: #ff9aa5; }
+    .draft-matchup-hero { margin-bottom: 12px; }
+    .draft-rec-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .draft-rec-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.03);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+    .draft-rec-row:hover { background: rgba(255,255,255,0.07); }
+    .draft-rec-row img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+    }
+    @media (max-width: 900px) {
+        .draft-teams {
+            grid-template-columns: 1fr;
+        }
+        .draft-matchup-card {
+            flex-direction: row;
+            gap: 12px;
+            min-height: auto;
+        }
+        .draft-body {
+            grid-template-columns: 1fr;
+        }
+        .draft-champ-list { max-height: 42vh; }
+        .draft-result { max-height: none; }
+    }
     /* The 專欄 view is wider than the other narrow views so the card grid can
        run 3-up like an editorial guide index; the reader self-caps at 720. */
     .view-column-host { max-width: 1180px; margin: 0 auto; }
@@ -5918,8 +6208,15 @@
             pickNoteEmpty: n => `最多選 ${n} 隻；未滿 5 隻時看推薦補位，選滿後看整隊勝率與維度。`,
             pickNotePartial: want => `目前這組選角的完整資料較少，先用已知搭配排序。`,
             pickNoteReady: (want, minGames) => `已選 ${want}/${MAX_TEAM_PICKS} 隻；pair 門檻 >= ${minGames} 場。`,
-            panelEmpty: '先開啟「選擇你的隊友」，再從英雄列表點 1～5 隻英雄。未滿 5 隻時排出最適合補進來的英雄；選滿後顯示整隊估計勝率與能力維度。',
+            panelEmpty: '到 Draft 分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
+            draftEmpty: '點右側列表加入我方英雄；需要時切到「對手」再選敵方（可選）。',
+            draftMatchupWr: '我方勝率（對陣）',
+            draftMatchupNote: '≈ 0.5 +（我方估計 − 對手估計）；兩邊皆依英雄均值 + 搭配 lift + 陣容組成。',
+            draftAllyEval: '我方陣容',
+            draftEnemyEval: '對手陣容',
+            draftVs: 'VS',
+            draftOnOtherSide: '這隻已在另一邊陣容裡。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -6099,8 +6396,15 @@
             pickNoteEmpty: n => `Pick up to ${n}. Under 5 shows fill-in ranks; at 5 shows full-team WR and dims.`,
             pickNotePartial: want => `This selected group has less complete data, so the list uses known teammate fits first.`,
             pickNoteReady: (want, minGames) => `${want}/${MAX_TEAM_PICKS} picked; pair threshold >= ${minGames} games.`,
-            panelEmpty: 'Turn on teammate mode, then click 1–5 champions. Under 5 ranks the best additions; at 5 shows estimated team win rate and ability dims.',
+            panelEmpty: 'Open the Draft tab and pick 1–5 allies; opponents are optional. Under 5 ranks fills; with an enemy roster we show matchup WR and both team traits.',
             panelNoData: 'This combination does not have enough pair data yet.',
+            draftEmpty: 'Click the list to add allies; switch to Opponent for an optional enemy roster.',
+            draftMatchupWr: 'Ally win chance (matchup)',
+            draftMatchupNote: '≈ 0.5 + (ally est. − enemy est.); each side uses mean WR + pair lift + composition.',
+            draftAllyEval: 'Ally composition',
+            draftEnemyEval: 'Enemy composition',
+            draftVs: 'VS',
+            draftOnOtherSide: 'Already on the other team.',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
@@ -9828,6 +10132,9 @@
             if (name === 'augments') {
                 renderAugmentTier();
             }
+            if (name === 'draft') {
+                renderDraft();
+            }
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
@@ -9980,13 +10287,14 @@
     }
 
     function setRecommendMode(next) {
-        recommendMode = Boolean(next);
-        if (!recommendMode) recModalOpen = false;
+        // Home teammate mode retired — Draft tab owns roster picks.
+        recommendMode = false;
+        recModalOpen = false;
         const btn = document.getElementById('recommend-mode');
         if (!btn) return;
-        btn.classList.toggle('active', recommendMode);
-        btn.setAttribute('aria-pressed', recommendMode ? 'true' : 'false');
-        btn.textContent = recommendMode ? tr().recModeOn : tr().recModeOff;
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.hidden = true;
     }
 
     function syncDetailModalState() {
@@ -10215,13 +10523,46 @@
             trackEvent('updates_close', {});
             return;
         }
-        const modeBtn = ev.target.closest('#recommend-mode');
-        if (modeBtn) {
-            const nextMode = !recommendMode;
-            setRecommendMode(nextMode);
+        const draftTarget = ev.target.closest('[data-draft-target]');
+        if (draftTarget) {
+            setDraftSide(draftTarget.getAttribute('data-draft-target') || 'ally');
+            trackEvent('draft_side', { side: draftSide });
+            return;
+        }
+        const draftRemove = ev.target.closest('[data-draft-remove]');
+        if (draftRemove) {
+            const side = draftRemove.getAttribute('data-draft-remove') || 'ally';
+            const cid = draftRemove.getAttribute('data-cid');
+            const list = draftPickList(side);
+            const idx = list.indexOf(cid);
+            if (idx !== -1) list.splice(idx, 1);
             pickNotice = '';
-            renderSidePanel();
-            trackEvent('recommend_mode_toggle', { enabled: nextMode });
+            renderDraft();
+            trackEvent('draft_pick_remove', { side, champion_id: cid });
+            return;
+        }
+        const draftPick = ev.target.closest('[data-draft-pick]');
+        if (draftPick) {
+            const cid = draftPick.getAttribute('data-draft-pick');
+            toggleDraftPick(cid);
+            trackEvent('draft_pick_toggle', { side: draftSide, champion_id: cid, ally: teamPicks.length, enemy: enemyPicks.length });
+            return;
+        }
+        const draftRoleBtn = ev.target.closest('[data-draft-role]');
+        if (draftRoleBtn) {
+            draftRole = draftRoleBtn.getAttribute('data-draft-role') || '';
+            const host = document.getElementById('draft-role-chips');
+            if (host) host.dataset.ready = '1';
+            host?.querySelectorAll('.chip').forEach(c => {
+                c.classList.toggle('active', (c.getAttribute('data-draft-role') || '') === draftRole);
+            });
+            renderDraftChampList();
+            trackEvent('draft_role_filter', { role: draftRole || 'all' });
+            return;
+        }
+        if (ev.target.closest('#draft-clear')) {
+            clearDraft();
+            trackEvent('draft_clear', {});
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');
@@ -10231,10 +10572,11 @@
             pickNotice = '';
             syncPickDecorations();
             renderSidePanel();
+            if (document.querySelector('.view-draft.is-active')) renderDraft();
             trackEvent('team_pick_remove', { champion_id: removedCid, picks: teamPicks.length });
             return;
         }
-        const recRow = ev.target.closest('.rec-row');
+        const recRow = ev.target.closest('.rec-row:not(.draft-rec-row)');
         if (recRow) {
             recModalOpen = false;
             renderSidePanel();
@@ -10245,13 +10587,14 @@
         }
         const champ = ev.target.closest('.champ');
         if (!champ) return;
-        const cid = champ.getAttribute('data-cid');
-        if (recommendMode) {
-            toggleTeamPick(cid);
-            trackEvent('team_pick_toggle', { champion_id: cid, picks: teamPicks.length });
-            return;
-        }
         openDetailForChamp(champ);
+    });
+
+    // Draft search input (debounced like home search).
+    document.getElementById('draft-search')?.addEventListener('input', (ev) => {
+        draftQuery = ev.target.value || '';
+        clearTimeout(window.__draftSearchT);
+        window.__draftSearchT = setTimeout(() => renderDraftChampList(), 80);
     });
 
     // When viewport width changes, the row containing the selected champ

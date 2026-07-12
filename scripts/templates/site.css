@@ -3983,6 +3983,296 @@
     @keyframes vt-in { from { opacity: 0; transform: translateY(8px); } }
     @keyframes vt-out { to { opacity: 0; transform: translateY(-6px); } }
     .view-narrow { max-width: 920px; margin: 0 auto; }
+
+    /* ===== Draft tab: ally + optional enemy, WR + traits ===== */
+    .draft-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        max-width: 1280px;
+        margin: 0 auto;
+    }
+    .draft-teams {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 12px;
+        align-items: stretch;
+    }
+    .draft-side {
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 10px 12px 12px;
+        min-width: 0;
+    }
+    .draft-side.is-targeting {
+        border-color: color-mix(in srgb, #3aa0ff 55%, var(--border, #30363d));
+        box-shadow: 0 0 0 1px color-mix(in srgb, #3aa0ff 25%, transparent);
+    }
+    .draft-side.is-enemy.is-targeting {
+        border-color: color-mix(in srgb, #ef4444 50%, var(--border, #30363d));
+        box-shadow: 0 0 0 1px color-mix(in srgb, #ef4444 22%, transparent);
+    }
+    .draft-side-head { margin-bottom: 8px; }
+    .draft-side-select {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+    .draft-side-select:hover { background: rgba(255,255,255,0.04); }
+    .draft-side-select.is-active {
+        background: rgba(58, 160, 255, 0.1);
+    }
+    .draft-side.is-enemy .draft-side-select.is-active {
+        background: rgba(239, 68, 68, 0.1);
+    }
+    .draft-side-label {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text, #e6e8eb);
+    }
+    .draft-side-wr {
+        font-size: 16px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: #7fc8ff;
+    }
+    .draft-side.is-enemy .draft-side-wr { color: #ff9aa5; }
+    .draft-slots {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 6px;
+    }
+    .draft-slot {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        min-height: 72px;
+        padding: 6px 4px;
+        border-radius: 10px;
+        border: 1px dashed rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.18);
+        color: #9aa0a6;
+        font: inherit;
+        cursor: pointer;
+        min-width: 0;
+    }
+    .draft-slot.is-filled {
+        border-style: solid;
+        border-color: rgba(255,255,255,0.14);
+        background: rgba(255,255,255,0.04);
+        color: var(--text, #e6e8eb);
+    }
+    .draft-slot img {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+    .draft-slot-rank {
+        font-size: 10px;
+        font-weight: 700;
+        color: #6b7280;
+    }
+    .draft-slot-name {
+        font-size: 10px;
+        font-weight: 600;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .draft-matchup-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-width: 88px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--bg, #0e1116) 70%, #1b2030);
+        border: 1px solid var(--border, #30363d);
+    }
+    .draft-vs-label {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #9aa0a6;
+    }
+    .draft-vs-wr {
+        font-size: 22px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    .draft-vs-wr.is-good { color: #7ddc8a; }
+    .draft-vs-wr.is-bad { color: #ff9aa5; }
+    .draft-vs-wr.is-even { color: #e6e8eb; }
+    .draft-vs-sub {
+        font-size: 10px;
+        color: #9aa0a6;
+        text-align: center;
+        max-width: 7em;
+        line-height: 1.25;
+    }
+    .draft-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+        gap: 14px;
+        align-items: start;
+    }
+    .draft-picker {
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 10px;
+        min-width: 0;
+    }
+    .draft-picker-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .draft-search-wrap {
+        flex: 1 1 180px;
+        min-width: 140px;
+    }
+    .draft-search { width: 100%; max-width: none; }
+    .draft-role-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .draft-role-chips .chip {
+        padding: 4px 10px;
+        font-size: 11px;
+    }
+    .draft-champ-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        max-height: min(62vh, 640px);
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-gutter: stable;
+    }
+    .draft-champ-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .draft-champ-row:hover { background: rgba(255,255,255,0.05); }
+    .draft-champ-row.is-ally {
+        background: rgba(58, 160, 255, 0.12);
+        outline: 1px solid rgba(58, 160, 255, 0.28);
+    }
+    .draft-champ-row.is-enemy {
+        background: rgba(239, 68, 68, 0.1);
+        outline: 1px solid rgba(239, 68, 68, 0.28);
+    }
+    .draft-champ-row img,
+    .draft-champ-ph {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: #1b2030;
+    }
+    .draft-champ-name {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .draft-champ-wr {
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: #7fc8ff;
+    }
+    .draft-result {
+        min-width: 0;
+        background: var(--surface, #11151d);
+        border: 1px solid var(--border, #30363d);
+        border-radius: 12px;
+        padding: 12px;
+        max-height: min(70vh, 720px);
+        overflow: auto;
+    }
+    .draft-eval-block + .draft-eval-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+    .draft-eval-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #9aa0a6;
+        margin-bottom: 8px;
+    }
+    .draft-eval-block.is-enemy .draft-eval-label { color: #ff9aa5; }
+    .draft-matchup-hero { margin-bottom: 12px; }
+    .draft-rec-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .draft-rec-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.03);
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+    .draft-rec-row:hover { background: rgba(255,255,255,0.07); }
+    .draft-rec-row img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+    }
+    @media (max-width: 900px) {
+        .draft-teams {
+            grid-template-columns: 1fr;
+        }
+        .draft-matchup-card {
+            flex-direction: row;
+            gap: 12px;
+            min-height: auto;
+        }
+        .draft-body {
+            grid-template-columns: 1fr;
+        }
+        .draft-champ-list { max-height: 42vh; }
+        .draft-result { max-height: none; }
+    }
     /* The 專欄 view is wider than the other narrow views so the card grid can
        run 3-up like an editorial guide index; the reader self-caps at 720. */
     .view-column-host { max-width: 1180px; margin: 0 auto; }
