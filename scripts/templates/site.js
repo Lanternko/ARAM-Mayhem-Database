@@ -4675,7 +4675,11 @@
     }
 
     function syncDetailModalState() {
-        document.body.classList.toggle('detail-modal-open', Boolean(detailSelected) && isMobileViewport());
+        const open = Boolean(detailSelected);
+        document.body.classList.toggle('detail-modal-open', open && isMobileViewport());
+        // Desktop sticky chrome: head + search share one row when detail is open.
+        document.body.classList.toggle('detail-open', open);
+        syncHeaderHeight();
     }
 
     function closeDetail() {
