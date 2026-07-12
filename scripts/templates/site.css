@@ -214,9 +214,10 @@
         border-radius: 10px;
         box-shadow: none;
     }
-    /* Sticky search only — semi-transparent glass under the site header.
-       Sibling of the tall tier list (not nested in short .filter-bar) so the
-       sticky containing block spans the whole main column. */
+    /* Sticky search only — sibling of the tall tier list so pin lasts for the
+       whole main column.  The rail itself is a transparent full-width flex
+       row (pointer-events: none) so it does NOT paint a frosted slab over
+       champion icon/title; only the input + count get glass + hit targets. */
     .search-rail {
         position: sticky;
         top: var(--header-h, 56px);
@@ -224,20 +225,44 @@
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 10px;
-        margin: 0 0 16px;
-        padding: 8px 12px;
-        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        gap: 8px;
+        margin: 0 0 12px;
+        padding: 4px 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        pointer-events: none;
+    }
+    .search-rail .search-wrap {
+        pointer-events: auto;
+        flex: 0 1 320px;
+        max-width: min(320px, 42vw);
+        min-width: 160px;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
         -webkit-backdrop-filter: saturate(180%) blur(14px);
         backdrop-filter: saturate(180%) blur(14px);
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 12px;
+        padding: 0;
+    }
+    .search-rail .search {
+        background: transparent;
+        border-color: transparent;
+    }
+    .search-rail .search:focus {
         box-shadow: none;
     }
-    .search-rail .search-wrap {
-        flex: 1 1 auto;
-        max-width: 420px;
-        min-width: 160px;
+    .search-rail .shown-count {
+        pointer-events: auto;
+        flex: 0 0 auto;
+        padding: 8px 10px;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        -webkit-backdrop-filter: saturate(180%) blur(14px);
+        backdrop-filter: saturate(180%) blur(14px);
+        border: 1px solid var(--border);
+        border-radius: 12px;
     }
     .role-chips {
         display: flex;
@@ -3699,8 +3724,11 @@
     /* Opaque-ish fallback where backdrop-filter is unsupported. */
     @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
         .site-header,
-        .view-home .search-rail,
         .detail-main-tabs > .detail-tab-rail {
+            background: color-mix(in srgb, var(--bg) 94%, transparent);
+        }
+        .search-rail .search-wrap,
+        .search-rail .shown-count {
             background: color-mix(in srgb, var(--bg) 94%, transparent);
         }
     }
@@ -4058,7 +4086,7 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* Search rail already owns the sticky glass chrome; filter-bar stays static. */
+    /* Search rail owns sticky pin; filter-bar stays static (no glass slab). */
     .view-home .filter-bar {
         top: auto;
         background: transparent;
@@ -4068,6 +4096,8 @@
     }
     .view-home .search-rail {
         top: var(--header-h);
+        background: transparent;
+        border: 0;
     }
     @media (max-width: 700px) {
         /* Two-row header: brand + actions on top, the primary tabs as a
@@ -4126,7 +4156,12 @@
        Chrome (header/nav/settings/column) already uses theme vars.  These
        overrides retarget the tier-list, 增幅榜, champion detail panel, and
        recommend side-panel so light mode is a real palette throughout. ===== */
-    /* .search-rail is frosted glass in both themes (sticky search under header). */
+    /* Sticky search chips (input + count) keep glass in both themes. */
+    [data-theme="light"] .search-rail .search-wrap,
+    [data-theme="light"] .search-rail .shown-count {
+        background: color-mix(in srgb, var(--bg) 82%, transparent);
+        border-color: var(--border);
+    }
     [data-theme="light"] .detail-main-tabs > .detail-tab-rail {
         background: color-mix(in srgb, var(--surface) 92%, transparent);
         border-bottom-color: var(--border);
