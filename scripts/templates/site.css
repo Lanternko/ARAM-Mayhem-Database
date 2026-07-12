@@ -203,7 +203,7 @@
     .view-home .main-col {
         --filter-row-h: 40px;
     }
-    /* Role chips: one row, reserve right gutter so search can sit beside them.
+    /* Role chips + shown-count: one row; reserve right gutter for sticky search.
        Search-rail is the *next sibling* under .main-col (not nested here) so
        sticky pin lasts for the whole tier/detail scroll. */
     .filter-bar {
@@ -215,23 +215,45 @@
         align-items: center;
         min-height: var(--filter-row-h, 40px);
         margin: 0;
-        /* Room for sticky search chip + count on the right. */
-        padding: 0 max(168px, calc(min(280px, 32vw) + 88px)) 0 0;
+        /* Room for sticky search chip on the right (count lives after Tank). */
+        padding: 0 max(160px, calc(min(280px, 32vw) + 24px)) 0 0;
         background: transparent;
         border-radius: 0;
         box-shadow: none;
         min-width: 0;
     }
     .filter-bar .role-chips {
+        display: flex;
         flex-wrap: nowrap;
+        align-items: center;
+        gap: 6px;
         min-width: 0;
     }
-    /* Sticky search: parent is tall .main-col → survives champion detail scroll.
-       Pull up into the filter-bar row with negative margin (visual one-liner). */
+    /* Inline after the last role chip (坦克 / Tank), not a floating pill by search. */
+    .filter-bar .role-chips .shown-count {
+        flex: 0 0 auto;
+        margin-left: 4px;
+        padding: 0 2px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+        background: none;
+        border: 0;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+    .filter-bar .role-chips .shown-count #shown-n {
+        color: var(--text-muted, #9aa0a6);
+        font-weight: 600;
+    }
+    /* Sticky search: fixed pin under site header (list + detail). Overlays
+       content with z-index — never reserves a second sticky band that shoves
+       detail chrome down. Negative margin pulls the rail into the filter
+       chips row at rest; chips may scroll away, search stays put on the right. */
     .search-rail {
         position: sticky;
         top: var(--header-h, 56px);
-        z-index: 30;
+        z-index: 32;
         display: flex;
         align-items: center;
         justify-content: flex-end;
@@ -267,55 +289,10 @@
     .search-rail .search:focus {
         box-shadow: none;
     }
-    .search-rail .shown-count {
-        pointer-events: auto;
-        flex: 0 0 auto;
-        padding: 8px 10px;
-        background: color-mix(in srgb, var(--bg) 78%, transparent);
-        -webkit-backdrop-filter: saturate(180%) blur(14px);
-        backdrop-filter: saturate(180%) blur(14px);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-    }
-    /* Detail open (desktop): pin search on the SAME row as avatar/name so the
-       sticky stack is only [head+search] then [tabs] — not search above head. */
-    body.detail-open .search-rail {
-        top: var(--header-h, 56px);
-        z-index: 31;
-        /* Keep the chip on the right when the filter row leaves the viewport.
-           `margin: 0` resets the base auto margin and sends it back to the
-           main column's left edge, over the champion avatar. */
-        margin: 0 0 16px auto;
-        /* Match .detail-tab-rail head row vertical padding so the input
-           sits level with the avatar (same sticky top, not stacked). */
-        padding: 10px 10px 0 0;
-        align-items: flex-start;
-    }
-    body.detail-open .search-rail .search-wrap {
-        max-width: min(280px, 36vw);
-        min-width: 140px;
-    }
-    body.detail-open .search-rail .shown-count {
-        display: none;
-    }
-    body.detail-open .detail-main-tabs > .detail-tab-rail {
-        top: var(--header-h, 56px);
-        /* Same pin line as .search-rail — do not offset by --search-rail-h. */
-    }
-    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
-        /* Leave a clear lane for the floating search chip on the right. */
-        padding-right: max(52px, calc(min(280px, 36vw) + 28px));
-        margin-bottom: 6px;
-        min-height: 40px;
-    }
-    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
-        /* Sit just left of the search chip, not under it. */
-        right: max(12px, calc(min(280px, 36vw) + 18px));
-        top: 12px;
-    }
     .role-chips {
         display: flex;
         flex-wrap: wrap;
+        align-items: center;
         gap: 6px;
     }
     .chip {
@@ -809,39 +786,47 @@
         padding: 8px 0 4px;
     }
     /* Full 5-man team evaluation — dense layout so one viewport can show all. */
+    /* Team eval: one flat surface — sections split by hairlines, no card-in-card.
+       The WR header is a horizontal stat row (number · label+meta · breakdown)
+       so it holds up in the wide draft panel and wraps in the narrow side card. */
     .team-eval {
         display: grid;
-        gap: 8px;
+        gap: 0;
     }
     .team-eval-wr {
-        text-align: center;
-        padding: 10px 10px 8px;
-        border-radius: 10px;
-        background: var(--surface-2, #1b2030);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        padding: 2px 0 12px;
     }
     .team-wr-num {
-        font-size: 26px;
+        font-size: 27px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        line-height: 1.05;
+        line-height: 1;
         letter-spacing: -0.02em;
     }
     .team-eval-wr.is-good .team-wr-num { color: #22c55e; }
     .team-eval-wr.is-bad .team-wr-num { color: #ff4d5e; }
     .team-eval-wr.is-even .team-wr-num { color: var(--text, #e6e8ea); }
+    .team-wr-side {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+    }
     .team-wr-label {
-        margin-top: 2px;
         font-size: 11px;
         font-weight: 600;
         color: var(--text-muted, #9aa0a6);
+        line-height: 1.2;
     }
     .team-wr-breakdown {
         display: flex;
         flex-wrap: wrap;
-        justify-content: center;
-        gap: 4px 10px;
-        margin-top: 6px;
+        align-items: center;
+        gap: 4px 14px;
+        margin-left: auto;
         font-size: 11px;
         color: var(--text-secondary, #c4c8ce);
         font-variant-numeric: tabular-nums;
@@ -862,21 +847,19 @@
     [data-theme="light"] .team-delta.tone-neg-1 { color: #d98992; }
     [data-theme="light"] .team-delta.tone-neg-2 { color: #d32f3f; }
     .team-wr-meta {
-        margin-top: 5px;
         font-size: 10px;
         color: var(--text-dim, #6a6f77);
+        line-height: 1.2;
     }
     .team-eval-block {
-        padding: 8px 8px 9px;
-        border-radius: 10px;
-        background: var(--surface-2, #1b2030);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 11px 0 2px;
+        border-top: 1px solid var(--border, rgba(255, 255, 255, 0.09));
     }
     .team-eval-h {
         font-size: 11px;
         font-weight: 700;
         color: var(--text-muted, #9aa0a6);
-        margin: 0 0 6px;
+        margin: 0 0 8px;
     }
     /* Radar left + dim bars right — halves the vertical stack. */
     .team-dims-split {
@@ -895,11 +878,11 @@
         height: auto;
         max-height: 168px;
     }
-    .team-ability-bars,
     .team-comp-list {
         display: grid;
         gap: 4px;
         min-width: 0;
+        align-content: center;
     }
     .team-comp-row {
         display: grid;
@@ -921,8 +904,6 @@
     .team-comp-tag {
         font-size: 10px;
         font-weight: 700;
-        padding: 1px 5px;
-        border-radius: 999px;
         white-space: nowrap;
     }
     /* Narrow panel / mobile modal: stack dims if split gets too tight. */
@@ -937,42 +918,37 @@
             max-width: 220px;
         }
     }
-    /* Dim grade: 偏弱 / 普通 / 充足 (bad / mid / good) from mean capability pct. */
-    .team-comp-row.is-bad .team-comp-tag {
-        color: #fca5a5;
-        background: rgba(239, 68, 68, 0.12);
-    }
-    .team-comp-row.is-mid .team-comp-tag {
-        color: #e5e7eb;
-        background: rgba(148, 163, 184, 0.14);
-    }
-    .team-comp-row.is-good .team-comp-tag {
-        color: #86efac;
-        background: rgba(34, 197, 94, 0.12);
-    }
-    .team-ability-bars .ab-bar,
+    /* Dim grade: 偏弱 / 普通 / 充足 (bad / mid / good) from mean capability pct.
+       Tags are text-only (pills ×6 read as noise); 普通 recedes into slate so
+       only outliers pop. Track carries 1px ticks at the 40/65 grade cuts. */
+    .team-comp-row.is-bad .team-comp-tag { color: #f87171; }
+    .team-comp-row.is-mid .team-comp-tag { color: var(--text-dim, #6a6f77); }
+    .team-comp-row.is-good .team-comp-tag { color: #4ade80; }
+    [data-theme="light"] .team-comp-row.is-bad .team-comp-tag { color: #d32f3f; }
+    [data-theme="light"] .team-comp-row.is-mid .team-comp-tag { color: var(--text-muted); }
+    [data-theme="light"] .team-comp-row.is-good .team-comp-tag { color: #15803d; }
     .team-comp-row .ab-bar {
-        height: 6px;
+        --tick: rgba(255, 255, 255, 0.22);
+        height: 5px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.06);
         overflow: hidden;
+        background-color: rgba(255, 255, 255, 0.07);
+        background-image:
+            linear-gradient(90deg, transparent calc(40% - 0.5px), var(--tick) calc(40% - 0.5px), var(--tick) calc(40% + 0.5px), transparent calc(40% + 0.5px)),
+            linear-gradient(90deg, transparent calc(65% - 0.5px), var(--tick) calc(65% - 0.5px), var(--tick) calc(65% + 0.5px), transparent calc(65% + 0.5px));
     }
-    .team-ability-bars .ab-bar > span,
+    [data-theme="light"] .team-comp-row .ab-bar {
+        --tick: rgba(0, 0, 0, 0.22);
+        background-color: rgba(0, 0, 0, 0.07);
+    }
     .team-comp-row .ab-bar > span {
         display: block;
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, #3aa0ff, #7fc8ff);
+        background: #74839a;
     }
-    .team-comp-row.is-bad .ab-bar > span {
-        background: linear-gradient(90deg, #f0a070, #ef4444);
-    }
-    .team-comp-row.is-mid .ab-bar > span {
-        background: linear-gradient(90deg, #94a3b8, #cbd5e1);
-    }
-    .team-comp-row.is-good .ab-bar > span {
-        background: linear-gradient(90deg, #22c55e, #86efac);
-    }
+    .team-comp-row.is-bad .ab-bar > span { background: #ef4444; }
+    .team-comp-row.is-good .ab-bar > span { background: #22c55e; }
     /* Dual-endpoint early↔late continuum (not a good/bad grade). */
     .team-tempo-head {
         display: flex;
@@ -1010,20 +986,21 @@
     .team-tempo-end.is-late small { color: #a78bfa; }
     .team-tempo-track {
         position: relative;
-        height: 10px;
+        height: 8px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.06);
+        background: rgba(255, 255, 255, 0.07);
         overflow: visible;
     }
-    .team-tempo-grad {
+    /* Fill grows from the 50/50 mark toward the lean side: length = lean
+       strength (deviation from balanced), colour = which side. */
+    .team-tempo-fill {
         position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        background: linear-gradient(90deg,
-            rgba(127, 200, 255, 0.45) 0%,
-            rgba(255, 255, 255, 0.08) 50%,
-            rgba(196, 160, 255, 0.45) 100%);
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
     }
+    .team-tempo-fill.is-early { background: #6cb8f2; }
+    .team-tempo-fill.is-late { background: #a78bfa; }
     .team-tempo-mid {
         position: absolute;
         top: -2px;
@@ -1031,20 +1008,20 @@
         left: 50%;
         width: 1px;
         transform: translateX(-0.5px);
-        background: rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.25);
         pointer-events: none;
     }
     .team-tempo-marker {
         position: absolute;
         top: 50%;
-        width: 12px;
-        height: 12px;
-        margin-left: -6px;
+        width: 10px;
+        height: 10px;
+        margin-left: -5px;
         transform: translateY(-50%);
         border-radius: 50%;
         background: var(--text, #e6e8ea);
-        border: 2px solid var(--surface-raised, #2a2e34);
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12), 0 2px 8px rgba(0, 0, 0, 0.35);
+        border: 2px solid var(--surface, #101114);
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
         z-index: 1;
     }
     .team-tempo-lean {
@@ -1056,18 +1033,17 @@
         white-space: nowrap;
     }
     [data-theme="light"] .team-tempo-track {
-        background: rgba(0, 0, 0, 0.06);
+        background: rgba(0, 0, 0, 0.07);
     }
-    [data-theme="light"] .team-tempo-grad {
-        background: linear-gradient(90deg,
-            rgba(37, 99, 235, 0.28) 0%,
-            rgba(0, 0, 0, 0.04) 50%,
-            rgba(124, 58, 237, 0.28) 100%);
+    [data-theme="light"] .team-tempo-mid {
+        background: rgba(0, 0, 0, 0.25);
     }
+    [data-theme="light"] .team-tempo-fill.is-early { background: #2563eb; }
+    [data-theme="light"] .team-tempo-fill.is-late { background: #7c3aed; }
     [data-theme="light"] .team-tempo-marker {
         background: var(--text);
         border-color: #ffffff;
-        box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(31, 41, 55, 0.18);
+        box-shadow: 0 1px 5px rgba(31, 41, 55, 0.2);
     }
     .rec-row {
         display: grid;
@@ -1728,11 +1704,11 @@
         pointer-events: none;
     }
     /* Sticky chrome for main detail: champ icon/name + 概覽/出裝/… tabs.
-       Default (no detail-open override): pin under header + search rail.
-       With body.detail-open, same top as search so head+search share one row. */
+       Same pin line as search (header-h only). Search overlays the right;
+       do NOT add --search-rail-h — that shoved the whole panel down. */
     .detail-main-tabs > .detail-tab-rail {
         position: sticky;
-        top: calc(var(--header-h, 56px) + var(--search-rail-h, 0px));
+        top: var(--header-h, 56px);
         z-index: 25;
         background: color-mix(in srgb, #1b2030 94%, transparent);
         -webkit-backdrop-filter: saturate(180%) blur(12px);
@@ -1740,6 +1716,23 @@
         margin: 0 -6px;
         padding: 10px 6px 0;
         border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    /* Detail open: nudge search down to the avatar/name baseline
+       (matches .detail-tab-rail padding-top: 10px). List mode unchanged. */
+    body.detail-open .search-rail {
+        padding-top: 10px;
+        align-items: flex-start;
+    }
+    /* Desktop detail: clear a right lane so name/× don't sit under the floating search. */
+    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
+        /* Clear lane for floating search only (count is with role chips). */
+        padding-right: max(48px, calc(min(280px, 32vw) + 28px));
+        min-height: 40px;
+        margin-bottom: 6px;
+    }
+    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
+        right: max(12px, calc(min(280px, 32vw) + 18px));
+        top: 12px;
     }
     .detail-main-tabs > .detail-tab-rail .detail-close {
         top: 8px;
@@ -3776,7 +3769,7 @@
     .site-header {
         position: sticky;
         top: 0;
-        /* z 45: above page content + sticky search-rail (30) / detail tabs
+        /* z 45: above page content + sticky search-rail (32) / detail tabs
            (25) and rec FAB (40), below the mobile modals / backdrops (55-70)
            so detail and recommend overlays cover the header. */
         z-index: 45;
@@ -3792,8 +3785,7 @@
         .detail-main-tabs > .detail-tab-rail {
             background: color-mix(in srgb, var(--bg) 94%, transparent);
         }
-        .search-rail .search-wrap,
-        .search-rail .shown-count {
+        .search-rail .search-wrap {
             background: color-mix(in srgb, var(--bg) 94%, transparent);
         }
     }
@@ -4009,173 +4001,191 @@
     @keyframes vt-out { to { opacity: 0; transform: translateY(-6px); } }
     .view-narrow { max-width: 920px; margin: 0 auto; }
 
-    /* ===== Draft tab: ally + optional enemy, WR + traits ===== */
+    /* ===== Draft tab: ally rail | champion pool | enemy rail (draftgap-style).
+       Rails are sticky team columns; the middle pool reuses the home board's
+       icon-tile language (square thumb + WR pill, sorted by Bayes WR desc).
+       --side-color themes one rail (ally blue / enemy red); --pick-color on the
+       shell follows the targeted side so pool hover hints where a click lands. */
     .draft-shell {
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 172px minmax(0, 1fr) 172px;
         gap: 14px;
+        align-items: start;
         max-width: 1280px;
         margin: 0 auto;
+        --pick-color: #3aa0ff;
     }
-    .draft-teams {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-        gap: 12px;
-        align-items: stretch;
-    }
+    .draft-shell.is-target-enemy { --pick-color: #ef4444; }
     .draft-side {
+        position: sticky;
+        top: calc(var(--header-h, 56px) + 12px);
         background: var(--surface, #11151d);
         border: 1px solid var(--border, #30363d);
         border-radius: 12px;
-        padding: 10px 12px 12px;
+        padding: 8px;
         min-width: 0;
+        --side-color: #3aa0ff;
     }
+    .draft-side.is-enemy { --side-color: #ef4444; }
     .draft-side.is-targeting {
-        border-color: color-mix(in srgb, #3aa0ff 55%, var(--border, #30363d));
-        box-shadow: 0 0 0 1px color-mix(in srgb, #3aa0ff 25%, transparent);
+        border-color: color-mix(in srgb, var(--side-color) 55%, var(--border, #30363d));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--side-color) 25%, transparent);
     }
-    .draft-side.is-enemy.is-targeting {
-        border-color: color-mix(in srgb, #ef4444 50%, var(--border, #30363d));
-        box-shadow: 0 0 0 1px color-mix(in srgb, #ef4444 22%, transparent);
-    }
-    .draft-side-head { margin-bottom: 8px; }
     .draft-side-select {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
-        gap: 10px;
+        gap: 8px;
         width: 100%;
-        padding: 6px 8px;
+        padding: 7px 9px;
+        margin-bottom: 8px;
         border: 0;
-        border-radius: 8px;
+        border-radius: 9px;
         background: transparent;
         color: inherit;
         font: inherit;
         cursor: pointer;
         text-align: left;
     }
-    .draft-side-select:hover { background: rgba(255,255,255,0.04); }
+    .draft-side-select:hover { background: color-mix(in srgb, var(--text, #e6e8eb) 5%, transparent); }
     .draft-side-select.is-active {
-        background: rgba(58, 160, 255, 0.1);
-    }
-    .draft-side.is-enemy .draft-side-select.is-active {
-        background: rgba(239, 68, 68, 0.1);
+        background: color-mix(in srgb, var(--side-color) 12%, transparent);
     }
     .draft-side-label {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 700;
         color: var(--text, #e6e8eb);
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
     .draft-side-wr {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        color: #7fc8ff;
+        color: color-mix(in srgb, var(--side-color) 62%, var(--text, #e6e8eb));
     }
-    .draft-side.is-enemy .draft-side-wr { color: #ff9aa5; }
     .draft-slots {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        display: flex;
+        flex-direction: column;
         gap: 6px;
     }
     .draft-slot {
         display: flex;
-        flex-direction: column;
         align-items: center;
-        gap: 4px;
-        min-height: 72px;
-        padding: 6px 4px;
+        gap: 8px;
+        width: 100%;
+        min-height: 52px;
+        padding: 6px 8px;
         border-radius: 10px;
-        border: 1px dashed rgba(255,255,255,0.12);
-        background: rgba(0,0,0,0.18);
-        color: #9aa0a6;
+        border: 1px dashed color-mix(in srgb, var(--text, #e6e8eb) 18%, transparent);
+        background: color-mix(in srgb, var(--text, #e6e8eb) 3%, transparent);
+        color: var(--text-muted, #9aa0a6);
         font: inherit;
         cursor: pointer;
         min-width: 0;
+        text-align: left;
     }
     .draft-slot.is-filled {
         border-style: solid;
-        border-color: rgba(255,255,255,0.14);
-        background: rgba(255,255,255,0.04);
+        border-color: color-mix(in srgb, var(--side-color) 35%, var(--border, #30363d));
+        background: color-mix(in srgb, var(--side-color) 8%, var(--surface, #11151d));
         color: var(--text, #e6e8eb);
     }
-    .draft-slot img {
+    .draft-slot.is-filled:hover {
+        border-color: color-mix(in srgb, var(--side-color) 60%, var(--border, #30363d));
+    }
+    .draft-slot img,
+    .draft-slot-ph {
+        flex: none;
         width: 36px;
         height: 36px;
         border-radius: 8px;
         object-fit: cover;
     }
-    .draft-slot-rank {
-        font-size: 10px;
+    .draft-slot-ph {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
         font-weight: 700;
-        color: #6b7280;
+        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 70%, transparent);
+        background: color-mix(in srgb, var(--text, #e6e8eb) 6%, transparent);
     }
     .draft-slot-name {
-        font-size: 10px;
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
         font-weight: 600;
-        text-align: center;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 100%;
     }
-    .draft-matchup-card {
+    .draft-slot-x {
+        flex: none;
+        font-size: 15px;
+        line-height: 1;
+        color: var(--text-muted, #9aa0a6);
+        opacity: 0;
+        transition: opacity .12s;
+    }
+    .draft-slot.is-filled:hover .draft-slot-x { opacity: 1; }
+    .draft-main {
         display: flex;
         flex-direction: column;
-        align-items: center;
+        gap: 12px;
+        min-width: 0;
+    }
+    .draft-vsbar {
+        display: flex;
+        align-items: baseline;
         justify-content: center;
-        gap: 4px;
-        min-width: 88px;
-        padding: 8px 10px;
+        gap: 10px;
+        padding: 7px 12px;
         border-radius: 12px;
-        background: color-mix(in srgb, var(--bg, #0e1116) 70%, #1b2030);
+        background: var(--surface, #11151d);
         border: 1px solid var(--border, #30363d);
     }
+    .draft-vsbar[hidden] { display: none; }
     .draft-vs-label {
         font-size: 11px;
         font-weight: 800;
         letter-spacing: 0.08em;
-        color: #9aa0a6;
+        color: var(--text-muted, #9aa0a6);
     }
     .draft-vs-wr {
-        font-size: 22px;
+        font-size: 20px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
     }
     .draft-vs-wr.is-good { color: #7ddc8a; }
     .draft-vs-wr.is-bad { color: #ff9aa5; }
-    .draft-vs-wr.is-even { color: #e6e8eb; }
+    .draft-vs-wr.is-even { color: var(--text, #e6e8eb); }
     .draft-vs-sub {
-        font-size: 10px;
-        color: #9aa0a6;
-        text-align: center;
-        max-width: 7em;
-        line-height: 1.25;
-    }
-    .draft-body {
-        display: grid;
-        grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
-        gap: 14px;
-        align-items: start;
-    }
-    .draft-picker {
-        background: var(--surface, #11151d);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 12px;
-        padding: 10px;
-        min-width: 0;
+        font-size: 11px;
+        color: var(--text-muted, #9aa0a6);
     }
     .draft-picker-bar {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
         align-items: center;
-        margin-bottom: 10px;
     }
     .draft-search-wrap {
-        flex: 1 1 180px;
-        min-width: 140px;
+        position: relative;
+        flex: 1 1 190px;
+        min-width: 150px;
     }
+    .draft-search-wrap svg {
+        position: absolute;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #6b7280;
+        pointer-events: none;
+    }
+    .draft-search-wrap:focus-within svg { color: var(--text-muted, #9aa0a6); }
     .draft-search { width: 100%; max-width: none; }
     .draft-role-chips {
         display: flex;
@@ -4186,78 +4196,137 @@
         padding: 4px 10px;
         font-size: 11px;
     }
-    .draft-champ-list {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        max-height: min(62vh, 640px);
+    .draft-pool {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+        gap: 7px;
+        max-height: min(58vh, 640px);
         overflow: auto;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
+        padding: 3px;
     }
-    .draft-champ-row {
-        display: grid;
-        grid-template-columns: 28px minmax(0, 1fr) auto;
-        gap: 10px;
-        align-items: center;
-        width: 100%;
-        padding: 6px 8px;
-        border: 0;
+    .draft-pool .panel-empty { grid-column: 1 / -1; }
+    .draft-champ {
+        position: relative;
+        aspect-ratio: 1 / 1;
+        min-width: 0;
+        padding: 0;
         border-radius: 8px;
-        background: transparent;
-        color: inherit;
-        font: inherit;
-        text-align: left;
+        border: 2px solid transparent;
+        background: var(--chip-bg, #1a1d21);
         cursor: pointer;
+        transition: transform .08s, border-color .08s, box-shadow .08s;
     }
-    .draft-champ-row:hover { background: rgba(255,255,255,0.05); }
-    .draft-champ-row.is-ally {
-        background: rgba(58, 160, 255, 0.12);
-        outline: 1px solid rgba(58, 160, 255, 0.28);
-    }
-    .draft-champ-row.is-enemy {
-        background: rgba(239, 68, 68, 0.1);
-        outline: 1px solid rgba(239, 68, 68, 0.28);
-    }
-    .draft-champ-row img,
-    .draft-champ-ph {
-        width: 28px;
-        height: 28px;
-        border-radius: 6px;
+    .draft-champ img {
+        width: 100%;
+        height: 100%;
         object-fit: cover;
-        background: #1b2030;
+        display: block;
+        border-radius: 6px;
     }
-    .draft-champ-name {
-        font-size: 13px;
-        font-weight: 600;
+    .draft-champ-ph {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--text, #e6e8eb) 6%, transparent);
+    }
+    .draft-champ .wr {
+        position: absolute;
+        left: 2px;
+        bottom: 2px;
+        font-size: 10px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums lining-nums;
+        padding: 1px 4px;
+        border-radius: 6px;
+        color: #e6e8eb;
+        background: rgba(14,17,22,0.9);
+        pointer-events: none;
+    }
+    .draft-champ .name {
+        position: absolute;
+        left: 0; right: 0; top: 0;
+        padding: 2px 4px;
+        font-size: 10px;
+        text-align: center;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0));
+        color: #e6e8eb;
+        border-top-left-radius: 6px;
+        border-top-right-radius: 6px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity .15s;
     }
-    .draft-champ-wr {
-        font-size: 12px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        color: #7fc8ff;
+    @media (hover: hover) {
+        .draft-champ:hover {
+            transform: translateY(-2px);
+            border-color: color-mix(in srgb, var(--pick-color) 70%, transparent);
+            z-index: 1;
+        }
+        .draft-champ:hover .name { opacity: 1; }
+    }
+    .draft-champ.is-ally,
+    .draft-champ.is-enemy {
+        border-color: var(--pool-ring, #3aa0ff);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--pool-ring, #3aa0ff) 40%, transparent);
+    }
+    .draft-champ.is-ally { --pool-ring: #3aa0ff; }
+    .draft-champ.is-enemy { --pool-ring: #ef4444; }
+    .draft-champ.is-ally::after,
+    .draft-champ.is-enemy::after {
+        content: '';
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 11px;
+        height: 11px;
+        border-radius: 999px;
+        background: var(--pool-ring, #3aa0ff);
+        border: 2px solid var(--surface, #11151d);
+        z-index: 2;
     }
     .draft-result {
         min-width: 0;
         background: var(--surface, #11151d);
         border: 1px solid var(--border, #30363d);
         border-radius: 12px;
-        padding: 12px;
-        max-height: min(70vh, 720px);
-        overflow: auto;
+        padding: 12px 14px;
     }
-    .draft-eval-block + .draft-eval-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); }
+    /* The team-eval component was sized for the narrow side card; in the wide
+       draft panel give it room deliberately: radar pinned left at fixed width,
+       dim bars run 2-up beside it, tempo track capped so the marker travel
+       stays readable. */
+    @media (min-width: 901px) {
+        .draft-result .team-dims-split {
+            grid-template-columns: 200px minmax(0, 1fr);
+            gap: 4px 24px;
+        }
+        .draft-result .team-eval-radar .comp-radar { max-height: 195px; }
+        .draft-result .team-comp-list {
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 28px;
+        }
+        .draft-result .team-comp-row {
+            font-size: 11px;
+            grid-template-columns: 40px 1fr 26px 34px;
+            gap: 8px;
+        }
+        .draft-result .team-comp-tag { font-size: 11px; text-align: right; }
+        .draft-result .team-tempo-row { max-width: 660px; }
+    }
+    .draft-eval-block + .draft-eval-block { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border, #30363d); }
     .draft-eval-label {
         font-size: 12px;
         font-weight: 700;
-        color: #9aa0a6;
+        color: var(--text-muted, #9aa0a6);
         margin-bottom: 8px;
     }
     .draft-eval-block.is-enemy .draft-eval-label { color: #ff9aa5; }
-    .draft-matchup-hero { margin-bottom: 12px; }
     .draft-rec-list {
         display: flex;
         flex-direction: column;
@@ -4271,32 +4340,37 @@
         padding: 6px 8px;
         border: 0;
         border-radius: 8px;
-        background: rgba(255,255,255,0.03);
+        background: color-mix(in srgb, var(--text, #e6e8eb) 3%, transparent);
         color: inherit;
         font: inherit;
         cursor: pointer;
         text-align: left;
     }
-    .draft-rec-row:hover { background: rgba(255,255,255,0.07); }
+    .draft-rec-row:hover { background: color-mix(in srgb, var(--text, #e6e8eb) 7%, transparent); }
     .draft-rec-row img {
         width: 26px;
         height: 26px;
         border-radius: 6px;
     }
     @media (max-width: 900px) {
-        .draft-teams {
-            grid-template-columns: 1fr;
+        .draft-shell {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 10px;
         }
-        .draft-matchup-card {
-            flex-direction: row;
-            gap: 12px;
-            min-height: auto;
+        .draft-side { position: static; }
+        .draft-side.is-ally { order: 1; }
+        .draft-side.is-enemy { order: 2; }
+        .draft-main { order: 3; grid-column: 1 / -1; }
+        .draft-side-select { padding: 6px 7px; }
+        .draft-side-label { font-size: 12px; }
+        .draft-slot { min-height: 44px; padding: 5px 6px; gap: 6px; }
+        .draft-slot img,
+        .draft-slot-ph { width: 30px; height: 30px; }
+        .draft-pool {
+            grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+            gap: 6px;
+            max-height: 46vh;
         }
-        .draft-body {
-            grid-template-columns: 1fr;
-        }
-        .draft-champ-list { max-height: 42vh; }
-        .draft-result { max-height: none; }
     }
     /* The 專欄 view is wider than the other narrow views so the card grid can
        run 3-up like an editorial guide index; the reader self-caps at 720. */
@@ -4441,7 +4515,7 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* Search sticky under header; chips scroll away; one visual row at rest. */
+    /* Search sticky under header (list + detail); chips scroll away; one row at rest. */
     .view-home .filter-bar {
         top: auto;
         background: transparent;
@@ -4510,9 +4584,8 @@
        Chrome (header/nav/settings/column) already uses theme vars.  These
        overrides retarget the tier-list, 增幅榜, champion detail panel, and
        recommend side-panel so light mode is a real palette throughout. ===== */
-    /* Sticky search chips (input + count) keep glass in both themes. */
-    [data-theme="light"] .search-rail .search-wrap,
-    [data-theme="light"] .search-rail .shown-count {
+    /* Sticky search input keeps glass in both themes. */
+    [data-theme="light"] .search-rail .search-wrap {
         background: color-mix(in srgb, var(--bg) 82%, transparent);
         border-color: var(--border);
     }
@@ -4523,8 +4596,10 @@
     [data-theme="light"] .chip:not(.active) { background: var(--chip-bg); color: var(--text-muted); }
     [data-theme="light"] .chip:not(.active):hover { background: #e2e6ee; }
     [data-theme="light"] .search { background: #ffffff; color: var(--text); border: 1px solid var(--border-strong); }
-    [data-theme="light"] .shown-count { color: var(--text-muted); }
-    [data-theme="light"] .shown-count #shown-n { color: var(--text); }
+    [data-theme="light"] .filter-bar .role-chips .shown-count,
+    [data-theme="light"] .filter-bar .role-chips .shown-count #shown-n {
+        color: var(--text-muted);
+    }
     [data-theme="light"] .tier-count,
     [data-theme="light"] .tier-count-unit,
     [data-theme="light"] .tier-count-num { color: var(--text-muted); }
