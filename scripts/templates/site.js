@@ -78,12 +78,21 @@
     }
 
     async function loadSitePayload(url) {
-        // Always resolve from site root. Relative "api/..." breaks under
-        // /zh-CN/… and /en/… deep-link shells (would 404 as /zh-CN/api/…).
-        // Keep ?v= cache-bust query from the build (do not strip).
-        const resolved = (url.startsWith('http') || url.startsWith('/'))
-            ? url
-            : ('/' + String(url).replace(/^\.?\//, ''));
+        // Resolve against window.location.origin — NOT document.baseURI.
+        // Local previews (and production HTML) ship
+        //   <base href="https://arammeta.com/">
+        // for SPA path shells. Root-relative fetch('/api/...') is resolved
+        // against that base in browsers, so localhost would silently load the
+        // production payload (and miss local draftModel). Absolute-origin URLs
+        // also fix /zh-CN/… and /en/… shells (relative "api/..." would 404 as
+        // /zh-CN/api/...). Keep ?v= cache-bust query from the build.
+        let resolved;
+        if (/^https?:\/\//i.test(String(url))) {
+            resolved = String(url);
+        } else {
+            const path = '/' + String(url).replace(/^\.?\//, '');
+            resolved = `${window.location.origin}${path}`;
+        }
         // Default HTTP cache: tier-list.json is multi-MB; `no-cache` forced a
         // revalidation on every visit and dominated /zh-CN bounce load time.
         // Build stamps the URL with ?v=YYYYMMDD so publishes still bust cache.
@@ -94,6 +103,46 @@
         return await response.json();
     }
     const DATA = __PAYLOAD__;
+    const CHAMP_DETAIL_FIELDS = [
+        'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
+        'itemClusters', 'augTypes',
+    ];
+    const champDetailLoads = new Map();
+
+    function champHasDetail(info) {
+        return !DATA.detailBase || CHAMP_DETAIL_FIELDS.some(key => (
+            Object.prototype.hasOwnProperty.call(info || {}, key)
+        ));
+    }
+
+    async function ensureChampDetail(cid) {
+        const key = String(cid);
+        const info = (DATA.champs || {})[key];
+        if (!info || champHasDetail(info)) return info;
+        if (champDetailLoads.has(key)) return champDetailLoads.get(key);
+
+        const base = String(DATA.detailBase || '').replace(/\/$/, '');
+        const version = DATA.detailVersion
+            ? `?v=${encodeURIComponent(String(DATA.detailVersion))}`
+            : '';
+        const request = loadSitePayload(`${base}/${encodeURIComponent(key)}.json${version}`)
+            .then(detail => {
+                if (!detail || typeof detail !== 'object' || Array.isArray(detail)) {
+                    throw new Error(`invalid champion detail payload: ${key}`);
+                }
+                Object.assign(info, detail);
+                // The startup pass may have marked the summary-only object as
+                // rehydrated. Let newly merged item rows run through once.
+                _rehydratedChamps.delete(key);
+                rehydrateChamp(key);
+                const card = document.querySelector(`.champ[data-cid="${key}"]`);
+                if (card) enrichChampCard(card);
+                return info;
+            })
+            .finally(() => champDetailLoads.delete(key));
+        champDetailLoads.set(key, request);
+        return request;
+    }
     // Empirical secondary artifacts: fetch in parallel (not waterfall).  Names
     // for zh-CN are optional for first paint (t2s fallback works); load them
     // after the main payload without blocking the dual-API path when unused.
@@ -259,6 +308,48 @@
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
         return `<svg class="comp-radar" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${baseline}${spokes}<polygon points="${dataPoly}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="2"/>${dots}${labels}</svg>`;
+    }
+
+    /**
+     * Dual-team radar: same axes, two polygons (ally blue / enemy red).
+     * series: [{ axes: [{label,pct}], stroke, fill, dot }]
+     * Labels use axis names only (values live in the bar compare below).
+     */
+    function compRadarOverlaySvg(series, ariaLabel) {
+        const first = (series && series[0] && series[0].axes) || [];
+        const n = first.length;
+        if (!n) return '';
+        const cx = 190, cy = 158, R = 108;
+        const ang = i => (-90 + i * (360 / n)) * Math.PI / 180;
+        const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
+        const ringPts = f => first.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
+        const grid = [0.25, 0.5, 0.75, 1].map(f =>
+            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+        const spokes = first.map((_, i) => {
+            const [x, y] = at(i, R);
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+        }).join('');
+        const polys = (series || []).map(s => {
+            const axes = s.axes || [];
+            const pts = axes.map((a, i) => {
+                const f = Math.max(0, Math.min(1, Number(a.pct) || 0));
+                return at(i, R * f).map(v => v.toFixed(1)).join(',');
+            }).join(' ');
+            const stroke = s.stroke || '#3aa0ff';
+            const fill = s.fill || 'rgba(58,160,255,0.16)';
+            const dots = axes.map((a, i) => {
+                const f = Math.max(0, Math.min(1, Number(a.pct) || 0));
+                const [x, y] = at(i, R * f);
+                return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${s.dot || stroke}"/>`;
+            }).join('');
+            return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2.2"/>${dots}`;
+        }).join('');
+        const labels = first.map((a, i) => {
+            const [lx, ly] = at(i, R + 22);
+            const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label || '')}</text>`;
+        }).join('');
+        return `<svg class="comp-radar is-overlay" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel || '')}">${grid}${spokes}${polys}${labels}</svg>`;
     }
     // Percentile rank 0-1: fraction of champions this value beats (robust to outliers).
     function compNorm(comp, key) {
@@ -486,6 +577,14 @@
         `;
     }
     const ROLE_LABELS = __ROLE_LABELS__;
+    // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
+    // CDragon item styles; empty object when catalogue unavailable).
+    const ITEM_FILTER_ROLES = __ITEM_ROLES__;
+    const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
+    // 「常見」= high pick-rate on this champion (matches common-trap force floor).
+    const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
+    // Session-sticky single-item filter ('' | role key | 'common').
+    let singleItemFilter = '';
     const ROLE_BADGE_ICONS = {
         Assassin: `
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -884,20 +983,19 @@
             panelEmpty: '到 Draft 分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
             draftEmpty: '點右側列表加入我方英雄；需要時切到「對手」再選敵方（可選）。',
-            draftMatchupWr: '我方勝率（對陣）',
-            draftMatchupNote: '≈ 0.5 +（我方估計 − 對手估計）；兩邊皆依英雄均值 + 搭配 lift + 陣容組成。',
             draftAllyEval: '我方陣容',
             draftEnemyEval: '對手陣容',
             draftVs: 'VS',
-            draftMetricAlly: '我方勝率',
-            draftMetricAllyRaw: '我方原始勝率',
-            draftMetricEnemyRaw: '對方原始勝率',
-            draftMetricMatchup: '我方綜合勝率',
-            draftMetricTeamNote: '英雄均值 + 搭配 + 陣容',
-            draftMetricRawNote: '所選英雄的平均勝率',
-            draftMetricEnemyNote: '對手英雄的平均勝率',
-            draftMetricMatchupNote: '≈ 0.5 +（我方勝率 − 對方勝率）',
-            draftMetricEmpty: '尚未選角',
+            draftCompareTitle: '對陣比較',
+            draftRadarTitle: '能力雷達（雙隊疊加）',
+            draftCompareExtras: '項目比較',
+            draftLegendAlly: '我方',
+            draftLegendEnemy: '對手',
+            draftChampStrength: '英雄強度',
+            draftMetricFinal: '最終勝率',
+            draftMetricFinalNote: 'AI推估勝率：綜合參考 1. 英雄強度 2. 搭配 3. 對戰組合',
+            draftMetricPartial: '完成我方與對方各 5 隻英雄後計算',
+            draftMetricUnavailable: '預測模型尚未載入或含未知英雄',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
@@ -1081,20 +1179,19 @@
             panelEmpty: 'Open the Draft tab and pick 1–5 allies; opponents are optional. Under 5 ranks fills; with an enemy roster we show matchup WR and both team traits.',
             panelNoData: 'This combination does not have enough pair data yet.',
             draftEmpty: 'Click the list to add allies; switch to Opponent for an optional enemy roster.',
-            draftMatchupWr: 'Ally win chance (matchup)',
-            draftMatchupNote: '≈ 0.5 + (ally est. − enemy est.); each side uses mean WR + pair lift + composition.',
             draftAllyEval: 'Ally composition',
             draftEnemyEval: 'Enemy composition',
             draftVs: 'VS',
-            draftMetricAlly: 'Ally win rate',
-            draftMetricAllyRaw: 'Ally raw win rate',
-            draftMetricEnemyRaw: 'Opponent raw win rate',
-            draftMetricMatchup: 'Ally matchup win rate',
-            draftMetricTeamNote: 'mean + pairs + composition',
-            draftMetricRawNote: 'mean of selected champions',
-            draftMetricEnemyNote: 'mean of opponent champions',
-            draftMetricMatchupNote: '≈ 0.5 + (ally win rate − opponent win rate)',
-            draftMetricEmpty: 'No picks yet',
+            draftCompareTitle: 'Matchup compare',
+            draftRadarTitle: 'Ability radar (both teams)',
+            draftCompareExtras: 'Stat compare',
+            draftLegendAlly: 'Ally',
+            draftLegendEnemy: 'Enemy',
+            draftChampStrength: 'Champ strength',
+            draftMetricFinal: 'Final win rate',
+            draftMetricFinalNote: 'AI win-rate estimate from 1) champion strength 2) synergy 3) matchup',
+            draftMetricPartial: 'Complete both 5-champion rosters to calculate',
+            draftMetricUnavailable: 'Model not loaded or contains unknown champions',
             draftOnOtherSide: 'Already on the other team.',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
@@ -2102,6 +2199,98 @@
     const MATE_LIST_LIMIT_DESKTOP = 8;
     const MATE_LIST_LIMIT_MOBILE = 6;
 
+    // ----- Single-item role filter (出裝 → 單件裝備強度) -------------------------
+    // Single-select chips: All + 6 roles + 常見.  Role comes from shell-injected
+    // ITEM_FILTER_ROLES (CDragon style → role list); 常見 = pick ≥ 10% on this champ.
+    // An item may match multiple roles (e.g. 殞落之祭 → Mage + Marksman).
+    function itemFilterRolesForId(id) {
+        if (id == null || id === '') return [];
+        const key = String(id);
+        const lut = DATA && DATA.itemLut && DATA.itemLut[key];
+        if (lut && lut.r) {
+            return String(lut.r).split(/\s+/).filter(Boolean);
+        }
+        const v = ITEM_FILTER_ROLES[key];
+        if (Array.isArray(v)) return v.map(String).filter(Boolean);
+        if (typeof v === 'string' && v) return v.split(/\s+/).filter(Boolean);
+        return [];
+    }
+    function itemFilterRoleLabels(role) {
+        if (role === 'common') return { zh: '常見', en: 'Common' };
+        if (!role) return { zh: '全部', en: 'All' };
+        const pack = ROLE_LABELS || {};
+        return {
+            zh: (pack.zh && pack.zh[role]) || role,
+            en: (pack.en && pack.en[role]) || role,
+        };
+    }
+    function buildSingleItemFilterChips() {
+        if (!ITEM_FILTER_ROLES || !Object.keys(ITEM_FILTER_ROLES).length) return '';
+        const allOn = !singleItemFilter;
+        const mk = (key, extraClass = '') => {
+            const on = key ? singleItemFilter === key : !singleItemFilter;
+            const labels = itemFilterRoleLabels(key);
+            const shown = currentLang === 'en' ? labels.en : zhUi(labels.zh);
+            const tip = key === 'common'
+                ? ` title="${escHtml(pickLang('選取率 ≥ 10%', 'pick rate ≥ 10%'))}"`
+                : '';
+            return `<button type="button" class="item-role-chip${extraClass}${on ? ' is-active' : ''}" data-item-filter="${key}" data-label-zh="${escHtml(labels.zh)}" data-label-en="${escHtml(labels.en)}" aria-pressed="${on}"${tip}>${escHtml(shown)}</button>`;
+        };
+        const chips = [mk('', '')];
+        ITEM_FILTER_ROLE_ORDER.forEach(role => chips.push(mk(role, ` role-${role}`)));
+        chips.push(mk('common', ' role-common'));
+        return `<div class="item-role-bar" role="group" aria-label="${escHtml(pickLang('裝備篩選', 'Item filters'))}">${chips.join('')}</div>`;
+    }
+    function applySingleItemFilter(root) {
+        if (!root) return;
+        root.querySelectorAll('.item-role-chip').forEach(chip => {
+            const key = chip.getAttribute('data-item-filter') || '';
+            const on = key ? singleItemFilter === key : !singleItemFilter;
+            chip.classList.toggle('is-active', on);
+            chip.setAttribute('aria-pressed', String(on));
+        });
+        root.querySelectorAll('.single-item-filter-host').forEach(host => {
+            const filter = singleItemFilter;
+            let shown = 0;
+            let total = 0;
+            host.querySelectorAll('.single-item-card').forEach(card => {
+                total++;
+                const roles = (card.getAttribute('data-item-role') || '').split(/\s+/).filter(Boolean);
+                const pick = Number(card.getAttribute('data-item-pick') || 0);
+                let match = true;
+                if (filter === 'common') match = pick >= SINGLE_ITEM_COMMON_MIN_PICK;
+                else if (filter) match = roles.includes(filter);
+                card.classList.toggle('item-filter-hidden', !match);
+                if (match) shown++;
+            });
+            let empty = host.querySelector('.item-filter-empty');
+            if (filter && total > 0 && shown === 0) {
+                if (!empty) {
+                    empty = document.createElement('div');
+                    empty.className = 'item-filter-empty mate-list empty-list';
+                    host.appendChild(empty);
+                }
+                empty.hidden = false;
+                empty.textContent = pickLang('沒有符合此篩選的裝備', 'No items match this filter');
+            } else if (empty) {
+                empty.hidden = true;
+            }
+        });
+    }
+    function setSingleItemFilter(key) {
+        singleItemFilter = key || '';
+        document.querySelectorAll('.detail').forEach(applySingleItemFilter);
+    }
+    document.addEventListener('click', (ev) => {
+        const chip = ev.target.closest('.item-role-chip');
+        if (!chip) return;
+        ev.preventDefault();
+        const key = chip.getAttribute('data-item-filter') || '';
+        // Toggle off → All when re-clicking the active non-all chip.
+        if (key && singleItemFilter === key) setSingleItemFilter('');
+        else setSingleItemFilter(key);
+    });
+
     // ----- Augment category filter (chips above the per-champion ranking) -----
     // Multi-select OR filter, persisted across champion switches within a
     // session.  Each .aug card carries data-cats; chips toggle membership and we
@@ -2715,11 +2904,19 @@
             const wrSign = liftValue > 0.005 ? 'is-good'
                 : (liftValue < -0.005 ? 'is-bad' : 'is-even');
             const wrClass = `item-build-wr ${wrSign}`;
+            const pickVal = Number(entry.pick || 0);
+            // Filter attrs only on the strength carousel (not 常見但不推薦 traps).
+            let filterAttrs = '';
+            if (options.singleItem && options.singleItemFilterable) {
+                const iid = pairItems[0] && pairItems[0].id != null ? pairItems[0].id : (entry.slug || '');
+                const roles = itemFilterRolesForId(iid).join(' ');
+                filterAttrs = ` data-item-role="${escHtml(roles)}" data-item-pick="${pickVal}"`;
+            }
             return `
-                <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}">
+                <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}"${filterAttrs}>
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
-                    <div class="item-build-pick pick-${pickTier(Number(entry.pick || 0))}">${pct(entry.pick || 0)}</div>
+                    <div class="item-build-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                     ${itemTipSource(tipHtml)}
                 </div>
@@ -2736,7 +2933,11 @@
                 carouselClasses.push('item-build-grid', 'single-item-grid');
             }
             const carouselClass = carouselClasses.join(' ');
-            return `<div class="${carouselClass}">${rows.map(entry => buildItemCard(entry, options)).join('')}</div>`;
+            const cards = rows.map(entry => buildItemCard(entry, options)).join('');
+            if (options.singleItemFilterable) {
+                return `<div class="single-item-filter-host">${buildSingleItemFilterChips()}<div class="${carouselClass}">${cards}</div></div>`;
+            }
+            return `<div class="${carouselClass}">${cards}</div>`;
         };
         const buildItemSectionFromRows = (title, meta, rows, options = {}) => {
             if (!rows || !rows.length) return '';
@@ -2898,6 +3099,7 @@
                     ? pairMeta
                     : ((options.singleItem || options.itemCluster) && meta ? meta : itemMeta);
                 const metaHtml = `<span class="section-meta">${displayMeta}</span>`;
+                const filterable = Boolean(options.singleItem && options.singleItemFilterable);
                 return `
                     <div class="detail-section">
                         <div class="detail-section-head">
@@ -2906,6 +3108,7 @@
                         </div>
                         ${buildItemCarousel(rows, {
                             singleItem: Boolean(options.singleItem),
+                            singleItemFilterable: filterable,
                             itemCluster: Boolean(options.itemCluster),
                             itemPairGrid: Boolean(options.itemPairGrid),
                         })}
@@ -3108,7 +3311,11 @@
                 </div>`;
         };
         const buildSingleItemPanel = (title, meta, payload) => {
-            const goodSection = buildAffinitySection(title, meta, payload, { itemCarousel: true, singleItem: true });
+            const goodSection = buildAffinitySection(title, meta, payload, {
+                itemCarousel: true,
+                singleItem: true,
+                singleItemFilterable: true,
+            });
             const badSection = buildItemSectionFromRows(
                 singleItemBadTitle,
                 singleItemBadMeta,
@@ -3680,9 +3887,6 @@
     function buildTeamEvalHtml(ids) {
         const copy = tr();
         const ev = evaluateFullTeam(ids);
-        const confLabel = ev.confKey === 'high' ? copy.teamConfHigh
-            : ev.confKey === 'mid' ? copy.teamConfMid
-            : copy.teamConfLow;
         const wrTone = ev.estWr >= 0.53 ? 'is-good' : (ev.estWr <= 0.47 ? 'is-bad' : 'is-even');
         const radar = compRadarSvg(ev.abilityAxes, copy.teamDimsTitle);
         // One block: radar + 6 dim bars graded 偏弱/普通/充足 by mean capability pct.
@@ -3703,46 +3907,16 @@
                 <span class="team-comp-tag">${escHtml(tag)}</span>
             </div>`;
         }).join('');
-        const earlyN = Math.round((ev.earlyPct || 0) * 100);
-        const lateN = Math.round((ev.latePct || 0) * 100);
-        const markerPct = Math.max(4, Math.min(96, (ev.tempoPos || 0.5) * 100));
-        const tempoLean = ev.tempoKey === 'early' ? copy.teamTempoEarlyLean
-            : ev.tempoKey === 'late' ? copy.teamTempoLateLean
-            : copy.teamTempoBalanced;
-        // Dual-endpoint bar: left=前期, right=後期. The fill is anchored at the
-        // 50/50 mark and grows toward the lean side, so bar length = lean
-        // strength (deviation from balanced), not a good/bad grade.
-        const fillLeft = Math.min(markerPct, 50);
-        const fillW = Math.abs(markerPct - 50);
-        const fillSide = markerPct < 50 ? 'is-early' : 'is-late';
-        const tempoHtml = `
-            <div class="team-eval-block team-tempo" title="${escHtml(copy.teamTempoTip || '')}">
-                <div class="team-eval-h team-tempo-head">
-                    <span>${escHtml(copy.teamTempoTitle)}</span>
-                    <span class="team-tempo-lean">${escHtml(tempoLean)}</span>
-                </div>
-                <div class="team-tempo-row">
-                    <span class="team-tempo-end is-early">${escHtml(copy.teamTempoEarly)}<small>${earlyN}</small></span>
-                    <div class="team-tempo-track" role="img"
-                         aria-label="${escHtml(copy.teamTempoTitle)}: ${escHtml(tempoLean)}">
-                        <div class="team-tempo-fill ${fillSide}" style="left:${fillLeft.toFixed(1)}%;width:${fillW.toFixed(1)}%"></div>
-                        <div class="team-tempo-mid"></div>
-                        <div class="team-tempo-marker" style="left:${markerPct.toFixed(1)}%"></div>
-                    </div>
-                    <span class="team-tempo-end is-late">${escHtml(copy.teamTempoLate)}<small>${lateN}</small></span>
-                </div>
-            </div>`;
         return `
             <div class="team-eval">
                 <div class="team-eval-wr ${wrTone}">
                     <div class="team-wr-num">${pct(ev.estWr)}</div>
                     <div class="team-wr-side">
                         <span class="team-wr-label">${escHtml(copy.teamEstWr)}</span>
-                        <span class="team-wr-meta">${escHtml(copy.teamPairCover(ev.pairN, ev.pairTotal))} · ${escHtml(confLabel)}</span>
+                        <span class="team-wr-meta">${escHtml(String(ids.length))}/${MAX_TEAM_PICKS}</span>
                     </div>
                     <div class="team-wr-breakdown">
-                        <span>${escHtml(copy.teamBaseWr)} ${pct(ev.baseWr)}</span>
-                        <span>${escHtml(copy.teamPairLift)} <b class="team-delta ${signedToneClass(ev.pairLift)}">${signed(ev.pairLift)}</b></span>
+                        <span>${escHtml(copy.draftChampStrength || copy.teamBaseWr)} ${pct(ev.baseWr)}</span>
                         <span>${escHtml(copy.teamCompAdj)} <b class="team-delta ${signedToneClass(ev.compositionScore)}">${signed(ev.compositionScore)}</b></span>
                     </div>
                 </div>
@@ -3753,22 +3927,267 @@
                         <div class="team-comp-list">${dimRows}</div>
                     </div>
                 </div>
-                ${tempoHtml}
             </div>
         `;
     }
 
-    /** Ally vs optional enemy: matchup WR ≈ 0.5 + (allyEst − enemyEst). */
+    /** Dual horizontal bar: ally (blue) vs enemy (red). value is 0–1 display fraction. */
+    function draftCompareBarRow(label, allyFrac, enemyFrac, allyText, enemyText) {
+        const a = Math.max(0, Math.min(1, Number(allyFrac) || 0));
+        const e = Math.max(0, Math.min(1, Number(enemyFrac) || 0));
+        return `
+            <div class="draft-cmp-row">
+                <span class="draft-cmp-label">${escHtml(label)}</span>
+                <div class="draft-cmp-bars">
+                    <div class="draft-cmp-track is-ally" title="${escHtml(allyText)}">
+                        <span class="draft-cmp-fill" style="width:${(a * 100).toFixed(1)}%"></span>
+                        <span class="draft-cmp-val">${escHtml(allyText)}</span>
+                    </div>
+                    <div class="draft-cmp-track is-enemy" title="${escHtml(enemyText)}">
+                        <span class="draft-cmp-fill" style="width:${(e * 100).toFixed(1)}%"></span>
+                        <span class="draft-cmp-val">${escHtml(enemyText)}</span>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    /**
+     * Matchup panel: overlaid dual radar (blue/red) + dual bars.
+     * Works for partial rosters (1–5 each side); composition score scales with size.
+     * Bars: champ strength, est WR, composition only (no pair lift / tempo).
+     */
+    function buildMatchupCompareHtml(allyEv, enemyEv, allyCount, enemyCount) {
+        const copy = tr();
+        const allyAxes = allyEv.abilityAxes || [];
+        const enemyAxes = (enemyEv.abilityAxes || []).map((a, i) => ({
+            label: (allyAxes[i] && allyAxes[i].label) || a.label,
+            pct: a.pct,
+        }));
+        const radar = compRadarOverlaySvg([
+            {
+                axes: allyAxes,
+                stroke: '#3aa0ff',
+                fill: 'rgba(58,160,255,0.16)',
+                dot: '#3aa0ff',
+            },
+            {
+                axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
+                stroke: '#e2574b',
+                fill: 'rgba(226,87,75,0.14)',
+                dot: '#e2574b',
+            },
+        ], copy.draftRadarTitle || copy.teamDimsTitle);
+
+        // Signed composition: map ±8pp → 0–1 around 0.5 for bar width.
+        const liftFrac = v => Math.max(0, Math.min(1, 0.5 + (Number(v) || 0) / 0.16));
+        const liftTxt = v => signed(Number(v) || 0);
+        const aN = Number(allyCount) || 0;
+        const eN = Number(enemyCount) || 0;
+        const rows = [
+            draftCompareBarRow(
+                copy.draftChampStrength || copy.teamBaseWr,
+                allyEv.baseWr, enemyEv.baseWr,
+                pct(allyEv.baseWr), pct(enemyEv.baseWr),
+            ),
+            draftCompareBarRow(
+                copy.teamEstWr,
+                allyEv.estWr, enemyEv.estWr,
+                pct(allyEv.estWr), pct(enemyEv.estWr),
+            ),
+            draftCompareBarRow(
+                copy.teamCompAdj,
+                liftFrac(allyEv.compositionScore), liftFrac(enemyEv.compositionScore),
+                liftTxt(allyEv.compositionScore), liftTxt(enemyEv.compositionScore),
+            ),
+        ];
+        const legAlly = `${copy.draftLegendAlly || 'Ally'} ${aN}/${MAX_TEAM_PICKS}`;
+        const legEnemy = `${copy.draftLegendEnemy || 'Enemy'} ${eN}/${MAX_TEAM_PICKS}`;
+
+        return `
+            <div class="draft-matchup">
+                <div class="draft-matchup-radar">
+                    <div class="draft-matchup-head">
+                        <span class="draft-matchup-title">${escHtml(copy.draftRadarTitle || copy.teamDimsTitle)}</span>
+                        <span class="draft-matchup-legend">
+                            <span class="draft-leg is-ally"><i></i>${escHtml(legAlly)}</span>
+                            <span class="draft-leg is-enemy"><i></i>${escHtml(legEnemy)}</span>
+                        </span>
+                    </div>
+                    <div class="draft-matchup-svg">${radar}</div>
+                </div>
+                <div class="draft-matchup-bars">
+                    <div class="draft-matchup-head">
+                        <span class="draft-matchup-title">${escHtml(copy.draftCompareExtras || copy.draftCompareTitle)}</span>
+                        <span class="draft-matchup-legend">
+                            <span class="draft-leg is-ally"><i></i>${escHtml(legAlly)}</span>
+                            <span class="draft-leg is-enemy"><i></i>${escHtml(legEnemy)}</span>
+                        </span>
+                    </div>
+                    <div class="draft-cmp-list">${rows.join('')}</div>
+                </div>
+            </div>`;
+    }
+
+    // ---- Draft final WR: Composition LR (same formula as recommend_gui.predict_matchup_prob) ----
+    // Export is built at site-render time from models/composition_lr_pooled_recency_7d.
+    // P(ally wins) = sigmoid(logit_ally − logit_enemy + intercept) where each team's
+    // logit is the full composition feature vector · coef (identity + team signals).
+    let draftFeatureIndex = null;
+
+    function draftGetFeatureIndex(model) {
+        if (draftFeatureIndex && draftFeatureIndex.model === model) return draftFeatureIndex.map;
+        const map = Object.create(null);
+        (model.feature_names || []).forEach((name, idx) => { map[name] = idx; });
+        draftFeatureIndex = { model, map };
+        return map;
+    }
+
+    function draftAdBinIndex(adShare) {
+        if (adShare < 0.35) return 0;
+        if (adShare < 0.45) return 1;
+        if (adShare < 0.55) return 2;
+        if (adShare < 0.65) return 3;
+        return 4;
+    }
+
+    function draftCountGroupIndex(count) {
+        if (count <= 0) return 0;
+        if (count === 1) return 1;
+        return 2;
+    }
+
+    function draftTeamProfile(teamIds, model) {
+        const profiles = model.profiles || {};
+        const scoreCols = (model.meta && model.meta.score_columns) || [];
+        const roleCols = (model.meta && model.meta.role_columns) || [];
+        const lackThr = (model.meta && model.meta.lack_thresholds) || {};
+        const coreCols = (model.meta && model.meta.core_columns) || [];
+        let physical = 0;
+        let magic = 0;
+        let trueDpm = 0;
+        const scoreSums = Object.create(null);
+        const roles = Object.create(null);
+        scoreCols.forEach(name => { scoreSums[name] = 0; });
+        roleCols.forEach(role => { roles[role] = 0; });
+        const rows = [];
+        for (let i = 0; i < teamIds.length; i += 1) {
+            const profile = profiles[String(teamIds[i])];
+            if (!profile) return null;
+            rows.push(profile);
+            physical += Number(profile.physical_dpm) || 0;
+            magic += Number(profile.magic_dpm) || 0;
+            trueDpm += Number(profile.true_dpm) || 0;
+            scoreCols.forEach(name => {
+                scoreSums[name] += Number((profile.scores || {})[name]) || 0;
+            });
+            roleCols.forEach(role => {
+                roles[role] += Number((profile.roles || {})[role]) || 0;
+            });
+        }
+        const adApDen = Math.max(physical + magic, 1e-9);
+        const allDen = Math.max(physical + magic + trueDpm, 1e-9);
+        const adShare = physical / adApDen;
+        const trueShare = trueDpm / allDen;
+        const lacks = Object.create(null);
+        scoreCols.forEach(name => {
+            lacks[name] = scoreSums[name] < Number(lackThr[name] || 0) ? 1 : 0;
+        });
+        const frontCount = rows.reduce((n, profile) => (
+            n + ((Number((profile.scores || {}).frontline_score) || 0) >= 2.0 ? 1 : 0)
+        ), 0);
+        return {
+            ad_share: adShare,
+            true_share: trueShare,
+            ad_ap_balance: 1.0 - Math.abs(adShare - (magic / adApDen)),
+            front_count: frontCount,
+            front_sum: scoreSums.frontline_score || 0,
+            score_sums: scoreSums,
+            lacks,
+            roles,
+            core_lacks_count: coreCols.reduce((n, name) => n + (lacks[name] || 0), 0),
+            all_lacks_count: scoreCols.reduce((n, name) => n + (lacks[name] || 0), 0),
+        };
+    }
+
+    /** Single-team composition feature vector · coef (matches recommend.py). */
+    function draftTeamLogitContribution(teamIds, model) {
+        const featureNames = model.feature_names || [];
+        const coef = model.coef || [];
+        if (!featureNames.length || coef.length !== featureNames.length) return null;
+        const featIdx = draftGetFeatureIndex(model);
+        const x = new Float64Array(featureNames.length);
+        for (let i = 0; i < teamIds.length; i += 1) {
+            const cid = String(teamIds[i]);
+            const fIdx = featIdx[`champion:${cid}`];
+            if (fIdx === undefined) return null;
+            x[fIdx] = 1;
+        }
+        const team = draftTeamProfile(teamIds, model);
+        if (!team) return null;
+        const scoreCols = (model.meta && model.meta.score_columns) || [];
+        const roleCols = (model.meta && model.meta.role_columns) || [];
+        const adBins = (model.meta && model.meta.ad_bins) || [];
+        const frontGroups = (model.meta && model.meta.front_groups) || [];
+        const waveGroups = (model.meta && model.meta.wave_groups) || [];
+        const engageGroups = (model.meta && model.meta.engage_groups) || [];
+        const pokeGroups = (model.meta && model.meta.poke_groups) || [];
+
+        const set = (name, value) => {
+            const idx = featIdx[name];
+            if (idx !== undefined) x[idx] = value;
+        };
+        set('ad_share', team.ad_share);
+        set('ad_ap_balance', team.ad_ap_balance);
+        set('true_share', team.true_share);
+        set('front_count', team.front_count);
+        set('front_sum', team.front_sum);
+        set('core_lacks_count', team.core_lacks_count);
+        set('all_lacks_count', team.all_lacks_count);
+        scoreCols.forEach(name => {
+            set(`sum_${name}`, team.score_sums[name] || 0);
+            set(`lack_${name}`, team.lacks[name] || 0);
+        });
+        roleCols.forEach(role => {
+            set(`role_${String(role).toLowerCase()}`, team.roles[role] || 0);
+        });
+
+        const adBin = adBins[draftAdBinIndex(team.ad_share)];
+        const frontGroup = frontGroups[draftCountGroupIndex(team.front_count)];
+        const waveGroup = waveGroups[team.lacks.wave_clear_score === 0 ? 1 : 0];
+        const engageGroup = engageGroups[team.lacks.engage_score === 0 ? 1 : 0];
+        const pokeGroup = pokeGroups[team.lacks.poke_score === 0 ? 1 : 0];
+        if (frontGroup && adBin) set(`ad_front:${frontGroup}:${adBin}`, 1);
+        if (waveGroup && engageGroup) set(`wave_engage:${waveGroup}:${engageGroup}`, 1);
+        if (frontGroup && pokeGroup) set(`poke_front:${frontGroup}:${pokeGroup}`, 1);
+        roleCols.forEach(role => {
+            if (adBin) set(`role_ad:${adBin}:${String(role).toLowerCase()}`, team.roles[role] || 0);
+        });
+
+        let total = 0;
+        for (let i = 0; i < coef.length; i += 1) total += x[i] * Number(coef[i] || 0);
+        return total;
+    }
+
+    /** Full 5v5 Composition LR: sigmoid(ally_logit − enemy_logit + intercept). */
+    function draftCompositionLrWinrate(allyIds, enemyIds) {
+        const model = DATA && DATA.draftModel;
+        if (!model || model.kind !== 'composition_lr') return null;
+        if (!Array.isArray(allyIds) || !Array.isArray(enemyIds) || allyIds.length !== 5 || enemyIds.length !== 5) {
+            return null;
+        }
+        const myLogit = draftTeamLogitContribution(allyIds, model);
+        const enemyLogit = draftTeamLogitContribution(enemyIds, model);
+        if (myLogit == null || enemyLogit == null) return null;
+        const logit = myLogit - enemyLogit + Number(model.intercept || 0);
+        return 1 / (1 + Math.exp(-logit));
+    }
+
+    /** Ally vs optional enemy: team details remain contextual; final WR is Composition LR. */
     function evaluateMatchup(allyIds, enemyIds) {
         const ally = allyIds && allyIds.length ? evaluateFullTeam(allyIds) : null;
         const enemy = enemyIds && enemyIds.length ? evaluateFullTeam(enemyIds) : null;
-        let matchupWr = null;
-        if (ally && enemy) {
-            matchupWr = Math.max(0.35, Math.min(0.65, 0.5 + (ally.estWr - enemy.estWr)));
-        } else if (ally) {
-            matchupWr = ally.estWr;
-        }
-        return { ally, enemy, matchupWr };
+        const finalWr = draftCompositionLrWinrate(allyIds, enemyIds);
+        return { ally, enemy, finalWr };
     }
 
     function draftPickList(side) {
@@ -3907,38 +4326,15 @@
     function buildDraftMetricsHtml() {
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
-        const cards = [
-            {
-                key: 'ally-est',
-                label: copy.draftMetricAlly,
-                value: mu.ally && mu.ally.estWr,
-                note: mu.ally ? copy.draftMetricTeamNote : copy.draftMetricEmpty,
-            },
-            {
-                key: 'ally-raw',
-                label: copy.draftMetricAllyRaw,
-                value: mu.ally && mu.ally.baseWr,
-                note: mu.ally ? copy.draftMetricRawNote : copy.draftMetricEmpty,
-            },
-            {
-                key: 'enemy-raw',
-                label: copy.draftMetricEnemyRaw,
-                value: mu.enemy && mu.enemy.baseWr,
-                note: mu.enemy ? copy.draftMetricEnemyNote : copy.draftMetricEmpty,
-            },
-            {
-                key: 'matchup',
-                label: copy.draftMetricMatchup,
-                value: mu.ally && mu.enemy ? mu.matchupWr : null,
-                note: mu.ally && mu.enemy ? copy.draftMetricMatchupNote : copy.draftMetricEmpty,
-            },
-        ];
-        return cards.map(card => `
-            <div class="draft-metric ${card.key} ${draftMetricTone(card.value)}">
-                <span class="draft-metric-label">${escHtml(card.label)}</span>
-                <strong class="draft-metric-value">${draftMetricValue(card.value)}</strong>
-                <span class="draft-metric-note">${escHtml(card.note || '')}</span>
-            </div>`).join('');
+        const fullDraft = teamPicks.length === MAX_TEAM_PICKS && enemyPicks.length === MAX_TEAM_PICKS;
+        const note = !fullDraft ? copy.draftMetricPartial
+            : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote);
+        return `
+            <div class="draft-metric final ${draftMetricTone(mu.finalWr)}">
+                <span class="draft-metric-label">${escHtml(copy.draftMetricFinal)}</span>
+                <strong class="draft-metric-value">${draftMetricValue(fullDraft ? mu.finalWr : null)}</strong>
+                <span class="draft-metric-note">${escHtml(note || '')}</span>
+            </div>`;
     }
 
     function renderDraftView() {
@@ -3963,14 +4359,19 @@
             return `<div class="panel-empty">${escHtml(copy.draftEmpty || copy.panelEmpty)}</div>`;
         }
         const parts = [];
-        if (mu.ally) {
-            parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
-        }
-        if (mu.enemy) {
-            parts.push(`<div class="draft-eval-block is-enemy"><div class="draft-eval-label">${escHtml(copy.draftEnemyEval || '對手陣容')}</div>${buildTeamEvalHtml(enemyPicks)}</div>`);
-        }
         if (pickNotice) {
-            parts.unshift(`<div class="pick-note">${escHtml(pickNotice)}</div>`);
+            parts.push(`<div class="pick-note">${escHtml(pickNotice)}</div>`);
+        }
+        // Both sides have ≥1 pick → overlaid radar + dual bars (partial rosters OK).
+        // Only final LR WR still requires full 5v5 (see buildDraftMetricsHtml).
+        if (mu.ally && mu.enemy) {
+            parts.push(buildMatchupCompareHtml(
+                mu.ally, mu.enemy, teamPicks.length, enemyPicks.length,
+            ));
+        } else if (mu.ally) {
+            parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
+        } else if (mu.enemy) {
+            parts.push(`<div class="draft-eval-block is-enemy"><div class="draft-eval-label">${escHtml(copy.draftEnemyEval || '對手陣容')}</div>${buildTeamEvalHtml(enemyPicks)}</div>`);
         }
         // Recommendations when ally not full and no focus on enemy-only.
         if (teamPicks.length > 0 && teamPicks.length < MAX_TEAM_PICKS && draftSide === 'ally') {
@@ -4987,7 +5388,7 @@
         document.querySelectorAll('.tier-count-unit').forEach(el => {
             el.textContent = copy.tierUnit;
         });
-        document.querySelectorAll('.chip').forEach(chip => {
+        document.querySelectorAll('.chip, .item-role-chip').forEach(chip => {
             if (currentLang === 'en') {
                 chip.textContent = chip.getAttribute('data-label-en') || chip.textContent || '';
             } else {
@@ -5028,6 +5429,12 @@
         const _augView = document.getElementById('view-augments');
         if (_augView && _augView.classList.contains('is-active')) {
             renderAugmentTier();
+        }
+        // Draft metrics / team-eval HTML is built via tr(); must re-render or
+        // language toggles leave the previous locale's strings on screen while
+        // data-i18n chrome has already flipped.
+        if (document.querySelector('.view-draft.is-active')) {
+            renderDraft();
         }
 
         moveTabIndicator();
@@ -5129,8 +5536,9 @@
             });
         }
 
-        // Phase 2: fill the real content after handing the main thread back.
-        yieldToMain().then(() => {
+        // Phase 2: fetch this champion's detail shard, then fill the panel after
+        // handing the main thread back. Inline/legacy payloads resolve instantly.
+        yieldToMain().then(() => ensureChampDetail(cid)).then(() => {
             // Abort if a newer open or a close superseded this one while we waited.
             if (token !== detailOpenToken || detailSelected !== cid) return;
             if (!host.isConnected) return;
@@ -5140,6 +5548,9 @@
                 // is active — they walk every card for no effect otherwise.
                 if (filterState.q.trim()) applySearchHighlights(host);
                 if (augCatFilter.size) applyAugCatFilter(host);
+                // Always re-sync chip pressed state (and hide cards if a role /
+                // 常見 filter is sticky from a previous champion).
+                applySingleItemFilter(host);
             } catch (err) {
                 console.error('detail render failed for champ', cid, err);
                 return;
@@ -5147,6 +5558,18 @@
             if (isMobileViewport()) {
                 host.querySelector('.detail-close')?.focus({ preventScroll: true });
             }
+        }).catch(err => {
+            if (token !== detailOpenToken || detailSelected !== cid) return;
+            console.error('detail load failed for champ', cid, err);
+            const message = currentLang === 'en'
+                ? 'Champion details could not be loaded.'
+                : '英雄詳細資料載入失敗。';
+            const retry = currentLang === 'en' ? 'Retry' : '重試';
+            host.innerHTML = `
+                <div class="detail detail-load-error"${dialogAttrs}>
+                    <div class="empty" role="alert">${escHtml(message)}</div>
+                    <button type="button" class="detail-retry" data-detail-retry>${escHtml(retry)}</button>
+                </div>`;
         });
     }
 
@@ -5176,6 +5599,12 @@
     }
 
     document.addEventListener('click', (ev) => {
+        const detailRetry = ev.target.closest('[data-detail-retry]');
+        if (detailRetry) {
+            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
+            if (champ) openDetailForChamp(champ, true);
+            return;
+        }
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
             trackEvent('github_star_click', { location: 'footer' });
