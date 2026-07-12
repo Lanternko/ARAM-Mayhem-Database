@@ -2043,6 +2043,16 @@
         if (pick >= 0.02) return 2;
         return 1;
     }
+    // Summoner spells: Mayhem carries two, so rates sum ~200% and commonly
+    // sit at 10–100%. Item pickTier (≥20% → max heat) collapses Flash/Ghost/
+    // Mark/Heal into the same orange. Wider cuts keep the heat ramp readable.
+    function spellPickTier(pick) {
+        if (pick >= 0.70) return 5;  // near-universal (Flash ~99%)
+        if (pick >= 0.40) return 4;  // very common pair
+        if (pick >= 0.22) return 3;  // solid secondary (~25–35%)
+        if (pick >= 0.12) return 2;  // situational
+        return 1;                   // rare on this champ
+    }
     /**
      * 5-step win-rate tone for .awr:
      *   5 正綠 → 4 淺綠 → 3 無色 → 2 淺紅 → 1 深紅
@@ -3671,8 +3681,12 @@
         const tempoLean = ev.tempoKey === 'early' ? copy.teamTempoEarlyLean
             : ev.tempoKey === 'late' ? copy.teamTempoLateLean
             : copy.teamTempoBalanced;
-        // Dual-endpoint bar: left=前期, right=後期. Marker is relative weight of
-        // late vs early WR — continuum, not a grade.
+        // Dual-endpoint bar: left=前期, right=後期. The fill is anchored at the
+        // 50/50 mark and grows toward the lean side, so bar length = lean
+        // strength (deviation from balanced), not a good/bad grade.
+        const fillLeft = Math.min(markerPct, 50);
+        const fillW = Math.abs(markerPct - 50);
+        const fillSide = markerPct < 50 ? 'is-early' : 'is-late';
         const tempoHtml = `
             <div class="team-eval-block team-tempo" title="${escHtml(copy.teamTempoTip || '')}">
                 <div class="team-eval-h team-tempo-head">
@@ -3683,7 +3697,7 @@
                     <span class="team-tempo-end is-early">${escHtml(copy.teamTempoEarly)}<small>${earlyN}</small></span>
                     <div class="team-tempo-track" role="img"
                          aria-label="${escHtml(copy.teamTempoTitle)}: ${escHtml(tempoLean)}">
-                        <div class="team-tempo-grad"></div>
+                        <div class="team-tempo-fill ${fillSide}" style="left:${fillLeft.toFixed(1)}%;width:${fillW.toFixed(1)}%"></div>
                         <div class="team-tempo-mid"></div>
                         <div class="team-tempo-marker" style="left:${markerPct.toFixed(1)}%"></div>
                     </div>
@@ -3694,15 +3708,14 @@
             <div class="team-eval">
                 <div class="team-eval-wr ${wrTone}">
                     <div class="team-wr-num">${pct(ev.estWr)}</div>
-                    <div class="team-wr-label">${escHtml(copy.teamEstWr)}</div>
+                    <div class="team-wr-side">
+                        <span class="team-wr-label">${escHtml(copy.teamEstWr)}</span>
+                        <span class="team-wr-meta">${escHtml(copy.teamPairCover(ev.pairN, ev.pairTotal))} · ${escHtml(confLabel)}</span>
+                    </div>
                     <div class="team-wr-breakdown">
                         <span>${escHtml(copy.teamBaseWr)} ${pct(ev.baseWr)}</span>
                         <span>${escHtml(copy.teamPairLift)} <b class="team-delta ${signedToneClass(ev.pairLift)}">${signed(ev.pairLift)}</b></span>
                         <span>${escHtml(copy.teamCompAdj)} <b class="team-delta ${signedToneClass(ev.compositionScore)}">${signed(ev.compositionScore)}</b></span>
-                    </div>
-                    <div class="team-wr-meta">
-                        ${escHtml(copy.teamPairCover(ev.pairN, ev.pairTotal))}
-                        · ${escHtml(confLabel)}
                     </div>
                 </div>
                 <div class="team-eval-block">
@@ -3740,23 +3753,24 @@
         const copy = tr();
         const list = draftPickList(side);
         const chips = [];
-        list.forEach((cid, i) => {
+        list.forEach((cid) => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
             const image = info && info.image ? info.image : '';
             chips.push(
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
-                + (image ? `<img loading="lazy" src="${image}" alt="">` : '')
-                + `<span class="draft-slot-rank">${i + 1}</span>`
+                + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-slot-ph"></span>')
                 + `<span class="draft-slot-name">${escHtml(name)}</span>`
+                + `<span class="draft-slot-x" aria-hidden="true">&times;</span>`
                 + `</button>`
             );
         });
         for (let i = list.length; i < MAX_TEAM_PICKS; i += 1) {
             chips.push(
-                `<button class="draft-slot is-empty" type="button" data-draft-target="${side}">`
-                + `<span class="draft-slot-rank">${i + 1}</span>`
+                `<button class="draft-slot is-empty" type="button" data-draft-target="${side}" `
+                + `aria-label="${escHtml(copy.pickEmpty)}">`
+                + `<span class="draft-slot-ph">${i + 1}</span>`
                 + `<span class="draft-slot-name">${escHtml(copy.pickEmpty)}</span>`
                 + `</button>`
             );
@@ -3806,15 +3820,17 @@
             const onAlly = allySet.has(row.cid);
             const onEnemy = enemySet.has(row.cid);
             let state = '';
-            if (onAlly) state = 'is-ally';
-            else if (onEnemy) state = 'is-enemy';
+            if (onAlly) state = ' is-ally';
+            else if (onEnemy) state = ' is-enemy';
             const image = row.info.image || '';
             const wrTxt = pct(row.wr);
             return (
-                `<button type="button" class="draft-champ-row ${state}" data-draft-pick="${row.cid}" role="option">`
+                `<button type="button" class="draft-champ${state}" data-draft-pick="${row.cid}" role="option" `
+                + `aria-selected="${onAlly || onEnemy ? 'true' : 'false'}" `
+                + `title="${escHtml(row.name)} · ${wrTxt}">`
                 + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-champ-ph"></span>')
-                + `<span class="draft-champ-name">${escHtml(row.name)}</span>`
-                + `<span class="draft-champ-wr">${wrTxt}</span>`
+                + `<span class="wr">${wrTxt}</span>`
+                + `<span class="name">${escHtml(row.name)}</span>`
                 + `</button>`
             );
         }).join('');
@@ -3854,15 +3870,6 @@
             return `<div class="panel-empty">${escHtml(copy.draftEmpty || copy.panelEmpty)}</div>`;
         }
         const parts = [];
-        if (mu.matchupWr != null && enemyPicks.length) {
-            const tone = mu.matchupWr >= 0.53 ? 'is-good' : (mu.matchupWr <= 0.47 ? 'is-bad' : 'is-even');
-            parts.push(`
-                <div class="draft-matchup-hero team-eval-wr ${tone}">
-                    <div class="team-wr-num">${pct(mu.matchupWr)}</div>
-                    <div class="team-wr-label">${escHtml(copy.draftMatchupWr || '我方勝率（對陣）')}</div>
-                    <div class="team-wr-meta">${escHtml(copy.draftMatchupNote || '')}</div>
-                </div>`);
-        }
         if (mu.ally) {
             parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
         }
@@ -3910,7 +3917,7 @@
         const mu = evaluateMatchup(teamPicks, enemyPicks);
         const allyWrEl = document.getElementById('draft-ally-wr');
         const enemyWrEl = document.getElementById('draft-enemy-wr');
-        const matchupEl = document.getElementById('draft-matchup');
+        const vsbarEl = document.getElementById('draft-vsbar');
         const resultEl = document.getElementById('draft-result');
         if (allyWrEl) {
             allyWrEl.textContent = mu.ally ? pct(mu.ally.estWr) : '—';
@@ -3918,19 +3925,21 @@
         if (enemyWrEl) {
             enemyWrEl.textContent = mu.enemy ? pct(mu.enemy.estWr) : '—';
         }
-        if (matchupEl) {
+        if (vsbarEl) {
             if (mu.matchupWr != null && enemyPicks.length) {
                 const tone = mu.matchupWr >= 0.53 ? 'is-good' : (mu.matchupWr <= 0.47 ? 'is-bad' : 'is-even');
-                matchupEl.innerHTML = `
-                    <div class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</div>
-                    <div class="draft-vs-wr ${tone}">${pct(mu.matchupWr)}</div>
-                    <div class="draft-vs-sub">${escHtml(copy.draftMatchupWr || '')}</div>`;
-                matchupEl.classList.add('has-matchup');
+                vsbarEl.innerHTML = `
+                    <span class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</span>
+                    <span class="draft-vs-wr ${tone}">${pct(mu.matchupWr)}</span>
+                    <span class="draft-vs-sub">${escHtml(copy.draftMatchupWr || '')}</span>`;
+                vsbarEl.title = copy.draftMatchupNote || '';
+                vsbarEl.hidden = false;
             } else {
-                matchupEl.innerHTML = `<div class="draft-vs-label">${escHtml(copy.draftVs || 'VS')}</div>`;
-                matchupEl.classList.remove('has-matchup');
+                vsbarEl.hidden = true;
             }
         }
+        const shellEl = shell.querySelector('.draft-shell');
+        if (shellEl) shellEl.classList.toggle('is-target-enemy', draftSide === 'enemy');
         document.querySelectorAll('.draft-side-select').forEach(btn => {
             const t = btn.getAttribute('data-draft-target');
             btn.classList.toggle('is-active', t === draftSide);
@@ -4973,7 +4982,7 @@
     function syncDetailModalState() {
         const open = Boolean(detailSelected);
         document.body.classList.toggle('detail-modal-open', open && isMobileViewport());
-        // Desktop sticky chrome: head + search share one row when detail is open.
+        // Desktop sticky chrome marker (search overlays right; tabs pin at same top).
         document.body.classList.toggle('detail-open', open);
         syncHeaderHeight();
     }

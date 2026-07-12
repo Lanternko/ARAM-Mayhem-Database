@@ -1599,6 +1599,11 @@ def render_html(
             f'<button class="chip" data-role="{html.escape(role_en)}" data-label-zh="{html.escape(role_zh)}" '
             f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
     )
+    # Count sits immediately after the last role chip (Tank), not beside search.
+    parts.append(
+        f'<span class="shown-count"><span id="shown-n">{len(records)}</span> / {len(records)} '
+        "<span id='shown-unit'>隻</span></span>"
+    )
     parts.append("</div>")  # /role-chips
     parts.append("</div>")  # /filter-bar
     # Search input wrapped in a label with an inline magnifier SVG sitting
@@ -1619,10 +1624,6 @@ def render_html(
         'placeholder="搜尋英雄（中 / 英）" autocomplete="off" '
         'aria-label="搜尋英雄">'
         "</label>"
-    )
-    parts.append(
-        f'<span class="shown-count"><span id="shown-n">{len(records)}</span> / {len(records)} '
-        "<span id='shown-unit'>隻</span></span>"
     )
     parts.append("</div>")  # /search-rail
 
@@ -1772,38 +1773,24 @@ def render_html(
     parts.append("</div>")  # /app-shell
     parts.append("</section>")  # /view-home
 
-    # ---- View: Draft — ally + optional enemy roster, WR + team traits ----
+    # ---- View: Draft — draftgap-style: ally rail | champion pool | enemy rail ----
     parts.append(
         "<section class='view view-draft' id='view-draft' data-view='draft' "
         "role='tabpanel' aria-labelledby='tab-draft'>"
         "<div class='draft-shell'>"
-        "<div class='draft-teams'>"
-        "<div class='draft-side is-ally' data-draft-side='ally'>"
-        "<div class='draft-side-head'>"
+        "<aside class='draft-side is-ally' data-draft-side='ally'>"
         "<button type='button' class='draft-side-select is-active' data-draft-target='ally' "
         "id='draft-target-ally'>"
         "<span class='draft-side-label' data-i18n-zh='我方' data-i18n-en='Ally'>我方</span>"
         "<span class='draft-side-wr' id='draft-ally-wr'></span>"
         "</button>"
-        "</div>"
         "<div class='draft-slots' id='draft-ally-slots'></div>"
-        "</div>"
-        "<div class='draft-matchup-card' id='draft-matchup'></div>"
-        "<div class='draft-side is-enemy' data-draft-side='enemy'>"
-        "<div class='draft-side-head'>"
-        "<button type='button' class='draft-side-select' data-draft-target='enemy' "
-        "id='draft-target-enemy'>"
-        "<span class='draft-side-label' data-i18n-zh='對手（可選）' data-i18n-en='Opponent (optional)'>對手（可選）</span>"
-        "<span class='draft-side-wr' id='draft-enemy-wr'></span>"
-        "</button>"
-        "</div>"
-        "<div class='draft-slots' id='draft-enemy-slots'></div>"
-        "</div>"
-        "</div>"
-        "<div class='draft-body'>"
-        "<div class='draft-picker'>"
+        "</aside>"
+        "<div class='draft-main'>"
+        "<div class='draft-vsbar' id='draft-vsbar' hidden></div>"
         "<div class='draft-picker-bar'>"
         "<label class='draft-search-wrap'>"
+        f"{search_icon}"
         "<input class='search draft-search' id='draft-search' type='search' "
         "placeholder='搜尋英雄（中 / 英）' autocomplete='off' "
         "aria-label='搜尋英雄'>"
@@ -1812,11 +1799,18 @@ def render_html(
         "<button type='button' class='tool-btn ghost draft-clear' id='draft-clear' "
         "data-i18n-zh='清空' data-i18n-en='Clear'>清空</button>"
         "</div>"
-        "<div class='draft-champ-list' id='draft-champ-list' role='listbox' "
-        "aria-label='英雄列表'></div>"
-        "</div>"
+        "<div class='draft-pool' id='draft-champ-list' role='listbox' "
+        "aria-label='英雄列表' aria-multiselectable='true'></div>"
         "<div class='draft-result' id='draft-result'></div>"
         "</div>"
+        "<aside class='draft-side is-enemy' data-draft-side='enemy'>"
+        "<button type='button' class='draft-side-select' data-draft-target='enemy' "
+        "id='draft-target-enemy'>"
+        "<span class='draft-side-label' data-i18n-zh='對手（可選）' data-i18n-en='Opponent (optional)'>對手（可選）</span>"
+        "<span class='draft-side-wr' id='draft-enemy-wr'></span>"
+        "</button>"
+        "<div class='draft-slots' id='draft-enemy-slots'></div>"
+        "</aside>"
         "</div>"
         "</section>"
     )
