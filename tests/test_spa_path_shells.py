@@ -14,7 +14,10 @@ from tierlist_render import (  # noqa: E402
     _site_base_href,
     _spa_deep_link_stub,
     discover_column_article_ids,
+    slim_site_payload,
+    versioned_payload_url,
     write_spa_path_shells,
+    SPA_FULL_SHELL_PATHS,
 )
 
 
@@ -61,7 +64,14 @@ class SpaPathShellTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             index = root / "index.html"
-            index.write_text("<!doctype html><title>app</title>", encoding="utf-8")
+            index.write_text(
+                "<!doctype html><html lang='zh-Hant'><head>"
+                "<title>app</title>"
+                "<link rel='canonical' href='https://arammeta.com/'>"
+                "<meta property='og:url' content='https://arammeta.com/'>"
+                "</head><body>FULL_SPA_SHELL</body></html>",
+                encoding="utf-8",
+            )
             written = write_spa_path_shells(
                 index,
                 site_url="https://arammeta.com/",
@@ -74,15 +84,69 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertLess(article.stat().st_size, 4_000)  # stub, not full SPA
             self.assertIn("/column/sprees-not-snowball", body)
             self.assertIn("aram-spa-path", body)
-            # English locale mirrors for shareable /en… links.
+            self.assertIn("location.replace('/')", body)
+            # High-traffic locale/tab routes get the full SPA (no bounce).
             en_home = root / "en" / "index.html"
             self.assertTrue(en_home.is_file())
-            self.assertIn("/en", en_home.read_text(encoding="utf-8"))
+            en_body = en_home.read_text(encoding="utf-8")
+            self.assertIn("FULL_SPA_SHELL", en_body)
+            self.assertNotIn("location.replace('/')", en_body)
+            self.assertIn("lang='en'", en_body)
+            self.assertIn("https://arammeta.com/en", en_body)
+            zh_cn = root / "zh-CN" / "index.html"
+            self.assertIn("FULL_SPA_SHELL", zh_cn.read_text(encoding="utf-8"))
+            self.assertIn("/zh-CN", SPA_FULL_SHELL_PATHS)
+            # Article mirrors stay stubs.
             en_article = root / "en" / "column" / "sprees-not-snowball" / "index.html"
             self.assertTrue(en_article.is_file())
-            en_body = en_article.read_text(encoding="utf-8")
-            self.assertIn("/en/column/sprees-not-snowball", en_body)
-            self.assertIn("lang='en'", en_body)
+            en_article_body = en_article.read_text(encoding="utf-8")
+            self.assertIn("/en/column/sprees-not-snowball", en_article_body)
+            self.assertIn("location.replace('/')", en_article_body)
+            self.assertIn("lang='en'", en_article_body)
+
+    def test_versioned_payload_url(self) -> None:
+        self.assertEqual(
+            versioned_payload_url("api/tier-list.json", "20260712"),
+            "api/tier-list.json?v=20260712",
+        )
+        self.assertEqual(
+            versioned_payload_url("api/tier-list.json?v=1", "20260712"),
+            "api/tier-list.json?v=1",
+        )
+
+    def test_slim_site_payload_caps_lists(self) -> None:
+        payload = {
+            "champs": {
+                "1": {
+                    "top": {"kGold": [{"id": i, "rawWr": 0.5, "wr": 0.5} for i in range(40)]},
+                    "bot": {"kGold": [{"id": i, "wr": 0.4} for i in range(40)]},
+                    "pairs": [{"id": i, "wr": 0.5, "g": 10, "lift": 0.0, "z": 0.0, "expected": 0.5} for i in range(80)],
+                    "items": {
+                        "top": [
+                            {
+                                "name": "甲",
+                                "name_zh": "甲",
+                                "name_en": "A",
+                                "peerGroup": "global",
+                                "peerScope": "global",
+                                "g": 1,
+                            }
+                            for _ in range(30)
+                        ]
+                    },
+                }
+            }
+        }
+        slim_site_payload(payload)
+        champ = payload["champs"]["1"]
+        self.assertEqual(len(champ["top"]["kGold"]), 16)
+        self.assertEqual(len(champ["bot"]["kGold"]), 12)
+        self.assertEqual(len(champ["pairs"]), 24)
+        self.assertNotIn("rawWr", champ["top"]["kGold"][0])
+        item = champ["items"]["top"][0]
+        self.assertNotIn("name", item)
+        self.assertNotIn("peerGroup", item)
+        self.assertEqual(len(champ["items"]["top"]), 16)
 
 
 if __name__ == "__main__":

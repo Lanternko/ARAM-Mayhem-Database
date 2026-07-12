@@ -403,6 +403,185 @@ def discover_column_article_ids(site_js: str | None = None) -> list[str]:
     return re.findall(r"(?m)^\s*id:\s*'([a-z0-9][a-z0-9-]*)'\s*,?\s*$", m.group(1))
 
 
+# High-traffic History routes get a full copy of index.html (no bounce).
+# Column *articles* stay as tiny stubs — low traffic, many paths.
+SPA_FULL_SHELL_PATHS = frozenset({
+    "/augments",
+    "/draft",
+    "/changes",
+    "/column",
+    "/en",
+    "/en/augments",
+    "/en/draft",
+    "/en/changes",
+    "/en/column",
+    "/zh-CN",
+    "/zh-CN/augments",
+    "/zh-CN/draft",
+    "/zh-CN/changes",
+    "/zh-CN/column",
+})
+
+# Cap shipped per-champion detail rows.  UI carousels only show a handful;
+# shipping the full ranked buckets was ~18 MB and dominated load time.
+PAYLOAD_TOP_AUGS_PER_RARITY = 16
+PAYLOAD_BOT_AUGS_PER_RARITY = 12
+PAYLOAD_PAIRS_EACH_SIDE = 12
+PAYLOAD_ITEM_PAIR_ROWS = 16
+PAYLOAD_SINGLE_ITEM_ROWS = 16
+
+
+def slim_site_payload(payload: dict) -> dict:
+    """In-place shrink of the public tier-list payload for faster first load.
+
+    Caps ranked lists to what the UI actually renders (plus a small swipe buffer)
+    and drops redundant fields.  Safe to re-run; returns a small stats dict.
+    """
+    champs = payload.get("champs") or {}
+    before_rows = 0
+    after_rows = 0
+    for _cid, info in champs.items():
+        if not isinstance(info, dict):
+            continue
+        for side, cap in (("top", PAYLOAD_TOP_AUGS_PER_RARITY), ("bot", PAYLOAD_BOT_AUGS_PER_RARITY)):
+            buckets = info.get(side)
+            if not isinstance(buckets, dict):
+                continue
+            for rar, rows in list(buckets.items()):
+                if not isinstance(rows, list):
+                    continue
+                before_rows += len(rows)
+                rows = rows[:cap]
+                for row in rows:
+                    if isinstance(row, dict):
+                        row.pop("rawWr", None)
+                buckets[rar] = rows
+                after_rows += len(rows)
+        pairs = info.get("pairs")
+        if isinstance(pairs, list) and len(pairs) > PAYLOAD_PAIRS_EACH_SIDE * 2:
+            before_rows += len(pairs)
+            keep = PAYLOAD_PAIRS_EACH_SIDE
+            info["pairs"] = pairs[:keep] + pairs[-keep:]
+            after_rows += len(info["pairs"])
+        elif isinstance(pairs, list):
+            before_rows += len(pairs)
+            after_rows += len(pairs)
+        for key, cap in (
+            ("items", PAYLOAD_ITEM_PAIR_ROWS),
+            ("singleItems", PAYLOAD_SINGLE_ITEM_ROWS),
+        ):
+            bucket = info.get(key)
+            if not isinstance(bucket, dict):
+                continue
+            for side, rows in list(bucket.items()):
+                if not isinstance(rows, list):
+                    continue
+                before_rows += len(rows)
+                rows = rows[:cap]
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    if row.get("name") is not None and row.get("name") == row.get("name_zh"):
+                        row.pop("name", None)
+                    if row.get("peerGroup") == "global":
+                        row.pop("peerGroup", None)
+                    if row.get("peerScope") == "global":
+                        row.pop("peerScope", None)
+                bucket[side] = rows
+                after_rows += len(rows)
+        for key in ("boots", "sets", "itemClusters", "augTypes", "spells"):
+            bucket = info.get(key)
+            if not isinstance(bucket, dict):
+                continue
+            for side, rows in list(bucket.items()):
+                if not isinstance(rows, list):
+                    continue
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    if row.get("name") is not None and row.get("name") == row.get("name_zh"):
+                        row.pop("name", None)
+                    if row.get("peerGroup") == "global":
+                        row.pop("peerGroup", None)
+                    if row.get("peerScope") == "global":
+                        row.pop("peerScope", None)
+    return {"before_rows": before_rows, "after_rows": after_rows, "champs": len(champs)}
+
+
+def versioned_payload_url(payload_url: str, version: str) -> str:
+    """Append a cache-busting ?v= stamp so browsers can cache the big JSON."""
+    url = (payload_url or "").strip()
+    ver = (version or "").strip()
+    if not url or not ver or "v=" in url:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}v={ver}"
+
+
+def _localize_full_shell_html(
+    html_src: str,
+    *,
+    site_url: str,
+    canonical_path: str,
+    html_lang: str,
+    title: str,
+    description: str,
+) -> str:
+    """Copy of the main SPA shell with locale/path-specific head tags."""
+    base = _site_base_href(site_url) or "/"
+    origin = base.rstrip("/")
+    path = canonical_path if canonical_path.startswith("/") else f"/{canonical_path}"
+    canonical = (origin + path) if origin.startswith("http") else path
+    out = html_src
+    out = re.sub(r"(<html\s+lang=)['\"][^'\"]*['\"]", rf"\1'{html_lang}'", out, count=1, flags=re.I)
+    out = re.sub(
+        r"(<link\s+rel=['\"]canonical['\"]\s+href=)['\"][^'\"]*['\"]",
+        rf"\1'{html.escape(canonical, quote=True)}'",
+        out,
+        count=1,
+        flags=re.I,
+    )
+    out = re.sub(
+        r"(property=['\"]og:url['\"]\s+content=)['\"][^'\"]*['\"]",
+        rf"\1'{html.escape(canonical, quote=True)}'",
+        out,
+        count=1,
+        flags=re.I,
+    )
+    if title:
+        out = re.sub(r"<title>[^<]*</title>", f"<title>{html.escape(title)}</title>", out, count=1, flags=re.I)
+        out = re.sub(
+            r"(property=['\"]og:title['\"]\s+content=)[\"'][^\"']*[\"']",
+            rf'\1"{html.escape(title, quote=True)}"',
+            out,
+            count=1,
+            flags=re.I,
+        )
+        out = re.sub(
+            r"(name=['\"]twitter:title['\"]\s+content=)[\"'][^\"']*[\"']",
+            rf'\1"{html.escape(title, quote=True)}"',
+            out,
+            count=1,
+            flags=re.I,
+        )
+    if description:
+        out = re.sub(
+            r"(property=['\"]og:description['\"]\s+content=)[\"'][^\"']*[\"']",
+            rf'\1"{html.escape(description, quote=True)}"',
+            out,
+            count=1,
+            flags=re.I,
+        )
+        out = re.sub(
+            r"(name=['\"]twitter:description['\"]\s+content=)[\"'][^\"']*[\"']",
+            rf'\1"{html.escape(description, quote=True)}"',
+            out,
+            count=1,
+            flags=re.I,
+        )
+    return out
+
+
 def _spa_deep_link_stub(
     *,
     site_url: str = "",
@@ -414,10 +593,9 @@ def _spa_deep_link_stub(
 ) -> str:
     """Tiny GH Pages shell: stash path → bounce to / so the real SPA can boot.
 
-    Avoids copying the full ~500KB index.html to every clean path (repo bloat)
-    while still giving shareable URLs HTTP 200 + basic OG tags for crawlers.
-    The SPA restores `sessionStorage['aram-spa-path']` (and locale via
-    `aram-spa-lang` when the path is under /en…) on boot.
+    Used for long-tail article paths (many URLs, low traffic).  High-traffic
+    routes get a full shell copy via write_spa_path_shells instead — bounce
+    doubled LCP on /zh-CN and /en (~5s in analytics).
     """
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
@@ -471,16 +649,18 @@ def write_spa_path_shells(
     site_url: str = "",
     og_image: str = "",
 ) -> list[Path]:
-    """Write lightweight deep-link stubs + 404.html for clean path URLs.
+    """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
-    History API routes like /column/<id> need *something* on GH Pages (no
-    rewrites).  Stubs return HTTP 200, carry basic OG tags for shares, then
-    bounce to / where site.js restores the path from sessionStorage.
+    High-traffic routes (locale homes, main tabs) get a *full* copy of
+    index.html so the browser never pays a bounce-to-/ double load.
+    Long-tail column articles stay as tiny stubs that stash the path and
+    redirect to / (sessionStorage restore in site.js).
     """
     index_path = Path(index_path)
     if not index_path.is_file():
         return []
     root = index_path.parent
+    full_shell = index_path.read_text(encoding="utf-8")
 
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
@@ -510,6 +690,13 @@ def write_spa_path_shells(
             "zh-Hant",
         ),
         (
+            root / "draft" / "index.html",
+            "/draft",
+            "Draft · arammeta",
+            "組隊 Draft：估計勝率與隊伍特性",
+            "zh-Hant",
+        ),
+        (
             root / "changes" / "index.html",
             "/changes",
             "版本變動 · arammeta",
@@ -533,6 +720,13 @@ def write_spa_path_shells(
             "en",
         ),
         (
+            root / "en" / "draft" / "index.html",
+            "/en/draft",
+            "Draft · arammeta",
+            "Team draft: estimated WR and composition traits",
+            "en",
+        ),
+        (
             root / "en" / "changes" / "index.html",
             "/en/changes",
             "Patch Changes · arammeta",
@@ -553,6 +747,13 @@ def write_spa_path_shells(
             "/zh-CN/augments",
             "海克斯 · arammeta",
             "大乱斗海克斯胜率",
+            "zh-Hans",
+        ),
+        (
+            root / "zh-CN" / "draft" / "index.html",
+            "/zh-CN/draft",
+            "Draft · arammeta",
+            "组队 Draft：估计胜率与队伍特性",
             "zh-Hans",
         ),
         (
@@ -602,17 +803,25 @@ def write_spa_path_shells(
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_text(
-            _spa_deep_link_stub(
+        if cpath in SPA_FULL_SHELL_PATHS:
+            body = _localize_full_shell_html(
+                full_shell,
+                site_url=site_url,
+                canonical_path=cpath,
+                html_lang=html_lang,
+                title=title,
+                description=desc,
+            )
+        else:
+            body = _spa_deep_link_stub(
                 site_url=site_url,
                 og_image=og_image,
                 canonical_path=cpath,
                 title=title,
                 description=desc,
                 html_lang=html_lang,
-            ),
-            encoding="utf-8",
-        )
+            )
+        dest.write_text(body, encoding="utf-8")
         written.append(dest)
     return written
 
@@ -1138,6 +1347,15 @@ def render_html(
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
     _dedupe_item_objects(payload)
+    slim_stats = slim_site_payload(payload)
+    click.echo(
+        f"[tierlist] slimmed payload rows {slim_stats['before_rows']:,} → "
+        f"{slim_stats['after_rows']:,} across {slim_stats['champs']} champs"
+    )
+    # Cache-bust the split JSON so browsers can store the multi-MB payload
+    # without serving a stale file after the next publish.
+    if payload_url and build_date:
+        payload_url = versioned_payload_url(payload_url, build_date.replace("-", ""))
     payload_json = json.dumps(payload, ensure_ascii=False)
     if payload_out_path is not None:
         payload_out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1221,6 +1439,15 @@ def render_html(
             ga_measurement_id=ga_measurement_id,
         )
     )
+    # Start the multi-MB tier-list JSON as early as possible — the SPA script
+    # lives at end of <body>, so without preload the fetch only begins after
+    # ~600KB of HTML/CSS/JS has been downloaded and parsed.
+    if payload_url:
+        preload_href = payload_url if (payload_url.startswith("http") or payload_url.startswith("/")) else payload_url
+        parts.append(
+            f"<link rel='preload' href='{html.escape(preload_href, quote=True)}' "
+            "as='fetch' crossorigin='anonymous'>"
+        )
     # Webfonts: Outfit = Latin brand wordmark only; Noto Sans TC = UI body;
     # Noto Serif TC = a few footnote captions (subtitle / panel meta / aug lift).
     # `display=swap` lets system fallback paint immediately.
@@ -1274,6 +1501,7 @@ def render_html(
     NAV_TABS = (
         ("home", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
+        ("draft", "Draft", "Draft", None),
         ("changes", "版本變動", "Patch Changes", None),
         ("column", "專欄", "Articles", None),
     )
@@ -1372,12 +1600,7 @@ def render_html(
             f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
     )
     parts.append("</div>")  # /role-chips
-    parts.append("<div class='filter-tools'>")
-    parts.append(
-        '<button class="tool-btn" id="recommend-mode" type="button" '
-        'aria-pressed="false">選擇你的隊友：關</button>'
-    )
-    parts.append("</div>")  # /filter-tools
+    # Teammate / draft picking lives on the Draft tab — not on the home filter bar.
     parts.append("</div>")  # /filter-bar
     # Search input wrapped in a label with an inline magnifier SVG sitting
     # in the input's left padding (the wrapper is positioned, the input
@@ -1550,6 +1773,55 @@ def render_html(
     parts.append("</div>")  # /app-shell
     parts.append("</section>")  # /view-home
 
+    # ---- View: Draft — ally + optional enemy roster, WR + team traits ----
+    parts.append(
+        "<section class='view view-draft' id='view-draft' data-view='draft' "
+        "role='tabpanel' aria-labelledby='tab-draft'>"
+        "<div class='draft-shell'>"
+        "<div class='draft-teams'>"
+        "<div class='draft-side is-ally' data-draft-side='ally'>"
+        "<div class='draft-side-head'>"
+        "<button type='button' class='draft-side-select is-active' data-draft-target='ally' "
+        "id='draft-target-ally'>"
+        "<span class='draft-side-label' data-i18n-zh='我方' data-i18n-en='Ally'>我方</span>"
+        "<span class='draft-side-wr' id='draft-ally-wr'></span>"
+        "</button>"
+        "</div>"
+        "<div class='draft-slots' id='draft-ally-slots'></div>"
+        "</div>"
+        "<div class='draft-matchup-card' id='draft-matchup'></div>"
+        "<div class='draft-side is-enemy' data-draft-side='enemy'>"
+        "<div class='draft-side-head'>"
+        "<button type='button' class='draft-side-select' data-draft-target='enemy' "
+        "id='draft-target-enemy'>"
+        "<span class='draft-side-label' data-i18n-zh='對手（可選）' data-i18n-en='Opponent (optional)'>對手（可選）</span>"
+        "<span class='draft-side-wr' id='draft-enemy-wr'></span>"
+        "</button>"
+        "</div>"
+        "<div class='draft-slots' id='draft-enemy-slots'></div>"
+        "</div>"
+        "</div>"
+        "<div class='draft-body'>"
+        "<div class='draft-picker'>"
+        "<div class='draft-picker-bar'>"
+        "<label class='draft-search-wrap'>"
+        "<input class='search draft-search' id='draft-search' type='search' "
+        "placeholder='搜尋英雄（中 / 英）' autocomplete='off' "
+        "aria-label='搜尋英雄'>"
+        "</label>"
+        "<div class='draft-role-chips' id='draft-role-chips'></div>"
+        "<button type='button' class='tool-btn ghost draft-clear' id='draft-clear' "
+        "data-i18n-zh='清空' data-i18n-en='Clear'>清空</button>"
+        "</div>"
+        "<div class='draft-champ-list' id='draft-champ-list' role='listbox' "
+        "aria-label='英雄列表'></div>"
+        "</div>"
+        "<div class='draft-result' id='draft-result'></div>"
+        "</div>"
+        "</div>"
+        "</section>"
+    )
+
     # ---- View: 增幅榜 (augments) — global per-augment WR tier, rendered by JS ----
     parts.append(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
@@ -1657,6 +1929,21 @@ def _run_shell_only(
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
 
+    # Slim oversized payloads left over from older full builds (full ranked
+    # aug/item lists).  Rewrite in place so the next fetch is smaller without a
+    # multi-minute data rebuild.
+    before_bytes = payload_path.stat().st_size
+    slim_stats = slim_site_payload(payload)
+    slim_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if len(slim_json.encode("utf-8")) < before_bytes:
+        payload_path.write_text(slim_json, encoding="utf-8")
+        click.echo(
+            f"[shell-only] slimmed {payload_path.name}: "
+            f"{before_bytes / 1e6:.1f} MB → {len(slim_json.encode('utf-8')) / 1e6:.1f} MB "
+            f"(rows {slim_stats['before_rows']:,} → {slim_stats['after_rows']:,})"
+        )
+    champs = payload.get("champs") or {}
+
     # Reconstruct just what the shell + server grid need straight from the payload
     # (no DB win-rate / affinity compute).  champ_meta carries name / tags /
     # portrait; records carry the win-rates the grid + tier split read.
@@ -1704,6 +1991,18 @@ def _run_shell_only(
     if not og_image and site_url:
         og_image = site_url.rstrip("/") + "/og-image.png" + f"?v={build_date.replace('-', '')}-thumb"
 
+    # Version stamp from payload mtime so shell-only still busts CDN/browser
+    # cache after an in-place slim (build_date alone may not change).
+    payload_ver = build_date.replace("-", "")
+    try:
+        payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
+    except OSError:
+        pass
+    resolved_payload_url = versioned_payload_url(
+        payload_url or "api/tier-list.json",
+        payload_ver,
+    )
+
     html = render_html(
         records, champ_meta,
         champ_profiles={}, champ_picks={}, champ_sets={}, champ_item_builds={},
@@ -1715,14 +2014,18 @@ def _run_shell_only(
         min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
-        payload_url=payload_url or "api/tier-list.json", icon_assets_dir=None, aug_global=None,
+        payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
+    full_n = sum(1 for p in mirrors if p.stat().st_size > 50_000)
     click.echo(
         f"[shell-only] wrote {out_path} ({len(html):,} chars) in {time.time() - t0:.2f}s — "
         f"reused {payload_path.name}, skipped all win-rate / affinity compute"
     )
     if mirrors:
-        click.echo(f"[shell-only] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
+        click.echo(
+            f"[shell-only] wrote {len(mirrors)} clean-path shells "
+            f"({full_n} full SPA, rest stubs + 404.html)"
+        )
