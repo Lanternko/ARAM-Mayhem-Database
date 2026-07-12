@@ -2451,16 +2451,14 @@
         border-left: 1px solid rgba(255, 255, 255, 0.08);
         color: #9aa3b8;
     }
-    /* Pick-rate ("選取率") — single-hue amber intensity ramp (not multi-hue
-       grey/blue/yellow/orange).  Multi-hue forced readers to decode three
-       color families beside green/red WR; one warm family reads as "how hot"
-       at a glance.  Weight steps reinforce the ladder.  Tier cuts still from
-       pickTier() / spellPickTier(). */
-    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #7c8794; font-weight: 500; }
-    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #a8895c; font-weight: 500; }
-    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #d4a04a; font-weight: 600; }
-    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Pick-rate ("選取率") — yellow → light-yellow → white → gray ladder.
+       Cold = muted gray, hot = solid yellow.  No blue/orange rainbow; WR
+       keeps green/red.  Tier cuts still from pickTier() / spellPickTier(). */
+    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #6b7280; font-weight: 500; }
+    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #e8d48a; font-weight: 700; }
+    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #f0c94a; font-weight: 700; }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -3089,12 +3087,12 @@
         box-sizing: border-box;
         /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick heat: single-hue amber intensity (muted → warm → 正橘). */
-    .aug .alift.pick-1 { color: #7c8794; font-weight: 500; }
-    .aug .alift.pick-2 { color: #a8895c; font-weight: 500; }
-    .aug .alift.pick-3 { color: #d4a04a; font-weight: 600; }
-    .aug .alift.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .aug .alift.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Pick heat: 黃 → 淺黃 → 白 → 灰 (hot → cold). */
+    .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
+    .aug .alift.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .aug .alift.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .aug .alift.pick-4 { color: #e8d48a; font-weight: 700; }
+    .aug .alift.pick-5 { color: #f0c94a; font-weight: 700; }
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -4311,13 +4309,14 @@
     }
     .draft-pool {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
-        gap: 7px;
-        max-height: min(58vh, 640px);
+        grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+        gap: 8px;
+        max-height: min(68vh, 720px);
         overflow: auto;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
-        padding: 3px;
+        padding: 2px;
+        background: color-mix(in srgb, var(--surface, #11151d) 58%, transparent);
     }
     .draft-pool .panel-empty { grid-column: 1 / -1; }
     .draft-champ {
@@ -4405,10 +4404,9 @@
     }
     .draft-result {
         min-width: 0;
-        background: var(--surface, #11151d);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 12px;
-        padding: 12px 14px;
+        background: transparent;
+        border: 0;
+        padding: 0;
     }
     /* The team-eval component was sized for the narrow side card; in the wide
        draft panel give it room deliberately: radar pinned left at fixed width,
@@ -4484,6 +4482,22 @@
             gap: 6px;
             max-height: 46vh;
         }
+    }
+    @media (max-width: 900px) {
+        .draft-analysis-intro {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .draft-analysis-intro p { max-width: none; text-align: left; }
+        .draft-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 520px) {
+        .view-draft.is-active { padding-inline: 10px; }
+        .draft-mode-tabs { gap: 16px; }
+        .draft-metric { min-height: 100px; padding: 11px 10px; }
+        .draft-metric-value { font-size: 22px; }
+        .draft-metric-note { font-size: 9px; }
     }
     /* The 專欄 view is wider than the other narrow views so the card grid can
        run 3-up like an editorial guide index; the reader self-caps at 720. */
@@ -4827,11 +4841,12 @@
     [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
     [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
     [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
-    [data-theme="light"] .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-2 { color: #9a7340; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-3 { color: #b87a12; font-weight: 600; }
-    [data-theme="light"] .aug .alift.pick-4 { color: #c45f00; font-weight: 700; }
-    [data-theme="light"] .aug .alift.pick-5 { color: #a84a00; font-weight: 700; }
+    /* Light theme: no pure white (vanishes on paper); darken the ladder. */
+    [data-theme="light"] .aug .alift.pick-1 { color: #9ca3af; font-weight: 500; }
+    [data-theme="light"] .aug .alift.pick-2 { color: #6b7280; font-weight: 500; }
+    [data-theme="light"] .aug .alift.pick-3 { color: #374151; font-weight: 600; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #b88912; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-5 { color: #a67c00; font-weight: 700; }
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active) {
@@ -5056,32 +5071,32 @@
         background: rgba(0, 0, 0, 0.05);
         color: var(--text-muted);
     }
-    /* Pick heat — single-hue amber, deeper on white so it still reads. */
+    /* Light: 灰 → 深灰 → 近黑白 → 淺黃 → 黃 (same order, paper-safe). */
     [data-theme="light"] .cluster-pick.pick-1,
     [data-theme="light"] .cg-option-pick.pick-1,
     [data-theme="light"] .item-build-pick.pick-1,
     [data-theme="light"] .boot-rail-pick.pick-1,
-    [data-theme="light"] .cg-core-share.pick-1 { color: #6b7280; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-1 { color: #9ca3af; font-weight: 500; }
     [data-theme="light"] .cluster-pick.pick-2,
     [data-theme="light"] .cg-option-pick.pick-2,
     [data-theme="light"] .item-build-pick.pick-2,
     [data-theme="light"] .boot-rail-pick.pick-2,
-    [data-theme="light"] .cg-core-share.pick-2 { color: #9a7340; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-2 { color: #6b7280; font-weight: 500; }
     [data-theme="light"] .cluster-pick.pick-3,
     [data-theme="light"] .cg-option-pick.pick-3,
     [data-theme="light"] .item-build-pick.pick-3,
     [data-theme="light"] .boot-rail-pick.pick-3,
-    [data-theme="light"] .cg-core-share.pick-3 { color: #b87a12; font-weight: 600; }
+    [data-theme="light"] .cg-core-share.pick-3 { color: #374151; font-weight: 600; }
     [data-theme="light"] .cluster-pick.pick-4,
     [data-theme="light"] .cg-option-pick.pick-4,
     [data-theme="light"] .item-build-pick.pick-4,
     [data-theme="light"] .boot-rail-pick.pick-4,
-    [data-theme="light"] .cg-core-share.pick-4 { color: #c45f00; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-4 { color: #b88912; font-weight: 700; }
     [data-theme="light"] .cluster-pick.pick-5,
     [data-theme="light"] .cg-option-pick.pick-5,
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
-    [data-theme="light"] .cg-core-share.pick-5 { color: #a84a00; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-5 { color: #a67c00; font-weight: 700; }
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -5378,12 +5393,12 @@
         font-size: 10.5px;
         line-height: 1.4;
     }
-    /* Co-opt the shared single-hue pick ramp on tip values. */
-    .item-tip-row > b.pick-1 { color: #7c8794; font-weight: 500; }
-    .item-tip-row > b.pick-2 { color: #a8895c; font-weight: 500; }
-    .item-tip-row > b.pick-3 { color: #d4a04a; font-weight: 600; }
-    .item-tip-row > b.pick-4 { color: #ef8b2b; font-weight: 700; }
-    .item-tip-row > b.pick-5 { color: #ff8a1a; font-weight: 700; }
+    /* Co-opt the shared 黃/白/灰 pick ladder on tip values. */
+    .item-tip-row > b.pick-1 { color: #6b7280; font-weight: 500; }
+    .item-tip-row > b.pick-2 { color: #9aa3b2; font-weight: 500; }
+    .item-tip-row > b.pick-3 { color: #e6e8eb; font-weight: 600; }
+    .item-tip-row > b.pick-4 { color: #e8d48a; font-weight: 700; }
+    .item-tip-row > b.pick-5 { color: #f0c94a; font-weight: 700; }
     #augch-host {
         position: fixed;
         inset: 0;

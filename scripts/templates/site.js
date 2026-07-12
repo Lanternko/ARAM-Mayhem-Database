@@ -919,7 +919,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度以單一琥珀系深淺上色：越亮橘、字重越重＝越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：黃→淺黃→白→灰，越黃越熱門。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -1115,7 +1115,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. The pick-rate figure on each card uses a single amber intensity ramp: brighter/bolder orange = hotter.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate colour: yellow → light yellow → white → gray (yellower = hotter).',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -2051,10 +2051,10 @@
         return 1;
     }
     // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
-    // Single-hue amber intensity ramp shared by augment cards AND every item
-    // surface (clusters / options / items / boots / spells / tips). Absolute
-    // cuts (2/5/10/20%) so the colour means the same thing everywhere; tier 5
-    // (>=20%) lines up with the augment 熱門 badge.
+    // Yellow→white→gray popularity ladder shared by augment cards AND every
+    // item surface (clusters / options / items / boots / spells / tips).
+    // Absolute cuts (2/5/10/20%) so the colour means the same thing everywhere;
+    // tier 5 (>=20%) lines up with the augment 熱門 badge.
     function pickTier(pick) {
         if (pick >= 0.20) return 5;
         if (pick >= 0.10) return 4;
