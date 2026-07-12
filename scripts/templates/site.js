@@ -211,6 +211,24 @@
             attachCnNames();
         }).catch(() => { NAMES_ZH_CN = null; });
     }
+    // Per-champ draft lock-in crop map (from tools/draft-slot-crop.html).
+    // Non-blocking; re-render slots when it arrives.
+    let DRAFT_SLOT_CROPS = null;
+    // High-res splash map (Universe 1920×1080+ vs Data Dragon 1215×717).
+    let DRAFT_SPLASH_HD = null;
+    function refreshDraftSlotsIfOpen() {
+        if (document.querySelector('.view-draft')) {
+            try { renderDraftSlots('ally'); renderDraftSlots('enemy'); } catch {}
+        }
+    }
+    loadSitePayload('api/draft-slot-crops.json').then(d => {
+        DRAFT_SLOT_CROPS = d || null;
+        refreshDraftSlotsIfOpen();
+    }).catch(() => { DRAFT_SLOT_CROPS = null; });
+    loadSitePayload('api/draft-splash-hd.json').then(d => {
+        DRAFT_SPLASH_HD = d || null;
+        refreshDraftSlotsIfOpen();
+    }).catch(() => { DRAFT_SPLASH_HD = null; });
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -4206,14 +4224,60 @@
      * Loading 308×560 in a short wide bar forces a razor-thin vertical crop that
      * routinely shears heads; splash ~1215×717 matches the bar aspect so the
      * full head can stay in frame.
+     * Per-champ crop overrides: docs/api/draft-slot-crops.json (editor at
+     * docs/tools/draft-slot-crop.html).
      */
-    function draftSlotArtUrl(info) {
+    function draftSlotArtUrl(info, cid) {
         if (!info) return '';
         const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
+        // 1) Wiki HD local (or Universe remote) from docs/api/draft-splash-hd.json
+        //    Prefer local assets/draft-splash-hd/{cid}.jpg (often 4k–10k).
+        if (DRAFT_SPLASH_HD && DRAFT_SPLASH_HD.byCid) {
+            const hit = DRAFT_SPLASH_HD.byCid[String(cid != null ? cid : info.id || '')];
+            if (hit && hit.url) {
+                const u = String(hit.url);
+                if (/^https?:\/\//i.test(u)) return u;
+                // site-relative path → absolute against origin (not <base href>)
+                return `${window.location.origin}/${u.replace(/^\.?\//, '')}`;
+            }
+        }
+        // 2) CommunityDragon uncentered splash (1215×717)
+        if (alias) {
+            const low = alias.toLowerCase();
+            return (
+                'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/'
+                + `global/default/assets/characters/${low}/skins/base/images/`
+                + `${low}_splash_uncentered_0.jpg`
+            );
+        }
+        // 3) Data Dragon fallback
         if (alias) {
             return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`;
         }
         return info.image || '';
+    }
+
+    function draftSlotCropFor(cid) {
+        const map = DRAFT_SLOT_CROPS;
+        const d = (map && map.default) || {};
+        const c = (map && map.champs && map.champs[String(cid)]) || {};
+        return {
+            x: Number(c.x != null ? c.x : d.x),
+            y: Number(c.y != null ? c.y : d.y),
+            zoom: Number(c.zoom != null ? c.zoom : d.zoom),
+            // mirror=true ⇒ source art faces LEFT (editor toggle). Default false = faces RIGHT.
+            mirror: !!(c.mirror != null ? c.mirror : d.mirror),
+        };
+    }
+
+    function draftSlotCropStyle(cid) {
+        if (!DRAFT_SLOT_CROPS) return '';
+        const { x, y, zoom } = draftSlotCropFor(cid);
+        const parts = [];
+        if (Number.isFinite(x)) parts.push(`--slot-art-x:${x}%`);
+        if (Number.isFinite(y)) parts.push(`--slot-art-y:${y}%`);
+        if (Number.isFinite(zoom)) parts.push(`--slot-art-zoom:${zoom}`);
+        return parts.length ? ` style="${parts.join(';')}"` : '';
     }
 
     function renderDraftSlots(side) {
@@ -4225,18 +4289,30 @@
         list.forEach((cid) => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const art = draftSlotArtUrl(info);
+            const art = draftSlotArtUrl(info, cid);
             const icon = info && info.image ? info.image : '';
+            const alias = String((info && (info.alias || info.name_en)) || '').replace(/[^A-Za-z0-9]/g, '');
+            const ddragonSplash = alias
+                ? `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`
+                : '';
+            // Cascade: HD → DDragon splash → square icon
+            const onerr = icon
+                ? ` onerror="this.onerror=function(){this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')};this.src='${escHtml(ddragonSplash || icon)}'"`
+                : (ddragonSplash
+                    ? ` onerror="this.onerror=null;this.src='${escHtml(ddragonSplash)}'"`
+                    : '');
+            const cropStyle = draftSlotCropStyle(cid);
+            const mirrored = DRAFT_SLOT_CROPS && draftSlotCropFor(cid).mirror
+                ? ' is-source-mirrored' : '';
             chips.push(
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
                 + (art
-                    /* Art wrap owns the mirror for enemy; img always head-left crop. */
-                    ? `<span class="draft-slot-art-wrap" aria-hidden="true">`
+                    /* Wrap handles side facing; is-source-mirrored flips when splash faces left. */
+                    ? `<span class="draft-slot-art-wrap${mirrored}" aria-hidden="true">`
                         + `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
-                        + (icon
-                            ? `onerror="this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')"`
-                            : '')
+                        + cropStyle
+                        + onerr
                         + `></span>`
                     : '<span class="draft-slot-ph" aria-hidden="true"></span>')
                 + `<span class="draft-slot-shade" aria-hidden="true"></span>`

@@ -1,0 +1,1560 @@
+{
+  "version": 3,
+  "source": "leagueoflegends.fandom.com File:{Name}_OriginalSkin_HD.jpg",
+  "note": "Prefer remote Fandom Wiki HD (static.wikia.nocookie.net) for production. Local docs/assets/draft-splash-hd/ is optional cache for offline tools. Universe CDN used only when Wiki HD filename was not found.",
+  "assetDir": "assets/draft-splash-hd (optional local cache)",
+  "byCid": {
+    "1": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Annie_OriginalSkin_HD.jpg/revision/latest?cb=20200322183404",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Annie_OriginalSkin_HD.jpg/revision/latest?cb=20200322183404",
+      "w": 6000,
+      "h": 3388,
+      "alias": "Annie",
+      "wikiTitle": "File:Annie_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "2": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9f/Olaf_OriginalSkin_HD.jpg/revision/latest?cb=20200328220720",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9f/Olaf_OriginalSkin_HD.jpg/revision/latest?cb=20200328220720",
+      "w": 7000,
+      "h": 4075,
+      "alias": "Olaf",
+      "wikiTitle": "File:Olaf_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "3": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/04/Galio_OriginalSkin_HD.jpg/revision/latest?cb=20180512200904",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/04/Galio_OriginalSkin_HD.jpg/revision/latest?cb=20180512200904",
+      "w": 5030,
+      "h": 2969,
+      "alias": "Galio",
+      "wikiTitle": "File:Galio_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "4": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/79/Twisted_Fate_OriginalSkin_HD.jpg/revision/latest?cb=20171010073530",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/79/Twisted_Fate_OriginalSkin_HD.jpg/revision/latest?cb=20171010073530",
+      "w": 6000,
+      "h": 3541,
+      "alias": "TwistedFate",
+      "wikiTitle": "File:Twisted Fate_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "5": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/79/Xin_Zhao_OriginalSkin_HD.jpg/revision/latest?cb=20180512215253",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/79/Xin_Zhao_OriginalSkin_HD.jpg/revision/latest?cb=20180512215253",
+      "w": 5000,
+      "h": 2951,
+      "alias": "XinZhao",
+      "wikiTitle": "File:Xin Zhao_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "6": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/be/Urgot_OriginalSkin_HD.jpg/revision/latest?cb=20230302151528",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/be/Urgot_OriginalSkin_HD.jpg/revision/latest?cb=20230302151528",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Urgot",
+      "wikiTitle": "File:Urgot_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "7": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/LeBlanc_OriginalSkin_HD.jpg/revision/latest?cb=20200326180128",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/LeBlanc_OriginalSkin_HD.jpg/revision/latest?cb=20200326180128",
+      "w": 6000,
+      "h": 3375,
+      "alias": "Leblanc",
+      "wikiTitle": "File:LeBlanc_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "8": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/77/Vladimir_OriginalSkin_HD.jpg/revision/latest?cb=20221108222109",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/77/Vladimir_OriginalSkin_HD.jpg/revision/latest?cb=20221108222109",
+      "w": 6000,
+      "h": 3376,
+      "alias": "Vladimir",
+      "wikiTitle": "File:Vladimir_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "9": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Fiddlesticks_OriginalSkin_HD.jpg/revision/latest?cb=20200314185125",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Fiddlesticks_OriginalSkin_HD.jpg/revision/latest?cb=20200314185125",
+      "w": 5000,
+      "h": 2940,
+      "alias": "Fiddlesticks",
+      "wikiTitle": "File:Fiddlesticks_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "10": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fa/Kayle_OriginalSkin_old.jpg/revision/latest?cb=20201224171735",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fa/Kayle_OriginalSkin_old.jpg/revision/latest?cb=20201224171735",
+      "w": 1215,
+      "h": 717,
+      "alias": "Kayle",
+      "wikiTitle": "File:Kayle OriginalSkin old.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "11": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cc/Master_Yi_OriginalSkin_HD.jpg/revision/latest?cb=20200327161343",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cc/Master_Yi_OriginalSkin_HD.jpg/revision/latest?cb=20200327161343",
+      "w": 6000,
+      "h": 3376,
+      "alias": "MasterYi",
+      "wikiTitle": "File:Master Yi_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "12": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/eb/Alistar_OriginalSkin_HD.jpg/revision/latest?cb=20180512145907",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/eb/Alistar_OriginalSkin_HD.jpg/revision/latest?cb=20180512145907",
+      "w": 4000,
+      "h": 2360,
+      "alias": "Alistar",
+      "wikiTitle": "File:Alistar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "13": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2e/Ryze_OriginalSkin_HD.jpg/revision/latest?cb=20210622185231",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2e/Ryze_OriginalSkin_HD.jpg/revision/latest?cb=20210622185231",
+      "w": 6000,
+      "h": 3540,
+      "alias": "Ryze",
+      "wikiTitle": "File:Ryze_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "14": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/55/Sion_OriginalSkin_HD.jpg/revision/latest?cb=20171009214609",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/55/Sion_OriginalSkin_HD.jpg/revision/latest?cb=20171009214609",
+      "w": 5988,
+      "h": 3594,
+      "alias": "Sion",
+      "wikiTitle": "File:Sion_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "15": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Sivir_OriginalSkin_HD.jpg/revision/latest?cb=20231007180158",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Sivir_OriginalSkin_HD.jpg/revision/latest?cb=20231007180158",
+      "w": 7000,
+      "h": 3938,
+      "alias": "Sivir",
+      "wikiTitle": "File:Sivir_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "16": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c3/Soraka_OriginalSkin_HD.jpg/revision/latest?cb=20171010072647",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c3/Soraka_OriginalSkin_HD.jpg/revision/latest?cb=20171010072647",
+      "w": 4986,
+      "h": 3090,
+      "alias": "Soraka",
+      "wikiTitle": "File:Soraka_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "17": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a9/Teemo_OriginalSkin_HD.jpg/revision/latest?cb=20240925010325",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a9/Teemo_OriginalSkin_HD.jpg/revision/latest?cb=20240925010325",
+      "w": 5760,
+      "h": 3240,
+      "alias": "Teemo",
+      "wikiTitle": "File:Teemo_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "18": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4b/Tristana_OriginalSkin_HD.jpg/revision/latest?cb=20220825215939",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4b/Tristana_OriginalSkin_HD.jpg/revision/latest?cb=20220825215939",
+      "w": 1920,
+      "h": 1080,
+      "alias": "Tristana",
+      "wikiTitle": "File:Tristana_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "19": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1c/Warwick_OriginalSkin_HD.jpg/revision/latest?cb=20230904201107",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1c/Warwick_OriginalSkin_HD.jpg/revision/latest?cb=20230904201107",
+      "w": 4000,
+      "h": 2448,
+      "alias": "Warwick",
+      "wikiTitle": "File:Warwick_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "20": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2f/Nunu_OriginalSkin_HD.jpg/revision/latest?cb=20200324013513",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2f/Nunu_OriginalSkin_HD.jpg/revision/latest?cb=20200324013513",
+      "w": 5000,
+      "h": 2996,
+      "alias": "Nunu",
+      "wikiTitle": "File:Nunu_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "21": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/92/Miss_Fortune_OriginalSkin_HD.jpg/revision/latest?cb=20220825201953",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/92/Miss_Fortune_OriginalSkin_HD.jpg/revision/latest?cb=20220825201953",
+      "w": 1920,
+      "h": 1080,
+      "alias": "MissFortune",
+      "wikiTitle": "File:Miss Fortune_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "22": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0c/Ashe_OriginalSkin_HD.jpg/revision/latest?cb=20200322184045",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0c/Ashe_OriginalSkin_HD.jpg/revision/latest?cb=20200322184045",
+      "w": 8279,
+      "h": 4200,
+      "alias": "Ashe",
+      "wikiTitle": "File:Ashe_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "23": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d0/Tryndamere_OriginalSkin_HD.jpg/revision/latest?cb=20171010073433",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d0/Tryndamere_OriginalSkin_HD.jpg/revision/latest?cb=20171010073433",
+      "w": 6300,
+      "h": 3917,
+      "alias": "Tryndamere",
+      "wikiTitle": "File:Tryndamere_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "24": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b7/Jax_OriginalSkin_HD.jpg/revision/latest?cb=20230927165033",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b7/Jax_OriginalSkin_HD.jpg/revision/latest?cb=20230927165033",
+      "w": 10000,
+      "h": 5626,
+      "alias": "Jax",
+      "wikiTitle": "File:Jax_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "25": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a5/Morgana_OriginalSkin.jpg/revision/latest?cb=20210922213425",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a5/Morgana_OriginalSkin.jpg/revision/latest?cb=20210922213425",
+      "w": 1215,
+      "h": 717,
+      "alias": "Morgana",
+      "wikiTitle": "File:Morgana_OriginalSkin.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "26": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a7/Zilean_OriginalSkin_HD.jpg/revision/latest?cb=20171010060511",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a7/Zilean_OriginalSkin_HD.jpg/revision/latest?cb=20171010060511",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Zilean",
+      "wikiTitle": "File:Zilean_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "27": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/39/Singed_OriginalSkin_HD.jpg/revision/latest?cb=20171009214424",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/39/Singed_OriginalSkin_HD.jpg/revision/latest?cb=20171009214424",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Singed",
+      "wikiTitle": "File:Singed_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "28": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Evelynn_OriginalSkin_HD.jpg/revision/latest?cb=20240216030338",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Evelynn_OriginalSkin_HD.jpg/revision/latest?cb=20240216030338",
+      "w": 4000,
+      "h": 2360,
+      "alias": "Evelynn",
+      "wikiTitle": "File:Evelynn_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "29": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/23/Twitch_OriginalSkin_HD.jpg/revision/latest?cb=20171010073611",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/23/Twitch_OriginalSkin_HD.jpg/revision/latest?cb=20171010073611",
+      "w": 6000,
+      "h": 3613,
+      "alias": "Twitch",
+      "wikiTitle": "File:Twitch_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "30": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c9/Karthus_OriginalSkin.jpg/revision/latest?cb=20181021122149",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c9/Karthus_OriginalSkin.jpg/revision/latest?cb=20181021122149",
+      "w": 1215,
+      "h": 717,
+      "alias": "Karthus",
+      "wikiTitle": "File:Karthus_OriginalSkin.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "31": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/34/Cho%27Gath_OriginalSkin_HD.jpg/revision/latest?cb=20200322194022",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/34/Cho%27Gath_OriginalSkin_HD.jpg/revision/latest?cb=20200322194022",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Chogath",
+      "wikiTitle": "File:Cho'Gath_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "32": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/48/Amumu_OriginalSkin_old.jpg/revision/latest?cb=20180408182234",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/48/Amumu_OriginalSkin_old.jpg/revision/latest?cb=20180408182234",
+      "w": 1215,
+      "h": 717,
+      "alias": "Amumu",
+      "wikiTitle": "File:Amumu OriginalSkin old.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "33": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/ca/Rammus_OriginalSkin_HD.jpg/revision/latest?cb=20211015144420",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/ca/Rammus_OriginalSkin_HD.jpg/revision/latest?cb=20211015144420",
+      "w": 7000,
+      "h": 4200,
+      "alias": "Rammus",
+      "wikiTitle": "File:Rammus_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "34": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4d/Anivia_OriginalSkin_HD.jpg/revision/latest?cb=20180512150340",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4d/Anivia_OriginalSkin_HD.jpg/revision/latest?cb=20180512150340",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Anivia",
+      "wikiTitle": "File:Anivia_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "35": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ed/Shaco_OriginalSkin_HD.jpg/revision/latest?cb=20171010072246",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ed/Shaco_OriginalSkin_HD.jpg/revision/latest?cb=20171010072246",
+      "w": 6000,
+      "h": 3540,
+      "alias": "Shaco",
+      "wikiTitle": "File:Shaco_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "36": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d4/Dr._Mundo_OriginalSkin_HD.jpg/revision/latest?cb=20230527001038",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d4/Dr._Mundo_OriginalSkin_HD.jpg/revision/latest?cb=20230527001038",
+      "w": 4000,
+      "h": 2270,
+      "alias": "DrMundo",
+      "wikiTitle": "File:Dr. Mundo_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "37": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d6/Sona_OriginalSkin_HD.jpg/revision/latest?cb=20200329033337",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d6/Sona_OriginalSkin_HD.jpg/revision/latest?cb=20200329033337",
+      "w": 6000,
+      "h": 3300,
+      "alias": "Sona",
+      "wikiTitle": "File:Sona_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "38": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f7/Kassadin_OriginalSkin_HD.jpg/revision/latest?cb=20220729000935",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f7/Kassadin_OriginalSkin_HD.jpg/revision/latest?cb=20220729000935",
+      "w": 4096,
+      "h": 2304,
+      "alias": "Kassadin",
+      "wikiTitle": "File:Kassadin_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "39": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fe/Irelia_OriginalSkin_HD.jpg/revision/latest?cb=20180319163046",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fe/Irelia_OriginalSkin_HD.jpg/revision/latest?cb=20180319163046",
+      "w": 4000,
+      "h": 2232,
+      "alias": "Irelia",
+      "wikiTitle": "File:Irelia_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "40": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/30/Janna_OriginalSkin_HD.jpg/revision/latest?cb=20200322224057",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/30/Janna_OriginalSkin_HD.jpg/revision/latest?cb=20200322224057",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Janna",
+      "wikiTitle": "File:Janna_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "41": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3d/Gangplank_OriginalSkin_HD.jpg/revision/latest?cb=20180512155428",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3d/Gangplank_OriginalSkin_HD.jpg/revision/latest?cb=20180512155428",
+      "w": 6000,
+      "h": 3614,
+      "alias": "Gangplank",
+      "wikiTitle": "File:Gangplank_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "42": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c3/Corki_OriginalSkin.jpg/revision/latest?cb=20240911153801",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c3/Corki_OriginalSkin.jpg/revision/latest?cb=20240911153801",
+      "w": 1215,
+      "h": 717,
+      "alias": "Corki",
+      "wikiTitle": "File:Corki_OriginalSkin.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "43": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ec/Karma_OriginalSkin_HD.jpg/revision/latest?cb=20200323001855",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ec/Karma_OriginalSkin_HD.jpg/revision/latest?cb=20200323001855",
+      "w": 6000,
+      "h": 3368,
+      "alias": "Karma",
+      "wikiTitle": "File:Karma_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "44": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3c/Taric_OriginalSkin_HD.jpg/revision/latest?cb=20210622151612",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3c/Taric_OriginalSkin_HD.jpg/revision/latest?cb=20210622151612",
+      "w": 6000,
+      "h": 3542,
+      "alias": "Taric",
+      "wikiTitle": "File:Taric_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "45": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a6/Veigar_OriginalSkin_HD.jpg/revision/latest?cb=20171010073826",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a6/Veigar_OriginalSkin_HD.jpg/revision/latest?cb=20171010073826",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Veigar",
+      "wikiTitle": "File:Veigar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "48": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bb/Trundle_OriginalSkin_HD.jpg/revision/latest?cb=20171010073414",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bb/Trundle_OriginalSkin_HD.jpg/revision/latest?cb=20171010073414",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Trundle",
+      "wikiTitle": "File:Trundle_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "50": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2d/Swain_OriginalSkin_HD.jpg/revision/latest?cb=20230527152633",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2d/Swain_OriginalSkin_HD.jpg/revision/latest?cb=20230527152633",
+      "w": 1920,
+      "h": 1133,
+      "alias": "Swain",
+      "wikiTitle": "File:Swain_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "51": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/37/Caitlyn_OriginalSkin_HD.jpg/revision/latest?cb=20211015144732",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/37/Caitlyn_OriginalSkin_HD.jpg/revision/latest?cb=20211015144732",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Caitlyn",
+      "wikiTitle": "File:Caitlyn_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "53": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Blitzcrank_OriginalSkin_HD.jpg/revision/latest?cb=20200322185639",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Blitzcrank_OriginalSkin_HD.jpg/revision/latest?cb=20200322185639",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Blitzcrank",
+      "wikiTitle": "File:Blitzcrank_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "54": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c6/Malphite_OriginalSkin_HD.jpg/revision/latest?cb=20200326224755",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c6/Malphite_OriginalSkin_HD.jpg/revision/latest?cb=20200326224755",
+      "w": 6554,
+      "h": 3495,
+      "alias": "Malphite",
+      "wikiTitle": "File:Malphite_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "55": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cf/Katarina_OriginalSkin_HD.jpg/revision/latest?cb=20230919144852",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cf/Katarina_OriginalSkin_HD.jpg/revision/latest?cb=20230919144852",
+      "w": 4096,
+      "h": 2417,
+      "alias": "Katarina",
+      "wikiTitle": "File:Katarina_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "56": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ea/Nocturne_OriginalSkin_HD.jpg/revision/latest?cb=20171010070622",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ea/Nocturne_OriginalSkin_HD.jpg/revision/latest?cb=20171010070622",
+      "w": 6000,
+      "h": 3688,
+      "alias": "Nocturne",
+      "wikiTitle": "File:Nocturne_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "57": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f4/Maokai_OriginalSkin_HD.jpg/revision/latest?cb=20171010070132",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f4/Maokai_OriginalSkin_HD.jpg/revision/latest?cb=20171010070132",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Maokai",
+      "wikiTitle": "File:Maokai_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "58": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/af/Renekton_OriginalSkin_HD.jpg/revision/latest?cb=20171010071058",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/af/Renekton_OriginalSkin_HD.jpg/revision/latest?cb=20171010071058",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Renekton",
+      "wikiTitle": "File:Renekton_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "59": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e2/Jarvan_IV_OriginalSkin_HD.jpg/revision/latest?cb=20200322225021",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e2/Jarvan_IV_OriginalSkin_HD.jpg/revision/latest?cb=20200322225021",
+      "w": 6000,
+      "h": 3541,
+      "alias": "JarvanIV",
+      "wikiTitle": "File:Jarvan IV_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "60": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0f/Elise_OriginalSkin_HD.jpg/revision/latest?cb=20200322200654",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0f/Elise_OriginalSkin_HD.jpg/revision/latest?cb=20200322200654",
+      "w": 7000,
+      "h": 4138,
+      "alias": "Elise",
+      "wikiTitle": "File:Elise_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "61": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a9/Orianna_OriginalSkin_HD.jpg/revision/latest?cb=20171010070707",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a9/Orianna_OriginalSkin_HD.jpg/revision/latest?cb=20171010070707",
+      "w": 6744,
+      "h": 3938,
+      "alias": "Orianna",
+      "wikiTitle": "File:Orianna_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "62": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/Wukong_OriginalSkin_HD.jpg/revision/latest?cb=20171010071430",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/Wukong_OriginalSkin_HD.jpg/revision/latest?cb=20171010071430",
+      "w": 6000,
+      "h": 3600,
+      "alias": "MonkeyKing",
+      "wikiTitle": "File:Wukong_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "63": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/04/Brand_OriginalSkin_HD.jpg/revision/latest?cb=20200322190031",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/04/Brand_OriginalSkin_HD.jpg/revision/latest?cb=20200322190031",
+      "w": 6000,
+      "h": 3388,
+      "alias": "Brand",
+      "wikiTitle": "File:Brand_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "64": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1b/Lee_Sin_OriginalSkin.jpg/revision/latest?cb=20240418181729",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1b/Lee_Sin_OriginalSkin.jpg/revision/latest?cb=20240418181729",
+      "w": 1215,
+      "h": 717,
+      "alias": "LeeSin",
+      "wikiTitle": "File:Lee Sin_OriginalSkin.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "67": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/ac/Vayne_OriginalSkin_HD.jpg/revision/latest?cb=20171010060419",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/ac/Vayne_OriginalSkin_HD.jpg/revision/latest?cb=20171010060419",
+      "w": 7200,
+      "h": 4400,
+      "alias": "Vayne",
+      "wikiTitle": "File:Vayne_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "68": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f1/Rumble_OriginalSkin_HD.jpg/revision/latest?cb=20171010071304",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f1/Rumble_OriginalSkin_HD.jpg/revision/latest?cb=20171010071304",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Rumble",
+      "wikiTitle": "File:Rumble_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "69": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/41/Cassiopeia_OriginalSkin_HD.jpg/revision/latest?cb=20200322193638",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/41/Cassiopeia_OriginalSkin_HD.jpg/revision/latest?cb=20200322193638",
+      "w": 6000,
+      "h": 3638,
+      "alias": "Cassiopeia",
+      "wikiTitle": "File:Cassiopeia_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "72": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bf/Skarner_OriginalSkin_HD.jpg/revision/latest?cb=20240318213317",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bf/Skarner_OriginalSkin_HD.jpg/revision/latest?cb=20240318213317",
+      "w": 7000,
+      "h": 3942,
+      "alias": "Skarner",
+      "wikiTitle": "File:Skarner_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "74": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/13/Heimerdinger_OriginalSkin_HD.jpg/revision/latest?cb=20200322214858",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/13/Heimerdinger_OriginalSkin_HD.jpg/revision/latest?cb=20200322214858",
+      "w": 6000,
+      "h": 3643,
+      "alias": "Heimerdinger",
+      "wikiTitle": "File:Heimerdinger_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "75": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fb/Nasus_OriginalSkin_HD.jpg/revision/latest?cb=20200328012915",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/fb/Nasus_OriginalSkin_HD.jpg/revision/latest?cb=20200328012915",
+      "w": 5120,
+      "h": 2892,
+      "alias": "Nasus",
+      "wikiTitle": "File:Nasus_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "76": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/98/Nidalee_OriginalSkin_HD.jpg/revision/latest?cb=20200328213639",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/98/Nidalee_OriginalSkin_HD.jpg/revision/latest?cb=20200328213639",
+      "w": 7000,
+      "h": 3938,
+      "alias": "Nidalee",
+      "wikiTitle": "File:Nidalee_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "77": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a7/Udyr_OriginalSkin_HD.jpg/revision/latest?cb=20221022202001",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a7/Udyr_OriginalSkin_HD.jpg/revision/latest?cb=20221022202001",
+      "w": 8000,
+      "h": 4406,
+      "alias": "Udyr",
+      "wikiTitle": "File:Udyr_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "78": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/da/Poppy_OriginalSkin_HD.jpg/revision/latest?cb=20210622151154",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/da/Poppy_OriginalSkin_HD.jpg/revision/latest?cb=20210622151154",
+      "w": 6000,
+      "h": 3376,
+      "alias": "Poppy",
+      "wikiTitle": "File:Poppy_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "79": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bb/Gragas_OriginalSkin_HD.jpg/revision/latest?cb=20200322210640",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bb/Gragas_OriginalSkin_HD.jpg/revision/latest?cb=20200322210640",
+      "w": 6000,
+      "h": 3577,
+      "alias": "Gragas",
+      "wikiTitle": "File:Gragas_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "80": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Pantheon_OriginalSkin_HD.jpg/revision/latest?cb=20221108230845",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Pantheon_OriginalSkin_HD.jpg/revision/latest?cb=20221108230845",
+      "w": 5000,
+      "h": 2950,
+      "alias": "Pantheon",
+      "wikiTitle": "File:Pantheon_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "81": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/11/Ezreal_OriginalSkin_HD.jpg/revision/latest?cb=20230316162826",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/11/Ezreal_OriginalSkin_HD.jpg/revision/latest?cb=20230316162826",
+      "w": 4096,
+      "h": 2333,
+      "alias": "Ezreal",
+      "wikiTitle": "File:Ezreal_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "82": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/dc/Mordekaiser_OriginalSkin_HD.jpg/revision/latest?cb=20221106154152",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/dc/Mordekaiser_OriginalSkin_HD.jpg/revision/latest?cb=20221106154152",
+      "w": 4000,
+      "h": 2161,
+      "alias": "Mordekaiser",
+      "wikiTitle": "File:Mordekaiser_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "83": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Yorick_OriginalSkin_HD.jpg/revision/latest?cb=20210515224628",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Yorick_OriginalSkin_HD.jpg/revision/latest?cb=20210515224628",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Yorick",
+      "wikiTitle": "File:Yorick_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "84": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/58/Akali_OriginalSkin_HD.jpg/revision/latest?cb=20220825171535",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/58/Akali_OriginalSkin_HD.jpg/revision/latest?cb=20220825171535",
+      "w": 5000,
+      "h": 2813,
+      "alias": "Akali",
+      "wikiTitle": "File:Akali_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "85": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Kennen_OriginalSkin_HD.jpg/revision/latest?cb=20220825194922",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/81/Kennen_OriginalSkin_HD.jpg/revision/latest?cb=20220825194922",
+      "w": 1920,
+      "h": 1169,
+      "alias": "Kennen",
+      "wikiTitle": "File:Kennen_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "86": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/42/Garen_OriginalSkin_HD.jpg/revision/latest?cb=20200322205416",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/42/Garen_OriginalSkin_HD.jpg/revision/latest?cb=20200322205416",
+      "w": 6626,
+      "h": 3893,
+      "alias": "Garen",
+      "wikiTitle": "File:Garen_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "89": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/eb/Leona_OriginalSkin_HD.jpg/revision/latest?cb=20200326183033",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/eb/Leona_OriginalSkin_HD.jpg/revision/latest?cb=20200326183033",
+      "w": 6000,
+      "h": 3756,
+      "alias": "Leona",
+      "wikiTitle": "File:Leona_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "90": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/09/Malzahar_OriginalSkin_HD.jpg/revision/latest?cb=20180512165959",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/09/Malzahar_OriginalSkin_HD.jpg/revision/latest?cb=20180512165959",
+      "w": 7716,
+      "h": 4554,
+      "alias": "Malzahar",
+      "wikiTitle": "File:Malzahar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "91": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/78/Talon_OriginalSkin_HD.jpg/revision/latest?cb=20171010072906",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/78/Talon_OriginalSkin_HD.jpg/revision/latest?cb=20171010072906",
+      "w": 7000,
+      "h": 4128,
+      "alias": "Talon",
+      "wikiTitle": "File:Talon_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "92": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c2/Riven_OriginalSkin_HD.jpg/revision/latest?cb=20171010071249",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c2/Riven_OriginalSkin_HD.jpg/revision/latest?cb=20171010071249",
+      "w": 5000,
+      "h": 2813,
+      "alias": "Riven",
+      "wikiTitle": "File:Riven_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "96": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/09/Kog%27Maw_OriginalSkin_HD.jpg/revision/latest?cb=20200326174815",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/09/Kog%27Maw_OriginalSkin_HD.jpg/revision/latest?cb=20200326174815",
+      "w": 7000,
+      "h": 3931,
+      "alias": "KogMaw",
+      "wikiTitle": "File:Kog'Maw_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "98": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f9/Shen_OriginalSkin_HD.jpg/revision/latest?cb=20180602175801",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f9/Shen_OriginalSkin_HD.jpg/revision/latest?cb=20180602175801",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Shen",
+      "wikiTitle": "File:Shen_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "99": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/33/Lux_OriginalSkin_HD.jpg/revision/latest?cb=20200510203407",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/33/Lux_OriginalSkin_HD.jpg/revision/latest?cb=20200510203407",
+      "w": 6000,
+      "h": 3375,
+      "alias": "Lux",
+      "wikiTitle": "File:Lux_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "101": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a4/Xerath_OriginalSkin_HD.jpg/revision/latest?cb=20171010071445",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a4/Xerath_OriginalSkin_HD.jpg/revision/latest?cb=20171010071445",
+      "w": 6000,
+      "h": 3388,
+      "alias": "Xerath",
+      "wikiTitle": "File:Xerath_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "102": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/8d/Shyvana_OriginalSkin_HD.jpg/revision/latest?cb=20171010072350",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/8d/Shyvana_OriginalSkin_HD.jpg/revision/latest?cb=20171010072350",
+      "w": 4000,
+      "h": 2444,
+      "alias": "Shyvana",
+      "wikiTitle": "File:Shyvana_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "103": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a5/Ahri_OriginalSkin_old_HD.jpg/revision/latest?cb=20200322193119",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a5/Ahri_OriginalSkin_old_HD.jpg/revision/latest?cb=20200322193119",
+      "w": 3628,
+      "h": 2063,
+      "alias": "Ahri",
+      "wikiTitle": "File:Ahri OriginalSkin old HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "104": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7c/Graves_OriginalSkin_HD.jpg/revision/latest?cb=20200322211646",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7c/Graves_OriginalSkin_HD.jpg/revision/latest?cb=20200322211646",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Graves",
+      "wikiTitle": "File:Graves_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "105": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/83/Fizz_OriginalSkin_HD.jpg/revision/latest?cb=20180512154720",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/83/Fizz_OriginalSkin_HD.jpg/revision/latest?cb=20180512154720",
+      "w": 5800,
+      "h": 3400,
+      "alias": "Fizz",
+      "wikiTitle": "File:Fizz_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "106": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/36/Volibear_OriginalSkin_HD.jpg/revision/latest?cb=20200706151754",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/36/Volibear_OriginalSkin_HD.jpg/revision/latest?cb=20200706151754",
+      "w": 4096,
+      "h": 2408,
+      "alias": "Volibear",
+      "wikiTitle": "File:Volibear_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "107": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e8/Rengar_OriginalSkin_HD.jpg/revision/latest?cb=20171009213902",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e8/Rengar_OriginalSkin_HD.jpg/revision/latest?cb=20171009213902",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Rengar",
+      "wikiTitle": "File:Rengar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "110": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a2/Varus_OriginalSkin_HD.jpg/revision/latest?cb=20180319163857",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a2/Varus_OriginalSkin_HD.jpg/revision/latest?cb=20180319163857",
+      "w": 4000,
+      "h": 2360,
+      "alias": "Varus",
+      "wikiTitle": "File:Varus_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "111": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Nautilus_OriginalSkin_HD.jpg/revision/latest?cb=20201119182842",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Nautilus_OriginalSkin_HD.jpg/revision/latest?cb=20201119182842",
+      "w": 4896,
+      "h": 2903,
+      "alias": "Nautilus",
+      "wikiTitle": "File:Nautilus_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "112": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cf/Viktor_OriginalSkin_HD.jpg/revision/latest?cb=20171010074012",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cf/Viktor_OriginalSkin_HD.jpg/revision/latest?cb=20171010074012",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Viktor",
+      "wikiTitle": "File:Viktor_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "113": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Sejuani_OriginalSkin_HD.jpg/revision/latest?cb=20171010072204",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Sejuani_OriginalSkin_HD.jpg/revision/latest?cb=20171010072204",
+      "w": 6000,
+      "h": 3388,
+      "alias": "Sejuani",
+      "wikiTitle": "File:Sejuani_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "114": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Fiora_OriginalSkin_HD.jpg/revision/latest?cb=20171030025332",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Fiora_OriginalSkin_HD.jpg/revision/latest?cb=20171030025332",
+      "w": 6000,
+      "h": 3614,
+      "alias": "Fiora",
+      "wikiTitle": "File:Fiora_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "115": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1f/Ziggs_OriginalSkin_HD.jpg/revision/latest?cb=20210628195546",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1f/Ziggs_OriginalSkin_HD.jpg/revision/latest?cb=20210628195546",
+      "w": 4788,
+      "h": 2780,
+      "alias": "Ziggs",
+      "wikiTitle": "File:Ziggs_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "117": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Lulu_OriginalSkin_old_HD.jpg/revision/latest?cb=20210515224024",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Lulu_OriginalSkin_old_HD.jpg/revision/latest?cb=20210515224024",
+      "w": 5012,
+      "h": 2864,
+      "alias": "Lulu",
+      "wikiTitle": "File:Lulu OriginalSkin old HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "119": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/54/Draven_OriginalSkin_HD.jpg/revision/latest?cb=20200322195933",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/54/Draven_OriginalSkin_HD.jpg/revision/latest?cb=20200322195933",
+      "w": 6229,
+      "h": 3637,
+      "alias": "Draven",
+      "wikiTitle": "File:Draven_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "120": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/07/Hecarim_OriginalSkin_HD.jpg/revision/latest?cb=20230705161121",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/07/Hecarim_OriginalSkin_HD.jpg/revision/latest?cb=20230705161121",
+      "w": 6000,
+      "h": 3375,
+      "alias": "Hecarim",
+      "wikiTitle": "File:Hecarim_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "121": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5a/Kha%27Zix_OriginalSkin_HD.jpg/revision/latest?cb=20200326172404",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5a/Kha%27Zix_OriginalSkin_HD.jpg/revision/latest?cb=20200326172404",
+      "w": 8000,
+      "h": 4724,
+      "alias": "Khazix",
+      "wikiTitle": "File:Kha'Zix_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "122": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d2/Darius_OriginalSkin_HD.jpg/revision/latest?cb=20180512152307",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d2/Darius_OriginalSkin_HD.jpg/revision/latest?cb=20180512152307",
+      "w": 6000,
+      "h": 3583,
+      "alias": "Darius",
+      "wikiTitle": "File:Darius_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "126": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4e/Jayce_OriginalSkin_HD.jpg/revision/latest?cb=20200322230909",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4e/Jayce_OriginalSkin_HD.jpg/revision/latest?cb=20200322230909",
+      "w": 6736,
+      "h": 3960,
+      "alias": "Jayce",
+      "wikiTitle": "File:Jayce_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "127": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/31/Lissandra_OriginalSkin_HD.jpg/revision/latest?cb=20240627023040",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/31/Lissandra_OriginalSkin_HD.jpg/revision/latest?cb=20240627023040",
+      "w": 6000,
+      "h": 3515,
+      "alias": "Lissandra",
+      "wikiTitle": "File:Lissandra_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "131": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/86/Diana_OriginalSkin_HD.jpg/revision/latest?cb=20200322195143",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/86/Diana_OriginalSkin_HD.jpg/revision/latest?cb=20200322195143",
+      "w": 6189,
+      "h": 3604,
+      "alias": "Diana",
+      "wikiTitle": "File:Diana_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "133": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d9/Quinn_OriginalSkin_HD.jpg/revision/latest?cb=20171010070802",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d9/Quinn_OriginalSkin_HD.jpg/revision/latest?cb=20171010070802",
+      "w": 7000,
+      "h": 4134,
+      "alias": "Quinn",
+      "wikiTitle": "File:Quinn_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "134": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Syndra_OriginalSkin_HD.jpg/revision/latest?cb=20240103182717",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c1/Syndra_OriginalSkin_HD.jpg/revision/latest?cb=20240103182717",
+      "w": 9707,
+      "h": 5484,
+      "alias": "Syndra",
+      "wikiTitle": "File:Syndra_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "136": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1a/Aurelion_Sol_OriginalSkin_HD.jpg/revision/latest?cb=20220825180329",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1a/Aurelion_Sol_OriginalSkin_HD.jpg/revision/latest?cb=20220825180329",
+      "w": 1920,
+      "h": 1080,
+      "alias": "AurelionSol",
+      "wikiTitle": "File:Aurelion Sol_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "141": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Kayn_OriginalSkin_HD.jpg/revision/latest?cb=20230327230055",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/cd/Kayn_OriginalSkin_HD.jpg/revision/latest?cb=20230327230055",
+      "w": 4000,
+      "h": 2362,
+      "alias": "Kayn",
+      "wikiTitle": "File:Kayn_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "142": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a4/Zoe_OriginalSkin_HD.jpg/revision/latest?cb=20221223044411",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a4/Zoe_OriginalSkin_HD.jpg/revision/latest?cb=20221223044411",
+      "w": 6000,
+      "h": 3546,
+      "alias": "Zoe",
+      "wikiTitle": "File:Zoe_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "143": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1e/Zyra_OriginalSkin_HD.jpg/revision/latest?cb=20171010071645",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1e/Zyra_OriginalSkin_HD.jpg/revision/latest?cb=20171010071645",
+      "w": 6000,
+      "h": 3376,
+      "alias": "Zyra",
+      "wikiTitle": "File:Zyra_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "145": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/97/Kai%27Sa_OriginalSkin_HD.jpg/revision/latest?cb=20180308040803",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/97/Kai%27Sa_OriginalSkin_HD.jpg/revision/latest?cb=20180308040803",
+      "w": 5000,
+      "h": 2950,
+      "alias": "Kaisa",
+      "wikiTitle": "File:Kai'Sa_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "147": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/19/Seraphine_OriginalSkin_HD.jpg/revision/latest?cb=20201016211636",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/19/Seraphine_OriginalSkin_HD.jpg/revision/latest?cb=20201016211636",
+      "w": 5000,
+      "h": 2758,
+      "alias": "Seraphine",
+      "wikiTitle": "File:Seraphine_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "150": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4a/Gnar_OriginalSkin_HD.jpg/revision/latest?cb=20200322205904",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4a/Gnar_OriginalSkin_HD.jpg/revision/latest?cb=20200322205904",
+      "w": 7000,
+      "h": 4101,
+      "alias": "Gnar",
+      "wikiTitle": "File:Gnar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "154": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ed/Zac_OriginalSkin_HD.jpg/revision/latest?cb=20171010071524",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ed/Zac_OriginalSkin_HD.jpg/revision/latest?cb=20171010071524",
+      "w": 7200,
+      "h": 4400,
+      "alias": "Zac",
+      "wikiTitle": "File:Zac_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "157": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e6/Yasuo_OriginalSkin_HD.jpg/revision/latest?cb=20171010060455",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/e6/Yasuo_OriginalSkin_HD.jpg/revision/latest?cb=20171010060455",
+      "w": 7200,
+      "h": 4400,
+      "alias": "Yasuo",
+      "wikiTitle": "File:Yasuo_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "161": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7f/Vel%27Koz_OriginalSkin_HD.jpg/revision/latest?cb=20171010073844",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7f/Vel%27Koz_OriginalSkin_HD.jpg/revision/latest?cb=20171010073844",
+      "w": 6472,
+      "h": 3794,
+      "alias": "Velkoz",
+      "wikiTitle": "File:Vel'Koz_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "163": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/6b/Taliyah_OriginalSkin_HD.jpg/revision/latest?cb=20180512184825",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/6b/Taliyah_OriginalSkin_HD.jpg/revision/latest?cb=20180512184825",
+      "w": 6000,
+      "h": 3716,
+      "alias": "Taliyah",
+      "wikiTitle": "File:Taliyah_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "164": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2e/Camille_OriginalSkin_HD.jpg/revision/latest?cb=20180512151738",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2e/Camille_OriginalSkin_HD.jpg/revision/latest?cb=20180512151738",
+      "w": 5000,
+      "h": 3007,
+      "alias": "Camille",
+      "wikiTitle": "File:Camille_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "166": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d3/Akshan_OriginalSkin_HD.jpg/revision/latest?cb=20211015205608",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d3/Akshan_OriginalSkin_HD.jpg/revision/latest?cb=20211015205608",
+      "w": 7000,
+      "h": 4150,
+      "alias": "Akshan",
+      "wikiTitle": "File:Akshan_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "200": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ef/Bel%27Veth_OriginalSkin_HD.jpg/revision/latest?cb=20221022201149",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ef/Bel%27Veth_OriginalSkin_HD.jpg/revision/latest?cb=20221022201149",
+      "w": 8000,
+      "h": 4501,
+      "alias": "Belveth",
+      "wikiTitle": "File:Bel'Veth_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "201": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a0/Braum_OriginalSkin_HD.jpg/revision/latest?cb=20200322190544",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/a0/Braum_OriginalSkin_HD.jpg/revision/latest?cb=20200322190544",
+      "w": 5985,
+      "h": 3633,
+      "alias": "Braum",
+      "wikiTitle": "File:Braum_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "202": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b5/Jhin_OriginalSkin_HD.jpg/revision/latest?cb=20180512161603",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b5/Jhin_OriginalSkin_HD.jpg/revision/latest?cb=20180512161603",
+      "w": 5808,
+      "h": 3556,
+      "alias": "Jhin",
+      "wikiTitle": "File:Jhin_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "203": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7b/Kindred_OriginalSkin_HD.jpg/revision/latest?cb=20240103182623",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7b/Kindred_OriginalSkin_HD.jpg/revision/latest?cb=20240103182623",
+      "w": 5084,
+      "h": 3034,
+      "alias": "Kindred",
+      "wikiTitle": "File:Kindred_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "221": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/Zeri_OriginalSkin_HD.jpg/revision/latest?cb=20221108224806",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/Zeri_OriginalSkin_HD.jpg/revision/latest?cb=20221108224806",
+      "w": 7000,
+      "h": 4164,
+      "alias": "Zeri",
+      "wikiTitle": "File:Zeri_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "222": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/40/Jinx_OriginalSkin_HD.jpg/revision/latest?cb=20200322231710",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/40/Jinx_OriginalSkin_HD.jpg/revision/latest?cb=20200322231710",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Jinx",
+      "wikiTitle": "File:Jinx_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "223": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c5/Tahm_Kench_OriginalSkin_HD.jpg/revision/latest?cb=20180512184655",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c5/Tahm_Kench_OriginalSkin_HD.jpg/revision/latest?cb=20180512184655",
+      "w": 6000,
+      "h": 3524,
+      "alias": "TahmKench",
+      "wikiTitle": "File:Tahm Kench_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "233": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/37/Briar_OriginalSkin_HD.jpg/revision/latest?cb=20230831161153",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/37/Briar_OriginalSkin_HD.jpg/revision/latest?cb=20230831161153",
+      "w": 3840,
+      "h": 2160,
+      "alias": "Briar",
+      "wikiTitle": "File:Briar_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "234": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/63/Viego_OriginalSkin_HD.jpg/revision/latest?cb=20211112185146",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/63/Viego_OriginalSkin_HD.jpg/revision/latest?cb=20211112185146",
+      "w": 7000,
+      "h": 4151,
+      "alias": "Viego",
+      "wikiTitle": "File:Viego_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "235": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/50/Senna_OriginalSkin_HD.jpg/revision/latest?cb=20191024170224",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/50/Senna_OriginalSkin_HD.jpg/revision/latest?cb=20191024170224",
+      "w": 8000,
+      "h": 4720,
+      "alias": "Senna",
+      "wikiTitle": "File:Senna_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "236": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c0/Lucian_OriginalSkin_HD.jpg/revision/latest?cb=20200326185553",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c0/Lucian_OriginalSkin_HD.jpg/revision/latest?cb=20200326185553",
+      "w": 8140,
+      "h": 4760,
+      "alias": "Lucian",
+      "wikiTitle": "File:Lucian_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "238": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2a/Zed_OriginalSkin_HD.jpg/revision/latest?cb=20171010071542",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2a/Zed_OriginalSkin_HD.jpg/revision/latest?cb=20171010071542",
+      "w": 5966,
+      "h": 3358,
+      "alias": "Zed",
+      "wikiTitle": "File:Zed_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "240": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c9/Kled_OriginalSkin_HD.jpg/revision/latest?cb=20210629183610",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c9/Kled_OriginalSkin_HD.jpg/revision/latest?cb=20210629183610",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Kled",
+      "wikiTitle": "File:Kled_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "245": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/83/Ekko_OriginalSkin_HD.jpg/revision/latest?cb=20200322200400",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/83/Ekko_OriginalSkin_HD.jpg/revision/latest?cb=20200322200400",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Ekko",
+      "wikiTitle": "File:Ekko_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "246": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9f/Qiyana_OriginalSkin_HD.jpg/revision/latest?cb=20190608170014",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/9f/Qiyana_OriginalSkin_HD.jpg/revision/latest?cb=20190608170014",
+      "w": 4000,
+      "h": 2348,
+      "alias": "Qiyana",
+      "wikiTitle": "File:Qiyana_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "254": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/8a/Vi_OriginalSkin_HD.jpg/revision/latest?cb=20221108222358",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/8a/Vi_OriginalSkin_HD.jpg/revision/latest?cb=20221108222358",
+      "w": 7220,
+      "h": 4264,
+      "alias": "Vi",
+      "wikiTitle": "File:Vi_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "266": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b8/Aatrox_OriginalSkin_HD.jpg/revision/latest?cb=20191228195207",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/b8/Aatrox_OriginalSkin_HD.jpg/revision/latest?cb=20191228195207",
+      "w": 6000,
+      "h": 3375,
+      "alias": "Aatrox",
+      "wikiTitle": "File:Aatrox_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "267": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7a/Nami_OriginalSkin_HD.jpg/revision/latest?cb=20200328012005",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/7a/Nami_OriginalSkin_HD.jpg/revision/latest?cb=20200328012005",
+      "w": 7000,
+      "h": 4131,
+      "alias": "Nami",
+      "wikiTitle": "File:Nami_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "268": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f9/Azir_OriginalSkin_HD.jpg/revision/latest?cb=20171025231812",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/f/f9/Azir_OriginalSkin_HD.jpg/revision/latest?cb=20171025231812",
+      "w": 5945,
+      "h": 3483,
+      "alias": "Azir",
+      "wikiTitle": "File:Azir_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "350": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4d/Yuumi_OriginalSkin_HD.jpg/revision/latest?cb=20190812194439",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/4d/Yuumi_OriginalSkin_HD.jpg/revision/latest?cb=20190812194439",
+      "w": 5000,
+      "h": 3130,
+      "alias": "Yuumi",
+      "wikiTitle": "File:Yuumi_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "360": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1e/Samira_OriginalSkin_HD.jpg/revision/latest?cb=20210127225822",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1e/Samira_OriginalSkin_HD.jpg/revision/latest?cb=20210127225822",
+      "w": 7000,
+      "h": 4130,
+      "alias": "Samira",
+      "wikiTitle": "File:Samira_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "412": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Thresh_OriginalSkin_HD.jpg/revision/latest?cb=20171010072936",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Thresh_OriginalSkin_HD.jpg/revision/latest?cb=20171010072936",
+      "w": 6000,
+      "h": 3541,
+      "alias": "Thresh",
+      "wikiTitle": "File:Thresh_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "420": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/69/Illaoi_OriginalSkin_HD.jpg/revision/latest?cb=20171030025246",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/69/Illaoi_OriginalSkin_HD.jpg/revision/latest?cb=20171030025246",
+      "w": 7000,
+      "h": 4177,
+      "alias": "Illaoi",
+      "wikiTitle": "File:Illaoi_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "421": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/55/Rek%27Sai_OriginalSkin_HD.jpg/revision/latest?cb=20171010071029",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/55/Rek%27Sai_OriginalSkin_HD.jpg/revision/latest?cb=20171010071029",
+      "w": 6000,
+      "h": 3596,
+      "alias": "RekSai",
+      "wikiTitle": "File:Rek'Sai_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "427": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Ivern_OriginalSkin_HD.jpg/revision/latest?cb=20200322222543",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/8/88/Ivern_OriginalSkin_HD.jpg/revision/latest?cb=20200322222543",
+      "w": 6000,
+      "h": 3549,
+      "alias": "Ivern",
+      "wikiTitle": "File:Ivern_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "429": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ec/Kalista_OriginalSkin_HD.jpg/revision/latest?cb=20200323001639",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/e/ec/Kalista_OriginalSkin_HD.jpg/revision/latest?cb=20200323001639",
+      "w": 6944,
+      "h": 4098,
+      "alias": "Kalista",
+      "wikiTitle": "File:Kalista_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "432": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d3/Bard_OriginalSkin_HD.jpg/revision/latest?cb=20200322185256",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/d/d3/Bard_OriginalSkin_HD.jpg/revision/latest?cb=20200322185256",
+      "w": 5985,
+      "h": 3633,
+      "alias": "Bard",
+      "wikiTitle": "File:Bard_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "497": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bd/RakanXayah_OriginalSkin_HD.jpg/revision/latest?cb=20180512210203",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bd/RakanXayah_OriginalSkin_HD.jpg/revision/latest?cb=20180512210203",
+      "w": 6463,
+      "h": 2500,
+      "alias": "Rakan",
+      "wikiTitle": "File:Rakan_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "498": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bd/RakanXayah_OriginalSkin_HD.jpg/revision/latest?cb=20180512210203",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/bd/RakanXayah_OriginalSkin_HD.jpg/revision/latest?cb=20180512210203",
+      "w": 6463,
+      "h": 2500,
+      "alias": "Xayah",
+      "wikiTitle": "File:Xayah_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "516": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1f/Ornn_OriginalSkin_HD.jpg/revision/latest?cb=20231024174112",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/1f/Ornn_OriginalSkin_HD.jpg/revision/latest?cb=20231024174112",
+      "w": 7000,
+      "h": 3939,
+      "alias": "Ornn",
+      "wikiTitle": "File:Ornn_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "517": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/40/Sylas_OriginalSkin_HD.jpg/revision/latest?cb=20200408185243",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/40/Sylas_OriginalSkin_HD.jpg/revision/latest?cb=20200408185243",
+      "w": 5000,
+      "h": 3100,
+      "alias": "Sylas",
+      "wikiTitle": "File:Sylas_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "518": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/52/Neeko_OriginalSkin_HD.jpg/revision/latest?cb=20181119181330",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/52/Neeko_OriginalSkin_HD.jpg/revision/latest?cb=20181119181330",
+      "w": 5000,
+      "h": 2950,
+      "alias": "Neeko",
+      "wikiTitle": "File:Neeko_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "523": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/Aphelios_OriginalSkin_HD.jpg/revision/latest?cb=20191123235527",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/Aphelios_OriginalSkin_HD.jpg/revision/latest?cb=20191123235527",
+      "w": 7000,
+      "h": 4134,
+      "alias": "Aphelios",
+      "wikiTitle": "File:Aphelios_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "526": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Rell_OriginalSkin_HD.jpg/revision/latest?cb=20201125173145",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/5/5f/Rell_OriginalSkin_HD.jpg/revision/latest?cb=20201125173145",
+      "w": 6000,
+      "h": 3242,
+      "alias": "Rell",
+      "wikiTitle": "File:Rell_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "555": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/77/Pyke_OriginalSkin_HD.jpg/revision/latest?cb=20180515195318",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/7/77/Pyke_OriginalSkin_HD.jpg/revision/latest?cb=20180515195318",
+      "w": 4000,
+      "h": 2250,
+      "alias": "Pyke",
+      "wikiTitle": "File:Pyke_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "711": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2b/Vex_OriginalSkin_HD.jpg/revision/latest?cb=20210902153700",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/2/2b/Vex_OriginalSkin_HD.jpg/revision/latest?cb=20210902153700",
+      "w": 4800,
+      "h": 2660,
+      "alias": "Vex",
+      "wikiTitle": "File:Vex_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "777": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/a/aa/Yone_OriginalSkin_HD.jpg/revision/latest?cb=20200803162654",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/a/aa/Yone_OriginalSkin_HD.jpg/revision/latest?cb=20200803162654",
+      "w": 5760,
+      "h": 3399,
+      "alias": "Yone",
+      "wikiTitle": "File:Yone_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "799": {
+      "url": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/universe/fe4125e7d5135486c5bb6941641e53316fb90c59-1920x1080.jpg?w=2560&q=90&auto=format",
+      "w": 1920,
+      "h": 1133,
+      "alias": "Ambessa",
+      "source": "universe-fallback-no-wiki-hd"
+    },
+    "800": {
+      "url": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/universe/4de677b45fdaaa7874a030c6c8865e9ffdb6a0ba-1920x1080.jpg?w=2560&q=90&auto=format",
+      "w": 1920,
+      "h": 1080,
+      "alias": "Mel",
+      "source": "universe-fallback-no-wiki-hd"
+    },
+    "804": {
+      "url": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/universe_live/7438b87454595bc3d3582056d4d1a45dcb9e97c9-1920x1080.jpg?w=2560&q=90&auto=format",
+      "w": 1920,
+      "h": 1080,
+      "alias": "Yunara",
+      "source": "universe-fallback-no-wiki-hd"
+    },
+    "805": {
+      "url": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/universe_live/f145da842088913c4c9bd44a715a5c912a096707-1920x1080.jpg?w=2560&q=90&auto=format",
+      "w": 1920,
+      "h": 1080,
+      "alias": "Locke",
+      "source": "universe-fallback-no-wiki-hd"
+    },
+    "875": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/b/ba/Sett_OriginalSkin_HD.jpg/revision/latest?cb=20200123224531",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/b/ba/Sett_OriginalSkin_HD.jpg/revision/latest?cb=20200123224531",
+      "w": 6375,
+      "h": 3663,
+      "alias": "Sett",
+      "wikiTitle": "File:Sett_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "876": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c2/Lillia_OriginalSkin_HD.jpg/revision/latest?cb=20221103165837",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/c/c2/Lillia_OriginalSkin_HD.jpg/revision/latest?cb=20221103165837",
+      "w": 5000,
+      "h": 2950,
+      "alias": "Lillia",
+      "wikiTitle": "File:Lillia_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "887": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3b/Gwen_OriginalSkin_HD.jpg/revision/latest?cb=20210331011930",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3b/Gwen_OriginalSkin_HD.jpg/revision/latest?cb=20210331011930",
+      "w": 6000,
+      "h": 3542,
+      "alias": "Gwen",
+      "wikiTitle": "File:Gwen_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "888": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/9/96/Renata_Glasc_OriginalSkin_HD.jpg/revision/latest?cb=20220208161630",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/9/96/Renata_Glasc_OriginalSkin_HD.jpg/revision/latest?cb=20220208161630",
+      "w": 6000,
+      "h": 3375,
+      "alias": "Renata",
+      "wikiTitle": "File:Renata Glasc_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "893": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3d/Aurora_OriginalSkin_HD.jpg/revision/latest?cb=20240626030426",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3d/Aurora_OriginalSkin_HD.jpg/revision/latest?cb=20240626030426",
+      "w": 8000,
+      "h": 4725,
+      "alias": "Aurora",
+      "wikiTitle": "File:Aurora_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "895": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/4/41/Nilah_OriginalSkin_HD.jpg/revision/latest?cb=20220623023908",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/4/41/Nilah_OriginalSkin_HD.jpg/revision/latest?cb=20220623023908",
+      "w": 8000,
+      "h": 4501,
+      "alias": "Nilah",
+      "wikiTitle": "File:Nilah_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "897": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/K%27Sante_OriginalSkin_HD.jpg/revision/latest?cb=20221022203014",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/66/K%27Sante_OriginalSkin_HD.jpg/revision/latest?cb=20221022203014",
+      "w": 7000,
+      "h": 4130,
+      "alias": "KSante",
+      "wikiTitle": "File:K'Sante_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "901": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0b/Smolder_OriginalSkin_HD.jpg/revision/latest?cb=20240119171159",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/0/0b/Smolder_OriginalSkin_HD.jpg/revision/latest?cb=20240119171159",
+      "w": 7467,
+      "h": 4180,
+      "alias": "Smolder",
+      "wikiTitle": "File:Smolder_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "902": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/64/Milio_OriginalSkin_HD.jpg/revision/latest?cb=20240627023515",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/64/Milio_OriginalSkin_HD.jpg/revision/latest?cb=20240627023515",
+      "w": 3840,
+      "h": 2160,
+      "alias": "Milio",
+      "wikiTitle": "File:Milio_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "904": {
+      "url": "https://cmsassets.rgpub.io/sanity/images/dsfx7636/universe_live/df2839a9368239f91af5f94190c806654301e2a7-1920x1080.jpg?w=2560&q=90&auto=format",
+      "w": 1920,
+      "h": 1080,
+      "alias": "Zaahen",
+      "source": "universe-fallback-no-wiki-hd"
+    },
+    "910": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/6/6a/Hwei_OriginalSkin_HD.jpg/revision/latest?cb=20231121012923",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/6/6a/Hwei_OriginalSkin_HD.jpg/revision/latest?cb=20231121012923",
+      "w": 7342,
+      "h": 4130,
+      "alias": "Hwei",
+      "wikiTitle": "File:Hwei_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    },
+    "950": {
+      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3c/Naafiri_OriginalSkin_HD.jpg/revision/latest?cb=20230629013949",
+      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/3/3c/Naafiri_OriginalSkin_HD.jpg/revision/latest?cb=20230629013949",
+      "w": 8000,
+      "h": 4499,
+      "alias": "Naafiri",
+      "wikiTitle": "File:Naafiri_OriginalSkin_HD.jpg",
+      "source": "fandom-wiki-hd-local"
+    }
+  },
+  "missing": [],
+  "stats": {
+    "totalMapped": 173,
+    "missing": 0
+  }
+}
