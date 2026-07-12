@@ -104,7 +104,9 @@ Expected diffs vs `HEAD`:
 ```powershell
 # ONLY the shell (+ clean-path deep-link stubs). Never re-stage payload / radar /
 # axes — they are untouched and re-adding them risks mixing in accidental local edits.
-git add docs/index.html docs/404.html
+# docs/assets/site.js is REQUIRED: the shell references it by content-hash ?v=;
+# shipping index.html without it loads a stale script (or 404s on first deploy).
+git add docs/index.html docs/404.html docs/assets/site.js
 git add docs/augments docs/changes docs/column docs/settings
 
 # If template sources changed and should stay in sync on main, stage them too
@@ -140,6 +142,7 @@ Do not poll the live URL (CDN cache lies). Actions: https://github.com/Lanternko
 - **Never** hand-edit and commit `docs/index.html` as the source of truth — templates are.
 - **Never** use this skill when the user asked to refresh patch data / WR / affinities — hand off to `deploy-tier-list`.
 - **Never** promise radar/axes updates from shell-only — those need the full pipeline + parquet.
+- **Never** ship `docs/index.html` without `docs/assets/site.js` in the same commit — the shell loads the app script externally (`/assets/site.js?v=<hash>`); forgetting it means the live site runs the previous script against the new HTML.
 
 ## Related
 

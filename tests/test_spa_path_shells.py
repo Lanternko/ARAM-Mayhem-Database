@@ -13,9 +13,12 @@ if str(SCRIPTS) not in sys.path:
 from tierlist_render import (  # noqa: E402
     _site_base_href,
     _spa_deep_link_stub,
+    champion_detail_base_url,
     discover_column_article_ids,
     slim_site_payload,
+    split_champion_detail_payloads,
     versioned_payload_url,
+    write_champion_detail_shards,
     write_spa_path_shells,
     SPA_FULL_SHELL_PATHS,
 )
@@ -113,6 +116,67 @@ class SpaPathShellTests(unittest.TestCase):
             versioned_payload_url("api/tier-list.json?v=1", "20260712"),
             "api/tier-list.json?v=1",
         )
+
+    def test_champion_detail_base_url_tracks_payload_location(self) -> None:
+        self.assertEqual(
+            champion_detail_base_url("api/tier-list.json?v=1"),
+            "api/champions",
+        )
+        self.assertEqual(
+            champion_detail_base_url("https://cdn.example/data/tier-list.json"),
+            "https://cdn.example/data/champions",
+        )
+
+    def test_split_champion_details_keeps_initial_indexes(self) -> None:
+        payload = {
+            "champs": {
+                "1": {
+                    "name": "One",
+                    "top": {"kGold": [{"id": 10}]},
+                    "pairs": [{"id": 2}],
+                    "comp": {"front": 0.5},
+                    "bot": {"kGold": [{"id": 11}]},
+                    "items": {"top": [{"id": 1001}]},
+                    "singleItems": {"top": [{"id": 1002}]},
+                }
+            }
+        }
+        details = split_champion_detail_payloads(payload)
+        champ = payload["champs"]["1"]
+        self.assertEqual(champ["name"], "One")
+        self.assertIn("top", champ)
+        self.assertIn("pairs", champ)
+        self.assertIn("comp", champ)
+        self.assertNotIn("bot", champ)
+        self.assertNotIn("items", champ)
+        self.assertEqual(details["1"]["items"]["top"][0]["id"], 1001)
+        self.assertEqual(split_champion_detail_payloads(payload), {})
+
+    def test_write_champion_detail_shards_sets_fetch_metadata(self) -> None:
+        payload = {
+            "champs": {
+                "1": {
+                    "name": "One",
+                    "top": {},
+                    "items": {"top": [{"id": 1001}]},
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            payload_path = Path(tmp) / "api" / "tier-list.json"
+            stats = write_champion_detail_shards(
+                payload,
+                payload_out_path=payload_path,
+                payload_url="api/tier-list.json?v=build-1",
+                version="build-1",
+            )
+            shard = payload_path.parent / "champions" / "1.json"
+            self.assertTrue(shard.is_file())
+            self.assertIn('"items"', shard.read_text(encoding="utf-8"))
+        self.assertEqual(stats["champs"], 1)
+        self.assertGreater(stats["bytes"], 0)
+        self.assertEqual(payload["detailBase"], "api/champions")
+        self.assertEqual(payload["detailVersion"], "build-1")
 
     def test_slim_site_payload_caps_lists(self) -> None:
         payload = {

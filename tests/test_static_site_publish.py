@@ -92,10 +92,14 @@ class StaticSitePublishTests(unittest.TestCase):
             [
                 "docs/index.html",
                 "docs/api/tier-list.json",
+                "docs/api/champions",
                 "docs/api/champ-archetype-fit.json",
                 "docs/api/champ-empirical-axes.json",
                 "docs/assets/icons",
                 "docs/assets/covers",
+                # External app script: the shell references it by content-hash
+                # ?v=, so it must ship in the same publish as index.html.
+                "docs/assets/site.js",
             ],
         )
         self.assertEqual(result["comp_fit"]["built"], True)

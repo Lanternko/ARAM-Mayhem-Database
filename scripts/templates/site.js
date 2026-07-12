@@ -194,17 +194,33 @@
     // Prefer loading names when the boot locale is already zh-CN (share links);
     // otherwise defer so / and /en don't wait on ~110KB of CN dictionaries.
     const wantCnNamesEarly = pendingBootLang === 'zh-CN';
+    // Arch-fit + empirical axes only feed the detail panel / draft radars, so
+    // they must NOT gate first render: blocking here used to add a full extra
+    // request round-trip AFTER the multi-MB main payload before any wiring ran.
+    // Merge on arrival, drop the percentile caches they feed, and repaint any
+    // surface that already consumed the stale values.
+    const onSecondaryDataMerged = () => {
+        // try-guarded: on the /zh-CN boot path this can fire while the CN-name
+        // await is still parked BEFORE the let-declarations below (TDZ).
+        // Losing one refresh there is harmless — nothing has rendered yet.
+        try {
+            _compNormCache = null;
+            _stageTempoCache = null;
+            if (detailSelected) {
+                const champ = document.querySelector(`.champ[data-cid="${detailSelected}"]`);
+                if (champ) openDetailForChamp(champ, true);
+            }
+            if (document.querySelector('.view-draft.is-active')) renderDraft();
+        } catch {}
+    };
     const secondaryFetches = [
-        loadSitePayload('api/champ-archetype-fit.json').then(d => { ARCHFIT = d; mergeArchFit(d); }).catch(() => { ARCHFIT = null; }),
-        loadSitePayload('api/champ-empirical-axes.json').then(mergeAxes).catch(() => {}),
+        loadSitePayload('api/champ-archetype-fit.json').then(d => { ARCHFIT = d; mergeArchFit(d); onSecondaryDataMerged(); }).catch(() => { ARCHFIT = null; }),
+        loadSitePayload('api/champ-empirical-axes.json').then(d => { mergeAxes(d); onSecondaryDataMerged(); }).catch(() => {}),
     ];
     if (wantCnNamesEarly) {
-        secondaryFetches.push(
-            loadSitePayload('api/names-zh-cn.json').then(d => { NAMES_ZH_CN = d; attachCnNames(); }).catch(() => { NAMES_ZH_CN = null; })
-        );
-    }
-    await Promise.all(secondaryFetches);
-    if (!wantCnNamesEarly) {
+        // CN names ARE first-paint copy for /zh-CN shares — keep that one blocking.
+        await loadSitePayload('api/names-zh-cn.json').then(d => { NAMES_ZH_CN = d; attachCnNames(); }).catch(() => { NAMES_ZH_CN = null; });
+    } else {
         // Non-blocking: official CN names arrive after first interactive frame.
         loadSitePayload('api/names-zh-cn.json').then(d => {
             NAMES_ZH_CN = d;
@@ -2457,6 +2473,19 @@
     function renderAugmentTier() {
         const host = document.getElementById('aug-tier-host');
         if (!host) return;
+        // The board's HTML depends only on the language (labels / names) and on
+        // whether the CN name dictionary has landed — augment data is static per
+        // page load.  Re-entering the tab used to rebuild hundreds of cards
+        // inside the tab-switch task; when nothing changed, just re-apply the
+        // cheap class-toggle filters instead.
+        const renderKey = currentLang + ':' + (NAMES_ZH_CN ? 1 : 0);
+        if (host.getAttribute('data-render-key') === renderKey && host.firstChild) {
+            buildAugTierFilters();
+            applyAugTierFilters();
+            renderAugChamps();
+            return;
+        }
+        host.setAttribute('data-render-key', renderKey);
         buildAugTierFilters();
         const tierMeta = (DATA && DATA.tiers) || {};
         const order = (tierMeta.order && tierMeta.order.length) ? tierMeta.order : ['OP','T1','T2','T3','T4','T5'];
@@ -6322,15 +6351,25 @@
 
     // Role chip clicks (event delegation).  "All" chip (data-role="") already
     // unsets role filter — no dedicated reset button needed.
+    //
+    // Two-phase (INP): the badge sweep + full-grid filter was a ~170 ms task
+    // when run inside the click.  Paint the pressed chip synchronously, yield,
+    // THEN filter.  A token coalesces rapid chip taps into one trailing pass
+    // (each pass reads filterState at run time, so the last click wins).
+    let roleFilterToken = 0;
     document.addEventListener('click', (ev) => {
         const chip = ev.target.closest('.chip');
         if (!chip) return;
         filterState.role = chip.getAttribute('data-role') || '';
         setActiveChip(filterState.role);
-        // Role is the only input to the secondary-role badges, so refresh them
-        // here (the single role-change site) rather than on every applyFilters.
-        refreshSecondaryRoleBadges();
-        applyFilters();
+        const token = ++roleFilterToken;
+        yieldToMain().then(() => {
+            if (token !== roleFilterToken) return;
+            // Role is the only input to the secondary-role badges, so refresh
+            // them here (the single role-change site), not on every keystroke.
+            refreshSecondaryRoleBadges();
+            applyFilters();
+        });
         trackEvent('role_filter_click', { role: filterState.role || 'all' });
     });
 
