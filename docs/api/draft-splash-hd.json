@@ -59,13 +59,14 @@
       "source": "fandom-wiki-hd-local"
     },
     "7": {
-      "url": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/LeBlanc_OriginalSkin_HD.jpg/revision/latest/scale-to-width-down/1600?cb=20200326180128",
-      "remoteUrl": "https://static.wikia.nocookie.net/leagueoflegends/images/1/18/LeBlanc_OriginalSkin_HD.jpg/revision/latest?cb=20200326180128",
-      "w": 6000,
-      "h": 3375,
+      "url": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/characters/leblanc/skins/base/images/leblanc_splash_uncentered_0.jpg",
+      "remoteUrl": "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/assets/characters/leblanc/skins/base/images/leblanc_splash_uncentered_0.jpg",
+      "w": 1215,
+      "h": 717,
       "alias": "Leblanc",
-      "wikiTitle": "File:LeBlanc_OriginalSkin_HD.jpg",
-      "source": "fandom-wiki-hd-local"
+      "wikiTitle": null,
+      "source": "communitydragon-asu",
+      "note": "Wiki OriginalSkin_HD.jpg still pre-ASU (2020); CDragon has current base splash."
     },
     "8": {
       "url": "https://static.wikia.nocookie.net/leagueoflegends/images/7/77/Vladimir_OriginalSkin_HD.jpg/revision/latest/scale-to-width-down/1600?cb=20221108222109",
