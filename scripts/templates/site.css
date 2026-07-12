@@ -199,16 +199,13 @@
     .lang-toggle { min-width: 56px; justify-content: center; }
     .lang-toggle span { font-size: 12px; letter-spacing: 0; }
     .lang-menu { position: relative; display: inline-flex; }
-    /* Single-row filter chrome: chips left, search+count right (desktop).
-       Search rail stays sticky so chips can scroll away without a second row. */
-    .filter-chrome {
-        display: flex;
-        flex-wrap: nowrap;
-        align-items: center;
-        gap: 12px 16px;
-        margin: 0 0 16px;
-        min-width: 0;
+    /* Shared row height so chips + sticky search sit on one baseline. */
+    .view-home .main-col {
+        --filter-row-h: 40px;
     }
+    /* Role chips: one row, reserve right gutter so search can sit beside them.
+       Search-rail is the *next sibling* under .main-col (not nested here) so
+       sticky pin lasts for the whole tier/detail scroll. */
     .filter-bar {
         position: static;
         z-index: auto;
@@ -216,18 +213,21 @@
         flex-wrap: nowrap;
         gap: 12px;
         align-items: center;
+        min-height: var(--filter-row-h, 40px);
         margin: 0;
-        padding: 0;
+        /* Room for sticky search chip + count on the right. */
+        padding: 0 max(168px, calc(min(280px, 32vw) + 88px)) 0 0;
         background: transparent;
         border-radius: 0;
         box-shadow: none;
-        flex: 1 1 auto;
         min-width: 0;
     }
     .filter-bar .role-chips {
         flex-wrap: nowrap;
         min-width: 0;
     }
+    /* Sticky search: parent is tall .main-col → survives champion detail scroll.
+       Pull up into the filter-bar row with negative margin (visual one-liner). */
     .search-rail {
         position: sticky;
         top: var(--header-h, 56px);
@@ -236,9 +236,10 @@
         align-items: center;
         justify-content: flex-end;
         gap: 8px;
-        margin: 0;
+        width: fit-content;
+        max-width: 100%;
+        margin: calc(-1 * var(--filter-row-h, 40px)) 0 16px auto;
         padding: 0;
-        flex: 0 0 auto;
         background: transparent;
         border: 0;
         box-shadow: none;
@@ -3359,12 +3360,19 @@
             padding: 0 0 2px;
         }
         .page-actions .gh-star { width: auto; }
-        /* Filter chrome: chips only on phone (search hidden below). */
-        .filter-chrome { flex-wrap: wrap; margin-bottom: 10px; gap: 8px; }
-        .filter-bar { padding: 0; gap: 8px; position: static; box-shadow: none; }
+        /* Phone: chips only (search rail hidden); drop desktop right gutter. */
+        .filter-bar {
+            padding: 0;
+            gap: 8px;
+            position: static;
+            box-shadow: none;
+            min-height: 0;
+            margin: 0 0 10px;
+        }
         .filter-bar .role-chips { flex-wrap: wrap; }
         .role-chips { gap: 4px; }
         .chip { padding: 4px 10px; font-size: 11px; }
+        .search-rail { margin: 0 !important; }
         .filter-tools {
             margin-left: 0;
             width: 100%;
@@ -4430,22 +4438,17 @@
     .scatter-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
     .scatter-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; vertical-align: -1px; margin-right: 4px; }
 
-    /* One-row chrome; search rail owns sticky pin (chips scroll away). */
-    .view-home .filter-chrome {
-        margin-bottom: 16px;
-    }
+    /* Search sticky under header; chips scroll away; one visual row at rest. */
     .view-home .filter-bar {
         top: auto;
         background: transparent;
         border: 0;
         box-shadow: none;
-        margin: 0;
     }
     .view-home .search-rail {
         top: var(--header-h);
         background: transparent;
         border: 0;
-        margin: 0;
     }
     @media (max-width: 700px) {
         /* Two-row header: brand + actions on top, the primary tabs as a

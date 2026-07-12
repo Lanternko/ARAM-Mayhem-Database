@@ -1585,10 +1585,10 @@ def render_html(
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
-    # One-row chrome: role chips (scroll away) + sticky search on the right.
-    # Wrapper is a flex row so they share a single baseline on desktop.
-    parts.append("<div class='filter-chrome' data-nosnippet>")
-    parts.append("<div class='filter-bar'>")
+    # Role chips scroll away; search-rail is a *sibling of the tier list*
+    # (not nested in a short chrome row) so position:sticky survives detail
+    # scroll.  CSS pulls the rail up into the same visual row as the chips.
+    parts.append("<div class='filter-bar' data-nosnippet>")
     parts.append("<div class='role-chips'>")
     parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
     for role_en in ROLE_ORDER:
@@ -1611,7 +1611,7 @@ def render_html(
         "<circle cx='11' cy='11' r='7'></circle>"
         "<line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg>"
     )
-    parts.append("<div class='search-rail'>")
+    parts.append("<div class='search-rail' data-nosnippet>")
     parts.append(
         "<label class='search-wrap'>"
         f"{search_icon}"
@@ -1625,7 +1625,6 @@ def render_html(
         "<span id='shown-unit'>隻</span></span>"
     )
     parts.append("</div>")  # /search-rail
-    parts.append("</div>")  # /filter-chrome
 
     for tier in TIER_ORDER:
         entries = by_tier[tier]
