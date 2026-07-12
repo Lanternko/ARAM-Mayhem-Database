@@ -264,6 +264,39 @@
         border: 1px solid var(--border);
         border-radius: 12px;
     }
+    /* Detail open (desktop): pin search on the SAME row as avatar/name so the
+       sticky stack is only [head+search] then [tabs] — not search above head. */
+    body.detail-open .search-rail {
+        top: var(--header-h, 56px);
+        z-index: 31;
+        margin: 0;
+        /* Match .detail-tab-rail head row vertical padding so the input
+           sits level with the avatar (same sticky top, not stacked). */
+        padding: 10px 10px 0 0;
+        align-items: flex-start;
+    }
+    body.detail-open .search-rail .search-wrap {
+        max-width: min(280px, 36vw);
+        min-width: 140px;
+    }
+    body.detail-open .search-rail .shown-count {
+        display: none;
+    }
+    body.detail-open .detail-main-tabs > .detail-tab-rail {
+        top: var(--header-h, 56px);
+        /* Same pin line as .search-rail — do not offset by --search-rail-h. */
+    }
+    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
+        /* Leave a clear lane for the floating search chip on the right. */
+        padding-right: max(52px, calc(min(280px, 36vw) + 28px));
+        margin-bottom: 6px;
+        min-height: 40px;
+    }
+    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
+        /* Sit just left of the search chip, not under it. */
+        right: max(12px, calc(min(280px, 36vw) + 18px));
+        top: 12px;
+    }
     .role-chips {
         display: flex;
         flex-wrap: wrap;
@@ -1679,7 +1712,8 @@
         pointer-events: none;
     }
     /* Sticky chrome for main detail: champ icon/name + 概覽/出裝/… tabs.
-       Sub-tabs do not use this path.  top sits under header + floating search. */
+       Default (no detail-open override): pin under header + search rail.
+       With body.detail-open, same top as search so head+search share one row. */
     .detail-main-tabs > .detail-tab-rail {
         position: sticky;
         top: calc(var(--header-h, 56px) + var(--search-rail-h, 0px));
