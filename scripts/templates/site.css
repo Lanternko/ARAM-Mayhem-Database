@@ -27,12 +27,6 @@
         --accent: #f5c518;
         --accent-soft: #f5d780;
         --accent-on: #14110a;
-        /* 必出 (pick-must): outlined chip — cool cyan ring (matches pick colour
-           ladder, not gold). -dark variants stay constant for always-dark tips. */
-        --pick-must-ring-dark: rgba(103, 232, 249, 0.50);
-        --pick-must-ink-dark: rgba(103, 232, 249, 0.08);
-        --pick-must-ring: var(--pick-must-ring-dark);
-        --pick-must-ink: var(--pick-must-ink-dark);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -66,9 +60,6 @@
         --accent: #e0a500;
         --accent-soft: #9a7100;
         --accent-on: #14110a;
-        /* Paper chip: deeper cyan ring on white, slightly denser ink. */
-        --pick-must-ring: rgba(8, 145, 178, 0.48);
-        --pick-must-ink: rgba(8, 145, 178, 0.10);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -2487,30 +2478,14 @@
         background: none;
         text-shadow: none;
     }
-    /* Pick-rate ("選取率") — cool cyan→blue→indigo→slate ladder.
-       Frequency only (no good/bad).  WR keeps green/red. Absolute colour cuts
-       in site.js: ≥50% / 20% / 5% / 1%.  必出 border is separate .pick-must
-       (surface cuts: hex 20% · 2件套/鞋子 30% · 單件 40% · 召喚師 50%). */
+    /* Pick-rate ("選取率") — 5 solar tiers, colour + weight only (no border).
+       青 → 亮黃 → 枯葉黃 → 白 → 灰.  Frequency only; WR keeps green/red.
+       Cuts in site.js: ≥50% / 20% / 5% / 1% / <1%. */
     .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #7c8aa1; font-weight: 500; }
-    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #94a3b8; font-weight: 600; }
-    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #818cf8; font-weight: 650; }
-    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #38bdf8; font-weight: 700; }
+    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #e6e8eb; font-weight: 600; }
+    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #c4a35a; font-weight: 650; }
+    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #fde047; font-weight: 700; }
     .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #67e8f9; font-weight: 700; }
-    /* 必出 marker: outlined chip around the number only — cool cyan ring. */
-    .cluster-pick.pick-must,
-    .cg-option-pick.pick-must,
-    .item-build-pick.pick-must,
-    .boot-rail-pick.pick-must,
-    .cg-core-share.pick-must {
-        padding: 0 4px;
-        border: 1px solid var(--pick-must-ring);
-        border-radius: 4px;
-        background: var(--pick-must-ink);
-    }
-    /* Wide cells: shrink / inset the chip instead of framing the whole cell. */
-    .item-build-pick.pick-must { width: fit-content; margin-left: auto; margin-right: auto; }
-    .cluster-pick.pick-must { margin: 3px 4px; border-radius: 6px; }
-    .boot-rail-pick.pick-must { text-align: center; }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -3180,20 +3155,12 @@
         box-sizing: border-box;
         /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick heat: cool cyan → sky → indigo → slate (hot → cold). */
+    /* Pick heat: 青 → 亮黃 → 枯葉黃 → 白 → 灰 (5 solar tiers, colour only). */
     .aug .alift.pick-1 { color: #7c8aa1; font-weight: 500; }
-    .aug .alift.pick-2 { color: #94a3b8; font-weight: 600; }
-    .aug .alift.pick-3 { color: #818cf8; font-weight: 650; }
-    .aug .alift.pick-4 { color: #38bdf8; font-weight: 700; }
+    .aug .alift.pick-2 { color: #e6e8eb; font-weight: 600; }
+    .aug .alift.pick-3 { color: #c4a35a; font-weight: 650; }
+    .aug .alift.pick-4 { color: #fde047; font-weight: 700; }
     .aug .alift.pick-5 { color: #67e8f9; font-weight: 700; }
-    /* 必出 marker — outlined chip; stretch column → self-center to number width. */
-    .aug .alift.pick-must {
-        align-self: center;
-        padding: 0 5px;
-        border: 1px solid var(--pick-must-ring);
-        border-radius: 4px;
-        background: var(--pick-must-ink);
-    }
     .aug-hot-badge {
         position: absolute;
         top: 4px;
@@ -4106,9 +4073,12 @@
        picks without blue/red team paint. */
     /* Full-bleed draft rails. Avoid bare 100vw without overflow-x:hidden —
        on Windows 100vw includes the scrollbar gutter and creates a fake
-       horizontal scrollbar even when nothing is off-screen. */
+       horizontal scrollbar even when nothing is off-screen.
+       Shell is locked to one viewport so both 5-slot rails always fit;
+       the middle column scrolls if the pool/analysis needs more room. */
     body:has(.view-draft.is-active) {
         overflow-x: hidden;
+        overflow-y: hidden;
     }
     .view-draft.is-active {
         /* Break out of .site-main padding + max-width centering to viewport edges. */
@@ -4121,7 +4091,9 @@
         margin-top: -24px;
         margin-bottom: -64px;
         padding: 0;
-        min-height: calc(100dvh - var(--header-h, 56px));
+        height: calc(100dvh - var(--header-h, 56px));
+        min-height: 0;
+        max-height: calc(100dvh - var(--header-h, 56px));
         overflow: hidden;
     }
     .draft-shell {
@@ -4132,7 +4104,10 @@
         width: 100%;
         max-width: none;
         margin: 0;
-        min-height: calc(100dvh - var(--header-h, 56px));
+        height: 100%;
+        min-height: 0;
+        max-height: 100%;
+        overflow: hidden;
         --pick-color: rgba(232, 234, 237, 0.92);
     }
     .draft-shell.is-target-enemy { --pick-color: rgba(180, 186, 194, 0.95); }
@@ -4141,7 +4116,9 @@
         align-items: center;
         gap: 22px;
         min-height: 48px;
-        margin-bottom: 12px;
+        flex: none;
+        /* Spacing below comes from .draft-main gap — avoid double margin. */
+        margin-bottom: 0;
         border-bottom: 1px solid var(--border);
     }
     .draft-mode-tab {
@@ -4169,8 +4146,17 @@
     .draft-mode-tab.is-active { color: var(--text); }
     .draft-mode-tab.is-active::after { background: var(--accent); }
     .draft-pane[hidden] { display: none !important; }
+    .draft-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+    }
     .draft-help {
-        margin: 12px 0 0;
+        margin: 0;
         color: var(--text-dim);
         font-size: 11px;
         line-height: 1.6;
@@ -4245,17 +4231,16 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    /* Broadcast-style lock-in: flush edges, fill shell height, no inner scroll. */
+    /* Broadcast-style lock-in: flush edges, fill shell height.
+       Shell is viewport-locked so all 5 slots always share the rail — no more
+       clipping the last pick when the middle column is taller. */
     .draft-side {
-        position: sticky;
-        top: var(--header-h, 56px);
+        position: relative;
         display: flex;
         flex-direction: column;
-        /* Stretch with .draft-shell — do NOT force height:100vh (that stacked
-           under the site header and forced a useless page scrollbar). */
-        height: auto;
-        min-height: 100%;
-        max-height: calc(100dvh - var(--header-h, 56px));
+        height: 100%;
+        min-height: 0;
+        max-height: none;
         background: #0a0c10;
         border: 0;
         border-radius: 0;
@@ -4278,11 +4263,12 @@
     }
     .draft-side-select {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         justify-content: space-between;
-        gap: 8px;
+        gap: 10px;
         width: 100%;
-        padding: 10px 12px;
+        min-height: 52px;
+        padding: 14px 16px;
         margin: 0;
         border: 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -4306,9 +4292,9 @@
         background: rgba(255, 255, 255, 0.09);
     }
     .draft-side-label {
-        font-size: 12px;
+        font-size: 15px;
         font-weight: 800;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
         color: #e8eaed;
         min-width: 0;
@@ -4317,9 +4303,11 @@
         white-space: nowrap;
     }
     .draft-side-wr {
-        font-size: 16px;
+        font-size: 22px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
+        letter-spacing: -0.02em;
+        line-height: 1;
         color: #f3f5f7;
         text-shadow: none;
     }
@@ -4329,13 +4317,15 @@
         flex: 1 1 auto;
         gap: 0;
         min-height: 0;
+        overflow: hidden;
     }
     .draft-slot {
         position: relative;
         display: block;
         flex: 1 1 0;
         width: 100%;
-        min-height: 64px;
+        /* Allow equal shrink so 5 picks always fit the rail height. */
+        min-height: 0;
         margin: 0;
         padding: 0;
         border: 0;
@@ -4357,8 +4347,26 @@
     .draft-side.is-enemy .draft-slot.is-empty {
         background: #10131a;
     }
+    /*
+     * Lock-in splash crop (broadcast bars)
+     * ------------------------------------
+     * Landscape splash + cover fill, then ~1.38× zoom into the face band so
+     * the portrait reads large (previous height-first crop was too wide/small).
+     * transform-origin upper-left keeps the head in frame while zooming.
+     * Enemy mirrors the WRAP so head lands right and faces into the board.
+     * Per-champ overrides can later set --slot-art-x / --slot-art-y / --slot-art-zoom.
+     */
+    .draft-slot-art-wrap {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        background: #0c0e14;
+    }
+    .draft-side.is-enemy .draft-slot-art-wrap {
+        transform: scaleX(-1);
+    }
     .draft-slot.is-filled:hover .draft-slot-art {
-        transform: scale(1.04);
         filter: brightness(1.08);
     }
     .draft-slot-art {
@@ -4367,17 +4375,19 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
-        object-position: 50% 18%;
-        transform: scale(1.01);
-        transition: transform 160ms var(--ease-out, ease), filter 160ms var(--ease-out, ease);
+        object-position: var(--slot-art-x, 22%) var(--slot-art-y, 20%);
+        transform: scale(var(--slot-art-zoom, 1.38));
+        transform-origin: var(--slot-art-x, 22%) var(--slot-art-y, 20%);
         pointer-events: none;
+        transition: filter 160ms var(--ease-out, ease);
+        user-select: none;
+        -webkit-user-drag: none;
     }
-    .draft-side.is-enemy .draft-slot-art {
-        object-position: 50% 18%;
-        transform: scaleX(-1) scale(1.01);
-    }
-    .draft-side.is-enemy .draft-slot.is-filled:hover .draft-slot-art {
-        transform: scaleX(-1) scale(1.04);
+    /* Square icon fallback if splash 404s — no extra zoom. */
+    .draft-slot-art.is-icon-fallback {
+        object-position: center 18%;
+        transform: none;
+        transform-origin: center center;
     }
     .draft-slot-shade {
         position: absolute;
@@ -4443,19 +4453,20 @@
         right: 12px;
         text-align: right;
     }
+    /* Empty + filled share bottom-left name baseline (enemy: bottom-right). */
     .draft-slot.is-empty .draft-slot-name {
-        bottom: auto;
-        top: 50%;
-        transform: translateY(-50%);
-        left: 42px;
-        right: 12px;
+        bottom: 8px;
+        top: auto;
+        transform: none;
+        left: 12px;
+        right: 28px;
         color: color-mix(in srgb, var(--text-muted, #9aa0a6) 90%, transparent);
         text-shadow: none;
         font-weight: 600;
     }
     .draft-side.is-enemy .draft-slot.is-empty .draft-slot-name {
-        left: 12px;
-        right: 42px;
+        left: 28px;
+        right: 12px;
         text-align: right;
     }
     .draft-slot-x {
@@ -4480,6 +4491,12 @@
         flex-direction: column;
         gap: 12px;
         min-width: 0;
+        min-height: 0;
+        height: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         /* Keep pool/analysis readable while side rails hug the screen edges. */
         padding: 0 clamp(12px, 1.6vw, 28px);
     }
@@ -4517,6 +4534,9 @@
         flex-wrap: wrap;
         gap: 8px;
         align-items: center;
+        /* Equal air above/below the control row (paired with .draft-pane gap). */
+        padding: 0;
+        margin: 0;
     }
     .draft-search-wrap {
         position: relative;
@@ -4537,33 +4557,86 @@
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
+        align-items: center;
     }
     .draft-role-chips .chip {
         padding: 4px 10px;
         font-size: 11px;
     }
+    /* Always site accent gold when active (not Fighter orange / role tints). */
+    .draft-role-chips .chip.active {
+        background: var(--accent, #f5c518);
+        color: var(--accent-on, #14110a);
+        border-color: var(--accent, #f5c518);
+        font-weight: 700;
+    }
     .draft-pool {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
         gap: 8px;
-        max-height: min(68vh, 720px);
-        overflow: auto;
+        /* Pack rows to the top — free height was stretching gaps between rows. */
+        align-content: start;
+        justify-content: start;
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+        /* Vertical scroll only — horizontal bar was a subpixel / badge leak fake. */
+        overflow-x: hidden;
+        overflow-y: auto;
         overscroll-behavior: contain;
         scrollbar-gutter: stable;
-        padding: 2px;
+        /* Horizontal only — vertical air comes from .draft-pane gap (symmetric). */
+        padding: 0 2px;
+        min-width: 0;
         background: color-mix(in srgb, var(--surface, #11151d) 58%, transparent);
     }
     .draft-pool .panel-empty { grid-column: 1 / -1; }
+    /* Zero-size full-width breaker: next tier starts on a new grid row. */
+    .draft-tier-break {
+        grid-column: 1 / -1;
+        height: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        overflow: hidden;
+        pointer-events: none;
+    }
     .draft-champ {
         position: relative;
         aspect-ratio: 1 / 1;
         min-width: 0;
         padding: 0;
         border-radius: 8px;
-        border: 2px solid transparent;
+        /* Match home tier-list: solid tier colour frame (OP/T1 use gradient below). */
+        border: 2px solid var(--tier-color, #555);
         background: var(--chip-bg, #1a1d21);
         cursor: pointer;
-        transition: transform .08s, border-color .08s, box-shadow .08s;
+        transition: transform .08s, border-color .08s, box-shadow .08s, filter .08s;
+    }
+    /* OP / T1: same prismatic / premium frames as home .champ cards. */
+    .draft-champ[data-tier="OP"] {
+        border-color: transparent;
+        background:
+            linear-gradient(#1f2530, #1f2530) padding-box,
+            linear-gradient(135deg,
+                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+        background-size: auto, 220% 220%;
+        animation: prismShift 6s ease-in-out infinite;
+        box-shadow: 0 0 8px rgba(220,180,255,0.45);
+    }
+    .draft-champ[data-tier="T1"] {
+        border-color: transparent;
+        background:
+            linear-gradient(#1f2530, #1f2530) padding-box,
+            linear-gradient(135deg,
+                #ffb380 0%,
+                #ff5a3c 32%,
+                #c8262c 62%,
+                #ff8050 100%) border-box;
+        background-size: auto, 220% 220%;
+        animation: prismShift 9s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .draft-champ img {
         width: 100%;
@@ -4571,6 +4644,13 @@
         object-fit: cover;
         display: block;
         border-radius: 6px;
+        transition: filter .12s ease;
+    }
+    /* Selected in either roster: grey out the portrait (tier frame stays). */
+    .draft-champ.is-ally img,
+    .draft-champ.is-enemy img {
+        filter: grayscale(1) brightness(0.72);
+        opacity: 0.88;
     }
     .draft-champ-ph {
         display: block;
@@ -4612,15 +4692,33 @@
     @media (hover: hover) {
         .draft-champ:hover {
             transform: translateY(-2px);
-            border-color: color-mix(in srgb, var(--pick-color) 70%, transparent);
+            filter: brightness(1.06);
             z-index: 1;
+        }
+        .draft-champ:hover:not([data-tier="OP"]):not([data-tier="T1"]) {
+            border-color: color-mix(in srgb, var(--tier-color, #555) 70%, #fff);
+            box-shadow: 0 4px 14px -6px color-mix(in srgb, var(--tier-color, #555) 55%, transparent);
         }
         .draft-champ:hover .name { opacity: 1; }
     }
+    /* Selected: keep tier frame; mark with corner dot + soft outer ring only. */
     .draft-champ.is-ally,
     .draft-champ.is-enemy {
-        border-color: var(--pool-ring, rgba(232, 234, 237, 0.9));
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 40%, transparent);
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 55%, transparent),
+            0 0 10px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 28%, transparent);
+    }
+    .draft-champ[data-tier="OP"].is-ally,
+    .draft-champ[data-tier="OP"].is-enemy {
+        box-shadow:
+            0 0 8px rgba(220,180,255,0.45),
+            0 0 0 1px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 55%, transparent);
+    }
+    .draft-champ[data-tier="T1"].is-ally,
+    .draft-champ[data-tier="T1"].is-enemy {
+        box-shadow:
+            0 0 6px rgba(255,90,60,0.42),
+            0 0 0 1px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 55%, transparent);
     }
     .draft-champ.is-ally { --pool-ring: rgba(240, 242, 245, 0.92); }
     .draft-champ.is-enemy { --pool-ring: rgba(160, 166, 176, 0.95); }
@@ -4628,14 +4726,17 @@
     .draft-champ.is-enemy::after {
         content: '';
         position: absolute;
-        top: -5px;
-        right: -5px;
-        width: 11px;
-        height: 11px;
+        /* Inset — negative offsets used to poke past the cell and force a
+           phantom horizontal scrollbar on the pool at some zoom/widths. */
+        top: 3px;
+        right: 3px;
+        width: 9px;
+        height: 9px;
         border-radius: 999px;
         background: var(--pool-ring, rgba(232, 234, 237, 0.92));
         border: 2px solid var(--surface, #11151d);
         z-index: 2;
+        pointer-events: none;
     }
     .draft-result {
         min-width: 0;
@@ -4719,10 +4820,16 @@
         height: 10px;
         border-radius: 2px;
     }
-    .draft-leg.is-ally { color: #e8eaed; }
-    .draft-leg.is-ally i { background: #e8eaed; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); }
-    .draft-leg.is-enemy { color: #9aa0a6; }
-    .draft-leg.is-enemy i { background: #6b7280; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); }
+    .draft-leg.is-ally { color: var(--accent-soft, #f5d780); }
+    .draft-leg.is-ally i {
+        background: var(--accent, #f5c518);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #f5c518) 40%, transparent);
+    }
+    .draft-leg.is-enemy { color: #b0b5bd; }
+    .draft-leg.is-enemy i {
+        background: linear-gradient(135deg, #c4c8d0, #8b919c);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+    }
     .draft-matchup-svg {
         min-width: 0;
     }
@@ -4752,15 +4859,24 @@
     }
     .draft-cmp-bars {
         display: grid;
-        gap: 2px;
+        gap: 5px;
+        min-width: 0;
+    }
+    /* Value sits outside the bar (right), not overlaid on the fill. */
+    .draft-cmp-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 3.6em;
+        gap: 10px;
+        align-items: center;
         min-width: 0;
     }
     .draft-cmp-track {
         position: relative;
-        height: 9px;
-        border-radius: 3px;
+        height: 14px;
+        border-radius: 4px;
         background: color-mix(in srgb, var(--text, #e6e8eb) 6%, transparent);
         overflow: hidden;
+        min-width: 0;
     }
     .draft-cmp-fill {
         display: block;
@@ -4769,28 +4885,33 @@
         min-width: 0;
         transition: width 120ms var(--ease-out, ease);
     }
-    .draft-cmp-track.is-ally .draft-cmp-fill {
-        background: linear-gradient(90deg, rgba(232, 234, 237, 0.35), rgba(232, 234, 237, 0.88));
+    .draft-cmp-line.is-ally .draft-cmp-fill {
+        background: linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--accent, #f5c518) 42%, transparent),
+            var(--accent, #f5c518)
+        );
     }
-    .draft-cmp-track.is-enemy .draft-cmp-fill {
-        background: linear-gradient(90deg, rgba(120, 126, 136, 0.4), rgba(150, 156, 166, 0.92));
+    .draft-cmp-line.is-enemy .draft-cmp-fill {
+        background: linear-gradient(90deg, rgba(140, 146, 156, 0.38), rgba(196, 200, 208, 0.92));
     }
     .draft-cmp-val {
-        position: absolute;
-        right: 5px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 9px;
+        font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
         line-height: 1;
-        color: var(--text, #e6e8ea);
-        text-shadow: 0 0 4px rgba(0, 0, 0, 0.55);
-        pointer-events: none;
+        text-align: right;
+        color: var(--text-muted, #9aa0a6);
+        white-space: nowrap;
     }
-    [data-theme="light"] .draft-cmp-val {
-        text-shadow: 0 0 3px rgba(255, 255, 255, 0.85);
-        color: var(--text);
+    .draft-cmp-line.is-ally .draft-cmp-val {
+        color: var(--accent-soft, #f5d780);
+    }
+    .draft-cmp-line.is-enemy .draft-cmp-val {
+        color: #b0b5bd;
+    }
+    [data-theme="light"] .draft-cmp-line.is-ally .draft-cmp-val {
+        color: var(--accent-soft, #9a7100);
     }
     [data-theme="light"] .draft-cmp-track {
         background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -4800,7 +4921,9 @@
             grid-template-columns: 56px minmax(0, 1fr);
             gap: 6px 8px;
         }
-        .draft-cmp-track { height: 8px; }
+        .draft-cmp-line { grid-template-columns: minmax(0, 1fr) 3.2em; gap: 8px; }
+        .draft-cmp-track { height: 12px; }
+        .draft-cmp-val { font-size: 10px; }
         .draft-matchup-svg .comp-radar { max-height: 240px; }
     }
     .draft-rec-list {
@@ -4840,16 +4963,31 @@
             min-height: 0;
             overflow: hidden;
         }
+        body:has(.view-draft.is-active) {
+            overflow-y: auto;
+        }
+        .view-draft.is-active {
+            height: auto;
+            max-height: none;
+            min-height: 0;
+            overflow: visible;
+        }
         .draft-shell {
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 0;
+            height: auto;
+            max-height: none;
             min-height: 0;
+            overflow: visible;
         }
         .draft-side.is-ally { order: 1; }
         .draft-side.is-enemy { order: 2; }
         .draft-main {
             order: 3;
             grid-column: 1 / -1;
+            height: auto;
+            max-height: none;
+            overflow: visible;
             padding: 12px 14px 16px;
         }
         .draft-side {
@@ -4862,13 +5000,22 @@
             box-shadow: none;
             overflow: hidden;
         }
-        .draft-side-select { padding: 8px 10px; }
-        .draft-side-label { font-size: 11px; }
+        .draft-side-select { min-height: 44px; padding: 11px 12px; }
+        .draft-side-label { font-size: 13px; }
+        .draft-side-wr { font-size: 18px; }
         .draft-slot { min-height: 52px; }
+        .draft-pane {
+            overflow: visible;
+            flex: none;
+        }
         .draft-pool {
             grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
             gap: 6px;
+            flex: none;
             max-height: 46vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            min-width: 0;
         }
         .draft-analysis-intro {
             align-items: flex-start;
@@ -5157,6 +5304,30 @@
         background-size: auto, 220% 220%;
         box-shadow: 0 0 6px rgba(255, 90, 60, 0.28);
     }
+    /* Draft pool mirrors home tier frames under light theme. */
+    [data-theme="light"] .draft-champ {
+        background: var(--surface);
+    }
+    [data-theme="light"] .draft-champ[data-tier="OP"] {
+        background:
+            linear-gradient(#ffffff, #ffffff) padding-box,
+            linear-gradient(135deg,
+                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+        background-size: auto, 220% 220%;
+        box-shadow: 0 0 8px rgba(180, 140, 230, 0.35);
+    }
+    [data-theme="light"] .draft-champ[data-tier="T1"] {
+        background:
+            linear-gradient(#ffffff, #ffffff) padding-box,
+            linear-gradient(135deg,
+                #ffb380 0%,
+                #ff5a3c 32%,
+                #c8262c 62%,
+                #ff8050 100%) border-box;
+        background-size: auto, 220% 220%;
+        box-shadow: 0 0 6px rgba(255, 90, 60, 0.28);
+    }
     [data-theme="light"] .tier-block[data-tier="OP"] {
         background:
             radial-gradient(ellipse 70% 60% at 50% 60%,
@@ -5227,13 +5398,12 @@
     [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
     [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
     [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
-    /* Light: cool ladder deepened for paper contrast (same order). */
+    /* Light: solar ladder deepened for paper contrast (same order). */
     [data-theme="light"] .aug .alift.pick-1 { color: #94a3b8; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-2 { color: #64748b; font-weight: 600; }
-    [data-theme="light"] .aug .alift.pick-3 { color: #4f46e5; font-weight: 650; }
-    [data-theme="light"] .aug .alift.pick-4 { color: #0284c7; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-2 { color: #374151; font-weight: 600; }
+    [data-theme="light"] .aug .alift.pick-3 { color: #8a6a2f; font-weight: 650; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #ca8a04; font-weight: 700; }
     [data-theme="light"] .aug .alift.pick-5 { color: #0e7490; font-weight: 700; }
-    /* 必出 chip colors flip via --pick-must-ring/--pick-must-ink in light theme. */
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
@@ -5460,7 +5630,7 @@
         background: rgba(0, 0, 0, 0.05);
         color: var(--text-muted);
     }
-    /* Light: cool ladder deepened for paper (same order as dark). */
+    /* Light: solar ladder deepened for paper (same order as dark). */
     [data-theme="light"] .cluster-pick.pick-1,
     [data-theme="light"] .cg-option-pick.pick-1,
     [data-theme="light"] .item-build-pick.pick-1,
@@ -5470,23 +5640,22 @@
     [data-theme="light"] .cg-option-pick.pick-2,
     [data-theme="light"] .item-build-pick.pick-2,
     [data-theme="light"] .boot-rail-pick.pick-2,
-    [data-theme="light"] .cg-core-share.pick-2 { color: #64748b; font-weight: 600; }
+    [data-theme="light"] .cg-core-share.pick-2 { color: #374151; font-weight: 600; }
     [data-theme="light"] .cluster-pick.pick-3,
     [data-theme="light"] .cg-option-pick.pick-3,
     [data-theme="light"] .item-build-pick.pick-3,
     [data-theme="light"] .boot-rail-pick.pick-3,
-    [data-theme="light"] .cg-core-share.pick-3 { color: #4f46e5; font-weight: 650; }
+    [data-theme="light"] .cg-core-share.pick-3 { color: #8a6a2f; font-weight: 650; }
     [data-theme="light"] .cluster-pick.pick-4,
     [data-theme="light"] .cg-option-pick.pick-4,
     [data-theme="light"] .item-build-pick.pick-4,
     [data-theme="light"] .boot-rail-pick.pick-4,
-    [data-theme="light"] .cg-core-share.pick-4 { color: #0284c7; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-4 { color: #ca8a04; font-weight: 700; }
     [data-theme="light"] .cluster-pick.pick-5,
     [data-theme="light"] .cg-option-pick.pick-5,
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
     [data-theme="light"] .cg-core-share.pick-5 { color: #0e7490; font-weight: 700; }
-    /* 必出 chip colors flip via --pick-must-ring/--pick-must-ink in light theme. */
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -5783,21 +5952,12 @@
         font-size: 10.5px;
         line-height: 1.4;
     }
-    /* Cool pick ladder on tip values (tip surface is always dark). */
+    /* Solar pick ladder on tip values (tip is always dark; colour only). */
     .item-tip-row > b.pick-1 { color: #7c8aa1; font-weight: 500; }
-    .item-tip-row > b.pick-2 { color: #94a3b8; font-weight: 600; }
-    .item-tip-row > b.pick-3 { color: #818cf8; font-weight: 650; }
-    .item-tip-row > b.pick-4 { color: #38bdf8; font-weight: 700; }
+    .item-tip-row > b.pick-2 { color: #e6e8eb; font-weight: 600; }
+    .item-tip-row > b.pick-3 { color: #c4a35a; font-weight: 650; }
+    .item-tip-row > b.pick-4 { color: #fde047; font-weight: 700; }
     .item-tip-row > b.pick-5 { color: #67e8f9; font-weight: 700; }
-    /* 必出 marker — tip is always dark → pin -dark ring/ink.  Shrink to number. */
-    .item-tip-row > b.pick-must {
-        justify-self: end;
-        width: fit-content;
-        padding: 0 4px;
-        border: 1px solid var(--pick-must-ring-dark);
-        border-radius: 4px;
-        background: var(--pick-must-ink-dark);
-    }
     #augch-host {
         position: fixed;
         inset: 0;

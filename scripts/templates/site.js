@@ -311,7 +311,7 @@
     }
 
     /**
-     * Dual-team radar: same axes, two polygons (ally blue / enemy red).
+     * Dual-team radar: same axes, two polygons (ally theme accent / enemy gray).
      * series: [{ axes: [{label,pct}], stroke, fill, dot }]
      * Labels use axis names only (values live in the bar compare below).
      */
@@ -975,14 +975,14 @@
             themeToDarkTitle: '切換深色',
             themeToDarkAria: '切換成深色主題',
             removePick: name => `移除 ${name}`,
-            pickEmpty: '尚未選擇',
+            pickEmpty: '英雄',
             maxOnly: n => `最多只能選 ${n} 隻英雄。`,
             pickNoteEmpty: n => `最多選 ${n} 隻；未滿 5 隻時看推薦補位，選滿後看整隊勝率與維度。`,
             pickNotePartial: want => `目前這組選角的完整資料較少，先用已知搭配排序。`,
             pickNoteReady: (want, minGames) => `已選 ${want}/${MAX_TEAM_PICKS} 隻；pair 門檻 >= ${minGames} 場。`,
             panelEmpty: '到 Draft 分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
-            draftEmpty: '點右側列表加入我方英雄；需要時切到「對手」再選敵方（可選）。',
+            draftEmpty: '連續點選英雄：先填我方 5 隻，滿了會自動接續選對手。',
             draftAllyEval: '我方陣容',
             draftEnemyEval: '對手陣容',
             draftVs: 'VS',
@@ -1017,7 +1017,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率用冷色階表示熱門度：亮青→天藍→靛藍→灰藍（越亮越熱門）；綠／紅只表示勝率。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率用太陽色階表示熱門度：青→亮黃→枯葉黃→白→灰（越亮越熱門）；綠／紅只表示勝率。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -1171,14 +1171,14 @@
             themeToDarkTitle: 'Switch to dark',
             themeToDarkAria: 'Switch to dark theme',
             removePick: name => `Remove ${name}`,
-            pickEmpty: 'Empty',
+            pickEmpty: 'Champion',
             maxOnly: n => `You can only pick up to ${n} champions.`,
             pickNoteEmpty: n => `Pick up to ${n}. Under 5 shows fill-in ranks; at 5 shows full-team WR and dims.`,
             pickNotePartial: want => `This selected group has less complete data, so the list uses known teammate fits first.`,
             pickNoteReady: (want, minGames) => `${want}/${MAX_TEAM_PICKS} picked; pair threshold >= ${minGames} games.`,
-            panelEmpty: 'Open the Draft tab and pick 1–5 allies; opponents are optional. Under 5 ranks fills; with an enemy roster we show matchup WR and both team traits.',
+            panelEmpty: 'Open the Draft tab and pick 1–5 allies; you can also pick opponents. Under 5 ranks fills; with an enemy roster we show matchup WR and both team traits.',
             panelNoData: 'This combination does not have enough pair data yet.',
-            draftEmpty: 'Click the list to add allies; switch to Opponent for an optional enemy roster.',
+            draftEmpty: 'Click champions continuously: fill 5 allies first, then auto-continue into the enemy roster.',
             draftAllyEval: 'Ally composition',
             draftEnemyEval: 'Enemy composition',
             draftVs: 'VS',
@@ -1212,7 +1212,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate uses a cool ladder: cyan → sky → indigo → slate (brighter = hotter); green/red are reserved for win rate.',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate uses a solar ladder: cyan → bright yellow → ochre → white → gray (brighter = hotter); green/red are reserved for win rate.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -1533,11 +1533,18 @@
     }
 
     function updateSearchPlaceholder() {
-        const searchEl = document.getElementById('champ-search');
-        if (!searchEl) return;
         const copy = tr();
-        searchEl.placeholder = searchPlaceholderFor(copy);
-        searchEl.setAttribute('aria-label', copy.searchAria);
+        const searchEl = document.getElementById('champ-search');
+        if (searchEl) {
+            searchEl.placeholder = searchPlaceholderFor(copy);
+            searchEl.setAttribute('aria-label', copy.searchAria);
+        }
+        // Draft pool search is a separate input (hardcoded zh in HTML shell).
+        const draftSearch = document.getElementById('draft-search');
+        if (draftSearch) {
+            draftSearch.placeholder = copy.searchPlaceholderMobile;
+            draftSearch.setAttribute('aria-label', copy.searchAria);
+        }
     }
 
     function champName(info, cid) {
@@ -1827,9 +1834,8 @@
         }
         if (opts.pick != null && opts.pick !== '') {
             const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
-            const mustCut = opts.mustCut != null ? opts.mustCut : PICK_MUST.hex;
             const colorFn = typeof opts.colorTierFn === 'function' ? opts.colorTierFn : pickColorTier;
-            const pickHeat = pickHeatClass(rate, mustCut, colorFn);
+            const pickHeat = pickHeatClass(rate, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
         if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
@@ -2070,10 +2076,10 @@
         const pickPct = pct(pickRate);
         const isHot = pickRate >= (onBoard ? AUG_BOARD_HOT_PICK : AUG_HOT_PICK);
         const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
-        // Board: own per-game scale for colour + must. Champ: absolute cool + must@20%.
+        // Board: own per-game colour scale. Champ: absolute solar ladder.
         const pickHeat = onBoard
-            ? pickHeatClass(pickRate, AUG_BOARD_HOT_PICK, augBoardColorTier)
-            : pickHeatClass(pickRate, PICK_MUST.hex);
+            ? pickHeatClass(pickRate, augBoardColorTier)
+            : pickHeatClass(pickRate);
         const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
@@ -2089,7 +2095,6 @@
             wr: pct(entry.wr),
             pick: pickPct,
             pickRate,
-            mustCut: onBoard ? AUG_BOARD_HOT_PICK : PICK_MUST.hex,
             colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
             lift: entry.lift,
             liftLabel: signed(entry.lift),
@@ -2141,25 +2146,16 @@
     }
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
-    // Aligns with 必出 border (pick-must) on hextech cards.
     const AUG_HOT_PICK = 0.20;
     // 增幅榜 board pick = average appearances per game (counts multiplicity), so it
     // runs on its own scale: the most-taken augment sits near ~0.75/game, the
     // median near ~0.14, and a value can exceed 1.0.  Give the board its own 熱門
     // cut + colour ramp so the colour still means "popular" relative to the field.
     const AUG_BOARD_HOT_PICK = 0.40;
-    // 必出 border (outlined chip) — surface-specific, independent of colour tier.
-    //   海克斯 20% · 概覽2件套/鞋子 30% · 單件 40% · 召喚師 50%
-    const PICK_MUST = {
-        hex: 0.20,
-        core: 0.30,
-        boot: 0.30,
-        single: 0.40,
-        spell: 0.50,
-    };
-    // Absolute cool colour ladder (選取率 has no good/bad — cyan→blue→indigo→slate).
-    //   ≥50% pick-5  #67E8F9   20–49.9% pick-4  #38BDF8
-    //   5–19.9% pick-3 #818CF8  1–4.9% pick-2  #94A3B8  <1% pick-1 #7C8AA1
+    // Absolute solar colour ladder — 5 tiers, colour only (no border).
+    //   ≥50% pick-5  青 #67E8F9     20–49.9% pick-4  亮黃 #FDE047
+    //   5–19.9% pick-3 枯葉黃 #C4A35A  1–4.9% pick-2  白 #E6E8EB
+    //   <1% pick-1  灰 #7C8AA1
     function pickColorTier(pick) {
         if (pick >= 0.50) return 5;
         if (pick >= 0.20) return 4;
@@ -2175,11 +2171,9 @@
         if (pick >= 0.10) return 2;
         return 1;
     }
-    // "pick-N" colour + optional "pick-must" border when rate clears the surface cut.
-    function pickHeatClass(pick, mustCut, colorTierFn) {
+    function pickHeatClass(pick, colorTierFn) {
         const tier = (typeof colorTierFn === 'function' ? colorTierFn : pickColorTier)(pick);
-        const must = Number.isFinite(mustCut) && pick >= mustCut ? ' pick-must' : '';
-        return `pick-${tier}${must}`;
+        return `pick-${tier}`;
     }
     /**
      * 5-step win-rate tone for .awr:
@@ -2837,8 +2831,7 @@
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-                // Multi-item route share: cool colour + 必出@30% (同 2件套).
-                const pickHeat = pickHeatClass(pickVal, PICK_MUST.core);
+                const pickHeat = pickHeatClass(pickVal);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
                     : titleForItemCard(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games);
@@ -2851,7 +2844,6 @@
                     wr: pct(entry.wr || 0),
                     pick: pct(pickVal),
                     pickRate: pickVal,
-                    mustCut: PICK_MUST.core,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games,
@@ -2892,17 +2884,14 @@
             );
             const iconLimit = options.singleItem ? 1 : 2;
             const tipItems = pairItems.slice(0, iconLimit);
-            // 單件 必出@40%；前兩件 pair 必出@30%（同概覽2件套）。Colour is absolute cool ladder.
-            const itemMust = options.singleItem ? PICK_MUST.single : PICK_MUST.core;
             const pickVal = Number(entry.pick || 0);
-            const pickHeat = pickHeatClass(pickVal, itemMust);
+            const pickHeat = pickHeatClass(pickVal);
             const tipHtml = buildItemTipHtml({
                 name,
                 items: tipItems,
                 wr: pct(entry.wr || 0),
                 pick: pct(entry.pick || 0),
                 pickRate: pickVal,
-                mustCut: itemMust,
                 lift: liftValue,
                 liftLabel: signed(liftValue),
                 games: entry.g || 0,
@@ -3181,8 +3170,7 @@
                     const lift = Number(o.lift || 0);
                     const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
                     const pickVal = Number(o.pick || 0);
-                    // Third-slot singles → 必出@40% (單件).
-                    const pickHeat = pickHeatClass(pickVal, PICK_MUST.single);
+                    const pickHeat = pickHeatClass(pickVal);
                     const laneInfo = laneLabels[o.lane];
                     const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
                     const optName = itemDisplayName(o) || o.name_zh || o.name || '';
@@ -3195,7 +3183,6 @@
                         wr: pct(o.wr || 0),
                         pick: pct(pickVal),
                         pickRate: pickVal,
-                        mustCut: PICK_MUST.single,
                         lift,
                         liftLabel: signed(lift),
                         games: o.g || 0,
@@ -3247,7 +3234,6 @@
                     wr: grp.wr != null ? pct(grp.wr || 0) : '',
                     pick: pct(grp.pick || 0),
                     pickRate: corePickVal,
-                    mustCut: PICK_MUST.core,
                     lift: coreLift,
                     liftLabel: signed(coreLift),
                     games: grp.g || 0,
@@ -3258,7 +3244,7 @@
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
                                 ${wrHtml}
-                                <span class="cg-core-share ${pickHeatClass(corePickVal, PICK_MUST.core)}">${escHtml(share)}</span>
+                                <span class="cg-core-share ${pickHeatClass(corePickVal)}">${escHtml(share)}</span>
                             </div>
                             ${itemTipSource(headTipHtml)}
                         </div>
@@ -3288,8 +3274,6 @@
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
-            // Boots 必出@30%; spells pass mustCut: PICK_MUST.spell (50%).
-            const mustCut = Number.isFinite(opts.mustCut) ? opts.mustCut : PICK_MUST.boot;
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
@@ -3303,7 +3287,7 @@
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
                 const pickVal = Number(entry.pick || 0);
-                const pickHeat = pickHeatClass(pickVal, mustCut);
+                const pickHeat = pickHeatClass(pickVal);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
@@ -3311,7 +3295,6 @@
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
-                    mustCut,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games: entry.g || 0,
@@ -3406,7 +3389,6 @@
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
                         extraClass: 'spell-rail-section',
-                        mustCut: PICK_MUST.spell,
                     })}
                 </div>
             </div>
@@ -3953,7 +3935,7 @@
         `;
     }
 
-    /** Dual horizontal bar: ally (blue) vs enemy (red). value is 0–1 display fraction. */
+    /** Dual horizontal bar: ally (theme accent) vs enemy (gray). value is 0–1 display fraction. */
     function draftCompareBarRow(label, allyFrac, enemyFrac, allyText, enemyText) {
         const a = Math.max(0, Math.min(1, Number(allyFrac) || 0));
         const e = Math.max(0, Math.min(1, Number(enemyFrac) || 0));
@@ -3961,12 +3943,16 @@
             <div class="draft-cmp-row">
                 <span class="draft-cmp-label">${escHtml(label)}</span>
                 <div class="draft-cmp-bars">
-                    <div class="draft-cmp-track is-ally" title="${escHtml(allyText)}">
-                        <span class="draft-cmp-fill" style="width:${(a * 100).toFixed(1)}%"></span>
+                    <div class="draft-cmp-line is-ally" title="${escHtml(allyText)}">
+                        <div class="draft-cmp-track">
+                            <span class="draft-cmp-fill" style="width:${(a * 100).toFixed(1)}%"></span>
+                        </div>
                         <span class="draft-cmp-val">${escHtml(allyText)}</span>
                     </div>
-                    <div class="draft-cmp-track is-enemy" title="${escHtml(enemyText)}">
-                        <span class="draft-cmp-fill" style="width:${(e * 100).toFixed(1)}%"></span>
+                    <div class="draft-cmp-line is-enemy" title="${escHtml(enemyText)}">
+                        <div class="draft-cmp-track">
+                            <span class="draft-cmp-fill" style="width:${(e * 100).toFixed(1)}%"></span>
+                        </div>
                         <span class="draft-cmp-val">${escHtml(enemyText)}</span>
                     </div>
                 </div>
@@ -3974,7 +3960,7 @@
     }
 
     /**
-     * Matchup panel: overlaid dual radar (blue/red) + dual bars.
+     * Matchup panel: overlaid dual radar (accent / gray) + dual bars.
      * Works for partial rosters (1–5 each side); composition score scales with size.
      * Bars: champ strength, est WR, composition only (no pair lift / tempo).
      */
@@ -3985,26 +3971,25 @@
             label: (allyAxes[i] && allyAxes[i].label) || a.label,
             pct: a.pct,
         }));
+        // Ally = site theme accent (gold); enemy = gray-white.
         const radar = compRadarOverlaySvg([
             {
                 axes: allyAxes,
-                stroke: 'rgba(232,234,237,0.92)',
-                fill: 'rgba(232,234,237,0.14)',
-                dot: 'rgba(240,242,245,0.95)',
+                stroke: 'var(--accent, #f5c518)',
+                fill: 'color-mix(in srgb, var(--accent, #f5c518) 20%, transparent)',
+                dot: 'var(--accent, #f5c518)',
             },
             {
                 axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
-                stroke: 'rgba(120,126,136,0.95)',
-                fill: 'rgba(100,106,116,0.16)',
-                dot: 'rgba(150,156,166,0.95)',
+                stroke: 'rgba(196,200,208,0.88)',
+                fill: 'rgba(160,166,176,0.14)',
+                dot: 'rgba(210,214,220,0.95)',
             },
         ], copy.draftRadarTitle || copy.teamDimsTitle);
 
         // Signed composition: map ±8pp → 0–1 around 0.5 for bar width.
         const liftFrac = v => Math.max(0, Math.min(1, 0.5 + (Number(v) || 0) / 0.16));
         const liftTxt = v => signed(Number(v) || 0);
-        const aN = Number(allyCount) || 0;
-        const eN = Number(enemyCount) || 0;
         const rows = [
             draftCompareBarRow(
                 copy.draftChampStrength || copy.teamBaseWr,
@@ -4022,8 +4007,8 @@
                 liftTxt(allyEv.compositionScore), liftTxt(enemyEv.compositionScore),
             ),
         ];
-        const legAlly = `${copy.draftLegendAlly || 'Ally'} ${aN}/${MAX_TEAM_PICKS}`;
-        const legEnemy = `${copy.draftLegendEnemy || 'Enemy'} ${eN}/${MAX_TEAM_PICKS}`;
+        const legAlly = copy.draftLegendAlly || 'Ally';
+        const legEnemy = copy.draftLegendEnemy || 'Enemy';
 
         return `
             <div class="draft-matchup">
@@ -4216,13 +4201,17 @@
         return side === 'enemy' ? enemyPicks : teamPicks;
     }
 
-    /** Prefer full-bleed loading/splash art for lock-in bars; fall back to square icon. */
+    /**
+     * Lock-in bar art: use landscape splash (not tall loading).
+     * Loading 308×560 in a short wide bar forces a razor-thin vertical crop that
+     * routinely shears heads; splash ~1215×717 matches the bar aspect so the
+     * full head can stay in frame.
+     */
     function draftSlotArtUrl(info) {
         if (!info) return '';
         const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
         if (alias) {
-            // Centered portrait crop reads better in a short horizontal bar than square icons.
-            return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${alias}_0.jpg`;
+            return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${alias}_0.jpg`;
         }
         return info.image || '';
     }
@@ -4242,8 +4231,13 @@
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
                 + (art
-                    ? `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
-                        + (icon ? `onerror="this.onerror=null;this.src='${escHtml(icon)}'"` : '') + `>`
+                    /* Art wrap owns the mirror for enemy; img always head-left crop. */
+                    ? `<span class="draft-slot-art-wrap" aria-hidden="true">`
+                        + `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
+                        + (icon
+                            ? `onerror="this.onerror=null;this.src='${escHtml(icon)}';this.classList.add('is-icon-fallback')"`
+                            : '')
+                        + `></span>`
                     : '<span class="draft-slot-ph" aria-hidden="true"></span>')
                 + `<span class="draft-slot-shade" aria-hidden="true"></span>`
                 + `<span class="draft-slot-name">${escHtml(name)}</span>`
@@ -4256,7 +4250,6 @@
                 `<button class="draft-slot is-empty" type="button" data-draft-target="${side}" `
                 + `aria-label="${escHtml(copy.pickEmpty)}">`
                 + `<span class="draft-slot-shade" aria-hidden="true"></span>`
-                + `<span class="draft-slot-ph">${i + 1}</span>`
                 + `<span class="draft-slot-name">${escHtml(copy.pickEmpty)}</span>`
                 + `</button>`
             );
@@ -4291,6 +4284,17 @@
             .sort((a, b) => b.wr - a.wr);
     }
 
+    // Same Bayes-WR cutoffs as scripts/tierlist_engine.py assign_tier.
+    function draftAssignTier(bayesWr) {
+        const w = Number(bayesWr) || 0;
+        if (w >= 0.55) return 'OP';
+        if (w >= 0.52) return 'T1';
+        if (w >= 0.50) return 'T2';
+        if (w >= 0.48) return 'T3';
+        if (w >= 0.46) return 'T4';
+        return 'T5';
+    }
+
     function renderDraftChampList() {
         const host = document.getElementById('draft-champ-list');
         if (!host) return;
@@ -4302,7 +4306,14 @@
             host.innerHTML = `<div class="panel-empty">${escHtml(copy.emptyCopy)}</div>`;
             return;
         }
-        host.innerHTML = rows.map(row => {
+        const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
+        const tierOrder = (((DATA && DATA.tiers) || {}).order) || ['OP', 'T1', 'T2', 'T3', 'T4', 'T5'];
+        const byTier = {};
+        rows.forEach(row => {
+            const tier = draftAssignTier(row.wr);
+            (byTier[tier] = byTier[tier] || []).push(row);
+        });
+        const champBtn = (row) => {
             const onAlly = allySet.has(row.cid);
             const onEnemy = enemySet.has(row.cid);
             let state = '';
@@ -4310,26 +4321,42 @@
             else if (onEnemy) state = ' is-enemy';
             const image = row.info.image || '';
             const wrTxt = pct(row.wr);
+            const tier = draftAssignTier(row.wr);
+            const tierColor = (tierColors[tier] && tierColors[tier].color) || '#555';
             return (
-                `<button type="button" class="draft-champ${state}" data-draft-pick="${row.cid}" role="option" `
+                `<button type="button" class="draft-champ${state}" data-draft-pick="${row.cid}" `
+                + `data-tier="${tier}" style="--tier-color:${tierColor}" role="option" `
                 + `aria-selected="${onAlly || onEnemy ? 'true' : 'false'}" `
-                + `title="${escHtml(row.name)} · ${wrTxt}">`
+                + `title="${escHtml(row.name)} · ${tier} · ${wrTxt}">`
                 + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-champ-ph"></span>')
                 + `<span class="wr">${wrTxt}</span>`
                 + `<span class="name">${escHtml(row.name)}</span>`
                 + `</button>`
             );
-        }).join('');
+        };
+        // Tier groups each force a new grid row via full-width break (zero padding).
+        const parts = [];
+        tierOrder.forEach((tier) => {
+            const list = byTier[tier];
+            if (!list || !list.length) return;
+            if (parts.length) {
+                parts.push('<div class="draft-tier-break" aria-hidden="true"></div>');
+            }
+            list.forEach(row => { parts.push(champBtn(row)); });
+        });
+        host.innerHTML = parts.join('');
     }
 
     function renderDraftRoleChips() {
         const host = document.getElementById('draft-role-chips');
-        if (!host || host.dataset.ready === '1') {
-            if (host) {
-                host.querySelectorAll('.chip').forEach(c => {
-                    c.classList.toggle('active', (c.getAttribute('data-role') || '') === draftRole);
-                });
-            }
+        if (!host) return;
+        // Rebuild when language changes (labels are zh/en); only skip when
+        // same locale already painted — still refresh active state.
+        const langKey = currentLang || 'zh';
+        if (host.dataset.ready === '1' && host.dataset.lang === langKey) {
+            host.querySelectorAll('.chip').forEach(c => {
+                c.classList.toggle('active', (c.getAttribute('data-draft-role') || '') === draftRole);
+            });
             return;
         }
         const roles = [
@@ -4344,9 +4371,16 @@
         host.innerHTML = roles.map(r => {
             const label = pickLang(r.zh, r.en);
             const active = (draftRole || '') === r.role ? ' active' : '';
-            return `<button type="button" class="chip${active}" data-draft-role="${escHtml(r.role)}">${escHtml(label)}</button>`;
+            // data-role keeps home .chip[data-role] --role-color hooks; draft
+            // CSS still forces accent gold on .active so 戰士 stays 亮黃.
+            return (
+                `<button type="button" class="chip${active}" data-role="${escHtml(r.role)}" `
+                + `data-draft-role="${escHtml(r.role)}" `
+                + `data-label-zh="${escHtml(r.zh)}" data-label-en="${escHtml(r.en)}">${escHtml(label)}</button>`
+            );
         }).join('');
         host.dataset.ready = '1';
+        host.dataset.lang = langKey;
     }
 
     function draftMetricValue(value) {
@@ -4472,7 +4506,12 @@
         if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
 
         const searchEl = document.getElementById('draft-search');
-        if (searchEl && searchEl.value !== draftQuery) searchEl.value = draftQuery;
+        if (searchEl) {
+            if (searchEl.value !== draftQuery) searchEl.value = draftQuery;
+            // Keep placeholder/aria in sync even if applyLanguage skipped update.
+            searchEl.placeholder = copy.searchPlaceholderMobile;
+            searchEl.setAttribute('aria-label', copy.searchAria);
+        }
     }
 
     function setDraftSide(side) {
@@ -4484,17 +4523,46 @@
     function toggleDraftPick(cid) {
         cid = String(cid);
         pickNotice = '';
-        const list = draftPickList(draftSide);
-        const other = draftSide === 'enemy' ? teamPicks : enemyPicks;
+        // Continuous 10-pick: after ally is full, next adds land on enemy.
+        let side = draftSide;
+        let list = draftPickList(side);
+        let other = side === 'enemy' ? teamPicks : enemyPicks;
         const idx = list.indexOf(cid);
         if (idx !== -1) {
             list.splice(idx, 1);
-        } else if (other.includes(cid)) {
+            renderDraft();
+            return;
+        }
+        if (other.includes(cid)) {
             pickNotice = tr().draftOnOtherSide || tr().maxOnly(MAX_TEAM_PICKS);
-        } else if (list.length >= MAX_TEAM_PICKS) {
-            pickNotice = tr().maxOnly(MAX_TEAM_PICKS);
-        } else {
-            list.push(cid);
+            renderDraft();
+            return;
+        }
+        if (list.length >= MAX_TEAM_PICKS) {
+            if (
+                side === 'ally'
+                && enemyPicks.length < MAX_TEAM_PICKS
+                && !enemyPicks.includes(cid)
+                && !teamPicks.includes(cid)
+            ) {
+                draftSide = 'enemy';
+                side = 'enemy';
+                list = enemyPicks;
+                other = teamPicks;
+            } else {
+                pickNotice = tr().maxOnly(MAX_TEAM_PICKS);
+                renderDraft();
+                return;
+            }
+        }
+        list.push(cid);
+        // After 5th ally, hand off targeting so the next click is enemy.
+        if (
+            side === 'ally'
+            && teamPicks.length >= MAX_TEAM_PICKS
+            && enemyPicks.length < MAX_TEAM_PICKS
+        ) {
+            draftSide = 'enemy';
         }
         // Keep teamPicks as ally for aggregateRecommendations.
         renderDraft();
@@ -4503,6 +4571,7 @@
     function clearDraft() {
         teamPicks = [];
         enemyPicks = [];
+        draftSide = 'ally';
         pickNotice = '';
         renderDraft();
     }
