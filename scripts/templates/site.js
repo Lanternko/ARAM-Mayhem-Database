@@ -3892,11 +3892,13 @@
     }
 
     function draftMetricValue(value) {
-        return Number.isFinite(Number(value)) ? pct(Number(value)) : '—';
+        return value === null || value === undefined || value === '' || !Number.isFinite(Number(value))
+            ? '—'
+            : pct(Number(value));
     }
 
     function draftMetricTone(value) {
-        if (!Number.isFinite(Number(value))) return 'is-empty';
+        if (value === null || value === undefined || value === '' || !Number.isFinite(Number(value))) return 'is-empty';
         if (Number(value) >= 0.53) return 'is-good';
         if (Number(value) <= 0.47) return 'is-bad';
         return 'is-even';
