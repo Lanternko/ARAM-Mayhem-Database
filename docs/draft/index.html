@@ -1,4 +1,4 @@
-<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Draft · arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712153222'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712153222'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/draft'><meta property='og:url' content='https://arammeta.com/draft'><meta property='og:type' content='website'><meta property='og:title' content="Draft · arammeta"><meta property='og:description' content="組隊 Draft：估計勝率與隊伍特性"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="Draft · arammeta"><meta name='twitter:description' content="組隊 Draft：估計勝率與隊伍特性"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783841549' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
+<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Draft · arammeta</title><link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v=20260712153222'><link rel='apple-touch-icon' href='apple-touch-icon.png?v=20260712153222'><meta name='description' content="基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。"><base href='https://arammeta.com/'><link rel='canonical' href='https://arammeta.com/draft'><meta property='og:url' content='https://arammeta.com/draft'><meta property='og:type' content='website'><meta property='og:title' content="Draft · arammeta"><meta property='og:description' content="組隊 Draft：估計勝率與隊伍特性"><meta property='og:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta property='og:image:width' content='512'><meta property='og:image:height' content='512'><meta property='og:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:card' content='summary'><meta name='twitter:image' content='https://arammeta.com/og-image.png?v=20260712-thumb'><meta name='twitter:image:alt' content='ARAM Mayhem Database preview'><meta name='twitter:title' content="Draft · arammeta"><meta name='twitter:description' content="組隊 Draft：估計勝率與隊伍特性"><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "WebSite", "name": "arammeta", "alternateName": "ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜arammeta", "url": "https://arammeta.com/", "description": "基於 553,231 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、增幅勝率、出裝與組隊推薦，版本 26.13 持續更新。", "inLanguage": "zh-Hant"}</script><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{&quot;token&quot;: &quot;483cb89af9ee4d1da31ce69cee310b49&quot;}'></script><link rel='preload' href='api/tier-list.json?v=20260712-1783843159' as='fetch' crossorigin='anonymous'><link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&family=Noto+Serif+TC:wght@400;500&display=swap' rel='stylesheet'><style>
     /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
        the palette.  New chrome (header, nav, views, settings, column) is
        authored entirely against these vars so both themes are correct.  The
@@ -27,18 +27,12 @@
         --accent: #f5c518;
         --accent-soft: #f5d780;
         --accent-on: #14110a;
-        /* 必出 (pick-5) highlighter — gpu_tracker style: tilted gradient
-           (97deg) with uneven translucent stops (light → dense → light) and
-           soft fade-out ends, so it reads as a wide soft marker wash, not a
-           hard CSS band.  -dark stays constant for always-dark surfaces
-           (item tips). */
-        --pick5-marker-dark: linear-gradient(97deg,
-            transparent 0 2%,
-            rgba(255, 222, 89, 0.24) 5%,
-            rgba(255, 222, 89, 0.38) 50%,
-            rgba(255, 222, 89, 0.22) 95%,
-            transparent 98% 100%);
-        --pick5-marker: var(--pick5-marker-dark);
+        /* 必出 (pick-must): outlined chip — cool cyan ring (matches pick colour
+           ladder, not gold). -dark variants stay constant for always-dark tips. */
+        --pick-must-ring-dark: rgba(103, 232, 249, 0.50);
+        --pick-must-ink-dark: rgba(103, 232, 249, 0.08);
+        --pick-must-ring: var(--pick-must-ring-dark);
+        --pick-must-ink: var(--pick-must-ink-dark);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -72,13 +66,9 @@
         --accent: #e0a500;
         --accent-soft: #9a7100;
         --accent-on: #14110a;
-        /* Paper highlighter: same soft wash, denser ink for white paper. */
-        --pick5-marker: linear-gradient(97deg,
-            transparent 0 2%,
-            rgba(255, 214, 20, 0.30) 5%,
-            rgba(255, 214, 20, 0.48) 50%,
-            rgba(255, 214, 20, 0.28) 95%,
-            transparent 98% 100%);
+        /* Paper chip: deeper cyan ring on white, slightly denser ink. */
+        --pick-must-ring: rgba(8, 145, 178, 0.48);
+        --pick-must-ink: rgba(8, 145, 178, 0.10);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -2490,34 +2480,37 @@
         min-height: 26px;
         font-size: 11px;
         font-weight: 700;
+        line-height: 1.15;
         font-variant-numeric: tabular-nums;
         border-left: 1px solid rgba(255, 255, 255, 0.08);
-        color: #9aa3b8;
+        color: #94a3b8;
+        background: none;
+        text-shadow: none;
     }
-    /* Pick-rate ("選取率") — yellow → light-yellow → white → gray ladder.
-       Cold = muted gray, hot = solid yellow.  No blue/orange rainbow; WR
-       keeps green/red.  Tier cuts still from pickTier() / spellPickTier(). */
-    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #6b7280; font-weight: 500; }
-    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #9aa3b2; font-weight: 500; }
-    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #e6e8eb; font-weight: 600; }
-    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #e8d48a; font-weight: 700; }
-    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker: soft highlighter wash (--pick5-marker) over the digits.
-       Length capped near the number width so wide flex cells don't stretch
-       it into a bar. */
-    .cluster-pick.pick-5,
-    .cg-option-pick.pick-5,
-    .item-build-pick.pick-5,
-    .boot-rail-pick.pick-5,
-    .cg-core-share.pick-5 {
-        padding: 0 3px;
-        background-image: var(--pick5-marker);
-        background-repeat: no-repeat;
-        background-position: center calc(50% + 0.12em);
-        background-size: min(100%, 3.8em) 0.85em;
+    /* Pick-rate ("選取率") — cool cyan→blue→indigo→slate ladder.
+       Frequency only (no good/bad).  WR keeps green/red. Absolute colour cuts
+       in site.js: ≥50% / 20% / 5% / 1%.  必出 border is separate .pick-must
+       (surface cuts: hex 20% · 2件套/鞋子 30% · 單件 40% · 召喚師 50%). */
+    .cluster-pick.pick-1, .cg-option-pick.pick-1, .item-build-pick.pick-1, .boot-rail-pick.pick-1, .cg-core-share.pick-1 { color: #7c8aa1; font-weight: 500; }
+    .cluster-pick.pick-2, .cg-option-pick.pick-2, .item-build-pick.pick-2, .boot-rail-pick.pick-2, .cg-core-share.pick-2 { color: #94a3b8; font-weight: 600; }
+    .cluster-pick.pick-3, .cg-option-pick.pick-3, .item-build-pick.pick-3, .boot-rail-pick.pick-3, .cg-core-share.pick-3 { color: #818cf8; font-weight: 650; }
+    .cluster-pick.pick-4, .cg-option-pick.pick-4, .item-build-pick.pick-4, .boot-rail-pick.pick-4, .cg-core-share.pick-4 { color: #38bdf8; font-weight: 700; }
+    .cluster-pick.pick-5, .cg-option-pick.pick-5, .item-build-pick.pick-5, .boot-rail-pick.pick-5, .cg-core-share.pick-5 { color: #67e8f9; font-weight: 700; }
+    /* 必出 marker: outlined chip around the number only — cool cyan ring. */
+    .cluster-pick.pick-must,
+    .cg-option-pick.pick-must,
+    .item-build-pick.pick-must,
+    .boot-rail-pick.pick-must,
+    .cg-core-share.pick-must {
+        padding: 0 4px;
+        border: 1px solid var(--pick-must-ring);
+        border-radius: 4px;
+        background: var(--pick-must-ink);
     }
-    /* Right-aligned cell: anchor the swipe to the digits, not the cell. */
-    .boot-rail-pick.pick-5 { background-position: right calc(50% + 0.12em); }
+    /* Wide cells: shrink / inset the chip instead of framing the whole cell. */
+    .item-build-pick.pick-must { width: fit-content; margin-left: auto; margin-right: auto; }
+    .cluster-pick.pick-must { margin: 3px 4px; border-radius: 6px; }
+    .boot-rail-pick.pick-must { text-align: center; }
     /* Core build groups: shared rush (core 2) + all qualifying pairing items + finish tail. */
     .core-group-list { display: flex; flex-direction: column; gap: 12px; }
     .core-group {
@@ -2535,7 +2528,7 @@
     .cg-core-wr.is-good { color: #6bd16b; }
     .cg-core-wr.is-bad { color: #ff8a8a; }
     .cg-core-wr.is-even { color: #c7cede; }
-    .cg-core-share { font-size: 12px; font-weight: 600; color: #8b93a7; font-variant-numeric: tabular-nums; }
+    .cg-core-share { font-size: 12px; font-weight: 600; line-height: 1.15; color: #94a3b8; font-variant-numeric: tabular-nums; background: none; text-shadow: none; }
     .cg-options-label { margin: 10px 0 6px; font-size: 11px; color: #8b93a7; }
     .cg-options { display: flex; flex-wrap: wrap; gap: 8px; }
     .cg-option {
@@ -2546,7 +2539,7 @@
     .cg-option:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); outline: none; }
     .cg-option-icon { width: 40px; height: 40px; border-radius: 6px; background: #2a3142; object-fit: contain; }
     .cg-option-wr { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .cg-option-pick { font-size: 10px; font-variant-numeric: tabular-nums; }
+    .cg-option-pick { font-size: 10px; line-height: 1.15; font-variant-numeric: tabular-nums; background: none; text-shadow: none; }
     .cg-option-wr.is-good { color: #6bd16b; }
     .cg-option-wr.is-bad { color: #ff8a8a; }
     .cg-option-wr.is-even { color: #c7cede; }
@@ -2588,7 +2581,7 @@
     .boot-rail-wr.is-good { color: #6bd16b; }
     .boot-rail-wr.is-bad { color: #ff8a8a; }
     .boot-rail-wr.is-even { color: #c7cede; }
-    .boot-rail-pick { flex: 0 0 auto; min-width: 36px; text-align: right; font-size: 11px; color: #8b93a7; font-variant-numeric: tabular-nums; }
+    .boot-rail-pick { flex: 0 0 auto; min-width: 36px; text-align: right; font-size: 11px; line-height: 1.15; color: #94a3b8; font-variant-numeric: tabular-nums; background: none; text-shadow: none; }
     @media (max-width: 760px) {
         .overview-split { grid-template-columns: 1fr; gap: 0; }
         .overview-split .overview-split-main > .detail-section { margin-top: 0; }
@@ -2649,10 +2642,13 @@
         align-items: center;
         justify-content: center;
         min-height: 18px;
-        color: #9aa3b8;
+        color: #94a3b8;
         font-size: 10px;
         font-weight: 600;
+        line-height: 1.15;
         font-variant-numeric: tabular-nums;
+        background: none;
+        text-shadow: none;
     }
     .item-build-name {
         display: flex;
@@ -3184,18 +3180,19 @@
         box-sizing: border-box;
         /* font-family: Mincho — see top-of-file .aug .alift rule */
     }
-    /* Pick heat: 黃 → 淺黃 → 白 → 灰 (hot → cold). */
-    .aug .alift.pick-1 { color: #6b7280; font-weight: 500; }
-    .aug .alift.pick-2 { color: #9aa3b2; font-weight: 500; }
-    .aug .alift.pick-3 { color: #e6e8eb; font-weight: 600; }
-    .aug .alift.pick-4 { color: #e8d48a; font-weight: 700; }
-    .aug .alift.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker — same soft wash as the pick ladder (see .cluster-pick). */
-    .aug .alift.pick-5 {
-        background-image: var(--pick5-marker);
-        background-repeat: no-repeat;
-        background-position: center calc(50% + 0.12em);
-        background-size: min(100%, 3.8em) 0.85em;
+    /* Pick heat: cool cyan → sky → indigo → slate (hot → cold). */
+    .aug .alift.pick-1 { color: #7c8aa1; font-weight: 500; }
+    .aug .alift.pick-2 { color: #94a3b8; font-weight: 600; }
+    .aug .alift.pick-3 { color: #818cf8; font-weight: 650; }
+    .aug .alift.pick-4 { color: #38bdf8; font-weight: 700; }
+    .aug .alift.pick-5 { color: #67e8f9; font-weight: 700; }
+    /* 必出 marker — outlined chip; stretch column → self-center to number width. */
+    .aug .alift.pick-must {
+        align-self: center;
+        padding: 0 5px;
+        border: 1px solid var(--pick-must-ring);
+        border-radius: 4px;
+        background: var(--pick-must-ink);
     }
     .aug-hot-badge {
         position: absolute;
@@ -4105,26 +4102,40 @@
     /* ===== Draft tab: ally rail | champion pool | enemy rail (draftgap-style).
        Rails are sticky team columns; the middle pool reuses the home board's
        icon-tile language (square thumb + WR pill, sorted by Bayes WR desc).
-       --side-color themes one rail (ally blue / enemy red); --pick-color on the
-       shell follows the targeted side so pool hover hints where a click lands. */
+       Rails use a neutral (achromatic) chrome; --pick-color / --pool-ring mark
+       picks without blue/red team paint. */
+    /* Full-bleed draft rails. Avoid bare 100vw without overflow-x:hidden —
+       on Windows 100vw includes the scrollbar gutter and creates a fake
+       horizontal scrollbar even when nothing is off-screen. */
+    body:has(.view-draft.is-active) {
+        overflow-x: hidden;
+    }
     .view-draft.is-active {
-        width: calc(100% + 48px);
-        max-width: calc(100% + 48px);
-        margin-left: -24px;
-        padding: 0 clamp(14px, 2vw, 32px) 48px;
-        overflow: clip;
+        /* Break out of .site-main padding + max-width centering to viewport edges. */
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+        /* Cancel site-main vertical padding so header + rails ≈ one screen
+           (fixed 100vh side height was stacking under the header → page scroll). */
+        margin-top: -24px;
+        margin-bottom: -64px;
+        padding: 0;
+        min-height: calc(100dvh - var(--header-h, 56px));
+        overflow: hidden;
     }
     .draft-shell {
         display: grid;
-        grid-template-columns: minmax(188px, 16vw) minmax(0, 1fr) minmax(188px, 16vw);
-        gap: 14px;
-        align-items: start;
+        grid-template-columns: minmax(200px, 17vw) minmax(0, 1fr) minmax(200px, 17vw);
+        gap: 0;
+        align-items: stretch;
         width: 100%;
-        max-width: 1800px;
-        margin: 0 auto;
-        --pick-color: var(--accent);
+        max-width: none;
+        margin: 0;
+        min-height: calc(100dvh - var(--header-h, 56px));
+        --pick-color: rgba(232, 234, 237, 0.92);
     }
-    .draft-shell.is-target-enemy { --pick-color: #ef4444; }
+    .draft-shell.is-target-enemy { --pick-color: rgba(180, 186, 194, 0.95); }
     .draft-mode-tabs {
         display: flex;
         align-items: center;
@@ -4234,116 +4245,234 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+    /* Broadcast-style lock-in: flush edges, fill shell height, no inner scroll. */
     .draft-side {
         position: sticky;
-        top: calc(var(--header-h, 56px) + 12px);
-        background: var(--surface, #11151d);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 12px;
-        padding: 8px;
+        top: var(--header-h, 56px);
+        display: flex;
+        flex-direction: column;
+        /* Stretch with .draft-shell — do NOT force height:100vh (that stacked
+           under the site header and forced a useless page scrollbar). */
+        height: auto;
+        min-height: 100%;
+        max-height: calc(100dvh - var(--header-h, 56px));
+        background: #0a0c10;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0;
         min-width: 0;
-        --side-color: var(--accent);
+        overflow: hidden;
+        /* Neutral chrome only — no blue/red team paint. */
+        --side-color: rgba(255, 255, 255, 0.88);
     }
-    .draft-side.is-enemy { --side-color: #e07a82; }
-    .draft-side.is-targeting { border-color: var(--border-strong); box-shadow: none; }
+    .draft-side.is-enemy {
+        --side-color: rgba(255, 255, 255, 0.88);
+    }
+    .draft-side.is-ally,
+    .draft-side.is-enemy {
+        box-shadow: none;
+    }
+    .draft-side.is-targeting .draft-side-select {
+        background: rgba(255, 255, 255, 0.08);
+    }
     .draft-side-select {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 8px;
         width: 100%;
-        padding: 7px 9px;
-        margin-bottom: 8px;
+        padding: 10px 12px;
+        margin: 0;
         border: 0;
-        border-radius: 9px;
-        background: transparent;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0;
+        background: rgba(255, 255, 255, 0.04);
         color: inherit;
         font: inherit;
         cursor: pointer;
         text-align: left;
+        flex: none;
     }
-    .draft-side-select:hover { background: color-mix(in srgb, var(--text, #e6e8eb) 5%, transparent); }
+    .draft-side.is-enemy .draft-side-select {
+        background: rgba(255, 255, 255, 0.04);
+        text-align: right;
+        flex-direction: row-reverse;
+    }
+    .draft-side-select:hover {
+        background: rgba(255, 255, 255, 0.07);
+    }
     .draft-side-select.is-active {
-        background: color-mix(in srgb, var(--side-color) 12%, transparent);
+        background: rgba(255, 255, 255, 0.09);
     }
     .draft-side-label {
-        font-size: 13px;
-        font-weight: 700;
-        color: var(--text, #e6e8eb);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #e8eaed;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
     .draft-side-wr {
-        font-size: 15px;
+        font-size: 16px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        color: color-mix(in srgb, var(--side-color) 62%, var(--text, #e6e8eb));
+        color: #f3f5f7;
+        text-shadow: none;
     }
     .draft-slots {
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        flex: 1 1 auto;
+        gap: 0;
+        min-height: 0;
     }
     .draft-slot {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+        position: relative;
+        display: block;
+        flex: 1 1 0;
         width: 100%;
-        min-height: 52px;
-        padding: 6px 8px;
-        border-radius: 10px;
-        border: 1px dashed color-mix(in srgb, var(--text, #e6e8eb) 18%, transparent);
-        background: color-mix(in srgb, var(--text, #e6e8eb) 3%, transparent);
-        color: var(--text-muted, #9aa0a6);
+        min-height: 64px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+        background: #12151c;
+        color: #e8eaed;
         font: inherit;
         cursor: pointer;
         min-width: 0;
+        overflow: hidden;
         text-align: left;
     }
-    .draft-slot.is-filled {
-        border-style: solid;
-        border-color: color-mix(in srgb, var(--side-color) 35%, var(--border, #30363d));
-        background: color-mix(in srgb, var(--side-color) 8%, var(--surface, #11151d));
-        color: var(--text, #e6e8eb);
+    .draft-slot:last-child { border-bottom: 0; }
+    .draft-slot.is-empty {
+        background: #10131a;
+        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 80%, transparent);
     }
-    .draft-slot.is-filled:hover {
-        border-color: color-mix(in srgb, var(--side-color) 60%, var(--border, #30363d));
+    .draft-side.is-enemy .draft-slot.is-empty {
+        background: #10131a;
     }
-    .draft-slot img,
-    .draft-slot-ph {
-        flex: none;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
+    .draft-slot.is-filled:hover .draft-slot-art {
+        transform: scale(1.04);
+        filter: brightness(1.08);
+    }
+    .draft-slot-art {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
         object-fit: cover;
+        object-position: 50% 18%;
+        transform: scale(1.01);
+        transition: transform 160ms var(--ease-out, ease), filter 160ms var(--ease-out, ease);
+        pointer-events: none;
+    }
+    .draft-side.is-enemy .draft-slot-art {
+        object-position: 50% 18%;
+        transform: scaleX(-1) scale(1.01);
+    }
+    .draft-side.is-enemy .draft-slot.is-filled:hover .draft-slot-art {
+        transform: scaleX(-1) scale(1.04);
+    }
+    .draft-slot-shade {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.72) 0%,
+            rgba(0, 0, 0, 0.28) 42%,
+            rgba(0, 0, 0, 0.08) 100%
+        );
+    }
+    .draft-side.is-enemy .draft-slot-shade {
+        background: linear-gradient(
+            270deg,
+            rgba(0, 0, 0, 0.72) 0%,
+            rgba(0, 0, 0, 0.28) 42%,
+            rgba(0, 0, 0, 0.08) 100%
+        );
+    }
+    .draft-slot.is-empty .draft-slot-shade {
+        background: transparent;
     }
     .draft-slot-ph {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 12px;
-        font-weight: 700;
-        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 70%, transparent);
-        background: color-mix(in srgb, var(--text, #e6e8eb) 6%, transparent);
+        width: 22px;
+        height: 22px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 800;
+        color: rgba(232, 234, 237, 0.78);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    .draft-side.is-enemy .draft-slot-ph {
+        left: auto;
+        right: 12px;
     }
     .draft-slot-name {
-        flex: 1;
-        min-width: 0;
+        position: absolute;
+        left: 12px;
+        right: 28px;
+        bottom: 8px;
+        z-index: 1;
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 800;
+        letter-spacing: 0.02em;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+        color: #fff;
+    }
+    .draft-side.is-enemy .draft-slot-name {
+        left: 28px;
+        right: 12px;
+        text-align: right;
+    }
+    .draft-slot.is-empty .draft-slot-name {
+        bottom: auto;
+        top: 50%;
+        transform: translateY(-50%);
+        left: 42px;
+        right: 12px;
+        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 90%, transparent);
+        text-shadow: none;
+        font-weight: 600;
+    }
+    .draft-side.is-enemy .draft-slot.is-empty .draft-slot-name {
+        left: 12px;
+        right: 42px;
+        text-align: right;
     }
     .draft-slot-x {
-        flex: none;
-        font-size: 15px;
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        z-index: 2;
+        font-size: 16px;
         line-height: 1;
-        color: var(--text-muted, #9aa0a6);
+        color: #fff;
         opacity: 0;
         transition: opacity .12s;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+    }
+    .draft-side.is-enemy .draft-slot-x {
+        right: auto;
+        left: 8px;
     }
     .draft-slot.is-filled:hover .draft-slot-x { opacity: 1; }
     .draft-main {
@@ -4351,6 +4480,8 @@
         flex-direction: column;
         gap: 12px;
         min-width: 0;
+        /* Keep pool/analysis readable while side rails hug the screen edges. */
+        padding: 0 clamp(12px, 1.6vw, 28px);
     }
     .draft-vsbar {
         display: flex;
@@ -4488,11 +4619,11 @@
     }
     .draft-champ.is-ally,
     .draft-champ.is-enemy {
-        border-color: var(--pool-ring, #3aa0ff);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--pool-ring, #3aa0ff) 40%, transparent);
+        border-color: var(--pool-ring, rgba(232, 234, 237, 0.9));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--pool-ring, rgba(232, 234, 237, 0.9)) 40%, transparent);
     }
-    .draft-champ.is-ally { --pool-ring: var(--accent); }
-    .draft-champ.is-enemy { --pool-ring: #ef4444; }
+    .draft-champ.is-ally { --pool-ring: rgba(240, 242, 245, 0.92); }
+    .draft-champ.is-enemy { --pool-ring: rgba(160, 166, 176, 0.95); }
     .draft-champ.is-ally::after,
     .draft-champ.is-enemy::after {
         content: '';
@@ -4502,7 +4633,7 @@
         width: 11px;
         height: 11px;
         border-radius: 999px;
-        background: var(--pool-ring, #3aa0ff);
+        background: var(--pool-ring, rgba(232, 234, 237, 0.92));
         border: 2px solid var(--surface, #11151d);
         z-index: 2;
     }
@@ -4588,10 +4719,10 @@
         height: 10px;
         border-radius: 2px;
     }
-    .draft-leg.is-ally { color: #7fc8ff; }
-    .draft-leg.is-ally i { background: #3aa0ff; box-shadow: 0 0 0 1px rgba(58, 160, 255, 0.35); }
-    .draft-leg.is-enemy { color: #f0998a; }
-    .draft-leg.is-enemy i { background: #e2574b; box-shadow: 0 0 0 1px rgba(226, 87, 75, 0.35); }
+    .draft-leg.is-ally { color: #e8eaed; }
+    .draft-leg.is-ally i { background: #e8eaed; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); }
+    .draft-leg.is-enemy { color: #9aa0a6; }
+    .draft-leg.is-enemy i { background: #6b7280; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12); }
     .draft-matchup-svg {
         min-width: 0;
     }
@@ -4639,10 +4770,10 @@
         transition: width 120ms var(--ease-out, ease);
     }
     .draft-cmp-track.is-ally .draft-cmp-fill {
-        background: linear-gradient(90deg, rgba(58, 160, 255, 0.55), rgba(58, 160, 255, 0.95));
+        background: linear-gradient(90deg, rgba(232, 234, 237, 0.35), rgba(232, 234, 237, 0.88));
     }
     .draft-cmp-track.is-enemy .draft-cmp-fill {
-        background: linear-gradient(90deg, rgba(226, 87, 75, 0.5), rgba(226, 87, 75, 0.95));
+        background: linear-gradient(90deg, rgba(120, 126, 136, 0.4), rgba(150, 156, 166, 0.92));
     }
     .draft-cmp-val {
         position: absolute;
@@ -4698,31 +4829,46 @@
         border-radius: 6px;
     }
     @media (max-width: 900px) {
+        .view-draft.is-active {
+            width: 100vw;
+            max-width: 100vw;
+            margin-left: calc(50% - 50vw);
+            margin-right: calc(50% - 50vw);
+            margin-top: -16px;
+            margin-bottom: -48px;
+            padding: 0;
+            min-height: 0;
+            overflow: hidden;
+        }
         .draft-shell {
             grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 10px;
+            gap: 0;
+            min-height: 0;
         }
-        .draft-side { position: static; }
         .draft-side.is-ally { order: 1; }
         .draft-side.is-enemy { order: 2; }
-        .draft-main { order: 3; grid-column: 1 / -1; }
-        .draft-side-select { padding: 6px 7px; }
-        .draft-side-label { font-size: 12px; }
-        .draft-slot { min-height: 44px; padding: 5px 6px; gap: 6px; }
-        .draft-slot img,
-        .draft-slot-ph { width: 30px; height: 30px; }
+        .draft-main {
+            order: 3;
+            grid-column: 1 / -1;
+            padding: 12px 14px 16px;
+        }
+        .draft-side {
+            position: static;
+            min-height: 260px;
+            max-height: none;
+            height: auto;
+            border-radius: 0;
+            border: 0;
+            box-shadow: none;
+            overflow: hidden;
+        }
+        .draft-side-select { padding: 8px 10px; }
+        .draft-side-label { font-size: 11px; }
+        .draft-slot { min-height: 52px; }
         .draft-pool {
             grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
             gap: 6px;
             max-height: 46vh;
-        }
-    }
-    @media (max-width: 900px) {
-        .view-draft.is-active {
-            width: calc(100% + 48px);
-            max-width: calc(100% + 48px);
-            margin-left: -24px;
-            padding-inline: 14px;
         }
         .draft-analysis-intro {
             align-items: flex-start;
@@ -4733,13 +4879,8 @@
         .draft-metrics { grid-template-columns: minmax(0, 1fr); }
     }
     @media (max-width: 520px) {
-        .view-draft.is-active {
-            width: calc(100% + 24px);
-            max-width: calc(100% + 24px);
-            margin-left: -12px;
-            padding-inline: 10px;
-        }
         .draft-mode-tabs { gap: 16px; }
+        .draft-main { padding: 10px 10px 0; }
         .draft-metric { min-height: 112px; padding: 13px 12px; }
         .draft-metric-value { font-size: 32px; }
         .draft-metric-note { font-size: 9px; }
@@ -5086,13 +5227,13 @@
     [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
     [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
     [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
-    /* Light theme: no pure white (vanishes on paper); darken the ladder. */
-    [data-theme="light"] .aug .alift.pick-1 { color: #9ca3af; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-2 { color: #6b7280; font-weight: 500; }
-    [data-theme="light"] .aug .alift.pick-3 { color: #374151; font-weight: 600; }
-    [data-theme="light"] .aug .alift.pick-4 { color: #b88912; font-weight: 700; }
-    [data-theme="light"] .aug .alift.pick-5 { color: #a67c00; font-weight: 700; }
-    /* 必出 marker itself flips via --pick5-marker in :root[data-theme="light"]. */
+    /* Light: cool ladder deepened for paper contrast (same order). */
+    [data-theme="light"] .aug .alift.pick-1 { color: #94a3b8; font-weight: 500; }
+    [data-theme="light"] .aug .alift.pick-2 { color: #64748b; font-weight: 600; }
+    [data-theme="light"] .aug .alift.pick-3 { color: #4f46e5; font-weight: 650; }
+    [data-theme="light"] .aug .alift.pick-4 { color: #0284c7; font-weight: 700; }
+    [data-theme="light"] .aug .alift.pick-5 { color: #0e7490; font-weight: 700; }
+    /* 必出 chip colors flip via --pick-must-ring/--pick-must-ink in light theme. */
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
@@ -5319,33 +5460,33 @@
         background: rgba(0, 0, 0, 0.05);
         color: var(--text-muted);
     }
-    /* Light: 灰 → 深灰 → 近黑白 → 淺黃 → 黃 (same order, paper-safe). */
+    /* Light: cool ladder deepened for paper (same order as dark). */
     [data-theme="light"] .cluster-pick.pick-1,
     [data-theme="light"] .cg-option-pick.pick-1,
     [data-theme="light"] .item-build-pick.pick-1,
     [data-theme="light"] .boot-rail-pick.pick-1,
-    [data-theme="light"] .cg-core-share.pick-1 { color: #9ca3af; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-1 { color: #94a3b8; font-weight: 500; }
     [data-theme="light"] .cluster-pick.pick-2,
     [data-theme="light"] .cg-option-pick.pick-2,
     [data-theme="light"] .item-build-pick.pick-2,
     [data-theme="light"] .boot-rail-pick.pick-2,
-    [data-theme="light"] .cg-core-share.pick-2 { color: #6b7280; font-weight: 500; }
+    [data-theme="light"] .cg-core-share.pick-2 { color: #64748b; font-weight: 600; }
     [data-theme="light"] .cluster-pick.pick-3,
     [data-theme="light"] .cg-option-pick.pick-3,
     [data-theme="light"] .item-build-pick.pick-3,
     [data-theme="light"] .boot-rail-pick.pick-3,
-    [data-theme="light"] .cg-core-share.pick-3 { color: #374151; font-weight: 600; }
+    [data-theme="light"] .cg-core-share.pick-3 { color: #4f46e5; font-weight: 650; }
     [data-theme="light"] .cluster-pick.pick-4,
     [data-theme="light"] .cg-option-pick.pick-4,
     [data-theme="light"] .item-build-pick.pick-4,
     [data-theme="light"] .boot-rail-pick.pick-4,
-    [data-theme="light"] .cg-core-share.pick-4 { color: #b88912; font-weight: 700; }
+    [data-theme="light"] .cg-core-share.pick-4 { color: #0284c7; font-weight: 700; }
     [data-theme="light"] .cluster-pick.pick-5,
     [data-theme="light"] .cg-option-pick.pick-5,
     [data-theme="light"] .item-build-pick.pick-5,
     [data-theme="light"] .boot-rail-pick.pick-5,
-    [data-theme="light"] .cg-core-share.pick-5 { color: #a67c00; font-weight: 700; }
-    /* 必出 marker itself flips via --pick5-marker in :root[data-theme="light"]. */
+    [data-theme="light"] .cg-core-share.pick-5 { color: #0e7490; font-weight: 700; }
+    /* 必出 chip colors flip via --pick-must-ring/--pick-must-ink in light theme. */
 
     /* Recommend side panel */
     [data-theme="light"] .side-panel {
@@ -5642,21 +5783,20 @@
         font-size: 10.5px;
         line-height: 1.4;
     }
-    /* Co-opt the shared 黃/白/灰 pick ladder on tip values. */
-    .item-tip-row > b.pick-1 { color: #6b7280; font-weight: 500; }
-    .item-tip-row > b.pick-2 { color: #9aa3b2; font-weight: 500; }
-    .item-tip-row > b.pick-3 { color: #e6e8eb; font-weight: 600; }
-    .item-tip-row > b.pick-4 { color: #e8d48a; font-weight: 700; }
-    .item-tip-row > b.pick-5 { color: #f0c94a; font-weight: 700; }
-    /* 必出 marker — tip card is always dark, so pin the dark wash (the
-       themed --pick5-marker would flip to the paper color in light mode).
-       Right-aligned column → anchor the wash to the digits' right edge. */
-    .item-tip-row > b.pick-5 {
-        padding: 0 3px;
-        background-image: var(--pick5-marker-dark);
-        background-repeat: no-repeat;
-        background-position: right calc(50% + 0.12em);
-        background-size: min(100%, 3.8em) 0.85em;
+    /* Cool pick ladder on tip values (tip surface is always dark). */
+    .item-tip-row > b.pick-1 { color: #7c8aa1; font-weight: 500; }
+    .item-tip-row > b.pick-2 { color: #94a3b8; font-weight: 600; }
+    .item-tip-row > b.pick-3 { color: #818cf8; font-weight: 650; }
+    .item-tip-row > b.pick-4 { color: #38bdf8; font-weight: 700; }
+    .item-tip-row > b.pick-5 { color: #67e8f9; font-weight: 700; }
+    /* 必出 marker — tip is always dark → pin -dark ring/ink.  Shrink to number. */
+    .item-tip-row > b.pick-must {
+        justify-self: end;
+        width: fit-content;
+        padding: 0 4px;
+        border: 1px solid var(--pick-must-ring-dark);
+        border-radius: 4px;
+        background: var(--pick-must-ink-dark);
     }
     #augch-host {
         position: fixed;
@@ -5915,7 +6055,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783841549");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260712-1783843159");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -6830,7 +6970,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：黃→淺黃→白→灰，越黃越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率用冷色階表示熱門度：亮青→天藍→靛藍→灰藍（越亮越熱門）；綠／紅只表示勝率。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -7025,7 +7165,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate colour: yellow → light yellow → white → gray (yellower = hotter).',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate uses a cool ladder: cyan → sky → indigo → slate (brighter = hotter); green/red are reserved for win rate.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -7639,8 +7779,10 @@
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
-            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
-            const pickHeat = 'pick-' + tierFn(Number(opts.pickRate != null ? opts.pickRate : 0));
+            const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
+            const mustCut = opts.mustCut != null ? opts.mustCut : PICK_MUST.hex;
+            const colorFn = typeof opts.colorTierFn === 'function' ? opts.colorTierFn : pickColorTier;
+            const pickHeat = pickHeatClass(rate, mustCut, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
         if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
@@ -7881,7 +8023,10 @@
         const pickPct = pct(pickRate);
         const isHot = pickRate >= (onBoard ? AUG_BOARD_HOT_PICK : AUG_HOT_PICK);
         const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
-        const augTierCls = onBoard ? augBoardPickTier(pickRate) : pickTier(pickRate);
+        // Board: own per-game scale for colour + must. Champ: absolute cool + must@20%.
+        const pickHeat = onBoard
+            ? pickHeatClass(pickRate, AUG_BOARD_HOT_PICK, augBoardColorTier)
+            : pickHeatClass(pickRate, PICK_MUST.hex);
         const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
@@ -7897,6 +8042,8 @@
             wr: pct(entry.wr),
             pick: pickPct,
             pickRate,
+            mustCut: onBoard ? AUG_BOARD_HOT_PICK : PICK_MUST.hex,
+            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
             lift: entry.lift,
             liftLabel: signed(entry.lift),
             games: entry.g,
@@ -7917,7 +8064,7 @@
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
                 <div class="awr wr-${wrToneTier(entry)}">${pct(entry.wr)}</div>
-                <div class="alift pick-${augTierCls}" title="${escHtml(pickLang(`選用率 ${pickPct}`, `pick ${pickPct}`))}">${copy.augPickLabel(pickPct)}</div>
+                <div class="alift ${pickHeat}" title="${escHtml(pickLang(`選用率 ${pickPct}`, `pick ${pickPct}`))}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
@@ -7947,40 +8094,45 @@
     }
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
+    // Aligns with 必出 border (pick-must) on hextech cards.
     const AUG_HOT_PICK = 0.20;
     // 增幅榜 board pick = average appearances per game (counts multiplicity), so it
     // runs on its own scale: the most-taken augment sits near ~0.75/game, the
     // median near ~0.14, and a value can exceed 1.0.  Give the board its own 熱門
-    // cut + heat ramp so the colour still means "popular" relative to the field.
+    // cut + colour ramp so the colour still means "popular" relative to the field.
     const AUG_BOARD_HOT_PICK = 0.40;
-    function augBoardPickTier(pick) {
+    // 必出 border (outlined chip) — surface-specific, independent of colour tier.
+    //   海克斯 20% · 概覽2件套/鞋子 30% · 單件 40% · 召喚師 50%
+    const PICK_MUST = {
+        hex: 0.20,
+        core: 0.30,
+        boot: 0.30,
+        single: 0.40,
+        spell: 0.50,
+    };
+    // Absolute cool colour ladder (選取率 has no good/bad — cyan→blue→indigo→slate).
+    //   ≥50% pick-5  #67E8F9   20–49.9% pick-4  #38BDF8
+    //   5–19.9% pick-3 #818CF8  1–4.9% pick-2  #94A3B8  <1% pick-1 #7C8AA1
+    function pickColorTier(pick) {
+        if (pick >= 0.50) return 5;
+        if (pick >= 0.20) return 4;
+        if (pick >= 0.05) return 3;
+        if (pick >= 0.01) return 2;
+        return 1;
+    }
+    // Board appearances/game scale (not champion-relative %).
+    function augBoardColorTier(pick) {
         if (pick >= 0.40) return 5;
         if (pick >= 0.28) return 4;
         if (pick >= 0.18) return 3;
         if (pick >= 0.10) return 2;
         return 1;
     }
-    // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
-    // Yellow→white→gray popularity ladder shared by augment cards AND every
-    // item surface (clusters / options / items / boots / spells / tips).
-    // Absolute cuts (2/5/10/20%) so the colour means the same thing everywhere;
-    // tier 5 (>=20%) lines up with the augment 熱門 badge.
-    function pickTier(pick) {
-        if (pick >= 0.20) return 5;
-        if (pick >= 0.10) return 4;
-        if (pick >= 0.05) return 3;
-        if (pick >= 0.02) return 2;
-        return 1;
-    }
-    // Summoner spells: Mayhem carries two, so rates sum ~200% and commonly
-    // sit at 10–100%. Item pickTier (≥20% → max heat) collapses Flash/Ghost/
-    // Mark/Heal into the same orange. Wider cuts keep the heat ramp readable.
-    function spellPickTier(pick) {
-        if (pick >= 0.70) return 5;  // near-universal (Flash ~99%)
-        if (pick >= 0.40) return 4;  // very common pair
-        if (pick >= 0.22) return 3;  // solid secondary (~25–35%)
-        if (pick >= 0.12) return 2;  // situational
-        return 1;                   // rare on this champ
+    // "pick-N" colour + optional "pick-must" border when rate clears the surface cut.
+    function pickHeatClass(pick, mustCut, colorTierFn) {
+        const tier = (typeof colorTierFn === 'function' ? colorTierFn : pickColorTier)(pick);
+        const must = Number.isFinite(mustCut) && pick >= mustCut ? ' pick-must' : '';
+        return `pick-${tier}${must}`;
     }
     /**
      * 5-step win-rate tone for .awr:
@@ -8638,7 +8790,8 @@
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-                const pickHeat = 'pick-' + pickTier(pickVal);
+                // Multi-item route share: cool colour + 必出@30% (同 2件套).
+                const pickHeat = pickHeatClass(pickVal, PICK_MUST.core);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
                     : titleForItemCard(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games);
@@ -8651,6 +8804,7 @@
                     wr: pct(entry.wr || 0),
                     pick: pct(pickVal),
                     pickRate: pickVal,
+                    mustCut: PICK_MUST.core,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games,
@@ -8691,12 +8845,17 @@
             );
             const iconLimit = options.singleItem ? 1 : 2;
             const tipItems = pairItems.slice(0, iconLimit);
+            // 單件 必出@40%；前兩件 pair 必出@30%（同概覽2件套）。Colour is absolute cool ladder.
+            const itemMust = options.singleItem ? PICK_MUST.single : PICK_MUST.core;
+            const pickVal = Number(entry.pick || 0);
+            const pickHeat = pickHeatClass(pickVal, itemMust);
             const tipHtml = buildItemTipHtml({
                 name,
                 items: tipItems,
                 wr: pct(entry.wr || 0),
                 pick: pct(entry.pick || 0),
-                pickRate: Number(entry.pick || 0),
+                pickRate: pickVal,
+                mustCut: itemMust,
                 lift: liftValue,
                 liftLabel: signed(liftValue),
                 games: entry.g || 0,
@@ -8717,7 +8876,6 @@
             const wrSign = liftValue > 0.005 ? 'is-good'
                 : (liftValue < -0.005 ? 'is-bad' : 'is-even');
             const wrClass = `item-build-wr ${wrSign}`;
-            const pickVal = Number(entry.pick || 0);
             // Filter attrs only on the strength carousel (not 常見但不推薦 traps).
             let filterAttrs = '';
             if (options.singleItem && options.singleItemFilterable) {
@@ -8729,7 +8887,7 @@
                 <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}"${filterAttrs}>
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
-                    <div class="item-build-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</div>
+                    <div class="item-build-pick ${pickHeat}">${pct(pickVal)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                     ${itemTipSource(tipHtml)}
                 </div>
@@ -8976,7 +9134,8 @@
                     const lift = Number(o.lift || 0);
                     const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
                     const pickVal = Number(o.pick || 0);
-                    const pickHeat = 'pick-' + pickTier(pickVal);
+                    // Third-slot singles → 必出@40% (單件).
+                    const pickHeat = pickHeatClass(pickVal, PICK_MUST.single);
                     const laneInfo = laneLabels[o.lane];
                     const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
                     const optName = itemDisplayName(o) || o.name_zh || o.name || '';
@@ -8989,6 +9148,7 @@
                         wr: pct(o.wr || 0),
                         pick: pct(pickVal),
                         pickRate: pickVal,
+                        mustCut: PICK_MUST.single,
                         lift,
                         liftLabel: signed(lift),
                         games: o.g || 0,
@@ -9033,12 +9193,14 @@
                 const headTitle = copy.coreBuildHeadTitle
                     ? copy.coreBuildHeadTitle(coreGroupName, pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
                     : '';
+                const corePickVal = Number(grp.pick || 0);
                 const headTipHtml = buildItemTipHtml({
                     name: coreGroupName,
                     items: core,
                     wr: grp.wr != null ? pct(grp.wr || 0) : '',
                     pick: pct(grp.pick || 0),
-                    pickRate: Number(grp.pick || 0),
+                    pickRate: corePickVal,
+                    mustCut: PICK_MUST.core,
                     lift: coreLift,
                     liftLabel: signed(coreLift),
                     games: grp.g || 0,
@@ -9049,7 +9211,7 @@
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
                                 ${wrHtml}
-                                <span class="cg-core-share pick-${pickTier(Number(grp.pick || 0))}">${escHtml(share)}</span>
+                                <span class="cg-core-share ${pickHeatClass(corePickVal, PICK_MUST.core)}">${escHtml(share)}</span>
                             </div>
                             ${itemTipSource(headTipHtml)}
                         </div>
@@ -9079,8 +9241,8 @@
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
-            // Spells need wider absolute cuts than items (see spellPickTier).
-            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
+            // Boots 必出@30%; spells pass mustCut: PICK_MUST.spell (50%).
+            const mustCut = Number.isFinite(opts.mustCut) ? opts.mustCut : PICK_MUST.boot;
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
@@ -9094,7 +9256,7 @@
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
                 const pickVal = Number(entry.pick || 0);
-                const pickHeat = `pick-${tierFn(pickVal)}`;
+                const pickHeat = pickHeatClass(pickVal, mustCut);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
@@ -9102,7 +9264,7 @@
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
-                    pickTierFn: tierFn,
+                    mustCut,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games: entry.g || 0,
@@ -9197,7 +9359,7 @@
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
                         extraClass: 'spell-rail-section',
-                        pickTierFn: spellPickTier,
+                        mustCut: PICK_MUST.spell,
                     })}
                 </div>
             </div>
@@ -9779,15 +9941,15 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: allyAxes,
-                stroke: '#3aa0ff',
-                fill: 'rgba(58,160,255,0.16)',
-                dot: '#3aa0ff',
+                stroke: 'rgba(232,234,237,0.92)',
+                fill: 'rgba(232,234,237,0.14)',
+                dot: 'rgba(240,242,245,0.95)',
             },
             {
                 axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
-                stroke: '#e2574b',
-                fill: 'rgba(226,87,75,0.14)',
-                dot: '#e2574b',
+                stroke: 'rgba(120,126,136,0.95)',
+                fill: 'rgba(100,106,116,0.16)',
+                dot: 'rgba(150,156,166,0.95)',
             },
         ], copy.draftRadarTitle || copy.teamDimsTitle);
 
@@ -10007,6 +10169,17 @@
         return side === 'enemy' ? enemyPicks : teamPicks;
     }
 
+    /** Prefer full-bleed loading/splash art for lock-in bars; fall back to square icon. */
+    function draftSlotArtUrl(info) {
+        if (!info) return '';
+        const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
+        if (alias) {
+            // Centered portrait crop reads better in a short horizontal bar than square icons.
+            return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${alias}_0.jpg`;
+        }
+        return info.image || '';
+    }
+
     function renderDraftSlots(side) {
         const host = document.getElementById(side === 'enemy' ? 'draft-enemy-slots' : 'draft-ally-slots');
         if (!host) return;
@@ -10016,11 +10189,16 @@
         list.forEach((cid) => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const image = info && info.image ? info.image : '';
+            const art = draftSlotArtUrl(info);
+            const icon = info && info.image ? info.image : '';
             chips.push(
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
-                + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-slot-ph"></span>')
+                + (art
+                    ? `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
+                        + (icon ? `onerror="this.onerror=null;this.src='${escHtml(icon)}'"` : '') + `>`
+                    : '<span class="draft-slot-ph" aria-hidden="true"></span>')
+                + `<span class="draft-slot-shade" aria-hidden="true"></span>`
                 + `<span class="draft-slot-name">${escHtml(name)}</span>`
                 + `<span class="draft-slot-x" aria-hidden="true">&times;</span>`
                 + `</button>`
@@ -10030,6 +10208,7 @@
             chips.push(
                 `<button class="draft-slot is-empty" type="button" data-draft-target="${side}" `
                 + `aria-label="${escHtml(copy.pickEmpty)}">`
+                + `<span class="draft-slot-shade" aria-hidden="true"></span>`
                 + `<span class="draft-slot-ph">${i + 1}</span>`
                 + `<span class="draft-slot-name">${escHtml(copy.pickEmpty)}</span>`
                 + `</button>`

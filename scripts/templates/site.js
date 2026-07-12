@@ -1017,7 +1017,7 @@
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
             augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率數字依熱門程度上色：黃→淺黃→白→灰，越黃越熱門。',
+            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率用冷色階表示熱門度：亮青→天藍→靛藍→灰藍（越亮越熱門）；綠／紅只表示勝率。',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -1212,7 +1212,7 @@
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
             augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate colour: yellow → light yellow → white → gray (yellower = hotter).',
+            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate uses a cool ladder: cyan → sky → indigo → slate (brighter = hotter); green/red are reserved for win rate.',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -1826,8 +1826,10 @@
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
-            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
-            const pickHeat = 'pick-' + tierFn(Number(opts.pickRate != null ? opts.pickRate : 0));
+            const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
+            const mustCut = opts.mustCut != null ? opts.mustCut : PICK_MUST.hex;
+            const colorFn = typeof opts.colorTierFn === 'function' ? opts.colorTierFn : pickColorTier;
+            const pickHeat = pickHeatClass(rate, mustCut, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
         if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
@@ -2068,7 +2070,10 @@
         const pickPct = pct(pickRate);
         const isHot = pickRate >= (onBoard ? AUG_BOARD_HOT_PICK : AUG_HOT_PICK);
         const hotBadge = isHot ? `<span class="aug-hot-badge">${copy.augHotBadge}</span>` : '';
-        const augTierCls = onBoard ? augBoardPickTier(pickRate) : pickTier(pickRate);
+        // Board: own per-game scale for colour + must. Champ: absolute cool + must@20%.
+        const pickHeat = onBoard
+            ? pickHeatClass(pickRate, AUG_BOARD_HOT_PICK, augBoardColorTier)
+            : pickHeatClass(pickRate, PICK_MUST.hex);
         const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
@@ -2084,6 +2089,8 @@
             wr: pct(entry.wr),
             pick: pickPct,
             pickRate,
+            mustCut: onBoard ? AUG_BOARD_HOT_PICK : PICK_MUST.hex,
+            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
             lift: entry.lift,
             liftLabel: signed(entry.lift),
             games: entry.g,
@@ -2104,7 +2111,7 @@
                 ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<div class="aicon-ph"></div>'}
                 <div class="aname"><span>${escHtml(name)}</span></div>
                 <div class="awr wr-${wrToneTier(entry)}">${pct(entry.wr)}</div>
-                <div class="alift pick-${augTierCls}" title="${escHtml(pickLang(`選用率 ${pickPct}`, `pick ${pickPct}`))}">${copy.augPickLabel(pickPct)}</div>
+                <div class="alift ${pickHeat}" title="${escHtml(pickLang(`選用率 ${pickPct}`, `pick ${pickPct}`))}">${copy.augPickLabel(pickPct)}</div>
                 ${itemTipSource(tipHtml)}
             </div>
         `;
@@ -2134,40 +2141,45 @@
     }
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
+    // Aligns with 必出 border (pick-must) on hextech cards.
     const AUG_HOT_PICK = 0.20;
     // 增幅榜 board pick = average appearances per game (counts multiplicity), so it
     // runs on its own scale: the most-taken augment sits near ~0.75/game, the
     // median near ~0.14, and a value can exceed 1.0.  Give the board its own 熱門
-    // cut + heat ramp so the colour still means "popular" relative to the field.
+    // cut + colour ramp so the colour still means "popular" relative to the field.
     const AUG_BOARD_HOT_PICK = 0.40;
-    function augBoardPickTier(pick) {
+    // 必出 border (outlined chip) — surface-specific, independent of colour tier.
+    //   海克斯 20% · 概覽2件套/鞋子 30% · 單件 40% · 召喚師 50%
+    const PICK_MUST = {
+        hex: 0.20,
+        core: 0.30,
+        boot: 0.30,
+        single: 0.40,
+        spell: 0.50,
+    };
+    // Absolute cool colour ladder (選取率 has no good/bad — cyan→blue→indigo→slate).
+    //   ≥50% pick-5  #67E8F9   20–49.9% pick-4  #38BDF8
+    //   5–19.9% pick-3 #818CF8  1–4.9% pick-2  #94A3B8  <1% pick-1 #7C8AA1
+    function pickColorTier(pick) {
+        if (pick >= 0.50) return 5;
+        if (pick >= 0.20) return 4;
+        if (pick >= 0.05) return 3;
+        if (pick >= 0.01) return 2;
+        return 1;
+    }
+    // Board appearances/game scale (not champion-relative %).
+    function augBoardColorTier(pick) {
         if (pick >= 0.40) return 5;
         if (pick >= 0.28) return 4;
         if (pick >= 0.18) return 3;
         if (pick >= 0.10) return 2;
         return 1;
     }
-    // Bucket a pick rate (0-1) into a popularity tier (1=rare .. 5=very hot) for
-    // Yellow→white→gray popularity ladder shared by augment cards AND every
-    // item surface (clusters / options / items / boots / spells / tips).
-    // Absolute cuts (2/5/10/20%) so the colour means the same thing everywhere;
-    // tier 5 (>=20%) lines up with the augment 熱門 badge.
-    function pickTier(pick) {
-        if (pick >= 0.20) return 5;
-        if (pick >= 0.10) return 4;
-        if (pick >= 0.05) return 3;
-        if (pick >= 0.02) return 2;
-        return 1;
-    }
-    // Summoner spells: Mayhem carries two, so rates sum ~200% and commonly
-    // sit at 10–100%. Item pickTier (≥20% → max heat) collapses Flash/Ghost/
-    // Mark/Heal into the same orange. Wider cuts keep the heat ramp readable.
-    function spellPickTier(pick) {
-        if (pick >= 0.70) return 5;  // near-universal (Flash ~99%)
-        if (pick >= 0.40) return 4;  // very common pair
-        if (pick >= 0.22) return 3;  // solid secondary (~25–35%)
-        if (pick >= 0.12) return 2;  // situational
-        return 1;                   // rare on this champ
+    // "pick-N" colour + optional "pick-must" border when rate clears the surface cut.
+    function pickHeatClass(pick, mustCut, colorTierFn) {
+        const tier = (typeof colorTierFn === 'function' ? colorTierFn : pickColorTier)(pick);
+        const must = Number.isFinite(mustCut) && pick >= mustCut ? ' pick-must' : '';
+        return `pick-${tier}${must}`;
     }
     /**
      * 5-step win-rate tone for .awr:
@@ -2825,7 +2837,8 @@
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-                const pickHeat = 'pick-' + pickTier(pickVal);
+                // Multi-item route share: cool colour + 必出@30% (同 2件套).
+                const pickHeat = pickHeatClass(pickVal, PICK_MUST.core);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
                     : titleForItemCard(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games);
@@ -2838,6 +2851,7 @@
                     wr: pct(entry.wr || 0),
                     pick: pct(pickVal),
                     pickRate: pickVal,
+                    mustCut: PICK_MUST.core,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games,
@@ -2878,12 +2892,17 @@
             );
             const iconLimit = options.singleItem ? 1 : 2;
             const tipItems = pairItems.slice(0, iconLimit);
+            // 單件 必出@40%；前兩件 pair 必出@30%（同概覽2件套）。Colour is absolute cool ladder.
+            const itemMust = options.singleItem ? PICK_MUST.single : PICK_MUST.core;
+            const pickVal = Number(entry.pick || 0);
+            const pickHeat = pickHeatClass(pickVal, itemMust);
             const tipHtml = buildItemTipHtml({
                 name,
                 items: tipItems,
                 wr: pct(entry.wr || 0),
                 pick: pct(entry.pick || 0),
-                pickRate: Number(entry.pick || 0),
+                pickRate: pickVal,
+                mustCut: itemMust,
                 lift: liftValue,
                 liftLabel: signed(liftValue),
                 games: entry.g || 0,
@@ -2904,7 +2923,6 @@
             const wrSign = liftValue > 0.005 ? 'is-good'
                 : (liftValue < -0.005 ? 'is-bad' : 'is-even');
             const wrClass = `item-build-wr ${wrSign}`;
-            const pickVal = Number(entry.pick || 0);
             // Filter attrs only on the strength carousel (not 常見但不推薦 traps).
             let filterAttrs = '';
             if (options.singleItem && options.singleItemFilterable) {
@@ -2916,7 +2934,7 @@
                 <div class="${cardClass} has-item-tip" tabindex="0" data-match-text="${escHtml(matchText)}" aria-label="${escHtml(titleAttr)}"${filterAttrs}>
                     <div class="item-build-icons">${paddedIcons}</div>
                     <div class="${wrClass}">${pct(entry.wr || 0)}</div>
-                    <div class="item-build-pick pick-${pickTier(pickVal)}">${pct(pickVal)}</div>
+                    <div class="item-build-pick ${pickHeat}">${pct(pickVal)}</div>
                     <div class="item-build-name"><span>${escHtml(name)}</span></div>
                     ${itemTipSource(tipHtml)}
                 </div>
@@ -3163,7 +3181,8 @@
                     const lift = Number(o.lift || 0);
                     const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
                     const pickVal = Number(o.pick || 0);
-                    const pickHeat = 'pick-' + pickTier(pickVal);
+                    // Third-slot singles → 必出@40% (單件).
+                    const pickHeat = pickHeatClass(pickVal, PICK_MUST.single);
                     const laneInfo = laneLabels[o.lane];
                     const badge = laneInfo ? `<span class="lane-badge lane-${o.lane}">${escHtml(laneInfo.label)}</span>` : '';
                     const optName = itemDisplayName(o) || o.name_zh || o.name || '';
@@ -3176,6 +3195,7 @@
                         wr: pct(o.wr || 0),
                         pick: pct(pickVal),
                         pickRate: pickVal,
+                        mustCut: PICK_MUST.single,
                         lift,
                         liftLabel: signed(lift),
                         games: o.g || 0,
@@ -3220,12 +3240,14 @@
                 const headTitle = copy.coreBuildHeadTitle
                     ? copy.coreBuildHeadTitle(coreGroupName, pct(grp.wr || 0), signed(coreLift), pct(grp.pick || 0), grp.g || 0)
                     : '';
+                const corePickVal = Number(grp.pick || 0);
                 const headTipHtml = buildItemTipHtml({
                     name: coreGroupName,
                     items: core,
                     wr: grp.wr != null ? pct(grp.wr || 0) : '',
                     pick: pct(grp.pick || 0),
-                    pickRate: Number(grp.pick || 0),
+                    pickRate: corePickVal,
+                    mustCut: PICK_MUST.core,
                     lift: coreLift,
                     liftLabel: signed(coreLift),
                     games: grp.g || 0,
@@ -3236,7 +3258,7 @@
                             <div class="cg-core">${coreIcons}</div>
                             <div class="cg-core-meta">
                                 ${wrHtml}
-                                <span class="cg-core-share pick-${pickTier(Number(grp.pick || 0))}">${escHtml(share)}</span>
+                                <span class="cg-core-share ${pickHeatClass(corePickVal, PICK_MUST.core)}">${escHtml(share)}</span>
                             </div>
                             ${itemTipSource(headTipHtml)}
                         </div>
@@ -3266,8 +3288,8 @@
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
-            // Spells need wider absolute cuts than items (see spellPickTier).
-            const tierFn = typeof opts.pickTierFn === 'function' ? opts.pickTierFn : pickTier;
+            // Boots 必出@30%; spells pass mustCut: PICK_MUST.spell (50%).
+            const mustCut = Number.isFinite(opts.mustCut) ? opts.mustCut : PICK_MUST.boot;
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
                     ? `${itemName} · WR ${wr} · pick ${pick} · lift ${lift} · ${games} games`
@@ -3281,7 +3303,7 @@
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
                 const pickVal = Number(entry.pick || 0);
-                const pickHeat = `pick-${tierFn(pickVal)}`;
+                const pickHeat = pickHeatClass(pickVal, mustCut);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
@@ -3289,7 +3311,7 @@
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
-                    pickTierFn: tierFn,
+                    mustCut,
                     lift: liftValue,
                     liftLabel: signed(liftValue),
                     games: entry.g || 0,
@@ -3384,7 +3406,7 @@
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
                         extraClass: 'spell-rail-section',
-                        pickTierFn: spellPickTier,
+                        mustCut: PICK_MUST.spell,
                     })}
                 </div>
             </div>
@@ -3966,15 +3988,15 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: allyAxes,
-                stroke: '#3aa0ff',
-                fill: 'rgba(58,160,255,0.16)',
-                dot: '#3aa0ff',
+                stroke: 'rgba(232,234,237,0.92)',
+                fill: 'rgba(232,234,237,0.14)',
+                dot: 'rgba(240,242,245,0.95)',
             },
             {
                 axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
-                stroke: '#e2574b',
-                fill: 'rgba(226,87,75,0.14)',
-                dot: '#e2574b',
+                stroke: 'rgba(120,126,136,0.95)',
+                fill: 'rgba(100,106,116,0.16)',
+                dot: 'rgba(150,156,166,0.95)',
             },
         ], copy.draftRadarTitle || copy.teamDimsTitle);
 
@@ -4194,6 +4216,17 @@
         return side === 'enemy' ? enemyPicks : teamPicks;
     }
 
+    /** Prefer full-bleed loading/splash art for lock-in bars; fall back to square icon. */
+    function draftSlotArtUrl(info) {
+        if (!info) return '';
+        const alias = String(info.alias || info.name_en || '').replace(/[^A-Za-z0-9]/g, '');
+        if (alias) {
+            // Centered portrait crop reads better in a short horizontal bar than square icons.
+            return `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${alias}_0.jpg`;
+        }
+        return info.image || '';
+    }
+
     function renderDraftSlots(side) {
         const host = document.getElementById(side === 'enemy' ? 'draft-enemy-slots' : 'draft-ally-slots');
         if (!host) return;
@@ -4203,11 +4236,16 @@
         list.forEach((cid) => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const image = info && info.image ? info.image : '';
+            const art = draftSlotArtUrl(info);
+            const icon = info && info.image ? info.image : '';
             chips.push(
                 `<button class="draft-slot is-filled" type="button" data-draft-remove="${side}" data-cid="${cid}" `
                 + `title="${escHtml(copy.removePick(name))}">`
-                + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-slot-ph"></span>')
+                + (art
+                    ? `<img class="draft-slot-art" loading="lazy" src="${escHtml(art)}" alt="" `
+                        + (icon ? `onerror="this.onerror=null;this.src='${escHtml(icon)}'"` : '') + `>`
+                    : '<span class="draft-slot-ph" aria-hidden="true"></span>')
+                + `<span class="draft-slot-shade" aria-hidden="true"></span>`
                 + `<span class="draft-slot-name">${escHtml(name)}</span>`
                 + `<span class="draft-slot-x" aria-hidden="true">&times;</span>`
                 + `</button>`
@@ -4217,6 +4255,7 @@
             chips.push(
                 `<button class="draft-slot is-empty" type="button" data-draft-target="${side}" `
                 + `aria-label="${escHtml(copy.pickEmpty)}">`
+                + `<span class="draft-slot-shade" aria-hidden="true"></span>`
                 + `<span class="draft-slot-ph">${i + 1}</span>`
                 + `<span class="draft-slot-name">${escHtml(copy.pickEmpty)}</span>`
                 + `</button>`
