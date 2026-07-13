@@ -5855,19 +5855,20 @@
     /**
      * Real damage mix from teamComposition.sums (phys / magic / true).
      * Percents are integers that sum to 100 (largest-remainder).
+     * Always returns numeric ad/ap/trueDmg (true kept as alias for call sites).
      */
     function metaPickDamageMix(sums) {
-        const p = Math.max(0, Number(sums && sums.phys) || 0);
+        const p = Math.max(0, Number(sums && (sums.phys != null ? sums.phys : sums.physical)) || 0);
         const m = Math.max(0, Number(sums && sums.magic) || 0);
-        const t = Math.max(0, Number(sums && sums.true) || 0);
+        const t = Math.max(0, Number(sums && (sums.true != null ? sums.true : sums.true_damage)) || 0);
         const total = p + m + t;
         if (total <= 0) {
-            return { ad: 50, ap: 50, true: 0, adShare: 0.5 };
+            return { ad: 50, ap: 50, true: 0, trueDmg: 0, adShare: 0.5 };
         }
         const raw = [
             { key: 'ad', v: (p / total) * 100 },
             { key: 'ap', v: (m / total) * 100 },
-            { key: 'true', v: (t / total) * 100 },
+            { key: 'trueDmg', v: (t / total) * 100 },
         ];
         const floors = raw.map(r => ({ key: r.key, n: Math.floor(r.v), frac: r.v - Math.floor(r.v) }));
         let left = 100 - floors.reduce((s, r) => s + r.n, 0);
@@ -5876,12 +5877,31 @@
             floors[i].n += 1;
             left -= 1;
         }
-        const out = { ad: 0, ap: 0, true: 0 };
+        const out = { ad: 0, ap: 0, trueDmg: 0 };
         floors.forEach(r => { out[r.key] = r.n; });
+        // Keep sum exactly 100 if floating edge-cases leave a gap.
+        const sum3 = out.ad + out.ap + out.trueDmg;
+        if (sum3 !== 100) {
+            out.ad = Math.max(0, out.ad + (100 - sum3));
+        }
+        out.true = out.trueDmg; // alias for older call sites / i18n helpers
         // adShare among AD+AP only (for mix-grade ideal ~40% AD)
         const adDen = p + m;
         out.adShare = adDen > 0 ? p / adDen : 0.5;
         return out;
+    }
+
+    /** Sum phys/magic/true from roster ids (defensive; does not rely on teamComposition). */
+    function metaPickTeamDamageSums(ids) {
+        const sums = { phys: 0, magic: 0, true: 0 };
+        (ids || []).forEach(rawId => {
+            const info = (DATA.champs && DATA.champs[String(rawId)]) || {};
+            const comp = info.comp || {};
+            sums.phys += Number(comp.phys != null ? comp.phys : comp.physical) || 0;
+            sums.magic += Number(comp.magic) || 0;
+            sums.true += Number(comp.true != null ? comp.true : comp.true_damage) || 0;
+        });
+        return sums;
     }
 
     /**
@@ -5930,13 +5950,14 @@
     function metaPickAnalysisHtml(yourIds, bestIds, copy) {
         const yours = metaPickSixAxes(yourIds, copy);
         const best = metaPickSixAxes(bestIds, copy);
-        const teamComp = teamComposition(bestIds);
         const cap = best.cap;
         // 英雄強度：原始 5 人平均 solo WR（如 52.3%），不是 PR
         const strengthTxt = pct(best.strength.meanWr);
-        const mix = metaPickDamageMix(teamComp.sums);
+        // Re-sum damage dims from champ ids (more reliable than teamComposition.sums alone).
+        const mix = metaPickDamageMix(metaPickTeamDamageSums(bestIds));
+        const truePct = Number(mix.trueDmg != null ? mix.trueDmg : mix.true) || 0;
         const mixNoteFn = copy.gameMixNote || ((ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`);
-        const mixNote = mixNoteFn(mix.ad, mix.ap, mix.true);
+        const mixNote = mixNoteFn(mix.ad, mix.ap, truePct);
 
         // 灰 = 你的選擇 · 黃 = 最佳 5 人（最佳用強調色）
         const radar = compRadarOverlaySvg([
@@ -6007,22 +6028,34 @@
 
         const bestEstWr = Number(best.ev.estWr);
         const bestWrTone = metaPickWrToneClass(bestEstWr);
-        // AD/AP/True bar — flex-grow 比例（勿用 width%，空 span 在 flex 裡會塌成 0）
-        // 三段永遠輸出（含 0%），legend 也永遠顯示 AD，避免只剩 AP/True 以為沒物傷
-        const mixSeg = (cls, n) =>
-            `<span class="${cls}" style="flex:${Math.max(0, Number(n) || 0)} 0 0"></span>`;
+        // Absolute width% so AD+AP+True always read on a 0–100 scale (not relative flex).
+        // Labels always render all three rows — including AD 0% — so pure-AP teams still show AD.
+        const adPct = Math.max(0, Math.min(100, Number(mix.ad) || 0));
+        const apPct = Math.max(0, Math.min(100, Number(mix.ap) || 0));
+        const mixSeg = (cls, n) => {
+            const w = Math.max(0, Math.min(100, Number(n) || 0));
+            // min-width keeps tiny non-zero slices visible; zero stays 0.
+            const min = w > 0 ? 'min-width:2px;' : '';
+            return `<span class="game-an-mix-seg ${cls}" style="width:${w}%;${min}"></span>`;
+        };
+        const mixLab = (cls, name, n) => (
+            `<span class="game-an-mix-lab ${cls}">`
+            + `<i aria-hidden="true"></i>`
+            + `${escHtml(name)} ${Math.max(0, Number(n) || 0)}%`
+            + `</span>`
+        );
         const mixBar = (
             `<div class="game-an-mix" title="${escHtml(mixNote)}">`
             + `<div class="game-an-mix-main">`
             + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
-            + mixSeg('is-ad', mix.ad)
-            + mixSeg('is-ap', mix.ap)
-            + mixSeg('is-true', mix.true)
+            + mixSeg('is-ad', adPct)
+            + mixSeg('is-ap', apPct)
+            + mixSeg('is-true', truePct)
             + `</div>`
             + `<div class="game-an-mix-labels">`
-            + `<span class="is-ad"><i></i>${escHtml(copy.gameMixAd || 'AD')} ${mix.ad}%</span>`
-            + `<span class="is-ap"><i></i>${escHtml(copy.gameMixAp || 'AP')} ${mix.ap}%</span>`
-            + `<span class="is-true"><i></i>${escHtml(copy.gameMixTrue || 'True')} ${mix.true}%</span>`
+            + mixLab('is-ad', copy.gameMixAd || 'AD', adPct)
+            + mixLab('is-ap', copy.gameMixAp || 'AP', apPct)
+            + mixLab('is-true', copy.gameMixTrue || 'True', truePct)
             + `</div>`
             + `</div></div>`
         );
