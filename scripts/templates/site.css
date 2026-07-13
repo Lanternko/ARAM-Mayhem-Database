@@ -6450,7 +6450,7 @@
         overflow: hidden;
     }
     .game-metric {
-        padding: 10px 12px;
+        padding: 14px 16px;
         border-right: 1px solid var(--border);
         min-width: 0;
     }
@@ -6465,32 +6465,35 @@
     }
     .game-metric-label {
         display: block;
-        font-size: 11px;
+        font-size: 13px;
+        font-weight: 600;
         color: var(--text-dim);
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }
     .game-metric-value {
         display: block;
-        font-size: 18px;
-        font-weight: 700;
+        font-size: clamp(22px, 3.2vw, 28px);
+        font-weight: 800;
         font-variant-numeric: tabular-nums;
-        line-height: 1.15;
+        line-height: 1.1;
         color: var(--text);
+        letter-spacing: -0.02em;
     }
     .game-metric-value.is-good { color: #7fe07f; }
     .game-metric-value.is-bad { color: #ff8a96; }
     .game-metric-grade {
         display: inline-block;
-        margin-left: 6px;
-        font-size: 12px;
-        font-weight: 700;
+        margin-left: 8px;
+        font-size: 0.72em;
+        font-weight: 800;
         color: var(--accent-soft);
-        vertical-align: 1px;
+        vertical-align: 0.05em;
     }
     .game-metric-sub {
         display: block;
-        margin-top: 3px;
-        font-size: 11px;
+        margin-top: 5px;
+        font-size: 13px;
+        font-weight: 600;
         color: var(--text-dim);
         font-variant-numeric: tabular-nums;
     }
