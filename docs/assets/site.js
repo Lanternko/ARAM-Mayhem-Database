@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783925827");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783925921");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -316,6 +316,32 @@
     const RADAR_CY = 158;
     const RADAR_R = 105;
 
+    /** Split long EN axis labels for multi-line SVG text (e.g. "Champ strength"). */
+    function radarLabelLines(label) {
+        const s = String(label || '').trim();
+        if (!s) return [''];
+        // Prefer "Champ strength" → Champ / strength (case-preserving first word)
+        if (/^champ\s+strength$/i.test(s)) {
+            const parts = s.split(/\s+/);
+            return [parts[0], parts.slice(1).join(' ')];
+        }
+        // Other multi-word Latin labels ≥ 10 chars: first word / rest
+        if (/\s/.test(s) && s.length >= 10 && !/[\u4e00-\u9fff]/.test(s)) {
+            const parts = s.split(/\s+/).filter(Boolean);
+            if (parts.length >= 2) return [parts[0], parts.slice(1).join(' ')];
+        }
+        return [s];
+    }
+
+    /** Build <tspan> stack for multi-line radar labels; each line re-sets x for text-anchor. */
+    function radarLabelTspans(lines, lx, fontSize) {
+        const x = lx.toFixed(1);
+        const dy = (fontSize * 1.15).toFixed(1);
+        return lines.map((line, i) => (
+            `<tspan x="${x}"${i === 0 ? '' : ` dy="${dy}"`}>${escHtml(line)}</tspan>`
+        )).join('');
+    }
+
     // axes: heuristic mode [{label, pct 0-1}]; signed mode (opts.signed) [{label, delta pp}].
     // Signed mode draws a dashed 0pp baseline ring; out=fits (blue), in=avoid (red); scale pp at full radius.
     function compRadarSvg(axes, ariaLabel, opts) {
@@ -341,6 +367,7 @@
         const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
         const dotCol = a => signed ? ((a.delta || 0) >= 0 ? '#3aa0ff' : '#e2574b') : '#3aa0ff';
         const dots = dataPts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="${dotCol(axes[i])}"/>`).join('');
+        const fontSize = 15;
         const labels = axes.map((a, i) => {
             // Side spokes: pull labels slightly inward so long text stays inside pad.
             const cosA = Math.cos(ang(i));
@@ -349,11 +376,22 @@
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
             const valTxt = signed ? ((a.delta || 0) >= 0 ? '+' : '') + (a.delta || 0).toFixed(1) : String(Math.round((a.pct || 0) * 100));
             const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : '#7fc8ff';
-            const estW = Math.max(32, (String(a.label || '').length + String(valTxt).length + 1) * 8.6);
+            const lines = radarLabelLines(a.label);
+            const longest = lines.reduce((m, L) => Math.max(m, L.length), 0);
+            const estW = Math.max(32, (longest + String(valTxt).length + 1) * 8.6);
             const edgePad = 4;
             if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="15" font-weight="600" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
+            // Multi-line: baseline at first line; shift up so stack is centered on spoke tip.
+            const y0 = ly + 4 - ((lines.length - 1) * fontSize * 1.15) / 2;
+            const body = radarLabelTspans(lines, lx, fontSize);
+            const val = `<tspan fill="${valCol}"> ${valTxt}</tspan>`;
+            // Put the numeric value on the last line of the stack.
+            const bodyWithVal = lines.length <= 1
+                ? `${body}${val}`
+                : radarLabelTspans(lines.slice(0, -1), lx, fontSize)
+                    + `<tspan x="${lx.toFixed(1)}" dy="${(fontSize * 1.15).toFixed(1)}">${escHtml(lines[lines.length - 1])}</tspan>${val}`;
+            return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#c2c7ce">${bodyWithVal}</text>`;
         }).join('');
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
@@ -394,18 +432,26 @@
             }).join('');
             return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2.2"/>${dots}`;
         }).join('');
+        const fontSize = 15;
         const labels = first.map((a, i) => {
             const cosA = Math.cos(ang(i));
-            // Pull side labels inward; long EN like "Champ strength" need the pad + this.
+            // Pull side labels inward; multi-line "Champ strength" fits tighter.
             const labelR = R + 20 - (Math.abs(cosA) > 0.55 ? 6 : 0);
             let [lx, ly] = at(i, labelR);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
-            // Keep label ink inside viewBox: end-anchor text grows left, start grows right.
-            const estW = Math.max(28, String(a.label || '').length * 8.6);
+            const lines = radarLabelLines(a.label);
+            const longest = lines.reduce((m, L) => Math.max(m, L.length), 0);
+            // Width estimate uses longest line only (wrap shortens horizontal span).
+            const estW = Math.max(28, longest * 8.6);
             const edgePad = 4;
             if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="15" font-weight="600" text-anchor="${anchor}" fill="#d4d8de">${escHtml(a.label || '')}</text>`;
+            const y0 = ly + 4 - ((lines.length - 1) * fontSize * 1.15) / 2;
+            return (
+                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#d4d8de">`
+                + radarLabelTspans(lines, lx, fontSize)
+                + `</text>`
+            );
         }).join('');
         return `<svg class="comp-radar is-overlay" viewBox="0 0 ${RADAR_VB_W} ${RADAR_VB_H}" width="100%" role="img" aria-label="${escHtml(ariaLabel || '')}">${grid}${spokes}${polys}${labels}</svg>`;
     }
