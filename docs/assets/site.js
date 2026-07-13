@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783915134");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783923973");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -1041,11 +1041,11 @@
             gameMissScore: (hit, total) => `答對：${hit}/${total}`,
             gameHint: '提示',
             gameReveal: '看答案',
-            gameHintUsed: '已使用提示：已鎖定 1 隻正解，請再選齊 5 隻。',
-            gameHintAuto: '前兩隻未全中正解 → 自動提示：已鎖定 1 隻正解，請再選齊 5 隻。',
+            gameHintUsed: name => `提示：${name}`,
+            gameHintAuto: name => `提示：${name}`,
             gamePerfect: '完全正確！',
             gameYourWr: '你的估計勝率',
-            gameOptimalWr: '最佳估計勝率',
+            gameOptimalWr: '最佳陣容勝率',
             gameYourTeam: '你的選擇',
             gameBestTeam: '最佳 5 人',
             gameDelta: '差距',
@@ -1060,12 +1060,34 @@
             gameTagYours: '選中',
             gameTagBest: '正解',
             gameTagMiss: '未選',
-            gameLegendPicked: '選中未中（半灰）',
-            gameLegendCorrect: '正解（白框）',
+            gameLegendPicked: '選取（白色圓圈）',
+            gameLegendCorrect: '最佳（黃字）',
             gameLegendNeither: '未選（灰階）',
             gameCompareTitle: '陣容對照',
-            gamePoolReview: '池中 10 隻（含單獨勝率）',
-            gameSoloWrList: '池中英雄單獨勝率',
+            gamePoolReview: '英雄池',
+            gameSoloWrList: '英雄池',
+            gameTabPool: '英雄池',
+            gameTabAnalysis: '隊伍分析',
+            gameAnalysisBest: '最佳 5 人',
+            gameAnalysisYours: '你的選擇',
+            gameAnalysisTitle: '最強隊伍評價',
+            gameAxisDamage: '輸出',
+            gameAxisFront: '前排',
+            gameAxisEngage: '開戰',
+            gameAxisWave: '清兵',
+            gameAxisChem: '默契',
+            gameAxisStrength: '英雄強度',
+            gameEvalStrength: '英雄強度',
+            gameEvalWave: '清兵',
+            gameEvalMix: '傷害構成',
+            gameEvalDamage: '輸出',
+            gameEvalFront: '前排',
+            gameEvalEngage: '開戰',
+            gameMixAd: 'AD',
+            gameMixAp: 'AP',
+            gameMixTrue: 'True',
+            gameMixNote: (ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`,
+            gameBestEstWr: '最佳陣容勝率',
             gameWaitingData: '載入英雄資料中…',
             gameNoPool: '目前沒有足夠樣本的英雄可開局。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
@@ -1274,11 +1296,11 @@
             gameMissScore: (hit, total) => `Correct: ${hit}/${total}`,
             gameHint: 'Hint',
             gameReveal: 'Answer',
-            gameHintUsed: 'Hint used: 1 correct champion pinned. Finish the 5.',
-            gameHintAuto: 'First two were not both correct → auto hint: 1 correct champion pinned. Finish the 5.',
+            gameHintUsed: name => `Hint: ${name}`,
+            gameHintAuto: name => `Hint: ${name}`,
             gamePerfect: 'Perfect!',
             gameYourWr: 'Your est. WR',
-            gameOptimalWr: 'Best est. WR',
+            gameOptimalWr: 'Best team WR',
             gameYourTeam: 'Your pick',
             gameBestTeam: 'Best 5',
             gameDelta: 'Delta',
@@ -1293,12 +1315,34 @@
             gameTagYours: 'Picked',
             gameTagBest: 'Correct',
             gameTagMiss: '—',
-            gameLegendPicked: 'Picked wrong (half-gray)',
-            gameLegendCorrect: 'Correct (white frame)',
+            gameLegendPicked: 'Picked (white ring)',
+            gameLegendCorrect: 'Best (yellow text)',
             gameLegendNeither: 'Not picked (gray)',
             gameCompareTitle: 'Roster compare',
-            gamePoolReview: 'Pool of 10 (solo WR)',
-            gameSoloWrList: 'Solo win rates in this pool',
+            gamePoolReview: 'Champion pool',
+            gameSoloWrList: 'Champion pool',
+            gameTabPool: 'Pool',
+            gameTabAnalysis: 'Team analysis',
+            gameAnalysisBest: 'Best 5',
+            gameAnalysisYours: 'Your pick',
+            gameAnalysisTitle: 'Best team rating',
+            gameAxisDamage: 'Damage',
+            gameAxisFront: 'Front',
+            gameAxisEngage: 'Engage',
+            gameAxisWave: 'Wave',
+            gameAxisChem: 'Synergy',
+            gameAxisStrength: 'Champ strength',
+            gameEvalStrength: 'Champ strength',
+            gameEvalWave: 'Wave',
+            gameEvalMix: 'Damage mix',
+            gameEvalDamage: 'Damage',
+            gameEvalFront: 'Frontline',
+            gameEvalEngage: 'Engage',
+            gameMixAd: 'AD',
+            gameMixAp: 'AP',
+            gameMixTrue: 'True',
+            gameMixNote: (ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`,
+            gameBestEstWr: 'Best team WR',
             gameWaitingData: 'Loading champion data…',
             gameNoPool: 'Not enough champions with sample size to start a round.',
             detailEmpty: 'No detail data is available for this champion yet.',
@@ -5051,9 +5095,15 @@
         metaPick.pinnedIds = [String(hintId)];
         metaPick.pickedIds = [String(hintId)];
         metaPick.phase = 'picking';
-        metaPick.notice = fromAuto
-            ? (tr().gameHintAuto || tr().gameHintUsed)
-            : tr().gameHintUsed;
+        const copy = tr();
+        const info = (DATA.champs && DATA.champs[String(hintId)]) || {};
+        const name = champName(info, String(hintId));
+        const fmt = fromAuto
+            ? (copy.gameHintAuto || copy.gameHintUsed)
+            : copy.gameHintUsed;
+        metaPick.notice = typeof fmt === 'function'
+            ? fmt(name)
+            : `提示：${name}`;
         metaPick.noticeKind = 'ok';
         metaPick.missMissing = 0;
         return true;
@@ -5133,15 +5183,263 @@
         return copy.gameTagMiss || '—';
     }
 
+    /** Letter grade from 0–1 capability percentile (S … F). */
+    function metaPickLetterGrade(pct01) {
+        const p = Number(pct01);
+        if (!Number.isFinite(p)) return '—';
+        if (p >= 0.90) return 'S';
+        if (p >= 0.80) return 'A+';
+        if (p >= 0.70) return 'A';
+        if (p >= 0.60) return 'B+';
+        if (p >= 0.50) return 'B';
+        if (p >= 0.40) return 'C+';
+        if (p >= 0.30) return 'C';
+        if (p >= 0.20) return 'D';
+        return 'F';
+    }
+
+    /**
+     * Grade AP–AD mix health: closer to empirical ideal (~40% AD) → higher letter.
+     * Maps distance-from-target into the same S…F ladder as capability percentiles.
+     */
+    function metaPickMixGrade(adShare) {
+        const target = Number(((DATA.recommendation_composition || {}).damage_mix || {}).target_ad_share);
+        const ideal = Number.isFinite(target) ? target : 0.4;
+        const dist = Math.abs((Number(adShare) || 0.5) - ideal);
+        // dist 0 → 1.0, dist 0.25+ → 0
+        const score = Math.max(0, Math.min(1, 1 - dist / 0.25));
+        return metaPickLetterGrade(score);
+    }
+
+    /** Team mean solo-WR percentile among all champs (0–1) —「英雄強度」軸. */
+    function metaPickTeamStrength01(ids) {
+        const wrs = [];
+        (ids || []).forEach(rawId => {
+            const wr = Number((DATA.champs[String(rawId)] || {}).wr);
+            if (Number.isFinite(wr)) wrs.push(wr);
+        });
+        if (!wrs.length) return 0.5;
+        const mean = wrs.reduce((a, b) => a + b, 0) / wrs.length;
+        const all = Object.values(DATA.champs || {})
+            .map(c => Number(c && c.wr))
+            .filter(Number.isFinite)
+            .sort((a, b) => a - b);
+        const n = all.length;
+        if (n < 2) return 0.5;
+        let lt = 0;
+        while (lt < n && all[lt] < mean) lt += 1;
+        return Math.max(0, Math.min(1, lt / (n - 1)));
+    }
+
+    /**
+     * Real damage mix from teamComposition.sums (phys / magic / true).
+     * Percents are integers that sum to 100 (largest-remainder).
+     */
+    function metaPickDamageMix(sums) {
+        const p = Math.max(0, Number(sums && sums.phys) || 0);
+        const m = Math.max(0, Number(sums && sums.magic) || 0);
+        const t = Math.max(0, Number(sums && sums.true) || 0);
+        const total = p + m + t;
+        if (total <= 0) {
+            return { ad: 50, ap: 50, true: 0, adShare: 0.5 };
+        }
+        const raw = [
+            { key: 'ad', v: (p / total) * 100 },
+            { key: 'ap', v: (m / total) * 100 },
+            { key: 'true', v: (t / total) * 100 },
+        ];
+        const floors = raw.map(r => ({ key: r.key, n: Math.floor(r.v), frac: r.v - Math.floor(r.v) }));
+        let left = 100 - floors.reduce((s, r) => s + r.n, 0);
+        floors.sort((a, b) => b.frac - a.frac || a.key.localeCompare(b.key));
+        for (let i = 0; i < floors.length && left > 0; i += 1) {
+            floors[i].n += 1;
+            left -= 1;
+        }
+        const out = { ad: 0, ap: 0, true: 0 };
+        floors.forEach(r => { out[r.key] = r.n; });
+        // adShare among AD+AP only (for mix-grade ideal ~40% AD)
+        const adDen = p + m;
+        out.adShare = adDen > 0 ? p / adDen : 0.5;
+        return out;
+    }
+
+    /**
+     * Map signed lift (pair / composition) onto radar 0–1.
+     * 0.5 = neutral; ±scale ≈ full stretch.
+     */
+    function metaPickSignedLift01(lift, scale) {
+        const s = Number(scale) > 0 ? Number(scale) : 0.06;
+        return Math.max(0, Math.min(1, 0.5 + (Number(lift) || 0) / s));
+    }
+
+    /**
+     * 6-axis profile: 輸出 / 前排 / 開戰 / 清兵 / 默契 / 英雄強度
+     * （AP+AD 融合成輸出；默契 = 搭檔 pair lift 化學反應）
+     */
+    function metaPickSixAxes(ids, copy) {
+        const ev = evaluateFullTeam(ids || []);
+        const cap = ev.cap || {};
+        const strength01 = metaPickTeamStrength01(ids);
+        // 輸出：優先用 damage 能力百分位；缺則取 phys/magic 平均
+        const dmg = Number(cap.damage);
+        const dmg01 = Number.isFinite(dmg) && dmg > 0
+            ? dmg
+            : ((Number(cap.phys) || 0) + (Number(cap.magic) || 0)) / 2;
+        // 默契：隊伍平均 pair lift → 0–1（±6pp 拉滿）
+        const chem01 = metaPickSignedLift01(ev.pairLift, 0.06);
+        return {
+            ev,
+            cap,
+            strength01,
+            chem01,
+            axes: [
+                { label: copy.gameAxisDamage || '輸出', pct: dmg01 },
+                { label: copy.gameAxisFront || '前排', pct: Number(cap.front) || 0 },
+                { label: copy.gameAxisEngage || '開戰', pct: Number(cap.engage) || 0 },
+                { label: copy.gameAxisWave || '清兵', pct: Number(cap.wave) || 0 },
+                { label: copy.gameAxisChem || '默契', pct: chem01 },
+                { label: copy.gameAxisStrength || '英雄強度', pct: strength01 },
+            ],
+        };
+    }
+
+    /**
+     * Dual 6-axis radar (黃=你的 / 灰=最佳) + best-team letter grades on the right.
+     */
+    function metaPickAnalysisHtml(yourIds, bestIds, copy) {
+        const yours = metaPickSixAxes(yourIds, copy);
+        const best = metaPickSixAxes(bestIds, copy);
+        const teamComp = teamComposition(bestIds);
+        const cap = best.cap;
+        const strengthScore = Math.round(best.strength01 * 100);
+        const mix = metaPickDamageMix(teamComp.sums);
+        const mixNoteFn = copy.gameMixNote || ((ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`);
+        const mixNote = mixNoteFn(mix.ad, mix.ap, mix.true);
+
+        // 灰 = 你的選擇 · 黃 = 最佳 5 人（最佳用強調色）
+        const radar = compRadarOverlaySvg([
+            {
+                axes: yours.axes,
+                stroke: 'rgba(196,200,208,0.90)',
+                fill: 'rgba(160,166,176,0.14)',
+                dot: 'rgba(210,214,220,0.95)',
+            },
+            {
+                axes: best.axes,
+                stroke: 'var(--accent, #f5c518)',
+                fill: 'color-mix(in srgb, var(--accent, #f5c518) 22%, transparent)',
+                dot: 'var(--accent, #f5c518)',
+            },
+        ], copy.gameAnalysisTitle || copy.teamDimsTitle || '');
+
+        const grades = [
+            {
+                label: copy.gameEvalStrength || '英雄強度',
+                value: String(strengthScore),
+                kind: 'num',
+                tip: pct(best.ev.baseWr),
+            },
+            {
+                label: copy.gameEvalWave || '清兵',
+                value: metaPickLetterGrade(cap.wave),
+                kind: 'letter',
+                tip: Math.round((Number(cap.wave) || 0) * 100),
+            },
+            {
+                label: copy.gameEvalMix || '傷害構成',
+                value: metaPickMixGrade(mix.adShare),
+                kind: 'letter',
+                tip: mixNote,
+            },
+            {
+                label: copy.gameEvalDamage || '輸出',
+                value: metaPickLetterGrade(cap.damage),
+                kind: 'letter',
+                tip: Math.round((Number(cap.damage) || 0) * 100),
+            },
+            {
+                label: copy.gameEvalFront || '前排',
+                value: metaPickLetterGrade(cap.front),
+                kind: 'letter',
+                tip: Math.round((Number(cap.front) || 0) * 100),
+            },
+            {
+                label: copy.gameEvalEngage || '開戰',
+                value: metaPickLetterGrade(cap.engage),
+                kind: 'letter',
+                tip: Math.round((Number(cap.engage) || 0) * 100),
+            },
+        ];
+
+        const gradeRows = grades.map(g => {
+            const gradeCls = g.kind === 'letter'
+                ? `is-grade-${String(g.value).replace('+', 'p').toLowerCase()}`
+                : 'is-num';
+            return (
+                `<div class="game-an-grade ${gradeCls}" title="${escHtml(String(g.tip))}">`
+                + `<span class="game-an-grade-label">${escHtml(g.label)}</span>`
+                + `<span class="game-an-grade-val">${escHtml(g.value)}</span>`
+                + `</div>`
+            );
+        }).join('');
+
+        const bestEstWr = Number(best.ev.estWr);
+        const bestWrTone = metaPickWrToneClass(bestEstWr);
+        // 縮短的 AD/AP/True bar；大字勝率在右上
+        const mixBar = (
+            `<div class="game-an-mix" title="${escHtml(mixNote)}">`
+            + `<div class="game-an-mix-main">`
+            + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
+            + (mix.ad > 0 ? `<span class="is-ad" style="width:${mix.ad}%"></span>` : '')
+            + (mix.ap > 0 ? `<span class="is-ap" style="width:${mix.ap}%"></span>` : '')
+            + (mix.true > 0 ? `<span class="is-true" style="width:${mix.true}%"></span>` : '')
+            + `</div>`
+            + `<div class="game-an-mix-labels">`
+            + `<span class="is-ad"><i></i>${escHtml(copy.gameMixAd || 'AD')} ${mix.ad}%</span>`
+            + `<span class="is-ap"><i></i>${escHtml(copy.gameMixAp || 'AP')} ${mix.ap}%</span>`
+            + `<span class="is-true"><i></i>${escHtml(copy.gameMixTrue || 'True')} ${mix.true}%</span>`
+            + `</div>`
+            + `</div></div>`
+        );
+
+        return (
+            `<div class="game-analysis">`
+            + `<div class="game-an-head">`
+            + `<div class="game-an-head-left">`
+            + `<span class="game-an-head-title">${escHtml(copy.gameAnalysisTitle || '最強隊伍評價')}</span>`
+            + `<span class="game-an-legend">`
+            + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
+            + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
+            + `</span>`
+            + `</div>`
+            + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(copy.gameBestEstWr || '最佳陣容勝率')}">`
+            + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
+            + `<span class="game-an-wr-label">${escHtml(copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率')}</span>`
+            + `</div>`
+            + `</div>`
+            + mixBar
+            + `<div class="game-an-dims-split is-best-only">`
+            + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
+            + `<div class="game-an-grades" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            + gradeRows
+            + `</div>`
+            + `</div>`
+            + `</div>`
+        );
+    }
+
     /** One horizontal roster strip of faces (+ optional role mark on reveal). */
     function metaPickRosterFacesHtml(ids, opts) {
         const copy = opts.copy || tr();
         const pickedSet = opts.pickedSet || new Set();
         const bestSet = opts.bestSet || new Set();
         const markRoles = !!opts.markRoles;
+        // 陣容對照：與主頁相同 — icon + tier 框 + 勝率左下角
+        const homeStyle = !!opts.homeStyle || markRoles;
         const pinSet = opts.pinSet || new Set();
         const padTo = opts.padTo != null ? opts.padTo : META_PICK_NEED;
         const list = (ids || []).map(String);
+        const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
         const cells = [];
         for (let i = 0; i < padTo; i += 1) {
             const cid = list[i];
@@ -5154,26 +5452,35 @@
             const img = info.image
                 ? `<img loading="lazy" src="${info.image}" alt="${escHtml(name)}">`
                 : '';
+            const wr = Number(info.wr);
             const role = markRoles ? metaPickChampRole(cid, pickedSet, bestSet) : '';
             const isPin = pinSet.has(String(cid));
+            const tier = homeStyle ? draftAssignTier(wr) : '';
+            const tierColor = (tier && tierColors[tier] && tierColors[tier].color) || '#555';
             const cls = [
                 'game-face',
+                homeStyle ? 'is-home' : '',
                 role ? `is-${role}` : '',
                 isPin ? 'is-pinned' : '',
             ].filter(Boolean).join(' ');
-            // Pick phase: pin hint only. Reveal: yellow「選中」text on picked faces.
+            // Pick phase: pin hint only. 陣容對照不顯示「選中」字樣（靠灰階/全彩區分）.
             let mark = '';
             if (!markRoles && isPin) {
                 mark = `<span class="game-face-mark is-hint">${escHtml(copy.gameHintBadge)}</span>`;
-            } else if (markRoles && (role === 'yours' || role === 'both')) {
-                mark = `<span class="game-face-mark is-picked">${escHtml(copy.gameTagYours || '選中')}</span>`;
             }
-            const title = markRoles && role
-                ? `${name} · ${metaPickRoleLabel(role, copy)}`
-                : name;
+            const wrHtml = (homeStyle && Number.isFinite(wr))
+                ? `<span class="wr">${pct(wr)}</span>`
+                : '';
+            const titleBits = [name];
+            if (homeStyle && tier) titleBits.push(tier);
+            if (homeStyle && Number.isFinite(wr)) titleBits.push(pct(wr));
+            if (markRoles && role) titleBits.push(metaPickRoleLabel(role, copy));
+            const styleAttr = homeStyle ? ` style="--tier-color:${tierColor}"` : '';
+            const tierAttr = homeStyle && tier ? ` data-tier="${tier}"` : '';
             cells.push(
-                `<div class="${cls}" title="${escHtml(title)}">`
+                `<div class="${cls}"${tierAttr}${styleAttr} title="${escHtml(titleBits.join(' · '))}">`
                 + img
+                + wrHtml
                 + mark
                 + `</div>`
             );
@@ -5346,19 +5653,39 @@
                     if (d) return d;
                     return String(a).localeCompare(String(b), undefined, { numeric: true });
                 });
+                // 塗鴉風白圈：選取 — 緊貼頭像+名字
+                const doodleRing = (
+                    `<svg class="game-review-doodle" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false">`
+                    + `<ellipse cx="50" cy="20" rx="46" ry="15.5" fill="none" stroke="currentColor"`
+                    + ` stroke-width="2.35" stroke-linecap="round"`
+                    + ` vector-effect="non-scaling-stroke"`
+                    + ` transform="rotate(-3.5 50 20)"/>`
+                    + `<ellipse cx="50.5" cy="20.5" rx="44.5" ry="14.2" fill="none" stroke="currentColor"`
+                    + ` stroke-width="1.15" stroke-linecap="round" opacity="0.55"`
+                    + ` vector-effect="non-scaling-stroke"`
+                    + ` transform="rotate(2 50 20)"/>`
+                    + `</svg>`
+                );
                 const listHtml = ranked.map((cid, i) => {
                     const id = String(cid);
                     const info = DATA.champs[id] || {};
                     const name = champName(info, id);
-                    const img = info.image ? `<img loading="lazy" src="${info.image}" alt="">` : '<span class="game-review-ph"></span>';
+                    const img = info.image
+                        ? `<img loading="lazy" src="${info.image}" alt="">`
+                        : '<span class="game-review-ph"></span>';
                     const wr = Number(info.wr);
                     const role = metaPickChampRole(id, picked, optimal);
-                    // Status colors restored; half-grayscale only on 陣容對照 faces (not this list).
+                    const isPicked = role === 'yours' || role === 'both';
+                    const isCorrect = role === 'best' || role === 'both';
+                    // 選取=白圈 · 正解=黃字+全彩 · 未選=灰階
                     return (
                         `<li class="game-review-row is-${role}" title="${escHtml(metaPickRoleLabel(role, copy))}">`
                         + `<span class="game-review-rank">${i + 1}</span>`
-                        + img
+                        + `<span class="game-review-main${isPicked ? ' is-picked' : ''}${isCorrect ? ' is-correct' : ''}">`
+                        + `<span class="game-review-face">${img}</span>`
                         + `<span class="game-review-name">${escHtml(name)}</span>`
+                        + (isPicked ? doodleRing : '')
+                        + `</span>`
                         + `<span class="game-review-wr">${Number.isFinite(wr) ? pct(wr) : '—'}</span>`
                         + `</li>`
                     );
@@ -5404,16 +5731,26 @@
                     + `</div>`
                     + bestFaces
                     + `</div>`
-                    + `<div class="game-legend" aria-label="legend">`
-                    + `<span class="game-legend-item is-neither"><i></i>${escHtml(copy.gameLegendNeither || '未選（灰階）')}</span>`
-                    + `<span class="game-legend-item is-picked">${escHtml(copy.gameLegendPicked || '選中未中（半灰）')}</span>`
-                    + `<span class="game-legend-item is-correct"><i></i>${escHtml(copy.gameLegendCorrect || '正解（白框）')}</span>`
-                    + `</div>`
                     + `</div>`
 
-                    + `<div class="game-review">`
-                    + `<div class="game-review-head">${escHtml(copy.gamePoolReview || copy.gameSoloWrList)}</div>`
+                    + `<div class="game-panels">`
+                    + `<div class="game-tabs" role="tablist" aria-label="${escHtml(copy.gameTabPool || 'tabs')}">`
+                    + `<button type="button" class="game-tab is-active" role="tab" aria-selected="true" data-game-tab="pool">`
+                    + `${escHtml(copy.gameTabPool || copy.gamePoolReview || '英雄池')}</button>`
+                    + `<button type="button" class="game-tab" role="tab" aria-selected="false" data-game-tab="analysis">`
+                    + `${escHtml(copy.gameTabAnalysis || '隊伍分析')}</button>`
+                    + `</div>`
+                    + `<div class="game-tab-panel is-active" data-game-tab-panel="pool" role="tabpanel">`
                     + `<ol class="game-review-list">${listHtml}</ol>`
+                    + `<div class="game-legend game-legend-under-pool" aria-label="legend">`
+                    + `<span class="game-legend-item is-picked"><i></i>${escHtml(copy.gameLegendPicked || '選取（白色圓圈）')}</span>`
+                    + `<span class="game-legend-item is-neither"><i></i>${escHtml(copy.gameLegendNeither || '未選（灰階）')}</span>`
+                    + `<span class="game-legend-item is-correct">${escHtml(copy.gameLegendCorrect || '最佳（黃字）')}</span>`
+                    + `</div>`
+                    + `</div>`
+                    + `<div class="game-tab-panel" data-game-tab-panel="analysis" role="tabpanel" hidden>`
+                    + metaPickAnalysisHtml(yourIds, bestIds, copy)
+                    + `</div>`
                     + `</div>`
                 );
             }
@@ -6783,6 +7120,25 @@
         if (ev.target.closest('#draft-clear')) {
             clearDraft();
             trackEvent('draft_clear', {});
+            return;
+        }
+        const gameTab = ev.target.closest('[data-game-tab]');
+        if (gameTab) {
+            const host = gameTab.closest('.game-panels');
+            if (host) {
+                const name = gameTab.getAttribute('data-game-tab') || 'pool';
+                host.querySelectorAll('.game-tab').forEach(btn => {
+                    const on = btn.getAttribute('data-game-tab') === name;
+                    btn.classList.toggle('is-active', on);
+                    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                host.querySelectorAll('[data-game-tab-panel]').forEach(panel => {
+                    const on = panel.getAttribute('data-game-tab-panel') === name;
+                    panel.classList.toggle('is-active', on);
+                    panel.hidden = !on;
+                });
+                trackEvent('game_result_tab', { tab: name });
+            }
             return;
         }
         const gamePick = ev.target.closest('[data-game-pick]');
