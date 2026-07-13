@@ -42,7 +42,7 @@ python -m aram_nn.ingest.snowball \
 python scripts/probe_user.py --region tw --riot-id "Name#TAG" --count 100
 
 # Tier list 網站 split build（見「Site deploy」節）：HTML fetch external JSON
-python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
+python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json --meta-pick-api-url "https://api.arammeta.com"
 
 # 舊 inline build 仍可用於臨時單檔測試；正式 deploy 不用這個模式
 python scripts/build_tier_list.py --site-url "https://arammeta.com/"
@@ -131,7 +131,7 @@ Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 Live: https://arammeta.com/
 ```powershell
 # 1. Rebuild split site — 一定要帶 --site-url，否則 og:url / canonical 會空
-python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json
+python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json --meta-pick-api-url "https://api.arammeta.com"
 
 # 2. Stage 只有產出檔（不要 git add -A）
 git add docs/index.html docs/api/tier-list.json
@@ -145,6 +145,7 @@ git commit -m "Refresh split tier list 2026-05-23"
 git push origin main
 ```
 - 預設參數：`--queue 2400 --patch-prefix 16.10 --out docs/index.html --min-games 50 --min-pair-games 15`，使用者另外要 patch / queue 時才 override
+- 正式 build 必帶 `--meta-pick-api-url "https://api.arammeta.com"`；空值會把全球排行榜建回「未設定 API」。
 - 正式 Pages deploy 採 split static 形式；HTML 約數百 KB，資料在 `docs/api/tier-list.json`。省略 `--payload-url` 會回到舊 inline HTML。
 - `data/cache/{kiwi.bin.json, lol_stringtable_zh_tw.json}` 首跑會自動下載 ~30 MB，後續 build 走本地快取
 - repo 改名 `ARAM-mayhem-collector` → `ARAM-Mayhem-Database`，舊 URL 仍 redirect，但 OG meta 走新 URL（commit `276409b`）
