@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783925089");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783925794");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -5429,16 +5429,23 @@
             + `</div></div>`
         );
 
+        const legend = (
+            `<div class="game-an-legend" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            + `<span class="game-an-legend-item is-yours">`
+            + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
+            + `</span>`
+            + `<span class="game-an-legend-item is-best">`
+            + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
+            + `</span>`
+            + `</div>`
+        );
+
         return (
             `<div class="game-analysis">`
             + `<div class="game-an-head">`
             + `<div class="game-an-head-left">`
             + `<div class="game-an-head-row">`
             + `<span class="game-an-head-title">${escHtml(copy.gameAnalysisTitle || '最強隊伍評價')}</span>`
-            + `<span class="game-an-legend">`
-            + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
-            + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
-            + `</span>`
             + `</div>`
             + mixBar
             + `</div>`
@@ -5448,7 +5455,10 @@
             + `</div>`
             + `</div>`
             + `<div class="game-an-dims-split is-best-only">`
+            + `<div class="game-an-radar-col">`
             + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
+            + legend
+            + `</div>`
             + `<div class="game-an-grades" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
             + gradeRows
             + `</div>`
