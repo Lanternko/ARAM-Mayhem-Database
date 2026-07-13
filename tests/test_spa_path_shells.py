@@ -99,6 +99,9 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn = root / "zh-CN" / "index.html"
             self.assertIn("FULL_SPA_SHELL", zh_cn.read_text(encoding="utf-8"))
             self.assertIn("/zh-CN", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/game", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/zh-CN/game", SPA_FULL_SHELL_PATHS)
             # Article mirrors stay stubs.
             en_article = root / "en" / "column" / "sprees-not-snowball" / "index.html"
             self.assertTrue(en_article.is_file())
