@@ -5878,55 +5878,58 @@
     }
 
     /**
-     * Real damage mix from teamComposition.sums (phys / magic / true).
-     * Percents are integers that sum to 100 (largest-remainder).
-     * Always returns numeric ad/ap/trueDmg (true kept as alias for call sites).
+     * Real damage mix from phys / magic / true DPM.
+     * Returns integers ad + ap + trueDmg === 100 (largest-remainder).
+     * Never uses object key `true` (boolean keyword footgun).
      */
     function metaPickDamageMix(sums) {
-        const p = Math.max(0, Number(sums && (sums.phys != null ? sums.phys : sums.physical)) || 0);
+        const p = Math.max(0, Number(sums && sums.phys) || 0);
         const m = Math.max(0, Number(sums && sums.magic) || 0);
-        const t = Math.max(0, Number(sums && (sums.true != null ? sums.true : sums.true_damage)) || 0);
+        const t = Math.max(0, Number(sums && sums.trueDmg) || 0);
         const total = p + m + t;
-        if (total <= 0) {
-            return { ad: 50, ap: 50, true: 0, trueDmg: 0, adShare: 0.5 };
+        if (!(total > 0)) {
+            return { ad: 50, ap: 50, trueDmg: 0, adShare: 0.5 };
         }
-        const raw = [
-            { key: 'ad', v: (p / total) * 100 },
-            { key: 'ap', v: (m / total) * 100 },
-            { key: 'trueDmg', v: (t / total) * 100 },
-        ];
-        const floors = raw.map(r => ({ key: r.key, n: Math.floor(r.v), frac: r.v - Math.floor(r.v) }));
-        let left = 100 - floors.reduce((s, r) => s + r.n, 0);
-        floors.sort((a, b) => b.frac - a.frac || a.key.localeCompare(b.key));
-        for (let i = 0; i < floors.length && left > 0; i += 1) {
-            floors[i].n += 1;
+        // Fixed order AD → AP → True so remainder tie-breaks prefer AD
+        const vals = [(p / total) * 100, (m / total) * 100, (t / total) * 100];
+        const ns = vals.map(v => Math.floor(v));
+        let left = 100 - (ns[0] + ns[1] + ns[2]);
+        const order = [0, 1, 2].sort((a, b) => {
+            const fa = vals[a] - ns[a];
+            const fb = vals[b] - ns[b];
+            return (fb - fa) || (a - b);
+        });
+        for (let k = 0; k < order.length && left > 0; k += 1) {
+            ns[order[k]] += 1;
             left -= 1;
         }
-        const out = { ad: 0, ap: 0, trueDmg: 0 };
-        floors.forEach(r => { out[r.key] = r.n; });
-        // Keep sum exactly 100 if floating edge-cases leave a gap.
-        const sum3 = out.ad + out.ap + out.trueDmg;
-        if (sum3 !== 100) {
-            out.ad = Math.max(0, out.ad + (100 - sum3));
-        }
-        out.true = out.trueDmg; // alias for older call sites / i18n helpers
-        // adShare among AD+AP only (for mix-grade ideal ~40% AD)
+        const ad = ns[0];
+        const ap = ns[1];
+        const trueDmg = ns[2];
         const adDen = p + m;
-        out.adShare = adDen > 0 ? p / adDen : 0.5;
-        return out;
+        return {
+            ad,
+            ap,
+            trueDmg,
+            adShare: adDen > 0 ? p / adDen : 0.5,
+        };
     }
 
-    /** Sum phys/magic/true from roster ids (defensive; does not rely on teamComposition). */
+    /** Sum phys/magic/true DPM from roster — always bracket-access for "true". */
     function metaPickTeamDamageSums(ids) {
-        const sums = { phys: 0, magic: 0, true: 0 };
+        let phys = 0;
+        let magic = 0;
+        let trueDmg = 0;
         (ids || []).forEach(rawId => {
             const info = (DATA.champs && DATA.champs[String(rawId)]) || {};
             const comp = info.comp || {};
-            sums.phys += Number(comp.phys != null ? comp.phys : comp.physical) || 0;
-            sums.magic += Number(comp.magic) || 0;
-            sums.true += Number(comp.true != null ? comp.true : comp.true_damage) || 0;
+            phys += Number(comp.phys != null ? comp.phys : comp.physical) || 0;
+            magic += Number(comp.magic) || 0;
+            trueDmg += Number(
+                comp['true'] != null ? comp['true'] : comp.true_damage
+            ) || 0;
         });
-        return sums;
+        return { phys, magic, trueDmg };
     }
 
     /**
@@ -5980,9 +5983,11 @@
         const strengthTxt = pct(best.strength.meanWr);
         // Re-sum damage dims from champ ids (more reliable than teamComposition.sums alone).
         const mix = metaPickDamageMix(metaPickTeamDamageSums(bestIds));
-        const truePct = Number(mix.trueDmg != null ? mix.trueDmg : mix.true) || 0;
+        const adPct = Math.max(0, Math.min(100, Number(mix.ad) || 0));
+        const apPct = Math.max(0, Math.min(100, Number(mix.ap) || 0));
+        const truePct = Math.max(0, Math.min(100, Number(mix.trueDmg) || 0));
         const mixNoteFn = copy.gameMixNote || ((ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`);
-        const mixNote = mixNoteFn(mix.ad, mix.ap, truePct);
+        const mixNote = mixNoteFn(adPct, apPct, truePct);
 
         // 灰 = 你的選擇 · 黃 = 最佳 5 人（最佳用強調色）
         const radar = compRadarOverlaySvg([
@@ -6053,24 +6058,19 @@
 
         const bestEstWr = Number(best.ev.estWr);
         const bestWrTone = metaPickWrToneClass(bestEstWr);
-        // Absolute width% so AD+AP+True always read on a 0–100 scale (not relative flex).
-        // Labels always render all three rows — including AD 0% — so pure-AP teams still show AD.
-        const adPct = Math.max(0, Math.min(100, Number(mix.ad) || 0));
-        const apPct = Math.max(0, Math.min(100, Number(mix.ap) || 0));
+        // flex-basis % 填滿 bar；圖例永遠三行（含 AD 0%）
         const mixSeg = (cls, n) => {
             const w = Math.max(0, Math.min(100, Number(n) || 0));
-            // min-width keeps tiny non-zero slices visible; zero stays 0.
-            const min = w > 0 ? 'min-width:2px;' : '';
-            return `<span class="game-an-mix-seg ${cls}" style="width:${w}%;${min}"></span>`;
+            return `<span class="game-an-mix-seg ${cls}" style="flex:0 0 ${w}%"></span>`;
         };
         const mixLab = (cls, name, n) => (
             `<span class="game-an-mix-lab ${cls}">`
             + `<i aria-hidden="true"></i>`
-            + `${escHtml(name)} ${Math.max(0, Number(n) || 0)}%`
+            + `${escHtml(name)}&nbsp;${Math.max(0, Number(n) || 0)}%`
             + `</span>`
         );
         const mixBar = (
-            `<div class="game-an-mix" title="${escHtml(mixNote)}">`
+            `<div class="game-an-mix" title="${escHtml(mixNote)}" data-mix-ad="${adPct}" data-mix-ap="${apPct}" data-mix-true="${truePct}">`
             + `<div class="game-an-mix-main">`
             + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
             + mixSeg('is-ad', adPct)

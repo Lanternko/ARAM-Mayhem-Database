@@ -6945,14 +6945,14 @@
             font-size: 12px;
         }
         .game-an-mix {
-            max-width: min(100%, 200px);
+            max-width: min(100%, 260px);
         }
         .game-an-mix-bar {
             height: 10px;
         }
         .game-an-mix-labels {
             font-size: 10px;
-            gap: 4px 10px;
+            gap: 4px 8px;
         }
     }
     /* 紅 AD · 藍 AP · 白 True — bar 縮短；用 flex-grow 比例填滿，不靠 width% */
@@ -6986,23 +6986,26 @@
     .game-an-mix-bar > .game-an-mix-seg {
         display: block;
         height: 100%;
-        flex: 0 0 auto; /* width% is the source of truth */
+        /* flex-basis set inline as N% — three segments sum to 100% */
+        flex-grow: 0;
+        flex-shrink: 0;
         box-sizing: border-box;
+        min-width: 0;
     }
-    .game-an-mix-bar .is-ad { background: #ef4444; }
-    .game-an-mix-bar .is-ap { background: #3b82f6; }
-    .game-an-mix-bar .is-true {
+    .game-an-mix-bar > .game-an-mix-seg.is-ad { background: #ef4444; }
+    .game-an-mix-bar > .game-an-mix-seg.is-ap { background: #3b82f6; }
+    .game-an-mix-bar > .game-an-mix-seg.is-true {
         background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
         box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.45);
     }
-    [data-theme="light"] .game-an-mix-bar .is-true {
+    [data-theme="light"] .game-an-mix-bar > .game-an-mix-seg.is-true {
         background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
         box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.35);
     }
     .game-an-mix-labels {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px 14px;
+        gap: 6px 12px;
         font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
@@ -7012,7 +7015,7 @@
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        flex-shrink: 0;
+        flex: 0 0 auto;
         white-space: nowrap;
     }
     .game-an-mix-labels i {
@@ -7022,17 +7025,17 @@
         display: inline-block;
         flex-shrink: 0;
     }
-    .game-an-mix-labels .is-ad { color: #f87171; }
-    .game-an-mix-labels .is-ad i { background: #ef4444; }
-    .game-an-mix-labels .is-ap { color: #60a5fa; }
-    .game-an-mix-labels .is-ap i { background: #3b82f6; }
-    .game-an-mix-labels .is-true { color: var(--text-muted); }
-    .game-an-mix-labels .is-true i {
+    .game-an-mix-labels .game-an-mix-lab.is-ad { color: #f87171; }
+    .game-an-mix-labels .game-an-mix-lab.is-ad i { background: #ef4444; }
+    .game-an-mix-labels .game-an-mix-lab.is-ap { color: #60a5fa; }
+    .game-an-mix-labels .game-an-mix-lab.is-ap i { background: #3b82f6; }
+    .game-an-mix-labels .game-an-mix-lab.is-true { color: var(--text-muted); }
+    .game-an-mix-labels .game-an-mix-lab.is-true i {
         background: #e2e8f0;
         box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.5);
     }
-    [data-theme="light"] .game-an-mix-labels .is-ad { color: #dc2626; }
-    [data-theme="light"] .game-an-mix-labels .is-ap { color: #2563eb; }
+    [data-theme="light"] .game-an-mix-labels .game-an-mix-lab.is-ad { color: #dc2626; }
+    [data-theme="light"] .game-an-mix-labels .game-an-mix-lab.is-ap { color: #2563eb; }
     /* 雷達靠左貼齊；多出的寬度給右側評分（字要大） */
     .game-an-dims-split.is-best-only {
         display: grid;
