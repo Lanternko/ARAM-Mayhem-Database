@@ -6983,11 +6983,11 @@
         background: color-mix(in srgb, var(--text) 8%, transparent);
         box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
     }
-    .game-an-mix-bar > span {
+    .game-an-mix-bar > .game-an-mix-seg {
         display: block;
         height: 100%;
-        min-width: 0;
-        /* flex: N 0 0 由 inline style 設定（N = 百分比整數） */
+        flex: 0 0 auto; /* width% is the source of truth */
+        box-sizing: border-box;
     }
     .game-an-mix-bar .is-ad { background: #ef4444; }
     .game-an-mix-bar .is-ap { background: #3b82f6; }
@@ -7008,10 +7008,12 @@
         font-variant-numeric: tabular-nums;
         color: var(--text-muted);
     }
-    .game-an-mix-labels > span {
+    .game-an-mix-labels > .game-an-mix-lab {
         display: inline-flex;
         align-items: center;
         gap: 5px;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
     .game-an-mix-labels i {
         width: 8px;
