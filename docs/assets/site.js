@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783926313");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783926459");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -5760,8 +5760,12 @@
                 const rankInfo = metaPickRankAmong(showUser, scores);
                 const deltaPp = (showUser - bestScore) * 100;
                 const deltaTxt = (deltaPp >= 0 ? '+' : '') + deltaPp.toFixed(1) + ' pp';
+                // Unique #1 (or perfect set): show gold "#1/252" — mid-rank PR formula
+                // only reaches ~99.8 for C(10,5)=252 and feels wrong next to「完全正確」.
+                const isRankOne = perfectHit || rankInfo.rank === 1;
                 const prTxt = (copy.gamePrValue || (p => `PR ${p}`))(rankInfo.pr);
                 const rankTxt = (copy.gameRankOf || ((r, t) => `#${r} / ${t}`))(rankInfo.rank, rankInfo.total);
+                const rankTopTxt = `#${rankInfo.rank}/${rankInfo.total}`;
 
                 // Keep the user's pick order; align best-5 into the same slots
                 // (shared champs stay put; only-best fill the missed slots).
@@ -5837,8 +5841,11 @@
                     + `</div>`
                     + `<div class="game-metric">`
                     + `<span class="game-metric-label">${escHtml(copy.gamePr || 'PR')}</span>`
-                    + `<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade">${escHtml(rankInfo.grade)}</span></span>`
-                    + `<span class="game-metric-sub">${escHtml(rankTxt)}</span>`
+                    + (isRankOne
+                        // Gold #1/252 as the hero number — no mid-99.x PR, no duplicate sub-rank.
+                        ? `<span class="game-metric-value is-rank-top" title="${escHtml(prTxt)} · ${escHtml(rankInfo.grade)}">${escHtml(rankTopTxt)}</span>`
+                        : (`<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade">${escHtml(rankInfo.grade)}</span></span>`
+                            + `<span class="game-metric-sub">${escHtml(rankTxt)}</span>`))
                     + `</div>`
                     + `</div>`
 
