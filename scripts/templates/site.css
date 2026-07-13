@@ -6667,21 +6667,31 @@
         color: var(--text);
         letter-spacing: 0.02em;
     }
+    /* 雷達圖例：固定在圖表正下方置中 */
     .game-an-legend {
-        display: inline-flex;
+        display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 6px 12px;
-        font-size: 11px;
+        justify-content: center;
+        gap: 8px 16px;
+        margin: 2px 0 0;
+        padding: 0 4px;
+        font-size: 12px;
+        font-weight: 600;
         color: var(--text-muted);
+    }
+    .game-an-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
     }
     .game-an-swatch {
         width: 10px;
         height: 10px;
         border-radius: 2px;
         display: inline-block;
-        margin-right: 2px;
-        vertical-align: -1px;
+        flex-shrink: 0;
     }
     .game-an-swatch.is-yours { background: rgba(196, 200, 208, 0.9); }
     .game-an-swatch.is-best { background: var(--accent, #f5c518); }
@@ -6803,6 +6813,13 @@
     }
     @media (max-width: 560px) {
         .game-an-dims-split.is-best-only { grid-template-columns: 1fr; }
+    }
+    .game-an-radar-col {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        min-width: 0;
     }
     .game-an-radar {
         min-width: 0;
