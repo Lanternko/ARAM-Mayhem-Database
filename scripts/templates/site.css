@@ -6631,6 +6631,24 @@
         color: var(--accent-soft);
         vertical-align: 0.05em;
     }
+    .game-metric-grade.is-grade-s,
+    .game-metric-sub.is-grade-s { color: #f5c518; }
+    .game-metric-grade.is-grade-a,
+    .game-metric-sub.is-grade-a { color: #4ade80; }
+    .game-metric-grade.is-grade-b,
+    .game-metric-sub.is-grade-b { color: #7dd3fc; }
+    .game-metric-grade.is-grade-c,
+    .game-metric-sub.is-grade-c { color: #d1d5db; }
+    .game-metric-grade.is-grade-d,
+    .game-metric-grade.is-grade-f,
+    .game-metric-sub.is-grade-d,
+    .game-metric-sub.is-grade-f { color: #f87171; }
+    [data-theme="light"] .game-metric-grade.is-grade-a,
+    [data-theme="light"] .game-metric-sub.is-grade-a { color: #15803d; }
+    [data-theme="light"] .game-metric-grade.is-grade-d,
+    [data-theme="light"] .game-metric-grade.is-grade-f,
+    [data-theme="light"] .game-metric-sub.is-grade-d,
+    [data-theme="light"] .game-metric-sub.is-grade-f { color: #c62828; }
     .game-metric-sub {
         display: block;
         margin-top: 5px;
@@ -7263,6 +7281,254 @@
         border-color: rgba(17, 24, 39, 0.75);
     }
     :root[data-theme="light"] .game-footer { background: var(--bg); }
+
+    /* Meta Pick 5-round settlement + global leaderboard */
+    .game-settle[hidden] { display: none !important; }
+    .game-settle { margin-top: 12px; }
+    .game-settle-card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        padding: 16px 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        align-items: stretch;
+    }
+    .game-settle-kicker {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-dim);
+        text-align: center;
+    }
+    .game-settle-avg {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 8px;
+        line-height: 1;
+    }
+    .game-settle-avg-prefix {
+        font-size: clamp(14px, 3.2vw, 18px);
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: var(--text-muted);
+        transform: translateY(-0.15em);
+    }
+    .game-settle-avg-num {
+        font-size: clamp(40px, 9vw, 56px);
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent, #f5c518);
+        letter-spacing: -0.02em;
+    }
+    .game-settle-avg-sub {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-dim);
+        font-variant-numeric: tabular-nums;
+        margin-top: -2px;
+    }
+    /* Rank grade tones (same ladder as analysis letter grades / Meta Pick PR). */
+    .game-settle-avg-num.is-grade-s,
+    .game-settle-chip-r.is-grade-s,
+    .game-board-avg.is-grade-s,
+    .game-board-rk.is-grade-s { color: #f5c518; }
+    .game-settle-avg-num.is-grade-a,
+    .game-settle-chip-r.is-grade-a,
+    .game-board-avg.is-grade-a,
+    .game-board-rk.is-grade-a { color: #4ade80; }
+    .game-settle-avg-num.is-grade-b,
+    .game-settle-chip-r.is-grade-b,
+    .game-board-avg.is-grade-b,
+    .game-board-rk.is-grade-b { color: #7dd3fc; }
+    .game-settle-avg-num.is-grade-c,
+    .game-settle-chip-r.is-grade-c,
+    .game-board-avg.is-grade-c,
+    .game-board-rk.is-grade-c { color: #d1d5db; }
+    .game-settle-avg-num.is-grade-d,
+    .game-settle-avg-num.is-grade-f,
+    .game-settle-chip-r.is-grade-d,
+    .game-settle-chip-r.is-grade-f,
+    .game-board-avg.is-grade-d,
+    .game-board-avg.is-grade-f,
+    .game-board-rk.is-grade-d,
+    .game-board-rk.is-grade-f { color: #f87171; }
+    [data-theme="light"] .game-settle-avg-num.is-grade-a,
+    [data-theme="light"] .game-settle-chip-r.is-grade-a,
+    [data-theme="light"] .game-board-avg.is-grade-a,
+    [data-theme="light"] .game-board-rk.is-grade-a { color: #15803d; }
+    [data-theme="light"] .game-settle-avg-num.is-grade-d,
+    [data-theme="light"] .game-settle-avg-num.is-grade-f,
+    [data-theme="light"] .game-settle-chip-r.is-grade-d,
+    [data-theme="light"] .game-settle-chip-r.is-grade-f,
+    [data-theme="light"] .game-board-avg.is-grade-d,
+    [data-theme="light"] .game-board-avg.is-grade-f,
+    [data-theme="light"] .game-board-rk.is-grade-d,
+    [data-theme="light"] .game-board-rk.is-grade-f { color: #c62828; }
+    .game-settle-avg-den {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+    .game-settle-avg-label {
+        text-align: center;
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: -4px;
+    }
+    .game-settle-ranks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: center;
+        margin: 4px 0 2px;
+    }
+    .game-settle-chip {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        min-width: 56px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--text) 4%, transparent);
+    }
+    .game-settle-chip-n {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-dim);
+    }
+    .game-settle-chip-r {
+        font-size: 15px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+    }
+    .game-board-rk {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .game-board-rk-sep {
+        color: var(--text-dim);
+        font-weight: 500;
+    }
+    .game-board-avg {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .game-settle-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .game-settle-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+    .game-settle-input {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 40px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 15px;
+    }
+    .game-settle-input:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent, #f5c518) 55%, transparent);
+        outline-offset: 1px;
+    }
+    .game-settle-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .game-settle-actions .tool-btn { width: 100%; min-height: 36px; }
+    .game-settle-status {
+        font-size: 12px;
+        text-align: center;
+        color: var(--text-muted);
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+    }
+    .game-settle-status.is-ok {
+        border-color: rgba(245, 197, 24, 0.35);
+        color: var(--text);
+    }
+    .game-settle-status.is-miss {
+        border-color: rgba(255, 77, 94, 0.28);
+        color: var(--text-muted);
+    }
+
+    .game-board {
+        margin-top: 28px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+    }
+    .game-board-head { margin-bottom: 10px; }
+    .game-board-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+    }
+    .game-board-sub {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+    .game-board-meta {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+    }
+    .game-board-empty {
+        margin: 0;
+        padding: 14px 12px;
+        border-radius: 8px;
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        font-size: 13px;
+        text-align: center;
+    }
+    .game-board-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+    }
+    .game-board-table th,
+    .game-board-table td {
+        padding: 8px 6px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        vertical-align: middle;
+    }
+    .game-board-table th {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-dim);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .game-board-pos { width: 2.2em; color: var(--text-dim); }
+    .game-board-nick { font-weight: 600; color: var(--text); word-break: break-word; }
+    .game-board-avg { font-weight: 700; color: var(--accent, #f5c518); white-space: nowrap; }
+    .game-board-ranks { color: var(--text-muted); font-size: 12px; }
+    @media (max-width: 520px) {
+        .game-board-ranks { display: none; }
+        .game-settle-actions { grid-template-columns: 1fr; }
+    }
 
     /* Reduced-motion override.  Disables prismShift / shineSweep /
        slideDown so vestibular-sensitive users don't get hue drift and
