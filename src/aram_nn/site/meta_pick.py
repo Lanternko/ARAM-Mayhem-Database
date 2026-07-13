@@ -5,6 +5,7 @@ snapshot (C(10,5)=252 combinations). Client-reported ranks/scores are ignored.
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import os
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS meta_pick_runs (
     ranks_json      TEXT NOT NULL,
     rounds_json     TEXT NOT NULL,
     total_combos    INTEGER NOT NULL DEFAULT 252,
+    run_fp          TEXT,
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     UNIQUE(nickname_key, patch)
 );
@@ -50,6 +52,14 @@ CREATE TABLE IF NOT EXISTS meta_pick_runs (
 CREATE_META_PICK_RUNS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_meta_pick_runs_patch_avg_created
 ON meta_pick_runs(patch, avg_rank ASC, created_at DESC, id DESC);
+"""
+
+# One leaderboard row per unique 5-round replay (pool+picks) × patch.
+# Blocks "change nickname → re-upload the same run".
+CREATE_META_PICK_RUN_FP_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS uq_meta_pick_runs_fp_patch
+ON meta_pick_runs(run_fp, patch)
+WHERE run_fp IS NOT NULL AND run_fp != '';
 """
 
 # Thread-safe snapshot cache: identity = (resolved path, mtime_ns, size).
@@ -241,6 +251,26 @@ def _id_sort_key(cid: Any) -> tuple[int, int | str]:
 
 def canonical_ids(ids: list[Any] | tuple[Any, ...]) -> list[str]:
     return [str(x) for x in sorted(ids, key=_id_sort_key)]
+
+
+def run_fingerprint(
+    rounds: list[dict[str, Any]] | list[tuple[list[str], list[str]]],
+) -> str:
+    """Stable SHA-256 of the five-round replay (canonical pool + picks only).
+
+    Order of champions within a round is ignored; round order is kept (R1…R5).
+    """
+    parts: list[dict[str, list[str]]] = []
+    for rnd in rounds:
+        if isinstance(rnd, dict):
+            pool = canonical_ids(rnd.get("pool_ids") or [])
+            picked = canonical_ids(rnd.get("picked_ids") or [])
+        else:
+            pool = canonical_ids(rnd[0])
+            picked = canonical_ids(rnd[1])
+        parts.append({"pool_ids": pool, "picked_ids": picked})
+    blob = json.dumps(parts, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -604,6 +634,17 @@ def recompute_run(
         scored.append(sc)
     ranks = [s.rank for s in scored]
     avg_rank = sum(ranks) / len(ranks)
+    rounds_out = [
+        {
+            "pool_ids": s.pool_ids,
+            "picked_ids": s.picked_ids,
+            "rank": s.rank,
+            "total": s.total,
+            "user_score": s.user_score,
+            "best_score": s.best_score,
+        }
+        for s in scored
+    ]
     return {
         "nickname": nickname,
         "nickname_key": nickname_key(nickname),
@@ -611,17 +652,8 @@ def recompute_run(
         "ranks": ranks,
         "avg_rank": avg_rank,
         "total_combos": TOTAL_COMBOS,
-        "rounds": [
-            {
-                "pool_ids": s.pool_ids,
-                "picked_ids": s.picked_ids,
-                "rank": s.rank,
-                "total": s.total,
-                "user_score": s.user_score,
-                "best_score": s.best_score,
-            }
-            for s in scored
-        ],
+        "run_fp": run_fingerprint(rounds_out),
+        "rounds": rounds_out,
     }
 
 
@@ -633,6 +665,11 @@ def ensure_meta_pick_schema(con: sqlite3.Connection) -> None:
     ensure_public_schema(con)
     con.execute(CREATE_META_PICK_RUNS_SQL)
     con.execute(CREATE_META_PICK_RUNS_INDEX_SQL)
+    # Migrate older DBs created before run_fp existed.
+    cols = {str(r[1]) for r in con.execute("PRAGMA table_info(meta_pick_runs)").fetchall()}
+    if "run_fp" not in cols:
+        con.execute("ALTER TABLE meta_pick_runs ADD COLUMN run_fp TEXT")
+    con.execute(CREATE_META_PICK_RUN_FP_INDEX_SQL)
     con.commit()
 
 
@@ -675,6 +712,9 @@ def _row_to_entry(row: sqlite3.Row | tuple) -> dict[str, Any]:
 def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
     """Keep only the best (lowest avg_rank) per nickname_key×patch.
 
+    Also enforces one row per run fingerprint×patch so the same 5-round replay
+    cannot be re-uploaded under a different nickname.
+
     Equal score replaces (refresh to newer run). Worse returns retained best.
 
     Uses BEGIN IMMEDIATE so concurrent first-submits for the same key cannot
@@ -692,6 +732,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
     ]
     rounds_json = json.dumps(rounds_payload, ensure_ascii=False, separators=(",", ":"))
     total_combos = int(run.get("total_combos") or TOTAL_COMBOS)
+    run_fp = str(run.get("run_fp") or run_fingerprint(rounds_payload))
 
     con = connect(db_path)
     try:
@@ -703,6 +744,18 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
         # so timestamps reflect serialized write order, not pre-lock wait time.
         con.execute("BEGIN IMMEDIATE")
         try:
+            # Same replay already on the board under another nickname → hard reject.
+            by_fp = con.execute(
+                "SELECT * FROM meta_pick_runs WHERE run_fp = ? AND patch = ?",
+                (run_fp, patch),
+            ).fetchone()
+            if by_fp is not None and str(by_fp["nickname_key"]) != key:
+                con.rollback()
+                raise MetaPickError(
+                    "this run was already submitted — change nickname cannot re-upload the same score",
+                    status_code=409,
+                )
+
             existing = con.execute(
                 "SELECT * FROM meta_pick_runs WHERE nickname_key = ? AND patch = ?",
                 (key, patch),
@@ -725,7 +778,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                     """
                     UPDATE meta_pick_runs
                     SET nickname = ?, avg_rank = ?, ranks_json = ?, rounds_json = ?,
-                        total_combos = ?, created_at = ?
+                        total_combos = ?, run_fp = ?, created_at = ?
                     WHERE nickname_key = ? AND patch = ?
                     """,
                     (
@@ -734,6 +787,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                         ranks_json,
                         rounds_json,
                         total_combos,
+                        run_fp,
                         now_iso,
                         key,
                         patch,
@@ -746,8 +800,8 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                     """
                     INSERT INTO meta_pick_runs (
                         nickname, nickname_key, patch, avg_rank, ranks_json,
-                        rounds_json, total_combos, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        rounds_json, total_combos, run_fp, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         nick,
@@ -757,6 +811,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                         ranks_json,
                         rounds_json,
                         total_combos,
+                        run_fp,
                         now_iso,
                     ),
                 )
@@ -768,6 +823,16 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
             entry = _row_to_entry(row)
             con.commit()
             return UpsertResult(updated=True, entry=entry, retained=None)
+        except MetaPickError:
+            con.rollback()
+            raise
+        except sqlite3.IntegrityError as exc:
+            con.rollback()
+            # Concurrent insert of the same run_fp×patch (or nick×patch).
+            raise MetaPickError(
+                "this run was already submitted — change nickname cannot re-upload the same score",
+                status_code=409,
+            ) from exc
         except Exception:
             con.rollback()
             raise

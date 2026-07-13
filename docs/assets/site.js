@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783932794");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783933114");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -1177,6 +1177,8 @@
             gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
             gameSubmitKept: ovr => `未刷新最佳 · 仍為 OVR ${ovr}`,
             gameSubmitFail: '上傳失敗，請稍後再試',
+            gameSubmitDup: '這組成績已上榜，不能換暱稱重傳',
+            gameSubmitLocked: '本局已上傳',
             gameRestart: '再來一輪（5 回合）',
             gameNeedFiveRounds: '請先完成 5 回合',
             gamePatchMissing: '缺少版本快照，無法上傳',
@@ -1460,6 +1462,8 @@
             gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
             gameSubmitKept: ovr => `Best kept · OVR ${ovr}`,
             gameSubmitFail: 'Submit failed — try again later',
+            gameSubmitDup: 'This run is already on the board — changing nickname cannot re-upload',
+            gameSubmitLocked: 'Already submitted this run',
             gameRestart: 'Play again (5 rounds)',
             gameNeedFiveRounds: 'Finish all 5 rounds first',
             gamePatchMissing: 'Missing patch snapshot — cannot submit',
@@ -5384,6 +5388,15 @@
             renderMetaPick();
             return;
         }
+        // One successful submit locks this 5-round run (server also rejects replay dupes).
+        if (metaPickSession.submitState === 'ok') {
+            metaPickSession.submitMessage = copy.gameSubmitLocked || 'Already submitted this run';
+            renderMetaPick();
+            return;
+        }
+        if (metaPickSession.submitState === 'submitting') {
+            return;
+        }
         if (metaPickSession.rounds.length !== META_PICK_ROUNDS) {
             metaPickSession.submitState = 'err';
             metaPickSession.submitMessage = copy.gameNeedFiveRounds || 'Finish 5 rounds first';
@@ -5425,8 +5438,14 @@
             try { data = await res.json(); } catch { data = null; }
             if (!res.ok) {
                 const detail = (data && (data.detail || data.message)) || (`HTTP ${res.status}`);
+                const detailStr = String(detail);
                 metaPickSession.submitState = 'err';
-                metaPickSession.submitMessage = String(detail);
+                // Server 409 on same-run / different-nickname (and related integrity races).
+                if (res.status === 409 && /already submitted|換暱稱|nickname/i.test(detailStr)) {
+                    metaPickSession.submitMessage = copy.gameSubmitDup || detailStr;
+                } else {
+                    metaPickSession.submitMessage = detailStr;
+                }
                 renderMetaPick();
                 return;
             }
@@ -5582,7 +5601,10 @@
         }).join('');
         const nick = metaPickSession.nickname || '';
         const base = metaPickApiBase();
-        const canSubmit = !!base && metaPickSession.submitState !== 'submitting';
+        const locked = metaPickSession.submitState === 'ok';
+        const canSubmit = !!base
+            && metaPickSession.submitState !== 'submitting'
+            && !locked;
         let status = '';
         if (metaPickSession.submitMessage) {
             const kind = metaPickSession.submitState === 'ok' ? 'ok'
@@ -5607,12 +5629,15 @@
             + `<input type="text" id="game-nick" name="nickname" maxlength="32" `
             + `class="game-settle-input" value="${escHtml(nick)}" `
             + `placeholder="${escHtml(copy.gameNickPlaceholder || '2–16 characters')}" `
-            + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}">`
+            + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}"`
+            + `${locked ? ' readonly' : ''}>`
             + `<div class="game-settle-actions">`
             + `<button type="submit" class="tool-btn" id="game-submit" ${canSubmit ? '' : 'disabled'}>`
             + `${escHtml(metaPickSession.submitState === 'submitting'
                 ? (copy.gameSubmitting || 'Submitting…')
-                : (copy.gameSubmit || 'Submit score'))}</button>`
+                : locked
+                    ? (copy.gameSubmitLocked || 'Already submitted')
+                    : (copy.gameSubmit || 'Submit score'))}</button>`
             + `<button type="button" class="tool-btn ghost" id="game-restart">`
             + `${escHtml(copy.gameRestart || 'Play again')}</button>`
             + `</div>`

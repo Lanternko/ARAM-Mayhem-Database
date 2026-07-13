@@ -353,6 +353,32 @@ class DbLeaderboardTests(unittest.TestCase):
                 refreshed.entry["created_at"], first.entry["created_at"]
             )
 
+    def test_same_run_different_nickname_rejected(self) -> None:
+        """Changing nickname must not re-upload the same 5-round replay."""
+        snap = mini_snapshot()
+        pool = [str(i) for i in range(1, 11)]
+        picks = ["6", "7", "8", "9", "10"]
+        rounds = five_rounds(pool, picks)
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            first = submit_run(
+                db,
+                {"nickname": "我的鍋", "patch": "16.10", "rounds": rounds},
+                snap,
+            )
+            self.assertTrue(first["updated"])
+            with self.assertRaises(MetaPickError) as ctx:
+                submit_run(
+                    db,
+                    {"nickname": "test", "patch": "16.10", "rounds": rounds},
+                    snap,
+                )
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertIn("already submitted", ctx.exception.detail.lower())
+            board = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertEqual(board["total"], 1)
+            self.assertEqual(board["entries"][0]["nickname"], "我的鍋")
+
     def test_sort_avg_rank_then_created_at_desc(self) -> None:
         snap = mini_snapshot()
         pool = [str(i) for i in range(1, 11)]
@@ -390,27 +416,28 @@ class DbLeaderboardTests(unittest.TestCase):
         """Equal avg_rank → newer created_at first; then id DESC."""
         snap = mini_snapshot()
         pool = [str(i) for i in range(1, 11)]
-        picks = ["6", "7", "8", "9", "10"]
+        # Different replays (distinct run_fp) forced to the same avg for sort-order test.
+        older = recompute_run(
+            {
+                "nickname": "OldTimer",
+                "patch": "16.10",
+                "rounds": five_rounds(pool, ["6", "7", "8", "9", "10"]),
+            },
+            snap,
+        )
+        newer = recompute_run(
+            {
+                "nickname": "NewTimer",
+                "patch": "16.10",
+                "rounds": five_rounds(pool, ["5", "6", "7", "8", "9"]),
+            },
+            snap,
+        )
+        newer["avg_rank"] = older["avg_rank"]
+        newer["ranks"] = list(older["ranks"])
+        self.assertNotEqual(older["run_fp"], newer["run_fp"])
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "site.db"
-            older = recompute_run(
-                {
-                    "nickname": "OldTimer",
-                    "patch": "16.10",
-                    "rounds": five_rounds(pool, picks),
-                },
-                snap,
-            )
-            newer = recompute_run(
-                {
-                    "nickname": "NewTimer",
-                    "patch": "16.10",
-                    "rounds": five_rounds(pool, picks),
-                },
-                snap,
-            )
-            # Same quality (same picks) → equal avg_rank; inject ordered timestamps.
-            self.assertAlmostEqual(older["avg_rank"], newer["avg_rank"])
             with mock.patch(
                 "aram_nn.site.meta_pick.utc_now_iso",
                 return_value="2026-01-01T00:00:00.000001Z",
