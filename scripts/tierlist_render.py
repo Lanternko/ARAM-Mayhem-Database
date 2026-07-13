@@ -860,7 +860,7 @@ def write_spa_path_shells(
             root / "game" / "index.html",
             "/game",
             "Meta Pick · arammeta",
-            "從 10 隻英雄挑最強 5 隻：小遊戲",
+            "挑選最佳陣容：小遊戲",
             "zh-Hant",
         ),
         (
@@ -897,7 +897,7 @@ def write_spa_path_shells(
             root / "en" / "game" / "index.html",
             "/en/game",
             "Meta Pick · arammeta",
-            "Pick the strongest 5 of 10: mini-game",
+            "Pick the best lineup: mini-game",
             "en",
         ),
         (
@@ -934,7 +934,7 @@ def write_spa_path_shells(
             root / "zh-CN" / "game" / "index.html",
             "/zh-CN/game",
             "Meta Pick · arammeta",
-            "从 10 只英雄挑最强 5 只：小游戏",
+            "挑选最佳阵容：小游戏",
             "zh-Hans",
         ),
         (
@@ -2249,13 +2249,11 @@ def render_html(
         "<div class='game-shell'>"
         "<header class='game-header'>"
         "<div class='game-header-text'>"
-        "<span class='game-kicker' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' "
-        "data-i18n-en='MINI GAME'>小遊戲</span>"
         "<h2 data-i18n-zh='Meta Pick' data-i18n-en='Meta Pick'>Meta Pick</h2>"
-        "<p class='game-sub' data-i18n-zh='從 10 隻英雄中挑最強的 5 隻（鎖定前不顯示勝率）' "
-        "data-i18n-zh-cn='从 10 只英雄中挑最强的 5 只（锁定前不显示胜率）' "
-        "data-i18n-en='Pick the strongest 5 of 10 (win rates hidden until lock)'>"
-        "從 10 隻英雄中挑最強的 5 隻（鎖定前不顯示勝率）</p>"
+        "<p class='game-sub' data-i18n-zh='挑選最佳陣容' "
+        "data-i18n-zh-cn='挑选最佳阵容' "
+        "data-i18n-en='Pick the best lineup'>"
+        "挑選最佳陣容</p>"
         "</div>"
         "</header>"
         "<div class='game-notice' id='game-notice' hidden></div>"

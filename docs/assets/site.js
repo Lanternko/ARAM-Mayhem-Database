@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783926459");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783926806");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -1148,6 +1148,7 @@
             gameAxisChem: '默契',
             gameAxisStrength: '英雄強度',
             gameEvalStrength: '英雄強度',
+            gameEvalStrengthTip: '5 人單獨勝率平均（非 PR）',
             gameEvalWave: '清兵',
             gameEvalMix: '傷害構成',
             gameEvalDamage: '輸出',
@@ -1403,6 +1404,7 @@
             gameAxisChem: 'Synergy',
             gameAxisStrength: 'Champ strength',
             gameEvalStrength: 'Champ strength',
+            gameEvalStrengthTip: 'Mean solo WR of the 5 (not a PR)',
             gameEvalWave: 'Wave',
             gameEvalMix: 'Damage mix',
             gameEvalDamage: 'Damage',
@@ -5315,24 +5317,24 @@
         return metaPickLetterGrade(score);
     }
 
-    /** Team mean solo-WR percentile among all champs (0–1) —「英雄強度」軸. */
-    function metaPickTeamStrength01(ids) {
+    /**
+     * 英雄強度 = 5 人單獨勝率平均（原始 WR，約 40%–60%）。
+     * 雷達軸：把 40%→0、60%→1 線性映射（超出夾住），讓圖形有開合。
+     * 不再用「相對 173 隻單人的 PR」——那會擠在 80–95、也不是 C(n,5) PR。
+     */
+    function metaPickTeamStrength(ids) {
         const wrs = [];
         (ids || []).forEach(rawId => {
             const wr = Number((DATA.champs[String(rawId)] || {}).wr);
             if (Number.isFinite(wr)) wrs.push(wr);
         });
-        if (!wrs.length) return 0.5;
-        const mean = wrs.reduce((a, b) => a + b, 0) / wrs.length;
-        const all = Object.values(DATA.champs || {})
-            .map(c => Number(c && c.wr))
-            .filter(Number.isFinite)
-            .sort((a, b) => a - b);
-        const n = all.length;
-        if (n < 2) return 0.5;
-        let lt = 0;
-        while (lt < n && all[lt] < mean) lt += 1;
-        return Math.max(0, Math.min(1, lt / (n - 1)));
+        const meanWr = wrs.length
+            ? wrs.reduce((a, b) => a + b, 0) / wrs.length
+            : 0.5;
+        const lo = 0.40;
+        const hi = 0.60;
+        const radar01 = Math.max(0, Math.min(1, (meanWr - lo) / (hi - lo)));
+        return { meanWr, radar01 };
     }
 
     /**
@@ -5383,7 +5385,7 @@
     function metaPickSixAxes(ids, copy) {
         const ev = evaluateFullTeam(ids || []);
         const cap = ev.cap || {};
-        const strength01 = metaPickTeamStrength01(ids);
+        const strength = metaPickTeamStrength(ids);
         // 輸出：優先用 damage 能力百分位；缺則取 phys/magic 平均
         const dmg = Number(cap.damage);
         const dmg01 = Number.isFinite(dmg) && dmg > 0
@@ -5394,7 +5396,7 @@
         return {
             ev,
             cap,
-            strength01,
+            strength,
             chem01,
             axes: [
                 { label: copy.gameAxisDamage || '輸出', pct: dmg01 },
@@ -5402,7 +5404,7 @@
                 { label: copy.gameAxisEngage || '開戰', pct: Number(cap.engage) || 0 },
                 { label: copy.gameAxisWave || '清兵', pct: Number(cap.wave) || 0 },
                 { label: copy.gameAxisChem || '默契', pct: chem01 },
-                { label: copy.gameAxisStrength || '英雄強度', pct: strength01 },
+                { label: copy.gameAxisStrength || '英雄強度', pct: strength.radar01 },
             ],
         };
     }
@@ -5415,7 +5417,8 @@
         const best = metaPickSixAxes(bestIds, copy);
         const teamComp = teamComposition(bestIds);
         const cap = best.cap;
-        const strengthScore = Math.round(best.strength01 * 100);
+        // 英雄強度：原始 5 人平均 solo WR（如 52.3%），不是 PR
+        const strengthTxt = pct(best.strength.meanWr);
         const mix = metaPickDamageMix(teamComp.sums);
         const mixNoteFn = copy.gameMixNote || ((ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`);
         const mixNote = mixNoteFn(mix.ad, mix.ap, mix.true);
@@ -5439,9 +5442,9 @@
         const grades = [
             {
                 label: copy.gameEvalStrength || '英雄強度',
-                value: String(strengthScore),
+                value: strengthTxt,
                 kind: 'num',
-                tip: pct(best.ev.baseWr),
+                tip: copy.gameEvalStrengthTip || '5 人單獨勝率平均',
             },
             {
                 label: copy.gameEvalWave || '清兵',
