@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783928329");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783928635");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',

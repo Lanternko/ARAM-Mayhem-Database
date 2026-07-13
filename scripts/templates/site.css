@@ -6182,6 +6182,7 @@
         font-weight: 500;
         line-height: 1.5;
         text-align: left;
+        white-space: pre-line;
         box-shadow: var(--shadow);
         opacity: 0;
         visibility: hidden;
