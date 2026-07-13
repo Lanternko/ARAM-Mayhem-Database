@@ -108,7 +108,7 @@ Content-Type: application/json
 }
 ```
 
-Validation: unique ids, exact sizes (10/5), picked ⊆ pool, known champions, nickname 2–16 Unicode code points after trim/collapse, internal uniqueness key = NFKC + casefold (not exposed in public entry dicts). Best-only upsert per nickname key×`patch` (lower or equal avg_rank replaces). Leaderboard sort: `avg_rank ASC`, then `created_at DESC`, then `id DESC`.
+Validation: unique ids, exact sizes (10/5), picked ⊆ pool, known champions, nickname 2–16 Unicode code points after trim/collapse, internal uniqueness key = NFKC + casefold (not exposed in public entry dicts). Best-only upsert per nickname key×`patch` (lower or equal avg_rank replaces). **Same 5-round replay** (SHA-256 of canonical pool+picks) cannot be re-uploaded under a different nickname (HTTP 409). Leaderboard sort: `avg_rank ASC`, then `created_at DESC`, then `id DESC`.
 
 ```http
 GET /api/meta-pick/leaderboard?patch=16.10&limit=50
