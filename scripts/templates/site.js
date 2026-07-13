@@ -1172,12 +1172,15 @@
             gameNickLabel: '暱稱',
             gameNickPlaceholder: '2–16 字',
             gameNickInvalid: '暱稱需 2–16 個字（去頭尾空白）',
+            gameFlagLabel: '國旗',
+            gameFlagNone: '無',
+            gameFlagMore: '更多…',
             gameSubmit: '上傳成績',
             gameSubmitting: '上傳中…',
             gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
-            gameSubmitKept: ovr => `未刷新最佳 · 仍為 OVR ${ovr}`,
+            gameSubmitKept: ovr => `已上榜 · OVR ${ovr}`,
             gameSubmitFail: '上傳失敗，請稍後再試',
-            gameSubmitDup: '這組成績已上榜，不能換暱稱重傳',
+            gameSubmitDup: '這組成績已上榜，不能重傳同一局',
             gameSubmitLocked: '本局已上傳',
             gameRestart: '再來一輪（5 回合）',
             gameNeedFiveRounds: '請先完成 5 回合',
@@ -1457,12 +1460,15 @@
             gameNickLabel: 'Nickname',
             gameNickPlaceholder: '2–16 characters',
             gameNickInvalid: 'Nickname must be 2–16 characters (after trim)',
+            gameFlagLabel: 'Flag',
+            gameFlagNone: 'None',
+            gameFlagMore: 'More…',
             gameSubmit: 'Submit score',
             gameSubmitting: 'Submitting…',
             gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
-            gameSubmitKept: ovr => `Best kept · OVR ${ovr}`,
+            gameSubmitKept: ovr => `On board · OVR ${ovr}`,
             gameSubmitFail: 'Submit failed — try again later',
-            gameSubmitDup: 'This run is already on the board — changing nickname cannot re-upload',
+            gameSubmitDup: 'This run is already on the board — cannot re-upload the same score',
             gameSubmitLocked: 'Already submitted this run',
             gameRestart: 'Play again (5 rounds)',
             gameNeedFiveRounds: 'Finish all 5 rounds first',
@@ -4951,6 +4957,70 @@
         dealt: false,
     };
     /** 5-round run state (leaderboard MVP). */
+    const META_PICK_FLAG_KEY = 'arammeta.metaPick.flag';
+    /** Quick-pick row (also in full list). */
+    const META_PICK_FLAG_QUICK = ['TW', 'HK', 'CN', 'JP', 'KR', 'SG', 'US', 'GB', 'AU', 'CA'];
+    /** ISO codes allowed by the API (keep in sync with server ALLOWED_FLAGS). */
+    const META_PICK_FLAGS = [
+        'TW', 'HK', 'MO', 'CN', 'JP', 'KR', 'SG', 'MY', 'TH', 'VN', 'PH', 'ID',
+        'IN', 'AU', 'NZ', 'US', 'CA', 'MX', 'BR', 'AR', 'CL', 'CO', 'PE',
+        'GB', 'IE', 'FR', 'DE', 'ES', 'IT', 'PT', 'NL', 'BE', 'CH', 'AT',
+        'SE', 'NO', 'DK', 'FI', 'PL', 'CZ', 'RO', 'HU', 'GR', 'TR', 'UA', 'RU',
+        'SA', 'AE', 'EG', 'ZA', 'IL',
+    ];
+    const META_PICK_FLAG_NAMES = {
+        TW: { zh: '台灣', en: 'Taiwan' },
+        HK: { zh: '香港', en: 'Hong Kong' },
+        MO: { zh: '澳門', en: 'Macao' },
+        CN: { zh: '中國', en: 'China' },
+        JP: { zh: '日本', en: 'Japan' },
+        KR: { zh: '韓國', en: 'Korea' },
+        SG: { zh: '新加坡', en: 'Singapore' },
+        MY: { zh: '馬來西亞', en: 'Malaysia' },
+        TH: { zh: '泰國', en: 'Thailand' },
+        VN: { zh: '越南', en: 'Vietnam' },
+        PH: { zh: '菲律賓', en: 'Philippines' },
+        ID: { zh: '印尼', en: 'Indonesia' },
+        IN: { zh: '印度', en: 'India' },
+        AU: { zh: '澳洲', en: 'Australia' },
+        NZ: { zh: '紐西蘭', en: 'New Zealand' },
+        US: { zh: '美國', en: 'United States' },
+        CA: { zh: '加拿大', en: 'Canada' },
+        MX: { zh: '墨西哥', en: 'Mexico' },
+        BR: { zh: '巴西', en: 'Brazil' },
+        AR: { zh: '阿根廷', en: 'Argentina' },
+        CL: { zh: '智利', en: 'Chile' },
+        CO: { zh: '哥倫比亞', en: 'Colombia' },
+        PE: { zh: '秘魯', en: 'Peru' },
+        GB: { zh: '英國', en: 'United Kingdom' },
+        IE: { zh: '愛爾蘭', en: 'Ireland' },
+        FR: { zh: '法國', en: 'France' },
+        DE: { zh: '德國', en: 'Germany' },
+        ES: { zh: '西班牙', en: 'Spain' },
+        IT: { zh: '義大利', en: 'Italy' },
+        PT: { zh: '葡萄牙', en: 'Portugal' },
+        NL: { zh: '荷蘭', en: 'Netherlands' },
+        BE: { zh: '比利時', en: 'Belgium' },
+        CH: { zh: '瑞士', en: 'Switzerland' },
+        AT: { zh: '奧地利', en: 'Austria' },
+        SE: { zh: '瑞典', en: 'Sweden' },
+        NO: { zh: '挪威', en: 'Norway' },
+        DK: { zh: '丹麥', en: 'Denmark' },
+        FI: { zh: '芬蘭', en: 'Finland' },
+        PL: { zh: '波蘭', en: 'Poland' },
+        CZ: { zh: '捷克', en: 'Czechia' },
+        RO: { zh: '羅馬尼亞', en: 'Romania' },
+        HU: { zh: '匈牙利', en: 'Hungary' },
+        GR: { zh: '希臘', en: 'Greece' },
+        TR: { zh: '土耳其', en: 'Türkiye' },
+        UA: { zh: '烏克蘭', en: 'Ukraine' },
+        RU: { zh: '俄羅斯', en: 'Russia' },
+        SA: { zh: '沙烏地', en: 'Saudi Arabia' },
+        AE: { zh: '阿聯', en: 'UAE' },
+        EG: { zh: '埃及', en: 'Egypt' },
+        ZA: { zh: '南非', en: 'South Africa' },
+        IL: { zh: '以色列', en: 'Israel' },
+    };
     const metaPickSession = {
         rounds: [], // { pool_ids, picked_ids, rank, total }
         recordedThisReveal: false,
@@ -4958,6 +5028,7 @@
         submitState: 'idle', // idle | submitting | ok | err
         submitMessage: '',
         nickname: '',
+        flag: '',
         boardLoaded: false,
         boardLoading: false,
         boardError: '',
@@ -4965,6 +5036,101 @@
         boardTotal: 0,
         boardPatch: '',
     };
+
+    function metaPickFlagEmoji(code) {
+        const cc = String(code || '').trim().toUpperCase();
+        if (!/^[A-Z]{2}$/.test(cc)) return '';
+        return String.fromCodePoint(
+            ...[...cc].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65)
+        );
+    }
+
+    function metaPickFlagLabel(code, copy) {
+        const cc = String(code || '').trim().toUpperCase();
+        if (!cc) return copy.gameFlagNone || 'None';
+        const names = META_PICK_FLAG_NAMES[cc];
+        const lang = (typeof currentLang === 'string' && currentLang.startsWith('zh'))
+            ? 'zh'
+            : 'en';
+        const name = names ? (names[lang] || names.en || cc) : cc;
+        const emoji = metaPickFlagEmoji(cc);
+        return emoji ? `${emoji} ${name}` : name;
+    }
+
+    function metaPickNormalizeFlagClient(raw) {
+        const cc = String(raw == null ? '' : raw).trim().toUpperCase();
+        if (!cc) return '';
+        return META_PICK_FLAGS.includes(cc) ? cc : '';
+    }
+
+    function metaPickLoadSavedFlag() {
+        try {
+            return metaPickNormalizeFlagClient(localStorage.getItem(META_PICK_FLAG_KEY) || '');
+        } catch {
+            return '';
+        }
+    }
+
+    function metaPickSaveFlag(code) {
+        const cc = metaPickNormalizeFlagClient(code);
+        metaPickSession.flag = cc;
+        try {
+            if (cc) localStorage.setItem(META_PICK_FLAG_KEY, cc);
+            else localStorage.removeItem(META_PICK_FLAG_KEY);
+        } catch { /* ignore */ }
+    }
+
+    function metaPickFlagPickerHtml(copy, locked) {
+        const selected = metaPickNormalizeFlagClient(metaPickSession.flag);
+        const quick = META_PICK_FLAG_QUICK.slice();
+        // Ensure current selection appears in the quick row if not already there.
+        if (selected && !quick.includes(selected)) quick.unshift(selected);
+        const chips = [
+            {
+                code: '',
+                label: copy.gameFlagNone || 'None',
+                title: copy.gameFlagNone || 'None',
+            },
+            ...quick.map((code) => ({
+                code,
+                label: metaPickFlagEmoji(code) || code,
+                title: metaPickFlagLabel(code, copy),
+            })),
+        ].map((item) => {
+            const active = item.code === selected;
+            return (
+                `<button type="button" class="game-flag-chip${active ? ' is-active' : ''}"`
+                + ` data-game-flag="${escHtml(item.code)}"`
+                + ` title="${escHtml(item.title)}"`
+                + ` aria-pressed="${active ? 'true' : 'false'}"`
+                + `${locked ? ' disabled' : ''}>`
+                + `${escHtml(item.label)}`
+                + `</button>`
+            );
+        }).join('');
+        const moreOpts = [
+            `<option value="">${escHtml(copy.gameFlagMore || 'More…')}</option>`,
+            ...META_PICK_FLAGS.map((code) => {
+                const lab = metaPickFlagLabel(code, copy);
+                const sel = code === selected ? ' selected' : '';
+                return `<option value="${escHtml(code)}"${sel}>${escHtml(lab)}</option>`;
+            }),
+        ].join('');
+        return (
+            `<div class="game-flag-field">`
+            + `<div class="game-settle-label" id="game-flag-label">`
+            + `${escHtml(copy.gameFlagLabel || 'Flag')}`
+            + `</div>`
+            + `<div class="game-flag-row" role="group" aria-labelledby="game-flag-label">`
+            + chips
+            + `<select id="game-flag-more" class="game-flag-select" aria-label="${escHtml(copy.gameFlagMore || 'More flags')}"`
+            + `${locked ? ' disabled' : ''}>`
+            + moreOpts
+            + `</select>`
+            + `</div>`
+            + `</div>`
+        );
+    }
 
     function metaPickApiBase() {
         const base = (typeof META_PICK_API_BASE === 'string' ? META_PICK_API_BASE : '').trim();
@@ -5353,7 +5519,12 @@
         metaPickSession.settled = false;
         metaPickSession.submitState = 'idle';
         metaPickSession.submitMessage = '';
-        // Keep nickname draft for convenience.
+        // Keep nickname + flag draft for convenience.
+    }
+
+    // Restore last-used flag once (session-wide).
+    if (!metaPickSession.flag) {
+        metaPickSession.flag = metaPickLoadSavedFlag();
     }
 
     function metaPickNextRound() {
@@ -5420,8 +5591,10 @@
         metaPickSession.submitState = 'submitting';
         metaPickSession.submitMessage = copy.gameSubmitting || 'Submitting…';
         renderMetaPick();
+        const flag = metaPickNormalizeFlagClient(metaPickSession.flag);
         const body = {
             nickname: nick.text,
+            flag,
             patch,
             rounds: metaPickSession.rounds.map(r => ({
                 pool_ids: r.pool_ids,
@@ -5548,10 +5721,18 @@
                 const ovrTxt = ovr == null ? '—' : metaPickFormatOvr(ovr);
                 return `<span class="game-board-rk ${gCls}" title="#${escHtml(String(rk))}">${escHtml(ovrTxt)}</span>`;
             }).join('<span class="game-board-rk-sep"> · </span>');
+            const flagCode = metaPickNormalizeFlagClient(e.flag);
+            const flagEmoji = flagCode ? metaPickFlagEmoji(flagCode) : '';
+            const flagHtml = flagEmoji
+                ? `<span class="game-board-flag" title="${escHtml(metaPickFlagLabel(flagCode, copy))}">${escHtml(flagEmoji)}</span>`
+                : `<span class="game-board-flag is-empty" aria-hidden="true"></span>`;
             return (
                 `<tr>`
                 + `<td class="game-board-pos">${i + 1}</td>`
-                + `<td class="game-board-nick">${escHtml(String(e.nickname || ''))}</td>`
+                + `<td class="game-board-nick">`
+                + flagHtml
+                + `<span class="game-board-nick-text">${escHtml(String(e.nickname || ''))}</span>`
+                + `</td>`
                 + `<td class="game-board-avg ${avgG}" title="${Number.isFinite(avgRank) ? `#${avgRank.toFixed(1)} / ${totalCombos}` : ''}">${escHtml(avgTxt)}</td>`
                 + `<td class="game-board-ranks">${ranksHtml}</td>`
                 + `</tr>`
@@ -5631,6 +5812,7 @@
             + `placeholder="${escHtml(copy.gameNickPlaceholder || '2–16 characters')}" `
             + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}"`
             + `${locked ? ' readonly' : ''}>`
+            + metaPickFlagPickerHtml(copy, locked)
             + `<div class="game-settle-actions">`
             + `<button type="submit" class="tool-btn" id="game-submit" ${canSubmit ? '' : 'disabled'}>`
             + `${escHtml(metaPickSession.submitState === 'submitting'
@@ -6058,10 +6240,11 @@
 
         const bestEstWr = Number(best.ev.estWr);
         const bestWrTone = metaPickWrToneClass(bestEstWr);
-        // flex-basis % 填滿 bar；圖例永遠三行（含 AD 0%）
+        // flex-basis % 填滿 bar；圖例永遠三段。
+        // Class names: is-phys / is-magic / is-true — NEVER is-ad (adblockers hide .is-ad).
         const mixSeg = (cls, n) => {
             const w = Math.max(0, Math.min(100, Number(n) || 0));
-            return `<span class="game-an-mix-seg ${cls}" style="flex:0 0 ${w}%"></span>`;
+            return `<span class="game-an-mix-seg ${cls}" style="flex:0 0 ${w}%;width:${w}%"></span>`;
         };
         const mixLab = (cls, name, n) => (
             `<span class="game-an-mix-lab ${cls}">`
@@ -6070,16 +6253,16 @@
             + `</span>`
         );
         const mixBar = (
-            `<div class="game-an-mix" title="${escHtml(mixNote)}" data-mix-ad="${adPct}" data-mix-ap="${apPct}" data-mix-true="${truePct}">`
+            `<div class="game-an-mix" title="${escHtml(mixNote)}" data-mix-phys="${adPct}" data-mix-magic="${apPct}" data-mix-true="${truePct}">`
             + `<div class="game-an-mix-main">`
             + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
-            + mixSeg('is-ad', adPct)
-            + mixSeg('is-ap', apPct)
+            + mixSeg('is-phys', adPct)
+            + mixSeg('is-magic', apPct)
             + mixSeg('is-true', truePct)
             + `</div>`
             + `<div class="game-an-mix-labels">`
-            + mixLab('is-ad', copy.gameMixAd || 'AD', adPct)
-            + mixLab('is-ap', copy.gameMixAp || 'AP', apPct)
+            + mixLab('is-phys', copy.gameMixAd || 'AD', adPct)
+            + mixLab('is-magic', copy.gameMixAp || 'AP', apPct)
             + mixLab('is-true', copy.gameMixTrue || 'True', truePct)
             + `</div>`
             + `</div></div>`
@@ -7728,8 +7911,30 @@
         ev.preventDefault();
         const nickEl = document.getElementById('game-nick');
         if (nickEl) metaPickSession.nickname = nickEl.value;
+        const moreEl = document.getElementById('game-flag-more');
+        if (moreEl && moreEl.value) metaPickSaveFlag(moreEl.value);
         metaPickSubmitRun();
-        trackEvent('game_submit_run', {});
+        trackEvent('game_submit_run', { flag: metaPickSession.flag || '' });
+    });
+
+    document.addEventListener('click', (ev) => {
+        const flagBtn = ev.target && ev.target.closest
+            ? ev.target.closest('[data-game-flag]')
+            : null;
+        if (!flagBtn || flagBtn.disabled) return;
+        // Only handle inside settle form.
+        if (!flagBtn.closest('#game-settle-form')) return;
+        ev.preventDefault();
+        metaPickSaveFlag(flagBtn.getAttribute('data-game-flag') || '');
+        // Re-render settle form so active chip updates without full game reset.
+        if (typeof renderMetaPick === 'function') renderMetaPick();
+    }, true);
+
+    document.addEventListener('change', (ev) => {
+        const sel = ev.target && ev.target.id === 'game-flag-more' ? ev.target : null;
+        if (!sel) return;
+        metaPickSaveFlag(sel.value || '');
+        if (typeof renderMetaPick === 'function') renderMetaPick();
     });
 
     document.addEventListener('click', (ev) => {
