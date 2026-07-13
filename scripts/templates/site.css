@@ -6462,20 +6462,18 @@
         color: var(--accent-on);
     }
 
-    /* Footer actions — same tool-btn language as rest of site */
+    /* Footer actions — no sticky black pad; primary CTA is clearly pressable */
     .game-footer {
-        margin-top: 16px;
-        padding-top: 12px;
-        border-top: 1px solid var(--border);
-        position: sticky;
-        bottom: 0;
-        z-index: 2;
-        background: var(--bg);
-        padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+        margin-top: 12px;
+        padding: 0;
+        border-top: 0;
+        position: static;
+        background: transparent;
+        box-shadow: none;
     }
     .game-footer[hidden] { display: none !important; }
     .game-footer.is-miss {
-        border-top-color: rgba(255, 77, 94, 0.28);
+        border-top: 0;
     }
     .game-actions {
         display: flex;
@@ -6486,11 +6484,40 @@
     }
     .game-actions .tool-btn {
         flex: 1 1 160px;
-        min-height: 36px;
+        min-height: 40px;
     }
     .game-actions .tool-btn[disabled] {
         opacity: 0.45;
         cursor: not-allowed;
+    }
+    /* 下一回合／鎖定／結算：金色實心主按鈕 */
+    .game-actions .tool-btn.game-cta:not([disabled]) {
+        background: var(--accent, #f5c518);
+        border-color: var(--accent, #f5c518);
+        color: var(--accent-on, #14110a);
+        font-size: 14px;
+        font-weight: 800;
+        border-radius: 10px;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset,
+                    0 4px 14px -4px rgba(245, 197, 24, 0.45);
+    }
+    .game-actions .tool-btn.game-cta:not([disabled]):hover {
+        filter: brightness(1.06);
+        background: var(--accent-soft, #f5d780);
+        border-color: var(--accent-soft, #f5d780);
+        color: var(--accent-on, #14110a);
+    }
+    .game-actions .tool-btn.game-cta:not([disabled]):active {
+        filter: brightness(0.96);
+        transform: translateY(1px);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12) inset;
+    }
+    .game-actions .tool-btn.game-cta:not([disabled]):focus-visible {
+        outline: 2px solid var(--accent, #f5c518);
+        outline-offset: 2px;
+    }
+    :root[data-theme="light"] .game-actions .tool-btn.game-cta:not([disabled]) {
+        color: #14110a;
     }
     .game-miss-bar {
         width: 100%;
@@ -7280,7 +7307,7 @@
     :root[data-theme="light"] .game-legend-item.is-picked i {
         border-color: rgba(17, 24, 39, 0.75);
     }
-    :root[data-theme="light"] .game-footer { background: var(--bg); }
+    :root[data-theme="light"] .game-footer { background: transparent; }
 
     /* Meta Pick 5-round settlement + global leaderboard */
     .game-settle[hidden] { display: none !important; }
