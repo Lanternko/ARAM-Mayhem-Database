@@ -6788,10 +6788,11 @@
     }
     [data-theme="light"] .game-an-mix-labels .is-ad { color: #dc2626; }
     [data-theme="light"] .game-an-mix-labels .is-ap { color: #2563eb; }
+    /* 雷達優先：吃掉右側評分欄寬度，字才能放大仍讀得清 */
     .game-an-dims-split.is-best-only {
         display: grid;
-        grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
-        gap: 10px 16px;
+        grid-template-columns: minmax(240px, 1.55fr) minmax(112px, 0.7fr);
+        gap: 8px 10px;
         align-items: center;
         margin-top: 0;
         padding-top: 0;
@@ -6810,13 +6811,13 @@
     .game-an-radar .comp-radar {
         display: block;
         width: 100%;
-        max-height: 240px;
+        max-height: 300px;
         overflow: visible;
     }
     .game-an-grades {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 8px;
+        gap: 6px;
         min-width: 0;
     }
     @media (max-width: 400px) {
@@ -6826,8 +6827,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 8px;
-        padding: 10px 12px;
+        gap: 6px;
+        padding: 8px 10px;
         border-radius: 8px;
         border: 1px solid var(--border);
         background: var(--surface-2);
