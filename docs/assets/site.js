@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783924724");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783925011");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -307,12 +307,21 @@
         _compNormCache = cols;
         return _compNormCache;
     }
+    // Radar geometry: extra horizontal pad so long EN labels (e.g. "Champ strength")
+    // with text-anchor=end on the left spoke are not clipped by the viewBox.
+    const RADAR_PAD_X = 48;
+    const RADAR_VB_W = 380 + RADAR_PAD_X * 2; // 476
+    const RADAR_VB_H = 320;
+    const RADAR_CX = 190 + RADAR_PAD_X;
+    const RADAR_CY = 158;
+    const RADAR_R = 100;
+
     // axes: heuristic mode [{label, pct 0-1}]; signed mode (opts.signed) [{label, delta pp}].
     // Signed mode draws a dashed 0pp baseline ring; out=fits (blue), in=avoid (red); scale pp at full radius.
     function compRadarSvg(axes, ariaLabel, opts) {
         opts = opts || {};
         const signed = !!opts.signed, scale = opts.scale || 2;
-        const cx = 190, cy = 158, R = 108, n = axes.length;
+        const cx = RADAR_CX, cy = RADAR_CY, R = RADAR_R, n = axes.length;
         const ang = i => (-90 + i * (360 / n)) * Math.PI / 180;
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => axes.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
@@ -333,15 +342,22 @@
         const dotCol = a => signed ? ((a.delta || 0) >= 0 ? '#3aa0ff' : '#e2574b') : '#3aa0ff';
         const dots = dataPts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="${dotCol(axes[i])}"/>`).join('');
         const labels = axes.map((a, i) => {
-            const [lx, ly] = at(i, R + 24);
+            // Side spokes: pull labels slightly inward so long text stays inside pad.
+            const cosA = Math.cos(ang(i));
+            const labelR = R + 22 - (Math.abs(cosA) > 0.55 ? 6 : 0);
+            let [lx, ly] = at(i, labelR);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
             const valTxt = signed ? ((a.delta || 0) >= 0 ? '+' : '') + (a.delta || 0).toFixed(1) : String(Math.round((a.pct || 0) * 100));
             const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : '#7fc8ff';
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
+            const estW = Math.max(28, (String(a.label || '').length + String(valTxt).length + 1) * 7.2);
+            const edgePad = 4;
+            if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
+            if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="12" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
         }).join('');
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
-        return `<svg class="comp-radar" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${baseline}${spokes}<polygon points="${dataPoly}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="2"/>${dots}${labels}</svg>`;
+        return `<svg class="comp-radar" viewBox="0 0 ${RADAR_VB_W} ${RADAR_VB_H}" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${baseline}${spokes}<polygon points="${dataPoly}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="2"/>${dots}${labels}</svg>`;
     }
 
     /**
@@ -353,7 +369,7 @@
         const first = (series && series[0] && series[0].axes) || [];
         const n = first.length;
         if (!n) return '';
-        const cx = 190, cy = 158, R = 108;
+        const cx = RADAR_CX, cy = RADAR_CY, R = RADAR_R;
         const ang = i => (-90 + i * (360 / n)) * Math.PI / 180;
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => first.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
@@ -379,11 +395,19 @@
             return `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="2.2"/>${dots}`;
         }).join('');
         const labels = first.map((a, i) => {
-            const [lx, ly] = at(i, R + 22);
+            const cosA = Math.cos(ang(i));
+            // Pull side labels inward; long EN like "Champ strength" need the pad + this.
+            const labelR = R + 20 - (Math.abs(cosA) > 0.55 ? 6 : 0);
+            let [lx, ly] = at(i, labelR);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="13" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label || '')}</text>`;
+            // Keep label ink inside viewBox: end-anchor text grows left, start grows right.
+            const estW = Math.max(24, String(a.label || '').length * 7.2);
+            const edgePad = 4;
+            if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
+            if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="12" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label || '')}</text>`;
         }).join('');
-        return `<svg class="comp-radar is-overlay" viewBox="0 0 380 320" width="100%" role="img" aria-label="${escHtml(ariaLabel || '')}">${grid}${spokes}${polys}${labels}</svg>`;
+        return `<svg class="comp-radar is-overlay" viewBox="0 0 ${RADAR_VB_W} ${RADAR_VB_H}" width="100%" role="img" aria-label="${escHtml(ariaLabel || '')}">${grid}${spokes}${polys}${labels}</svg>`;
     }
     // Percentile rank 0-1: fraction of champions this value beats (robust to outliers).
     function compNorm(comp, key) {
