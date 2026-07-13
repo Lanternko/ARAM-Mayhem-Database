@@ -6191,14 +6191,14 @@
         object-fit: cover;
         display: block;
     }
-    /* 陣容對照：與主頁 .champ / Draft 池相同 — tier 色框 + 左下 WR */
+    /* 陣容對照：tier 色框加厚 + 左下 WR */
     .game-face.is-home {
         overflow: visible;
-        border: 2px solid var(--tier-color, #555);
+        border: 4px solid var(--tier-color, #555);
         background: var(--chip-bg, #1a1d21);
     }
     .game-face.is-home[data-tier="OP"] {
-        border-color: transparent;
+        border: 4px solid transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
             linear-gradient(135deg,
@@ -6209,7 +6209,7 @@
         box-shadow: 0 0 8px rgba(220,180,255,0.45);
     }
     .game-face.is-home[data-tier="T1"] {
-        border-color: transparent;
+        border: 4px solid transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
             linear-gradient(135deg,
@@ -6222,7 +6222,7 @@
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .game-face.is-home img {
-        border-radius: 6px;
+        border-radius: 4px;
     }
     .game-face .wr {
         position: absolute;
@@ -6798,12 +6798,13 @@
     }
     [data-theme="light"] .game-an-mix-labels .is-ad { color: #dc2626; }
     [data-theme="light"] .game-an-mix-labels .is-ap { color: #2563eb; }
-    /* 雷達優先：吃掉右側評分欄寬度，字才能放大仍讀得清 */
+    /* 雷達靠左貼齊；多出的寬度給右側評分（字要大） */
     .game-an-dims-split.is-best-only {
         display: grid;
-        grid-template-columns: minmax(240px, 1.55fr) minmax(112px, 0.7fr);
-        gap: 8px 10px;
+        grid-template-columns: minmax(0, max-content) minmax(200px, 1fr);
+        gap: 8px 14px;
         align-items: center;
+        justify-content: start;
         margin-top: 0;
         padding-top: 0;
     }
@@ -6817,25 +6818,36 @@
     .game-an-radar-col {
         display: flex;
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start; /* 靠左，不水平撐滿留空洞 */
         gap: 4px;
         min-width: 0;
+        width: max-content;
+        max-width: 100%;
     }
     .game-an-radar {
         min-width: 0;
         overflow: visible;
+        width: min(100%, 300px);
     }
     .game-an-radar .comp-radar {
         display: block;
         width: 100%;
+        height: auto;
         max-height: 300px;
+        margin: 0; /* 不置中 */
         overflow: visible;
+    }
+    .game-an-radar-col .game-an-legend {
+        justify-content: flex-start; /* 圖例跟著雷達靠左 */
+        width: 100%;
+        padding-left: 8px;
     }
     .game-an-grades {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 6px;
+        gap: 8px;
         min-width: 0;
+        width: 100%;
     }
     @media (max-width: 400px) {
         .game-an-grades { grid-template-columns: 1fr; }
@@ -6844,15 +6856,15 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 6px;
-        padding: 8px 10px;
+        gap: 8px;
+        padding: 12px 14px;
         border-radius: 8px;
         border: 1px solid var(--border);
         background: var(--surface-2);
         min-width: 0;
     }
     .game-an-grade-label {
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 600;
         color: var(--text-muted);
         white-space: nowrap;
@@ -6860,7 +6872,7 @@
         text-overflow: ellipsis;
     }
     .game-an-grade-val {
-        font-size: 18px;
+        font-size: 24px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         line-height: 1;
