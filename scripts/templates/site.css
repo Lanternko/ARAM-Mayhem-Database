@@ -6211,18 +6211,26 @@
         transform: translateY(0);
         pointer-events: auto;
     }
+    /* 手機：貼在問號下方（不要 fixed 到螢幕底，會割裂） */
     @media (max-width: 560px) {
-        .game-help-tip {
-            position: fixed;
-            left: 12px;
-            right: 12px;
-            top: auto;
-            bottom: max(12px, env(safe-area-inset-bottom, 0px));
-            width: auto;
-            max-width: none;
-            transform: translateY(6px);
+        .game-header-top {
+            position: relative;
+            z-index: 5;
         }
-        .game-help-tip::before { display: none; }
+        .game-help-tip {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            left: auto;
+            bottom: auto;
+            width: min(calc(100vw - 28px), 340px);
+            max-width: none;
+            transform: translateY(-4px);
+        }
+        .game-help-tip::before {
+            display: block;
+            right: 10px;
+        }
         .game-help-btn:hover .game-help-tip,
         .game-help-btn:focus-visible .game-help-tip,
         .game-help-btn:focus-within .game-help-tip {
