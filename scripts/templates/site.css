@@ -6106,6 +6106,16 @@
     .game-header {
         margin-bottom: 14px;
     }
+    .game-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px 14px;
+    }
+    .game-header-text {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
     .game-kicker {
         display: block;
         font-size: 11px;
@@ -6126,6 +6136,97 @@
         font-size: 13px;
         line-height: 1.45;
         max-width: 40em;
+    }
+    /* Meta Pick play-tips tooltip (header) */
+    .game-help-btn {
+        position: relative;
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        margin: 2px 0 0;
+        padding: 0;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text-muted);
+        cursor: help;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font: inherit;
+    }
+    .game-help-btn:hover,
+    .game-help-btn:focus-visible {
+        color: var(--text);
+        border-color: var(--border-strong);
+        background: var(--surface-raised);
+        outline: none;
+    }
+    .game-help-icon {
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1;
+    }
+    .game-help-tip {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 40;
+        width: min(320px, calc(100vw - 32px));
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--surface-raised);
+        color: var(--text);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.5;
+        text-align: left;
+        box-shadow: var(--shadow);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-4px);
+        transition: opacity 0.12s var(--ease-out), transform 0.12s var(--ease-out),
+                    visibility 0.12s;
+    }
+    .game-help-tip::before {
+        content: '';
+        position: absolute;
+        top: -5px;
+        right: 10px;
+        width: 9px;
+        height: 9px;
+        background: var(--surface-raised);
+        border-left: 1px solid var(--border);
+        border-top: 1px solid var(--border);
+        transform: rotate(45deg);
+    }
+    .game-help-btn:hover .game-help-tip,
+    .game-help-btn:focus-visible .game-help-tip,
+    .game-help-btn:focus-within .game-help-tip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+    @media (max-width: 560px) {
+        .game-help-tip {
+            position: fixed;
+            left: 12px;
+            right: 12px;
+            top: auto;
+            bottom: max(12px, env(safe-area-inset-bottom, 0px));
+            width: auto;
+            max-width: none;
+            transform: translateY(6px);
+        }
+        .game-help-tip::before { display: none; }
+        .game-help-btn:hover .game-help-tip,
+        .game-help-btn:focus-visible .game-help-tip,
+        .game-help-btn:focus-within .game-help-tip {
+            transform: translateY(0);
+        }
     }
     .game-progress {
         font-size: 12px;
