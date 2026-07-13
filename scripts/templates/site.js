@@ -1161,6 +1161,33 @@
             gameBestEstWr: '最佳陣容勝率',
             gameWaitingData: '載入英雄資料中…',
             gameNoPool: '目前沒有足夠樣本的英雄可開局。',
+            gameRoundOf: (a, b) => `第 ${a}/${b} 回合`,
+            gameRoundN: n => `第 ${n} 回合`,
+            gameNextRound: '下一回合',
+            gameShowSettle: '結算',
+            gameSettleTitle: '五回合結算',
+            gameSettleAvg: '平均 OVR',
+            gameSettleRankSub: (avg, total) => `平均名次 #${avg} / ${total}`,
+            gameOvrValueShort: ovr => `OVR ${ovr}`,
+            gameNickLabel: '暱稱',
+            gameNickPlaceholder: '2–16 字',
+            gameNickInvalid: '暱稱需 2–16 個字（去頭尾空白）',
+            gameSubmit: '上傳成績',
+            gameSubmitting: '上傳中…',
+            gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
+            gameSubmitKept: ovr => `未刷新最佳 · 仍為 OVR ${ovr}`,
+            gameSubmitFail: '上傳失敗，請稍後再試',
+            gameRestart: '再來一輪（5 回合）',
+            gameNeedFiveRounds: '請先完成 5 回合',
+            gamePatchMissing: '缺少版本快照，無法上傳',
+            gameBoardUnavailable: '排行榜未連線（未設定 API）',
+            gameBoardLoading: '載入排行榜…',
+            gameBoardFail: '排行榜載入失敗',
+            gameBoardEmpty: '還沒有成績，來當第一名',
+            gameBoardPatch: '版本',
+            gameBoardNick: '暱稱',
+            gameBoardAvg: '平均 OVR',
+            gameBoardRanks: '各回合',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -1417,6 +1444,33 @@
             gameBestEstWr: 'Best team WR',
             gameWaitingData: 'Loading champion data…',
             gameNoPool: 'Not enough champions with sample size to start a round.',
+            gameRoundOf: (a, b) => `Round ${a}/${b}`,
+            gameRoundN: n => `R${n}`,
+            gameNextRound: 'Next round',
+            gameShowSettle: 'Settlement',
+            gameSettleTitle: '5-round settlement',
+            gameSettleAvg: 'Average OVR',
+            gameSettleRankSub: (avg, total) => `Avg rank #${avg} / ${total}`,
+            gameOvrValueShort: ovr => `OVR ${ovr}`,
+            gameNickLabel: 'Nickname',
+            gameNickPlaceholder: '2–16 characters',
+            gameNickInvalid: 'Nickname must be 2–16 characters (after trim)',
+            gameSubmit: 'Submit score',
+            gameSubmitting: 'Submitting…',
+            gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
+            gameSubmitKept: ovr => `Best kept · OVR ${ovr}`,
+            gameSubmitFail: 'Submit failed — try again later',
+            gameRestart: 'Play again (5 rounds)',
+            gameNeedFiveRounds: 'Finish all 5 rounds first',
+            gamePatchMissing: 'Missing patch snapshot — cannot submit',
+            gameBoardUnavailable: 'Leaderboard offline (API not configured)',
+            gameBoardLoading: 'Loading leaderboard…',
+            gameBoardFail: 'Could not load leaderboard',
+            gameBoardEmpty: 'No scores yet — be the first',
+            gameBoardPatch: 'Patch',
+            gameBoardNick: 'Name',
+            gameBoardAvg: 'Avg OVR',
+            gameBoardRanks: 'Rounds',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
@@ -4868,9 +4922,14 @@
     }
 
     // ---- Meta Pick mini-game: 10 pool → pick 5 → lock → WR / one-time hint ----
+    // A full run is exactly 5 completed rounds; avg_rank = mean of integer ranks.
+    // Server re-scores every submit — never trust client ranks remotely.
     const META_PICK_POOL = 10;
     const META_PICK_NEED = 5;
+    const META_PICK_ROUNDS = 5;
     const META_PICK_MIN_GAMES = 50;
+    // Build-time inject; empty string = remote board/submit unavailable.
+    const META_PICK_API_BASE = __META_PICK_API_BASE__;
     const metaPick = {
         phase: 'idle', // idle | picking | miss_offer | reveal
         poolIds: [],
@@ -4887,6 +4946,44 @@
         missMissing: 0,
         dealt: false,
     };
+    /** 5-round run state (leaderboard MVP). */
+    const metaPickSession = {
+        rounds: [], // { pool_ids, picked_ids, rank, total }
+        recordedThisReveal: false,
+        settled: false,
+        submitState: 'idle', // idle | submitting | ok | err
+        submitMessage: '',
+        nickname: '',
+        boardLoaded: false,
+        boardLoading: false,
+        boardError: '',
+        boardEntries: null,
+        boardTotal: 0,
+        boardPatch: '',
+    };
+
+    function metaPickApiBase() {
+        const base = (typeof META_PICK_API_BASE === 'string' ? META_PICK_API_BASE : '').trim();
+        return base.replace(/\/+$/, '');
+    }
+
+    function metaPickSnapshotPatch() {
+        return String((DATA && (DATA.patch_prefix || DATA.patch)) || '').trim();
+    }
+
+    /** Canonical numeric/string sort so Meta Pick est-WR is order-invariant. */
+    function metaPickCanonicalIds(ids) {
+        return (ids || []).map(String).slice().sort((a, b) => {
+            const na = Number(a);
+            const nb = Number(b);
+            const aNum = Number.isFinite(na) && String(na) === a;
+            const bNum = Number.isFinite(nb) && String(nb) === b;
+            if (aNum && bNum) return na - nb;
+            if (aNum) return -1;
+            if (bNum) return 1;
+            return a.localeCompare(b, undefined, { numeric: true });
+        });
+    }
 
     function metaPickShuffle(arr, rng) {
         const a = arr.slice();
@@ -4961,7 +5058,9 @@
 
     function metaPickScoreTeam(ids) {
         if (!ids || !ids.length) return 0.5;
-        return Number(evaluateFullTeam(ids).estWr) || 0.5;
+        // Meta Pick only: sort ids so pair-walk + composition match server.
+        // Draft evaluateFullTeam stays order-as-picked (do not change globally).
+        return Number(evaluateFullTeam(metaPickCanonicalIds(ids)).estWr) || 0.5;
     }
 
     /**
@@ -5050,6 +5149,76 @@
         return { rank, total: n, pr, worse, ties, better, grade };
     }
 
+    /**
+     * Approximate PR from rank among `total` combos (singleton-tie assumption).
+     * Matches metaPickRankAmong: PR = 100 * (worse + 0.5 * ties) / n
+     * with better = rank-1, ties = 1, worse = n - rank.
+     * Used for per-round metrics only; settlement/board hero score is OVR.
+     */
+    function metaPickPrFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(1, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 0;
+        const pr = 100 * (n - r + 0.5) / n;
+        return Math.round(Math.max(0, Math.min(100, pr)) * 10) / 10;
+    }
+
+    /**
+     * Display OVR 1–99 from rank among `total` (99 = #1 best, 1 = last).
+     * Linear in rank space; floor so only true #1 maps to 99 (avoids #1 and #2
+     * both rounding to 99 when n≈252). Accepts fractional ranks.
+     */
+    function metaPickOvrFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(2, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 1;
+        const clamped = Math.min(n, Math.max(1, r));
+        if (clamped <= 1) return 99;
+        // ranks (1, n] → (99, 1]; floor keeps #2 at 98, last at 1
+        const raw = 99 - (clamped - 1) * 98 / (n - 1);
+        return Math.max(1, Math.min(98, Math.floor(raw + 1e-9)));
+    }
+
+    /**
+     * Grade letter from rank among `total` combos — same ladder as metaPickRankAmong
+     * when ties are a singleton at that rank (display/settlement chips).
+     */
+    function metaPickGradeFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(1, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 'F';
+        if (r === 1) return 'S';
+        return metaPickGradeFromOvr(metaPickOvrFromRank(r, n));
+    }
+
+    /** Grade from OVR (1–99, higher better). S only at perfect 99. */
+    function metaPickGradeFromOvr(ovr) {
+        const v = Number(ovr);
+        if (!Number.isFinite(v)) return 'F';
+        if (v >= 99) return 'S';
+        if (v >= 90) return 'A';
+        if (v >= 70) return 'B';
+        if (v >= 50) return 'C';
+        if (v >= 30) return 'D';
+        return 'F';
+    }
+
+    /** @deprecated alias — prefer metaPickGradeFromOvr for settlement. */
+    function metaPickGradeFromPr(pr) {
+        return metaPickGradeFromOvr(pr);
+    }
+
+    /** CSS class for grade colors (shared with analysis letter grades). */
+    function metaPickGradeClass(grade) {
+        const g = String(grade || 'F').toUpperCase();
+        if (g === 'S') return 'is-grade-s';
+        if (g === 'A' || g === 'A+') return 'is-grade-a';
+        if (g === 'B' || g === 'B+') return 'is-grade-b';
+        if (g === 'C' || g === 'C+') return 'is-grade-c';
+        if (g === 'D') return 'is-grade-d';
+        return 'is-grade-f';
+    }
+
     /** Prefer an optimal champ the user did not already have correct. */
     function metaPickHintChamp(optimalIds, previousUserIds, rng) {
         const prev = new Set((previousUserIds || []).map(String));
@@ -5078,6 +5247,10 @@
     function metaPickDealRound() {
         const copy = tr();
         metaPickResetRound();
+        metaPickSession.recordedThisReveal = false;
+        metaPickSession.settled = false;
+        metaPickSession.submitState = 'idle';
+        metaPickSession.submitMessage = '';
         if (!DATA || !DATA.champs) {
             metaPick.phase = 'idle';
             metaPick.notice = copy.gameWaitingData;
@@ -5107,6 +5280,347 @@
         metaPick.notice = '';
         metaPick.noticeKind = '';
         metaPick.missMissing = 0;
+    }
+
+    /** Record rank once when a round first enters reveal (client preview only). */
+    function metaPickRecordRoundIfNeeded() {
+        if (metaPickSession.recordedThisReveal) return;
+        if (metaPick.phase !== 'reveal') return;
+        if (!metaPick.poolIds.length || metaPick.pickedIds.length !== META_PICK_NEED) return;
+        const userScore = metaPickScoreTeam(metaPick.pickedIds);
+        let scores = metaPick.allScores;
+        if (!scores || !scores.length) {
+            scores = metaPickScoreAllTeams(metaPick.poolIds, META_PICK_NEED).scores;
+            metaPick.allScores = scores;
+            metaPick.comboTotal = scores.length;
+        }
+        const rankInfo = metaPickRankAmong(userScore, scores);
+        metaPickSession.rounds.push({
+            pool_ids: metaPick.poolIds.map(String),
+            picked_ids: metaPick.pickedIds.map(String),
+            rank: rankInfo.rank,
+            total: rankInfo.total || metaPick.comboTotal || 252,
+            grade: rankInfo.grade,
+            pr: rankInfo.pr,
+        });
+        metaPickSession.recordedThisReveal = true;
+        // Do NOT auto-set settled here: the fifth reveal must stay visible with
+        // #game-show-settle. Settlement is only entered when that button is clicked
+        // (metaPickNextRound may still guard length>=5 as a fallback).
+    }
+
+    function metaPickSessionAvgRank() {
+        const ranks = metaPickSession.rounds.map(r => Number(r.rank)).filter(n => Number.isFinite(n));
+        if (!ranks.length) return null;
+        return ranks.reduce((a, b) => a + b, 0) / ranks.length;
+    }
+
+    /**
+     * Mean OVR across recorded rounds (each round mapped #rank→OVR, then averaged).
+     * Falls back to OVR(avg_rank) if needed.
+     */
+    function metaPickSessionAvgOvr() {
+        const rounds = metaPickSession.rounds || [];
+        if (!rounds.length) return null;
+        const ovrs = rounds.map((round) => {
+            const r = Number(round.rank);
+            const t = Number(round.total) || 252;
+            if (!Number.isFinite(r)) return null;
+            return metaPickOvrFromRank(r, t);
+        }).filter(v => v != null && Number.isFinite(v));
+        if (!ovrs.length) {
+            const avgR = metaPickSessionAvgRank();
+            if (avgR == null) return null;
+            return metaPickOvrFromRank(avgR, (rounds[0] && rounds[0].total) || 252);
+        }
+        // Integer OVR per round; mean rounded to nearest int for the hero digit.
+        return Math.round(ovrs.reduce((a, b) => a + b, 0) / ovrs.length);
+    }
+
+    function metaPickFormatOvr(ovr) {
+        const v = Number(ovr);
+        if (!Number.isFinite(v)) return '—';
+        return String(Math.round(Math.max(1, Math.min(99, v))));
+    }
+
+    function metaPickResetSession() {
+        metaPickSession.rounds = [];
+        metaPickSession.recordedThisReveal = false;
+        metaPickSession.settled = false;
+        metaPickSession.submitState = 'idle';
+        metaPickSession.submitMessage = '';
+        // Keep nickname draft for convenience.
+    }
+
+    function metaPickNextRound() {
+        if (metaPickSession.rounds.length >= META_PICK_ROUNDS) {
+            metaPickSession.settled = true;
+            renderMetaPick();
+            return;
+        }
+        metaPickDealRound();
+        renderMetaPick();
+    }
+
+    function metaPickRestartRun() {
+        metaPickResetSession();
+        metaPickDealRound();
+        renderMetaPick();
+        metaPickLoadLeaderboard({ force: true });
+    }
+
+    function metaPickNormalizeNickClient(raw) {
+        const text = String(raw || '').trim().replace(/\s+/g, ' ');
+        const n = [...text].length; // Unicode code points
+        return { text, n, ok: n >= 2 && n <= 16 };
+    }
+
+    async function metaPickSubmitRun() {
+        const copy = tr();
+        const base = metaPickApiBase();
+        if (!base) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameBoardUnavailable || 'Leaderboard unavailable';
+            renderMetaPick();
+            return;
+        }
+        if (metaPickSession.rounds.length !== META_PICK_ROUNDS) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameNeedFiveRounds || 'Finish 5 rounds first';
+            renderMetaPick();
+            return;
+        }
+        const nick = metaPickNormalizeNickClient(metaPickSession.nickname);
+        if (!nick.ok) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameNickInvalid || 'Nickname must be 2–16 characters';
+            renderMetaPick();
+            return;
+        }
+        const patch = metaPickSnapshotPatch();
+        if (!patch) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gamePatchMissing || 'Missing patch snapshot';
+            renderMetaPick();
+            return;
+        }
+        metaPickSession.submitState = 'submitting';
+        metaPickSession.submitMessage = copy.gameSubmitting || 'Submitting…';
+        renderMetaPick();
+        const body = {
+            nickname: nick.text,
+            patch,
+            rounds: metaPickSession.rounds.map(r => ({
+                pool_ids: r.pool_ids,
+                picked_ids: r.picked_ids,
+            })),
+        };
+        try {
+            const res = await fetch(`${base}/api/meta-pick/runs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            let data = null;
+            try { data = await res.json(); } catch { data = null; }
+            if (!res.ok) {
+                const detail = (data && (data.detail || data.message)) || (`HTTP ${res.status}`);
+                metaPickSession.submitState = 'err';
+                metaPickSession.submitMessage = String(detail);
+                renderMetaPick();
+                return;
+            }
+            metaPickSession.submitState = 'ok';
+            if (data && data.updated === false) {
+                // Retained best (entry/retained), not the rejected current-run avg_rank.
+                const keptRaw = (data.entry && data.entry.avg_rank != null)
+                    ? data.entry.avg_rank
+                    : (data.retained && data.retained.avg_rank != null)
+                        ? data.retained.avg_rank
+                        : null;
+                const keptTotal = (data.entry && data.entry.total_combos)
+                    || (data.retained && data.retained.total_combos)
+                    || 252;
+                const keptOvr = keptRaw != null
+                    ? metaPickFormatOvr(metaPickOvrFromRank(Number(keptRaw), keptTotal))
+                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                metaPickSession.submitMessage = (copy.gameSubmitKept || ((a) => `Best kept · OVR ${a}`))(keptOvr);
+            } else {
+                const avgRank = data && data.avg_rank != null
+                    ? Number(data.avg_rank)
+                    : metaPickSessionAvgRank();
+                const totalCombos = (data && data.total_combos) || 252;
+                const avg = avgRank != null
+                    ? metaPickFormatOvr(metaPickOvrFromRank(avgRank, totalCombos))
+                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                metaPickSession.submitMessage = (copy.gameSubmitOk || ((a) => `Submitted · avg OVR ${a}`))(avg);
+            }
+            renderMetaPick();
+            metaPickLoadLeaderboard({ force: true });
+        } catch (err) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameSubmitFail || 'Submit failed';
+            renderMetaPick();
+        }
+    }
+
+    async function metaPickLoadLeaderboard(opts) {
+        const force = !!(opts && opts.force);
+        const base = metaPickApiBase();
+        const body = document.getElementById('game-board-body');
+        const copy = tr();
+        if (!body) return;
+        if (!base) {
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = 'unavailable';
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardUnavailable || 'Leaderboard unavailable')}</p>`;
+            return;
+        }
+        if (metaPickSession.boardLoaded && !force) {
+            if (metaPickSession.boardEntries) metaPickRenderLeaderboard();
+            return;
+        }
+        if (metaPickSession.boardLoading && !force) return;
+        metaPickSession.boardLoading = true;
+        body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardLoading || 'Loading…')}</p>`;
+        const patch = metaPickSnapshotPatch();
+        const q = patch ? `?patch=${encodeURIComponent(patch)}&limit=50` : '?limit=50';
+        try {
+            const res = await fetch(`${base}/api/meta-pick/leaderboard${q}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = '';
+            metaPickSession.boardEntries = Array.isArray(data.entries) ? data.entries : [];
+            metaPickSession.boardTotal = Number(data.total) || metaPickSession.boardEntries.length;
+            metaPickSession.boardPatch = String(data.patch || patch || '');
+            metaPickRenderLeaderboard();
+        } catch (err) {
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = 'fail';
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardFail || 'Could not load leaderboard')}</p>`;
+        } finally {
+            metaPickSession.boardLoading = false;
+        }
+    }
+
+    function metaPickRenderLeaderboard() {
+        const body = document.getElementById('game-board-body');
+        if (!body) return;
+        const copy = tr();
+        const entries = metaPickSession.boardEntries || [];
+        if (!entries.length) {
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardEmpty || 'No scores yet')}</p>`;
+            return;
+        }
+        const rows = entries.map((e, i) => {
+            const avgRank = Number(e.avg_rank);
+            const totalCombos = Number(e.total_combos) || 252;
+            const avgOvr = Number.isFinite(avgRank)
+                ? metaPickOvrFromRank(avgRank, totalCombos)
+                : null;
+            const avgTxt = avgOvr == null ? '—' : metaPickFormatOvr(avgOvr);
+            const avgG = avgOvr == null ? '' : metaPickGradeClass(metaPickGradeFromOvr(avgOvr));
+            const rankList = Array.isArray(e.ranks) ? e.ranks : [];
+            const ranksHtml = rankList.map((rk) => {
+                const r = Number(rk);
+                const ovr = Number.isFinite(r) ? metaPickOvrFromRank(r, totalCombos) : null;
+                const gCls = ovr == null ? '' : metaPickGradeClass(metaPickGradeFromOvr(ovr));
+                const ovrTxt = ovr == null ? '—' : metaPickFormatOvr(ovr);
+                return `<span class="game-board-rk ${gCls}" title="#${escHtml(String(rk))}">${escHtml(ovrTxt)}</span>`;
+            }).join('<span class="game-board-rk-sep"> · </span>');
+            return (
+                `<tr>`
+                + `<td class="game-board-pos">${i + 1}</td>`
+                + `<td class="game-board-nick">${escHtml(String(e.nickname || ''))}</td>`
+                + `<td class="game-board-avg ${avgG}" title="${Number.isFinite(avgRank) ? `#${avgRank.toFixed(1)} / ${totalCombos}` : ''}">${escHtml(avgTxt)}</td>`
+                + `<td class="game-board-ranks">${ranksHtml}</td>`
+                + `</tr>`
+            );
+        }).join('');
+        const patchLabel = metaPickSession.boardPatch
+            ? escHtml(metaPickSession.boardPatch)
+            : '';
+        body.innerHTML = (
+            (patchLabel ? `<div class="game-board-meta">${escHtml(copy.gameBoardPatch || 'Patch')} ${patchLabel}</div>` : '')
+            + `<table class="game-board-table">`
+            + `<thead><tr>`
+            + `<th>#</th>`
+            + `<th>${escHtml(copy.gameBoardNick || 'Name')}</th>`
+            + `<th>${escHtml(copy.gameBoardAvg || 'Avg')}</th>`
+            + `<th>${escHtml(copy.gameBoardRanks || 'Rounds')}</th>`
+            + `</tr></thead>`
+            + `<tbody>${rows}</tbody></table>`
+        );
+    }
+
+    function metaPickSettlementHtml(copy) {
+        const rounds = metaPickSession.rounds || [];
+        const avgRank = metaPickSessionAvgRank();
+        const avgOvr = metaPickSessionAvgOvr();
+        const avgOvrTxt = avgOvr == null ? '—' : metaPickFormatOvr(avgOvr);
+        const total = Number((rounds[0] && rounds[0].total) || 252) || 252;
+        const avgRankTxt = avgRank == null ? '—' : avgRank.toFixed(1);
+        const avgGrade = avgOvr == null
+            ? 'F'
+            : (avgRank === 1 || avgOvr >= 99 ? 'S' : metaPickGradeFromOvr(avgOvr));
+        const avgGradeCls = metaPickGradeClass(avgGrade);
+        const rankSub = (copy.gameSettleRankSub || ((a, t) => `Avg rank #${a} / ${t}`))(avgRankTxt, total);
+        const rankChips = rounds.map((round, i) => {
+            const r = Number(round.rank);
+            const t = Number(round.total) || total;
+            const ovr = metaPickOvrFromRank(r, t);
+            const grade = round.grade || metaPickGradeFromOvr(ovr);
+            const gCls = metaPickGradeClass(grade);
+            const ovrTxt = metaPickFormatOvr(ovr);
+            return (
+                `<span class="game-settle-chip" title="#${r} / ${t} · ${escHtml(grade)}">`
+                + `<span class="game-settle-chip-n">${escHtml(copy.gameRoundN ? copy.gameRoundN(i + 1) : `R${i + 1}`)}</span>`
+                + `<span class="game-settle-chip-r ${gCls}">${escHtml(ovrTxt)}</span>`
+                + `</span>`
+            );
+        }).join('');
+        const nick = metaPickSession.nickname || '';
+        const base = metaPickApiBase();
+        const canSubmit = !!base && metaPickSession.submitState !== 'submitting';
+        let status = '';
+        if (metaPickSession.submitMessage) {
+            const kind = metaPickSession.submitState === 'ok' ? 'ok'
+                : metaPickSession.submitState === 'err' ? 'miss' : '';
+            status = `<div class="game-settle-status${kind ? ` is-${kind}` : ''}">${escHtml(metaPickSession.submitMessage)}</div>`;
+        } else if (!base) {
+            status = `<div class="game-settle-status is-miss">${escHtml(copy.gameBoardUnavailable || 'Leaderboard unavailable')}</div>`;
+        }
+        return (
+            `<div class="game-settle-card">`
+            + `<div class="game-settle-kicker">${escHtml(copy.gameSettleTitle || 'Run complete')}</div>`
+            + `<div class="game-settle-avg" title="${escHtml(rankSub)} · ${escHtml(avgGrade)}">`
+            + `<span class="game-settle-avg-prefix">OVR</span>`
+            + `<span class="game-settle-avg-num ${avgGradeCls}">${escHtml(avgOvrTxt)}</span>`
+            + `</div>`
+            + `<div class="game-settle-avg-label">${escHtml(copy.gameSettleAvg || 'Average OVR')}</div>`
+            + `<div class="game-settle-avg-sub">${escHtml(rankSub)}</div>`
+            + `<div class="game-settle-ranks">${rankChips}</div>`
+            + `<form class="game-settle-form" id="game-settle-form" autocomplete="nickname">`
+            + `<label class="game-settle-label" for="game-nick">`
+            + `${escHtml(copy.gameNickLabel || 'Nickname')}`
+            + `</label>`
+            + `<input type="text" id="game-nick" name="nickname" maxlength="32" `
+            + `class="game-settle-input" value="${escHtml(nick)}" `
+            + `placeholder="${escHtml(copy.gameNickPlaceholder || '2–16 characters')}" `
+            + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}">`
+            + `<div class="game-settle-actions">`
+            + `<button type="submit" class="tool-btn" id="game-submit" ${canSubmit ? '' : 'disabled'}>`
+            + `${escHtml(metaPickSession.submitState === 'submitting'
+                ? (copy.gameSubmitting || 'Submitting…')
+                : (copy.gameSubmit || 'Submit score'))}</button>`
+            + `<button type="button" class="tool-btn ghost" id="game-restart">`
+            + `${escHtml(copy.gameRestart || 'Play again')}</button>`
+            + `</div>`
+            + `</form>`
+            + status
+            + `</div>`
+        );
     }
 
     function metaPickEnsureDealt() {
@@ -5233,6 +5747,8 @@
     }
 
     function metaPickPlayAgain() {
+        // Legacy single-round restart: only within a run (next-round path uses
+        // metaPickNextRound; full-run restart uses metaPickRestartRun).
         metaPickDealRound();
         renderMetaPick();
     }
@@ -5615,20 +6131,40 @@
         if (!shell) return;
         metaPickEnsureDealt();
         const copy = tr();
+        // Capture rank exactly once when a round reaches reveal.
+        if (metaPick.phase === 'reveal') metaPickRecordRoundIfNeeded();
         const revealing = metaPick.phase === 'reveal';
-        const interactive = metaPick.phase === 'picking';
+        const settling = metaPickSession.settled && metaPickSession.rounds.length >= META_PICK_ROUNDS;
+        const interactive = metaPick.phase === 'picking' && !settling;
         const pinned = new Set(metaPick.pinnedIds.map(String));
         const picked = new Set(metaPick.pickedIds.map(String));
         const optimal = new Set(metaPick.optimalIds.map(String));
+        // After recording on reveal, rounds.length already includes this round.
+        const displayRound = revealing
+            ? Math.min(META_PICK_ROUNDS, metaPickSession.rounds.length)
+            : Math.min(META_PICK_ROUNDS, metaPickSession.rounds.length + 1);
 
-        // Bottom footer: lock / play again / miss-offer (答對 k/5 + 提示 · 看答案).
+        // Bottom footer: lock / next / settle / miss-offer.
         const actions = document.getElementById('game-actions');
         if (actions) {
-            if (metaPick.phase === 'reveal') {
+            if (settling) {
                 actions.innerHTML = (
-                    `<button type="button" class="tool-btn" id="game-play-again">`
-                    + `${escHtml(copy.gamePlayAgain)}</button>`
+                    `<button type="button" class="tool-btn" id="game-restart">`
+                    + `${escHtml(copy.gameRestart || copy.gamePlayAgain)}</button>`
                 );
+            } else if (metaPick.phase === 'reveal') {
+                const done = metaPickSession.rounds.length >= META_PICK_ROUNDS;
+                if (done) {
+                    actions.innerHTML = (
+                        `<button type="button" class="tool-btn" id="game-show-settle">`
+                        + `${escHtml(copy.gameShowSettle || 'Settlement')}</button>`
+                    );
+                } else {
+                    actions.innerHTML = (
+                        `<button type="button" class="tool-btn" id="game-next-round">`
+                        + `${escHtml(copy.gameNextRound || 'Next round')}</button>`
+                    );
+                }
             } else if (metaPick.phase === 'miss_offer') {
                 const hit = Math.max(0, META_PICK_NEED - (Number(metaPick.missMissing) || 0));
                 const scoreTxt = (copy.gameMissScore || ((h, t) => `答對：${h}/${t}`))(hit, META_PICK_NEED);
@@ -5650,18 +6186,30 @@
         }
         const footer = document.getElementById('game-footer');
         if (footer) {
-            footer.hidden = false;
+            footer.hidden = settling;
             footer.classList.toggle('is-miss', metaPick.phase === 'miss_offer');
         }
 
         const progress = document.getElementById('game-progress');
         if (progress) {
-            if (revealing || metaPick.phase === 'miss_offer') {
-                progress.hidden = true;
-                progress.textContent = '';
+            const roundLabel = (copy.gameRoundOf || ((a, b) => `Round ${a}/${b}`))(
+                Math.max(1, displayRound || 1),
+                META_PICK_ROUNDS,
+            );
+            if (settling) {
+                progress.hidden = false;
+                progress.textContent = (copy.gameRoundOf || ((a, b) => `Round ${a}/${b}`))(
+                    META_PICK_ROUNDS, META_PICK_ROUNDS,
+                );
+            } else if (metaPick.phase === 'miss_offer') {
+                progress.hidden = false;
+                progress.textContent = `${roundLabel} · ${copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED)}`;
+            } else if (revealing) {
+                progress.hidden = false;
+                progress.textContent = roundLabel;
             } else {
                 progress.hidden = false;
-                progress.textContent = copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED);
+                progress.textContent = `${roundLabel} · ${copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED)}`;
             }
         }
 
@@ -5739,9 +6287,20 @@
             }
         }
 
+        const settle = document.getElementById('game-settle');
+        if (settle) {
+            if (settling) {
+                settle.hidden = false;
+                settle.innerHTML = metaPickSettlementHtml(copy);
+            } else {
+                settle.hidden = true;
+                settle.innerHTML = '';
+            }
+        }
+
         const result = document.getElementById('game-result');
         if (result) {
-            if (!revealing) {
+            if (!revealing || settling) {
                 result.hidden = true;
                 result.innerHTML = '';
             } else {
@@ -5848,8 +6407,8 @@
                     + (isRankOne
                         // Gold #1/252 as the hero number — no mid-99.x PR, no duplicate sub-rank.
                         ? `<span class="game-metric-value is-rank-top" title="${escHtml(prTxt)} · ${escHtml(rankInfo.grade)}">${escHtml(rankTopTxt)}</span>`
-                        : (`<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade">${escHtml(rankInfo.grade)}</span></span>`
-                            + `<span class="game-metric-sub">${escHtml(rankTxt)}</span>`))
+                        : (`<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade ${metaPickGradeClass(rankInfo.grade)}">${escHtml(rankInfo.grade)}</span></span>`
+                            + `<span class="game-metric-sub ${metaPickGradeClass(rankInfo.grade)}">${escHtml(rankTxt)}</span>`))
                     + `</div>`
                     + `</div>`
 
@@ -5893,6 +6452,19 @@
                 );
             }
         }
+
+        // Hide pick chrome while settlement is front-and-center.
+        if (settling) {
+            const poolEl = document.getElementById('game-pool');
+            if (poolEl) { poolEl.hidden = true; poolEl.innerHTML = ''; }
+            const slotsEl = document.getElementById('game-slots');
+            if (slotsEl) { slotsEl.hidden = true; slotsEl.innerHTML = ''; }
+            const noticeEl = document.getElementById('game-notice');
+            if (noticeEl) { noticeEl.hidden = true; noticeEl.innerHTML = ''; }
+        }
+
+        // Leaderboard under the game (best-effort; no-op if base empty).
+        metaPickLoadLeaderboard();
     }
 
     function setDraftSide(side) {
@@ -7093,6 +7665,16 @@
         renderSidePanel();
     }
 
+    document.addEventListener('submit', (ev) => {
+        const form = ev.target && ev.target.closest ? ev.target.closest('#game-settle-form') : null;
+        if (!form) return;
+        ev.preventDefault();
+        const nickEl = document.getElementById('game-nick');
+        if (nickEl) metaPickSession.nickname = nickEl.value;
+        metaPickSubmitRun();
+        trackEvent('game_submit_run', {});
+    });
+
     document.addEventListener('click', (ev) => {
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
@@ -7306,9 +7888,29 @@
             trackEvent('game_reveal_early', {});
             return;
         }
-        if (ev.target.closest('#game-play-again')) {
-            metaPickPlayAgain();
-            trackEvent('game_play_again', {});
+        if (ev.target.closest('#game-play-again') || ev.target.closest('#game-next-round')) {
+            metaPickNextRound();
+            trackEvent('game_next_round', { rounds: metaPickSession.rounds.length });
+            return;
+        }
+        if (ev.target.closest('#game-show-settle')) {
+            metaPickSession.settled = true;
+            renderMetaPick();
+            trackEvent('game_show_settle', {});
+            return;
+        }
+        if (ev.target.closest('#game-restart')) {
+            metaPickRestartRun();
+            trackEvent('game_restart_run', {});
+            return;
+        }
+        if (ev.target.closest('#game-submit')) {
+            // Form submit handler also covers this; keep click path for safety.
+            ev.preventDefault();
+            const nickEl = document.getElementById('game-nick');
+            if (nickEl) metaPickSession.nickname = nickEl.value;
+            metaPickSubmitRun();
+            trackEvent('game_submit_run', {});
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');

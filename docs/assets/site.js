@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783928647");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783929063");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -683,7 +683,7 @@
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Marksman"],"2512":["Marksman"],"2517":["Fighter"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Marksman"],"2525":["Tank"],"2526":["Tank"],"2530":["Tank"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Marksman"],"3032":["Marksman"],"3033":["Marksman"],"3036":["Marksman"],"3039":["Marksman"],"3040":["Mage"],"3042":["Marksman"],"3046":["Marksman"],"3050":["Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Marksman"],"3072":["Fighter"],"3073":["Marksman"],"3074":["Marksman"],"3075":["Tank"],"3078":["Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Marksman"],"3089":["Mage"],"3091":["Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Marksman"],"3102":["Fighter"],"3107":["Support"],"3109":["Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Marksman"],"3116":["Fighter"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Fighter"],"3142":["Assassin"],"3143":["Tank"],"3146":["Mage"],"3152":["Mage"],"3153":["Marksman"],"3156":["Fighter"],"3157":["Fighter"],"3161":["Fighter"],"3165":["Fighter"],"3177":["Fighter"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Marksman"],"3190":["Support"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Marksman"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Fighter"],"4633":["Fighter"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Marksman"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter"],"6662":["Marksman"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Marksman"],"6675":["Marksman"],"6676":["Marksman"],"6691":["Assassin"],"6692":["Fighter"],"6693":["Assassin"],"6694":["Marksman"],"6695":["Assassin"],"6696":["Assassin"],"6697":["Assassin"],"6698":["Assassin"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Fighter"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"994403":["Mage","Marksman"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -1161,6 +1161,33 @@
             gameBestEstWr: '最佳陣容勝率',
             gameWaitingData: '載入英雄資料中…',
             gameNoPool: '目前沒有足夠樣本的英雄可開局。',
+            gameRoundOf: (a, b) => `第 ${a}/${b} 回合`,
+            gameRoundN: n => `第 ${n} 回合`,
+            gameNextRound: '下一回合',
+            gameShowSettle: '結算',
+            gameSettleTitle: '五回合結算',
+            gameSettleAvg: '平均 OVR',
+            gameSettleRankSub: (avg, total) => `平均名次 #${avg} / ${total}`,
+            gameOvrValueShort: ovr => `OVR ${ovr}`,
+            gameNickLabel: '暱稱',
+            gameNickPlaceholder: '2–16 字',
+            gameNickInvalid: '暱稱需 2–16 個字（去頭尾空白）',
+            gameSubmit: '上傳成績',
+            gameSubmitting: '上傳中…',
+            gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
+            gameSubmitKept: ovr => `未刷新最佳 · 仍為 OVR ${ovr}`,
+            gameSubmitFail: '上傳失敗，請稍後再試',
+            gameRestart: '再來一輪（5 回合）',
+            gameNeedFiveRounds: '請先完成 5 回合',
+            gamePatchMissing: '缺少版本快照，無法上傳',
+            gameBoardUnavailable: '排行榜未連線（未設定 API）',
+            gameBoardLoading: '載入排行榜…',
+            gameBoardFail: '排行榜載入失敗',
+            gameBoardEmpty: '還沒有成績，來當第一名',
+            gameBoardPatch: '版本',
+            gameBoardNick: '暱稱',
+            gameBoardAvg: '平均 OVR',
+            gameBoardRanks: '各回合',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -1417,6 +1444,33 @@
             gameBestEstWr: 'Best team WR',
             gameWaitingData: 'Loading champion data…',
             gameNoPool: 'Not enough champions with sample size to start a round.',
+            gameRoundOf: (a, b) => `Round ${a}/${b}`,
+            gameRoundN: n => `R${n}`,
+            gameNextRound: 'Next round',
+            gameShowSettle: 'Settlement',
+            gameSettleTitle: '5-round settlement',
+            gameSettleAvg: 'Average OVR',
+            gameSettleRankSub: (avg, total) => `Avg rank #${avg} / ${total}`,
+            gameOvrValueShort: ovr => `OVR ${ovr}`,
+            gameNickLabel: 'Nickname',
+            gameNickPlaceholder: '2–16 characters',
+            gameNickInvalid: 'Nickname must be 2–16 characters (after trim)',
+            gameSubmit: 'Submit score',
+            gameSubmitting: 'Submitting…',
+            gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
+            gameSubmitKept: ovr => `Best kept · OVR ${ovr}`,
+            gameSubmitFail: 'Submit failed — try again later',
+            gameRestart: 'Play again (5 rounds)',
+            gameNeedFiveRounds: 'Finish all 5 rounds first',
+            gamePatchMissing: 'Missing patch snapshot — cannot submit',
+            gameBoardUnavailable: 'Leaderboard offline (API not configured)',
+            gameBoardLoading: 'Loading leaderboard…',
+            gameBoardFail: 'Could not load leaderboard',
+            gameBoardEmpty: 'No scores yet — be the first',
+            gameBoardPatch: 'Patch',
+            gameBoardNick: 'Name',
+            gameBoardAvg: 'Avg OVR',
+            gameBoardRanks: 'Rounds',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
@@ -4868,9 +4922,14 @@
     }
 
     // ---- Meta Pick mini-game: 10 pool → pick 5 → lock → WR / one-time hint ----
+    // A full run is exactly 5 completed rounds; avg_rank = mean of integer ranks.
+    // Server re-scores every submit — never trust client ranks remotely.
     const META_PICK_POOL = 10;
     const META_PICK_NEED = 5;
+    const META_PICK_ROUNDS = 5;
     const META_PICK_MIN_GAMES = 50;
+    // Build-time inject; empty string = remote board/submit unavailable.
+    const META_PICK_API_BASE = "";
     const metaPick = {
         phase: 'idle', // idle | picking | miss_offer | reveal
         poolIds: [],
@@ -4887,6 +4946,44 @@
         missMissing: 0,
         dealt: false,
     };
+    /** 5-round run state (leaderboard MVP). */
+    const metaPickSession = {
+        rounds: [], // { pool_ids, picked_ids, rank, total }
+        recordedThisReveal: false,
+        settled: false,
+        submitState: 'idle', // idle | submitting | ok | err
+        submitMessage: '',
+        nickname: '',
+        boardLoaded: false,
+        boardLoading: false,
+        boardError: '',
+        boardEntries: null,
+        boardTotal: 0,
+        boardPatch: '',
+    };
+
+    function metaPickApiBase() {
+        const base = (typeof META_PICK_API_BASE === 'string' ? META_PICK_API_BASE : '').trim();
+        return base.replace(/\/+$/, '');
+    }
+
+    function metaPickSnapshotPatch() {
+        return String((DATA && (DATA.patch_prefix || DATA.patch)) || '').trim();
+    }
+
+    /** Canonical numeric/string sort so Meta Pick est-WR is order-invariant. */
+    function metaPickCanonicalIds(ids) {
+        return (ids || []).map(String).slice().sort((a, b) => {
+            const na = Number(a);
+            const nb = Number(b);
+            const aNum = Number.isFinite(na) && String(na) === a;
+            const bNum = Number.isFinite(nb) && String(nb) === b;
+            if (aNum && bNum) return na - nb;
+            if (aNum) return -1;
+            if (bNum) return 1;
+            return a.localeCompare(b, undefined, { numeric: true });
+        });
+    }
 
     function metaPickShuffle(arr, rng) {
         const a = arr.slice();
@@ -4961,7 +5058,9 @@
 
     function metaPickScoreTeam(ids) {
         if (!ids || !ids.length) return 0.5;
-        return Number(evaluateFullTeam(ids).estWr) || 0.5;
+        // Meta Pick only: sort ids so pair-walk + composition match server.
+        // Draft evaluateFullTeam stays order-as-picked (do not change globally).
+        return Number(evaluateFullTeam(metaPickCanonicalIds(ids)).estWr) || 0.5;
     }
 
     /**
@@ -5050,6 +5149,76 @@
         return { rank, total: n, pr, worse, ties, better, grade };
     }
 
+    /**
+     * Approximate PR from rank among `total` combos (singleton-tie assumption).
+     * Matches metaPickRankAmong: PR = 100 * (worse + 0.5 * ties) / n
+     * with better = rank-1, ties = 1, worse = n - rank.
+     * Used for per-round metrics only; settlement/board hero score is OVR.
+     */
+    function metaPickPrFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(1, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 0;
+        const pr = 100 * (n - r + 0.5) / n;
+        return Math.round(Math.max(0, Math.min(100, pr)) * 10) / 10;
+    }
+
+    /**
+     * Display OVR 1–99 from rank among `total` (99 = #1 best, 1 = last).
+     * Linear in rank space; floor so only true #1 maps to 99 (avoids #1 and #2
+     * both rounding to 99 when n≈252). Accepts fractional ranks.
+     */
+    function metaPickOvrFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(2, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 1;
+        const clamped = Math.min(n, Math.max(1, r));
+        if (clamped <= 1) return 99;
+        // ranks (1, n] → (99, 1]; floor keeps #2 at 98, last at 1
+        const raw = 99 - (clamped - 1) * 98 / (n - 1);
+        return Math.max(1, Math.min(98, Math.floor(raw + 1e-9)));
+    }
+
+    /**
+     * Grade letter from rank among `total` combos — same ladder as metaPickRankAmong
+     * when ties are a singleton at that rank (display/settlement chips).
+     */
+    function metaPickGradeFromRank(rank, total) {
+        const r = Number(rank);
+        const n = Math.max(1, Number(total) || 252);
+        if (!Number.isFinite(r) || r < 1) return 'F';
+        if (r === 1) return 'S';
+        return metaPickGradeFromOvr(metaPickOvrFromRank(r, n));
+    }
+
+    /** Grade from OVR (1–99, higher better). S only at perfect 99. */
+    function metaPickGradeFromOvr(ovr) {
+        const v = Number(ovr);
+        if (!Number.isFinite(v)) return 'F';
+        if (v >= 99) return 'S';
+        if (v >= 90) return 'A';
+        if (v >= 70) return 'B';
+        if (v >= 50) return 'C';
+        if (v >= 30) return 'D';
+        return 'F';
+    }
+
+    /** @deprecated alias — prefer metaPickGradeFromOvr for settlement. */
+    function metaPickGradeFromPr(pr) {
+        return metaPickGradeFromOvr(pr);
+    }
+
+    /** CSS class for grade colors (shared with analysis letter grades). */
+    function metaPickGradeClass(grade) {
+        const g = String(grade || 'F').toUpperCase();
+        if (g === 'S') return 'is-grade-s';
+        if (g === 'A' || g === 'A+') return 'is-grade-a';
+        if (g === 'B' || g === 'B+') return 'is-grade-b';
+        if (g === 'C' || g === 'C+') return 'is-grade-c';
+        if (g === 'D') return 'is-grade-d';
+        return 'is-grade-f';
+    }
+
     /** Prefer an optimal champ the user did not already have correct. */
     function metaPickHintChamp(optimalIds, previousUserIds, rng) {
         const prev = new Set((previousUserIds || []).map(String));
@@ -5078,6 +5247,10 @@
     function metaPickDealRound() {
         const copy = tr();
         metaPickResetRound();
+        metaPickSession.recordedThisReveal = false;
+        metaPickSession.settled = false;
+        metaPickSession.submitState = 'idle';
+        metaPickSession.submitMessage = '';
         if (!DATA || !DATA.champs) {
             metaPick.phase = 'idle';
             metaPick.notice = copy.gameWaitingData;
@@ -5107,6 +5280,347 @@
         metaPick.notice = '';
         metaPick.noticeKind = '';
         metaPick.missMissing = 0;
+    }
+
+    /** Record rank once when a round first enters reveal (client preview only). */
+    function metaPickRecordRoundIfNeeded() {
+        if (metaPickSession.recordedThisReveal) return;
+        if (metaPick.phase !== 'reveal') return;
+        if (!metaPick.poolIds.length || metaPick.pickedIds.length !== META_PICK_NEED) return;
+        const userScore = metaPickScoreTeam(metaPick.pickedIds);
+        let scores = metaPick.allScores;
+        if (!scores || !scores.length) {
+            scores = metaPickScoreAllTeams(metaPick.poolIds, META_PICK_NEED).scores;
+            metaPick.allScores = scores;
+            metaPick.comboTotal = scores.length;
+        }
+        const rankInfo = metaPickRankAmong(userScore, scores);
+        metaPickSession.rounds.push({
+            pool_ids: metaPick.poolIds.map(String),
+            picked_ids: metaPick.pickedIds.map(String),
+            rank: rankInfo.rank,
+            total: rankInfo.total || metaPick.comboTotal || 252,
+            grade: rankInfo.grade,
+            pr: rankInfo.pr,
+        });
+        metaPickSession.recordedThisReveal = true;
+        // Do NOT auto-set settled here: the fifth reveal must stay visible with
+        // #game-show-settle. Settlement is only entered when that button is clicked
+        // (metaPickNextRound may still guard length>=5 as a fallback).
+    }
+
+    function metaPickSessionAvgRank() {
+        const ranks = metaPickSession.rounds.map(r => Number(r.rank)).filter(n => Number.isFinite(n));
+        if (!ranks.length) return null;
+        return ranks.reduce((a, b) => a + b, 0) / ranks.length;
+    }
+
+    /**
+     * Mean OVR across recorded rounds (each round mapped #rank→OVR, then averaged).
+     * Falls back to OVR(avg_rank) if needed.
+     */
+    function metaPickSessionAvgOvr() {
+        const rounds = metaPickSession.rounds || [];
+        if (!rounds.length) return null;
+        const ovrs = rounds.map((round) => {
+            const r = Number(round.rank);
+            const t = Number(round.total) || 252;
+            if (!Number.isFinite(r)) return null;
+            return metaPickOvrFromRank(r, t);
+        }).filter(v => v != null && Number.isFinite(v));
+        if (!ovrs.length) {
+            const avgR = metaPickSessionAvgRank();
+            if (avgR == null) return null;
+            return metaPickOvrFromRank(avgR, (rounds[0] && rounds[0].total) || 252);
+        }
+        // Integer OVR per round; mean rounded to nearest int for the hero digit.
+        return Math.round(ovrs.reduce((a, b) => a + b, 0) / ovrs.length);
+    }
+
+    function metaPickFormatOvr(ovr) {
+        const v = Number(ovr);
+        if (!Number.isFinite(v)) return '—';
+        return String(Math.round(Math.max(1, Math.min(99, v))));
+    }
+
+    function metaPickResetSession() {
+        metaPickSession.rounds = [];
+        metaPickSession.recordedThisReveal = false;
+        metaPickSession.settled = false;
+        metaPickSession.submitState = 'idle';
+        metaPickSession.submitMessage = '';
+        // Keep nickname draft for convenience.
+    }
+
+    function metaPickNextRound() {
+        if (metaPickSession.rounds.length >= META_PICK_ROUNDS) {
+            metaPickSession.settled = true;
+            renderMetaPick();
+            return;
+        }
+        metaPickDealRound();
+        renderMetaPick();
+    }
+
+    function metaPickRestartRun() {
+        metaPickResetSession();
+        metaPickDealRound();
+        renderMetaPick();
+        metaPickLoadLeaderboard({ force: true });
+    }
+
+    function metaPickNormalizeNickClient(raw) {
+        const text = String(raw || '').trim().replace(/\s+/g, ' ');
+        const n = [...text].length; // Unicode code points
+        return { text, n, ok: n >= 2 && n <= 16 };
+    }
+
+    async function metaPickSubmitRun() {
+        const copy = tr();
+        const base = metaPickApiBase();
+        if (!base) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameBoardUnavailable || 'Leaderboard unavailable';
+            renderMetaPick();
+            return;
+        }
+        if (metaPickSession.rounds.length !== META_PICK_ROUNDS) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameNeedFiveRounds || 'Finish 5 rounds first';
+            renderMetaPick();
+            return;
+        }
+        const nick = metaPickNormalizeNickClient(metaPickSession.nickname);
+        if (!nick.ok) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameNickInvalid || 'Nickname must be 2–16 characters';
+            renderMetaPick();
+            return;
+        }
+        const patch = metaPickSnapshotPatch();
+        if (!patch) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gamePatchMissing || 'Missing patch snapshot';
+            renderMetaPick();
+            return;
+        }
+        metaPickSession.submitState = 'submitting';
+        metaPickSession.submitMessage = copy.gameSubmitting || 'Submitting…';
+        renderMetaPick();
+        const body = {
+            nickname: nick.text,
+            patch,
+            rounds: metaPickSession.rounds.map(r => ({
+                pool_ids: r.pool_ids,
+                picked_ids: r.picked_ids,
+            })),
+        };
+        try {
+            const res = await fetch(`${base}/api/meta-pick/runs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            let data = null;
+            try { data = await res.json(); } catch { data = null; }
+            if (!res.ok) {
+                const detail = (data && (data.detail || data.message)) || (`HTTP ${res.status}`);
+                metaPickSession.submitState = 'err';
+                metaPickSession.submitMessage = String(detail);
+                renderMetaPick();
+                return;
+            }
+            metaPickSession.submitState = 'ok';
+            if (data && data.updated === false) {
+                // Retained best (entry/retained), not the rejected current-run avg_rank.
+                const keptRaw = (data.entry && data.entry.avg_rank != null)
+                    ? data.entry.avg_rank
+                    : (data.retained && data.retained.avg_rank != null)
+                        ? data.retained.avg_rank
+                        : null;
+                const keptTotal = (data.entry && data.entry.total_combos)
+                    || (data.retained && data.retained.total_combos)
+                    || 252;
+                const keptOvr = keptRaw != null
+                    ? metaPickFormatOvr(metaPickOvrFromRank(Number(keptRaw), keptTotal))
+                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                metaPickSession.submitMessage = (copy.gameSubmitKept || ((a) => `Best kept · OVR ${a}`))(keptOvr);
+            } else {
+                const avgRank = data && data.avg_rank != null
+                    ? Number(data.avg_rank)
+                    : metaPickSessionAvgRank();
+                const totalCombos = (data && data.total_combos) || 252;
+                const avg = avgRank != null
+                    ? metaPickFormatOvr(metaPickOvrFromRank(avgRank, totalCombos))
+                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                metaPickSession.submitMessage = (copy.gameSubmitOk || ((a) => `Submitted · avg OVR ${a}`))(avg);
+            }
+            renderMetaPick();
+            metaPickLoadLeaderboard({ force: true });
+        } catch (err) {
+            metaPickSession.submitState = 'err';
+            metaPickSession.submitMessage = copy.gameSubmitFail || 'Submit failed';
+            renderMetaPick();
+        }
+    }
+
+    async function metaPickLoadLeaderboard(opts) {
+        const force = !!(opts && opts.force);
+        const base = metaPickApiBase();
+        const body = document.getElementById('game-board-body');
+        const copy = tr();
+        if (!body) return;
+        if (!base) {
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = 'unavailable';
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardUnavailable || 'Leaderboard unavailable')}</p>`;
+            return;
+        }
+        if (metaPickSession.boardLoaded && !force) {
+            if (metaPickSession.boardEntries) metaPickRenderLeaderboard();
+            return;
+        }
+        if (metaPickSession.boardLoading && !force) return;
+        metaPickSession.boardLoading = true;
+        body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardLoading || 'Loading…')}</p>`;
+        const patch = metaPickSnapshotPatch();
+        const q = patch ? `?patch=${encodeURIComponent(patch)}&limit=50` : '?limit=50';
+        try {
+            const res = await fetch(`${base}/api/meta-pick/leaderboard${q}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = '';
+            metaPickSession.boardEntries = Array.isArray(data.entries) ? data.entries : [];
+            metaPickSession.boardTotal = Number(data.total) || metaPickSession.boardEntries.length;
+            metaPickSession.boardPatch = String(data.patch || patch || '');
+            metaPickRenderLeaderboard();
+        } catch (err) {
+            metaPickSession.boardLoaded = true;
+            metaPickSession.boardError = 'fail';
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardFail || 'Could not load leaderboard')}</p>`;
+        } finally {
+            metaPickSession.boardLoading = false;
+        }
+    }
+
+    function metaPickRenderLeaderboard() {
+        const body = document.getElementById('game-board-body');
+        if (!body) return;
+        const copy = tr();
+        const entries = metaPickSession.boardEntries || [];
+        if (!entries.length) {
+            body.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameBoardEmpty || 'No scores yet')}</p>`;
+            return;
+        }
+        const rows = entries.map((e, i) => {
+            const avgRank = Number(e.avg_rank);
+            const totalCombos = Number(e.total_combos) || 252;
+            const avgOvr = Number.isFinite(avgRank)
+                ? metaPickOvrFromRank(avgRank, totalCombos)
+                : null;
+            const avgTxt = avgOvr == null ? '—' : metaPickFormatOvr(avgOvr);
+            const avgG = avgOvr == null ? '' : metaPickGradeClass(metaPickGradeFromOvr(avgOvr));
+            const rankList = Array.isArray(e.ranks) ? e.ranks : [];
+            const ranksHtml = rankList.map((rk) => {
+                const r = Number(rk);
+                const ovr = Number.isFinite(r) ? metaPickOvrFromRank(r, totalCombos) : null;
+                const gCls = ovr == null ? '' : metaPickGradeClass(metaPickGradeFromOvr(ovr));
+                const ovrTxt = ovr == null ? '—' : metaPickFormatOvr(ovr);
+                return `<span class="game-board-rk ${gCls}" title="#${escHtml(String(rk))}">${escHtml(ovrTxt)}</span>`;
+            }).join('<span class="game-board-rk-sep"> · </span>');
+            return (
+                `<tr>`
+                + `<td class="game-board-pos">${i + 1}</td>`
+                + `<td class="game-board-nick">${escHtml(String(e.nickname || ''))}</td>`
+                + `<td class="game-board-avg ${avgG}" title="${Number.isFinite(avgRank) ? `#${avgRank.toFixed(1)} / ${totalCombos}` : ''}">${escHtml(avgTxt)}</td>`
+                + `<td class="game-board-ranks">${ranksHtml}</td>`
+                + `</tr>`
+            );
+        }).join('');
+        const patchLabel = metaPickSession.boardPatch
+            ? escHtml(metaPickSession.boardPatch)
+            : '';
+        body.innerHTML = (
+            (patchLabel ? `<div class="game-board-meta">${escHtml(copy.gameBoardPatch || 'Patch')} ${patchLabel}</div>` : '')
+            + `<table class="game-board-table">`
+            + `<thead><tr>`
+            + `<th>#</th>`
+            + `<th>${escHtml(copy.gameBoardNick || 'Name')}</th>`
+            + `<th>${escHtml(copy.gameBoardAvg || 'Avg')}</th>`
+            + `<th>${escHtml(copy.gameBoardRanks || 'Rounds')}</th>`
+            + `</tr></thead>`
+            + `<tbody>${rows}</tbody></table>`
+        );
+    }
+
+    function metaPickSettlementHtml(copy) {
+        const rounds = metaPickSession.rounds || [];
+        const avgRank = metaPickSessionAvgRank();
+        const avgOvr = metaPickSessionAvgOvr();
+        const avgOvrTxt = avgOvr == null ? '—' : metaPickFormatOvr(avgOvr);
+        const total = Number((rounds[0] && rounds[0].total) || 252) || 252;
+        const avgRankTxt = avgRank == null ? '—' : avgRank.toFixed(1);
+        const avgGrade = avgOvr == null
+            ? 'F'
+            : (avgRank === 1 || avgOvr >= 99 ? 'S' : metaPickGradeFromOvr(avgOvr));
+        const avgGradeCls = metaPickGradeClass(avgGrade);
+        const rankSub = (copy.gameSettleRankSub || ((a, t) => `Avg rank #${a} / ${t}`))(avgRankTxt, total);
+        const rankChips = rounds.map((round, i) => {
+            const r = Number(round.rank);
+            const t = Number(round.total) || total;
+            const ovr = metaPickOvrFromRank(r, t);
+            const grade = round.grade || metaPickGradeFromOvr(ovr);
+            const gCls = metaPickGradeClass(grade);
+            const ovrTxt = metaPickFormatOvr(ovr);
+            return (
+                `<span class="game-settle-chip" title="#${r} / ${t} · ${escHtml(grade)}">`
+                + `<span class="game-settle-chip-n">${escHtml(copy.gameRoundN ? copy.gameRoundN(i + 1) : `R${i + 1}`)}</span>`
+                + `<span class="game-settle-chip-r ${gCls}">${escHtml(ovrTxt)}</span>`
+                + `</span>`
+            );
+        }).join('');
+        const nick = metaPickSession.nickname || '';
+        const base = metaPickApiBase();
+        const canSubmit = !!base && metaPickSession.submitState !== 'submitting';
+        let status = '';
+        if (metaPickSession.submitMessage) {
+            const kind = metaPickSession.submitState === 'ok' ? 'ok'
+                : metaPickSession.submitState === 'err' ? 'miss' : '';
+            status = `<div class="game-settle-status${kind ? ` is-${kind}` : ''}">${escHtml(metaPickSession.submitMessage)}</div>`;
+        } else if (!base) {
+            status = `<div class="game-settle-status is-miss">${escHtml(copy.gameBoardUnavailable || 'Leaderboard unavailable')}</div>`;
+        }
+        return (
+            `<div class="game-settle-card">`
+            + `<div class="game-settle-kicker">${escHtml(copy.gameSettleTitle || 'Run complete')}</div>`
+            + `<div class="game-settle-avg" title="${escHtml(rankSub)} · ${escHtml(avgGrade)}">`
+            + `<span class="game-settle-avg-prefix">OVR</span>`
+            + `<span class="game-settle-avg-num ${avgGradeCls}">${escHtml(avgOvrTxt)}</span>`
+            + `</div>`
+            + `<div class="game-settle-avg-label">${escHtml(copy.gameSettleAvg || 'Average OVR')}</div>`
+            + `<div class="game-settle-avg-sub">${escHtml(rankSub)}</div>`
+            + `<div class="game-settle-ranks">${rankChips}</div>`
+            + `<form class="game-settle-form" id="game-settle-form" autocomplete="nickname">`
+            + `<label class="game-settle-label" for="game-nick">`
+            + `${escHtml(copy.gameNickLabel || 'Nickname')}`
+            + `</label>`
+            + `<input type="text" id="game-nick" name="nickname" maxlength="32" `
+            + `class="game-settle-input" value="${escHtml(nick)}" `
+            + `placeholder="${escHtml(copy.gameNickPlaceholder || '2–16 characters')}" `
+            + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}">`
+            + `<div class="game-settle-actions">`
+            + `<button type="submit" class="tool-btn" id="game-submit" ${canSubmit ? '' : 'disabled'}>`
+            + `${escHtml(metaPickSession.submitState === 'submitting'
+                ? (copy.gameSubmitting || 'Submitting…')
+                : (copy.gameSubmit || 'Submit score'))}</button>`
+            + `<button type="button" class="tool-btn ghost" id="game-restart">`
+            + `${escHtml(copy.gameRestart || 'Play again')}</button>`
+            + `</div>`
+            + `</form>`
+            + status
+            + `</div>`
+        );
     }
 
     function metaPickEnsureDealt() {
@@ -5233,6 +5747,8 @@
     }
 
     function metaPickPlayAgain() {
+        // Legacy single-round restart: only within a run (next-round path uses
+        // metaPickNextRound; full-run restart uses metaPickRestartRun).
         metaPickDealRound();
         renderMetaPick();
     }
@@ -5615,20 +6131,40 @@
         if (!shell) return;
         metaPickEnsureDealt();
         const copy = tr();
+        // Capture rank exactly once when a round reaches reveal.
+        if (metaPick.phase === 'reveal') metaPickRecordRoundIfNeeded();
         const revealing = metaPick.phase === 'reveal';
-        const interactive = metaPick.phase === 'picking';
+        const settling = metaPickSession.settled && metaPickSession.rounds.length >= META_PICK_ROUNDS;
+        const interactive = metaPick.phase === 'picking' && !settling;
         const pinned = new Set(metaPick.pinnedIds.map(String));
         const picked = new Set(metaPick.pickedIds.map(String));
         const optimal = new Set(metaPick.optimalIds.map(String));
+        // After recording on reveal, rounds.length already includes this round.
+        const displayRound = revealing
+            ? Math.min(META_PICK_ROUNDS, metaPickSession.rounds.length)
+            : Math.min(META_PICK_ROUNDS, metaPickSession.rounds.length + 1);
 
-        // Bottom footer: lock / play again / miss-offer (答對 k/5 + 提示 · 看答案).
+        // Bottom footer: lock / next / settle / miss-offer.
         const actions = document.getElementById('game-actions');
         if (actions) {
-            if (metaPick.phase === 'reveal') {
+            if (settling) {
                 actions.innerHTML = (
-                    `<button type="button" class="tool-btn" id="game-play-again">`
-                    + `${escHtml(copy.gamePlayAgain)}</button>`
+                    `<button type="button" class="tool-btn" id="game-restart">`
+                    + `${escHtml(copy.gameRestart || copy.gamePlayAgain)}</button>`
                 );
+            } else if (metaPick.phase === 'reveal') {
+                const done = metaPickSession.rounds.length >= META_PICK_ROUNDS;
+                if (done) {
+                    actions.innerHTML = (
+                        `<button type="button" class="tool-btn" id="game-show-settle">`
+                        + `${escHtml(copy.gameShowSettle || 'Settlement')}</button>`
+                    );
+                } else {
+                    actions.innerHTML = (
+                        `<button type="button" class="tool-btn" id="game-next-round">`
+                        + `${escHtml(copy.gameNextRound || 'Next round')}</button>`
+                    );
+                }
             } else if (metaPick.phase === 'miss_offer') {
                 const hit = Math.max(0, META_PICK_NEED - (Number(metaPick.missMissing) || 0));
                 const scoreTxt = (copy.gameMissScore || ((h, t) => `答對：${h}/${t}`))(hit, META_PICK_NEED);
@@ -5650,18 +6186,30 @@
         }
         const footer = document.getElementById('game-footer');
         if (footer) {
-            footer.hidden = false;
+            footer.hidden = settling;
             footer.classList.toggle('is-miss', metaPick.phase === 'miss_offer');
         }
 
         const progress = document.getElementById('game-progress');
         if (progress) {
-            if (revealing || metaPick.phase === 'miss_offer') {
-                progress.hidden = true;
-                progress.textContent = '';
+            const roundLabel = (copy.gameRoundOf || ((a, b) => `Round ${a}/${b}`))(
+                Math.max(1, displayRound || 1),
+                META_PICK_ROUNDS,
+            );
+            if (settling) {
+                progress.hidden = false;
+                progress.textContent = (copy.gameRoundOf || ((a, b) => `Round ${a}/${b}`))(
+                    META_PICK_ROUNDS, META_PICK_ROUNDS,
+                );
+            } else if (metaPick.phase === 'miss_offer') {
+                progress.hidden = false;
+                progress.textContent = `${roundLabel} · ${copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED)}`;
+            } else if (revealing) {
+                progress.hidden = false;
+                progress.textContent = roundLabel;
             } else {
                 progress.hidden = false;
-                progress.textContent = copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED);
+                progress.textContent = `${roundLabel} · ${copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED)}`;
             }
         }
 
@@ -5739,9 +6287,20 @@
             }
         }
 
+        const settle = document.getElementById('game-settle');
+        if (settle) {
+            if (settling) {
+                settle.hidden = false;
+                settle.innerHTML = metaPickSettlementHtml(copy);
+            } else {
+                settle.hidden = true;
+                settle.innerHTML = '';
+            }
+        }
+
         const result = document.getElementById('game-result');
         if (result) {
-            if (!revealing) {
+            if (!revealing || settling) {
                 result.hidden = true;
                 result.innerHTML = '';
             } else {
@@ -5848,8 +6407,8 @@
                     + (isRankOne
                         // Gold #1/252 as the hero number — no mid-99.x PR, no duplicate sub-rank.
                         ? `<span class="game-metric-value is-rank-top" title="${escHtml(prTxt)} · ${escHtml(rankInfo.grade)}">${escHtml(rankTopTxt)}</span>`
-                        : (`<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade">${escHtml(rankInfo.grade)}</span></span>`
-                            + `<span class="game-metric-sub">${escHtml(rankTxt)}</span>`))
+                        : (`<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade ${metaPickGradeClass(rankInfo.grade)}">${escHtml(rankInfo.grade)}</span></span>`
+                            + `<span class="game-metric-sub ${metaPickGradeClass(rankInfo.grade)}">${escHtml(rankTxt)}</span>`))
                     + `</div>`
                     + `</div>`
 
@@ -5893,6 +6452,19 @@
                 );
             }
         }
+
+        // Hide pick chrome while settlement is front-and-center.
+        if (settling) {
+            const poolEl = document.getElementById('game-pool');
+            if (poolEl) { poolEl.hidden = true; poolEl.innerHTML = ''; }
+            const slotsEl = document.getElementById('game-slots');
+            if (slotsEl) { slotsEl.hidden = true; slotsEl.innerHTML = ''; }
+            const noticeEl = document.getElementById('game-notice');
+            if (noticeEl) { noticeEl.hidden = true; noticeEl.innerHTML = ''; }
+        }
+
+        // Leaderboard under the game (best-effort; no-op if base empty).
+        metaPickLoadLeaderboard();
     }
 
     function setDraftSide(side) {
@@ -7093,6 +7665,16 @@
         renderSidePanel();
     }
 
+    document.addEventListener('submit', (ev) => {
+        const form = ev.target && ev.target.closest ? ev.target.closest('#game-settle-form') : null;
+        if (!form) return;
+        ev.preventDefault();
+        const nickEl = document.getElementById('game-nick');
+        if (nickEl) metaPickSession.nickname = nickEl.value;
+        metaPickSubmitRun();
+        trackEvent('game_submit_run', {});
+    });
+
     document.addEventListener('click', (ev) => {
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
@@ -7306,9 +7888,29 @@
             trackEvent('game_reveal_early', {});
             return;
         }
-        if (ev.target.closest('#game-play-again')) {
-            metaPickPlayAgain();
-            trackEvent('game_play_again', {});
+        if (ev.target.closest('#game-play-again') || ev.target.closest('#game-next-round')) {
+            metaPickNextRound();
+            trackEvent('game_next_round', { rounds: metaPickSession.rounds.length });
+            return;
+        }
+        if (ev.target.closest('#game-show-settle')) {
+            metaPickSession.settled = true;
+            renderMetaPick();
+            trackEvent('game_show_settle', {});
+            return;
+        }
+        if (ev.target.closest('#game-restart')) {
+            metaPickRestartRun();
+            trackEvent('game_restart_run', {});
+            return;
+        }
+        if (ev.target.closest('#game-submit')) {
+            // Form submit handler also covers this; keep click path for safety.
+            ev.preventDefault();
+            const nickEl = document.getElementById('game-nick');
+            if (nickEl) metaPickSession.nickname = nickEl.value;
+            metaPickSubmitRun();
+            trackEvent('game_submit_run', {});
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');

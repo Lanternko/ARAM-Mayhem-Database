@@ -51,6 +51,13 @@ for _m in (_eng, _rnd):
                    "production and search still works (the client rebuilds its search index from "
                    "the payload on load). Use while iterating on site.css / site.js / copy; run a "
                    "normal build to refresh the data.")
+@click.option(
+    "--meta-pick-api-url",
+    envvar="ARAM_META_PICK_API_URL",
+    default="",
+    help="Base URL for Meta Pick leaderboard API (e.g. https://api.example.com). "
+         "Empty disables remote submit/board. Injected into site.js as __META_PICK_API_BASE__.",
+)
 def main(
     db: Path,
     queue_id: int,
@@ -70,6 +77,7 @@ def main(
     payload_out: Path | None,
     payload_url: str,
     shell_only: bool,
+    meta_pick_api_url: str,
 ) -> None:
     if patch_prefix == "auto":
         from aram_nn.site.db import latest_patch_prefix as _latest
@@ -90,6 +98,7 @@ def main(
             cloudflare_analytics_token=cloudflare_analytics_token,
             ga_measurement_id=ga_measurement_id, min_pair_games=min_pair_games,
             min_synergy_games=min_synergy_games,
+            meta_pick_api_url=meta_pick_api_url,
         )
         return
 
@@ -364,6 +373,7 @@ def main(
         icon_assets_dir=out_path.parent / "assets" / "icons",
         aug_global=aug_global,
         script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")

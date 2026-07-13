@@ -1312,6 +1312,7 @@ def render_html(
     icon_assets_dir: Path | None = None,
     aug_global: dict[int, dict] | None = None,
     script_assets_dir: Path | None = None,
+    meta_pick_api_url: str = "",
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -1708,6 +1709,9 @@ def render_html(
                 for t in TIER_ORDER
             },
         },
+        # Snapshot id for Meta Pick client/server parity (POST /api/meta-pick/runs).
+        # Internal patch string (e.g. 16.11), not the public display map (26.11).
+        "patch_prefix": patch_prefix or None,
         "min_games_per_pair": min_games_per_pair,
         "min_synergy_games": min_synergy_games,
         "patchChanges": patch_changes or {},
@@ -2251,10 +2255,10 @@ def render_html(
         "<div class='game-header-top'>"
         "<div class='game-header-text'>"
         "<h2 data-i18n-zh='Meta Pick' data-i18n-en='Meta Pick'>Meta Pick</h2>"
-        "<p class='game-sub' data-i18n-zh='挑選最佳陣容' "
-        "data-i18n-zh-cn='挑选最佳阵容' "
-        "data-i18n-en='Pick the best lineup'>"
-        "挑選最佳陣容</p>"
+        "<p class='game-sub' data-i18n-zh='5 回合挑戰：每回合從 10 隻挑最強 5 隻（鎖定前不顯示勝率）' "
+        "data-i18n-zh-cn='5 回合挑战：每回合从 10 只挑最强 5 只（锁定前不显示胜率）' "
+        "data-i18n-en='5-round challenge: each round pick the strongest 5 of 10 (WR hidden until lock)'>"
+        "5 回合挑戰：每回合從 10 隻挑最強 5 隻（鎖定前不顯示勝率）</p>"
         "</div>"
         # Hover/focus tip: how to think about team WR when playing Meta Pick.
         # data-i18n lives on leaf nodes only (applyLanguage sets textContent).
@@ -2285,9 +2289,23 @@ def render_html(
         "<div class='game-pool' id='game-pool' role='listbox' aria-multiselectable='true' "
         "aria-label='英雄池'></div>"
         "<div class='game-result' id='game-result' hidden></div>"
+        "<div class='game-settle' id='game-settle' hidden></div>"
         "<div class='game-footer' id='game-footer'>"
         "<div class='game-actions' id='game-actions'></div>"
         "</div>"
+        "<section class='game-board' id='game-board' aria-labelledby='game-board-title'>"
+        "<div class='game-board-head'>"
+        "<h3 class='game-board-title' id='game-board-title' "
+        "data-i18n-zh='全球排行榜' data-i18n-zh-cn='全球排行榜' "
+        "data-i18n-en='Global leaderboard'>全球排行榜</h3>"
+        "<p class='game-board-sub' id='game-board-sub' "
+        "data-i18n-zh='5 回合平均排名（越低越好）' "
+        "data-i18n-zh-cn='5 回合平均排名（越低越好）' "
+        "data-i18n-en='Average rank over 5 rounds (lower is better)'>"
+        "5 回合平均排名（越低越好）</p>"
+        "</div>"
+        "<div class='game-board-body' id='game-board-body'></div>"
+        "</section>"
         "</div>"
         "</section>"
     )
@@ -2353,6 +2371,11 @@ def render_html(
     js = js.replace("__BUILD_DATE__", json.dumps(build_date, ensure_ascii=False))
     js = js.replace("__PATCH_LABEL__", json.dumps(patch_label, ensure_ascii=False))
     js = js.replace("__TOTAL_GAMES__", json.dumps(f"{total_games:,}", ensure_ascii=False))
+    # Empty string disables remote Meta Pick submit/leaderboard on the client.
+    js = js.replace(
+        "__META_PICK_API_BASE__",
+        json.dumps((meta_pick_api_url or "").strip().rstrip("/"), ensure_ascii=False),
+    )
     js = js.replace(
         "__ROLE_LABELS__",
         json.dumps(
@@ -2424,6 +2447,7 @@ def _run_shell_only(
     payload_out: Path | None, payload_url: str, site_url: str, og_image: str,
     build_date: str, cloudflare_analytics_token: str, ga_measurement_id: str,
     min_pair_games: int, min_synergy_games: int,
+    meta_pick_api_url: str = "",
 ) -> None:
     """Regenerate index.html from the existing payload, skipping all data compute.
 
@@ -2447,6 +2471,9 @@ def _run_shell_only(
         )
     payload_text = payload_path.read_text(encoding="utf-8")
     payload = json.loads(payload_text)
+    # Stamp snapshot id when an older payload predates Meta Pick leaderboard.
+    if patch_prefix and not payload.get("patch_prefix"):
+        payload["patch_prefix"] = patch_prefix
     # Always (re)export Draft model on shell-only so migrations
     # (DeepSets → Composition LR) land without a multi-minute data rebuild.
     draft_model = load_draft_composition_lr_payload()
@@ -2554,6 +2581,7 @@ def _run_shell_only(
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
