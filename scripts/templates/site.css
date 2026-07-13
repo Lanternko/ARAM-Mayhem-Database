@@ -6276,15 +6276,20 @@
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 6px;
+        align-items: start;
     }
     .game-face {
         position: relative;
-        aspect-ratio: 1;
+        width: 100%;
+        aspect-ratio: 1 / 1;
         border-radius: 8px;
         border: 1px solid var(--border);
         background: var(--surface-sunken);
         overflow: hidden;
         min-width: 0;
+        box-sizing: border-box;
+        /* 避免被 grid stretch 拉成非正方形 */
+        align-self: start;
     }
     .game-face.is-empty {
         border-style: dashed;
@@ -6296,19 +6301,25 @@
         background: transparent;
     }
     .game-face img {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         object-fit: cover;
+        object-position: center center;
         display: block;
+        border-radius: 0;
     }
-    /* 陣容對照：tier 色框加厚 + 左下 WR */
+    /* 陣容對照：正方形 tier 框，頭像貼滿內緣（與主頁 .champ 同結構） */
     .game-face.is-home {
-        overflow: visible;
-        border: 4px solid var(--tier-color, #555);
+        overflow: hidden;
+        border: 3px solid var(--tier-color, #555);
         background: var(--chip-bg, #1a1d21);
+        /* 外框圓角；內緣由 overflow:hidden 裁切，icon 不服帖問題來自可見縫 */
+        border-radius: 8px;
     }
     .game-face.is-home[data-tier="OP"] {
-        border: 4px solid transparent;
+        border: 3px solid transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
             linear-gradient(135deg,
@@ -6319,7 +6330,7 @@
         box-shadow: 0 0 8px rgba(220,180,255,0.45);
     }
     .game-face.is-home[data-tier="T1"] {
-        border: 4px solid transparent;
+        border: 3px solid transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
             linear-gradient(135deg,
@@ -6332,7 +6343,8 @@
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .game-face.is-home img {
-        border-radius: 4px;
+        /* 填滿 padding-box，圓角交給外層 overflow 裁 */
+        border-radius: 0;
     }
     .game-face .wr {
         position: absolute;
