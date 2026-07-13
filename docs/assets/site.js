@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783929383");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783931164");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -4929,7 +4929,7 @@
     const META_PICK_ROUNDS = 5;
     const META_PICK_MIN_GAMES = 50;
     // Build-time inject; empty string = remote board/submit unavailable.
-    const META_PICK_API_BASE = "https://api.arammeta.com";
+    const META_PICK_API_BASE = "";
     const metaPick = {
         phase: 'idle', // idle | picking | miss_offer | reveal
         poolIds: [],
