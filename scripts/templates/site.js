@@ -5598,7 +5598,6 @@
             + `<span class="game-settle-avg-prefix">OVR</span>`
             + `<span class="game-settle-avg-num ${avgGradeCls}">${escHtml(avgOvrTxt)}</span>`
             + `</div>`
-            + `<div class="game-settle-avg-label">${escHtml(copy.gameSettleAvg || 'Average OVR')}</div>`
             + `<div class="game-settle-avg-sub">${escHtml(rankSub)}</div>`
             + `<div class="game-settle-ranks">${rankChips}</div>`
             + `<form class="game-settle-form" id="game-settle-form" autocomplete="nickname">`
