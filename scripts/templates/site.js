@@ -668,8 +668,8 @@
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
-    // Primary tabs: home (英雄) / augments / changes / column. Brand also → home.
-    const VIEWS = ['home', 'augments', 'draft', 'changes', 'column'];
+    // Primary tabs: home (英雄) / augments / draft / game / changes / column.
+    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'column'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [
@@ -1031,6 +1031,43 @@
             draftMetricPartial: '完成我方與對方各 5 隻英雄後計算',
             draftMetricUnavailable: '預測模型尚未載入或含未知英雄',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
+            gamePickCount: (n, max) => `已選 ${n}/${max}`,
+            gameLock: '鎖定',
+            gamePlayAgain: '再來一局',
+            gameMaxOnly: '最多選 5 隻。',
+            gameNeedFive: '請先選滿 5 隻再鎖定。',
+            gameMissTitle: '未答對',
+            gameMissNeed: k => `還差 ${k} 隻正解英雄`,
+            gameMissScore: (hit, total) => `答對：${hit}/${total}`,
+            gameHint: '提示',
+            gameReveal: '看答案',
+            gameHintUsed: '已使用提示：已鎖定 1 隻正解，請再選齊 5 隻。',
+            gameHintAuto: '前兩隻未全中正解 → 自動提示：已鎖定 1 隻正解，請再選齊 5 隻。',
+            gamePerfect: '完全正確！',
+            gameYourWr: '你的估計勝率',
+            gameOptimalWr: '最佳估計勝率',
+            gameYourTeam: '你的選擇',
+            gameBestTeam: '最佳 5 人',
+            gameDelta: '差距',
+            gameGrade: '評等',
+            gameRank: '排名',
+            gamePr: 'PR',
+            gameRankOf: (rank, total) => `#${rank} / ${total}`,
+            gamePrValue: pr => `PR ${pr}`,
+            gameHintBadge: '提示',
+            gameOptimalBadge: '最佳',
+            gameTagBoth: '選中·正解',
+            gameTagYours: '選中',
+            gameTagBest: '正解',
+            gameTagMiss: '未選',
+            gameLegendPicked: '選中未中（半灰）',
+            gameLegendCorrect: '正解（白框）',
+            gameLegendNeither: '未選（灰階）',
+            gameCompareTitle: '陣容對照',
+            gamePoolReview: '池中 10 隻（含單獨勝率）',
+            gameSoloWrList: '池中英雄單獨勝率',
+            gameWaitingData: '載入英雄資料中…',
+            gameNoPool: '目前沒有足夠樣本的英雄可開局。',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -1227,6 +1264,43 @@
             draftMetricPartial: 'Complete both 5-champion rosters to calculate',
             draftMetricUnavailable: 'Model not loaded or contains unknown champions',
             draftOnOtherSide: 'Already on the other team.',
+            gamePickCount: (n, max) => `Picked ${n}/${max}`,
+            gameLock: 'Lock in',
+            gamePlayAgain: 'Play again',
+            gameMaxOnly: 'You can only pick 5.',
+            gameNeedFive: 'Pick 5 champions before locking in.',
+            gameMissTitle: 'Not quite',
+            gameMissNeed: k => `${k} correct champion(s) still missing`,
+            gameMissScore: (hit, total) => `Correct: ${hit}/${total}`,
+            gameHint: 'Hint',
+            gameReveal: 'Answer',
+            gameHintUsed: 'Hint used: 1 correct champion pinned. Finish the 5.',
+            gameHintAuto: 'First two were not both correct → auto hint: 1 correct champion pinned. Finish the 5.',
+            gamePerfect: 'Perfect!',
+            gameYourWr: 'Your est. WR',
+            gameOptimalWr: 'Best est. WR',
+            gameYourTeam: 'Your pick',
+            gameBestTeam: 'Best 5',
+            gameDelta: 'Delta',
+            gameGrade: 'Grade',
+            gameRank: 'Rank',
+            gamePr: 'PR',
+            gameRankOf: (rank, total) => `#${rank} / ${total}`,
+            gamePrValue: pr => `PR ${pr}`,
+            gameHintBadge: 'Hint',
+            gameOptimalBadge: 'Best',
+            gameTagBoth: 'Picked · correct',
+            gameTagYours: 'Picked',
+            gameTagBest: 'Correct',
+            gameTagMiss: '—',
+            gameLegendPicked: 'Picked wrong (half-gray)',
+            gameLegendCorrect: 'Correct (white frame)',
+            gameLegendNeither: 'Not picked (gray)',
+            gameCompareTitle: 'Roster compare',
+            gamePoolReview: 'Pool of 10 (solo WR)',
+            gameSoloWrList: 'Solo win rates in this pool',
+            gameWaitingData: 'Loading champion data…',
+            gameNoPool: 'Not enough champions with sample size to start a round.',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
@@ -4643,6 +4717,709 @@
         }
     }
 
+    // ---- Meta Pick mini-game: 10 pool → pick 5 → lock → WR / one-time hint ----
+    const META_PICK_POOL = 10;
+    const META_PICK_NEED = 5;
+    const META_PICK_MIN_GAMES = 50;
+    const metaPick = {
+        phase: 'idle', // idle | picking | miss_offer | reveal
+        poolIds: [],
+        optimalIds: [],
+        optimalScore: 0,
+        /** All C(10,5) team est-WR scores for this pool (for PR / rank). */
+        allScores: [],
+        comboTotal: 0,
+        pickedIds: [],
+        pinnedIds: [],
+        hintUsed: false,
+        notice: '',
+        noticeKind: '',
+        missMissing: 0,
+        dealt: false,
+    };
+
+    function metaPickShuffle(arr, rng) {
+        const a = arr.slice();
+        const rand = typeof rng === 'function' ? rng : Math.random;
+        for (let i = a.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(rand() * (i + 1));
+            const t = a[i];
+            a[i] = a[j];
+            a[j] = t;
+        }
+        return a;
+    }
+
+    function metaPickSampleFrom(band, n, rng) {
+        if (n <= 0 || !band.length) return [];
+        return metaPickShuffle(band, rng).slice(0, Math.min(n, band.length));
+    }
+
+    function metaPickEligibleIds() {
+        const champs = (DATA && DATA.champs) || {};
+        return Object.keys(champs).filter(cid => {
+            const info = champs[cid];
+            if (!info) return false;
+            if (!Number.isFinite(Number(info.wr))) return false;
+            return (Number(info.g) || 0) >= META_PICK_MIN_GAMES;
+        });
+    }
+
+    /** Stratified sample: mix high / mid / low solo WR so boards stay interesting. */
+    function metaPickSamplePool(eligible, n, rng) {
+        const need = n || META_PICK_POOL;
+        const sorted = eligible.slice().sort((a, b) => {
+            const d = Number(DATA.champs[b].wr) - Number(DATA.champs[a].wr);
+            if (d) return d;
+            return String(a).localeCompare(String(b), undefined, { numeric: true });
+        });
+        if (sorted.length <= need) return metaPickShuffle(sorted, rng);
+        const third = Math.max(1, Math.floor(sorted.length / 3));
+        const high = sorted.slice(0, third);
+        const mid = sorted.slice(third, third * 2);
+        const low = sorted.slice(third * 2);
+        let pick = []
+            .concat(metaPickSampleFrom(high, 3, rng))
+            .concat(metaPickSampleFrom(mid, 4, rng))
+            .concat(metaPickSampleFrom(low, 3, rng));
+        // Top up if a band was thin.
+        if (pick.length < need) {
+            const used = new Set(pick);
+            const rest = metaPickShuffle(sorted.filter(id => !used.has(id)), rng);
+            pick = pick.concat(rest.slice(0, need - pick.length));
+        }
+        return metaPickShuffle(pick.slice(0, need), rng);
+    }
+
+    function metaPickCombinations(arr, k) {
+        const out = [];
+        const path = [];
+        function rec(start) {
+            if (path.length === k) {
+                out.push(path.slice());
+                return;
+            }
+            for (let i = start; i < arr.length; i += 1) {
+                path.push(arr[i]);
+                rec(i + 1);
+                path.pop();
+            }
+        }
+        rec(0);
+        return out;
+    }
+
+    function metaPickScoreTeam(ids) {
+        if (!ids || !ids.length) return 0.5;
+        return Number(evaluateFullTeam(ids).estWr) || 0.5;
+    }
+
+    /**
+     * Score every k-subset of the pool (C(n,k)). Returns best team + all scores
+     * so reveal can rank the player's est WR among the full distribution.
+     */
+    function metaPickScoreAllTeams(pool, k) {
+        const need = k || META_PICK_NEED;
+        const combos = metaPickCombinations(pool, need);
+        const scores = [];
+        let bestIds = null;
+        let bestScore = -Infinity;
+        let bestKey = '';
+        combos.forEach(ids => {
+            const score = metaPickScoreTeam(ids);
+            scores.push(score);
+            const key = ids.slice().sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })).join(',');
+            if (score > bestScore + 1e-12 || (Math.abs(score - bestScore) <= 1e-12 && (bestIds == null || key < bestKey))) {
+                bestScore = score;
+                bestIds = ids.slice();
+                bestKey = key;
+            }
+        });
+        return {
+            ids: bestIds || [],
+            score: Number.isFinite(bestScore) ? bestScore : 0.5,
+            scores,
+            total: scores.length,
+        };
+    }
+
+    function metaPickBestTeamOf(pool, k) {
+        const all = metaPickScoreAllTeams(pool, k);
+        return { ids: all.ids, score: all.score };
+    }
+
+    function metaPickSetsEqual(a, b) {
+        if (!a || !b || a.length !== b.length) return false;
+        const sa = a.map(String).slice().sort();
+        const sb = b.map(String).slice().sort();
+        for (let i = 0; i < sa.length; i += 1) {
+            if (sa[i] !== sb[i]) return false;
+        }
+        return true;
+    }
+
+    function metaPickMissingCount(userIds, optimalIds) {
+        const u = new Set((userIds || []).map(String));
+        let miss = 0;
+        (optimalIds || []).forEach(id => {
+            if (!u.has(String(id))) miss += 1;
+        });
+        return miss;
+    }
+
+    /**
+     * Rank player's team est WR among all C(10,5) scores.
+     * rank 1 = best; PR = classic percentile (higher = better).
+     * PR = 100 * (n_worse + 0.5 * n_tie) / n
+     */
+    function metaPickRankAmong(userScore, allScores) {
+        const scores = Array.isArray(allScores) ? allScores : [];
+        const n = scores.length;
+        if (!n) {
+            return { rank: 1, total: 0, pr: 0, worse: 0, ties: 0, grade: 'F' };
+        }
+        const u = Number(userScore);
+        let better = 0;
+        let worse = 0;
+        let ties = 0;
+        scores.forEach(s => {
+            const v = Number(s);
+            if (v > u + 1e-12) better += 1;
+            else if (v < u - 1e-12) worse += 1;
+            else ties += 1;
+        });
+        const rank = better + 1;
+        const prRaw = 100 * (worse + 0.5 * ties) / n;
+        const pr = Math.round(prRaw * 10) / 10;
+        let grade = 'F';
+        if (rank === 1) grade = 'S';
+        else if (pr >= 90) grade = 'A';
+        else if (pr >= 70) grade = 'B';
+        else if (pr >= 50) grade = 'C';
+        else if (pr >= 30) grade = 'D';
+        return { rank, total: n, pr, worse, ties, better, grade };
+    }
+
+    /** Prefer an optimal champ the user did not already have correct. */
+    function metaPickHintChamp(optimalIds, previousUserIds, rng) {
+        const prev = new Set((previousUserIds || []).map(String));
+        const missing = (optimalIds || []).filter(id => !prev.has(String(id)));
+        const pool = missing.length ? missing : (optimalIds || []).slice();
+        if (!pool.length) return null;
+        return metaPickSampleFrom(pool, 1, rng)[0] || null;
+    }
+
+    function metaPickResetRound() {
+        metaPick.phase = 'idle';
+        metaPick.poolIds = [];
+        metaPick.optimalIds = [];
+        metaPick.optimalScore = 0;
+        metaPick.allScores = [];
+        metaPick.comboTotal = 0;
+        metaPick.pickedIds = [];
+        metaPick.pinnedIds = [];
+        metaPick.hintUsed = false;
+        metaPick.notice = '';
+        metaPick.noticeKind = '';
+        metaPick.missMissing = 0;
+        metaPick.dealt = false;
+    }
+
+    function metaPickDealRound() {
+        const copy = tr();
+        metaPickResetRound();
+        if (!DATA || !DATA.champs) {
+            metaPick.phase = 'idle';
+            metaPick.notice = copy.gameWaitingData;
+            metaPick.noticeKind = '';
+            return;
+        }
+        const eligible = metaPickEligibleIds();
+        if (eligible.length < META_PICK_NEED) {
+            metaPick.phase = 'idle';
+            metaPick.notice = copy.gameNoPool;
+            metaPick.noticeKind = '';
+            return;
+        }
+        const pool = metaPickSamplePool(eligible, META_PICK_POOL);
+        // Score full C(10,5) once per deal — best answer + PR distribution.
+        const all = metaPickScoreAllTeams(pool, META_PICK_NEED);
+        metaPick.poolIds = pool;
+        metaPick.optimalIds = all.ids.map(String);
+        metaPick.optimalScore = all.score;
+        metaPick.allScores = all.scores;
+        metaPick.comboTotal = all.total;
+        metaPick.pickedIds = [];
+        metaPick.pinnedIds = [];
+        metaPick.hintUsed = false;
+        metaPick.phase = 'picking';
+        metaPick.dealt = true;
+        metaPick.notice = '';
+        metaPick.noticeKind = '';
+        metaPick.missMissing = 0;
+    }
+
+    function metaPickEnsureDealt() {
+        if (!metaPick.dealt || !metaPick.poolIds.length) metaPickDealRound();
+    }
+
+    function metaPickToggle(cid) {
+        if (metaPick.phase !== 'picking') return;
+        cid = String(cid);
+        if (!metaPick.poolIds.map(String).includes(cid)) return;
+        if (metaPick.pinnedIds.map(String).includes(cid)) return;
+        const idx = metaPick.pickedIds.map(String).indexOf(cid);
+        if (idx >= 0) {
+            metaPick.pickedIds = metaPick.pickedIds.filter(x => String(x) !== cid);
+            metaPick.notice = '';
+            metaPick.noticeKind = '';
+            return;
+        }
+        if (metaPick.pickedIds.length >= META_PICK_NEED) {
+            metaPick.notice = tr().gameMaxOnly;
+            metaPick.noticeKind = 'miss';
+            return;
+        }
+        metaPick.pickedIds.push(cid);
+        metaPick.notice = '';
+        metaPick.noticeKind = '';
+        // After the first two free picks: if they are not both optimal, auto-hint once.
+        metaPickMaybeAutoHintAfterTwo();
+    }
+
+    /** First two picks both in optimal set? Otherwise one-time auto hint. */
+    function metaPickMaybeAutoHintAfterTwo() {
+        if (metaPick.hintUsed || metaPick.phase !== 'picking') return;
+        // Only free-pick phase before any pin; count exact first two.
+        if (metaPick.pinnedIds.length || metaPick.pickedIds.length !== 2) return;
+        const opt = new Set(metaPick.optimalIds.map(String));
+        const bothHit = metaPick.pickedIds.every(id => opt.has(String(id)));
+        if (bothHit) return;
+        metaPickApplyHint({ auto: true });
+    }
+
+    function metaPickLock() {
+        if (metaPick.phase !== 'picking') return;
+        const copy = tr();
+        if (metaPick.pickedIds.length !== META_PICK_NEED) {
+            metaPick.notice = copy.gameNeedFive;
+            metaPick.noticeKind = 'miss';
+            renderMetaPick();
+            return;
+        }
+        const hit = metaPickSetsEqual(metaPick.pickedIds, metaPick.optimalIds);
+        if (hit) {
+            metaPick.phase = 'reveal';
+            metaPick.notice = copy.gamePerfect;
+            metaPick.noticeKind = 'ok';
+            metaPick.missMissing = 0;
+            renderMetaPick();
+            return;
+        }
+        const missing = metaPickMissingCount(metaPick.pickedIds, metaPick.optimalIds);
+        metaPick.missMissing = missing;
+        // Hint already auto-fired (or skipped because first two were both correct).
+        // On lock miss with hint remaining, offer manual hint once; else reveal.
+        if (!metaPick.hintUsed) {
+            metaPick.phase = 'miss_offer';
+            metaPick.notice = '';
+            metaPick.noticeKind = 'miss';
+            renderMetaPick();
+            return;
+        }
+        metaPick.phase = 'reveal';
+        metaPick.notice = '';
+        metaPick.noticeKind = 'miss';
+        renderMetaPick();
+    }
+
+    /**
+     * One-time hint: clear free picks, pin one optimal champ (prefer one not
+     * already correct in previous selection). `fromAuto` only affects copy.
+     */
+    function metaPickApplyHint(opts) {
+        const fromAuto = !!(opts && opts.auto);
+        if (metaPick.hintUsed) return false;
+        if (metaPick.phase !== 'picking' && metaPick.phase !== 'miss_offer') return false;
+        const prev = metaPick.pickedIds.slice();
+        const hintId = metaPickHintChamp(metaPick.optimalIds, prev);
+        if (!hintId) {
+            metaPick.phase = 'reveal';
+            return true;
+        }
+        metaPick.hintUsed = true;
+        metaPick.pinnedIds = [String(hintId)];
+        metaPick.pickedIds = [String(hintId)];
+        metaPick.phase = 'picking';
+        metaPick.notice = fromAuto
+            ? (tr().gameHintAuto || tr().gameHintUsed)
+            : tr().gameHintUsed;
+        metaPick.noticeKind = 'ok';
+        metaPick.missMissing = 0;
+        return true;
+    }
+
+    function metaPickUseHint() {
+        if (metaPick.phase !== 'miss_offer' || metaPick.hintUsed) return;
+        metaPickApplyHint({ auto: false });
+        renderMetaPick();
+    }
+
+    function metaPickShowAnswer() {
+        if (metaPick.phase !== 'miss_offer' && metaPick.phase !== 'picking') return;
+        // If still picking with a full roster after hint, allow "give up" only via lock.
+        if (metaPick.phase === 'miss_offer') {
+            metaPick.phase = 'reveal';
+            metaPick.notice = '';
+            metaPick.noticeKind = 'miss';
+            renderMetaPick();
+        }
+    }
+
+    function metaPickPlayAgain() {
+        metaPickDealRound();
+        renderMetaPick();
+    }
+
+    function metaPickWrToneClass(wr) {
+        if (wr >= 0.53) return 'is-good';
+        if (wr <= 0.47) return 'is-bad';
+        return 'is-even';
+    }
+
+    /** Status of one champ relative to picked set and best set. */
+    function metaPickChampRole(cid, pickedSet, bestSet) {
+        const id = String(cid);
+        const inPick = pickedSet.has(id);
+        const inBest = bestSet.has(id);
+        if (inPick && inBest) return 'both';
+        if (inPick) return 'yours';
+        if (inBest) return 'best';
+        return 'neither';
+    }
+
+    /**
+     * Arrange best-5 to mirror user pick order as much as possible:
+     * same champ → same slot; only-best champs fill the slots user missed.
+     */
+    function metaPickAlignBestToUser(userIds, bestIds) {
+        const user = (userIds || []).map(String);
+        const best = (bestIds || []).map(String);
+        const bestSet = new Set(best);
+        const out = new Array(Math.max(user.length, META_PICK_NEED)).fill(null);
+        const used = new Set();
+        user.forEach((id, i) => {
+            if (bestSet.has(id)) {
+                out[i] = id;
+                used.add(id);
+            }
+        });
+        const rest = best.filter(id => !used.has(id));
+        let r = 0;
+        for (let i = 0; i < out.length; i += 1) {
+            if (out[i] == null && r < rest.length) {
+                out[i] = rest[r];
+                r += 1;
+            }
+        }
+        // Drop trailing nulls if any, keep first META_PICK_NEED.
+        return out.filter(Boolean).slice(0, META_PICK_NEED);
+    }
+
+    function metaPickRoleLabel(role, copy) {
+        if (role === 'both') return copy.gameTagBoth || '雙方';
+        if (role === 'yours') return copy.gameTagYours || '你的';
+        if (role === 'best') return copy.gameTagBest || '最佳';
+        return copy.gameTagMiss || '—';
+    }
+
+    /** One horizontal roster strip of faces (+ optional role mark on reveal). */
+    function metaPickRosterFacesHtml(ids, opts) {
+        const copy = opts.copy || tr();
+        const pickedSet = opts.pickedSet || new Set();
+        const bestSet = opts.bestSet || new Set();
+        const markRoles = !!opts.markRoles;
+        const pinSet = opts.pinSet || new Set();
+        const padTo = opts.padTo != null ? opts.padTo : META_PICK_NEED;
+        const list = (ids || []).map(String);
+        const cells = [];
+        for (let i = 0; i < padTo; i += 1) {
+            const cid = list[i];
+            if (!cid) {
+                cells.push(`<div class="game-face is-empty" aria-hidden="true"><span>${i + 1}</span></div>`);
+                continue;
+            }
+            const info = (DATA.champs && DATA.champs[cid]) || {};
+            const name = champName(info, cid);
+            const img = info.image
+                ? `<img loading="lazy" src="${info.image}" alt="${escHtml(name)}">`
+                : '';
+            const role = markRoles ? metaPickChampRole(cid, pickedSet, bestSet) : '';
+            const isPin = pinSet.has(String(cid));
+            const cls = [
+                'game-face',
+                role ? `is-${role}` : '',
+                isPin ? 'is-pinned' : '',
+            ].filter(Boolean).join(' ');
+            // Pick phase: pin hint only. Reveal: yellow「選中」text on picked faces.
+            let mark = '';
+            if (!markRoles && isPin) {
+                mark = `<span class="game-face-mark is-hint">${escHtml(copy.gameHintBadge)}</span>`;
+            } else if (markRoles && (role === 'yours' || role === 'both')) {
+                mark = `<span class="game-face-mark is-picked">${escHtml(copy.gameTagYours || '選中')}</span>`;
+            }
+            const title = markRoles && role
+                ? `${name} · ${metaPickRoleLabel(role, copy)}`
+                : name;
+            cells.push(
+                `<div class="${cls}" title="${escHtml(title)}">`
+                + img
+                + mark
+                + `</div>`
+            );
+        }
+        return `<div class="game-faces">${cells.join('')}</div>`;
+    }
+
+    function renderMetaPick() {
+        const shell = document.querySelector('.view-game');
+        if (!shell) return;
+        metaPickEnsureDealt();
+        const copy = tr();
+        const revealing = metaPick.phase === 'reveal';
+        const interactive = metaPick.phase === 'picking';
+        const pinned = new Set(metaPick.pinnedIds.map(String));
+        const picked = new Set(metaPick.pickedIds.map(String));
+        const optimal = new Set(metaPick.optimalIds.map(String));
+
+        // Bottom footer: lock / play again / miss-offer (答對 k/5 + 提示 · 看答案).
+        const actions = document.getElementById('game-actions');
+        if (actions) {
+            if (metaPick.phase === 'reveal') {
+                actions.innerHTML = (
+                    `<button type="button" class="tool-btn" id="game-play-again">`
+                    + `${escHtml(copy.gamePlayAgain)}</button>`
+                );
+            } else if (metaPick.phase === 'miss_offer') {
+                const hit = Math.max(0, META_PICK_NEED - (Number(metaPick.missMissing) || 0));
+                const scoreTxt = (copy.gameMissScore || ((h, t) => `答對：${h}/${t}`))(hit, META_PICK_NEED);
+                actions.innerHTML = (
+                    `<div class="game-miss-bar">`
+                    + `<div class="game-miss-score">${escHtml(scoreTxt)}</div>`
+                    + `<div class="game-miss-btns">`
+                    + `<button type="button" class="tool-btn" id="game-hint">${escHtml(copy.gameHint)}</button>`
+                    + `<button type="button" class="tool-btn ghost" id="game-reveal">${escHtml(copy.gameReveal)}</button>`
+                    + `</div></div>`
+                );
+            } else {
+                const canLock = metaPick.pickedIds.length === META_PICK_NEED;
+                actions.innerHTML = (
+                    `<button type="button" class="tool-btn" id="game-lock" ${canLock ? '' : 'disabled'}>`
+                    + `${escHtml(copy.gameLock)}</button>`
+                );
+            }
+        }
+        const footer = document.getElementById('game-footer');
+        if (footer) {
+            footer.hidden = false;
+            footer.classList.toggle('is-miss', metaPick.phase === 'miss_offer');
+        }
+
+        const progress = document.getElementById('game-progress');
+        if (progress) {
+            if (revealing || metaPick.phase === 'miss_offer') {
+                progress.hidden = true;
+                progress.textContent = '';
+            } else {
+                progress.hidden = false;
+                progress.textContent = copy.gamePickCount(metaPick.pickedIds.length, META_PICK_NEED);
+            }
+        }
+
+        // Top notice: only auto-hint / other transient messages (not miss-offer).
+        const notice = document.getElementById('game-notice');
+        if (notice) {
+            let html = '';
+            if (metaPick.phase === 'miss_offer') {
+                notice.hidden = true;
+                notice.className = 'game-notice';
+            } else if (metaPick.notice && !revealing) {
+                html = escHtml(metaPick.notice);
+                notice.hidden = false;
+                notice.className = 'game-notice' + (metaPick.noticeKind ? ` is-${metaPick.noticeKind}` : '');
+            } else {
+                notice.hidden = true;
+                notice.className = 'game-notice';
+            }
+            notice.innerHTML = html;
+        }
+
+        // During pick: show selected slots. During reveal: hide — comparison lives in result.
+        const slots = document.getElementById('game-slots');
+        if (slots) {
+            if (revealing) {
+                slots.hidden = true;
+                slots.innerHTML = '';
+            } else {
+                slots.hidden = false;
+                slots.innerHTML = metaPickRosterFacesHtml(metaPick.pickedIds, {
+                    copy,
+                    pinSet: pinned,
+                    padTo: META_PICK_NEED,
+                });
+            }
+        }
+
+        const pool = document.getElementById('game-pool');
+        if (pool) {
+            if (revealing) {
+                // Pool review is folded into the result panel for clearer hierarchy.
+                pool.hidden = true;
+                pool.innerHTML = '';
+            } else if (!metaPick.poolIds.length) {
+                pool.hidden = false;
+                pool.innerHTML = `<div class="panel-empty">${escHtml(metaPick.notice || copy.gameWaitingData)}</div>`;
+            } else {
+                pool.hidden = false;
+                pool.innerHTML = metaPick.poolIds.map(cid => {
+                    const id = String(cid);
+                    const info = DATA.champs[id] || {};
+                    const name = champName(info, id);
+                    const img = info.image ? `<img loading="lazy" src="${info.image}" alt="">` : '';
+                    const isPin = pinned.has(id);
+                    const isPicked = picked.has(id);
+                    const cls = [
+                        'game-tile',
+                        isPicked ? 'is-picked' : '',
+                        isPin ? 'is-pinned' : '',
+                    ].filter(Boolean).join(' ');
+                    const disabled = (!interactive || isPin) ? ' disabled' : '';
+                    const pinMark = isPin
+                        ? `<span class="game-tile-mark">${escHtml(copy.gameHintBadge)}</span>`
+                        : '';
+                    return (
+                        `<button type="button" class="${cls}" data-game-pick="${id}" role="option" `
+                        + `aria-selected="${isPicked ? 'true' : 'false'}"${disabled}>`
+                        + pinMark
+                        + `<span class="game-tile-art">${img}</span>`
+                        + `<span class="game-tile-name">${escHtml(name)}</span>`
+                        + `</button>`
+                    );
+                }).join('');
+            }
+        }
+
+        const result = document.getElementById('game-result');
+        if (result) {
+            if (!revealing) {
+                result.hidden = true;
+                result.innerHTML = '';
+            } else {
+                const userScore = metaPickScoreTeam(metaPick.pickedIds);
+                const bestScore = metaPick.optimalScore || metaPickScoreTeam(metaPick.optimalIds);
+                let scores = metaPick.allScores;
+                if (!scores || !scores.length) {
+                    scores = metaPickScoreAllTeams(metaPick.poolIds, META_PICK_NEED).scores;
+                    metaPick.allScores = scores;
+                    metaPick.comboTotal = scores.length;
+                }
+                const rankInfo = metaPickRankAmong(userScore, scores);
+                const deltaPp = (userScore - bestScore) * 100;
+                const deltaTxt = (deltaPp >= 0 ? '+' : '') + deltaPp.toFixed(1) + ' pp';
+                const prTxt = (copy.gamePrValue || (p => `PR ${p}`))(rankInfo.pr);
+                const rankTxt = (copy.gameRankOf || ((r, t) => `#${r} / ${t}`))(rankInfo.rank, rankInfo.total);
+
+                // Keep the user's pick order; align best-5 into the same slots
+                // (shared champs stay put; only-best fill the missed slots).
+                const yourIds = metaPick.pickedIds.map(String);
+                const bestIds = metaPickAlignBestToUser(yourIds, metaPick.optimalIds);
+
+                const yourFaces = metaPickRosterFacesHtml(yourIds, {
+                    copy, pickedSet: picked, bestSet: optimal, markRoles: true, padTo: META_PICK_NEED,
+                });
+                const bestFaces = metaPickRosterFacesHtml(bestIds, {
+                    copy, pickedSet: picked, bestSet: optimal, markRoles: true, padTo: META_PICK_NEED,
+                });
+
+                const ranked = metaPick.poolIds.slice().sort((a, b) => {
+                    const d = Number(DATA.champs[b].wr) - Number(DATA.champs[a].wr);
+                    if (d) return d;
+                    return String(a).localeCompare(String(b), undefined, { numeric: true });
+                });
+                const listHtml = ranked.map((cid, i) => {
+                    const id = String(cid);
+                    const info = DATA.champs[id] || {};
+                    const name = champName(info, id);
+                    const img = info.image ? `<img loading="lazy" src="${info.image}" alt="">` : '<span class="game-review-ph"></span>';
+                    const wr = Number(info.wr);
+                    const role = metaPickChampRole(id, picked, optimal);
+                    // Status colors restored; half-grayscale only on 陣容對照 faces (not this list).
+                    return (
+                        `<li class="game-review-row is-${role}" title="${escHtml(metaPickRoleLabel(role, copy))}">`
+                        + `<span class="game-review-rank">${i + 1}</span>`
+                        + img
+                        + `<span class="game-review-name">${escHtml(name)}</span>`
+                        + `<span class="game-review-wr">${Number.isFinite(wr) ? pct(wr) : '—'}</span>`
+                        + `</li>`
+                    );
+                }).join('');
+
+                const noticeLine = metaPick.notice
+                    ? `<div class="game-result-banner is-${metaPick.noticeKind || 'ok'}">${escHtml(metaPick.notice)}</div>`
+                    : '';
+
+                result.hidden = false;
+                result.innerHTML = (
+                    noticeLine
+                    + `<div class="game-metrics" role="group" aria-label="${escHtml(copy.gameGrade)}">`
+                    + `<div class="game-metric">`
+                    + `<span class="game-metric-label">${escHtml(copy.gameYourWr)}</span>`
+                    + `<span class="game-metric-value ${metaPickWrToneClass(userScore)}">${pct(userScore)}</span>`
+                    + `</div>`
+                    + `<div class="game-metric">`
+                    + `<span class="game-metric-label">${escHtml(copy.gameOptimalWr)}</span>`
+                    + `<span class="game-metric-value ${metaPickWrToneClass(bestScore)}">${pct(bestScore)}</span>`
+                    + `<span class="game-metric-sub">${escHtml(deltaTxt)}</span>`
+                    + `</div>`
+                    + `<div class="game-metric">`
+                    + `<span class="game-metric-label">${escHtml(copy.gamePr || 'PR')}</span>`
+                    + `<span class="game-metric-value">${escHtml(prTxt)} <span class="game-metric-grade">${escHtml(rankInfo.grade)}</span></span>`
+                    + `<span class="game-metric-sub">${escHtml(rankTxt)}</span>`
+                    + `</div>`
+                    + `</div>`
+
+                    + `<div class="game-compare">`
+                    + `<div class="game-compare-head">${escHtml(copy.gameCompareTitle || '陣容對照')}</div>`
+                    + `<div class="game-compare-row is-yours">`
+                    + `<div class="game-compare-meta">`
+                    + `<span class="game-compare-label">${escHtml(copy.gameYourTeam || '你的選擇')}</span>`
+                    + `<span class="game-compare-wr ${metaPickWrToneClass(userScore)}">${pct(userScore)}</span>`
+                    + `</div>`
+                    + yourFaces
+                    + `</div>`
+                    + `<div class="game-compare-row is-best">`
+                    + `<div class="game-compare-meta">`
+                    + `<span class="game-compare-label">${escHtml(copy.gameBestTeam || '最佳 5 人')}</span>`
+                    + `<span class="game-compare-wr ${metaPickWrToneClass(bestScore)}">${pct(bestScore)}</span>`
+                    + `</div>`
+                    + bestFaces
+                    + `</div>`
+                    + `<div class="game-legend" aria-label="legend">`
+                    + `<span class="game-legend-item is-neither"><i></i>${escHtml(copy.gameLegendNeither || '未選（灰階）')}</span>`
+                    + `<span class="game-legend-item is-picked">${escHtml(copy.gameLegendPicked || '選中未中（半灰）')}</span>`
+                    + `<span class="game-legend-item is-correct"><i></i>${escHtml(copy.gameLegendCorrect || '正解（白框）')}</span>`
+                    + `</div>`
+                    + `</div>`
+
+                    + `<div class="game-review">`
+                    + `<div class="game-review-head">${escHtml(copy.gamePoolReview || copy.gameSoloWrList)}</div>`
+                    + `<ol class="game-review-list">${listHtml}</ol>`
+                    + `</div>`
+                );
+            }
+        }
+    }
+
     function setDraftSide(side) {
         draftSide = side === 'enemy' ? 'enemy' : 'ally';
         pickNotice = '';
@@ -5537,6 +6314,9 @@
             if (name === 'draft') {
                 renderDraft();
             }
+            if (name === 'game') {
+                renderMetaPick();
+            }
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
@@ -5672,6 +6452,9 @@
         // data-i18n chrome has already flipped.
         if (document.querySelector('.view-draft.is-active')) {
             renderDraft();
+        }
+        if (document.querySelector('.view-game.is-active')) {
+            renderMetaPick();
         }
 
         moveTabIndicator();
@@ -6000,6 +6783,38 @@
         if (ev.target.closest('#draft-clear')) {
             clearDraft();
             trackEvent('draft_clear', {});
+            return;
+        }
+        const gamePick = ev.target.closest('[data-game-pick]');
+        if (gamePick) {
+            const cid = gamePick.getAttribute('data-game-pick');
+            metaPickToggle(cid);
+            renderMetaPick();
+            trackEvent('game_pick_toggle', { champion_id: cid, picks: metaPick.pickedIds.length });
+            return;
+        }
+        if (ev.target.closest('#game-lock')) {
+            metaPickLock();
+            trackEvent('game_lock', {
+                picks: metaPick.pickedIds.length,
+                phase: metaPick.phase,
+                hint_used: metaPick.hintUsed,
+            });
+            return;
+        }
+        if (ev.target.closest('#game-hint')) {
+            metaPickUseHint();
+            trackEvent('game_hint', { pinned: metaPick.pinnedIds[0] || '' });
+            return;
+        }
+        if (ev.target.closest('#game-reveal')) {
+            metaPickShowAnswer();
+            trackEvent('game_reveal_early', {});
+            return;
+        }
+        if (ev.target.closest('#game-play-again')) {
+            metaPickPlayAgain();
+            trackEvent('game_play_again', {});
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');

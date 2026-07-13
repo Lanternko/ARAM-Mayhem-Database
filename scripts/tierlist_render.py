@@ -409,16 +409,19 @@ def discover_column_article_ids(site_js: str | None = None) -> list[str]:
 SPA_FULL_SHELL_PATHS = frozenset({
     "/augments",
     "/draft",
+    "/game",
     "/changes",
     "/column",
     "/en",
     "/en/augments",
     "/en/draft",
+    "/en/game",
     "/en/changes",
     "/en/column",
     "/zh-CN",
     "/zh-CN/augments",
     "/zh-CN/draft",
+    "/zh-CN/game",
     "/zh-CN/changes",
     "/zh-CN/column",
 })
@@ -854,6 +857,13 @@ def write_spa_path_shells(
             "zh-Hant",
         ),
         (
+            root / "game" / "index.html",
+            "/game",
+            "Meta Pick · arammeta",
+            "從 10 隻英雄挑最強 5 隻：小遊戲",
+            "zh-Hant",
+        ),
+        (
             root / "changes" / "index.html",
             "/changes",
             "版本變動 · arammeta",
@@ -884,6 +894,13 @@ def write_spa_path_shells(
             "en",
         ),
         (
+            root / "en" / "game" / "index.html",
+            "/en/game",
+            "Meta Pick · arammeta",
+            "Pick the strongest 5 of 10: mini-game",
+            "en",
+        ),
+        (
             root / "en" / "changes" / "index.html",
             "/en/changes",
             "Patch Changes · arammeta",
@@ -911,6 +928,13 @@ def write_spa_path_shells(
             "/zh-CN/draft",
             "Draft · arammeta",
             "组队 Draft：估计胜率与队伍特性",
+            "zh-Hans",
+        ),
+        (
+            root / "zh-CN" / "game" / "index.html",
+            "/zh-CN/game",
+            "Meta Pick · arammeta",
+            "从 10 只英雄挑最强 5 只：小游戏",
             "zh-Hans",
         ),
         (
@@ -1885,8 +1909,10 @@ def render_html(
         ("home", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
         ("draft", "Draft", "Draft", None),
+        ("game", "小遊戲", "Game", "小游戏"),
         ("changes", "版本變動", "Patch Changes", None),
-        ("column", "專欄", "Articles", None),
+        # 專欄 temporarily hidden from primary nav (routes/view still exist).
+        # ("column", "專欄", "Articles", None),
     )
     sun_icon = (
         "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -2212,6 +2238,35 @@ def render_html(
         "</button>"
         "<div class='draft-slots' id='draft-enemy-slots'></div>"
         "</aside>"
+        "</div>"
+        "</section>"
+    )
+
+    # ---- View: Meta Pick mini-game — pick 5 of 10, hidden WR until reveal ----
+    parts.append(
+        "<section class='view view-game' id='view-game' data-view='game' "
+        "role='tabpanel' aria-labelledby='tab-game'>"
+        "<div class='game-shell'>"
+        "<header class='game-header'>"
+        "<div class='game-header-text'>"
+        "<span class='game-kicker' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' "
+        "data-i18n-en='MINI GAME'>小遊戲</span>"
+        "<h2 data-i18n-zh='Meta Pick' data-i18n-en='Meta Pick'>Meta Pick</h2>"
+        "<p class='game-sub' data-i18n-zh='從 10 隻英雄中挑最強的 5 隻（鎖定前不顯示勝率）' "
+        "data-i18n-zh-cn='从 10 只英雄中挑最强的 5 只（锁定前不显示胜率）' "
+        "data-i18n-en='Pick the strongest 5 of 10 (win rates hidden until lock)'>"
+        "從 10 隻英雄中挑最強的 5 隻（鎖定前不顯示勝率）</p>"
+        "</div>"
+        "</header>"
+        "<div class='game-notice' id='game-notice' hidden></div>"
+        "<div class='game-progress' id='game-progress'></div>"
+        "<div class='game-slots' id='game-slots' aria-label='已選英雄'></div>"
+        "<div class='game-pool' id='game-pool' role='listbox' aria-multiselectable='true' "
+        "aria-label='英雄池'></div>"
+        "<div class='game-result' id='game-result' hidden></div>"
+        "<div class='game-footer' id='game-footer'>"
+        "<div class='game-actions' id='game-actions'></div>"
+        "</div>"
         "</div>"
         "</section>"
     )
