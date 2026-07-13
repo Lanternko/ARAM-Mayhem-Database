@@ -349,11 +349,11 @@
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
             const valTxt = signed ? ((a.delta || 0) >= 0 ? '+' : '') + (a.delta || 0).toFixed(1) : String(Math.round((a.pct || 0) * 100));
             const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : '#7fc8ff';
-            const estW = Math.max(28, (String(a.label || '').length + String(valTxt).length + 1) * 7.2);
+            const estW = Math.max(32, (String(a.label || '').length + String(valTxt).length + 1) * 8.6);
             const edgePad = 4;
             if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="12" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="15" font-weight="600" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label)} <tspan fill="${valCol}">${valTxt}</tspan></text>`;
         }).join('');
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
@@ -401,11 +401,11 @@
             let [lx, ly] = at(i, labelR);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
             // Keep label ink inside viewBox: end-anchor text grows left, start grows right.
-            const estW = Math.max(24, String(a.label || '').length * 7.2);
+            const estW = Math.max(28, String(a.label || '').length * 8.6);
             const edgePad = 4;
             if (anchor === 'end') lx = Math.max(lx, estW + edgePad);
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
-            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="12" text-anchor="${anchor}" fill="#c2c7ce">${escHtml(a.label || '')}</text>`;
+            return `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" font-size="15" font-weight="600" text-anchor="${anchor}" fill="#d4d8de">${escHtml(a.label || '')}</text>`;
         }).join('');
         return `<svg class="comp-radar is-overlay" viewBox="0 0 ${RADAR_VB_W} ${RADAR_VB_H}" width="100%" role="img" aria-label="${escHtml(ariaLabel || '')}">${grid}${spokes}${polys}${labels}</svg>`;
     }
