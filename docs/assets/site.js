@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783931882");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783931950");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -1429,8 +1429,8 @@
             gameAxisEngage: 'Engage',
             gameAxisWave: 'Wave',
             gameAxisChem: 'Synergy',
-            gameAxisStrength: 'Champ strength',
-            gameEvalStrength: 'Champ strength',
+            gameAxisStrength: 'Strength',
+            gameEvalStrength: 'Strength',
             gameEvalStrengthTip: 'Mean solo WR of the 5 (not a PR)',
             gameEvalWave: 'Wave',
             gameEvalMix: 'Damage mix',
