@@ -6191,6 +6191,53 @@
         object-fit: cover;
         display: block;
     }
+    /* 陣容對照：與主頁 .champ / Draft 池相同 — tier 色框 + 左下 WR */
+    .game-face.is-home {
+        overflow: visible;
+        border: 2px solid var(--tier-color, #555);
+        background: var(--chip-bg, #1a1d21);
+    }
+    .game-face.is-home[data-tier="OP"] {
+        border-color: transparent;
+        background:
+            linear-gradient(#1f2530, #1f2530) padding-box,
+            linear-gradient(135deg,
+                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+        background-size: auto, 220% 220%;
+        animation: prismShift 6s ease-in-out infinite;
+        box-shadow: 0 0 8px rgba(220,180,255,0.45);
+    }
+    .game-face.is-home[data-tier="T1"] {
+        border-color: transparent;
+        background:
+            linear-gradient(#1f2530, #1f2530) padding-box,
+            linear-gradient(135deg,
+                #ffb380 0%,
+                #ff5a3c 32%,
+                #c8262c 62%,
+                #ff8050 100%) border-box;
+        background-size: auto, 220% 220%;
+        animation: prismShift 9s ease-in-out infinite;
+        box-shadow: 0 0 6px rgba(255,90,60,0.42);
+    }
+    .game-face.is-home img {
+        border-radius: 6px;
+    }
+    .game-face .wr {
+        position: absolute;
+        left: 2px;
+        bottom: 2px;
+        font-size: 10px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums lining-nums;
+        padding: 1px 4px;
+        border-radius: 6px;
+        color: #e6e8eb;
+        background: rgba(14,17,22,0.9);
+        pointer-events: none;
+        z-index: 2;
+    }
     .game-face-mark {
         position: absolute;
         left: 3px;
@@ -6207,52 +6254,38 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        z-index: 3;
     }
     .game-face-mark.is-hint {
         background: var(--accent);
         color: var(--accent-on);
         border-color: transparent;
     }
-    /* 未選=灰階；正解=白框；選中未答對=無框白字；選中且正解=白框+黃字 */
-    .game-face.is-neither {
-        border-color: var(--border);
-    }
+    /* 未選=灰階；正解=主頁 tier 框 + 全彩；選中未中=更灰（無額外外框） */
     .game-face.is-neither img {
         filter: grayscale(1);
+        opacity: 0.55;
+    }
+    .game-face.is-neither .wr {
         opacity: 0.72;
     }
-    /* 正解：白框框住整格 */
-    .game-face.is-best,
-    .game-face.is-both {
-        border: 2px solid rgba(255, 255, 255, 0.88);
-        box-shadow: none;
-        outline: none;
-    }
-    /* 選中未答對：無框、半灰階 */
-    .game-face.is-yours {
-        border-color: var(--border);
-        box-shadow: none;
-    }
-    .game-face.is-yours img {
-        filter: grayscale(0.55);
-        opacity: 0.88;
-    }
-    .game-face.is-pinned {
-        border-color: var(--accent);
-    }
-    /* 選中未答對：白字；選中且正解：黃字 */
-    .game-face-mark.is-picked {
-        color: #e8eaed;
-        background: rgba(10, 11, 13, 0.82);
-        border-color: transparent;
-        font-weight: 700;
-    }
-    .game-face.is-both .game-face-mark.is-picked {
-        color: var(--accent-soft);
-    }
-    .game-face.is-both img {
+    /* 正解：僅主頁 tier 框 + 全彩，無額外外框 */
+    .game-face.is-both img,
+    .game-face.is-best img {
         filter: none;
         opacity: 1;
+    }
+    /* 選中未答對：肖像更灰（tier 框保留主頁色） */
+    .game-face.is-yours img {
+        filter: grayscale(0.95) brightness(0.7);
+        opacity: 0.55;
+    }
+    .game-face.is-yours .wr {
+        opacity: 0.65;
+        color: #b8bcc2;
+    }
+    .game-face.is-pinned:not(.is-home) {
+        border-color: var(--accent);
     }
 
     /* Pick pool — compact champ-like tiles */
@@ -6516,6 +6549,15 @@
         border-top: 1px solid var(--border);
         background: var(--surface-2);
     }
+    /* 圖例只放在「英雄池」列表下方；隊伍分析不顯示這行 */
+    .game-legend-under-pool {
+        margin: 0;
+        border-top: 1px solid var(--border);
+        border-radius: 0 0 10px 10px;
+    }
+    .game-tab-panel[data-game-tab-panel="pool"] .game-review-list {
+        border-bottom: 0;
+    }
     .game-legend-item {
         display: inline-flex;
         align-items: center;
@@ -6538,33 +6580,48 @@
         border-color: #4b5563;
         filter: grayscale(1);
     }
-    .game-legend-item.is-correct i {
-        background: transparent;
-        border: 2px solid rgba(255, 255, 255, 0.88);
-        box-shadow: none;
-    }
-    .game-legend-item.is-picked {
-        color: #e8eaed;
-    }
-    .game-legend-item.is-picked i {
-        display: none;
-    }
+    /* legend color rules live near .game-review-row below */
 
-    .game-review {
+    /* Reveal sub-tabs: 英雄池 | 隊伍分析 */
+    .game-panels {
         border: 1px solid var(--border);
         border-radius: 10px;
         background: var(--surface);
         overflow: hidden;
     }
-    .game-review-head {
-        padding: 8px 12px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        color: var(--text-dim);
+    .game-tabs {
+        display: flex;
+        gap: 0;
         border-bottom: 1px solid var(--border);
         background: var(--surface-2);
+        padding: 0 4px;
     }
+    .game-tab {
+        appearance: none;
+        border: 0;
+        background: transparent;
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        padding: 10px 14px;
+        margin: 0;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+    }
+    .game-tab:hover { color: var(--text); }
+    .game-tab.is-active {
+        color: var(--text);
+        border-bottom-color: var(--accent, #f5c518);
+    }
+    .game-tab-panel {
+        padding: 0;
+    }
+    .game-tab-panel[hidden] { display: none !important; }
+    .game-tab-panel.is-active { display: block; }
+
     .game-review-list {
         margin: 0;
         padding: 6px;
@@ -6573,15 +6630,230 @@
         grid-template-columns: 1fr 1fr;
         gap: 4px 8px;
     }
+
+    /* Team analysis tab — best team only: radar + grade card */
+    .game-analysis {
+        padding: 10px 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .game-an-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px 16px;
+    }
+    .game-an-head-left {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        min-width: 0;
+    }
+    .game-an-head-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: 0.02em;
+    }
+    .game-an-legend {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 12px;
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+    .game-an-swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+        margin-right: 2px;
+        vertical-align: -1px;
+    }
+    .game-an-swatch.is-yours { background: rgba(196, 200, 208, 0.9); }
+    .game-an-swatch.is-best { background: var(--accent, #f5c518); }
+    /* 右上角大字勝率 */
+    .game-an-wr-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        line-height: 1;
+        flex-shrink: 0;
+        margin-left: auto;
+        text-align: right;
+    }
+    .game-an-wr-num {
+        font-size: clamp(28px, 6vw, 40px);
+        font-weight: 800;
+        font-variant-numeric: tabular-nums lining-nums;
+        letter-spacing: -0.02em;
+        color: var(--text);
+    }
+    .game-an-wr-hero.is-good .game-an-wr-num { color: #22c55e; }
+    .game-an-wr-hero.is-bad .game-an-wr-num { color: #ff4d5e; }
+    .game-an-wr-hero.is-even .game-an-wr-num { color: var(--text); }
+    .game-an-wr-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--text-dim);
+    }
+    /* 紅 AD · 藍 AP · 白 True — bar 縮短，不拉滿寬 */
+    .game-an-mix {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-width: min(100%, 420px);
+        margin: 0;
+        padding-bottom: 0;
+    }
+    .game-an-mix-main {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+    .game-an-mix-bar {
+        display: flex;
+        height: 12px;
+        width: 100%;
+        max-width: 360px;
+        border-radius: 999px;
+        overflow: hidden;
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent);
+    }
+    .game-an-mix-bar > span {
+        display: block;
+        height: 100%;
+        min-width: 0;
+    }
+    .game-an-mix-bar .is-ad { background: #ef4444; }
+    .game-an-mix-bar .is-ap { background: #3b82f6; }
+    .game-an-mix-bar .is-true {
+        background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.45);
+    }
+    [data-theme="light"] .game-an-mix-bar .is-true {
+        background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+        box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.35);
+    }
+    .game-an-mix-labels {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-muted);
+    }
+    .game-an-mix-labels > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .game-an-mix-labels i {
+        width: 8px;
+        height: 8px;
+        border-radius: 2px;
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .game-an-mix-labels .is-ad { color: #f87171; }
+    .game-an-mix-labels .is-ad i { background: #ef4444; }
+    .game-an-mix-labels .is-ap { color: #60a5fa; }
+    .game-an-mix-labels .is-ap i { background: #3b82f6; }
+    .game-an-mix-labels .is-true { color: var(--text-muted); }
+    .game-an-mix-labels .is-true i {
+        background: #e2e8f0;
+        box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.5);
+    }
+    [data-theme="light"] .game-an-mix-labels .is-ad { color: #dc2626; }
+    [data-theme="light"] .game-an-mix-labels .is-ap { color: #2563eb; }
+    .game-an-dims-split.is-best-only {
+        display: grid;
+        grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+        gap: 10px 16px;
+        align-items: center;
+        margin-top: 0;
+        padding-top: 0;
+    }
+    /* bar 與雷達之間不要留大空白 */
+    .game-analysis > .game-an-mix + .game-an-dims-split {
+        margin-top: 2px;
+    }
+    @media (max-width: 560px) {
+        .game-an-dims-split.is-best-only { grid-template-columns: 1fr; }
+    }
+    .game-an-radar { min-width: 0; }
+    .game-an-radar .comp-radar { width: 100%; max-height: 220px; }
+    .game-an-grades {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        min-width: 0;
+    }
+    @media (max-width: 400px) {
+        .game-an-grades { grid-template-columns: 1fr; }
+    }
+    .game-an-grade {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface-2);
+        min-width: 0;
+    }
+    .game-an-grade-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .game-an-grade-val {
+        font-size: 18px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+        color: var(--text);
+        flex-shrink: 0;
+    }
+    .game-an-grade.is-num .game-an-grade-val {
+        font-size: 20px;
+        color: var(--accent, #f5c518);
+    }
+    .game-an-grade.is-grade-s .game-an-grade-val { color: #f5c518; }
+    .game-an-grade.is-grade-ap .game-an-grade-val,
+    .game-an-grade.is-grade-a .game-an-grade-val { color: #4ade80; }
+    .game-an-grade.is-grade-bp .game-an-grade-val,
+    .game-an-grade.is-grade-b .game-an-grade-val { color: #7dd3fc; }
+    .game-an-grade.is-grade-cp .game-an-grade-val,
+    .game-an-grade.is-grade-c .game-an-grade-val { color: #d1d5db; }
+    .game-an-grade.is-grade-d .game-an-grade-val,
+    .game-an-grade.is-grade-f .game-an-grade-val { color: #f87171; }
+    [data-theme="light"] .game-an-grade.is-grade-a .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-ap .game-an-grade-val { color: #15803d; }
+    [data-theme="light"] .game-an-grade.is-grade-d .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-f .game-an-grade-val { color: #c62828; }
     @media (max-width: 520px) {
         .game-review-list { grid-template-columns: 1fr; }
     }
     .game-review-row {
         display: grid;
-        grid-template-columns: 22px 28px minmax(0, 1fr) auto;
+        grid-template-columns: 22px minmax(0, 1fr) auto;
         gap: 6px;
         align-items: center;
-        padding: 6px 8px;
+        padding: 8px 8px;
         margin: 0;
         border-radius: 8px;
         border: 1px solid transparent;
@@ -6589,39 +6861,59 @@
         box-sizing: border-box;
         min-width: 0;
     }
-    /* 池中列表：狀態色可有，但「選中未中」不要半灰階（半灰只在陣容對照） */
-    .game-review-row.is-neither {
-        color: var(--text-dim);
+    /* 頭像 + 名字；寬度跟內容走（勿被 grid 1fr 拉滿，否則黃圈會爆大） */
+    .game-review-main {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        width: max-content;
+        max-width: 100%;
+        justify-self: start;
+        padding: 4px 10px 4px 4px;
+        box-sizing: border-box;
+        min-width: 0;
     }
-    .game-review-row.is-neither img,
-    .game-review-row.is-neither .game-review-ph {
-        filter: grayscale(1);
-        opacity: 0.72;
+    .game-review-face {
+        position: relative;
+        width: 28px;
+        height: 28px;
+        flex-shrink: 0;
+        display: block;
+        z-index: 1;
     }
-    .game-review-row.is-neither .game-review-name,
-    .game-review-row.is-neither .game-review-wr {
-        color: var(--text-dim);
-    }
-    .game-review-row img,
+    .game-review-face img,
     .game-review-ph {
         width: 28px;
         height: 28px;
         border-radius: 6px;
         object-fit: cover;
+        display: block;
         background: var(--surface-sunken);
         border: 1px solid var(--border);
         box-sizing: border-box;
     }
-    /* 正解：白框框住整列 */
-    .game-review-row.is-best,
-    .game-review-row.is-both {
-        border-color: rgba(255, 255, 255, 0.88);
-        background: rgba(255, 255, 255, 0.03);
-    }
-    /* 選中未答對：無框、全彩（不做半灰） */
-    .game-review-row.is-yours {
+    .game-review-main.is-picked .game-review-face img,
+    .game-review-main.is-picked .game-review-ph {
         border-color: transparent;
-        background: transparent;
+    }
+    /* 選取：緊貼頭像+名字的白塗鴉圈（彩度/強度約降 20%） */
+    .game-review-doodle {
+        position: absolute;
+        left: -5px;
+        top: -6px;
+        width: calc(100% + 14px);
+        height: calc(100% + 12px);
+        pointer-events: none;
+        overflow: visible;
+        /* 純白 → 略灰且 opacity 0.92×0.8≈0.74 */
+        color: rgba(210, 214, 220, 0.74);
+        filter: drop-shadow(0 0 1.5px rgba(210, 214, 220, 0.2));
+        z-index: 0;
+    }
+    [data-theme="light"] .game-review-doodle {
+        color: rgba(55, 65, 81, 0.62);
+        filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.1));
     }
     .game-review-rank {
         font-size: 11px;
@@ -6637,16 +6929,8 @@
         text-overflow: ellipsis;
         min-width: 0;
         color: var(--text);
-    }
-    /* 選中未答對：白字 */
-    .game-review-row.is-yours .game-review-name,
-    .game-review-row.is-yours .game-review-wr {
-        color: #e8eaed;
-    }
-    /* 選中且正解：黃字 + 白框 */
-    .game-review-row.is-both .game-review-name,
-    .game-review-row.is-both .game-review-wr {
-        color: var(--accent-soft);
+        z-index: 1;
+        position: relative;
     }
     .game-review-wr {
         font-size: 12px;
@@ -6656,44 +6940,76 @@
         text-align: right;
         color: var(--text-muted);
     }
+    /* 未選（非正解）：灰階 */
+    .game-review-row.is-neither {
+        color: var(--text-dim);
+    }
+    .game-review-row.is-neither img,
+    .game-review-row.is-neither .game-review-ph {
+        filter: grayscale(1);
+        opacity: 0.62;
+    }
+    .game-review-row.is-neither .game-review-name,
+    .game-review-row.is-neither .game-review-wr,
+    .game-review-row.is-neither .game-review-rank {
+        color: var(--text-dim);
+        opacity: 0.85;
+    }
+    /* 選取未中：白圈 + 灰階 */
+    .game-review-row.is-yours .game-review-name,
+    .game-review-row.is-yours .game-review-wr,
+    .game-review-row.is-yours .game-review-rank {
+        color: var(--text-dim);
+        opacity: 0.85;
+    }
+    .game-review-row.is-yours img,
+    .game-review-row.is-yours .game-review-ph {
+        filter: grayscale(1);
+        opacity: 0.62;
+    }
+    /* 正解（含選中）：黃字 + 全彩 */
+    .game-review-row.is-best .game-review-name,
+    .game-review-row.is-best .game-review-wr,
+    .game-review-row.is-both .game-review-name,
+    .game-review-row.is-both .game-review-wr {
+        color: var(--accent, #f5c518);
+    }
+    .game-review-row.is-best img,
+    .game-review-row.is-both img {
+        filter: none;
+        opacity: 1;
+    }
+    .game-review-row.is-best .game-review-rank,
+    .game-review-row.is-both .game-review-rank {
+        color: color-mix(in srgb, var(--accent, #f5c518) 55%, var(--text-dim));
+    }
+    /* 圖例 */
+    .game-legend-item.is-picked i {
+        display: inline-block;
+        background: transparent;
+        border: 2px solid rgba(210, 214, 220, 0.74);
+        border-radius: 50%;
+        box-shadow: none;
+        transform: rotate(-8deg);
+    }
+    .game-legend-item.is-picked {
+        color: var(--text);
+    }
+    .game-legend-item.is-correct {
+        color: var(--accent, #f5c518);
+        font-weight: 700;
+    }
+    .game-legend-item.is-correct i {
+        display: none;
+    }
 
     :root[data-theme="light"] .game-face-mark {
         background: rgba(255, 255, 255, 0.9);
         color: #1a1e26;
         border-color: rgba(0, 0, 0, 0.08);
     }
-    :root[data-theme="light"] .game-face.is-best,
-    :root[data-theme="light"] .game-face.is-both {
-        border: 2px solid rgba(0, 0, 0, 0.45);
-        box-shadow: none;
-    }
-    :root[data-theme="light"] .game-review-row.is-best,
-    :root[data-theme="light"] .game-review-row.is-both {
-        border-color: rgba(0, 0, 0, 0.45);
-        background: rgba(0, 0, 0, 0.02);
-    }
-    :root[data-theme="light"] .game-review-row.is-yours {
-        border-color: transparent;
-        background: transparent;
-    }
-    :root[data-theme="light"] .game-legend-item.is-correct i {
-        border: 2px solid rgba(0, 0, 0, 0.45);
-    }
-    :root[data-theme="light"] .game-review-row.is-yours .game-review-name,
-    :root[data-theme="light"] .game-review-row.is-yours .game-review-wr,
-    :root[data-theme="light"] .game-legend-item.is-picked {
-        color: var(--text);
-    }
-    :root[data-theme="light"] .game-review-row.is-both .game-review-name,
-    :root[data-theme="light"] .game-review-row.is-both .game-review-wr {
-        color: var(--accent-soft);
-    }
-    :root[data-theme="light"] .game-face-mark.is-picked {
-        color: var(--text);
-        background: rgba(255, 255, 255, 0.92);
-    }
-    :root[data-theme="light"] .game-face.is-both .game-face-mark.is-picked {
-        color: var(--accent-soft);
+    :root[data-theme="light"] .game-legend-item.is-picked i {
+        border-color: rgba(17, 24, 39, 0.75);
     }
     :root[data-theme="light"] .game-footer { background: var(--bg); }
 
