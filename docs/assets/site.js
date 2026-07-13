@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783928635");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783928647");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -5117,7 +5117,7 @@
         if (metaPick.phase !== 'picking') return;
         cid = String(cid);
         if (!metaPick.poolIds.map(String).includes(cid)) return;
-        if (metaPick.pinnedIds.map(String).includes(cid)) return;
+        // 提示英雄可故意取消（想挑戰低分）；仍保留「提示」角標方便辨識
         const idx = metaPick.pickedIds.map(String).indexOf(cid);
         if (idx >= 0) {
             metaPick.pickedIds = metaPick.pickedIds.filter(x => String(x) !== cid);
@@ -5722,7 +5722,8 @@
                         isPicked ? 'is-picked' : '',
                         isPin ? 'is-pinned' : '',
                     ].filter(Boolean).join(' ');
-                    const disabled = (!interactive || isPin) ? ' disabled' : '';
+                    // 提示可取消選取；僅在非選人階段 disabled
+                    const disabled = !interactive ? ' disabled' : '';
                     const pinMark = isPin
                         ? `<span class="game-tile-mark">${escHtml(copy.gameHintBadge)}</span>`
                         : '';
