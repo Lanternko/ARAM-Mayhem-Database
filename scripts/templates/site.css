@@ -6455,13 +6455,42 @@
         min-width: 0;
     }
     .game-metric:last-child { border-right: 0; }
+    /* 手機：兩行 — 上你的/最佳並排，下 PR 全寬（橫向緊湊） */
     @media (max-width: 560px) {
-        .game-metrics { grid-template-columns: 1fr; }
+        .game-metrics {
+            grid-template-columns: 1fr 1fr;
+        }
         .game-metric {
-            border-right: 0;
+            padding: 10px 12px;
+            border-right: 1px solid var(--border);
             border-bottom: 1px solid var(--border);
         }
-        .game-metric:last-child { border-bottom: 0; }
+        .game-metric:nth-child(2) { border-right: 0; }
+        .game-metric:nth-child(3) {
+            grid-column: 1 / -1;
+            border-right: 0;
+            border-bottom: 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 4px 10px;
+            padding: 10px 12px;
+        }
+        .game-metric:nth-child(3) .game-metric-label {
+            margin-bottom: 0;
+            flex: 0 0 auto;
+        }
+        .game-metric:nth-child(3) .game-metric-value {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .game-metric:nth-child(3) .game-metric-sub {
+            margin-top: 0;
+            margin-left: auto;
+        }
+        .game-metric-label { font-size: 11px; margin-bottom: 4px; }
+        .game-metric-value { font-size: clamp(18px, 5.2vw, 24px); }
+        .game-metric-sub { font-size: 11px; margin-top: 3px; }
     }
     .game-metric-label {
         display: block;
@@ -6481,6 +6510,17 @@
     }
     .game-metric-value.is-good { color: #7fe07f; }
     .game-metric-value.is-bad { color: #ff8a96; }
+    /* #1/252 gold when Meta Pick is perfect / sole best */
+    .game-metric-value.is-rank-top {
+        color: var(--accent, #f5c518);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.01em;
+    }
+    .game-metric-sub.is-rank-top {
+        color: var(--accent-soft, #f5d780);
+        font-weight: 800;
+        letter-spacing: 0.04em;
+    }
     .game-metric-grade {
         display: inline-block;
         margin-left: 8px;
@@ -6725,6 +6765,29 @@
         letter-spacing: 0.04em;
         color: var(--text-dim);
     }
+    /* 手機：標題放大、勝率放大、bar 再縮短 */
+    @media (max-width: 560px) {
+        .game-an-head-title {
+            font-size: 15px;
+            letter-spacing: 0.01em;
+        }
+        .game-an-wr-num {
+            font-size: clamp(36px, 11vw, 48px);
+        }
+        .game-an-wr-label {
+            font-size: 12px;
+        }
+        .game-an-mix {
+            max-width: min(100%, 200px);
+        }
+        .game-an-mix-bar {
+            height: 10px;
+        }
+        .game-an-mix-labels {
+            font-size: 10px;
+            gap: 4px 10px;
+        }
+    }
     /* 紅 AD · 藍 AP · 白 True — bar 縮短；用 flex-grow 比例填滿，不靠 width% */
     .game-an-mix {
         display: flex;
@@ -6899,8 +6962,40 @@
     [data-theme="light"] .game-an-grade.is-grade-ap .game-an-grade-val { color: #15803d; }
     [data-theme="light"] .game-an-grade.is-grade-d .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-f .game-an-grade-val { color: #c62828; }
+    /* 手機也維持 2 欄；列更緊湊以免擠 */
     @media (max-width: 520px) {
-        .game-review-list { grid-template-columns: 1fr; }
+        .game-review-list {
+            grid-template-columns: 1fr 1fr;
+            gap: 2px 4px;
+            padding: 4px;
+        }
+        .game-review-row {
+            grid-template-columns: 16px minmax(0, 1fr) auto;
+            gap: 3px;
+            padding: 5px 4px;
+        }
+        .game-review-rank { font-size: 10px; }
+        .game-review-face {
+            width: 24px;
+            height: 24px;
+        }
+        .game-review-face img,
+        .game-review-ph {
+            width: 24px;
+            height: 24px;
+        }
+        .game-review-name { font-size: 12px; }
+        .game-review-wr {
+            font-size: 11px;
+            min-width: 2.8em;
+        }
+        .game-review-main { gap: 5px; padding: 3px 6px 3px 3px; }
+        .game-review-doodle {
+            left: -3px;
+            top: -4px;
+            width: calc(100% + 10px);
+            height: calc(100% + 8px);
+        }
     }
     .game-review-row {
         display: grid;
