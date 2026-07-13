@@ -5385,14 +5385,17 @@
 
         const bestEstWr = Number(best.ev.estWr);
         const bestWrTone = metaPickWrToneClass(bestEstWr);
-        // 縮短的 AD/AP/True bar；大字勝率在右上
+        // AD/AP/True bar — flex-grow 比例（勿用 width%，空 span 在 flex 裡會塌成 0）
+        // 三段永遠輸出（含 0%），legend 也永遠顯示 AD，避免只剩 AP/True 以為沒物傷
+        const mixSeg = (cls, n) =>
+            `<span class="${cls}" style="flex:${Math.max(0, Number(n) || 0)} 0 0"></span>`;
         const mixBar = (
             `<div class="game-an-mix" title="${escHtml(mixNote)}">`
             + `<div class="game-an-mix-main">`
             + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
-            + (mix.ad > 0 ? `<span class="is-ad" style="width:${mix.ad}%"></span>` : '')
-            + (mix.ap > 0 ? `<span class="is-ap" style="width:${mix.ap}%"></span>` : '')
-            + (mix.true > 0 ? `<span class="is-true" style="width:${mix.true}%"></span>` : '')
+            + mixSeg('is-ad', mix.ad)
+            + mixSeg('is-ap', mix.ap)
+            + mixSeg('is-true', mix.true)
             + `</div>`
             + `<div class="game-an-mix-labels">`
             + `<span class="is-ad"><i></i>${escHtml(copy.gameMixAd || 'AD')} ${mix.ad}%</span>`
@@ -5406,18 +5409,20 @@
             `<div class="game-analysis">`
             + `<div class="game-an-head">`
             + `<div class="game-an-head-left">`
+            + `<div class="game-an-head-row">`
             + `<span class="game-an-head-title">${escHtml(copy.gameAnalysisTitle || '最強隊伍評價')}</span>`
             + `<span class="game-an-legend">`
             + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
             + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
             + `</span>`
             + `</div>`
+            + mixBar
+            + `</div>`
             + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(copy.gameBestEstWr || '最佳陣容勝率')}">`
             + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
             + `<span class="game-an-wr-label">${escHtml(copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率')}</span>`
             + `</div>`
             + `</div>`
-            + mixBar
             + `<div class="game-an-dims-split is-best-only">`
             + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
             + `<div class="game-an-grades" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
