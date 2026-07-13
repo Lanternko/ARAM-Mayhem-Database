@@ -307,14 +307,14 @@
         _compNormCache = cols;
         return _compNormCache;
     }
-    // Radar geometry: extra horizontal pad so long EN labels (e.g. "Champ strength")
-    // with text-anchor=end on the left spoke are not clipped by the viewBox.
-    const RADAR_PAD_X = 48;
-    const RADAR_VB_W = 380 + RADAR_PAD_X * 2; // 476
+    // Radar geometry: modest L/R pad (long EN labels clamp themselves).
+    // Keep pad tight so the hex sits left instead of floating in empty space.
+    const RADAR_PAD_X = 28;
+    const RADAR_VB_W = 380 + RADAR_PAD_X * 2; // 436
     const RADAR_VB_H = 320;
     const RADAR_CX = 190 + RADAR_PAD_X;
     const RADAR_CY = 158;
-    const RADAR_R = 100;
+    const RADAR_R = 105;
 
     // axes: heuristic mode [{label, pct 0-1}]; signed mode (opts.signed) [{label, delta pp}].
     // Signed mode draws a dashed 0pp baseline ring; out=fits (blue), in=avoid (red); scale pp at full radius.
