@@ -6149,19 +6149,19 @@
         if (actions) {
             if (settling) {
                 actions.innerHTML = (
-                    `<button type="button" class="tool-btn" id="game-restart">`
+                    `<button type="button" class="tool-btn game-cta" id="game-restart">`
                     + `${escHtml(copy.gameRestart || copy.gamePlayAgain)}</button>`
                 );
             } else if (metaPick.phase === 'reveal') {
                 const done = metaPickSession.rounds.length >= META_PICK_ROUNDS;
                 if (done) {
                     actions.innerHTML = (
-                        `<button type="button" class="tool-btn" id="game-show-settle">`
+                        `<button type="button" class="tool-btn game-cta" id="game-show-settle">`
                         + `${escHtml(copy.gameShowSettle || 'Settlement')}</button>`
                     );
                 } else {
                     actions.innerHTML = (
-                        `<button type="button" class="tool-btn" id="game-next-round">`
+                        `<button type="button" class="tool-btn game-cta" id="game-next-round">`
                         + `${escHtml(copy.gameNextRound || 'Next round')}</button>`
                     );
                 }
@@ -6179,7 +6179,7 @@
             } else {
                 const canLock = metaPick.pickedIds.length === META_PICK_NEED;
                 actions.innerHTML = (
-                    `<button type="button" class="tool-btn" id="game-lock" ${canLock ? '' : 'disabled'}>`
+                    `<button type="button" class="tool-btn game-cta" id="game-lock" ${canLock ? '' : 'disabled'}>`
                     + `${escHtml(copy.gameLock)}</button>`
                 );
             }
