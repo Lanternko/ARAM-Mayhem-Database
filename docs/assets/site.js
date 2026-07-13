@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783933114");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260713-1783933443");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -683,7 +683,7 @@
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Marksman"],"2512":["Marksman"],"2517":["Fighter"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Marksman"],"2525":["Tank"],"2526":["Tank"],"2530":["Tank"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Marksman"],"3032":["Marksman"],"3033":["Marksman"],"3036":["Marksman"],"3039":["Marksman"],"3040":["Mage"],"3042":["Marksman"],"3046":["Marksman"],"3050":["Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Marksman"],"3072":["Fighter"],"3073":["Marksman"],"3074":["Marksman"],"3075":["Tank"],"3078":["Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Marksman"],"3089":["Mage"],"3091":["Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Marksman"],"3102":["Fighter"],"3107":["Support"],"3109":["Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Marksman"],"3116":["Fighter"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Fighter"],"3142":["Assassin"],"3143":["Tank"],"3146":["Mage"],"3152":["Mage"],"3153":["Marksman"],"3156":["Fighter"],"3157":["Fighter"],"3161":["Fighter"],"3165":["Fighter"],"3177":["Fighter"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Marksman"],"3190":["Support"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Marksman"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Fighter"],"4633":["Fighter"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Marksman"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter"],"6662":["Marksman"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Marksman"],"6675":["Marksman"],"6676":["Marksman"],"6691":["Assassin"],"6692":["Fighter"],"6693":["Assassin"],"6694":["Marksman"],"6695":["Assassin"],"6696":["Assassin"],"6697":["Assassin"],"6698":["Assassin"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Fighter"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"994403":["Mage","Marksman"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -5878,55 +5878,58 @@
     }
 
     /**
-     * Real damage mix from teamComposition.sums (phys / magic / true).
-     * Percents are integers that sum to 100 (largest-remainder).
-     * Always returns numeric ad/ap/trueDmg (true kept as alias for call sites).
+     * Real damage mix from phys / magic / true DPM.
+     * Returns integers ad + ap + trueDmg === 100 (largest-remainder).
+     * Never uses object key `true` (boolean keyword footgun).
      */
     function metaPickDamageMix(sums) {
-        const p = Math.max(0, Number(sums && (sums.phys != null ? sums.phys : sums.physical)) || 0);
+        const p = Math.max(0, Number(sums && sums.phys) || 0);
         const m = Math.max(0, Number(sums && sums.magic) || 0);
-        const t = Math.max(0, Number(sums && (sums.true != null ? sums.true : sums.true_damage)) || 0);
+        const t = Math.max(0, Number(sums && sums.trueDmg) || 0);
         const total = p + m + t;
-        if (total <= 0) {
-            return { ad: 50, ap: 50, true: 0, trueDmg: 0, adShare: 0.5 };
+        if (!(total > 0)) {
+            return { ad: 50, ap: 50, trueDmg: 0, adShare: 0.5 };
         }
-        const raw = [
-            { key: 'ad', v: (p / total) * 100 },
-            { key: 'ap', v: (m / total) * 100 },
-            { key: 'trueDmg', v: (t / total) * 100 },
-        ];
-        const floors = raw.map(r => ({ key: r.key, n: Math.floor(r.v), frac: r.v - Math.floor(r.v) }));
-        let left = 100 - floors.reduce((s, r) => s + r.n, 0);
-        floors.sort((a, b) => b.frac - a.frac || a.key.localeCompare(b.key));
-        for (let i = 0; i < floors.length && left > 0; i += 1) {
-            floors[i].n += 1;
+        // Fixed order AD → AP → True so remainder tie-breaks prefer AD
+        const vals = [(p / total) * 100, (m / total) * 100, (t / total) * 100];
+        const ns = vals.map(v => Math.floor(v));
+        let left = 100 - (ns[0] + ns[1] + ns[2]);
+        const order = [0, 1, 2].sort((a, b) => {
+            const fa = vals[a] - ns[a];
+            const fb = vals[b] - ns[b];
+            return (fb - fa) || (a - b);
+        });
+        for (let k = 0; k < order.length && left > 0; k += 1) {
+            ns[order[k]] += 1;
             left -= 1;
         }
-        const out = { ad: 0, ap: 0, trueDmg: 0 };
-        floors.forEach(r => { out[r.key] = r.n; });
-        // Keep sum exactly 100 if floating edge-cases leave a gap.
-        const sum3 = out.ad + out.ap + out.trueDmg;
-        if (sum3 !== 100) {
-            out.ad = Math.max(0, out.ad + (100 - sum3));
-        }
-        out.true = out.trueDmg; // alias for older call sites / i18n helpers
-        // adShare among AD+AP only (for mix-grade ideal ~40% AD)
+        const ad = ns[0];
+        const ap = ns[1];
+        const trueDmg = ns[2];
         const adDen = p + m;
-        out.adShare = adDen > 0 ? p / adDen : 0.5;
-        return out;
+        return {
+            ad,
+            ap,
+            trueDmg,
+            adShare: adDen > 0 ? p / adDen : 0.5,
+        };
     }
 
-    /** Sum phys/magic/true from roster ids (defensive; does not rely on teamComposition). */
+    /** Sum phys/magic/true DPM from roster — always bracket-access for "true". */
     function metaPickTeamDamageSums(ids) {
-        const sums = { phys: 0, magic: 0, true: 0 };
+        let phys = 0;
+        let magic = 0;
+        let trueDmg = 0;
         (ids || []).forEach(rawId => {
             const info = (DATA.champs && DATA.champs[String(rawId)]) || {};
             const comp = info.comp || {};
-            sums.phys += Number(comp.phys != null ? comp.phys : comp.physical) || 0;
-            sums.magic += Number(comp.magic) || 0;
-            sums.true += Number(comp.true != null ? comp.true : comp.true_damage) || 0;
+            phys += Number(comp.phys != null ? comp.phys : comp.physical) || 0;
+            magic += Number(comp.magic) || 0;
+            trueDmg += Number(
+                comp['true'] != null ? comp['true'] : comp.true_damage
+            ) || 0;
         });
-        return sums;
+        return { phys, magic, trueDmg };
     }
 
     /**
@@ -5980,9 +5983,11 @@
         const strengthTxt = pct(best.strength.meanWr);
         // Re-sum damage dims from champ ids (more reliable than teamComposition.sums alone).
         const mix = metaPickDamageMix(metaPickTeamDamageSums(bestIds));
-        const truePct = Number(mix.trueDmg != null ? mix.trueDmg : mix.true) || 0;
+        const adPct = Math.max(0, Math.min(100, Number(mix.ad) || 0));
+        const apPct = Math.max(0, Math.min(100, Number(mix.ap) || 0));
+        const truePct = Math.max(0, Math.min(100, Number(mix.trueDmg) || 0));
         const mixNoteFn = copy.gameMixNote || ((ad, ap, tr) => `AD ${ad}% · AP ${ap}% · True ${tr}%`);
-        const mixNote = mixNoteFn(mix.ad, mix.ap, truePct);
+        const mixNote = mixNoteFn(adPct, apPct, truePct);
 
         // 灰 = 你的選擇 · 黃 = 最佳 5 人（最佳用強調色）
         const radar = compRadarOverlaySvg([
@@ -6053,24 +6058,19 @@
 
         const bestEstWr = Number(best.ev.estWr);
         const bestWrTone = metaPickWrToneClass(bestEstWr);
-        // Absolute width% so AD+AP+True always read on a 0–100 scale (not relative flex).
-        // Labels always render all three rows — including AD 0% — so pure-AP teams still show AD.
-        const adPct = Math.max(0, Math.min(100, Number(mix.ad) || 0));
-        const apPct = Math.max(0, Math.min(100, Number(mix.ap) || 0));
+        // flex-basis % 填滿 bar；圖例永遠三行（含 AD 0%）
         const mixSeg = (cls, n) => {
             const w = Math.max(0, Math.min(100, Number(n) || 0));
-            // min-width keeps tiny non-zero slices visible; zero stays 0.
-            const min = w > 0 ? 'min-width:2px;' : '';
-            return `<span class="game-an-mix-seg ${cls}" style="width:${w}%;${min}"></span>`;
+            return `<span class="game-an-mix-seg ${cls}" style="flex:0 0 ${w}%"></span>`;
         };
         const mixLab = (cls, name, n) => (
             `<span class="game-an-mix-lab ${cls}">`
             + `<i aria-hidden="true"></i>`
-            + `${escHtml(name)} ${Math.max(0, Number(n) || 0)}%`
+            + `${escHtml(name)}&nbsp;${Math.max(0, Number(n) || 0)}%`
             + `</span>`
         );
         const mixBar = (
-            `<div class="game-an-mix" title="${escHtml(mixNote)}">`
+            `<div class="game-an-mix" title="${escHtml(mixNote)}" data-mix-ad="${adPct}" data-mix-ap="${apPct}" data-mix-true="${truePct}">`
             + `<div class="game-an-mix-main">`
             + `<div class="game-an-mix-bar" role="img" aria-label="${escHtml(mixNote)}">`
             + mixSeg('is-ad', adPct)
