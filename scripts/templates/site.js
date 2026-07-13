@@ -4029,9 +4029,45 @@
     }
 
     /**
+     * Look up ordered pair row A→B in champ A's top-pairs list (may be absent —
+     * payload only keeps ~24 partners per champ).
+     */
+    function pairEntry(fromId, toId) {
+        const pairs = (DATA.champs[String(fromId)] && DATA.champs[String(fromId)].pairs) || [];
+        const want = String(toId);
+        for (let k = 0; k < pairs.length; k += 1) {
+            if (String(pairs[k].id) === want) return pairs[k];
+        }
+        return null;
+    }
+
+    /**
+     * Unordered pair lift for {a,b}. Each champ only stores a short top-pairs
+     * list, so A→B and B→A are often missing one side. Prefer the average when
+     * both exist; otherwise the single known direction. Order-invariant.
+     */
+    function pairLiftBetween(aId, bId) {
+        const ab = pairEntry(aId, bId);
+        const ba = pairEntry(bId, aId);
+        if (!ab && !ba) return null;
+        if (ab && ba) {
+            const lift = (Number(ab.lift || 0) + Number(ba.lift || 0)) / 2;
+            const ga = Number(ab.g || 0) || 0;
+            const gb = Number(ba.g || 0) || 0;
+            const g = ga && gb ? Math.min(ga, gb) : (ga || gb);
+            return { lift, g };
+        }
+        const p = ab || ba;
+        return { lift: Number(p.lift || 0), g: Number(p.g || 0) || 0 };
+    }
+
+    /**
      * Full 5-man roster evaluation for the side panel.
      * estWr ≈ mean(champ WR) + mean(known pair lifts) + composition table score.
      * Dims = mean capability percentiles across the five champions.
+     *
+     * Pair lifts are looked up bidirectionally so the same 5-set always scores
+     * the same regardless of pick order (each champ only ships ~24 pair rows).
      */
     function evaluateFullTeam(ids) {
         const list = (ids || []).map(String).filter(Boolean);
@@ -4059,14 +4095,12 @@
         let pairN = 0;
         let minGames = Number.POSITIVE_INFINITY;
         for (let i = 0; i < list.length; i += 1) {
-            const pairs = (DATA.champs[list[i]] && DATA.champs[list[i]].pairs) || [];
-            const byId = new Map(pairs.map(p => [String(p.id), p]));
             for (let j = i + 1; j < list.length; j += 1) {
-                const p = byId.get(list[j]);
-                if (!p) continue;
-                liftSum += Number(p.lift || 0);
+                const hit = pairLiftBetween(list[i], list[j]);
+                if (!hit) continue;
+                liftSum += hit.lift;
                 pairN += 1;
-                minGames = Math.min(minGames, Number(p.g || 0) || 0);
+                if (hit.g > 0) minGames = Math.min(minGames, hit.g);
             }
         }
         const pairLift = pairN ? liftSum / pairN : 0;
@@ -5707,16 +5741,24 @@
                 result.hidden = true;
                 result.innerHTML = '';
             } else {
+                // Always re-score both with evaluateFullTeam (order-invariant pair
+                // lifts). Do not prefer a stale optimalScore from deal-time if the
+                // scorer changed; same 5-set must print the same WR.
                 const userScore = metaPickScoreTeam(metaPick.pickedIds);
-                const bestScore = metaPick.optimalScore || metaPickScoreTeam(metaPick.optimalIds);
+                const bestScore = metaPickScoreTeam(metaPick.optimalIds);
+                // Perfect roster → scores must match; guard against any residual drift.
+                const perfectHit = metaPickSetsEqual(metaPick.pickedIds, metaPick.optimalIds);
+                const showUser = perfectHit ? bestScore : userScore;
                 let scores = metaPick.allScores;
                 if (!scores || !scores.length) {
-                    scores = metaPickScoreAllTeams(metaPick.poolIds, META_PICK_NEED).scores;
+                    const all = metaPickScoreAllTeams(metaPick.poolIds, META_PICK_NEED);
+                    scores = all.scores;
                     metaPick.allScores = scores;
                     metaPick.comboTotal = scores.length;
+                    metaPick.optimalScore = all.score;
                 }
-                const rankInfo = metaPickRankAmong(userScore, scores);
-                const deltaPp = (userScore - bestScore) * 100;
+                const rankInfo = metaPickRankAmong(showUser, scores);
+                const deltaPp = (showUser - bestScore) * 100;
                 const deltaTxt = (deltaPp >= 0 ? '+' : '') + deltaPp.toFixed(1) + ' pp';
                 const prTxt = (copy.gamePrValue || (p => `PR ${p}`))(rankInfo.pr);
                 const rankTxt = (copy.gameRankOf || ((r, t) => `#${r} / ${t}`))(rankInfo.rank, rankInfo.total);
@@ -5786,7 +5828,7 @@
                     + `<div class="game-metrics" role="group" aria-label="${escHtml(copy.gameGrade)}">`
                     + `<div class="game-metric">`
                     + `<span class="game-metric-label">${escHtml(copy.gameYourWr)}</span>`
-                    + `<span class="game-metric-value ${metaPickWrToneClass(userScore)}">${pct(userScore)}</span>`
+                    + `<span class="game-metric-value ${metaPickWrToneClass(showUser)}">${pct(showUser)}</span>`
                     + `</div>`
                     + `<div class="game-metric">`
                     + `<span class="game-metric-label">${escHtml(copy.gameOptimalWr)}</span>`
@@ -5805,7 +5847,7 @@
                     + `<div class="game-compare-row is-yours">`
                     + `<div class="game-compare-meta">`
                     + `<span class="game-compare-label">${escHtml(copy.gameYourTeam || '你的選擇')}</span>`
-                    + `<span class="game-compare-wr ${metaPickWrToneClass(userScore)}">${pct(userScore)}</span>`
+                    + `<span class="game-compare-wr ${metaPickWrToneClass(showUser)}">${pct(showUser)}</span>`
                     + `</div>`
                     + yourFaces
                     + `</div>`
