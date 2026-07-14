@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784051121");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784049007");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -4131,11 +4131,16 @@
 
     /**
      * Full 5-man roster evaluation for the side panel.
-     * estWr ≈ mean(champ WR) + mean(known pair lifts) + composition table score.
+     * estWr ≈ mean(champ WR) + mean(pair lifts) + composition table score.
      * Dims = mean capability percentiles across the five champions.
      *
      * Pair lifts are looked up bidirectionally so the same 5-set always scores
      * the same regardless of pick order (each champ only ships ~24 pair rows).
+     *
+     * Synergy (pairLift) is averaged over ALL C(n,2) edges — missing pair data
+     * counts as 0, not "skip and average only the known (often strong) edges".
+     * Known-only averaging made best-team 默契 radar almost always hit the cap.
+     * Composition score is separate and never folded into pairLift / 默契.
      */
     function evaluateFullTeam(ids) {
         const list = (ids || []).map(String).filter(Boolean);
@@ -4160,10 +4165,12 @@
         const baseWr = wrN ? wrSum / wrN : 0.5;
 
         let liftSum = 0;
-        let pairN = 0;
+        let pairN = 0; // known edges only (for confidence / coverage)
+        let pairEdges = 0; // all unordered pairs C(n,2)
         let minGames = Number.POSITIVE_INFINITY;
         for (let i = 0; i < list.length; i += 1) {
             for (let j = i + 1; j < list.length; j += 1) {
+                pairEdges += 1;
                 const hit = pairLiftBetween(list[i], list[j]);
                 if (!hit) continue;
                 liftSum += hit.lift;
@@ -4171,7 +4178,8 @@
                 if (hit.g > 0) minGames = Math.min(minGames, hit.g);
             }
         }
-        const pairLift = pairN ? liftSum / pairN : 0;
+        // Dense team synergy: missing edges contribute 0 (not dropped from denom).
+        const pairLift = pairEdges ? liftSum / pairEdges : 0;
         const compositionScore = teamCompositionScore(list);
         const teamComp = teamComposition(list);
         // Soft clamp so noisy pair stacks don't print absurd 70%+ estimates.
@@ -6158,7 +6166,8 @@
         const dmg01 = Number.isFinite(dmg) && dmg > 0
             ? dmg
             : ((Number(cap.phys) || 0) + (Number(cap.magic) || 0)) / 2;
-        // 默契：隊伍平均 pair lift → 0–1（±6pp 拉滿）
+        // 默契 = synergy only (pairLift; composition is a separate score term).
+        // Dense mean over C(5,2) edges; ±6pp team-average stretch to the rim.
         const chem01 = metaPickSignedLift01(ev.pairLift, 0.06);
         return {
             ev,

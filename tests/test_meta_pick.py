@@ -167,16 +167,17 @@ class ScoringTests(unittest.TestCase):
         team = ["1", "2", "3", "4", "10"]
         # Mean WR of {1,2,3,4,10} = (0.46+0.47+0.48+0.49+0.55)/5 = 0.49
         # One known pair lift 0.04 among C(5,2)=10 pairs → mean lift 0.004
-        # Composition may add a small table term; assert lift is not dropped.
+        # (missing edges count as 0; do NOT average only known edges).
         score = score_team(team, snap)
         score_rev = score_team(list(reversed(team)), snap)
         self.assertAlmostEqual(score, score_rev, places=12)
-        # Without any pairs, only base WR (+comp). With the 0.04 lift present,
-        # score must exceed the zero-lift version.
         snap_no = mini_snapshot()
         for cid in ("1", "2", "3", "4", "5", "10"):
             snap_no["champs"][cid]["pairs"] = []
-        self.assertGreater(score, score_team(team, snap_no) + 1e-9)
+        base = score_team(team, snap_no)
+        # Same roster → same composition term; delta must be exactly 0.04/10.
+        self.assertAlmostEqual(score - base, 0.04 / 10.0, places=12)
+        self.assertGreater(score, base + 1e-9)
 
     def test_rank_recomputation_and_est_wr_clamp(self) -> None:
         snap = mini_snapshot()
