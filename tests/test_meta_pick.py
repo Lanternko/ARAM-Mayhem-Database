@@ -139,7 +139,6 @@ class NicknameTests(unittest.TestCase):
         wide = nickname_key(normalize_nickname_display("Ｆｏｏ"))
         self.assertEqual(wide, a)
 
-
 class ScoringTests(unittest.TestCase):
     def test_exactly_252_combinations(self) -> None:
         snap = mini_snapshot()
@@ -276,7 +275,8 @@ class ValidationTests(unittest.TestCase):
 
 
 class DbLeaderboardTests(unittest.TestCase):
-    def test_best_only_upsert_and_equal_refresh(self) -> None:
+    def test_same_nickname_multiple_distinct_runs(self) -> None:
+        """Same nick can hold many board rows; each distinct 5-round replay inserts."""
         snap = mini_snapshot()
         pool = [str(i) for i in range(1, 11)]
         good_picks = ["6", "7", "8", "9", "10"]
@@ -299,6 +299,7 @@ class DbLeaderboardTests(unittest.TestCase):
                 },
                 snap,
             )
+            self.assertNotEqual(good["run_fp"], bad["run_fp"])
             with mock.patch(
                 "aram_nn.site.meta_pick.utc_now_iso",
                 return_value="2026-07-13T12:00:00.000001Z",
@@ -308,22 +309,8 @@ class DbLeaderboardTests(unittest.TestCase):
             self.assertTrue(first.updated)
             self.assertEqual(first.entry["created_at"], "2026-07-13T12:00:00.000001Z")
             self.assertNotIn("nickname_key", first.entry)
-            # Worse score must not stamp a timestamp (no utc_now_iso call).
-            with mock.patch("aram_nn.site.meta_pick.utc_now_iso") as mock_now:
-                worse = upsert_best_run(db, bad)
-                mock_now.assert_not_called()
-            self.assertFalse(worse.updated)
-            self.assertAlmostEqual(worse.entry["avg_rank"], good["avg_rank"])
-            self.assertIsNotNone(worse.retained)
-            assert worse.retained is not None
-            self.assertAlmostEqual(worse.retained["avg_rank"], good["avg_rank"])
-            self.assertEqual(worse.entry["created_at"], first.entry["created_at"])
-            self.assertNotIn("nickname_key", worse.entry)
-            # Equal score refreshes timestamp + display without flaky sleeps.
-            # utc_now_iso must run under the write transaction (after BEGIN).
-            equal = dict(good)
-            equal["nickname"] = "ACE"  # display may change; key same
-            equal["nickname_key"] = nickname_key("ACE")
+            self.assertIsNone(first.retained)
+
             held: list = []
 
             def tracking_connect(path):
@@ -344,14 +331,62 @@ class DbLeaderboardTests(unittest.TestCase):
             ), mock.patch(
                 "aram_nn.site.meta_pick.utc_now_iso", side_effect=now_under_tx
             ) as mock_now:
-                refreshed = upsert_best_run(db, equal)
+                second = upsert_best_run(db, bad)
                 mock_now.assert_called_once()
-            self.assertTrue(refreshed.updated)
-            self.assertEqual(refreshed.entry["nickname"], "ACE")
-            self.assertEqual(refreshed.entry["created_at"], "2026-07-13T12:00:00.999999Z")
-            self.assertGreater(
-                refreshed.entry["created_at"], first.entry["created_at"]
+            self.assertTrue(second.updated)
+            self.assertEqual(second.entry["nickname"], "Ace")
+            self.assertEqual(second.entry["created_at"], "2026-07-13T12:00:00.999999Z")
+            self.assertNotEqual(first.entry["id"], second.entry["id"])
+            self.assertAlmostEqual(second.entry["avg_rank"], bad["avg_rank"])
+
+            board = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertEqual(board["total"], 2)
+            nicks = {e["nickname"] for e in board["entries"]}
+            self.assertEqual(nicks, {"Ace"})
+            # Better avg_rank sorts first.
+            self.assertLessEqual(
+                board["entries"][0]["avg_rank"], board["entries"][1]["avg_rank"]
             )
+
+            # Identical replay (same run_fp) under same nick → 409, no third row.
+            with self.assertRaises(MetaPickError) as ctx:
+                upsert_best_run(db, good)
+            self.assertEqual(ctx.exception.status_code, 409)
+            board2 = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertEqual(board2["total"], 2)
+
+    def test_legacy_flag_payload_ignored(self) -> None:
+        """Clients may still send flag; server ignores it and omits from entry."""
+        snap = mini_snapshot()
+        pool = [str(i) for i in range(1, 11)]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            out = submit_run(
+                db,
+                {
+                    "nickname": "路燈",
+                    "flag": "tw",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["6", "7", "8", "9", "10"]),
+                },
+                snap,
+            )
+            self.assertNotIn("flag", out["entry"])
+            board = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertNotIn("flag", board["entries"][0])
+            # Invalid legacy flag must not reject the run.
+            out2 = submit_run(
+                db,
+                {
+                    "nickname": "路燈2",
+                    "flag": "ZZ",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["1", "2", "3", "4", "5"]),
+                },
+                snap,
+            )
+            self.assertTrue(out2["updated"])
+            self.assertNotIn("flag", out2["entry"])
 
     def test_same_run_different_nickname_rejected(self) -> None:
         """Changing nickname must not re-upload the same 5-round replay."""
@@ -378,6 +413,65 @@ class DbLeaderboardTests(unittest.TestCase):
             board = list_leaderboard(db, patch="16.10", limit=10)
             self.assertEqual(board["total"], 1)
             self.assertEqual(board["entries"][0]["nickname"], "我的鍋")
+
+    def test_legacy_nick_unique_migrates_to_multi_entry(self) -> None:
+        """DBs with UNIQUE(nickname_key, patch) drop that constraint on open."""
+        snap = mini_snapshot()
+        pool = [str(i) for i in range(1, 11)]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            con = db_connect(db)
+            try:
+                con.execute(
+                    """
+                    CREATE TABLE meta_pick_runs (
+                        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                        nickname        TEXT NOT NULL,
+                        nickname_key    TEXT NOT NULL,
+                        patch           TEXT NOT NULL,
+                        avg_rank        REAL NOT NULL,
+                        ranks_json      TEXT NOT NULL,
+                        rounds_json     TEXT NOT NULL,
+                        total_combos    INTEGER NOT NULL DEFAULT 252,
+                        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                        UNIQUE(nickname_key, patch)
+                    )
+                    """
+                )
+                con.execute(
+                    """
+                    INSERT INTO meta_pick_runs (
+                        nickname, nickname_key, patch, avg_rank, ranks_json,
+                        rounds_json, total_combos, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "Ace",
+                        nickname_key("Ace"),
+                        "16.10",
+                        10.0,
+                        "[10,10,10,10,10]",
+                        "[]",
+                        252,
+                        "2026-01-01T00:00:00.000001Z",
+                    ),
+                )
+                con.commit()
+            finally:
+                con.close()
+
+            submit_run(
+                db,
+                {
+                    "nickname": "Ace",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["1", "2", "3", "4", "5"]),
+                },
+                snap,
+            )
+            board = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertEqual(board["total"], 2)
+            self.assertEqual({e["nickname"] for e in board["entries"]}, {"Ace"})
 
     def test_sort_avg_rank_then_created_at_desc(self) -> None:
         snap = mini_snapshot()
@@ -543,6 +637,7 @@ class ApiTests(unittest.TestCase):
                 self.assertIn("avg_rank", data)
                 self.assertEqual(len(data["ranks"]), 5)
                 self.assertTrue(data["updated"])
+                self.assertNotIn("flag", data["entry"])
 
                 stale = client.post(
                     "/api/meta-pick/runs",
@@ -582,7 +677,7 @@ class ApiTests(unittest.TestCase):
                     "https://arammeta.com",
                 )
 
-                # Worse resubmit: updated=false keeps best; public entry has no key.
+                # Second distinct run under same nick inserts a second row.
                 worse_body = {
                     "nickname": "Boarder",
                     "patch": "16.10",
@@ -591,15 +686,15 @@ class ApiTests(unittest.TestCase):
                 worse_res = client.post("/api/meta-pick/runs", json=worse_body)
                 self.assertEqual(worse_res.status_code, 200, worse_res.text)
                 worse_data = worse_res.json()
-                self.assertFalse(worse_data["updated"])
+                self.assertTrue(worse_data["updated"])
                 self.assertNotIn("nickname_key", worse_data["entry"])
-                self.assertAlmostEqual(
-                    worse_data["entry"]["avg_rank"], data["avg_rank"]
-                )
-                # Current run avg may be worse than retained entry.
+                self.assertNotEqual(worse_data["entry"]["id"], data["entry"]["id"])
                 self.assertGreaterEqual(
-                    worse_data["avg_rank"], worse_data["entry"]["avg_rank"]
+                    worse_data["avg_rank"], data["avg_rank"]
                 )
+                board2 = client.get("/api/meta-pick/leaderboard")
+                self.assertEqual(board2.status_code, 200)
+                self.assertEqual(board2.json()["total"], 2)
 
 
 class RenderContractTests(unittest.TestCase):

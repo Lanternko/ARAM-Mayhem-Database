@@ -33,6 +33,9 @@ DEFAULT_RATE_LIMIT_PER_HOUR = 30
 
 # High-precision UTC fallback when created_at is omitted (SQLite %f = ms).
 # Prefer Python-generated microsecond timestamps on every insert/update.
+# Same nickname may hold many rows (one per distinct 5-round replay).
+# Uniqueness is (run_fp, patch) only — see uq_meta_pick_runs_fp_patch.
+# Note: legacy `flag` column may still exist on older DBs (always written as '').
 CREATE_META_PICK_RUNS_SQL = """
 CREATE TABLE IF NOT EXISTS meta_pick_runs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,8 +47,8 @@ CREATE TABLE IF NOT EXISTS meta_pick_runs (
     rounds_json     TEXT NOT NULL,
     total_combos    INTEGER NOT NULL DEFAULT 252,
     run_fp          TEXT,
-    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-    UNIQUE(nickname_key, patch)
+    flag            TEXT NOT NULL DEFAULT '',
+    created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 """
 
@@ -54,8 +57,13 @@ CREATE INDEX IF NOT EXISTS idx_meta_pick_runs_patch_avg_created
 ON meta_pick_runs(patch, avg_rank ASC, created_at DESC, id DESC);
 """
 
+CREATE_META_PICK_RUNS_NICK_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_meta_pick_runs_nick_patch
+ON meta_pick_runs(nickname_key, patch);
+"""
+
 # One leaderboard row per unique 5-round replay (pool+picks) × patch.
-# Blocks "change nickname → re-upload the same run".
+# Blocks re-uploading the same run under any nickname (including the same one).
 CREATE_META_PICK_RUN_FP_INDEX_SQL = """
 CREATE UNIQUE INDEX IF NOT EXISTS uq_meta_pick_runs_fp_patch
 ON meta_pick_runs(run_fp, patch)
@@ -131,7 +139,7 @@ def normalize_nickname_display(raw: str) -> str:
 
 
 def nickname_key(display: str) -> str:
-    """NFKC + casefold key for best-per-nickname uniqueness."""
+    """NFKC + casefold key for nickname identity (not a board uniqueness key)."""
     return unicodedata.normalize("NFKC", display).casefold()
 
 
@@ -604,6 +612,7 @@ def validate_submit_payload(
     payload: dict[str, Any], snapshot: dict[str, Any]
 ) -> tuple[str, str, list[tuple[list[str], list[str]]]]:
     nickname = normalize_nickname_display(payload.get("nickname") or "")
+    # Legacy clients may still send `flag`; ignore it.
     patch = str(payload.get("patch") or "").strip()
     if not patch:
         raise MetaPickError("patch is required")
@@ -661,14 +670,82 @@ def recompute_run(
 # DB
 # ---------------------------------------------------------------------------
 
+def _meta_pick_has_nick_patch_unique(con: sqlite3.Connection) -> bool:
+    """True if legacy UNIQUE(nickname_key, patch) autoindex is still present."""
+    try:
+        indexes = con.execute("PRAGMA index_list(meta_pick_runs)").fetchall()
+    except sqlite3.OperationalError:
+        return False
+    for idx in indexes:
+        # (seq, name, unique, origin, partial)
+        if not idx[2]:
+            continue
+        name = str(idx[1])
+        cols = [
+            str(r[2])
+            for r in con.execute(f"PRAGMA index_info({name})").fetchall()
+        ]
+        if cols == ["nickname_key", "patch"]:
+            return True
+    return False
+
+
+def _migrate_drop_nick_patch_unique(con: sqlite3.Connection) -> None:
+    """Rebuild meta_pick_runs without UNIQUE(nickname_key, patch).
+
+    SQLite cannot DROP a table-level UNIQUE constraint in place; copy+rename.
+    """
+    con.execute(
+        """
+        CREATE TABLE meta_pick_runs__new (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname        TEXT NOT NULL,
+            nickname_key    TEXT NOT NULL,
+            patch           TEXT NOT NULL,
+            avg_rank        REAL NOT NULL,
+            ranks_json      TEXT NOT NULL,
+            rounds_json     TEXT NOT NULL,
+            total_combos    INTEGER NOT NULL DEFAULT 252,
+            run_fp          TEXT,
+            flag            TEXT NOT NULL DEFAULT '',
+            created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        )
+        """
+    )
+    cols = {str(r[1]) for r in con.execute("PRAGMA table_info(meta_pick_runs)").fetchall()}
+    run_fp_expr = "run_fp" if "run_fp" in cols else "NULL"
+    flag_expr = "flag" if "flag" in cols else "''"
+    con.execute(
+        f"""
+        INSERT INTO meta_pick_runs__new (
+            id, nickname, nickname_key, patch, avg_rank, ranks_json,
+            rounds_json, total_combos, run_fp, flag, created_at
+        )
+        SELECT
+            id, nickname, nickname_key, patch, avg_rank, ranks_json,
+            rounds_json, total_combos, {run_fp_expr}, {flag_expr}, created_at
+        FROM meta_pick_runs
+        """
+    )
+    con.execute("DROP TABLE meta_pick_runs")
+    con.execute("ALTER TABLE meta_pick_runs__new RENAME TO meta_pick_runs")
+
+
 def ensure_meta_pick_schema(con: sqlite3.Connection) -> None:
     ensure_public_schema(con)
     con.execute(CREATE_META_PICK_RUNS_SQL)
-    con.execute(CREATE_META_PICK_RUNS_INDEX_SQL)
-    # Migrate older DBs created before run_fp existed.
     cols = {str(r[1]) for r in con.execute("PRAGMA table_info(meta_pick_runs)").fetchall()}
     if "run_fp" not in cols:
         con.execute("ALTER TABLE meta_pick_runs ADD COLUMN run_fp TEXT")
+    if "flag" not in cols:
+        con.execute(
+            "ALTER TABLE meta_pick_runs ADD COLUMN flag TEXT NOT NULL DEFAULT ''"
+        )
+    # Drop legacy best-only UNIQUE(nickname_key, patch) so multi-entry nicks work.
+    if _meta_pick_has_nick_patch_unique(con):
+        _migrate_drop_nick_patch_unique(con)
+    con.execute(CREATE_META_PICK_RUNS_INDEX_SQL)
+    con.execute(CREATE_META_PICK_RUNS_NICK_INDEX_SQL)
     con.execute(CREATE_META_PICK_RUN_FP_INDEX_SQL)
     con.commit()
 
@@ -710,15 +787,17 @@ def _row_to_entry(row: sqlite3.Row | tuple) -> dict[str, Any]:
 
 
 def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
-    """Keep only the best (lowest avg_rank) per nickname_key×patch.
+    """Insert a leaderboard row for this 5-round run.
 
-    Also enforces one row per run fingerprint×patch so the same 5-round replay
-    cannot be re-uploaded under a different nickname.
+    Same nickname may appear many times (one row per distinct replay).
+    Duplicate ``run_fp``×``patch`` is rejected (HTTP 409) whether the
+    nickname matches or not — cannot re-upload the same score by renaming.
 
-    Equal score replaces (refresh to newer run). Worse returns retained best.
+    ``updated`` is True on insert. ``retained`` is always None on success paths
+    (kept for API shape compatibility with older clients).
 
-    Uses BEGIN IMMEDIATE so concurrent first-submits for the same key cannot
-    both pass a SELECT-then-INSERT race on the unique constraint.
+    Uses BEGIN IMMEDIATE so concurrent same-fingerprint inserts serialize
+    against the unique index.
     """
     nick = str(run["nickname"])
     key = str(run["nickname_key"])
@@ -738,86 +817,48 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
     try:
         ensure_meta_pick_schema(con)
         con.row_factory = sqlite3.Row
-        # Schema setup commits; start an exclusive write transaction for the
-        # read/decision/write path so two concurrent first inserts serialize.
-        # created_at is stamped only after this lock (and only on write paths)
-        # so timestamps reflect serialized write order, not pre-lock wait time.
+        # Schema setup commits; exclusive write lock for read/decision/write.
+        # created_at is stamped only after this lock so timestamps reflect
+        # serialized write order, not pre-lock wait time.
         con.execute("BEGIN IMMEDIATE")
         try:
-            # Same replay already on the board under another nickname → hard reject.
             by_fp = con.execute(
                 "SELECT * FROM meta_pick_runs WHERE run_fp = ? AND patch = ?",
                 (run_fp, patch),
             ).fetchone()
-            if by_fp is not None and str(by_fp["nickname_key"]) != key:
+            if by_fp is not None:
                 con.rollback()
                 raise MetaPickError(
-                    "this run was already submitted — change nickname cannot re-upload the same score",
+                    "this run was already submitted — cannot re-upload the same score",
                     status_code=409,
                 )
 
-            existing = con.execute(
-                "SELECT * FROM meta_pick_runs WHERE nickname_key = ? AND patch = ?",
-                (key, patch),
-            ).fetchone()
-            if existing is not None:
-                old_avg = float(existing["avg_rank"])
-                if avg_rank > old_avg:
-                    entry = _row_to_entry(existing)
-                    # Release the write lock cleanly without writing.
-                    # Worse score: no timestamp generation.
-                    con.rollback()
-                    return UpsertResult(
-                        updated=False,
-                        entry=entry,
-                        retained=entry,
-                    )
-                # Stamp after decision + under the write lock.
-                now_iso = utc_now_iso()
-                con.execute(
-                    """
-                    UPDATE meta_pick_runs
-                    SET nickname = ?, avg_rank = ?, ranks_json = ?, rounds_json = ?,
-                        total_combos = ?, run_fp = ?, created_at = ?
-                    WHERE nickname_key = ? AND patch = ?
-                    """,
-                    (
-                        nick,
-                        avg_rank,
-                        ranks_json,
-                        rounds_json,
-                        total_combos,
-                        run_fp,
-                        now_iso,
-                        key,
-                        patch,
-                    ),
-                )
-            else:
-                # Stamp after decision + under the write lock.
-                now_iso = utc_now_iso()
-                con.execute(
-                    """
-                    INSERT INTO meta_pick_runs (
-                        nickname, nickname_key, patch, avg_rank, ranks_json,
-                        rounds_json, total_combos, run_fp, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        nick,
-                        key,
-                        patch,
-                        avg_rank,
-                        ranks_json,
-                        rounds_json,
-                        total_combos,
-                        run_fp,
-                        now_iso,
-                    ),
-                )
+            now_iso = utc_now_iso()
+            # Keep legacy `flag` column empty for schema compatibility.
+            cur = con.execute(
+                """
+                INSERT INTO meta_pick_runs (
+                    nickname, nickname_key, patch, avg_rank, ranks_json,
+                    rounds_json, total_combos, run_fp, flag, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    nick,
+                    key,
+                    patch,
+                    avg_rank,
+                    ranks_json,
+                    rounds_json,
+                    total_combos,
+                    run_fp,
+                    "",
+                    now_iso,
+                ),
+            )
+            row_id = int(cur.lastrowid)
             row = con.execute(
-                "SELECT * FROM meta_pick_runs WHERE nickname_key = ? AND patch = ?",
-                (key, patch),
+                "SELECT * FROM meta_pick_runs WHERE id = ?",
+                (row_id,),
             ).fetchone()
             assert row is not None
             entry = _row_to_entry(row)
@@ -828,9 +869,9 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
             raise
         except sqlite3.IntegrityError as exc:
             con.rollback()
-            # Concurrent insert of the same run_fp×patch (or nick×patch).
+            # Concurrent insert of the same run_fp×patch.
             raise MetaPickError(
-                "this run was already submitted — change nickname cannot re-upload the same score",
+                "this run was already submitted — cannot re-upload the same score",
                 status_code=409,
             ) from exc
         except Exception:

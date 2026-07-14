@@ -7500,58 +7500,12 @@
         outline: 2px solid color-mix(in srgb, var(--accent, #f5c518) 55%, transparent);
         outline-offset: 1px;
     }
-    .game-flag-field { display: flex; flex-direction: column; gap: 6px; }
-    .game-flag-row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-    }
-    .game-flag-chip {
-        min-width: 36px;
-        min-height: 32px;
-        padding: 4px 8px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        font-size: 14px;
-        line-height: 1.2;
-        cursor: pointer;
-    }
-    .game-flag-chip.is-active {
-        border-color: color-mix(in srgb, var(--accent, #f5c518) 70%, var(--border));
-        background: color-mix(in srgb, var(--accent, #f5c518) 16%, var(--bg));
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #f5c518) 35%, transparent);
-    }
-    .game-flag-chip:disabled {
-        opacity: 0.7;
-        cursor: default;
-    }
-    .game-flag-select {
-        min-height: 32px;
-        max-width: 100%;
-        padding: 4px 8px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text);
-        font-size: 12px;
-    }
     .game-board-nick {
         display: flex;
         align-items: center;
         gap: 6px;
         min-width: 0;
     }
-    .game-board-flag {
-        flex: 0 0 auto;
-        width: 1.4em;
-        text-align: center;
-        font-size: 1.05em;
-        line-height: 1;
-    }
-    .game-board-flag.is-empty { opacity: 0.25; }
     .game-board-nick-text {
         min-width: 0;
         overflow: hidden;
