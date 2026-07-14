@@ -388,6 +388,48 @@ class DbLeaderboardTests(unittest.TestCase):
             self.assertTrue(out2["updated"])
             self.assertNotIn("flag", out2["entry"])
 
+    def test_main_id_stored_on_entry(self) -> None:
+        snap = mini_snapshot()
+        pool = [str(i) for i in range(1, 11)]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            out = submit_run(
+                db,
+                {
+                    "nickname": "主角哥",
+                    "main_id": "7",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["6", "7", "8", "9", "10"]),
+                },
+                snap,
+            )
+            self.assertEqual(out["entry"]["main_id"], "7")
+            board = list_leaderboard(db, patch="16.10", limit=10)
+            self.assertEqual(board["entries"][0]["main_id"], "7")
+            # Empty main is fine.
+            out2 = submit_run(
+                db,
+                {
+                    "nickname": "無頭像",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["1", "2", "3", "4", "5"]),
+                },
+                snap,
+            )
+            self.assertEqual(out2["entry"]["main_id"], "")
+            # Unknown champion rejected.
+            with self.assertRaises(MetaPickError):
+                submit_run(
+                    db,
+                    {
+                        "nickname": "壞ID",
+                        "main_id": "99999",
+                        "patch": "16.10",
+                        "rounds": five_rounds(pool, ["2", "3", "4", "5", "6"]),
+                    },
+                    snap,
+                )
+
     def test_same_run_different_nickname_rejected(self) -> None:
         """Changing nickname must not re-upload the same 5-round replay."""
         snap = mini_snapshot()
@@ -626,6 +668,7 @@ class ApiTests(unittest.TestCase):
                 pool = [str(i) for i in range(1, 11)]
                 body = {
                     "nickname": "Boarder",
+                    "main_id": "1",
                     "patch": "16.10",
                     "rounds": five_rounds(pool, ["6", "7", "8", "9", "10"]),
                     "avg_rank": 1.0,
@@ -638,6 +681,7 @@ class ApiTests(unittest.TestCase):
                 self.assertEqual(len(data["ranks"]), 5)
                 self.assertTrue(data["updated"])
                 self.assertNotIn("flag", data["entry"])
+                self.assertEqual(data["entry"]["main_id"], "1")
 
                 stale = client.post(
                     "/api/meta-pick/runs",

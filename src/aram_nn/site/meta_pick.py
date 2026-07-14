@@ -36,6 +36,7 @@ DEFAULT_RATE_LIMIT_PER_HOUR = 30
 # Same nickname may hold many rows (one per distinct 5-round replay).
 # Uniqueness is (run_fp, patch) only — see uq_meta_pick_runs_fp_patch.
 # Note: legacy `flag` column may still exist on older DBs (always written as '').
+# `main_id` = optional champion key id used as leaderboard avatar.
 CREATE_META_PICK_RUNS_SQL = """
 CREATE TABLE IF NOT EXISTS meta_pick_runs (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS meta_pick_runs (
     total_combos    INTEGER NOT NULL DEFAULT 252,
     run_fp          TEXT,
     flag            TEXT NOT NULL DEFAULT '',
+    main_id         TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 """
@@ -141,6 +143,27 @@ def normalize_nickname_display(raw: str) -> str:
 def nickname_key(display: str) -> str:
     """NFKC + casefold key for nickname identity (not a board uniqueness key)."""
     return unicodedata.normalize("NFKC", display).casefold()
+
+
+def normalize_main_id(raw: Any, snapshot: dict[str, Any]) -> str:
+    """Return '' or a champion id present in the snapshot (string key)."""
+    if raw is None:
+        return ""
+    text = str(raw).strip()
+    if not text:
+        return ""
+    champs = snapshot.get("champs") or {}
+    known = {str(k) for k in champs.keys()}
+    if text in known:
+        return text
+    # Numeric payloads sometimes arrive without string keys matching.
+    try:
+        as_int = str(int(text))
+    except (TypeError, ValueError):
+        as_int = ""
+    if as_int and as_int in known:
+        return as_int
+    raise MetaPickError("main_id must be empty or a known champion id")
 
 
 # ---------------------------------------------------------------------------
@@ -610,9 +633,14 @@ def validate_round_input(
 
 def validate_submit_payload(
     payload: dict[str, Any], snapshot: dict[str, Any]
-) -> tuple[str, str, list[tuple[list[str], list[str]]]]:
+) -> tuple[str, str, str, list[tuple[list[str], list[str]]]]:
     nickname = normalize_nickname_display(payload.get("nickname") or "")
     # Legacy clients may still send `flag`; ignore it.
+    # Accept main_id (preferred) or main as optional avatar champion.
+    main_raw = payload.get("main_id")
+    if main_raw is None:
+        main_raw = payload.get("main")
+    main_id = normalize_main_id(main_raw, snapshot)
     patch = str(payload.get("patch") or "").strip()
     if not patch:
         raise MetaPickError("patch is required")
@@ -625,14 +653,14 @@ def validate_submit_payload(
     parsed: list[tuple[list[str], list[str]]] = []
     for i, rnd in enumerate(rounds):
         parsed.append(validate_round_input(rnd, snapshot, index=i))
-    return nickname, patch, parsed
+    return nickname, main_id, patch, parsed
 
 
 def recompute_run(
     payload: dict[str, Any], snapshot: dict[str, Any]
 ) -> dict[str, Any]:
     """Validate + recompute all ranks. Ignores any client score fields."""
-    nickname, patch, rounds = validate_submit_payload(payload, snapshot)
+    nickname, main_id, patch, rounds = validate_submit_payload(payload, snapshot)
     scored: list[ScoredRound] = []
     for pool, picked in rounds:
         sc = score_round(pool, picked, snapshot)
@@ -657,6 +685,7 @@ def recompute_run(
     return {
         "nickname": nickname,
         "nickname_key": nickname_key(nickname),
+        "main_id": main_id,
         "patch": patch,
         "ranks": ranks,
         "avg_rank": avg_rank,
@@ -708,6 +737,7 @@ def _migrate_drop_nick_patch_unique(con: sqlite3.Connection) -> None:
             total_combos    INTEGER NOT NULL DEFAULT 252,
             run_fp          TEXT,
             flag            TEXT NOT NULL DEFAULT '',
+            main_id         TEXT NOT NULL DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         )
         """
@@ -715,15 +745,17 @@ def _migrate_drop_nick_patch_unique(con: sqlite3.Connection) -> None:
     cols = {str(r[1]) for r in con.execute("PRAGMA table_info(meta_pick_runs)").fetchall()}
     run_fp_expr = "run_fp" if "run_fp" in cols else "NULL"
     flag_expr = "flag" if "flag" in cols else "''"
+    main_expr = "main_id" if "main_id" in cols else "''"
     con.execute(
         f"""
         INSERT INTO meta_pick_runs__new (
             id, nickname, nickname_key, patch, avg_rank, ranks_json,
-            rounds_json, total_combos, run_fp, flag, created_at
+            rounds_json, total_combos, run_fp, flag, main_id, created_at
         )
         SELECT
             id, nickname, nickname_key, patch, avg_rank, ranks_json,
-            rounds_json, total_combos, {run_fp_expr}, {flag_expr}, created_at
+            rounds_json, total_combos, {run_fp_expr}, {flag_expr},
+            {main_expr}, created_at
         FROM meta_pick_runs
         """
     )
@@ -740,6 +772,10 @@ def ensure_meta_pick_schema(con: sqlite3.Connection) -> None:
     if "flag" not in cols:
         con.execute(
             "ALTER TABLE meta_pick_runs ADD COLUMN flag TEXT NOT NULL DEFAULT ''"
+        )
+    if "main_id" not in cols:
+        con.execute(
+            "ALTER TABLE meta_pick_runs ADD COLUMN main_id TEXT NOT NULL DEFAULT ''"
         )
     # Drop legacy best-only UNIQUE(nickname_key, patch) so multi-entry nicks work.
     if _meta_pick_has_nick_patch_unique(con):
@@ -775,9 +811,11 @@ def _row_to_entry(row: sqlite3.Row | tuple) -> dict[str, Any]:
             ranks = json.loads(ranks)
         except json.JSONDecodeError:
             ranks = []
+    main_id = str(d.get("main_id") or "").strip()
     return {
         "id": int(d["id"]),
         "nickname": str(d["nickname"]),
+        "main_id": main_id,
         "patch": str(d["patch"]),
         "avg_rank": float(d["avg_rank"]),
         "ranks": ranks if isinstance(ranks, list) else [],
@@ -801,6 +839,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
     """
     nick = str(run["nickname"])
     key = str(run["nickname_key"])
+    main_id = str(run.get("main_id") or "").strip()
     patch = str(run["patch"])
     avg_rank = float(run["avg_rank"])
     ranks_json = json.dumps(run["ranks"], ensure_ascii=False, separators=(",", ":"))
@@ -839,8 +878,8 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                 """
                 INSERT INTO meta_pick_runs (
                     nickname, nickname_key, patch, avg_rank, ranks_json,
-                    rounds_json, total_combos, run_fp, flag, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    rounds_json, total_combos, run_fp, flag, main_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     nick,
@@ -852,6 +891,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                     total_combos,
                     run_fp,
                     "",
+                    main_id,
                     now_iso,
                 ),
             )

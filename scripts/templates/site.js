@@ -1172,6 +1172,10 @@
             gameNickLabel: '暱稱',
             gameNickPlaceholder: '2–16 字',
             gameNickInvalid: '暱稱需 2–16 個字（去頭尾空白）',
+            gameMainLabel: 'MAIN',
+            gameMainNone: '無',
+            gameMainSearch: '搜尋英雄…',
+            gameMainHint: '選一隻當頭像（可略）',
             gameSubmit: '上傳成績',
             gameSubmitting: '上傳中…',
             gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
@@ -1457,6 +1461,10 @@
             gameNickLabel: 'Nickname',
             gameNickPlaceholder: '2–16 characters',
             gameNickInvalid: 'Nickname must be 2–16 characters (after trim)',
+            gameMainLabel: 'MAIN',
+            gameMainNone: 'None',
+            gameMainSearch: 'Search champion…',
+            gameMainHint: 'Pick a champion avatar (optional)',
             gameSubmit: 'Submit score',
             gameSubmitting: 'Submitting…',
             gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
@@ -4951,6 +4959,7 @@
         dealt: false,
     };
     /** 5-round run state (leaderboard MVP). */
+    const META_PICK_MAIN_KEY = 'arammeta.metaPick.mainId';
     const metaPickSession = {
         rounds: [], // { pool_ids, picked_ids, rank, total }
         recordedThisReveal: false,
@@ -4958,6 +4967,8 @@
         submitState: 'idle', // idle | submitting | ok | err
         submitMessage: '',
         nickname: '',
+        mainId: '',
+        mainQuery: '',
         boardLoaded: false,
         boardLoading: false,
         boardError: '',
@@ -4965,6 +4976,160 @@
         boardTotal: 0,
         boardPatch: '',
     };
+
+    function metaPickNormalizeMainIdClient(raw) {
+        const cid = String(raw == null ? '' : raw).trim();
+        if (!cid) return '';
+        const champs = (DATA && DATA.champs) || {};
+        if (champs[cid]) return cid;
+        try {
+            const asInt = String(parseInt(cid, 10));
+            if (asInt && champs[asInt]) return asInt;
+        } catch { /* ignore */ }
+        return '';
+    }
+
+    function metaPickLoadSavedMainRaw() {
+        try {
+            return String(localStorage.getItem(META_PICK_MAIN_KEY) || '').trim();
+        } catch {
+            return '';
+        }
+    }
+
+    function metaPickSaveMain(cid) {
+        // Allow clear even before DATA is ready; otherwise require a known champ.
+        const raw = String(cid == null ? '' : cid).trim();
+        const mainId = raw ? metaPickNormalizeMainIdClient(raw) : '';
+        if (raw && !mainId) return;
+        metaPickSession.mainId = mainId;
+        try {
+            if (mainId) localStorage.setItem(META_PICK_MAIN_KEY, mainId);
+            else localStorage.removeItem(META_PICK_MAIN_KEY);
+        } catch { /* ignore */ }
+    }
+
+    function metaPickEnsureMainLoaded() {
+        if (metaPickSession.mainId) {
+            metaPickSession.mainId = metaPickNormalizeMainIdClient(metaPickSession.mainId);
+            return;
+        }
+        metaPickSession.mainId = metaPickNormalizeMainIdClient(metaPickLoadSavedMainRaw());
+    }
+
+    function metaPickChampAvatarHtml(cid, opts) {
+        const o = opts || {};
+        const mainId = metaPickNormalizeMainIdClient(cid);
+        const info = mainId && DATA && DATA.champs ? (DATA.champs[mainId] || {}) : {};
+        const name = mainId ? champName(info, mainId) : '';
+        const cls = ['game-main-avatar', o.className || '', mainId ? '' : 'is-empty']
+            .filter(Boolean).join(' ');
+        if (!mainId || !info.image) {
+            return (
+                `<span class="${cls}" aria-hidden="true"${o.title ? ` title="${escHtml(o.title)}"` : ''}>`
+                + `${escHtml(o.emptyLabel || '·')}`
+                + `</span>`
+            );
+        }
+        return (
+            `<span class="${cls}" title="${escHtml(name)}">`
+            + `<img loading="lazy" src="${escHtml(info.image)}" alt="${escHtml(name)}">`
+            + `</span>`
+        );
+    }
+
+    function metaPickMainPickerHtml(copy, locked) {
+        const selected = metaPickNormalizeMainIdClient(metaPickSession.mainId);
+        const q = String(metaPickSession.mainQuery || '').trim().toLowerCase();
+        const champs = (DATA && DATA.champs) || {};
+        const rows = Object.keys(champs).map((cid) => {
+            const info = champs[cid] || {};
+            const name = champName(info, cid);
+            const alias = String(info.alias || info.name_en || '').toLowerCase();
+            const nameZh = String(info.name_zh || info.name || '').toLowerCase();
+            const nameEn = String(info.name_en || '').toLowerCase();
+            const hay = `${name} ${nameZh} ${nameEn} ${alias} ${cid}`.toLowerCase();
+            return { cid, info, name, hay };
+        }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        const chips = rows.map((row) => {
+            const match = !q || row.hay.includes(q);
+            const active = row.cid === selected;
+            const img = row.info.image
+                ? `<img loading="lazy" src="${escHtml(row.info.image)}" alt="">`
+                : '';
+            return (
+                `<button type="button" class="game-main-chip${active ? ' is-active' : ''}${match ? '' : ' is-hidden'}"`
+                + ` data-game-main="${escHtml(row.cid)}"`
+                + ` title="${escHtml(row.name)}"`
+                + ` aria-pressed="${active ? 'true' : 'false'}"`
+                + `${locked ? ' disabled' : ''}>`
+                + img
+                + `</button>`
+            );
+        }).join('');
+        const noneActive = !selected;
+        const preview = metaPickChampAvatarHtml(selected, {
+            className: 'is-preview',
+            emptyLabel: '?',
+            title: selected ? '' : (copy.gameMainNone || 'None'),
+        });
+        const selName = selected
+            ? champName((champs[selected] || {}), selected)
+            : (copy.gameMainNone || 'None');
+        return (
+            `<div class="game-main-field">`
+            + `<div class="game-settle-label" id="game-main-label">`
+            + `${escHtml(copy.gameMainLabel || 'MAIN')}`
+            + `<span class="game-main-hint">${escHtml(copy.gameMainHint || '')}</span>`
+            + `</div>`
+            + `<div class="game-main-selected">`
+            + preview
+            + `<span class="game-main-selected-name">${escHtml(selName)}</span>`
+            + `<button type="button" class="game-main-none${noneActive ? ' is-active' : ''}"`
+            + ` data-game-main=""`
+            + ` aria-pressed="${noneActive ? 'true' : 'false'}"`
+            + `${locked ? ' disabled' : ''}>`
+            + `${escHtml(copy.gameMainNone || 'None')}`
+            + `</button>`
+            + `</div>`
+            + `<input type="search" id="game-main-search" class="game-settle-input game-main-search"`
+            + ` value="${escHtml(metaPickSession.mainQuery || '')}"`
+            + ` placeholder="${escHtml(copy.gameMainSearch || 'Search…')}"`
+            + ` aria-label="${escHtml(copy.gameMainSearch || 'Search champion')}"`
+            + ` autocomplete="off"`
+            + `${locked ? ' disabled' : ''}>`
+            + `<div class="game-main-grid" role="group" aria-labelledby="game-main-label">`
+            + chips
+            + `</div>`
+            + `</div>`
+        );
+    }
+
+    function metaPickFilterMainPicker() {
+        const q = String(metaPickSession.mainQuery || '').trim().toLowerCase();
+        const grid = document.querySelector('.game-main-grid');
+        if (!grid) return;
+        const champs = (DATA && DATA.champs) || {};
+        grid.querySelectorAll('[data-game-main]').forEach((btn) => {
+            const cid = btn.getAttribute('data-game-main') || '';
+            if (!cid) return; // "none" button lives outside grid
+            if (!q) {
+                btn.classList.remove('is-hidden');
+                return;
+            }
+            const info = champs[cid] || {};
+            const name = champName(info, cid);
+            const hay = [
+                name,
+                info.name_zh,
+                info.name_en,
+                info.alias,
+                info.name,
+                cid,
+            ].map((x) => String(x || '').toLowerCase()).join(' ');
+            btn.classList.toggle('is-hidden', !hay.includes(q));
+        });
+    }
 
     function metaPickApiBase() {
         const base = (typeof META_PICK_API_BASE === 'string' ? META_PICK_API_BASE : '').trim();
@@ -5353,7 +5518,7 @@
         metaPickSession.settled = false;
         metaPickSession.submitState = 'idle';
         metaPickSession.submitMessage = '';
-        // Keep nickname draft for convenience.
+        // Keep nickname + MAIN draft for convenience.
     }
 
     function metaPickNextRound() {
@@ -5420,8 +5585,10 @@
         metaPickSession.submitState = 'submitting';
         metaPickSession.submitMessage = copy.gameSubmitting || 'Submitting…';
         renderMetaPick();
+        const mainId = metaPickNormalizeMainIdClient(metaPickSession.mainId);
         const body = {
             nickname: nick.text,
+            main_id: mainId,
             patch,
             rounds: metaPickSession.rounds.map(r => ({
                 pool_ids: r.pool_ids,
@@ -5548,10 +5715,15 @@
                 const ovrTxt = ovr == null ? '—' : metaPickFormatOvr(ovr);
                 return `<span class="game-board-rk ${gCls}" title="#${escHtml(String(rk))}">${escHtml(ovrTxt)}</span>`;
             }).join('<span class="game-board-rk-sep"> · </span>');
+            const avatarHtml = metaPickChampAvatarHtml(e.main_id, {
+                className: 'is-board',
+                emptyLabel: '',
+            });
             return (
                 `<tr>`
                 + `<td class="game-board-pos">${i + 1}</td>`
                 + `<td class="game-board-nick">`
+                + avatarHtml
                 + `<span class="game-board-nick-text">${escHtml(String(e.nickname || ''))}</span>`
                 + `</td>`
                 + `<td class="game-board-avg ${avgG}" title="${Number.isFinite(avgRank) ? `#${avgRank.toFixed(1)} / ${totalCombos}` : ''}">${escHtml(avgTxt)}</td>`
@@ -5576,6 +5748,7 @@
     }
 
     function metaPickSettlementHtml(copy) {
+        metaPickEnsureMainLoaded();
         const rounds = metaPickSession.rounds || [];
         const avgRank = metaPickSessionAvgRank();
         const avgOvr = metaPickSessionAvgOvr();
@@ -5633,6 +5806,7 @@
             + `placeholder="${escHtml(copy.gameNickPlaceholder || '2–16 characters')}" `
             + `aria-label="${escHtml(copy.gameNickLabel || 'Nickname')}"`
             + `${locked ? ' readonly' : ''}>`
+            + metaPickMainPickerHtml(copy, locked)
             + `<div class="game-settle-actions">`
             + `<button type="submit" class="tool-btn" id="game-submit" ${canSubmit ? '' : 'disabled'}>`
             + `${escHtml(metaPickSession.submitState === 'submitting'
@@ -7731,8 +7905,35 @@
         ev.preventDefault();
         const nickEl = document.getElementById('game-nick');
         if (nickEl) metaPickSession.nickname = nickEl.value;
+        const searchEl = document.getElementById('game-main-search');
+        if (searchEl) metaPickSession.mainQuery = searchEl.value;
         metaPickSubmitRun();
-        trackEvent('game_submit_run', {});
+        trackEvent('game_submit_run', {
+            main_id: metaPickNormalizeMainIdClient(metaPickSession.mainId) || '',
+        });
+    });
+
+    document.addEventListener('click', (ev) => {
+        const mainBtn = ev.target && ev.target.closest
+            ? ev.target.closest('[data-game-main]')
+            : null;
+        if (mainBtn && !mainBtn.disabled && mainBtn.closest('#game-settle-form')) {
+            ev.preventDefault();
+            const nickEl = document.getElementById('game-nick');
+            if (nickEl) metaPickSession.nickname = nickEl.value;
+            const searchEl = document.getElementById('game-main-search');
+            if (searchEl) metaPickSession.mainQuery = searchEl.value;
+            metaPickSaveMain(mainBtn.getAttribute('data-game-main') || '');
+            if (typeof renderMetaPick === 'function') renderMetaPick();
+            return;
+        }
+    }, true);
+
+    document.addEventListener('input', (ev) => {
+        const sel = ev.target && ev.target.id === 'game-main-search' ? ev.target : null;
+        if (!sel) return;
+        metaPickSession.mainQuery = sel.value || '';
+        metaPickFilterMainPicker();
     });
 
     document.addEventListener('click', (ev) => {
