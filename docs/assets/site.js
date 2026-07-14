@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784047640");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784048997");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -1175,7 +1175,7 @@
             gameMainLabel: 'MAIN',
             gameMainNone: '無',
             gameMainSearch: '搜尋英雄…',
-            gameMainHint: '選一隻當頭像（可略）',
+            gameMainHint: '選一隻當頭像（可略，會自動記住）',
             gameSubmit: '上傳成績',
             gameSubmitting: '上傳中…',
             gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
@@ -1464,7 +1464,7 @@
             gameMainLabel: 'MAIN',
             gameMainNone: 'None',
             gameMainSearch: 'Search champion…',
-            gameMainHint: 'Pick a champion avatar (optional)',
+            gameMainHint: 'Champion avatar (optional, remembered)',
             gameSubmit: 'Submit score',
             gameSubmitting: 'Submitting…',
             gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
@@ -4960,6 +4960,7 @@
     };
     /** 5-round run state (leaderboard MVP). */
     const META_PICK_MAIN_KEY = 'arammeta.metaPick.mainId';
+    const META_PICK_NICK_KEY = 'arammeta.metaPick.nickname';
     const metaPickSession = {
         rounds: [], // { pool_ids, picked_ids, rank, total }
         recordedThisReveal: false,
@@ -4997,6 +4998,14 @@
         }
     }
 
+    function metaPickLoadSavedNickRaw() {
+        try {
+            return String(localStorage.getItem(META_PICK_NICK_KEY) || '');
+        } catch {
+            return '';
+        }
+    }
+
     function metaPickSaveMain(cid) {
         // Allow clear even before DATA is ready; otherwise require a known champ.
         const raw = String(cid == null ? '' : cid).trim();
@@ -5009,12 +5018,31 @@
         } catch { /* ignore */ }
     }
 
+    /** Persist nickname draft (local only). Keeps text even if length not yet valid. */
+    function metaPickSaveNick(raw) {
+        const text = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+        // Cap storage to nickname max + a little headroom for mid-edit drafts.
+        const clipped = [...text].slice(0, 32).join('');
+        metaPickSession.nickname = clipped;
+        try {
+            if (clipped) localStorage.setItem(META_PICK_NICK_KEY, clipped);
+            else localStorage.removeItem(META_PICK_NICK_KEY);
+        } catch { /* ignore */ }
+    }
+
     function metaPickEnsureMainLoaded() {
         if (metaPickSession.mainId) {
             metaPickSession.mainId = metaPickNormalizeMainIdClient(metaPickSession.mainId);
             return;
         }
         metaPickSession.mainId = metaPickNormalizeMainIdClient(metaPickLoadSavedMainRaw());
+    }
+
+    function metaPickEnsureProfileLoaded() {
+        metaPickEnsureMainLoaded();
+        if (!metaPickSession.nickname) {
+            metaPickSession.nickname = metaPickLoadSavedNickRaw();
+        }
     }
 
     function metaPickChampAvatarHtml(cid, opts) {
@@ -5748,7 +5776,7 @@
     }
 
     function metaPickSettlementHtml(copy) {
-        metaPickEnsureMainLoaded();
+        metaPickEnsureProfileLoaded();
         const rounds = metaPickSession.rounds || [];
         const avgRank = metaPickSessionAvgRank();
         const avgOvr = metaPickSessionAvgOvr();
@@ -7904,9 +7932,11 @@
         if (!form) return;
         ev.preventDefault();
         const nickEl = document.getElementById('game-nick');
-        if (nickEl) metaPickSession.nickname = nickEl.value;
+        if (nickEl) metaPickSaveNick(nickEl.value);
         const searchEl = document.getElementById('game-main-search');
         if (searchEl) metaPickSession.mainQuery = searchEl.value;
+        // Re-persist MAIN in case session was restored only in memory.
+        metaPickSaveMain(metaPickSession.mainId || '');
         metaPickSubmitRun();
         trackEvent('game_submit_run', {
             main_id: metaPickNormalizeMainIdClient(metaPickSession.mainId) || '',
@@ -7920,7 +7950,7 @@
         if (mainBtn && !mainBtn.disabled && mainBtn.closest('#game-settle-form')) {
             ev.preventDefault();
             const nickEl = document.getElementById('game-nick');
-            if (nickEl) metaPickSession.nickname = nickEl.value;
+            if (nickEl) metaPickSaveNick(nickEl.value);
             const searchEl = document.getElementById('game-main-search');
             if (searchEl) metaPickSession.mainQuery = searchEl.value;
             metaPickSaveMain(mainBtn.getAttribute('data-game-main') || '');
@@ -7930,10 +7960,16 @@
     }, true);
 
     document.addEventListener('input', (ev) => {
-        const sel = ev.target && ev.target.id === 'game-main-search' ? ev.target : null;
-        if (!sel) return;
-        metaPickSession.mainQuery = sel.value || '';
-        metaPickFilterMainPicker();
+        const t = ev.target;
+        if (!t) return;
+        if (t.id === 'game-nick') {
+            metaPickSaveNick(t.value);
+            return;
+        }
+        if (t.id === 'game-main-search') {
+            metaPickSession.mainQuery = t.value || '';
+            metaPickFilterMainPicker();
+        }
     });
 
     document.addEventListener('click', (ev) => {
@@ -8169,9 +8205,12 @@
             // Form submit handler also covers this; keep click path for safety.
             ev.preventDefault();
             const nickEl = document.getElementById('game-nick');
-            if (nickEl) metaPickSession.nickname = nickEl.value;
+            if (nickEl) metaPickSaveNick(nickEl.value);
+            metaPickSaveMain(metaPickSession.mainId || '');
             metaPickSubmitRun();
-            trackEvent('game_submit_run', {});
+            trackEvent('game_submit_run', {
+                main_id: metaPickNormalizeMainIdClient(metaPickSession.mainId) || '',
+            });
             return;
         }
         const removeBtn = ev.target.closest('[data-remove-cid]');
