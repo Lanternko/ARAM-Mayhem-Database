@@ -13,6 +13,26 @@ for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
 
 
+PRODUCTION_SITE_URL = "https://arammeta.com"
+PRODUCTION_META_PICK_API_URL = "https://api.arammeta.com"
+
+
+def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
+    """Keep production builds wired to the one public leaderboard API."""
+    normalized_site = site_url.strip().rstrip("/")
+    normalized_api = meta_pick_api_url.strip().rstrip("/")
+    if normalized_site != PRODUCTION_SITE_URL:
+        return normalized_api
+    if not normalized_api:
+        return PRODUCTION_META_PICK_API_URL
+    if normalized_api != PRODUCTION_META_PICK_API_URL:
+        raise click.ClickException(
+            "production site requires --meta-pick-api-url "
+            f"{PRODUCTION_META_PICK_API_URL!r}; got {normalized_api!r}"
+        )
+    return normalized_api
+
+
 
 
 @click.command()
@@ -79,6 +99,10 @@ def main(
     shell_only: bool,
     meta_pick_api_url: str,
 ) -> None:
+    meta_pick_api_url = resolve_meta_pick_api_url(site_url, meta_pick_api_url)
+    if site_url.strip().rstrip("/") == PRODUCTION_SITE_URL:
+        click.echo(f"[tierlist] production Meta Pick API: {meta_pick_api_url}")
+
     if patch_prefix == "auto":
         from aram_nn.site.db import latest_patch_prefix as _latest
         patch_prefix = _latest(db, queue_id=queue_id)

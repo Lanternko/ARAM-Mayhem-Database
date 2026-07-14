@@ -869,6 +869,47 @@ class RenderContractTests(unittest.TestCase):
         # Empty base injects empty JSON string
         self.assertIn('const META_PICK_API_BASE = "";', html_empty)
 
+    def test_production_build_defaults_to_public_meta_pick_api(self) -> None:
+        import sys
+
+        root = Path(__file__).resolve().parents[1]
+        scripts = root / "scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from build_tier_list import (
+            PRODUCTION_META_PICK_API_URL,
+            resolve_meta_pick_api_url,
+        )
+
+        self.assertEqual(
+            resolve_meta_pick_api_url("https://arammeta.com/", ""),
+            PRODUCTION_META_PICK_API_URL,
+        )
+        self.assertEqual(
+            resolve_meta_pick_api_url(
+                "https://arammeta.com", "https://api.arammeta.com/"
+            ),
+            PRODUCTION_META_PICK_API_URL,
+        )
+
+    def test_production_build_rejects_another_meta_pick_api(self) -> None:
+        import sys
+
+        import click
+
+        root = Path(__file__).resolve().parents[1]
+        scripts = root / "scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from build_tier_list import resolve_meta_pick_api_url
+
+        with self.assertRaises(click.ClickException):
+            resolve_meta_pick_api_url(
+                "https://arammeta.com/", "https://wrong.example.com"
+            )
+
+        self.assertEqual(resolve_meta_pick_api_url("", ""), "")
+
 
 if __name__ == "__main__":
     unittest.main()
