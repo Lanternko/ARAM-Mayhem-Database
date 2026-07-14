@@ -489,10 +489,14 @@ def pair_lift_between(
 
 
 def score_team(ids: list[Any], snapshot: dict[str, Any]) -> float:
-    """estWr = clamp(mean WR + mean known pair lift + composition score).
+    """estWr = clamp(mean WR + mean pair lift + composition score).
 
     IDs are canonically sorted and pair lifts are bidirectional so Meta Pick
     scoring is order-invariant (matches site.js evaluateFullTeam + pairLiftBetween).
+
+    Pair synergy is averaged over all C(n,2) edges; missing pair rows count as
+    0 (not dropped). Known-only averages over-weighted sparse top-pairs and
+    made best-team chemistry look permanently maxed. Composition is separate.
     """
     list_ids = canonical_ids(ids)
     if not list_ids:
@@ -514,16 +518,16 @@ def score_team(ids: list[Any], snapshot: dict[str, Any]) -> float:
     base_wr = (wr_sum / wr_n) if wr_n else 0.5
 
     lift_sum = 0.0
-    pair_n = 0
+    pair_edges = 0
     for i, a in enumerate(list_ids):
         for j in range(i + 1, len(list_ids)):
+            pair_edges += 1
             b = list_ids[j]
             hit = pair_lift_between(champs, a, b)
             if hit is None:
                 continue
             lift_sum += hit
-            pair_n += 1
-    pair_lift = (lift_sum / pair_n) if pair_n else 0.0
+    pair_lift = (lift_sum / pair_edges) if pair_edges else 0.0
     composition_score = team_composition_score(list_ids, snapshot)
     est_raw = base_wr + pair_lift + composition_score
     return max(EST_WR_LO, min(EST_WR_HI, est_raw))
