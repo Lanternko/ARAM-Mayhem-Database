@@ -519,6 +519,8 @@ def ensure_static_site_publisher(args: argparse.Namespace) -> dict[str, Any] | N
         str(args.static_publish_state),
         "--patch-prefix",
         args.static_publish_patch_prefix,
+        "--auto-patch-min-games",
+        str(args.static_publish_auto_patch_min_games),
     ]
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     with out_path.open("ab") as out, err_path.open("ab") as err:
@@ -817,6 +819,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--static-publish-growth-ratio", type=float, default=0.10)
     parser.add_argument("--static-publish-interval-sec", type=int, default=300)
     parser.add_argument("--static-publish-patch-prefix", default="auto")
+    parser.add_argument("--static-publish-auto-patch-min-games", type=int, default=50_000)
     parser.add_argument("--static-publish-state", type=Path, default=DEFAULT_STATIC_PUBLISH_STATE)
     parser.add_argument("--static-publisher-log-dir", type=Path, default=DEFAULT_STATIC_PUBLISH_LOG_DIR)
     parser.add_argument("--model-refresher", action=argparse.BooleanOptionalAction, default=True)

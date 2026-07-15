@@ -16,6 +16,13 @@ from .static_publish import DEFAULT_SITE_URL, DEFAULT_STATE_PATH, publish_static
 @click.option("--growth-ratio", type=float, default=0.10, show_default=True, help="Publish after this fractional growth since the previous publish.")
 @click.option("--queue", "queue_id", type=int, default=2400, show_default=True)
 @click.option("--patch-prefix", default="auto", show_default=True, help='"auto" detects the latest patch from the DB.')
+@click.option(
+    "--auto-patch-min-games",
+    type=int,
+    default=50_000,
+    show_default=True,
+    help="In auto mode, keep the newest mature patch until a newer patch reaches this many games.",
+)
 @click.option("--site-url", default=DEFAULT_SITE_URL, show_default=True)
 @click.option("--branch", default="main", show_default=True)
 @click.option("--force/--no-force", default=False, show_default=True)
@@ -30,6 +37,7 @@ def main(
     growth_ratio: float,
     queue_id: int,
     patch_prefix: str,
+    auto_patch_min_games: int,
     site_url: str,
     branch: str,
     force: bool,
@@ -46,9 +54,18 @@ def main(
     last_resolved: str | None = None
     while True:
         if auto_patch:
-            resolved = latest_patch_prefix(db, queue_id=queue_id)
+            resolved = latest_patch_prefix(
+                db,
+                queue_id=queue_id,
+                min_games=max(1, auto_patch_min_games),
+                fallback_latest=False,
+            )
             if not resolved:
-                click.echo("[static-site] error: could not auto-detect patch from DB", err=True)
+                click.echo(
+                    "[static-site] error: no patch meets the auto-publish maturity floor "
+                    f"({max(1, auto_patch_min_games):,} games)",
+                    err=True,
+                )
                 if not watch:
                     raise SystemExit(1)
                 # Transient empty / mid-write DB in watch mode: wait and retry rather

@@ -86,13 +86,18 @@ def _patch_major_minor(patch: str) -> str | None:
 
 
 def latest_patch_prefix(
-    db_path: Path, *, queue_id: int = 2400, min_games: int = 1000,
+    db_path: Path,
+    *,
+    queue_id: int = 2400,
+    min_games: int = 1000,
+    fallback_latest: bool = True,
 ) -> str | None:
     """Return the most recent major.minor prefix that has at least *min_games*.
 
     Recency is determined by the newest game's ``created_ms`` within each
-    prefix group.  Falls back to the absolute most-recent prefix if none
-    meet *min_games*.
+    prefix group.  When *fallback_latest* is true, falls back to the absolute
+    most-recent prefix if none meet *min_games*; callers that publish models can
+    disable the fallback so a thin new patch cannot replace a mature one.
     """
     if not db_path.exists():
         return None
@@ -120,8 +125,10 @@ def latest_patch_prefix(
     if not prefix_stats:
         return None
     qualified = [(latest, pfx) for pfx, (n, latest) in prefix_stats.items() if n >= min_games]
-    if not qualified:
+    if not qualified and fallback_latest:
         qualified = [(latest, pfx) for pfx, (_, latest) in prefix_stats.items()]
+    if not qualified:
+        return None
     qualified.sort(reverse=True)
     return qualified[0][1]
 

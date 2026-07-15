@@ -40,11 +40,10 @@ $argsList = @(
     "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),
     "--static-publish-growth-ratio", "0.10",
     "--static-publish-threshold", "0",
-    # Pin the public tier list to the current patch (16.13, deployed 2026-06-25 at ~15k games:
-    # all 172 champions clear the 50-game floor). Explicit pin keeps controlled patch flips: a
-    # watchdog restart stays on 16.13 instead of "auto" advancing to the next thin patch. Bump
-    # this to the new patch once it has enough games (target ~50k) when 16.14+ arrives.
-    "--static-publish-patch-prefix", "16.13"
+    # Keep the current mature patch until a newer patch has enough data; then the normal
+    # site build retrains empirical profiles and team-score calibration before publishing.
+    "--static-publish-patch-prefix", "auto",
+    "--static-publish-auto-patch-min-games", "50000"
 )
 
 $pythonw = Join-Path (Split-Path (Get-Command python).Source -Parent) "pythonw.exe"

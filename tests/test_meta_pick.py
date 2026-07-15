@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import math
 import os
 import re
 import tempfile
@@ -24,6 +25,7 @@ from aram_nn.site.meta_pick import (
     normalize_nickname_display,
     rank_among,
     recompute_run,
+    rescore_stale_runs,
     score_all_teams,
     score_round,
     score_team,
@@ -179,6 +181,37 @@ class ScoringTests(unittest.TestCase):
         self.assertAlmostEqual(score - base, 0.04 / 10.0, places=12)
         self.assertGreater(score, base + 1e-9)
 
+    def test_logit_v2_calibrates_pair_and_composition_signals(self) -> None:
+        snap = mini_snapshot()
+        team = ["1", "2", "3", "4", "10"]
+        for cid in ("1", "2", "3", "4", "10"):
+            snap["champs"][cid]["pairs"] = []
+        snap["champs"]["10"]["pairs"] = [{"id": 1, "lift": 0.04, "g": 80}]
+        # One frontline champion activates the 1-front|45-55% AD table cell.
+        snap["champs"]["1"]["comp"]["front"] = 2.1
+        snap["team_score"] = {
+            "kind": "logit_v2",
+            "score_version": "unit-v2",
+            "pair_prior_games": 100,
+            "pair_logit_weight": 4.0,
+            "composition_logit_weight": 1.0,
+        }
+
+        base = 0.49
+        pair_signal = (0.04 * 80 / 180) / 10
+        composition_signal = 0.55 * 0.01
+        expected = 1 / (
+            1
+            + math.exp(
+                -(
+                    math.log(base / (1 - base))
+                    + 4.0 * pair_signal
+                    + composition_signal
+                )
+            )
+        )
+        self.assertAlmostEqual(score_team(team, snap), expected, places=12)
+
     def test_rank_recomputation_and_est_wr_clamp(self) -> None:
         snap = mini_snapshot()
         pool = [str(i) for i in range(1, 11)]
@@ -276,6 +309,41 @@ class ValidationTests(unittest.TestCase):
 
 
 class DbLeaderboardTests(unittest.TestCase):
+    def test_stale_rows_rescore_once_per_score_version(self) -> None:
+        snap = mini_snapshot()
+        pool = [str(i) for i in range(1, 11)]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            submit_run(
+                db,
+                {
+                    "nickname": "Versioned",
+                    "patch": "16.10",
+                    "rounds": five_rounds(pool, ["6", "7", "8", "9", "10"]),
+                },
+                snap,
+            )
+            snap_v2 = mini_snapshot()
+            snap_v2["team_score"] = {
+                "kind": "logit_v2",
+                "score_version": "unit-v2",
+                "pair_prior_games": 100,
+                "pair_logit_weight": 4.0,
+                "composition_logit_weight": 1.0,
+            }
+            first = rescore_stale_runs(db, snap_v2)
+            second = rescore_stale_runs(db, snap_v2)
+            self.assertEqual(first["updated"], 1)
+            self.assertEqual(second["updated"], 0)
+            con = db_connect(db)
+            try:
+                version = con.execute(
+                    "SELECT score_version FROM meta_pick_runs"
+                ).fetchone()[0]
+            finally:
+                con.close()
+            self.assertEqual(version, "unit-v2")
+
     def test_same_nickname_multiple_distinct_runs(self) -> None:
         """Same nick can hold many board rows; each distinct 5-round replay inserts."""
         snap = mini_snapshot()

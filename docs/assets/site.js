@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784049007");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260715-1784100961");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -735,7 +735,7 @@
     const DATE_STR_ZH = "更新於 2026-07-15";
     const BUILD_DATE = "2026-07-15";
     const PATCH_LABEL = "patch 26.13";
-    const TOTAL_GAMES = "553,231";
+    const TOTAL_GAMES = "554,491";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
@@ -1165,17 +1165,17 @@
             gameRoundN: n => `第 ${n} 回合`,
             gameNextRound: '下一回合',
             gameShowSettle: '結算',
-            gameSettleTitle: '五回合結算',
+            gameSettleTitle: '最終結果',
             gameSettleAvg: '平均 OVR',
             gameSettleRankSub: (avg, total) => `平均名次 #${avg} / ${total}`,
             gameOvrValueShort: ovr => `OVR ${ovr}`,
             gameNickLabel: '暱稱',
             gameNickPlaceholder: '2–16 字',
             gameNickInvalid: '暱稱需 2–16 個字（去頭尾空白）',
-            gameMainLabel: 'MAIN',
+            gameMainLabel: '個人頭像',
             gameMainNone: '無',
             gameMainSearch: '搜尋英雄…',
-            gameMainHint: '選一隻當頭像（可略，會自動記住）',
+            gameMainHint: '選你的主力英雄當個人頭像！',
             gameSubmit: '上傳成績',
             gameSubmitting: '上傳中…',
             gameSubmitOk: ovr => `已上傳 · 平均 OVR ${ovr}`,
@@ -1454,17 +1454,17 @@
             gameRoundN: n => `R${n}`,
             gameNextRound: 'Next round',
             gameShowSettle: 'Settlement',
-            gameSettleTitle: '5-round settlement',
+            gameSettleTitle: 'Final result',
             gameSettleAvg: 'Average OVR',
             gameSettleRankSub: (avg, total) => `Avg rank #${avg} / ${total}`,
             gameOvrValueShort: ovr => `OVR ${ovr}`,
             gameNickLabel: 'Nickname',
             gameNickPlaceholder: '2–16 characters',
             gameNickInvalid: 'Nickname must be 2–16 characters (after trim)',
-            gameMainLabel: 'MAIN',
+            gameMainLabel: 'Profile picture',
             gameMainNone: 'None',
             gameMainSearch: 'Search champion…',
-            gameMainHint: 'Champion avatar (optional, remembered)',
+            gameMainHint: 'Pick your main champion as your profile!',
             gameSubmit: 'Submit score',
             gameSubmitting: 'Submitting…',
             gameSubmitOk: ovr => `Submitted · avg OVR ${ovr}`,
@@ -4118,20 +4118,26 @@
         const ab = pairEntry(aId, bId);
         const ba = pairEntry(bId, aId);
         if (!ab && !ba) return null;
+        const priorGames = Math.max(0, Number(((DATA.team_score || {}).pair_prior_games) || 0));
+        const adjustedLift = row => {
+            const lift = Number((row && row.lift) || 0);
+            const games = Math.max(0, Number((row && row.g) || 0));
+            return games + priorGames > 0 ? lift * games / (games + priorGames) : 0;
+        };
         if (ab && ba) {
-            const lift = (Number(ab.lift || 0) + Number(ba.lift || 0)) / 2;
+            const lift = (adjustedLift(ab) + adjustedLift(ba)) / 2;
             const ga = Number(ab.g || 0) || 0;
             const gb = Number(ba.g || 0) || 0;
             const g = ga && gb ? Math.min(ga, gb) : (ga || gb);
             return { lift, g };
         }
         const p = ab || ba;
-        return { lift: Number(p.lift || 0), g: Number(p.g || 0) || 0 };
+        return { lift: adjustedLift(p), g: Number(p.g || 0) || 0 };
     }
 
     /**
      * Full 5-man roster evaluation for the side panel.
-     * estWr ≈ mean(champ WR) + mean(pair lifts) + composition table score.
+     * estWr = sigmoid(logit(mean champ WR) + calibrated pair + composition signals).
      * Dims = mean capability percentiles across the five champions.
      *
      * Pair lifts are looked up bidirectionally so the same 5-set always scores
@@ -4179,11 +4185,31 @@
             }
         }
         // Dense team synergy: missing edges contribute 0 (not dropped from denom).
-        const pairLift = pairEdges ? liftSum / pairEdges : 0;
-        const compositionScore = teamCompositionScore(list);
+        const pairSignal = pairEdges ? liftSum / pairEdges : 0;
+        const compositionSignal = teamCompositionScore(list);
         const teamComp = teamComposition(list);
-        // Soft clamp so noisy pair stacks don't print absurd 70%+ estimates.
-        const estRaw = baseWr + pairLift + compositionScore;
+        const scoreConfig = DATA.team_score || {};
+        let pairLift = pairSignal;
+        let compositionScore = compositionSignal;
+        let estRaw = baseWr + pairLift + compositionScore;
+        if (scoreConfig.kind === 'logit_v2') {
+            const p = Math.max(1e-6, Math.min(1 - 1e-6, baseWr));
+            const baseLogit = Math.log(p / (1 - p));
+            const pairWeight = Math.max(0, Number(scoreConfig.pair_logit_weight || 0));
+            const compositionWeight = Math.max(0, Number(scoreConfig.composition_logit_weight || 0));
+            const sigmoid = x => 1 / (1 + Math.exp(-x));
+            const afterPair = sigmoid(baseLogit + pairWeight * pairSignal);
+            estRaw = sigmoid(
+                baseLogit
+                + pairWeight * pairSignal
+                + compositionWeight * compositionSignal
+            );
+            // Keep public rows as exact probability-point deltas:
+            // baseWr + pairLift + compositionScore === estRaw before clamp.
+            pairLift = afterPair - baseWr;
+            compositionScore = estRaw - afterPair;
+        }
+        // Product guardrail remains separate from statistical calibration.
         const estWr = Math.max(0.35, Math.min(0.65, estRaw));
 
         const cap = compCapPct(meanComp);
@@ -4217,6 +4243,8 @@
             baseWr,
             pairLift,
             compositionScore,
+            pairSignal,
+            compositionSignal,
             estWr,
             pairN,
             pairTotal: TEAM_PAIR_TOTAL,

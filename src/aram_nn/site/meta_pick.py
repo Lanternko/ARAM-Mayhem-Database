@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import math
 import os
 import re
 import sqlite3
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS meta_pick_runs (
     run_fp          TEXT,
     flag            TEXT NOT NULL DEFAULT '',
     main_id         TEXT NOT NULL DEFAULT '',
+    score_version   TEXT NOT NULL DEFAULT '',
     created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 """
@@ -268,6 +270,19 @@ def snapshot_patch(snapshot: dict[str, Any]) -> str:
     return str(snapshot.get("patch_prefix") or snapshot.get("patch") or "").strip()
 
 
+def snapshot_score_version(snapshot: dict[str, Any]) -> str:
+    """Version the exact scoring snapshot used for persisted leaderboard ranks."""
+    team_score = snapshot.get("team_score") or {}
+    explicit = str(team_score.get("score_version") or "").strip()
+    if explicit:
+        return explicit
+    # Legacy snapshots predate explicit calibration ids.  detailVersion changes
+    # whenever their champion shards/payload are rebuilt, so it is a useful
+    # migration key without hashing the multi-megabyte champs mapping per request.
+    detail_version = str(snapshot.get("detailVersion") or "").strip()
+    return f"legacy-additive:{snapshot_patch(snapshot)}:{detail_version or 'unversioned'}"
+
+
 # ---------------------------------------------------------------------------
 # Canonical ID order (Meta Pick only — order-invariant scoring)
 # ---------------------------------------------------------------------------
@@ -458,7 +473,11 @@ def _pair_entry(champs: dict[str, Any], from_id: str, to_id: str) -> dict[str, A
 
 
 def pair_lift_between(
-    champs: dict[str, Any], a_id: str, b_id: str
+    champs: dict[str, Any],
+    a_id: str,
+    b_id: str,
+    *,
+    prior_games: float = 0.0,
 ) -> float | None:
     """Unordered pair lift for {a,b} — JS pairLiftBetween parity.
 
@@ -470,26 +489,28 @@ def pair_lift_between(
     ba = _pair_entry(champs, b_id, a_id)
     if not ab and not ba:
         return None
+    prior_games = max(0.0, float(prior_games or 0.0))
+
+    def adjusted(row: dict[str, Any]) -> float:
+        try:
+            lift = float(row.get("lift") or 0)
+        except (TypeError, ValueError):
+            lift = 0.0
+        try:
+            games = max(0.0, float(row.get("g") or 0))
+        except (TypeError, ValueError):
+            games = 0.0
+        return lift * games / (games + prior_games) if games + prior_games > 0 else 0.0
+
     if ab and ba:
-        try:
-            la = float(ab.get("lift") or 0)
-        except (TypeError, ValueError):
-            la = 0.0
-        try:
-            lb = float(ba.get("lift") or 0)
-        except (TypeError, ValueError):
-            lb = 0.0
-        return (la + lb) / 2.0
+        return (adjusted(ab) + adjusted(ba)) / 2.0
     p = ab or ba
     assert p is not None
-    try:
-        return float(p.get("lift") or 0)
-    except (TypeError, ValueError):
-        return 0.0
+    return adjusted(p)
 
 
 def score_team(ids: list[Any], snapshot: dict[str, Any]) -> float:
-    """estWr = clamp(mean WR + mean pair lift + composition score).
+    """Estimate one team's WR against an average opponent.
 
     IDs are canonically sorted and pair lifts are bidirectional so Meta Pick
     scoring is order-invariant (matches site.js evaluateFullTeam + pairLiftBetween).
@@ -517,19 +538,50 @@ def score_team(ids: list[Any], snapshot: dict[str, Any]) -> float:
             wr_n += 1
     base_wr = (wr_sum / wr_n) if wr_n else 0.5
 
+    score_config = snapshot.get("team_score") or {}
+    try:
+        pair_prior_games = max(0.0, float(score_config.get("pair_prior_games") or 0.0))
+    except (TypeError, ValueError):
+        pair_prior_games = 0.0
+
     lift_sum = 0.0
     pair_edges = 0
     for i, a in enumerate(list_ids):
         for j in range(i + 1, len(list_ids)):
             pair_edges += 1
             b = list_ids[j]
-            hit = pair_lift_between(champs, a, b)
+            hit = pair_lift_between(
+                champs,
+                a,
+                b,
+                prior_games=pair_prior_games,
+            )
             if hit is None:
                 continue
             lift_sum += hit
-    pair_lift = (lift_sum / pair_edges) if pair_edges else 0.0
-    composition_score = team_composition_score(list_ids, snapshot)
-    est_raw = base_wr + pair_lift + composition_score
+    pair_signal = (lift_sum / pair_edges) if pair_edges else 0.0
+    composition_signal = team_composition_score(list_ids, snapshot)
+    if score_config.get("kind") == "logit_v2":
+        try:
+            pair_weight = max(0.0, float(score_config.get("pair_logit_weight") or 0.0))
+        except (TypeError, ValueError):
+            pair_weight = 0.0
+        try:
+            composition_weight = max(
+                0.0, float(score_config.get("composition_logit_weight") or 0.0)
+            )
+        except (TypeError, ValueError):
+            composition_weight = 0.0
+        p = min(1.0 - 1e-6, max(1e-6, base_wr))
+        team_logit = (
+            math.log(p / (1.0 - p))
+            + pair_weight * pair_signal
+            + composition_weight * composition_signal
+        )
+        est_raw = 1.0 / (1.0 + math.exp(-team_logit))
+    else:
+        # Explicit compatibility path for snapshots built before team-logit-v2.
+        est_raw = base_wr + pair_signal + composition_signal
     return max(EST_WR_LO, min(EST_WR_HI, est_raw))
 
 
@@ -694,6 +746,7 @@ def recompute_run(
         "ranks": ranks,
         "avg_rank": avg_rank,
         "total_combos": TOTAL_COMBOS,
+        "score_version": snapshot_score_version(snapshot),
         "run_fp": run_fingerprint(rounds_out),
         "rounds": rounds_out,
     }
@@ -742,6 +795,7 @@ def _migrate_drop_nick_patch_unique(con: sqlite3.Connection) -> None:
             run_fp          TEXT,
             flag            TEXT NOT NULL DEFAULT '',
             main_id         TEXT NOT NULL DEFAULT '',
+            score_version   TEXT NOT NULL DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         )
         """
@@ -750,16 +804,17 @@ def _migrate_drop_nick_patch_unique(con: sqlite3.Connection) -> None:
     run_fp_expr = "run_fp" if "run_fp" in cols else "NULL"
     flag_expr = "flag" if "flag" in cols else "''"
     main_expr = "main_id" if "main_id" in cols else "''"
+    score_version_expr = "score_version" if "score_version" in cols else "''"
     con.execute(
         f"""
         INSERT INTO meta_pick_runs__new (
             id, nickname, nickname_key, patch, avg_rank, ranks_json,
-            rounds_json, total_combos, run_fp, flag, main_id, created_at
+            rounds_json, total_combos, run_fp, flag, main_id, score_version, created_at
         )
         SELECT
             id, nickname, nickname_key, patch, avg_rank, ranks_json,
             rounds_json, total_combos, {run_fp_expr}, {flag_expr},
-            {main_expr}, created_at
+            {main_expr}, {score_version_expr}, created_at
         FROM meta_pick_runs
         """
     )
@@ -780,6 +835,10 @@ def ensure_meta_pick_schema(con: sqlite3.Connection) -> None:
     if "main_id" not in cols:
         con.execute(
             "ALTER TABLE meta_pick_runs ADD COLUMN main_id TEXT NOT NULL DEFAULT ''"
+        )
+    if "score_version" not in cols:
+        con.execute(
+            "ALTER TABLE meta_pick_runs ADD COLUMN score_version TEXT NOT NULL DEFAULT ''"
         )
     # Drop legacy best-only UNIQUE(nickname_key, patch) so multi-entry nicks work.
     if _meta_pick_has_nick_patch_unique(con):
@@ -855,6 +914,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
     rounds_json = json.dumps(rounds_payload, ensure_ascii=False, separators=(",", ":"))
     total_combos = int(run.get("total_combos") or TOTAL_COMBOS)
     run_fp = str(run.get("run_fp") or run_fingerprint(rounds_payload))
+    score_version = str(run.get("score_version") or "")
 
     con = connect(db_path)
     try:
@@ -882,8 +942,9 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                 """
                 INSERT INTO meta_pick_runs (
                     nickname, nickname_key, patch, avg_rank, ranks_json,
-                    rounds_json, total_combos, run_fp, flag, main_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    rounds_json, total_combos, run_fp, flag, main_id,
+                    score_version, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     nick,
@@ -896,6 +957,7 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
                     run_fp,
                     "",
                     main_id,
+                    score_version,
                     now_iso,
                 ),
             )
@@ -925,12 +987,96 @@ def upsert_best_run(db_path: Path, run: dict[str, Any]) -> UpsertResult:
         con.close()
 
 
+def rescore_stale_runs(
+    db_path: Path,
+    snapshot: dict[str, Any],
+    *,
+    patch: str | None = None,
+) -> dict[str, int | str]:
+    """Recompute persisted ranks once when the scoring snapshot changes.
+
+    ``rounds_json`` contains the original pools/picks, so historical entries can
+    be made formula-consistent without asking players to replay or re-submit.
+    Malformed legacy rows are left untouched and reported as ``skipped``.
+    """
+    use_patch = (patch or snapshot_patch(snapshot)).strip()
+    version = snapshot_score_version(snapshot)
+    con = connect(db_path)
+    try:
+        ensure_meta_pick_schema(con)
+        con.row_factory = sqlite3.Row
+        rows = con.execute(
+            "SELECT id, nickname, main_id, patch, rounds_json "
+            "FROM meta_pick_runs WHERE patch = ? AND score_version != ?",
+            (use_patch, version),
+        ).fetchall()
+    finally:
+        con.close()
+
+    updates: list[tuple[float, str, str, int]] = []
+    skipped = 0
+    for row in rows:
+        try:
+            rounds = json.loads(str(row["rounds_json"]))
+            run = recompute_run(
+                {
+                    "nickname": str(row["nickname"]),
+                    "main_id": str(row["main_id"] or ""),
+                    "patch": str(row["patch"]),
+                    "rounds": rounds,
+                },
+                snapshot,
+            )
+            ranks_json = json.dumps(
+                run["ranks"], ensure_ascii=False, separators=(",", ":")
+            )
+            rounds_payload = [
+                {
+                    "pool_ids": r["pool_ids"],
+                    "picked_ids": r["picked_ids"],
+                    "rank": r["rank"],
+                }
+                for r in run["rounds"]
+            ]
+            rounds_json = json.dumps(
+                rounds_payload, ensure_ascii=False, separators=(",", ":")
+            )
+            updates.append((float(run["avg_rank"]), ranks_json, rounds_json, int(row["id"])))
+        except (MetaPickError, TypeError, ValueError, json.JSONDecodeError):
+            skipped += 1
+
+    if updates:
+        con = connect(db_path)
+        try:
+            ensure_meta_pick_schema(con)
+            con.execute("BEGIN IMMEDIATE")
+            con.executemany(
+                "UPDATE meta_pick_runs SET avg_rank=?, ranks_json=?, rounds_json=?, "
+                "score_version=? WHERE id=?",
+                [(*values[:3], version, values[3]) for values in updates],
+            )
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+        finally:
+            con.close()
+    return {
+        "score_version": version,
+        "updated": len(updates),
+        "skipped": skipped,
+    }
+
+
 def list_leaderboard(
     db_path: Path,
     *,
     patch: str,
     limit: int = 50,
+    snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if snapshot is not None:
+        rescore_stale_runs(db_path, snapshot, patch=patch)
     limit = max(1, min(100, int(limit)))
     con = connect(db_path)
     try:
