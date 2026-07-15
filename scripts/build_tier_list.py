@@ -408,6 +408,13 @@ def main(
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
+    info_pages = write_site_info_pages(
+        out_path,
+        site_url=site_url,
+        build_date=build_date,
+    )
+    if info_pages:
+        click.echo(f"[tierlist] wrote {len(info_pages)} site information file(s)")
 
     # Hand-made article cover banners live (committed) under docs/assets/covers
     # and are referenced as assets/covers/<file>.  Mirror them into the build

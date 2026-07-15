@@ -3322,6 +3322,31 @@
         margin-top: 6px;
         color: #555a63;
     }
+    .footer .site-links {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin-top: 10px;
+    }
+    .footer .site-links a {
+        color: var(--text-muted, #8d96a0);
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+        text-underline-offset: 3px;
+        transition: color var(--dur-1) var(--ease);
+    }
+    .footer .site-links a:hover {
+        color: var(--text, #e6e8eb);
+        text-decoration: underline;
+    }
+    .footer .site-links a:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent, #48b868) 60%, transparent);
+        outline-offset: 3px;
+        border-radius: 3px;
+    }
     /* Footer GitHub star: still meta-level, but reads as a real control
        (pill + border + hover lift) so it is not mistaken for plain text. */
     .footer .gh-star {
