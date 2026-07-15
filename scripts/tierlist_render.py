@@ -1625,6 +1625,7 @@ def render_html(
     aug_global: dict[int, dict] | None = None,
     script_assets_dir: Path | None = None,
     meta_pick_api_url: str = "",
+    team_score_bundle: dict[str, object] | None = None,
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -2006,6 +2007,27 @@ def render_html(
 
     css = _read_site_template("site.css")
 
+    trained_composition = dict((team_score_bundle or {}).get("composition") or {})
+    recommendation_composition = {
+        "weight": trained_composition.get("weight", RECOMMENDATION_COMPOSITION_WEIGHT),
+        "clamp": trained_composition.get("clamp", RECOMMENDATION_COMPOSITION_CLAMP),
+        "lack_thresholds": trained_composition.get(
+            "lack_thresholds", COMPOSITION_LACK_THRESHOLDS
+        ),
+        "table_weights": trained_composition.get(
+            "table_weights", RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS
+        ),
+        "tables": trained_composition.get("tables", RECOMMENDATION_COMPOSITION_TABLES),
+        "damage_mix": {
+            "target_ad_share": RECOMMENDATION_DAMAGE_MIX_TARGET_AD,
+            "weight": RECOMMENDATION_DAMAGE_MIX_WEIGHT,
+            "clamp": RECOMMENDATION_DAMAGE_MIX_CLAMP,
+        },
+    }
+    for key in ("trained_patch", "trained_games", "cell_prior_games"):
+        if key in trained_composition:
+            recommendation_composition[key] = trained_composition[key]
+
     payload = {
         "champs": js_champs,
         "augs": js_augs,
@@ -2027,18 +2049,8 @@ def render_html(
         "min_games_per_pair": min_games_per_pair,
         "min_synergy_games": min_synergy_games,
         "patchChanges": patch_changes or {},
-        "recommendation_composition": {
-            "weight": RECOMMENDATION_COMPOSITION_WEIGHT,
-            "clamp": RECOMMENDATION_COMPOSITION_CLAMP,
-            "lack_thresholds": COMPOSITION_LACK_THRESHOLDS,
-            "table_weights": RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS,
-            "tables": RECOMMENDATION_COMPOSITION_TABLES,
-            "damage_mix": {
-                "target_ad_share": RECOMMENDATION_DAMAGE_MIX_TARGET_AD,
-                "weight": RECOMMENDATION_DAMAGE_MIX_WEIGHT,
-                "clamp": RECOMMENDATION_DAMAGE_MIX_CLAMP,
-            },
-        },
+        "recommendation_composition": recommendation_composition,
+        "team_score": dict((team_score_bundle or {}).get("team_score") or {}),
         "draftModel": load_draft_composition_lr_payload(),
     }
     if icon_assets_dir is not None:
@@ -2580,10 +2592,10 @@ def render_html(
         "<div class='game-header-top'>"
         "<div class='game-header-text'>"
         "<h2 data-i18n-zh='Meta Pick' data-i18n-en='Meta Pick'>Meta Pick</h2>"
-        "<p class='game-sub' data-i18n-zh='5 回合挑戰：每回合從 10 隻挑最強 5 隻（鎖定前不顯示勝率）' "
-        "data-i18n-zh-cn='5 回合挑战：每回合从 10 只挑最强 5 只（锁定前不显示胜率）' "
-        "data-i18n-en='5-round challenge: each round pick the strongest 5 of 10 (WR hidden until lock)'>"
-        "5 回合挑戰：每回合從 10 隻挑最強 5 隻（鎖定前不顯示勝率）</p>"
+        "<p class='game-sub' data-i18n-zh='5 回合挑戰：每回合從 10 隻英雄池挑最強 5 人隊（鎖定前不顯示勝率）' "
+        "data-i18n-zh-cn='5 回合挑战：每回合从 10 只英雄池挑最强 5 人队（锁定前不显示胜率）' "
+        "data-i18n-en='5-round challenge: each round pick the strongest 5-champ team from a 10-champ pool (WR hidden until lock)'>"
+        "5 回合挑戰：每回合從 10 隻英雄池挑最強 5 人隊（鎖定前不顯示勝率）</p>"
         "</div>"
         # Hover/focus tip: how to think about team WR when playing Meta Pick.
         # data-i18n lives on leaf nodes only (applyLanguage sets textContent).

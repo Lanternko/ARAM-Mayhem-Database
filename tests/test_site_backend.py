@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from aram_nn.site.db import count_games, insert_public_games, iter_public_games
+from aram_nn.site.db import count_games, insert_public_games, iter_public_games, latest_patch_prefix
 from aram_nn.site.sync import decide_sync
 
 
@@ -87,6 +87,28 @@ class SiteBackendTests(unittest.TestCase):
 
             self.assertFalse(wait.should_push)
             self.assertTrue(push.should_push)
+
+    def test_latest_patch_can_require_a_mature_auto_publish_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "site.db"
+            rows = [
+                {**game_row(f"TW_old_{idx}", created_ms=idx), "patch": "16.13.1"}
+                for idx in range(3)
+            ]
+            rows.extend(
+                {**game_row(f"TW_new_{idx}", created_ms=100 + idx), "patch": "16.14.1"}
+                for idx in range(2)
+            )
+            insert_public_games(db, rows)
+
+            self.assertEqual(
+                latest_patch_prefix(db, min_games=3, fallback_latest=False),
+                "16.13",
+            )
+            self.assertIsNone(
+                latest_patch_prefix(db, min_games=4, fallback_latest=False)
+            )
+            self.assertEqual(latest_patch_prefix(db, min_games=4), "16.14")
 
 
 if __name__ == "__main__":

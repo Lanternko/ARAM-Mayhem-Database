@@ -5,8 +5,11 @@ this module wires them behind the click CLI.  Kept importable as `build_tier_lis
 (re-exports every engine/render symbol) for existing callers.
 """
 from __future__ import annotations
-import os as _os, sys as _sys
-_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+import os as _os, subprocess as _subprocess, sys as _sys
+_SCRIPT_DIR = _os.path.dirname(_os.path.abspath(__file__))
+_ROOT_DIR = _os.path.dirname(_SCRIPT_DIR)
+_sys.path.insert(0, _os.path.join(_ROOT_DIR, "src"))
+_sys.path.insert(0, _SCRIPT_DIR)
 import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
@@ -15,6 +18,38 @@ for _m in (_eng, _rnd):
 
 PRODUCTION_SITE_URL = "https://arammeta.com"
 PRODUCTION_META_PICK_API_URL = "https://api.arammeta.com"
+
+
+def refresh_empirical_champion_profiles(
+    *, db: Path, queue_id: int, patch_prefix: str | None
+) -> bool:
+    """Refresh the comp capability vectors before per-patch table training.
+
+    The composition categories depend on empirical damage/frontline/sustain
+    profiles.  Rebuilding only the residual tables while leaving those vectors
+    on an older patch would still be a partial stale-model bug.
+    """
+    if not patch_prefix:
+        return False
+    command = [
+        _sys.executable,
+        _os.path.join(_SCRIPT_DIR, "build_empirical_champion_scores.py"),
+        "--db",
+        str(db),
+        "--queue",
+        str(queue_id),
+        "--patch-prefix",
+        str(patch_prefix),
+    ]
+    result = _subprocess.run(command, check=False)
+    if result.returncode != 0:
+        click.echo(
+            "[tierlist] WARN: empirical champion-profile refresh failed; "
+            "using the previous profile artifact"
+        )
+        return False
+    click.echo(f"[tierlist] refreshed empirical champion profiles for patch {patch_prefix}")
+    return True
 
 
 def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
@@ -198,7 +233,50 @@ def main(
     affinity_min_games = max(min_pair_games * 3, 45)
     item_style_min_games = max(affinity_min_games, ITEM_STYLE_MIN_GAMES)
     augment_type_min_games = max(affinity_min_games, AUGMENT_TYPE_MIN_GAMES)
+    refresh_empirical_champion_profiles(
+        db=db,
+        queue_id=queue_id,
+        patch_prefix=patch_prefix,
+    )
     champ_profiles = load_champion_pick_profiles(champ_meta)
+    team_score_bundle = None
+    try:
+        from aram_nn.site.team_score_training import train_team_score_bundle
+
+        team_score_bundle = train_team_score_bundle(
+            db,
+            queue_id=queue_id,
+            patch_prefix=patch_prefix,
+            champ_profiles=champ_profiles,
+            champ_meta=champ_meta,
+            lack_thresholds=COMPOSITION_LACK_THRESHOLDS,
+            table_weights=RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS,
+            composition_clamp=RECOMMENDATION_COMPOSITION_CLAMP,
+            min_synergy_games=min_synergy_games,
+        )
+        score_meta = team_score_bundle["team_score"]
+        score_metrics = score_meta["metrics"]["test"]
+        click.echo(
+            "[tierlist] team score retrained "
+            f"patch={patch_prefix} games={score_meta['trained_games']:,} "
+            f"pair_prior={score_meta['pair_prior_games']:g} "
+            f"pair_logit={score_meta['pair_logit_weight']:.3f} "
+            f"composition_logit={score_meta['composition_logit_weight']:.3f} "
+            f"test_auc={score_metrics['base']['auc']:.4f}->{score_metrics['full']['auc']:.4f} "
+            f"test_ll={score_metrics['base']['log_loss']:.5f}->{score_metrics['full']['log_loss']:.5f}"
+        )
+        artifact_patch = str(patch_prefix or "all").replace("/", "_").replace("\\", "_")
+        score_artifact = Path("data/cache") / f"team_score_{queue_id}_{artifact_patch}.json"
+        score_artifact.parent.mkdir(parents=True, exist_ok=True)
+        score_artifact.write_text(
+            json.dumps(team_score_bundle, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        click.echo(f"[tierlist] wrote {score_artifact}")
+    except ValueError as exc:
+        click.echo(f"[tierlist] WARN: {exc}; using explicit legacy team-score fallback")
+    except Exception as exc:
+        click.echo(f"[tierlist] WARN: team-score retraining failed: {exc}; using legacy fallback")
     set_affinity, item_style_affinity, augment_type_affinity = compute_champ_category_affinities(
         db,
         queue_id,
@@ -317,6 +395,9 @@ def main(
     synergy = build_champ_synergy_index(
         champ_pairs,
         min_games=min_synergy_games,
+        prior_games=float(
+            ((team_score_bundle or {}).get("team_score") or {}).get("pair_prior_games") or 0.0
+        ),
     )
     click.echo(
         f"[tierlist] {len(synergy)} champions have >= 1 teammate synergy row "
@@ -398,6 +479,7 @@ def main(
         aug_global=aug_global,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
+        team_score_bundle=team_score_bundle,
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")

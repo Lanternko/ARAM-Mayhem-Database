@@ -180,4 +180,9 @@ def get_meta_pick_leaderboard(
         raise _http_meta_pick_error(exc) from exc
     snap_patch = snapshot_patch(snapshot)
     use_patch = (patch or "").strip() or snap_patch
-    return list_leaderboard(_site_db(), patch=use_patch, limit=limit)
+    return list_leaderboard(
+        _site_db(),
+        patch=use_patch,
+        limit=limit,
+        snapshot=snapshot,
+    )

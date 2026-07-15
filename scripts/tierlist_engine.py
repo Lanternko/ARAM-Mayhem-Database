@@ -4323,6 +4323,7 @@ def build_champ_synergy_index(
     champ_pairs: list[dict],
     *,
     min_games: int,
+    prior_games: float = 0.0,
 ) -> dict[int, list[dict]]:
     """Per champion, keep same-team teammate rows sorted by synergy lift.
 
@@ -4331,15 +4332,23 @@ def build_champ_synergy_index(
     primary fit metric.
     """
     by_champ: dict[int, list[dict]] = {}
-    for row in champ_pairs:
+    prior_games = max(0.0, float(prior_games or 0.0))
+    for source_row in champ_pairs:
+        row = dict(source_row)
         if row["games"] < min_games:
             continue
+        games = max(0, int(row.get("games") or 0))
+        shrink = games / (games + prior_games) if games + prior_games > 0 else 0.0
+        # Raw lift remains in the public row for auditability.  score_lift is
+        # the confidence-shrunk value used to decide which 12 top + 12 bottom
+        # rows survive payload slimming, matching the runtime pair prior.
+        row["score_lift"] = float(row.get("lift") or 0.0) * shrink
         by_champ.setdefault(row["champion_id"], []).append(row)
 
     for cid, rows in by_champ.items():
         rows.sort(
             key=lambda r: (
-                -r["lift"],
+                -r["score_lift"],
                 -r["z_score"],
                 -r["games"],
                 r["teammate_id"],
