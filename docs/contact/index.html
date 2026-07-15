@@ -1,0 +1,151 @@
+<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>聯絡與回報 | arammeta</title><meta name='description' content='回報資料、介面、排行榜、隱私權與站務問題。'><link rel='canonical' href='https://arammeta.com/contact/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+</style></head><body><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/' aria-current='page'>聯絡</a></nav></div></header><main><p class='eyebrow'>Contact</p><h1>聯絡與回報</h1><p class='lede'>回報資料、介面、排行榜、隱私權與站務問題。</p><p class='updated'>最後更新：2026-07-15</p>
+<section><h2>適合回報的事項</h2>
+<ul><li>英雄、增幅、裝備或版本資料異常。</li><li>手機版、無障礙、載入速度或互動錯誤。</li><li>Meta Pick 排行榜紀錄移除。</li><li>隱私權、廣告或站務問題。</li></ul>
+<p><a class="action" href="https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new" target="_blank" rel="noopener">建立 GitHub Issue</a></p></section>
+<section><h2>隱私提醒</h2>
+<p>GitHub Issue 會公開顯示。請勿貼上真實姓名、電子郵件、IP 位址、Riot ID、PUUID、驗證權杖或其他敏感資料。隱私請求只需提供排行榜暱稱、版本與大約提交時間，站方會視需要提供後續處理方式。</p></section>
+<section><h2>處理方式</h2>
+<p>請在標題簡述問題，並附上頁面網址、使用裝置與可重現步驟。資料問題若能附版本與畫面截圖，通常會更快定位。</p></section>
+</main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/' aria-current='page'>聯絡</a></nav><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></div></footer></body></html>

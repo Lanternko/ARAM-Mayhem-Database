@@ -15,16 +15,29 @@ from tierlist_render import (  # noqa: E402
     _spa_deep_link_stub,
     champion_detail_base_url,
     discover_column_article_ids,
+    render_adsense_verification_tag,
     slim_site_payload,
     split_champion_detail_payloads,
     versioned_payload_url,
     write_champion_detail_shards,
+    write_site_info_pages,
     write_spa_path_shells,
     SPA_FULL_SHELL_PATHS,
 )
 
 
 class SpaPathShellTests(unittest.TestCase):
+    def test_adsense_verification_is_production_only(self) -> None:
+        self.assertEqual(render_adsense_verification_tag(site_url=""), "")
+        self.assertEqual(
+            render_adsense_verification_tag(site_url="https://preview.example"),
+            "",
+        )
+        tag = render_adsense_verification_tag(site_url="https://arammeta.com/")
+        self.assertIn("ca-pub-8593280194977470", tag)
+        self.assertIn("adsbygoogle.js", tag)
+        self.assertIn("crossorigin='anonymous'", tag)
+
     def test_site_base_href(self) -> None:
         self.assertEqual(_site_base_href("https://arammeta.com/"), "https://arammeta.com/")
         self.assertEqual(_site_base_href("https://arammeta.com"), "https://arammeta.com/")
@@ -109,6 +122,29 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("/en/column/sprees-not-snowball", en_article_body)
             self.assertIn("location.replace('/')", en_article_body)
             self.assertIn("lang='en'", en_article_body)
+
+    def test_write_site_info_pages_creates_policy_pages_and_ads_txt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text("<!doctype html><title>arammeta</title>", encoding="utf-8")
+            written = write_site_info_pages(
+                index,
+                site_url="https://arammeta.com/",
+                build_date="2026-07-15",
+            )
+            self.assertEqual(len(written), 4)
+            privacy = (root / "privacy" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Google AdSense", privacy)
+            self.assertIn("Meta Pick 排行榜", privacy)
+            self.assertIn("ca-pub-8593280194977470", privacy)
+            self.assertIn("最後更新：2026-07-15", privacy)
+            self.assertTrue((root / "about" / "index.html").is_file())
+            self.assertTrue((root / "contact" / "index.html").is_file())
+            self.assertEqual(
+                (root / "ads.txt").read_text(encoding="utf-8"),
+                "google.com, pub-8593280194977470, DIRECT, f08c47fec0942fa0\n",
+            )
 
     def test_versioned_payload_url(self) -> None:
         self.assertEqual(

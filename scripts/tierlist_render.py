@@ -8,6 +8,29 @@ import tierlist_engine as _eng  # noqa: E402,F401
 globals().update({_k: _v for _k, _v in vars(_eng).items() if not _k.startswith('__')})
 
 
+ADSENSE_SITE_ORIGIN = "https://arammeta.com"
+ADSENSE_CLIENT_ID = "ca-pub-8593280194977470"
+ADSENSE_PUBLISHER_ID = "pub-8593280194977470"
+ADSENSE_CERTIFICATION_AUTHORITY_ID = "f08c47fec0942fa0"
+
+
+def render_adsense_verification_tag(*, site_url: str = "") -> str:
+    """Return the production-only AdSense site verification script.
+
+    The public publisher id is intentionally committed with the generated site.
+    Keeping the tag production-only prevents previews and alternate hosts from
+    creating ad requests under arammeta's account.
+    """
+    if (site_url or "").strip().rstrip("/") != ADSENSE_SITE_ORIGIN:
+        return ""
+    client = html.escape(ADSENSE_CLIENT_ID, quote=True)
+    return (
+        "<script async "
+        "src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?"
+        f"client={client}' crossorigin='anonymous'></script>"
+    )
+
+
 
 def render_analytics_tags(
     *,
@@ -392,6 +415,295 @@ def _site_base_href(site_url: str) -> str:
         return f"{p.scheme}://{p.netloc}{prefix}/"
     except Exception:
         return raw if raw.endswith("/") else raw + "/"
+
+
+_INFO_PAGE_CSS = """
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+"""
+
+
+def _info_page_html(
+    *,
+    slug: str,
+    title: str,
+    eyebrow: str,
+    description: str,
+    body_html: str,
+    site_url: str,
+    updated: str,
+) -> str:
+    """Render a lightweight, crawlable station-information page."""
+    esc = html.escape
+    base = _site_base_href(site_url) or "/"
+    origin = base.rstrip("/")
+    canonical_path = f"/{slug}/"
+    canonical = (origin + canonical_path) if origin.startswith("http") else canonical_path
+    nav_items = (
+        ("/", "首頁", "home"),
+        ("/about/", "關於", "about"),
+        ("/privacy/", "隱私權", "privacy"),
+        ("/contact/", "聯絡", "contact"),
+    )
+    nav = "".join(
+        f"<a href='{href}'"
+        + (" aria-current='page'" if key == slug else "")
+        + f">{label}</a>"
+        for href, label, key in nav_items
+    )
+    adsense = render_adsense_verification_tag(site_url=site_url)
+    return (
+        "<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{esc(title)} | arammeta</title>"
+        f"<meta name='description' content='{esc(description, quote=True)}'>"
+        f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
+        "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
+        f"{adsense}<style>{_INFO_PAGE_CSS}</style></head><body>"
+        "<header class='topbar'><div class='topbar-inner'>"
+        "<a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a>"
+        f"<nav class='topnav' aria-label='站務導覽'>{nav}</nav>"
+        "</div></header>"
+        "<main>"
+        f"<p class='eyebrow'>{esc(eyebrow)}</p><h1>{esc(title)}</h1>"
+        f"<p class='lede'>{esc(description)}</p>"
+        f"<p class='updated'>最後更新：{esc(updated)}</p>"
+        f"{body_html}</main>"
+        "<footer class='page-footer'><div class='page-footer-inner'>"
+        f"<nav aria-label='頁尾導覽'>{nav}</nav>"
+        "<p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。"
+        "Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p>"
+        "</div></footer></body></html>\n"
+    )
+
+
+def write_site_info_pages(
+    index_path: Path,
+    *,
+    site_url: str = "",
+    build_date: str = "",
+) -> list[Path]:
+    """Write About, Privacy, Contact, and the production ads.txt file."""
+    root = Path(index_path).parent
+    updated = build_date or _dt.date.today().isoformat()
+    repo_url = "https://github.com/Lanternko/ARAM-Mayhem-Database"
+    issues_url = repo_url + "/issues/new"
+
+    about_body = f"""
+<section><h2>本站提供什麼</h2>
+<p>arammeta 將 ARAM: Mayhem 對戰整理成英雄、增幅、裝備與隊伍搭配資料，並提供 Draft 分析與 Meta Pick 小遊戲。目標是讓玩家在短時間內看懂版本環境，同時保留樣本量與統計限制。</p></section>
+<section><h2>資料怎麼來</h2>
+<p>資料由本機 League Client 介面收集，網站只發布彙總後的對戰統計。公開資料不包含 PUUID、Riot ID、召喚師名稱或可識別個別玩家的原始紀錄。</p>
+<ul><li>對局以 game ID 去除重複。</li><li>英雄勝率使用 Bayesian shrinkage，降低小樣本造成的極端波動。</li><li>版本、樣本數與更新日期會顯示在資料旁，跨版本結果不視為同一環境。</li></ul></section>
+<section><h2>如何解讀</h2>
+<p>勝率代表歷史資料中的關聯，不保證個別對局結果。英雄強度、玩家熟練度、隊伍組成、增幅選擇與版本平衡都會影響結果。樣本較少的組合應視為探索線索，不應當成確定答案。</p></section>
+<section><h2>開源與回報</h2>
+<p>網站與資料處理工具公開於 GitHub。你可以檢查方法、提出資料問題或回報介面錯誤。</p>
+<p><a class="action" href="{repo_url}" target="_blank" rel="noopener">查看 GitHub 專案</a></p></section>
+<div class="notice"><p>這是一個獨立社群專案，不是 Riot Games 官方網站，也未獲 Riot Games 贊助。</p></div>
+"""
+    privacy_body = f"""
+<section><h2>我們處理哪些資料</h2>
+<ul>
+<li><strong>瀏覽與裝置資料：</strong>託管、API 與流量分析服務可能處理 IP 位址、瀏覽器類型、作業系統、來源頁、瀏覽路徑、國家或約略地區及效能資料，用於安全、除錯與流量統計。</li>
+<li><strong>瀏覽器儲存：</strong>本站使用 localStorage 保存語言、主題、Meta Pick 暱稱草稿與頭像英雄；使用 sessionStorage 完成站內路徑導向。這些資料通常留在你的裝置上。</li>
+<li><strong>Meta Pick 排行榜：</strong>選擇上傳成績時，暱稱、頭像英雄、五回合選擇、分數、版本與提交時間會傳送到後端。暱稱、頭像、分數及時間可能公開顯示，請勿使用真實姓名或其他個人資料。</li>
+</ul></section>
+<section><h2>使用目的</h2>
+<p>資料用於提供網站功能、維護排行榜、偵測濫用、改善內容與效能，以及了解整體使用趨勢。我們不販售使用者個人資料。</p></section>
+<section><h2>廣告與 Cookie</h2>
+<p>本站申請使用 Google AdSense。第三方供應商（包括 Google）可能使用 Cookie，依使用者先前造訪本站或其他網站的情況投放廣告。Google 使用廣告 Cookie，可讓 Google 及其合作夥伴根據使用者造訪本站或網際網路上其他網站的情況顯示廣告。</p>
+<p>你可以前往 <a href="https://adssettings.google.com/" target="_blank" rel="noopener">Google 廣告設定</a>停用個人化廣告，也可以透過 <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener">About Ads</a> 管理部分第三方供應商的個人化廣告選項。若所在地法令要求，本站會在載入個人化廣告前提供同意或拒絕選項。</p></section>
+<section><h2>第三方服務</h2>
+<p>本站可能使用 GitHub Pages 提供靜態網站、Cloudflare 提供流量分析與網路服務、Google 提供字型、分析或廣告服務，以及 arammeta 自有後端提供排行榜。這些服務會依各自的隱私政策處理必要資料。</p>
+<ul><li><a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare 隱私政策</a></li><li><a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google 隱私權政策</a></li><li><a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener">GitHub 隱私權聲明</a></li></ul></section>
+<section><h2>保存與刪除</h2>
+<p>託管與安全紀錄依服務供應商的保存政策處理。排行榜紀錄可能持續保存，直到例行維護、功能停止或收到合理的移除請求。彙總且無法識別個人的統計資料可能長期保留。</p></section>
+<section><h2>查詢與請求</h2>
+<p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
+<p><a href="/contact/">前往聯絡與回報</a></p></section>
+<div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
+"""
+    contact_body = f"""
+<section><h2>適合回報的事項</h2>
+<ul><li>英雄、增幅、裝備或版本資料異常。</li><li>手機版、無障礙、載入速度或互動錯誤。</li><li>Meta Pick 排行榜紀錄移除。</li><li>隱私權、廣告或站務問題。</li></ul>
+<p><a class="action" href="{issues_url}" target="_blank" rel="noopener">建立 GitHub Issue</a></p></section>
+<section><h2>隱私提醒</h2>
+<p>GitHub Issue 會公開顯示。請勿貼上真實姓名、電子郵件、IP 位址、Riot ID、PUUID、驗證權杖或其他敏感資料。隱私請求只需提供排行榜暱稱、版本與大約提交時間，站方會視需要提供後續處理方式。</p></section>
+<section><h2>處理方式</h2>
+<p>請在標題簡述問題，並附上頁面網址、使用裝置與可重現步驟。資料問題若能附版本與畫面截圖，通常會更快定位。</p></section>
+"""
+    specs = (
+        ("about", "關於 arammeta", "About", "ARAM Mayhem 的獨立資料工具、統計方法與開源資訊。", about_body),
+        ("privacy", "隱私權政策", "Privacy", "arammeta 如何處理瀏覽資料、排行榜內容、Cookie 與第三方服務。", privacy_body),
+        ("contact", "聯絡與回報", "Contact", "回報資料、介面、排行榜、隱私權與站務問題。", contact_body),
+    )
+    written: list[Path] = []
+    for slug, title, eyebrow, description, body in specs:
+        dest = root / slug / "index.html"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(
+            _info_page_html(
+                slug=slug,
+                title=title,
+                eyebrow=eyebrow,
+                description=description,
+                body_html=body,
+                site_url=site_url,
+                updated=updated,
+            ),
+            encoding="utf-8",
+        )
+        written.append(dest)
+
+    if (site_url or "").strip().rstrip("/") == ADSENSE_SITE_ORIGIN:
+        ads_txt = root / "ads.txt"
+        ads_txt.write_text(
+            f"google.com, {ADSENSE_PUBLISHER_ID}, DIRECT, "
+            f"{ADSENSE_CERTIFICATION_AUTHORITY_ID}\n",
+            encoding="utf-8",
+        )
+        written.append(ads_txt)
+    return written
 
 
 def discover_column_article_ids(site_js: str | None = None) -> list[str]:
@@ -1839,6 +2151,9 @@ def render_html(
             ga_measurement_id=ga_measurement_id,
         )
     )
+    adsense_tag = render_adsense_verification_tag(site_url=site_url)
+    if adsense_tag:
+        parts.append(adsense_tag)
     # Start the multi-MB tier-list JSON as early as possible — the SPA script
     # lives at end of <body>, so without preload the fetch only begins after
     # ~600KB of HTML/CSS/JS has been downloaded and parsed.
@@ -2131,6 +2446,16 @@ def render_html(
         parts.append(
             f"<div class='freshness' id='freshness-copy'>{date_str}（{total_games:,} 場） · {patch_label}</div>"
         )
+    parts.append(
+        "<nav class='site-links' aria-label='站務連結'>"
+        "<a href='/about/' data-i18n-zh='關於' data-i18n-zh-cn='关于' "
+        "data-i18n-en='About'>關於</a>"
+        "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
+        "data-i18n-en='Privacy'>隱私權</a>"
+        "<a href='/contact/' data-i18n-zh='聯絡' data-i18n-zh-cn='联系' "
+        "data-i18n-en='Contact'>聯絡</a>"
+        "</nav>"
+    )
     # Footer open-source control: pill affordance so it reads as clickable,
     # still sits with freshness meta (not a header CTA).
     star_glyph = (
@@ -2586,6 +2911,11 @@ def _run_shell_only(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
+    info_pages = write_site_info_pages(
+        out_path,
+        site_url=site_url,
+        build_date=build_date,
+    )
     full_n = sum(1 for p in mirrors if p.stat().st_size > 50_000)
     click.echo(
         f"[shell-only] wrote {out_path} ({len(html):,} chars) in {time.time() - t0:.2f}s — "
@@ -2596,3 +2926,5 @@ def _run_shell_only(
             f"[shell-only] wrote {len(mirrors)} clean-path shells "
             f"({full_n} full SPA, rest stubs + 404.html)"
         )
+    if info_pages:
+        click.echo(f"[shell-only] wrote {len(info_pages)} site information file(s)")
