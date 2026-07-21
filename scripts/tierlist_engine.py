@@ -129,18 +129,26 @@ ANTIHEAL_ITEM_NAME_KEYWORDS = (
 CATEGORY_PRIOR_DEFAULT = AUGMENT_PRIOR_DEFAULT
 ITEM_STYLE_MIN_GAMES = 150
 ITEM_STYLE_FALLBACK_MIN_GAMES = 100
-ITEM_PAIR_MIN_GAMES = 30
-ITEM_PAIR_FALLBACK_MIN_GAMES = 20
+# Absolute sample floors + relative pick floors (share of that champion's games).
+# Relative floors drop niche champ×item cells that pass raw min_games only because
+# the champion has a huge sample (e.g. 30 / 8k games ≈ 0.4% pick).
+ITEM_PAIR_MIN_GAMES = 60
+ITEM_PAIR_FALLBACK_MIN_GAMES = 40
 ITEM_PAIR_TOP_MIN_LIFT = -0.02
+ITEM_PAIR_TOP_MIN_PICK_RATE = 0.02  # ≥2% of champ games to surface as a core pair
 ITEM_PAIR_PICK_LIFT_WEIGHT = 0.0
 ITEM_PAIR_PICK_LIFT_CAP = AUGMENT_PICK_LIFT_CAP
 ITEM_PAIR_PICK_RATE_WEIGHT = 0.012
 ITEM_PAIR_PICK_RATE_REF = 0.005
 ITEM_PAIR_PICK_RATE_CAP = 0.045
 ITEM_PAIR_ORDER_PRIOR_GAMES = 20
-SINGLE_ITEM_MIN_GAMES = 30
-SINGLE_ITEM_FALLBACK_MIN_GAMES = 20
+SINGLE_ITEM_MIN_GAMES = 60
+SINGLE_ITEM_FALLBACK_MIN_GAMES = 40
 SINGLE_ITEM_TOP_MIN_LIFT = -0.02
+# 1% floor feeds the 出裝 filter bar's 全部 tier.  Below this the real binding
+# constraint is SINGLE_ITEM_MIN_GAMES (60 games ≈ 1.2% for a 5k-game champion),
+# so a lower floor buys almost nothing (0.5% adds ~2 items/champ).
+SINGLE_ITEM_TOP_MIN_PICK_RATE = 0.01  # ≥1% of champ games to surface as a single item
 SINGLE_ITEM_PICK_LIFT_WEIGHT = ITEM_PAIR_PICK_LIFT_WEIGHT
 SINGLE_ITEM_PICK_LIFT_CAP = ITEM_PAIR_PICK_LIFT_CAP
 SINGLE_ITEM_PICK_RATE_WEIGHT = ITEM_PAIR_PICK_RATE_WEIGHT
@@ -148,9 +156,10 @@ SINGLE_ITEM_PICK_RATE_REF = ITEM_PAIR_PICK_RATE_REF
 SINGLE_ITEM_PICK_RATE_CAP = ITEM_PAIR_PICK_RATE_CAP
 SINGLE_ITEM_COMMON_TRAP_N = 6
 SINGLE_ITEM_COMMON_TRAP_MIN_LIFT = -0.01
-BOOT_ITEM_MIN_GAMES = 30
-BOOT_ITEM_FALLBACK_MIN_GAMES = 20
+BOOT_ITEM_MIN_GAMES = 60
+BOOT_ITEM_FALLBACK_MIN_GAMES = 40
 BOOT_ITEM_TOP_MIN_LIFT = -0.04
+BOOT_ITEM_TOP_MIN_PICK_RATE = 0.04  # boots are concentrated; require ≥4%
 SPELL_MIN_GAMES = 50
 SPELL_FALLBACK_MIN_GAMES = 30
 SPELL_TOP_MIN_LIFT = -0.04
@@ -188,9 +197,9 @@ ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD = 0.80
 # real observed 6-item completion is attached only as confirmation.
 ITEM_CORE_BUILD_PRIOR_GAMES = 20.0          # smoothing pseudo-games toward champ baseline
 ITEM_CORE_BUILD_EARLY_PRIOR = 20.0          # shrinkage for the build-order (earliness) signal
-ITEM_CORE_BUILD_MIN_GAMES = 40              # a core triple must be observed >= this often
+ITEM_CORE_BUILD_MIN_GAMES = 80              # a core triple must be observed >= this often
 ITEM_CORE_BUILD_MIN_CONFIRM = 3            # a real 6-item completion must exist >= this often
-ITEM_CORE_BUILD_WINRATE_MIN_GAMES = 50      # stricter sample floor for the winrate lane
+ITEM_CORE_BUILD_WINRATE_MIN_GAMES = 80      # stricter sample floor for the winrate lane
 ITEM_CORE_BUILD_WINRATE_MIN_LCB = 0.0       # winrate lane must be confidently above baseline
 ITEM_CORE_BUILD_LCB_Z = 1.65                # small-sample penalty (lower confidence bound)
 ITEM_CORE_BUILD_PICK_RATE_REF = 0.01
@@ -198,18 +207,23 @@ ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT = 0.012
 ITEM_CORE_BUILD_PICK_CREDIT_CAP = 0.035
 ITEM_CORE_BUILD_LIFT_WEIGHT = 0.55
 ITEM_CORE_BUILD_GAMES_WEIGHT = 0.02
-ITEM_CORE_BUILD_OPTION_MIN_GAMES = 15       # any pairing item needs this many games to show
-ITEM_CORE_BUILD_OPTION_MIN_PICK = 0.015     # ...or this pick rate — the "popular" half of the OR gate
+ITEM_CORE_BUILD_OPTION_MIN_GAMES = 30       # any pairing item needs this many games to show
+ITEM_CORE_BUILD_OPTION_MIN_PICK = 0.03      # ...or this pick rate — the "popular" half of the OR gate
 ITEM_CORE_BUILD_OPTION_TOP_N = 8            # max pairing items shown per core-2 group
 ITEM_CORE_BUILD_TAIL_N = 3                  # extra "also common" items shown dim per group
 ITEM_CORE_BUILD_GROUP_TOP_N = 3             # max core groups (distinct build paths) per champion
-ITEM_CORE_BUILD_GROUP_MIN_PICK = 0.04       # drop tiny build-path groups (the top group is always kept)
+ITEM_CORE_BUILD_GROUP_MIN_PICK = 0.06       # drop tiny build-path groups (the top group is always kept)
 PATCH_CHANGE_TOP_N = 10
 PATCH_CHANGE_HERO_MIN_GAMES = 500
 PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES = 500
 PATCH_CHANGE_ITEM_BASELINE_MIN_GAMES = 800
 PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES = 80
 PATCH_CHANGE_CHAMP_ITEM_BASELINE_MIN_GAMES = 120
+# Relative floor on top of the absolute ones: the pairing must be this share of
+# the champion's own games in BOTH patches.  Without it a popular champion's
+# fringe build (110 games out of 21k = 0.5%) outranks a niche champion's core
+# build purely because the absolute count is easier to hit.
+PATCH_CHANGE_CHAMP_ITEM_MIN_PICK = 0.015
 PATCH_CHANGE_ITEM_PRIOR_GAMES = 200
 PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES = 30
 PATCH_CHANGE_AUGMENT_CURRENT_MIN_GAMES = 500
@@ -2873,6 +2887,7 @@ def compute_champ_item_pair_affinities(
         pick_rate_cap=ITEM_PAIR_PICK_RATE_CAP,
         rank_mode="lift",
         top_min_lift=ITEM_PAIR_TOP_MIN_LIFT,
+        top_min_pick_rate=ITEM_PAIR_TOP_MIN_PICK_RATE,
         top_n=0,
     )
     for cid, payload in affinity.items():
@@ -2898,6 +2913,7 @@ def _compute_champ_item_slot_affinities(
     item_selector,
     fallback_min_games: int,
     top_min_lift: float,
+    top_min_pick_rate: float = 0.0,
     top_n: int = 0,
 ) -> dict[int, dict]:
     baseline_by_champ = {
@@ -2988,6 +3004,7 @@ def _compute_champ_item_slot_affinities(
         pick_rate_cap=SINGLE_ITEM_PICK_RATE_CAP,
         rank_mode="lift",
         top_min_lift=top_min_lift,
+        top_min_pick_rate=top_min_pick_rate,
         top_n=top_n,
         popular_bad_n=SINGLE_ITEM_COMMON_TRAP_N,
     )
@@ -3011,6 +3028,7 @@ def compute_champ_single_item_affinities(
         item_selector=_participant_recommendable_item_ids,
         fallback_min_games=SINGLE_ITEM_FALLBACK_MIN_GAMES,
         top_min_lift=SINGLE_ITEM_TOP_MIN_LIFT,
+        top_min_pick_rate=SINGLE_ITEM_TOP_MIN_PICK_RATE,
         top_n=0,
     )
 
@@ -3033,6 +3051,7 @@ def compute_champ_boot_item_affinities(
         item_selector=_participant_boot_item_ids,
         fallback_min_games=BOOT_ITEM_FALLBACK_MIN_GAMES,
         top_min_lift=BOOT_ITEM_TOP_MIN_LIFT,
+        top_min_pick_rate=BOOT_ITEM_TOP_MIN_PICK_RATE,
         top_n=4,
     )
 
@@ -3251,6 +3270,10 @@ def _compute_core_item_patch_stats(
     champ_item_stats: dict[tuple[int, int], dict[str, float]] = defaultdict(
         lambda: {"games": 0.0, "wins": 0.0, "baseline_sum": 0.0}
     )
+    # Denominator for the relative (pick-share) floor on 版本變動: how many games
+    # this champion had *with any core item*, i.e. the same population the
+    # champ_item numerators are drawn from.
+    champ_games_stats: dict[int, float] = defaultdict(float)
     con = sqlite3.connect(str(db_path))
     try:
         rows = con.execute(
@@ -3289,6 +3312,7 @@ def _compute_core_item_patch_stats(
                     continue
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 baseline = champ_baseline.get(cid, 0.5)
+                champ_games_stats[cid] += 1
                 for item_id in selected_ids:
                     item_bucket = item_stats[item_id]
                     item_bucket["games"] += 1
@@ -3302,6 +3326,7 @@ def _compute_core_item_patch_stats(
     return {
         "item": item_stats,
         "champ_item": champ_item_stats,
+        "champ_games": champ_games_stats,
         "global_wr": _record_global_wr(champ_records),
     }
 
@@ -3386,6 +3411,8 @@ def compute_patch_changes(
     champ_item_rows: list[dict[str, object]] = []
     current_champ_items = current_item_stats["champ_item"]
     baseline_champ_items = baseline_item_stats["champ_item"]
+    current_champ_games = current_item_stats.get("champ_games") or {}
+    baseline_champ_games = baseline_item_stats.get("champ_games") or {}
     for key, current in current_champ_items.items():
         cid, item_id = key
         baseline = baseline_champ_items.get(key)
@@ -3396,6 +3423,13 @@ def compute_patch_changes(
         if (
             current_games < PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES
             or baseline_games < PATCH_CHANGE_CHAMP_ITEM_BASELINE_MIN_GAMES
+        ):
+            continue
+        current_pick = current_games / max(float(current_champ_games.get(cid, 0.0)), 1.0)
+        baseline_pick = baseline_games / max(float(baseline_champ_games.get(cid, 0.0)), 1.0)
+        if (
+            current_pick < PATCH_CHANGE_CHAMP_ITEM_MIN_PICK
+            or baseline_pick < PATCH_CHANGE_CHAMP_ITEM_MIN_PICK
         ):
             continue
         current_prior = float(current["baseline_sum"]) / current_games if current_games else 0.5
@@ -3418,6 +3452,8 @@ def compute_patch_changes(
             "delta": round(current_lift - baseline_lift, 4),
             "current_games": current_games,
             "baseline_games": baseline_games,
+            "current_pick": round(current_pick, 4),
+            "baseline_pick": round(baseline_pick, 4),
         })
 
     augment_rows: list[dict[str, object]] = []
@@ -3460,6 +3496,7 @@ def compute_patch_changes(
         "minHeroGames": PATCH_CHANGE_HERO_MIN_GAMES,
         "minItemGames": PATCH_CHANGE_ITEM_CURRENT_MIN_GAMES,
         "minChampItemGames": PATCH_CHANGE_CHAMP_ITEM_CURRENT_MIN_GAMES,
+        "minChampItemPick": PATCH_CHANGE_CHAMP_ITEM_MIN_PICK,
         "heroRisers": sorted(hero_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
         "heroFallers": sorted(hero_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
         "itemRisers": sorted(item_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],

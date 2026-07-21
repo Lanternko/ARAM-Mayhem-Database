@@ -307,7 +307,7 @@ def main(
     )
     click.echo(
         f"[tierlist] {len(item_pair_affinity)} champions have >= 1 core item-pair row "
-        f"(games >= {ITEM_PAIR_MIN_GAMES}, no fixed pick floor, "
+        f"(games >= {ITEM_PAIR_MIN_GAMES}, pick >= {ITEM_PAIR_TOP_MIN_PICK_RATE:.1%} of champ games, "
         f"top_lift >= {ITEM_PAIR_TOP_MIN_LIFT:.1%})"
     )
     single_item_affinity = compute_champ_single_item_affinities(
@@ -320,7 +320,7 @@ def main(
     )
     click.echo(
         f"[tierlist] {len(single_item_affinity)} champions have >= 1 single-item row "
-        f"(games >= {SINGLE_ITEM_MIN_GAMES}, no fixed pick floor, "
+        f"(games >= {SINGLE_ITEM_MIN_GAMES}, pick >= {SINGLE_ITEM_TOP_MIN_PICK_RATE:.1%} of champ games, "
         f"top_lift >= {SINGLE_ITEM_TOP_MIN_LIFT:.1%})"
     )
     boot_item_affinity = compute_champ_boot_item_affinities(
@@ -333,7 +333,8 @@ def main(
     )
     click.echo(
         f"[tierlist] {len(boot_item_affinity)} champions have >= 1 boot row "
-        f"(games >= {BOOT_ITEM_MIN_GAMES}, top_lift >= {BOOT_ITEM_TOP_MIN_LIFT:.1%})"
+        f"(games >= {BOOT_ITEM_MIN_GAMES}, pick >= {BOOT_ITEM_TOP_MIN_PICK_RATE:.1%} of champ games, "
+        f"top_lift >= {BOOT_ITEM_TOP_MIN_LIFT:.1%})"
     )
     spell_affinity = compute_champ_spell_affinities(
         db,
