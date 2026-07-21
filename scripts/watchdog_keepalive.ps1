@@ -28,7 +28,7 @@ if ($watchdog) {
 
 $argsList = @(
     "scripts/mayhem_lcu_watchdog.py",
-    "--workers", "1",
+    "--workers", "2",
     "--degraded-workers", "1",
     "--degrade-client-mb", "5200",
     "--client-restart-mb", "5800",

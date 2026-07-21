@@ -33,9 +33,10 @@ LEAGUE_LOCKFILES = (
     Path(r"D:\Riot Games\League of Legends\lockfile"),
 )
 DEFAULT_RIOT_CLIENTS = (
-    Path(r"D:\?\Riot Games\Riot Client\RiotClientServices.exe"),
+    Path(r"D:\遊戲\Riot Games\Riot Client\RiotClientServices.exe"),
     Path(r"C:\Riot Games\Riot Client\RiotClientServices.exe"),
     Path(r"D:\Riot Games\Riot Client\RiotClientServices.exe"),
+    Path(r"C:\Program Files\Riot Games\Riot Client\RiotClientServices.exe"),
 )
 
 
@@ -405,36 +406,53 @@ def start_league_client() -> dict[str, Any]:
     if status == 200:
         return {"started": True, "method": "riot_remoting", "response": "<redacted>"}
 
+    # A Riot Client process without remoting args is a zombie: fresh launches
+    # just forward their app-command to it and exit, so remoting never comes up
+    # and every restart attempt fails. Clear zombies before launching. Match both
+    # "RiotClientServices.exe" and the space-form "Riot Client.exe" (the UX host);
+    # stray copies of the latter wedge a fresh boot pre-LCU.
+    killed_zombie_pids: list[int] = []
+    if riot_remoting() is None:
+        zombies = []
+        for proc in iter_processes():
+            try:
+                name = (proc.info.get("name") or "").lower()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+            if name.replace(" ", "").startswith("riotclient"):
+                zombies.append(proc)
+        for proc in zombies:
+            try:
+                proc.kill()
+                killed_zombie_pids.append(proc.pid)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        if killed_zombie_pids:
+            psutil.wait_procs(zombies, timeout=10)
+
     riot = find_riot_client()
     if not riot:
         return {
             "started": False,
             "method": "riot_remoting",
             "error": f"launch failed: {status} {body}; RiotClientServices.exe not found",
+            "killed_zombie_pids": killed_zombie_pids,
         }
+    # Cold start (no live Riot Client): "--app-command" only forwards to an
+    # existing instance and exits when there is none, so remoting never comes
+    # up. "--launch-product" boots the full Riot Client AND launches League
+    # directly; wait_for_lcu_ready in the caller confirms actual health.
     args = [
         str(riot),
-        "--app-command=riotclient://launch-product=league_of_legends&launch-patchline=live",
+        "--launch-product=league_of_legends",
+        "--launch-patchline=live",
     ]
     subprocess.Popen(args, cwd=str(riot.parent), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    if wait_for_riot_remoting(60):
-        status, body = remoting_request(
-            "/product-launcher/v1/products/league_of_legends/patchlines/live",
-            method="POST",
-            data=b"{}",
-        )
-        if status == 200:
-            return {
-                "started": True,
-                "method": "riot_remoting_after_start",
-                "exe": str(riot),
-                "response": "<redacted>",
-            }
     return {
-        "started": False,
-        "method": "riot_remoting_after_start",
+        "started": True,
+        "method": "direct_launch_product",
         "exe": str(riot),
-        "error": f"launch failed: {status} {body}",
+        "killed_zombie_pids": killed_zombie_pids,
     }
 
 
@@ -593,6 +611,22 @@ def latest_capture_age_min(db: Path) -> float | None:
         return None
 
 
+def min_worker_uptime_min(workers: list[dict[str, Any]]) -> float:
+    """Uptime (minutes) of the youngest snowball worker; 0.0 when unknown."""
+    ages: list[float] = []
+    now = time.time()
+    for worker in workers:
+        try:
+            ages.append((now - psutil.Process(int(worker["pid"])).create_time()) / 60)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, KeyError, TypeError, ValueError):
+            continue
+    return min(ages) if ages else 0.0
+
+
+# In-memory stall tracker for watch mode; resets when the watchdog restarts.
+_STALL_STATE = {"last_restart_monotonic": 0.0, "consecutive_restarts": 0}
+
+
 def append_state(path: Path, record: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -696,8 +730,47 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    # Zero-throughput stall: workers alive and LCU "healthy", yet no new 2400
+    # capture for worker-stall-min while the youngest worker has been up at
+    # least that long (fake-healthy hang: PID alive + LCU 200 but blocked call).
+    stall_force_client_restart = False
+    if args.worker_stall_min > 0 and latest_age is not None:
+        if latest_age < args.worker_stall_min:
+            _STALL_STATE["consecutive_restarts"] = 0
+        elif (
+            workers
+            and health["ok"]
+            and min_worker_uptime_min(workers) >= args.worker_stall_min
+            and time.monotonic() - _STALL_STATE["last_restart_monotonic"]
+            >= args.worker_stall_cooldown_sec
+        ):
+            stopped = stop_snowball_workers()
+            workers = snowball_workers()
+            _STALL_STATE["last_restart_monotonic"] = time.monotonic()
+            _STALL_STATE["consecutive_restarts"] += 1
+            actions.append(
+                {
+                    "action": "restart_workers_capture_stalled",
+                    "pids": stopped,
+                    "latest_capture_age_min": latest_age,
+                    "consecutive_stall_restarts": _STALL_STATE["consecutive_restarts"],
+                    **action_context(args, health, main_mb),
+                }
+            )
+            if _STALL_STATE["consecutive_restarts"] >= args.worker_stall_client_restart_after:
+                stall_force_client_restart = True
+
     restart, restart_reason = should_restart_client(args, health, main_mb)
+    if not restart and stall_force_client_restart:
+        phase = health.get("phase") or "None"
+        if phase in args.safe_restart_phase:
+            restart = True
+            restart_reason = (
+                f"capture stalled {latest_age:.0f}min despite "
+                f"{_STALL_STATE['consecutive_restarts']} worker restarts"
+            )
     if args.restart_client and restart:
+        _STALL_STATE["consecutive_restarts"] = 0
         if workers:
             stopped = stop_snowball_workers()
             workers = snowball_workers()
@@ -804,6 +877,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
     parser.add_argument("--worker-stop-client-mb", type=float, default=5000.0)
     parser.add_argument("--worker-start-max-client-mb", type=float, default=3500.0)
+    # Zero-throughput stall recovery: restart workers when no new 2400 capture
+    # for this many minutes while workers look alive (0 disables).
+    parser.add_argument("--worker-stall-min", type=float, default=30.0)
+    parser.add_argument("--worker-stall-cooldown-sec", type=int, default=900)
+    # After this many consecutive stall restarts without recovery, restart the
+    # League client too (safe phases only).
+    parser.add_argument("--worker-stall-client-restart-after", type=int, default=3)
     parser.add_argument("--client-ready-timeout-sec", type=int, default=600)
     parser.add_argument("--safe-restart-phase", action="append", default=["None", "EndOfGame"])
     parser.add_argument("--target-games", type=int, default=50000)
