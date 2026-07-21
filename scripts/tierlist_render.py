@@ -744,7 +744,7 @@ PAYLOAD_TOP_AUGS_PER_RARITY = 16
 PAYLOAD_BOT_AUGS_PER_RARITY = 12
 PAYLOAD_PAIRS_EACH_SIDE = 12
 PAYLOAD_ITEM_PAIR_ROWS = 16
-PAYLOAD_SINGLE_ITEM_ROWS = 16
+PAYLOAD_SINGLE_ITEM_ROWS = 24  # raised with the 1% pick floor (avg 17.4 rows/champ)
 
 # Keep the initial tier-list payload focused on the grid, global augment index,
 # Draft, and recommendation data.  These fields are only needed after a user

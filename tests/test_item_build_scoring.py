@@ -200,8 +200,9 @@ class ItemBuildScoringTests(unittest.TestCase):
             ([101, 102, 301], 30, 15),
             ([101, 102, 103, 301], 30, 15),
             ([101, 102, 103, 201, 202, 301], 25, 12),
-            ([101, 102, 104, 301], 12, 11),
-            ([101, 102, 104, 201, 202, 301], 10, 8),
+            # 104 needs >= ITEM_CORE_BUILD_OPTION_MIN_GAMES (30) pairing sample.
+            ([101, 102, 104, 301], 20, 18),
+            ([101, 102, 104, 201, 202, 301], 15, 12),
         ]
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "games.db"
