@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260721-1784632860");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784657095");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -732,10 +732,10 @@
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
     const SHORT_PATCH_ZH = "26.14";
-    const DATE_STR_ZH = "更新於 2026-07-21";
-    const BUILD_DATE = "2026-07-21";
+    const DATE_STR_ZH = "更新於 2026-07-22";
+    const BUILD_DATE = "2026-07-22";
     const PATCH_LABEL = "patch 26.14";
-    const TOTAL_GAMES = "144,639";
+    const TOTAL_GAMES = "159,756";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
@@ -5402,14 +5402,27 @@
      * both rounding to 99 when n≈252). Accepts fractional ranks.
      */
     function metaPickOvrFromRank(rank, total) {
+        const raw = metaPickOvrRawFromRank(rank, total);
+        if (raw >= 99) return 99;
+        // ranks (1, n] → (99, 1]; floor keeps #2 at 98, last at 1
+        return Math.max(1, Math.min(98, Math.floor(raw + 1e-9)));
+    }
+
+    /**
+     * Continuous OVR before flooring. Same line as metaPickOvrFromRank, but
+     * keeps the fraction so averaged surfaces (leaderboard, submit echo) can
+     * show 0.1 steps instead of collapsing distinct runs onto one integer.
+     *
+     * Averaged OVR must be derived from avg_rank — the server orders the board
+     * by avg_rank ASC, so anything not monotone in it (e.g. the mean of
+     * per-round floored OVRs) can render a lower row above a higher one.
+     */
+    function metaPickOvrRawFromRank(rank, total) {
         const r = Number(rank);
         const n = Math.max(2, Number(total) || 252);
         if (!Number.isFinite(r) || r < 1) return 1;
         const clamped = Math.min(n, Math.max(1, r));
-        if (clamped <= 1) return 99;
-        // ranks (1, n] → (99, 1]; floor keeps #2 at 98, last at 1
-        const raw = 99 - (clamped - 1) * 98 / (n - 1);
-        return Math.max(1, Math.min(98, Math.floor(raw + 1e-9)));
+        return 99 - (clamped - 1) * 98 / (n - 1);
     }
 
     /**
@@ -5549,31 +5562,30 @@
     }
 
     /**
-     * Mean OVR across recorded rounds (each round mapped #rank→OVR, then averaged).
-     * Falls back to OVR(avg_rank) if needed.
+     * Session OVR as a continuous value from the mean rank — the same formula
+     * the leaderboard uses, so the settlement card and the board can never
+     * disagree about which run scored higher.
      */
     function metaPickSessionAvgOvr() {
         const rounds = metaPickSession.rounds || [];
-        if (!rounds.length) return null;
-        const ovrs = rounds.map((round) => {
-            const r = Number(round.rank);
-            const t = Number(round.total) || 252;
-            if (!Number.isFinite(r)) return null;
-            return metaPickOvrFromRank(r, t);
-        }).filter(v => v != null && Number.isFinite(v));
-        if (!ovrs.length) {
-            const avgR = metaPickSessionAvgRank();
-            if (avgR == null) return null;
-            return metaPickOvrFromRank(avgR, (rounds[0] && rounds[0].total) || 252);
-        }
-        // Integer OVR per round; mean rounded to nearest int for the hero digit.
-        return Math.round(ovrs.reduce((a, b) => a + b, 0) / ovrs.length);
+        const avgRank = metaPickSessionAvgRank();
+        if (!rounds.length || avgRank == null) return null;
+        const total = Number((rounds[0] && rounds[0].total) || 252) || 252;
+        return metaPickOvrRawFromRank(avgRank, total);
     }
 
+    /** Integer OVR (hero digit / round chips). Floor keeps 99 = flawless only. */
     function metaPickFormatOvr(ovr) {
         const v = Number(ovr);
         if (!Number.isFinite(v)) return '—';
-        return String(Math.round(Math.max(1, Math.min(99, v))));
+        return String(Math.floor(Math.max(1, Math.min(99, v)) + 1e-9));
+    }
+
+    /** One-decimal OVR for averaged surfaces (leaderboard, submit echo). */
+    function metaPickFormatOvr1(ovr) {
+        const v = Number(ovr);
+        if (!Number.isFinite(v)) return '—';
+        return (Math.max(1, Math.min(99, v))).toFixed(1);
     }
 
     function metaPickResetSession() {
@@ -5691,9 +5703,10 @@
                 const keptTotal = (data.entry && data.entry.total_combos)
                     || (data.retained && data.retained.total_combos)
                     || 252;
+                // Echo the board's precision so the status line and the row match.
                 const keptOvr = keptRaw != null
-                    ? metaPickFormatOvr(metaPickOvrFromRank(Number(keptRaw), keptTotal))
-                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                    ? metaPickFormatOvr1(metaPickOvrRawFromRank(Number(keptRaw), keptTotal))
+                    : metaPickFormatOvr1(metaPickSessionAvgOvr());
                 metaPickSession.submitMessage = (copy.gameSubmitKept || ((a) => `Best kept · OVR ${a}`))(keptOvr);
             } else {
                 const avgRank = data && data.avg_rank != null
@@ -5701,8 +5714,8 @@
                     : metaPickSessionAvgRank();
                 const totalCombos = (data && data.total_combos) || 252;
                 const avg = avgRank != null
-                    ? metaPickFormatOvr(metaPickOvrFromRank(avgRank, totalCombos))
-                    : metaPickFormatOvr(metaPickSessionAvgOvr());
+                    ? metaPickFormatOvr1(metaPickOvrRawFromRank(avgRank, totalCombos))
+                    : metaPickFormatOvr1(metaPickSessionAvgOvr());
                 metaPickSession.submitMessage = (copy.gameSubmitOk || ((a) => `Submitted · avg OVR ${a}`))(avg);
             }
             renderMetaPick();
@@ -5767,10 +5780,14 @@
             const avgRank = Number(e.avg_rank);
             const totalCombos = Number(e.total_combos) || 252;
             const avgOvr = Number.isFinite(avgRank)
-                ? metaPickOvrFromRank(avgRank, totalCombos)
+                ? metaPickOvrRawFromRank(avgRank, totalCombos)
                 : null;
-            const avgTxt = avgOvr == null ? '—' : metaPickFormatOvr(avgOvr);
-            const avgG = avgOvr == null ? '' : metaPickGradeClass(metaPickGradeFromOvr(avgOvr));
+            // 0.1 steps: C(10,5)=252 packs ~2.6 ranks into every integer OVR,
+            // so whole numbers hid real gaps between adjacent rows.
+            const avgTxt = avgOvr == null ? '—' : metaPickFormatOvr1(avgOvr);
+            const avgG = avgOvr == null
+                ? ''
+                : metaPickGradeClass(metaPickGradeFromOvr(metaPickOvrFromRank(avgRank, totalCombos)));
             const rankList = Array.isArray(e.ranks) ? e.ranks : [];
             const ranksHtml = rankList.map((rk) => {
                 const r = Number(rk);
