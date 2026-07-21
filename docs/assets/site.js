@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784657095");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784662127");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -687,7 +687,11 @@
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
-    // Session-sticky single-item filter ('' | role key | 'common').
+    // Pick-share tiers for the 出裝 filter bar.  The payload floor is 3%
+    // (SINGLE_ITEM_TOP_MIN_PICK_RATE), so 全部 == everything shipped, not
+    // literally every item this champion has ever built.
+    const SINGLE_ITEM_NORMAL_MIN_PICK = 0.06;
+    // Session-sticky single-item filter ('' | role key | 'common' | 'normal').
     let singleItemFilter = '';
     const ROLE_BADGE_ICONS = {
         Assassin: `
@@ -735,7 +739,7 @@
     const DATE_STR_ZH = "更新於 2026-07-22";
     const BUILD_DATE = "2026-07-22";
     const PATCH_LABEL = "patch 26.14";
-    const TOTAL_GAMES = "159,756";
+    const TOTAL_GAMES = "162,346";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
@@ -2513,6 +2517,7 @@
     }
     function itemFilterRoleLabels(role) {
         if (role === 'common') return { zh: '常見', en: 'Common' };
+        if (role === 'normal') return { zh: '普通', en: 'Normal' };
         if (!role) return { zh: '全部', en: 'All' };
         const pack = ROLE_LABELS || {};
         return {
@@ -2527,14 +2532,20 @@
             const on = key ? singleItemFilter === key : !singleItemFilter;
             const labels = itemFilterRoleLabels(key);
             const shown = currentLang === 'en' ? labels.en : zhUi(labels.zh);
-            const tip = key === 'common'
-                ? ` title="${escHtml(pickLang('選取率 ≥ 10%', 'pick rate ≥ 10%'))}"`
-                : '';
+            let tip = '';
+            if (key === 'common') {
+                tip = ` title="${escHtml(pickLang('選取率 ≥ 10%', 'pick rate ≥ 10%'))}"`;
+            } else if (key === 'normal') {
+                tip = ` title="${escHtml(pickLang('選取率 ≥ 6%', 'pick rate ≥ 6%'))}"`;
+            } else if (!key) {
+                tip = ` title="${escHtml(pickLang('全部（選取率 ≥ 3%）', 'All (pick rate ≥ 3%)'))}"`;
+            }
             return `<button type="button" class="item-role-chip${extraClass}${on ? ' is-active' : ''}" data-item-filter="${key}" data-label-zh="${escHtml(labels.zh)}" data-label-en="${escHtml(labels.en)}" aria-pressed="${on}"${tip}>${escHtml(shown)}</button>`;
         };
         const chips = [mk('', '')];
         ITEM_FILTER_ROLE_ORDER.forEach(role => chips.push(mk(role, ` role-${role}`)));
         chips.push(mk('common', ' role-common'));
+        chips.push(mk('normal', ' role-common'));
         return `<div class="item-role-bar" role="group" aria-label="${escHtml(pickLang('裝備篩選', 'Item filters'))}">${chips.join('')}</div>`;
     }
     function applySingleItemFilter(root) {
@@ -2555,6 +2566,7 @@
                 const pick = Number(card.getAttribute('data-item-pick') || 0);
                 let match = true;
                 if (filter === 'common') match = pick >= SINGLE_ITEM_COMMON_MIN_PICK;
+                else if (filter === 'normal') match = pick >= SINGLE_ITEM_NORMAL_MIN_PICK;
                 else if (filter) match = roles.includes(filter);
                 card.classList.toggle('item-filter-hidden', !match);
                 if (match) shown++;
