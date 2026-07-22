@@ -2532,54 +2532,84 @@
             en: (pack.en && pack.en[role]) || role,
         };
     }
+    /** Pick-share floor for a scope ('' = whatever the payload already shipped). */
+    function singleItemScopeMinPick(scope) {
+        if (scope === 'common') return SINGLE_ITEM_COMMON_MIN_PICK;
+        if (scope === 'normal') return SINGLE_ITEM_NORMAL_MIN_PICK;
+        return 0;
+    }
+    function singleItemScopeTip(scope) {
+        const next = SINGLE_ITEM_SCOPES[
+            (SINGLE_ITEM_SCOPES.indexOf(scope) + 1) % SINGLE_ITEM_SCOPES.length
+        ];
+        const say = (key) => {
+            const labels = itemFilterRoleLabels(key);
+            const name = currentLang === 'en' ? labels.en : zhUi(labels.zh);
+            // 全部 is the payload floor (SINGLE_ITEM_TOP_MIN_PICK_RATE), not 0%.
+            const pctTxt = key ? `${Math.round(singleItemScopeMinPick(key) * 100)}%` : '3%';
+            return `${name} (≥ ${pctTxt})`;
+        };
+        return pickLang(
+            `目前：${say(scope)}，點一下切到 ${say(next)}`,
+            `Now: ${say(scope)} — click for ${say(next)}`
+        );
+    }
+    /** The cycling pick-share knob. Label + dots both reflect the live scope. */
+    function singleItemScopeChipHtml() {
+        const idx = Math.max(0, SINGLE_ITEM_SCOPES.indexOf(singleItemScope));
+        const labels = itemFilterRoleLabels(singleItemScope);
+        const shown = currentLang === 'en' ? labels.en : zhUi(labels.zh);
+        const dots = SINGLE_ITEM_SCOPES
+            .map((_, i) => `<i${i === idx ? ' class="is-on"' : ''}></i>`)
+            .join('');
+        const tip = singleItemScopeTip(singleItemScope);
+        return (
+            `<button type="button" class="item-scope-chip${singleItemScope ? ' is-active' : ''}"`
+            + ` data-item-scope="${escHtml(singleItemScope)}"`
+            + ` title="${escHtml(tip)}" aria-label="${escHtml(tip)}">`
+            + `<span class="item-scope-label">${escHtml(shown)}</span>`
+            + `<span class="item-scope-dots" aria-hidden="true">${dots}</span>`
+            + `</button>`
+        );
+    }
     function buildSingleItemFilterChips() {
         if (!ITEM_FILTER_ROLES || !Object.keys(ITEM_FILTER_ROLES).length) return '';
-        const allOn = !singleItemFilter;
-        const mk = (key, extraClass = '') => {
-            const on = key ? singleItemFilter === key : !singleItemFilter;
-            const labels = itemFilterRoleLabels(key);
+        const roleChip = (role) => {
+            const on = singleItemRole === role;
+            const labels = itemFilterRoleLabels(role);
             const shown = currentLang === 'en' ? labels.en : zhUi(labels.zh);
-            let tip = '';
-            if (key === 'common') {
-                tip = ` title="${escHtml(pickLang('選取率 ≥ 10%', 'pick rate ≥ 10%'))}"`;
-            } else if (key === 'normal') {
-                tip = ` title="${escHtml(pickLang('選取率 ≥ 6%', 'pick rate ≥ 6%'))}"`;
-            } else if (!key) {
-                tip = ` title="${escHtml(pickLang('全部（選取率 ≥ 3%）', 'All (pick rate ≥ 3%)'))}"`;
-            }
-            return `<button type="button" class="item-role-chip${extraClass}${on ? ' is-active' : ''}" data-item-filter="${key}" data-label-zh="${escHtml(labels.zh)}" data-label-en="${escHtml(labels.en)}" aria-pressed="${on}"${tip}>${escHtml(shown)}</button>`;
+            return `<button type="button" class="item-role-chip role-${role}${on ? ' is-active' : ''}" data-item-filter="${role}" data-label-zh="${escHtml(labels.zh)}" data-label-en="${escHtml(labels.en)}" aria-pressed="${on}">${escHtml(shown)}</button>`;
         };
-        const chips = [mk('', '')];
-        ITEM_FILTER_ROLE_ORDER.forEach(role => chips.push(mk(role, ` role-${role}`)));
-        chips.push(mk('common', ' role-common'));
-        chips.push(mk('normal', ' role-common'));
-        return `<div class="item-role-bar" role="group" aria-label="${escHtml(pickLang('裝備篩選', 'Item filters'))}">${chips.join('')}</div>`;
+        const chips = ITEM_FILTER_ROLE_ORDER.map(roleChip);
+        return `<div class="item-role-bar" role="group" aria-label="${escHtml(pickLang('裝備篩選', 'Item filters'))}">${singleItemScopeChipHtml()}${chips.join('')}</div>`;
     }
     function applySingleItemFilter(root) {
         if (!root) return;
         root.querySelectorAll('.item-role-chip').forEach(chip => {
             const key = chip.getAttribute('data-item-filter') || '';
-            const on = key ? singleItemFilter === key : !singleItemFilter;
+            const on = !!key && singleItemRole === key;
             chip.classList.toggle('is-active', on);
             chip.setAttribute('aria-pressed', String(on));
         });
+        // The knob's label changes with its state, so re-render it in place.
+        root.querySelectorAll('.item-scope-chip').forEach(chip => {
+            chip.outerHTML = singleItemScopeChipHtml();
+        });
+        const role = singleItemRole;
+        const minPick = singleItemScopeMinPick(singleItemScope);
         root.querySelectorAll('.single-item-filter-host').forEach(host => {
-            const filter = singleItemFilter;
             let shown = 0;
             let total = 0;
             host.querySelectorAll('.single-item-card').forEach(card => {
                 total++;
                 const roles = (card.getAttribute('data-item-role') || '').split(/\s+/).filter(Boolean);
                 const pick = Number(card.getAttribute('data-item-pick') || 0);
-                let match = true;
-                if (filter === 'common') match = pick >= SINGLE_ITEM_COMMON_MIN_PICK;
-                else if (filter === 'normal') match = pick >= SINGLE_ITEM_NORMAL_MIN_PICK;
-                else if (filter) match = roles.includes(filter);
+                const match = (!role || roles.includes(role)) && pick >= minPick;
                 card.classList.toggle('item-filter-hidden', !match);
                 if (match) shown++;
             });
             let empty = host.querySelector('.item-filter-empty');
-            if (filter && total > 0 && shown === 0) {
+            if ((role || singleItemScope) && total > 0 && shown === 0) {
                 if (!empty) {
                     empty = document.createElement('div');
                     empty.className = 'item-filter-empty mate-list empty-list';
@@ -2592,18 +2622,31 @@
             }
         });
     }
-    function setSingleItemFilter(key) {
-        singleItemFilter = key || '';
+    function refreshSingleItemFilter() {
         document.querySelectorAll('.detail').forEach(applySingleItemFilter);
     }
+    function setSingleItemRole(key) {
+        singleItemRole = key || '';
+        refreshSingleItemFilter();
+    }
+    function cycleSingleItemScope() {
+        const i = SINGLE_ITEM_SCOPES.indexOf(singleItemScope);
+        singleItemScope = SINGLE_ITEM_SCOPES[(i + 1) % SINGLE_ITEM_SCOPES.length];
+        refreshSingleItemFilter();
+    }
     document.addEventListener('click', (ev) => {
+        const scope = ev.target.closest('.item-scope-chip');
+        if (scope) {
+            ev.preventDefault();
+            cycleSingleItemScope();
+            return;
+        }
         const chip = ev.target.closest('.item-role-chip');
         if (!chip) return;
         ev.preventDefault();
         const key = chip.getAttribute('data-item-filter') || '';
-        // Toggle off → All when re-clicking the active non-all chip.
-        if (key && singleItemFilter === key) setSingleItemFilter('');
-        else setSingleItemFilter(key);
+        // Re-clicking the active role clears it; the scope knob is untouched.
+        setSingleItemRole(singleItemRole === key ? '' : key);
     });
 
     // ----- Augment category filter (chips above the per-champion ranking) -----
@@ -7833,6 +7876,9 @@
                 chip.textContent = zhUi(zh);
             }
         });
+        // Scope knob is state-driven (label + tooltip), not a static data-label
+        // pair — and its inner spans would not survive the textContent swap.
+        refreshSingleItemFilter();
         const emptyTitle = document.getElementById('empty-title');
         if (emptyTitle) emptyTitle.textContent = copy.emptyTitle;
         const emptyCopy = document.getElementById('empty-copy');
