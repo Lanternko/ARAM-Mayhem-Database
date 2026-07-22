@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784663516");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784695055");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -739,7 +739,7 @@
     const DATE_STR_ZH = "更新於 2026-07-22";
     const BUILD_DATE = "2026-07-22";
     const PATCH_LABEL = "patch 26.14";
-    const TOTAL_GAMES = "162,642";
+    const TOTAL_GAMES = "176,963";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
@@ -6991,7 +6991,7 @@
                 kicker: range,
                 title: 'What moved this patch',
                 close: 'Close patch changes',
-                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items', champItems: 'Hero x item' },
+                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items', champItems: 'Hero x item', champAugs: 'Hero x augment' },
                 summaryBase: 'Compared with',
                 summarySample: 'Sample',
                 summaryRule: 'Signal',
@@ -7006,6 +7006,9 @@
                 augmentNote: 'By augment picks this patch; only augments with enough sample in both patches are shown.',
                 champItemUp: 'Hero-item spikes',
                 champItemDown: 'Hero-item slumps',
+                champAugUp: 'Hero-augment spikes',
+                champAugDown: 'Hero-augment slumps',
+                champAugNote: 'Only pairings taken by at least 5% of that champion’s games in both patches; compares lift relative to the champion’s own baseline.',
                 itemNote: 'Core items only; boots and augment-gated rewards are excluded. Hero x item compares item lift against that hero baseline.',
                 games: 'games',
                 uses: 'uses',
@@ -7017,7 +7020,7 @@
             kicker: range,
             title: '這版誰變多了',
             close: '關閉版本變動',
-            tabs: { heroes: '英雄', augments: '增幅', items: '裝備', champItems: '英雄×裝備' },
+            tabs: { heroes: '英雄', augments: '增幅', items: '裝備', champItems: '英雄×裝備', champAugs: '英雄×增幅' },
             summaryBase: '比較基準',
             summarySample: '樣本',
             summaryRule: '訊號門檻',
@@ -7032,6 +7035,9 @@
             augmentNote: '依本版增幅選用次數比較；只列兩版樣本都足夠的增幅。',
             champItemUp: '搭配突然變好',
             champItemDown: '搭配突然變差',
+            champAugUp: '增幅突然變好',
+            champAugDown: '增幅突然變差',
+            champAugNote: '只列兩版都被該英雄至少 5% 場次選用的增幅；比較的是相對該英雄 baseline 的 lift 變動。',
             itemNote: '只看核心裝備，不含鞋子與增幅限定獎勵；英雄×裝備比較的是相對該英雄 baseline 的 lift 變動。',
             games: '場',
             uses: '次',
@@ -7131,6 +7137,29 @@
         `;
     }
 
+    function changeChampAugRow(row) {
+        const labels = changeLabels();
+        const champ = row.champ || {};
+        const aug = row.augment || {};
+        const champName = localizedEntityName(champ);
+        const augName = localizedEntityName(aug);
+        const title = `${champName} + ${augName} ${signed(row.delta || 0)}`;
+        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} -> ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        return `
+            <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
+                <span class="change-duo">
+                    <img src="${escHtml(champ.image || '')}" alt="">
+                    <img src="${escHtml(aug.icon || '')}" alt="">
+                </span>
+                <span>
+                    <span class="change-name">${escHtml(champName)} + ${escHtml(augName)}</span>
+                    <span class="change-meta">${escHtml(meta)}</span>
+                </span>
+                <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
+            </button>
+        `;
+    }
+
     function changeColumn(title, rows, renderer) {
         const labels = changeLabels();
         const body = rows && rows.length
@@ -7166,6 +7195,15 @@
                 <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
             `;
         }
+        if (activeUpdateTab === 'champAugs') {
+            return `
+                <div class="change-grid">
+                    ${changeColumn(labels.champAugUp, changes.champAugRisers || [], changeChampAugRow)}
+                    ${changeColumn(labels.champAugDown, changes.champAugFallers || [], changeChampAugRow)}
+                </div>
+                <div class="change-meta" style="margin-top:10px">${escHtml(labels.champAugNote)}</div>
+            `;
+        }
         if (activeUpdateTab === 'augments') {
             return `
                 <div class="change-grid">
@@ -7187,7 +7225,7 @@
         const copy = tr();
         const labels = changeLabels();
         const changes = DATA.patchChanges || {};
-        if (!['heroes', 'augments', 'items', 'champItems'].includes(activeUpdateTab)) {
+        if (!['heroes', 'augments', 'items', 'champItems', 'champAugs'].includes(activeUpdateTab)) {
             activeUpdateTab = 'heroes';
         }
         const button = document.getElementById('updates-toggle');

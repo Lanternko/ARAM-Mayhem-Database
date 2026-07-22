@@ -229,6 +229,15 @@ PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES = 30
 PATCH_CHANGE_AUGMENT_CURRENT_MIN_GAMES = 500
 PATCH_CHANGE_AUGMENT_BASELINE_MIN_GAMES = 800
 PATCH_CHANGE_AUGMENT_PRIOR_GAMES = 200
+# 英雄×增幅 needs a stricter relative floor than 英雄×裝備 (1.5%).  Augments are
+# thinner per cell: 4 picks/player out of a 206-augment pool means the median
+# champ×augment cell is only 72 games / 0.83% pick, so a 1.5% gate would fill
+# the board with 60-game noise.  At 5% the surviving cells run 125-495 games and
+# the extreme delta drops from +15.6% to +9.2% — in line with the item board.
+PATCH_CHANGE_CHAMP_AUG_CURRENT_MIN_GAMES = 80
+PATCH_CHANGE_CHAMP_AUG_BASELINE_MIN_GAMES = 120
+PATCH_CHANGE_CHAMP_AUG_MIN_PICK = 0.05
+PATCH_CHANGE_CHAMP_AUG_PRIOR_GAMES = 30
 AUGMENT_TYPE_MIN_GAMES = 100
 
 ITEM_STYLE_LABELS = {
@@ -3488,6 +3497,69 @@ def compute_patch_changes(
                 "baseline_games": int(baseline_games),
             })
 
+    # 英雄×增幅: same shape as champ×item, but reusing the per-champion augment
+    # records the augment board already loads — no extra DB scan.
+    champ_aug_rows: list[dict[str, object]] = []
+    if aug_meta:
+        def _index_champ_aug(records: list[dict] | None) -> dict[tuple[int, int], dict[str, int]]:
+            out: dict[tuple[int, int], dict[str, int]] = defaultdict(
+                lambda: {"games": 0, "wins": 0}
+            )
+            for r in records or []:
+                key = (int(r["champion_id"]), int(r["augment_id"]))
+                out[key]["games"] += int(r["games"])
+                out[key]["wins"] += int(r["wins"])
+            return out
+
+        cur_ca = _index_champ_aug(champ_aug_records)
+        base_ca = _index_champ_aug(baseline_champ_aug)
+        for key, current in cur_ca.items():
+            cid, aid = key
+            baseline = base_ca.get(key)
+            if not baseline or aid not in aug_meta or cid not in champ_meta:
+                continue
+            cur_games = int(current["games"])
+            base_games = int(baseline["games"])
+            if (
+                cur_games < PATCH_CHANGE_CHAMP_AUG_CURRENT_MIN_GAMES
+                or base_games < PATCH_CHANGE_CHAMP_AUG_BASELINE_MIN_GAMES
+            ):
+                continue
+            cur_rec = current_by_champ.get(cid)
+            base_rec = baseline_by_champ.get(cid)
+            if not cur_rec or not base_rec:
+                continue
+            cur_pick = cur_games / max(int(cur_rec.get("games", 0) or 0), 1)
+            base_pick = base_games / max(int(base_rec.get("games", 0) or 0), 1)
+            if (
+                cur_pick < PATCH_CHANGE_CHAMP_AUG_MIN_PICK
+                or base_pick < PATCH_CHANGE_CHAMP_AUG_MIN_PICK
+            ):
+                continue
+            cur_base_wr = float(cur_rec.get("raw_wr", 0.5) or 0.5)
+            base_base_wr = float(base_rec.get("raw_wr", 0.5) or 0.5)
+            cur_wr = _smoothed_patch_wr(
+                int(current["wins"]), cur_games, cur_base_wr, PATCH_CHANGE_CHAMP_AUG_PRIOR_GAMES
+            )
+            base_wr = _smoothed_patch_wr(
+                int(baseline["wins"]), base_games, base_base_wr, PATCH_CHANGE_CHAMP_AUG_PRIOR_GAMES
+            )
+            cur_lift = cur_wr - cur_base_wr
+            base_lift = base_wr - base_base_wr
+            champ_aug_rows.append({
+                "champ": _patch_champ_payload(cid, champ_meta),
+                "augment": _patch_augment_payload(aid, aug_meta),
+                "current_wr": round(cur_wr, 4),
+                "baseline_wr": round(base_wr, 4),
+                "current_lift": round(cur_lift, 4),
+                "baseline_lift": round(base_lift, 4),
+                "delta": round(cur_lift - base_lift, 4),
+                "current_games": cur_games,
+                "baseline_games": base_games,
+                "current_pick": round(cur_pick, 4),
+                "baseline_pick": round(base_pick, 4),
+            })
+
     return {
         "currentPatch": current_patch,
         "baselinePatch": baseline_patch,
@@ -3506,6 +3578,10 @@ def compute_patch_changes(
         "minAugmentGames": PATCH_CHANGE_AUGMENT_CURRENT_MIN_GAMES,
         "augmentRisers": sorted(augment_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
         "augmentFallers": sorted(augment_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
+        "minChampAugGames": PATCH_CHANGE_CHAMP_AUG_CURRENT_MIN_GAMES,
+        "minChampAugPick": PATCH_CHANGE_CHAMP_AUG_MIN_PICK,
+        "champAugRisers": sorted(champ_aug_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
+        "champAugFallers": sorted(champ_aug_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
     }
 
 def _affinity_top_rows_by_slug(affinity: dict[int, dict]) -> dict[int, dict[str, dict]]:

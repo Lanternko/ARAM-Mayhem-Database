@@ -691,8 +691,14 @@
     // (SINGLE_ITEM_TOP_MIN_PICK_RATE), so 全部 == everything shipped, not
     // literally every item this champion has ever built.
     const SINGLE_ITEM_NORMAL_MIN_PICK = 0.06;
-    // Session-sticky single-item filter ('' | role key | 'common' | 'normal').
-    let singleItemFilter = '';
+    // Pick-share tiers are one knob, not chips: they are a threshold on a single
+    // axis (3% → 6% → 10%), so only one can ever be true and cycling loosest →
+    // tightest is the whole interaction.  Role is a different axis and stays
+    // independent — 法師 + 常見 is a legitimate combination.
+    const SINGLE_ITEM_SCOPES = ['', 'normal', 'common'];
+    // Session-sticky, both axes ('' = off; role = one of ITEM_FILTER_ROLE_ORDER).
+    let singleItemRole = '';
+    let singleItemScope = '';
     const ROLE_BADGE_ICONS = {
         Assassin: `
             <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -2499,10 +2505,11 @@
     const MATE_LIST_LIMIT_DESKTOP = 8;
     const MATE_LIST_LIMIT_MOBILE = 6;
 
-    // ----- Single-item role filter (出裝 → 單件裝備強度) -------------------------
-    // Single-select chips: All + 6 roles + 常見.  Role comes from shell-injected
-    // ITEM_FILTER_ROLES (CDragon style → role list); 常見 = pick ≥ 10% on this champ.
-    // An item may match multiple roles (e.g. 殞落之祭 → Mage + Marksman).
+    // ----- Single-item filters (出裝 → 單件裝備強度) -----------------------------
+    // Two independent axes: one cycling pick-share knob (全部 → 普通 → 常見) plus
+    // single-select role chips.  Role comes from shell-injected ITEM_FILTER_ROLES
+    // (CDragon style → role list); an item may match multiple roles (e.g. 殞落之祭
+    // → Mage + Marksman).  The two are ANDed.
     function itemFilterRolesForId(id) {
         if (id == null || id === '') return [];
         const key = String(id);
@@ -6991,7 +6998,7 @@
                 kicker: range,
                 title: 'What moved this patch',
                 close: 'Close patch changes',
-                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items', champItems: 'Hero x item' },
+                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items', champItems: 'Hero x item', champAugs: 'Hero x augment' },
                 summaryBase: 'Compared with',
                 summarySample: 'Sample',
                 summaryRule: 'Signal',
@@ -7006,6 +7013,9 @@
                 augmentNote: 'By augment picks this patch; only augments with enough sample in both patches are shown.',
                 champItemUp: 'Hero-item spikes',
                 champItemDown: 'Hero-item slumps',
+                champAugUp: 'Hero-augment spikes',
+                champAugDown: 'Hero-augment slumps',
+                champAugNote: 'Only pairings taken by at least 5% of that champion’s games in both patches; compares lift relative to the champion’s own baseline.',
                 itemNote: 'Core items only; boots and augment-gated rewards are excluded. Hero x item compares item lift against that hero baseline.',
                 games: 'games',
                 uses: 'uses',
@@ -7017,7 +7027,7 @@
             kicker: range,
             title: '這版誰變多了',
             close: '關閉版本變動',
-            tabs: { heroes: '英雄', augments: '增幅', items: '裝備', champItems: '英雄×裝備' },
+            tabs: { heroes: '英雄', augments: '增幅', items: '裝備', champItems: '英雄×裝備', champAugs: '英雄×增幅' },
             summaryBase: '比較基準',
             summarySample: '樣本',
             summaryRule: '訊號門檻',
@@ -7032,6 +7042,9 @@
             augmentNote: '依本版增幅選用次數比較；只列兩版樣本都足夠的增幅。',
             champItemUp: '搭配突然變好',
             champItemDown: '搭配突然變差',
+            champAugUp: '增幅突然變好',
+            champAugDown: '增幅突然變差',
+            champAugNote: '只列兩版都被該英雄至少 5% 場次選用的增幅；比較的是相對該英雄 baseline 的 lift 變動。',
             itemNote: '只看核心裝備，不含鞋子與增幅限定獎勵；英雄×裝備比較的是相對該英雄 baseline 的 lift 變動。',
             games: '場',
             uses: '次',
@@ -7131,6 +7144,29 @@
         `;
     }
 
+    function changeChampAugRow(row) {
+        const labels = changeLabels();
+        const champ = row.champ || {};
+        const aug = row.augment || {};
+        const champName = localizedEntityName(champ);
+        const augName = localizedEntityName(aug);
+        const title = `${champName} + ${augName} ${signed(row.delta || 0)}`;
+        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} -> ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        return `
+            <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
+                <span class="change-duo">
+                    <img src="${escHtml(champ.image || '')}" alt="">
+                    <img src="${escHtml(aug.icon || '')}" alt="">
+                </span>
+                <span>
+                    <span class="change-name">${escHtml(champName)} + ${escHtml(augName)}</span>
+                    <span class="change-meta">${escHtml(meta)}</span>
+                </span>
+                <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
+            </button>
+        `;
+    }
+
     function changeColumn(title, rows, renderer) {
         const labels = changeLabels();
         const body = rows && rows.length
@@ -7166,6 +7202,15 @@
                 <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
             `;
         }
+        if (activeUpdateTab === 'champAugs') {
+            return `
+                <div class="change-grid">
+                    ${changeColumn(labels.champAugUp, changes.champAugRisers || [], changeChampAugRow)}
+                    ${changeColumn(labels.champAugDown, changes.champAugFallers || [], changeChampAugRow)}
+                </div>
+                <div class="change-meta" style="margin-top:10px">${escHtml(labels.champAugNote)}</div>
+            `;
+        }
         if (activeUpdateTab === 'augments') {
             return `
                 <div class="change-grid">
@@ -7187,7 +7232,7 @@
         const copy = tr();
         const labels = changeLabels();
         const changes = DATA.patchChanges || {};
-        if (!['heroes', 'augments', 'items', 'champItems'].includes(activeUpdateTab)) {
+        if (!['heroes', 'augments', 'items', 'champItems', 'champAugs'].includes(activeUpdateTab)) {
             activeUpdateTab = 'heroes';
         }
         const button = document.getElementById('updates-toggle');
