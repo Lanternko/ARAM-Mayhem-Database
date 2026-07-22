@@ -6297,68 +6297,131 @@
         grid-template-columns: repeat(3, 1fr);
         gap: 10px;
     }
+    /* Card art follows the in-client augment select: portrait card, rarity-lit
+       frame, art on top, name → genre chip → rules text stacked and centred. */
+    .aug-draft-slot { display: flex; flex-direction: column; gap: 8px; }
     .aug-draft-card {
         position: relative;
+        flex: 1;
         display: flex;
         flex-direction: column;
+        align-items: center;
         gap: 8px;
-        padding: 12px;
-        text-align: left;
-        border-radius: 12px;
-        border: 1px solid var(--border, #2f3645);
-        border-top: 3px solid var(--aug-colour, #f5c518);
+        padding: 18px 14px 16px;
+        text-align: center;
+        border-radius: 14px;
+        border: 1px solid var(--aug-colour, #f5c518);
+        /* Plain fill first: a browser without color-mix() drops the whole
+           gradient declaration, and without this the card would render
+           transparent rather than merely un-lit. */
         background: var(--surface-raised, #1a1f29);
+        background:
+            radial-gradient(120% 80% at 50% 0%,
+                color-mix(in srgb, var(--aug-colour, #f5c518) 22%, transparent) 0%,
+                transparent 62%),
+            var(--surface-raised, #1a1f29);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--aug-colour, #f5c518) 28%, transparent),
+                    0 6px 22px -12px var(--aug-colour, #f5c518);
         color: var(--text, #e6e9ef);
         font-family: inherit;
         cursor: default;
-        transition: border-color 0.12s, transform 0.12s, opacity 0.12s;
+        transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
     }
     button.aug-draft-card { cursor: pointer; }
     button.aug-draft-card:hover {
-        border-color: var(--accent, #f5c518);
-        transform: translateY(-2px);
+        transform: translateY(-3px);
+        box-shadow: 0 0 0 1px var(--aug-colour, #f5c518),
+                    0 14px 30px -14px var(--aug-colour, #f5c518);
     }
     .aug-draft-card:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
     .aug-draft-card.is-silver    { --aug-colour: #c7cdd6; }
     .aug-draft-card.is-gold      { --aug-colour: #f5c518; }
     .aug-draft-card.is-prismatic { --aug-colour: #c084fc; }
-    .aug-draft-card.is-picked { border-color: var(--accent, #f5c518); }
-    .aug-draft-card.is-best   { border-color: #4ade80; }
+    .aug-draft-card.is-picked { --aug-colour: #f5c518; }
+    .aug-draft-card.is-best   { --aug-colour: #4ade80; }
     /* Rerolled-away options stay on screen at reveal because they still count
        toward the score — hiding them would make the reroll look consequence-free. */
-    .aug-draft-card.is-stale { opacity: 0.5; }
+    .aug-draft-card.is-stale { opacity: 0.45; box-shadow: none; }
     .aug-draft-badge {
         position: absolute;
         top: -9px;
-        left: 10px;
-        padding: 1px 7px;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        padding: 1px 8px;
         border-radius: 999px;
         font-size: 10px;
         font-weight: 700;
-        background: var(--accent, #f5c518);
+        background: var(--aug-colour, #f5c518);
         color: #0e1116;
     }
-    .aug-draft-card.is-best .aug-draft-badge { background: #4ade80; }
     .aug-draft-card.is-stale .aug-draft-badge {
         background: var(--border, #2f3645);
         color: var(--text-muted, #9aa0a6);
     }
-    .aug-draft-top { display: flex; align-items: center; gap: 8px; }
-    .aug-draft-icon { width: 34px; height: 34px; border-radius: 8px; flex: none; }
-    .aug-draft-name { font-size: 13px; font-weight: 700; line-height: 1.3; }
-    .aug-draft-lift {
-        margin-left: auto;
-        font-size: 12px;
+    .aug-draft-art {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 66px;
+        height: 66px;
+        border-radius: 50%;
+        background: radial-gradient(circle,
+            color-mix(in srgb, var(--aug-colour, #f5c518) 26%, transparent) 0%, transparent 70%);
+    }
+    .aug-draft-icon { width: 52px; height: 52px; }
+    .aug-draft-name {
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.25;
+        letter-spacing: 0.01em;
+    }
+    .aug-draft-cat {
+        padding: 2px 9px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--aug-colour, #f5c518) 18%, transparent);
+        border: 1px solid color-mix(in srgb, var(--aug-colour, #f5c518) 40%, transparent);
+        font-size: 10px;
         font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .aug-draft-lift {
+        margin-top: auto;
+        padding-top: 4px;
+        font-size: 13px;
+        font-weight: 800;
         font-variant-numeric: tabular-nums;
     }
     .aug-draft-lift.is-good { color: #4ade80; }
     .aug-draft-lift.is-bad  { color: #f87171; }
     .aug-draft-desc {
-        font-size: 11px;
-        line-height: 1.45;
+        font-size: 12px;
+        line-height: 1.5;
         color: var(--text-muted, #9aa0a6);
     }
+    .aug-draft-val { color: var(--aug-colour, #f5c518); font-weight: 700; }
+    /* Per-card reroll: the client gives every offered augment its own ⟳. */
+    .aug-slot-reroll {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 7px;
+        border-radius: 9px;
+        border: 1px solid var(--border, #2f3645);
+        background: var(--chip-bg, #1f2530);
+        color: var(--text-muted, #9aa0a6);
+        cursor: pointer;
+        transition: color 0.12s, border-color 0.12s, background 0.12s;
+    }
+    .aug-slot-reroll:hover:not([disabled]) {
+        color: var(--text, #e6e9ef);
+        border-color: var(--aug-colour, #f5c518);
+    }
+    .aug-slot-reroll:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .aug-slot-reroll[disabled] { opacity: 0.35; cursor: not-allowed; }
+    .aug-slot-reroll .aug-reroll-icon { width: 15px; height: 15px; }
     .aug-verdict {
         margin: 12px 0 0;
         text-align: center;
@@ -6374,8 +6437,6 @@
         gap: 8px;
         margin-top: 14px;
     }
-    .aug-reroll { display: inline-flex; align-items: center; gap: 6px; }
-    .aug-reroll[disabled] { opacity: 0.45; cursor: not-allowed; }
     .aug-reroll-icon { width: 14px; height: 14px; flex: none; }
 
     .aug-settle-champ {
@@ -6415,10 +6476,14 @@
         font-variant-numeric: tabular-nums;
     }
     @media (max-width: 560px) {
+        /* Three portrait cards will not hold readable rules text at 375px, so
+           they stack; the reroll stays attached to its own card. */
         .aug-draft-row { grid-template-columns: 1fr; }
+        .aug-draft-card { padding: 14px 12px 12px; }
+        .aug-draft-art { width: 54px; height: 54px; }
+        .aug-draft-icon { width: 42px; height: 42px; }
         .aug-champ-row { gap: 6px; }
         .aug-champ-img { width: 46px; height: 46px; }
-        .aug-draft-desc { font-size: 12px; }
     }
     .game-header {
         margin-bottom: 14px;
