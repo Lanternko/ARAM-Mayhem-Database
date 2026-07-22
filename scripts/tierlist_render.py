@@ -2587,7 +2587,18 @@ def render_html(
     parts.append(
         "<section class='view view-game' id='view-game' data-view='game' "
         "role='tabpanel' aria-labelledby='tab-game'>"
-        "<div class='game-shell'>"
+        # Two mini-games share this view; the switcher is server-rendered so the
+        # tab labels are in the HTML for crawlers, panels are toggled by JS.
+        "<div class='game-mode-tabs' role='tablist' aria-label='小遊戲'>"
+        "<button type='button' class='game-mode-tab is-active' data-game-mode='metapick' "
+        "role='tab' aria-selected='true' "
+        "data-i18n-zh='Meta Pick' data-i18n-en='Meta Pick'>Meta Pick</button>"
+        "<button type='button' class='game-mode-tab' data-game-mode='augment' "
+        "role='tab' aria-selected='false' "
+        "data-i18n-zh='選增幅' data-i18n-zh-cn='选增幅' "
+        "data-i18n-en='Augment Draft'>選增幅</button>"
+        "</div>"
+        "<div class='game-shell game-mode-panel' data-game-mode='metapick'>"
         "<header class='game-header'>"
         "<div class='game-header-top'>"
         "<div class='game-header-text'>"
@@ -2644,6 +2655,9 @@ def render_html(
         "<div class='game-board-body' id='game-board-body'></div>"
         "</section>"
         "</div>"
+        # 選增幅 — rendered entirely by JS (renderAugDraft), like #aug-tier-host.
+        "<div class='game-shell game-mode-panel' data-game-mode='augment' "
+        "id='aug-draft-host' hidden></div>"
         "</section>"
     )
 

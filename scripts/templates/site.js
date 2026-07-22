@@ -1204,6 +1204,35 @@
             gameBoardNick: '暱稱',
             gameBoardAvg: '平均 OVR',
             gameBoardRanks: '各回合',
+            // ---- 選增幅 (augment draft) ----
+            augGameTitle: '選增幅',
+            augGameSub: '從 3 隻英雄挑 1 隻，再抽 4 輪增幅。顏色機率取自真實對局，選之前不顯示強度。',
+            augGameTip: '遊玩建議：同一場的顏色是全場共用的，銀色不會連兩次，彩色之後下一個彩色機率會變低。'
+                + '每輪只能重骰一次，而且被你重骰掉的選項仍會列入計分——想清楚再刷。',
+            augGameChampTitle: '選一隻英雄',
+            augGameChampSub: '這局要用誰？增幅池會跟著這隻英雄的實戰資料走。',
+            augGameLadder: '本場顏色',
+            augGameRound: (a, b) => `第 ${a}/${b} 個增幅`,
+            augGameRerollLeft: '可重骰 1 次',
+            augGameRerollUsed: '已重骰',
+            augGameReroll: '重骰',
+            augGamePickPrompt: '選一個增幅',
+            augGameYourPick: '你的選擇',
+            augGameBestPick: '最佳選擇',
+            augGameRerolledAway: '被你重骰掉',
+            augGameNextRound: '下一個增幅',
+            augGameSettleTitle: '最終結果',
+            augGameSettleSub: '每輪你的選擇離「看過的最佳」有多近',
+            augGameRoundHit: '選中最佳',
+            augGameRoundMiss: (gap) => `差 ${gap}`,
+            augGameLiftLabel: '勝率增益',
+            augGameRestart: '再玩一次',
+            augGameChampGames: n => `${n.toLocaleString()} 場`,
+            augGameNoData: '增幅資料尚未載入，請稍後再試。',
+            augGameRarityS: '銀色',
+            augGameRarityG: '金色',
+            augGameRarityP: '彩色',
+            augGameTotalLift: '這套增幅的總增益',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
             detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
@@ -1493,6 +1522,36 @@
             gameBoardNick: 'Name',
             gameBoardAvg: 'Avg OVR',
             gameBoardRanks: 'Rounds',
+            // ---- Augment Draft ----
+            augGameTitle: 'Augment Draft',
+            augGameSub: 'Pick 1 of 3 champions, then draft 4 augments. Colour odds come from real games; strength stays hidden until you pick.',
+            augGameTip: 'Tips: the colour ladder is shared by the whole lobby, silver never repeats twice in a row, '
+                + 'and a prismatic makes the next prismatic less likely. You get one reroll per round — and anything '
+                + 'you reroll away still counts against your score, so think before you refresh.',
+            augGameChampTitle: 'Pick a champion',
+            augGameChampSub: 'Who are you playing? The augment pool follows this champion’s real games.',
+            augGameLadder: 'This game’s colours',
+            augGameRound: (a, b) => `Augment ${a}/${b}`,
+            augGameRerollLeft: '1 reroll left',
+            augGameRerollUsed: 'Reroll used',
+            augGameReroll: 'Reroll',
+            augGamePickPrompt: 'Pick an augment',
+            augGameYourPick: 'Your pick',
+            augGameBestPick: 'Best pick',
+            augGameRerolledAway: 'Rerolled away',
+            augGameNextRound: 'Next augment',
+            augGameSettleTitle: 'Final result',
+            augGameSettleSub: 'How close each pick was to the best you were shown',
+            augGameRoundHit: 'Best pick',
+            augGameRoundMiss: (gap) => `off by ${gap}`,
+            augGameLiftLabel: 'WR lift',
+            augGameRestart: 'Play again',
+            augGameChampGames: n => `${n.toLocaleString()} games`,
+            augGameNoData: 'Augment data has not loaded yet — try again shortly.',
+            augGameRarityS: 'Silver',
+            augGameRarityG: 'Gold',
+            augGameRarityP: 'Prismatic',
+            augGameTotalLift: 'Total lift of this build',
             detailEmpty: 'No detail data is available for this champion yet.',
             detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
@@ -6504,6 +6563,491 @@
         return `<div class="game-faces">${cells.join('')}</div>`;
     }
 
+    // ===== 選增幅 (Augment Draft) ==========================================
+    // Mayhem deals one 4-colour ladder per LOBBY, not per player: across 157,915
+    // patch-16.14 games the 10 players agree on each slot's colour 98.0% of the
+    // time.  The colours are also not independent draws — silver never repeats
+    // at slot 1→2 (0.00%, n=17,272) and a prismatic drops the next prismatic
+    // from ~27% to ~17%.  Rolling each slot on its own marginal would therefore
+    // produce ladders the game never deals, so we sample a whole sequence from
+    // the measured joint distribution and let it carry the dependence for us.
+    // Refresh with: python scripts/build_augment_ladder.py --patch <patch>
+    // Measured from 157,915 patch-16.14 games (scripts/build_augment_ladder.py).
+    const AUGMENT_LADDER = {
+        GGPG: 6405, GGGP: 6340, GPGG: 6278, GSPG: 5879, GGGG: 5834, GSGP: 5815, PGGG: 5303,
+        GSGG: 4564, GSSP: 4381, GGSP: 4327, GGPS: 4323, GPGS: 4312, GSPS: 4236, GPSG: 4235,
+        GGGS: 3695, GGSG: 3523, PGGS: 3411, PGSG: 3359, PSGG: 3279, GPSS: 3225, PGSS: 2399,
+        PSGS: 2375, PSSG: 2341, GSGS: 2224, GSSG: 2183, GGPP: 2171, GSPP: 2160, GPGP: 2090,
+        GPPG: 2077, PGPG: 1894, PGGP: 1864, GGSS: 1834, PPGG: 1766, SGGP: 1718, SGPG: 1717,
+        GPPS: 1675, SPGG: 1648, GPSP: 1620, PSSS: 1612, PGPS: 1480, SGGG: 1457, PPSG: 1431,
+        PGSP: 1391, PPGS: 1351, SGPS: 1272, SGSP: 1252, SPGS: 1237, SPSG: 1207, PSPG: 1206,
+        PSGP: 1191, PPSS: 1072, PSPS: 922, PSSP: 921, SPSS: 852, SGSG: 847, SGGS: 778,
+        GPPP: 667, SPPG: 635, SGPP: 626, GSSS: 618, PGPP: 616, PPPG: 607, SPGP: 603, PPGP: 575,
+        PPPS: 499, PPSP: 482, SPPS: 479, SPSP: 463, PSPP: 386, SGSS: 290, SPPP: 210, PPPP: 200,
+    };
+    const AUG_DRAFT_ROUNDS = 4;
+    const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
+    const AUG_DRAFT_CHAMP_CHOICES = 3;
+    // Champions below this see too few games for their per-augment lift to mean
+    // anything; the draft would be scoring noise.
+    const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
+    const AUG_RARITY_OF_CODE = { S: 'kSilver', G: 'kGold', P: 'kPrismatic' };
+    const AUG_RARITY_CSS = { S: 'silver', G: 'gold', P: 'prismatic' };
+    // feather "refresh-cw" — the in-client reroll affordance.
+    const AUG_REROLL_ICON =
+        '<svg class="aug-reroll-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + '<polyline points="23 4 23 10 17 10"></polyline>'
+        + '<polyline points="1 20 1 14 7 14"></polyline>'
+        + '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>'
+        + '</svg>';
+
+    const augDraft = {
+        phase: 'champ',      // champ | pick | reveal | settle
+        champChoices: [],
+        champId: '',
+        ladder: '',
+        round: 0,
+        offer: [],           // ids currently on the table
+        shown: [],           // every id shown this round, including rerolled-away
+        rerolled: false,
+        picks: [],
+        started: false,
+    };
+
+    /** Weighted draw of a full 4-colour ladder from the measured distribution. */
+    function augDraftRollLadder() {
+        const entries = Object.keys(AUGMENT_LADDER);
+        let total = 0;
+        entries.forEach(seq => { total += AUGMENT_LADDER[seq]; });
+        let r = Math.random() * total;
+        for (let i = 0; i < entries.length; i += 1) {
+            r -= AUGMENT_LADDER[entries[i]];
+            if (r <= 0) return entries[i];
+        }
+        return entries[0] || 'GGGG';
+    }
+
+    function augDraftSample(pool, n, exclude) {
+        const ex = new Set((exclude || []).map(String));
+        const rest = (pool || []).filter(x => !ex.has(String(x)));
+        const out = [];
+        while (out.length < n && rest.length) {
+            out.push(rest.splice(Math.floor(Math.random() * rest.length), 1)[0]);
+        }
+        return out;
+    }
+
+    function augDraftRarityRows(code, champId) {
+        const cid = champId || augDraft.champId;
+        const champ = (DATA && DATA.champs && DATA.champs[cid]) || null;
+        const key = AUG_RARITY_OF_CODE[code] || 'kGold';
+        const rows = champ && champ.top ? champ.top[key] : null;
+        return Array.isArray(rows) ? rows : [];
+    }
+
+    /** Champions with enough games AND a deep enough pool to survive a reroll. */
+    function augDraftChampPool() {
+        const champs = (DATA && DATA.champs) || {};
+        return Object.keys(champs).filter(cid => {
+            const c = champs[cid];
+            if (!c || Number(c.g || 0) < AUG_DRAFT_MIN_CHAMP_GAMES) return false;
+            return ['S', 'G', 'P'].every(
+                code => augDraftRarityRows(code, cid).length >= AUG_DRAFT_OFFER * 2
+            );
+        });
+    }
+
+    function augDraftRoundCode(round) {
+        const i = round == null ? augDraft.round : round;
+        return augDraft.ladder[i] || 'G';
+    }
+
+    function augDraftRowFor(id, round) {
+        const rows = augDraftRarityRows(augDraftRoundCode(round));
+        const key = String(id);
+        return rows.find(r => String(r.id) === key) || null;
+    }
+
+    function augDraftLift(id, round) {
+        const row = augDraftRowFor(id, round);
+        return row ? Number(row.lift || 0) : 0;
+    }
+
+    function augDraftDeal(exclude) {
+        const ids = augDraftRarityRows(augDraftRoundCode()).map(r => r.id);
+        return augDraftSample(ids, AUG_DRAFT_OFFER, exclude);
+    }
+
+    function augDraftStart() {
+        augDraft.phase = 'champ';
+        augDraft.champChoices = augDraftSample(augDraftChampPool(), AUG_DRAFT_CHAMP_CHOICES);
+        augDraft.champId = '';
+        augDraft.ladder = augDraftRollLadder();
+        augDraft.round = 0;
+        augDraft.offer = [];
+        augDraft.shown = [];
+        augDraft.rerolled = false;
+        augDraft.picks = [];
+        augDraft.started = true;
+    }
+
+    function augDraftBeginRound() {
+        augDraft.rerolled = false;
+        augDraft.offer = augDraftDeal([]);
+        augDraft.shown = augDraft.offer.slice();
+        augDraft.phase = 'pick';
+    }
+
+    function augDraftChoose(cid) {
+        if (augDraft.phase !== 'champ') return;
+        if (!augDraft.champChoices.map(String).includes(String(cid))) return;
+        augDraft.champId = String(cid);
+        augDraft.round = 0;
+        augDraftBeginRound();
+        renderAugDraft();
+        trackEvent('aug_draft_champ', { champ: augDraft.champId, ladder: augDraft.ladder });
+    }
+
+    /**
+     * Score a pick against everything the player was SHOWN this round — the
+     * rerolled-away options included.  Grading only against what survived the
+     * reroll would make rerolling free, when deciding whether to reroll is the
+     * actual skill the game tests.
+     */
+    function augDraftPick(id) {
+        if (augDraft.phase !== 'pick') return;
+        if (!augDraft.offer.map(String).includes(String(id))) return;
+        const shown = augDraft.shown.slice();
+        const lifts = shown.map(x => augDraftLift(x));
+        const best = Math.max.apply(null, lifts);
+        const worst = Math.min.apply(null, lifts);
+        const mine = augDraftLift(id);
+        const bestId = shown[lifts.indexOf(best)];
+        augDraft.picks.push({
+            id: String(id),
+            bestId: String(bestId),
+            shown,
+            offer: augDraft.offer.slice(),
+            rerolled: augDraft.rerolled,
+            code: augDraftRoundCode(),
+            mine,
+            best,
+            worst,
+            // Flat 1.0 when every option was identical: there was nothing to read.
+            score: best === worst ? 1 : (mine - worst) / (best - worst),
+        });
+        augDraft.phase = 'reveal';
+        renderAugDraft();
+    }
+
+    function augDraftReroll() {
+        if (augDraft.phase !== 'pick' || augDraft.rerolled) return;
+        const next = augDraftDeal(augDraft.offer);
+        if (next.length < AUG_DRAFT_OFFER) return;
+        augDraft.rerolled = true;
+        augDraft.offer = next;
+        augDraft.shown = augDraft.shown.concat(next);
+        renderAugDraft();
+        trackEvent('aug_draft_reroll', { round: augDraft.round + 1 });
+    }
+
+    function augDraftNextRound() {
+        if (augDraft.phase !== 'reveal') return;
+        if (augDraft.round + 1 >= AUG_DRAFT_ROUNDS) {
+            augDraft.phase = 'settle';
+            renderAugDraft();
+            trackEvent('aug_draft_settle', { ovr: augDraftOvr() });
+            return;
+        }
+        augDraft.round += 1;
+        augDraftBeginRound();
+        renderAugDraft();
+    }
+
+    function augDraftOvr() {
+        if (!augDraft.picks.length) return null;
+        const mean = augDraft.picks.reduce((a, p) => a + p.score, 0) / augDraft.picks.length;
+        // Same 1–99 ladder as Meta Pick so the grade colours mean one thing.
+        return Math.max(1, Math.min(99, Math.round(mean * 98) + 1));
+    }
+
+    function augDraftRarityLabel(code, copy) {
+        if (code === 'S') return copy.augGameRarityS || 'Silver';
+        if (code === 'P') return copy.augGameRarityP || 'Prismatic';
+        return copy.augGameRarityG || 'Gold';
+    }
+
+    function augDraftLadderStripHtml(copy) {
+        if (!augDraft.ladder) return '';
+        const pips = augDraft.ladder.split('').map((code, i) => {
+            const done = augDraft.phase === 'settle' || i < augDraft.round
+                || (i === augDraft.round && augDraft.phase === 'reveal');
+            const now = i === augDraft.round && augDraft.phase !== 'settle'
+                && augDraft.phase !== 'champ';
+            const cls = ['aug-ladder-pip', `is-${AUG_RARITY_CSS[code] || 'gold'}`,
+                now ? 'is-now' : '', done ? 'is-done' : ''].filter(Boolean).join(' ');
+            return `<span class="${cls}" title="${escHtml(augDraftRarityLabel(code, copy))}">`
+                + `<span class="aug-ladder-n">${i + 1}</span></span>`;
+        }).join('');
+        return `<div class="aug-ladder"><span class="aug-ladder-label">`
+            + `${escHtml(copy.augGameLadder || 'Colours')}</span>`
+            + `<div class="aug-ladder-pips">${pips}</div></div>`;
+    }
+
+    function augDraftAugCardHtml(id, opts) {
+        const o = opts || {};
+        const aug = (DATA && DATA.augs && DATA.augs[id]) || null;
+        const name = aug ? augName(aug, id) : `#${id}`;
+        const desc = aug ? augDesc(aug, id) : '';
+        const icon = aug && aug.icon ? aug.icon : '';
+        const code = o.code || augDraftRoundCode();
+        const classes = ['aug-draft-card', `is-${AUG_RARITY_CSS[code] || 'gold'}`,
+            o.picked ? 'is-picked' : '', o.best ? 'is-best' : '',
+            o.stale ? 'is-stale' : '', o.reveal ? 'is-reveal' : ''].filter(Boolean).join(' ');
+        const tag = o.interactive ? 'button' : 'div';
+        const attrs = o.interactive
+            ? ` type="button" data-aug-pick="${escHtml(String(id))}"`
+            : '';
+        let badge = '';
+        if (o.picked) badge = o.copy.augGameYourPick;
+        else if (o.best) badge = o.copy.augGameBestPick;
+        else if (o.stale) badge = o.copy.augGameRerolledAway;
+        const liftHtml = o.reveal
+            ? `<span class="aug-draft-lift ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
+                + `${escHtml(signed(augDraftLift(id)))}</span>`
+            : '';
+        return (
+            `<${tag} class="${classes}"${attrs}>`
+            + (badge ? `<span class="aug-draft-badge">${escHtml(badge)}</span>` : '')
+            + `<span class="aug-draft-top">`
+            + (icon ? `<img class="aug-draft-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '')
+            + `<span class="aug-draft-name">${escHtml(name)}</span>`
+            + liftHtml
+            + `</span>`
+            + (desc ? `<span class="aug-draft-desc">${escHtml(desc)}</span>` : '')
+            + `</${tag}>`
+        );
+    }
+
+    function augDraftChampPhaseHtml(copy) {
+        const cards = augDraft.champChoices.map(cid => {
+            const c = (DATA.champs || {})[cid] || {};
+            return (
+                `<button type="button" class="aug-champ-card" data-aug-champ="${escHtml(String(cid))}">`
+                + `<img class="aug-champ-img" src="${escHtml(c.image || '')}" alt="" loading="lazy">`
+                + `<span class="aug-champ-name">${escHtml(champName(c, cid))}</span>`
+                + `<span class="aug-champ-meta">${escHtml(pct(Number(c.wr || 0)))}`
+                + ` · ${escHtml((copy.augGameChampGames || (n => `${n}`))(Number(c.g || 0)))}</span>`
+                + `</button>`
+            );
+        }).join('');
+        return (
+            `<div class="aug-phase aug-phase-champ">`
+            + `<h3 class="aug-phase-title">${escHtml(copy.augGameChampTitle || 'Pick a champion')}</h3>`
+            + `<p class="aug-phase-sub">${escHtml(copy.augGameChampSub || '')}</p>`
+            + `<div class="aug-champ-row">${cards}</div>`
+            + `</div>`
+        );
+    }
+
+    function augDraftPickPhaseHtml(copy) {
+        const reveal = augDraft.phase === 'reveal';
+        const last = reveal ? augDraft.picks[augDraft.picks.length - 1] : null;
+        const code = augDraftRoundCode();
+        const ids = reveal ? last.shown : augDraft.offer;
+        const cards = ids.map(id => augDraftAugCardHtml(id, {
+            copy,
+            code: reveal ? last.code : code,
+            interactive: !reveal,
+            reveal,
+            picked: reveal && String(id) === last.id,
+            best: reveal && String(id) === last.bestId && String(id) !== last.id,
+            stale: reveal && !last.offer.map(String).includes(String(id)),
+        })).join('');
+        const rerollBtn = reveal ? '' : (
+            `<button type="button" class="tool-btn ghost aug-reroll" id="aug-reroll"`
+            + `${augDraft.rerolled ? ' disabled' : ''}>`
+            + AUG_REROLL_ICON
+            + `<span>${escHtml(augDraft.rerolled
+                ? (copy.augGameRerollUsed || 'Reroll used')
+                : (copy.augGameReroll || 'Reroll'))}</span>`
+            + `</button>`
+        );
+        let verdict = '';
+        if (reveal) {
+            const hit = last.id === last.bestId;
+            // Magnitude only — the copy already says 差 / "off by", so a signed
+            // value renders as a double negative ("差 -0.3%").
+            const gap = pct(Math.abs(last.best - last.mine));
+            verdict = `<div class="aug-verdict ${hit ? 'is-hit' : 'is-miss'}">`
+                + escHtml(hit
+                    ? (copy.augGameRoundHit || 'Best pick')
+                    : (copy.augGameRoundMiss || (g => g))(gap))
+                + `</div>`;
+        }
+        return (
+            `<div class="aug-phase aug-phase-pick">`
+            + `<div class="aug-phase-head">`
+            + `<h3 class="aug-phase-title">`
+            + escHtml((copy.augGameRound || ((a, b) => `${a}/${b}`))(
+                augDraft.round + 1, AUG_DRAFT_ROUNDS))
+            + `<span class="aug-phase-rarity is-${AUG_RARITY_CSS[code] || 'gold'}">`
+            + escHtml(augDraftRarityLabel(code, copy)) + `</span>`
+            + `</h3>`
+            + rerollBtn
+            + `</div>`
+            + `<div class="aug-draft-row">${cards}</div>`
+            + verdict
+            + (reveal
+                ? `<div class="aug-actions"><button type="button" class="tool-btn game-cta" id="aug-next">`
+                    + escHtml(augDraft.round + 1 >= AUG_DRAFT_ROUNDS
+                        ? (copy.gameShowSettle || 'Settle')
+                        : (copy.augGameNextRound || 'Next'))
+                    + `</button></div>`
+                : '')
+            + `</div>`
+        );
+    }
+
+    function augDraftSettleHtml(copy) {
+        const ovr = augDraftOvr();
+        const grade = metaPickGradeFromOvr(ovr);
+        const totalLift = augDraft.picks.reduce((a, p) => a + p.mine, 0);
+        const chips = augDraft.picks.map((p, i) => {
+            const hit = p.id === p.bestId;
+            const aug = (DATA.augs || {})[p.id] || null;
+            return (
+                `<span class="aug-settle-chip ${hit ? 'is-hit' : 'is-miss'}">`
+                + `<span class="aug-settle-n">${escHtml((copy.gameRoundN || (n => `R${n}`))(i + 1))}</span>`
+                + (aug && aug.icon
+                    ? `<img class="aug-settle-icon" src="${escHtml(aug.icon)}" alt="" loading="lazy">`
+                    : '')
+                + `<span class="aug-settle-name">${escHtml(aug ? augName(aug, p.id) : `#${p.id}`)}</span>`
+                + `<span class="aug-settle-score">${escHtml(Math.round(p.score * 100) + '%')}</span>`
+                + `</span>`
+            );
+        }).join('');
+        const champ = (DATA.champs || {})[augDraft.champId] || {};
+        return (
+            `<div class="aug-phase aug-phase-settle">`
+            + `<div class="game-settle-card">`
+            + `<div class="game-settle-kicker">${escHtml(copy.augGameSettleTitle || 'Final result')}</div>`
+            + `<div class="game-settle-avg">`
+            + `<span class="game-settle-avg-prefix">OVR</span>`
+            + `<span class="game-settle-avg-num ${metaPickGradeClass(grade)}">${escHtml(String(ovr))}</span>`
+            + `</div>`
+            + `<div class="game-settle-avg-sub">${escHtml(copy.augGameSettleSub || '')}</div>`
+            + `<div class="aug-settle-champ">`
+            + `<img src="${escHtml(champ.image || '')}" alt="" loading="lazy">`
+            + `<span>${escHtml(champName(champ, augDraft.champId))}</span>`
+            + `<span class="aug-settle-total">${escHtml(copy.augGameTotalLift || 'Total lift')} `
+            + `<b class="${totalLift >= 0 ? 'is-good' : 'is-bad'}">${escHtml(signed(totalLift))}</b></span>`
+            + `</div>`
+            + `<div class="aug-settle-chips">${chips}</div>`
+            + `<div class="aug-actions">`
+            + `<button type="button" class="tool-btn game-cta" id="aug-restart">`
+            + escHtml(copy.augGameRestart || 'Play again') + `</button>`
+            + `</div>`
+            + `</div>`
+            + `</div>`
+        );
+    }
+
+    function renderAugDraft() {
+        const host = document.getElementById('aug-draft-host');
+        if (!host) return;
+        const copy = tr();
+        if (!DATA || !DATA.champs || !DATA.augs) {
+            host.innerHTML = `<p class="game-board-empty">${escHtml(copy.augGameNoData || '')}</p>`;
+            return;
+        }
+        if (!augDraft.started) augDraftStart();
+        if (augDraft.phase === 'champ' && !augDraft.champChoices.length) {
+            host.innerHTML = `<p class="game-board-empty">${escHtml(copy.gameNoPool || '')}</p>`;
+            return;
+        }
+        let body = '';
+        if (augDraft.phase === 'champ') body = augDraftChampPhaseHtml(copy);
+        else if (augDraft.phase === 'settle') body = augDraftSettleHtml(copy);
+        else body = augDraftPickPhaseHtml(copy);
+        host.innerHTML = (
+            `<header class="game-header">`
+            + `<div class="game-header-top">`
+            + `<div class="game-header-text">`
+            + `<h2>${escHtml(copy.augGameTitle || 'Augment Draft')}</h2>`
+            + `<p class="game-sub">${escHtml(copy.augGameSub || '')}</p>`
+            + `</div>`
+            + `<button type="button" class="game-help-btn">`
+            + `<span class="game-help-icon" aria-hidden="true">?</span>`
+            + `<span class="game-help-tip" role="tooltip">${escHtml(copy.augGameTip || '')}</span>`
+            + `</button>`
+            + `</div>`
+            + `</header>`
+            + augDraftLadderStripHtml(copy)
+            + body
+        );
+    }
+
+    function augDraftRestart() {
+        augDraft.started = false;
+        augDraftStart();
+        renderAugDraft();
+        trackEvent('aug_draft_restart', {});
+    }
+
+    // ----- Game view mode switch (Meta Pick / 選增幅) -----
+    let gameMode = 'metapick';
+    function setGameMode(next) {
+        gameMode = next === 'augment' ? 'augment' : 'metapick';
+        document.querySelectorAll('.game-mode-tab').forEach(tab => {
+            const on = tab.getAttribute('data-game-mode') === gameMode;
+            tab.classList.toggle('is-active', on);
+            tab.setAttribute('aria-selected', String(on));
+        });
+        document.querySelectorAll('.game-mode-panel').forEach(panel => {
+            panel.hidden = panel.getAttribute('data-game-mode') !== gameMode;
+        });
+        renderGameView();
+        trackEvent('game_mode', { mode: gameMode });
+    }
+    /** Single entry point for the 小遊戲 tab — renders whichever game is showing. */
+    function renderGameView() {
+        if (gameMode === 'augment') renderAugDraft();
+        else renderMetaPick();
+    }
+
+    document.addEventListener('click', (ev) => {
+        const modeTab = ev.target.closest && ev.target.closest('.game-mode-tab');
+        if (modeTab) {
+            ev.preventDefault();
+            setGameMode(modeTab.getAttribute('data-game-mode') || 'metapick');
+            return;
+        }
+        if (!ev.target.closest || !ev.target.closest('#aug-draft-host')) return;
+        const champBtn = ev.target.closest('[data-aug-champ]');
+        if (champBtn) {
+            augDraftChoose(champBtn.getAttribute('data-aug-champ'));
+            return;
+        }
+        const pickBtn = ev.target.closest('[data-aug-pick]');
+        if (pickBtn) {
+            augDraftPick(pickBtn.getAttribute('data-aug-pick'));
+            return;
+        }
+        if (ev.target.closest('#aug-reroll')) {
+            augDraftReroll();
+            return;
+        }
+        if (ev.target.closest('#aug-next')) {
+            augDraftNextRound();
+            return;
+        }
+        if (ev.target.closest('#aug-restart')) {
+            augDraftRestart();
+        }
+    });
+
     function renderMetaPick() {
         const shell = document.querySelector('.view-game');
         if (!shell) return;
@@ -7778,7 +8322,7 @@
                 renderDraft();
             }
             if (name === 'game') {
-                renderMetaPick();
+                renderGameView();
             }
             if (name === 'changes') {
                 renderUpdatesPanel();
@@ -7920,7 +8464,7 @@
             renderDraft();
         }
         if (document.querySelector('.view-game.is-active')) {
-            renderMetaPick();
+            renderGameView();
         }
 
         moveTabIndicator();

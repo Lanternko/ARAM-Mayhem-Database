@@ -6157,6 +6157,269 @@
         margin: 0 auto;
         padding: 4px 0 20px;
     }
+    /* ---- Mini-game switcher (Meta Pick / 選增幅) ---- */
+    .game-mode-tabs {
+        display: flex;
+        gap: 6px;
+        max-width: 720px;
+        margin: 0 auto 14px;
+        padding: 4px;
+        border-radius: 12px;
+        background: var(--surface-raised, #1a1f29);
+        border: 1px solid var(--border, #2f3645);
+    }
+    .game-mode-tab {
+        flex: 1;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-muted, #9aa0a6);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background 0.12s, color 0.12s;
+    }
+    .game-mode-tab:hover { color: var(--text, #e6e9ef); }
+    .game-mode-tab.is-active {
+        background: var(--accent, #f5c518);
+        color: #0e1116;
+    }
+    .game-mode-tab:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+
+    /* ---- 選增幅: colour ladder strip ---- */
+    .aug-ladder {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 16px;
+    }
+    .aug-ladder-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .aug-ladder-pips { display: flex; gap: 6px; }
+    .aug-ladder-pip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #0e1116;
+        /* Unplayed rounds stay dimmed: the ladder is known up front in-client,
+           but the player should still read at a glance which one is live. */
+        opacity: 0.32;
+        border: 2px solid transparent;
+        transition: opacity 0.12s, transform 0.12s;
+    }
+    .aug-ladder-pip.is-done { opacity: 0.72; }
+    .aug-ladder-pip.is-now {
+        opacity: 1;
+        transform: scale(1.12);
+        border-color: var(--text, #e6e9ef);
+    }
+    .aug-ladder-pip.is-silver     { background: #c7cdd6; }
+    .aug-ladder-pip.is-gold       { background: #f5c518; }
+    .aug-ladder-pip.is-prismatic  { background: linear-gradient(135deg, #a78bfa, #f0abfc, #67e8f9); }
+
+    /* ---- 選增幅: phases ---- */
+    .aug-phase { max-width: 720px; margin: 0 auto; }
+    .aug-phase-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .aug-phase-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .aug-phase-sub {
+        margin: 0 0 14px;
+        font-size: 13px;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .aug-phase-rarity {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #0e1116;
+    }
+    .aug-phase-rarity.is-silver    { background: #c7cdd6; }
+    .aug-phase-rarity.is-gold      { background: #f5c518; }
+    .aug-phase-rarity.is-prismatic { background: linear-gradient(135deg, #a78bfa, #f0abfc, #67e8f9); }
+
+    .aug-champ-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .aug-champ-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 14px 8px;
+        border-radius: 12px;
+        border: 1px solid var(--border, #2f3645);
+        background: var(--surface-raised, #1a1f29);
+        color: var(--text, #e6e9ef);
+        font-family: inherit;
+        cursor: pointer;
+        transition: border-color 0.12s, transform 0.12s;
+    }
+    .aug-champ-card:hover {
+        border-color: var(--accent, #f5c518);
+        transform: translateY(-2px);
+    }
+    .aug-champ-card:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .aug-champ-img { width: 56px; height: 56px; border-radius: 50%; }
+    .aug-champ-name { font-size: 13px; font-weight: 700; }
+    .aug-champ-meta {
+        font-size: 11px;
+        color: var(--text-muted, #9aa0a6);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .aug-draft-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+    }
+    .aug-draft-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        text-align: left;
+        border-radius: 12px;
+        border: 1px solid var(--border, #2f3645);
+        border-top: 3px solid var(--aug-colour, #f5c518);
+        background: var(--surface-raised, #1a1f29);
+        color: var(--text, #e6e9ef);
+        font-family: inherit;
+        cursor: default;
+        transition: border-color 0.12s, transform 0.12s, opacity 0.12s;
+    }
+    button.aug-draft-card { cursor: pointer; }
+    button.aug-draft-card:hover {
+        border-color: var(--accent, #f5c518);
+        transform: translateY(-2px);
+    }
+    .aug-draft-card:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .aug-draft-card.is-silver    { --aug-colour: #c7cdd6; }
+    .aug-draft-card.is-gold      { --aug-colour: #f5c518; }
+    .aug-draft-card.is-prismatic { --aug-colour: #c084fc; }
+    .aug-draft-card.is-picked { border-color: var(--accent, #f5c518); }
+    .aug-draft-card.is-best   { border-color: #4ade80; }
+    /* Rerolled-away options stay on screen at reveal because they still count
+       toward the score — hiding them would make the reroll look consequence-free. */
+    .aug-draft-card.is-stale { opacity: 0.5; }
+    .aug-draft-badge {
+        position: absolute;
+        top: -9px;
+        left: 10px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        background: var(--accent, #f5c518);
+        color: #0e1116;
+    }
+    .aug-draft-card.is-best .aug-draft-badge { background: #4ade80; }
+    .aug-draft-card.is-stale .aug-draft-badge {
+        background: var(--border, #2f3645);
+        color: var(--text-muted, #9aa0a6);
+    }
+    .aug-draft-top { display: flex; align-items: center; gap: 8px; }
+    .aug-draft-icon { width: 34px; height: 34px; border-radius: 8px; flex: none; }
+    .aug-draft-name { font-size: 13px; font-weight: 700; line-height: 1.3; }
+    .aug-draft-lift {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-draft-lift.is-good { color: #4ade80; }
+    .aug-draft-lift.is-bad  { color: #f87171; }
+    .aug-draft-desc {
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .aug-verdict {
+        margin: 12px 0 0;
+        text-align: center;
+        font-size: 13px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-verdict.is-hit  { color: #4ade80; }
+    .aug-verdict.is-miss { color: var(--text-muted, #9aa0a6); }
+    .aug-actions {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 14px;
+    }
+    .aug-reroll { display: inline-flex; align-items: center; gap: 6px; }
+    .aug-reroll[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .aug-reroll-icon { width: 14px; height: 14px; flex: none; }
+
+    .aug-settle-champ {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin: 10px 0 14px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .aug-settle-champ img { width: 30px; height: 30px; border-radius: 50%; }
+    .aug-settle-total {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+    }
+    .aug-settle-total .is-good { color: #4ade80; }
+    .aug-settle-total .is-bad  { color: #f87171; }
+    .aug-settle-chips { display: flex; flex-direction: column; gap: 6px; }
+    .aug-settle-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 10px;
+        background: var(--chip-bg, #1f2530);
+        font-size: 12px;
+    }
+    .aug-settle-chip.is-hit { box-shadow: inset 2px 0 0 #4ade80; }
+    .aug-settle-n { font-weight: 700; color: var(--text-muted, #9aa0a6); flex: none; }
+    .aug-settle-icon { width: 22px; height: 22px; border-radius: 6px; flex: none; }
+    .aug-settle-name { font-weight: 600; }
+    .aug-settle-score {
+        margin-left: auto;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    @media (max-width: 560px) {
+        .aug-draft-row { grid-template-columns: 1fr; }
+        .aug-champ-row { gap: 6px; }
+        .aug-champ-img { width: 46px; height: 46px; }
+        .aug-draft-desc { font-size: 12px; }
+    }
     .game-header {
         margin-bottom: 14px;
     }
