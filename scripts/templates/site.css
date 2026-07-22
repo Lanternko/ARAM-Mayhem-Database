@@ -6412,15 +6412,26 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
     }
-    .aug-draft-lift {
+    .aug-draft-stats {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 8px;
         margin-top: auto;
-        padding-top: 4px;
-        font-size: 13px;
-        font-weight: 800;
+        padding-top: 6px;
         font-variant-numeric: tabular-nums;
     }
-    .aug-draft-lift.is-good { color: #4ade80; }
-    .aug-draft-lift.is-bad  { color: #f87171; }
+    .aug-draft-wr { font-size: 14px; font-weight: 800; }
+    .aug-draft-wr.is-good { color: #4ade80; }
+    .aug-draft-wr.is-bad  { color: #f87171; }
+    /* Pick rate sits next to win rate because it is half the ranking: a high
+       win rate off 114 games is not a better augment than a slightly lower one
+       off 3,942. */
+    .aug-draft-pick {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted, #9aa0a6);
+    }
     .aug-draft-desc {
         font-size: 12px;
         line-height: 1.5;

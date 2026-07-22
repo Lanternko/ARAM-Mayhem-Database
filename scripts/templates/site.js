@@ -1206,7 +1206,7 @@
             gameBoardRanks: '各回合',
             // ---- 選增幅 (augment draft) ----
             augGameTitle: '選增幅',
-            augGameSub: '從 3 隻英雄挑 1 隻，再抽 4 輪增幅。顏色機率取自真實對局，選之前不顯示強度。',
+            augGameSub: '從 3 隻英雄挑 1 隻，再抽 4 輪增幅。顏色機率取自真實對局；強度綜合勝率與選用率，選之前不顯示。',
             augGameTip: '遊玩建議：同一場的顏色是全場共用的，銀色不會連兩次，彩色之後下一個彩色機率會變低。'
                 + '每張卡各有一次重骰。對答案時是從這輪的 6 個候選（3 張明牌＋3 張重骰後的）挑最佳，'
                 + '所以骰子沒用完＝你自己少看了選項，算判斷失誤。同一場不會拿到重複的增幅。',
@@ -1222,9 +1222,10 @@
             augGameNeverRolled: '你沒骰出來',
             augGameNextRound: '下一個增幅',
             augGameSettleTitle: '最終結果',
-            augGameSettleSub: '每輪你的選擇離「這輪 6 個候選裡最佳」有多近',
+            augGameSettleSub: '每輪你的選擇離「這輪 6 個候選裡最強」有多近（強度＝勝率＋選用率，同站上排行）',
             augGameRoundHit: '選中最佳',
-            augGameRoundMiss: (gap) => `差 ${gap}`,
+            augGameRoundMiss: (v) => `這輪 ${v}`,
+            augGamePickRate: p => `選用 ${p}`,
             augGameLiftLabel: '勝率增益',
             augGameRestart: '再玩一次',
             augGameChampGames: n => `${n.toLocaleString()} 場`,
@@ -1524,7 +1525,7 @@
             gameBoardRanks: 'Rounds',
             // ---- Augment Draft ----
             augGameTitle: 'Augment Draft',
-            augGameSub: 'Pick 1 of 3 champions, then draft 4 augments. Colour odds come from real games; strength stays hidden until you pick.',
+            augGameSub: 'Pick 1 of 3 champions, then draft 4 augments. Colour odds come from real games; strength blends win rate and pick rate and stays hidden until you pick.',
             augGameTip: 'Tips: the colour ladder is shared by the whole lobby, silver never repeats twice in a row, '
                 + 'and a prismatic makes the next prismatic less likely. Every card carries its own reroll, and you are '
                 + 'graded against all six of the round’s candidates — the three face-up plus the three behind the '
@@ -1542,9 +1543,10 @@
             augGameNeverRolled: 'Never rolled',
             augGameNextRound: 'Next augment',
             augGameSettleTitle: 'Final result',
-            augGameSettleSub: 'How close each pick was to the best of the round’s six candidates',
+            augGameSettleSub: 'How close each pick was to the strongest of the round’s six — strength blends win rate and pick rate, as on the board',
             augGameRoundHit: 'Best pick',
-            augGameRoundMiss: (gap) => `off by ${gap}`,
+            augGameRoundMiss: (v) => `this round: ${v}`,
+            augGamePickRate: p => `${p} picked`,
             augGameLiftLabel: 'WR lift',
             augGameRestart: 'Play again',
             augGameChampGames: n => `${n.toLocaleString()} games`,
@@ -1935,8 +1937,24 @@
         return aug.name_zh || aug.name || '';
     }
 
+    // CommunityDragon leaves the scaling value unresolved as a literal 「[數值]」
+    // token — 444 of them across 111 augments — because the number depends on
+    // runtime state the static data does not carry.  It also leaks the Chinese
+    // token into the English strings.  Render it as X in every locale: it reads
+    // as "some value" rather than as a broken translation.
+    // Both forms: the zh-CN path runs t2s() before this, so by then the token
+    // has already been converted to 「[数值]」.
+    const AUG_VALUE_TOKEN = /\[(?:數值|数值)\]/g;
+    function augFillValueToken(text) {
+        return String(text || '').replace(AUG_VALUE_TOKEN, 'X');
+    }
+
     function augDesc(aug, aid) {
         if (!aug) return '';
+        return augFillValueToken(augDescRaw(aug, aid));
+    }
+
+    function augDescRaw(aug, aid) {
         if (currentLang === 'en') return aug.desc_en || aug.desc || '';
         if (currentLang === 'zh-CN') {
             if (aug.desc_cn) return aug.desc_cn;
@@ -6695,6 +6713,28 @@
         return rows.find(r => String(r.id) === key) || null;
     }
 
+    /**
+     * Ranking metric.  `lift` alone rewards tiny samples — Yasuo's 彈珠台 shows
+     * +1.3% off 114 games while 俠盜恆毅 shows +0.9% off 3,942 — so grading on
+     * lift called the noisier augment "best" and contradicted the site's own
+     * 增幅裝置排行, which sorts by `score` (lcb lift + pick-rate credit).
+     * Use the same field so the game and the board never disagree.
+     */
+    function augDraftRank(id, round) {
+        const row = augDraftRowFor(id, round);
+        return row ? Number(row.score || 0) : 0;
+    }
+
+    function augDraftWr(id, round) {
+        const row = augDraftRowFor(id, round);
+        return row ? Number(row.wr || 0) : 0;
+    }
+
+    function augDraftPickRate(id, round) {
+        const row = augDraftRowFor(id, round);
+        return row ? Number(row.pick || 0) : 0;
+    }
+
     function augDraftLift(id, round) {
         const row = augDraftRowFor(id, round);
         return row ? Number(row.lift || 0) : 0;
@@ -6762,11 +6802,11 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const lifts = candidates.map(x => augDraftLift(x));
-        const best = Math.max.apply(null, lifts);
-        const worst = Math.min.apply(null, lifts);
-        const mine = augDraftLift(id);
-        const bestId = candidates[lifts.indexOf(best)];
+        const ranks = candidates.map(x => augDraftRank(x));
+        const best = Math.max.apply(null, ranks);
+        const worst = Math.min.apply(null, ranks);
+        const mine = augDraftRank(id);
+        const bestId = candidates[ranks.indexOf(best)];
         augDraft.taken.push(String(id));
         augDraft.picks.push({
             id: String(id),
@@ -6778,6 +6818,7 @@
             mine,
             best,
             worst,
+            wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
         });
@@ -6869,13 +6910,14 @@
     }
 
     /**
-     * Highlight numbers the way the client does.  Only literal values are
-     * marked: the payload's `[數值]` placeholders are a known upstream gap and
-     * dressing them up would read as a rendering bug rather than a missing number.
+     * Highlight the numbers the way the client does.  The standalone X that
+     * augDesc leaves where the payload had an unresolved 「[數值]」 counts as a
+     * value too — colouring it says "a number belongs here" instead of leaving
+     * a stray letter mid-sentence.
      */
     function augDraftDescHtml(desc) {
         return escHtml(desc).replace(
-            /(\d+(?:\.\d+)?\s?%|\d+(?:\.\d+)?)/g,
+            /(\d+(?:\.\d+)?\s?%|\d+(?:\.\d+)?|\bX\b)/g,
             '<b class="aug-draft-val">$1</b>'
         );
     }
@@ -6901,9 +6943,16 @@
         const badge = o.best
             ? (o.copy.augGameBestPick || 'Best')
             : (o.stale ? (o.staleLabel || '') : '');
+        // Show the two quantities the ranking is actually built from, not the
+        // blended score: a bare "+1.3%" made a 114-game augment look better
+        // than a 3,942-game one with no way to see why.
         const liftHtml = o.reveal
-            ? `<span class="aug-draft-lift ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
-                + `${escHtml(signed(augDraftLift(id)))}</span>`
+            ? `<span class="aug-draft-stats">`
+                + `<span class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
+                + `${escHtml(pct(augDraftWr(id)))}</span>`
+                + `<span class="aug-draft-pick">`
+                + `${escHtml((o.copy.augGamePickRate || (p => p))(pct(augDraftPickRate(id))))}</span>`
+                + `</span>`
             : '';
         return (
             `<${tag} class="${classes}"${attrs}>`
@@ -6992,9 +7041,10 @@
         let verdict = '';
         if (reveal) {
             const hit = last.id === last.bestId;
-            // Magnitude only — the copy already says 差 / "off by", so a signed
-            // value renders as a double negative ("差 -0.3%").
-            const gap = pct(Math.abs(last.best - last.mine));
+            // best − mine is a difference in the blended score, not a win-rate
+            // delta, so printing it as "差 0.4%" would read as percentage points
+            // it is not. Show the round's normalised result instead.
+            const gap = Math.round(last.score * 100) + '%';
             verdict = `<div class="aug-verdict ${hit ? 'is-hit' : 'is-miss'}">`
                 + escHtml(hit
                     ? (copy.augGameRoundHit || 'Best pick')
@@ -7027,7 +7077,7 @@
     function augDraftSettleHtml(copy) {
         const ovr = augDraftOvr();
         const grade = metaPickGradeFromOvr(ovr);
-        const totalLift = augDraft.picks.reduce((a, p) => a + p.mine, 0);
+        const totalLift = augDraft.picks.reduce((a, p) => a + (p.wrLift || 0), 0);
         const chips = augDraft.picks.map((p, i) => {
             const hit = p.id === p.bestId;
             const aug = (DATA.augs || {})[p.id] || null;
