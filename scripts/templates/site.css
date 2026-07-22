@@ -2843,14 +2843,15 @@
     .detail-col-heading h3 { margin: 0; }
     .detail-col.best h3 { color: #6bd16b; }
     .detail-col.worst h3 { color: #ff6b6b; }
-    /* Single-item strength filter (出裝 tab): All + 6 roles + 常見. */
+    /* Single-item strength filter (出裝 tab): pick-share knob + 6 role chips. */
     .item-role-bar {
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
         margin: 0 0 12px;
     }
-    .item-role-chip {
+    .item-role-chip,
+    .item-scope-chip {
         padding: 4px 11px;
         background: #1f2530;
         color: #c5cad3;
@@ -2864,20 +2865,46 @@
         transition: background 0.1s, border-color 0.1s, color 0.1s;
         --role-color: #9aa0a6;
     }
-    .item-role-chip:hover { background: #2a3142; border-color: #3a4252; }
-    .item-role-chip.is-active {
+    .item-role-chip:hover,
+    .item-scope-chip:hover { background: #2a3142; border-color: #3a4252; }
+    .item-role-chip.is-active,
+    .item-scope-chip.is-active {
         background: var(--role-color);
         color: #0e1116;
         border-color: var(--role-color);
     }
-    .item-role-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    .item-role-chip:focus-visible,
+    .item-scope-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    /* Cycling pick-share knob: dots say how many states there are and where
+       you are, so a label that silently changes on click still reads as one
+       control rather than three chips collapsing. */
+    .item-scope-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 4px;
+        --role-color: #f5c518;
+    }
+    .item-scope-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+    }
+    .item-scope-dots i {
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.3;
+        transition: opacity 0.1s;
+    }
+    .item-scope-dots i.is-on { opacity: 1; }
     .item-role-chip.role-Assassin { --role-color: #ef4444; }
     .item-role-chip.role-Fighter  { --role-color: #f97316; }
     .item-role-chip.role-Mage     { --role-color: #3b82f6; }
     .item-role-chip.role-Marksman { --role-color: #22c55e; }
     .item-role-chip.role-Support  { --role-color: #ec4899; }
     .item-role-chip.role-Tank     { --role-color: #a855f7; }
-    .item-role-chip.role-common   { --role-color: #f5c518; }
     .single-item-card.item-filter-hidden { display: none; }
     .item-filter-empty { margin: 4px 0 8px; }
 
@@ -5429,13 +5456,15 @@
 
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
-    [data-theme="light"] .item-role-chip:not(.is-active) {
+    [data-theme="light"] .item-role-chip:not(.is-active),
+    [data-theme="light"] .item-scope-chip:not(.is-active) {
         background: var(--chip-bg);
         color: var(--text-muted);
         border-color: var(--border);
     }
     [data-theme="light"] .aug-cat-chip:not(.is-active):hover,
-    [data-theme="light"] .item-role-chip:not(.is-active):hover {
+    [data-theme="light"] .item-role-chip:not(.is-active):hover,
+    [data-theme="light"] .item-scope-chip:not(.is-active):hover {
         background: #e2e6ee;
         border-color: var(--border-strong);
         color: var(--text);
