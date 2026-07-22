@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784699808");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260722-1784703012");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -745,7 +745,7 @@
     const DATE_STR_ZH = "更新於 2026-07-22";
     const BUILD_DATE = "2026-07-22";
     const PATCH_LABEL = "patch 26.14";
-    const TOTAL_GAMES = "180,748";
+    const TOTAL_GAMES = "181,128";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
@@ -1208,15 +1208,14 @@
             augGameTitle: '選增幅',
             augGameSub: '從 3 隻英雄挑 1 隻，再抽 4 輪增幅。顏色機率取自真實對局，選之前不顯示強度。',
             augGameTip: '遊玩建議：同一場的顏色是全場共用的，銀色不會連兩次，彩色之後下一個彩色機率會變低。'
-                + '每輪只能重骰一次，而且被你重骰掉的選項仍會列入計分——想清楚再刷。',
+                + '每張卡各有一次重骰，而且被你重骰掉的選項仍會列入計分——想清楚再刷。'
+                + '同一場不會拿到重複的增幅。',
             augGameChampTitle: '選一隻英雄',
             augGameChampSub: '這局要用誰？增幅池會跟著這隻英雄的實戰資料走。',
             augGameLadder: '本場顏色',
             augGameRound: (a, b) => `第 ${a}/${b} 個增幅`,
-            augGameRerollLeft: '可重骰 1 次',
             augGameRerollUsed: '已重骰',
             augGameReroll: '重骰',
-            augGamePickPrompt: '選一個增幅',
             augGameYourPick: '你的選擇',
             augGameBestPick: '最佳選擇',
             augGameRerolledAway: '被你重骰掉',
@@ -1526,16 +1525,15 @@
             augGameTitle: 'Augment Draft',
             augGameSub: 'Pick 1 of 3 champions, then draft 4 augments. Colour odds come from real games; strength stays hidden until you pick.',
             augGameTip: 'Tips: the colour ladder is shared by the whole lobby, silver never repeats twice in a row, '
-                + 'and a prismatic makes the next prismatic less likely. You get one reroll per round — and anything '
-                + 'you reroll away still counts against your score, so think before you refresh.',
+                + 'and a prismatic makes the next prismatic less likely. Every card carries its own reroll — and anything '
+                + 'you reroll away still counts against your score, so think before you refresh. '
+                + 'You never get the same augment twice in a run.',
             augGameChampTitle: 'Pick a champion',
             augGameChampSub: 'Who are you playing? The augment pool follows this champion’s real games.',
             augGameLadder: 'This game’s colours',
             augGameRound: (a, b) => `Augment ${a}/${b}`,
-            augGameRerollLeft: '1 reroll left',
             augGameRerollUsed: 'Reroll used',
             augGameReroll: 'Reroll',
-            augGamePickPrompt: 'Pick an augment',
             augGameYourPick: 'Your pick',
             augGameBestPick: 'Best pick',
             augGameRerolledAway: 'Rerolled away',
@@ -6609,8 +6607,9 @@
         ladder: '',
         round: 0,
         offer: [],           // ids currently on the table
+        slotRerolled: [],    // per-slot: each card carries its own single reroll
         shown: [],           // every id shown this round, including rerolled-away
-        rerolled: false,
+        taken: [],           // picked across the whole run — never offered twice
         picks: [],
         started: false,
     };
@@ -6628,13 +6627,34 @@
         return entries[0] || 'GGGG';
     }
 
-    function augDraftSample(pool, n, exclude) {
-        const ex = new Set((exclude || []).map(String));
-        const rest = (pool || []).filter(x => !ex.has(String(x)));
+    /**
+     * Draw n ids at random.
+     *
+     * `hard` can never be drawn (augments already taken this run — you cannot
+     * own the same augment twice).  `soft` is avoided but reused if the pool
+     * would otherwise run dry: a rarity ships 16 rows per champion, and four
+     * same-colour rounds with three rerolls each can ask for more distinct
+     * cards than that, so "never show a declined card again" cannot be a hard
+     * rule.  Declined augments returning later also matches the live client.
+     */
+    function augDraftSample(pool, n, hard, soft) {
+        const hardEx = new Set((hard || []).map(String));
+        const softEx = new Set((soft || []).map(String));
+        const fresh = [];
+        const reuse = [];
+        (pool || []).forEach(x => {
+            const k = String(x);
+            if (hardEx.has(k)) return;
+            (softEx.has(k) ? reuse : fresh).push(x);
+        });
         const out = [];
-        while (out.length < n && rest.length) {
-            out.push(rest.splice(Math.floor(Math.random() * rest.length), 1)[0]);
-        }
+        const take = (bucket) => {
+            while (out.length < n && bucket.length) {
+                out.push(bucket.splice(Math.floor(Math.random() * bucket.length), 1)[0]);
+            }
+        };
+        take(fresh);
+        take(reuse);
         return out;
     }
 
@@ -6674,9 +6694,10 @@
         return row ? Number(row.lift || 0) : 0;
     }
 
-    function augDraftDeal(exclude) {
+    function augDraftDeal(n, soft, extraHard) {
         const ids = augDraftRarityRows(augDraftRoundCode()).map(r => r.id);
-        return augDraftSample(ids, AUG_DRAFT_OFFER, exclude);
+        const hard = augDraft.taken.concat(extraHard || []);
+        return augDraftSample(ids, n, hard, soft);
     }
 
     function augDraftStart() {
@@ -6686,15 +6707,19 @@
         augDraft.ladder = augDraftRollLadder();
         augDraft.round = 0;
         augDraft.offer = [];
+        augDraft.slotRerolled = [];
         augDraft.shown = [];
-        augDraft.rerolled = false;
+        augDraft.taken = [];
         augDraft.picks = [];
         augDraft.started = true;
     }
 
     function augDraftBeginRound() {
-        augDraft.rerolled = false;
-        augDraft.offer = augDraftDeal([]);
+        // Prefer cards this run has not shown yet, but never re-offer one the
+        // player already owns.
+        const seen = augDraft.picks.reduce((a, p) => a.concat(p.shown), []);
+        augDraft.offer = augDraftDeal(AUG_DRAFT_OFFER, seen);
+        augDraft.slotRerolled = augDraft.offer.map(() => false);
         augDraft.shown = augDraft.offer.slice();
         augDraft.phase = 'pick';
     }
@@ -6724,12 +6749,13 @@
         const worst = Math.min.apply(null, lifts);
         const mine = augDraftLift(id);
         const bestId = shown[lifts.indexOf(best)];
+        augDraft.taken.push(String(id));
         augDraft.picks.push({
             id: String(id),
             bestId: String(bestId),
             shown,
             offer: augDraft.offer.slice(),
-            rerolled: augDraft.rerolled,
+            rerolls: augDraft.slotRerolled.filter(Boolean).length,
             code: augDraftRoundCode(),
             mine,
             best,
@@ -6741,15 +6767,24 @@
         renderAugDraft();
     }
 
-    function augDraftReroll() {
-        if (augDraft.phase !== 'pick' || augDraft.rerolled) return;
-        const next = augDraftDeal(augDraft.offer);
-        if (next.length < AUG_DRAFT_OFFER) return;
-        augDraft.rerolled = true;
-        augDraft.offer = next;
-        augDraft.shown = augDraft.shown.concat(next);
+    /** One reroll per card, not one per round — mirrors the client's per-slot ⟳. */
+    function augDraftRerollSlot(slot) {
+        const i = Number(slot);
+        if (augDraft.phase !== 'pick') return;
+        if (!Number.isInteger(i) || i < 0 || i >= augDraft.offer.length) return;
+        if (augDraft.slotRerolled[i]) return;
+        // The cards currently on the table are a HARD exclusion: the soft
+        // fallback exists so the pool can never run dry, but letting it hand
+        // back a card already on screen renders the reroll as a no-op (or worse,
+        // shows the same augment twice). Only the round's earlier, already
+        // discarded cards are merely discouraged.
+        const next = augDraftDeal(1, augDraft.shown, augDraft.offer);
+        if (!next.length) return;
+        augDraft.offer[i] = next[0];
+        augDraft.slotRerolled[i] = true;
+        augDraft.shown.push(next[0]);
         renderAugDraft();
-        trackEvent('aug_draft_reroll', { round: augDraft.round + 1 });
+        trackEvent('aug_draft_reroll', { round: augDraft.round + 1, slot: i });
     }
 
     function augDraftNextRound() {
@@ -6795,12 +6830,35 @@
             + `<div class="aug-ladder-pips">${pips}</div></div>`;
     }
 
+    /** First category of an augment, as the client's single genre chip. */
+    function augDraftCatLabel(aug) {
+        const cats = aug && Array.isArray(aug.cats) ? aug.cats : [];
+        if (!cats.length) return '';
+        const meta = (DATA && DATA.augCategories && DATA.augCategories.labels) || {};
+        const row = meta[cats[0]];
+        if (!row) return '';
+        return currentLang === 'en' ? (row.en || '') : zhUi(row.zh || row.en || '');
+    }
+
+    /**
+     * Highlight numbers the way the client does.  Only literal values are
+     * marked: the payload's `[數值]` placeholders are a known upstream gap and
+     * dressing them up would read as a rendering bug rather than a missing number.
+     */
+    function augDraftDescHtml(desc) {
+        return escHtml(desc).replace(
+            /(\d+(?:\.\d+)?\s?%|\d+(?:\.\d+)?)/g,
+            '<b class="aug-draft-val">$1</b>'
+        );
+    }
+
     function augDraftAugCardHtml(id, opts) {
         const o = opts || {};
         const aug = (DATA && DATA.augs && DATA.augs[id]) || null;
         const name = aug ? augName(aug, id) : `#${id}`;
         const desc = aug ? augDesc(aug, id) : '';
         const icon = aug && aug.icon ? aug.icon : '';
+        const cat = augDraftCatLabel(aug);
         const code = o.code || augDraftRoundCode();
         const classes = ['aug-draft-card', `is-${AUG_RARITY_CSS[code] || 'gold'}`,
             o.picked ? 'is-picked' : '', o.best ? 'is-best' : '',
@@ -6820,12 +6878,13 @@
         return (
             `<${tag} class="${classes}"${attrs}>`
             + (badge ? `<span class="aug-draft-badge">${escHtml(badge)}</span>` : '')
-            + `<span class="aug-draft-top">`
+            + `<span class="aug-draft-art">`
             + (icon ? `<img class="aug-draft-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '')
-            + `<span class="aug-draft-name">${escHtml(name)}</span>`
-            + liftHtml
             + `</span>`
-            + (desc ? `<span class="aug-draft-desc">${escHtml(desc)}</span>` : '')
+            + `<span class="aug-draft-name">${escHtml(name)}</span>`
+            + (cat ? `<span class="aug-draft-cat">${escHtml(cat)}</span>` : '')
+            + (desc ? `<span class="aug-draft-desc">${augDraftDescHtml(desc)}</span>` : '')
+            + liftHtml
             + `</${tag}>`
         );
     }
@@ -6856,24 +6915,33 @@
         const last = reveal ? augDraft.picks[augDraft.picks.length - 1] : null;
         const code = augDraftRoundCode();
         const ids = reveal ? last.shown : augDraft.offer;
-        const cards = ids.map(id => augDraftAugCardHtml(id, {
-            copy,
-            code: reveal ? last.code : code,
-            interactive: !reveal,
-            reveal,
-            picked: reveal && String(id) === last.id,
-            best: reveal && String(id) === last.bestId && String(id) !== last.id,
-            stale: reveal && !last.offer.map(String).includes(String(id)),
-        })).join('');
-        const rerollBtn = reveal ? '' : (
-            `<button type="button" class="tool-btn ghost aug-reroll" id="aug-reroll"`
-            + `${augDraft.rerolled ? ' disabled' : ''}>`
-            + AUG_REROLL_ICON
-            + `<span>${escHtml(augDraft.rerolled
+        const cards = ids.map((id, slot) => {
+            const card = augDraftAugCardHtml(id, {
+                copy,
+                code: reveal ? last.code : code,
+                interactive: !reveal,
+                reveal,
+                picked: reveal && String(id) === last.id,
+                best: reveal && String(id) === last.bestId && String(id) !== last.id,
+                stale: reveal && !last.offer.map(String).includes(String(id)),
+            });
+            if (reveal) return `<div class="aug-draft-slot">${card}</div>`;
+            const used = !!augDraft.slotRerolled[slot];
+            const label = used
                 ? (copy.augGameRerollUsed || 'Reroll used')
-                : (copy.augGameReroll || 'Reroll'))}</span>`
-            + `</button>`
-        );
+                : (copy.augGameReroll || 'Reroll');
+            return (
+                `<div class="aug-draft-slot">`
+                + card
+                + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
+                + `${used ? ' disabled' : ''} title="${escHtml(label)}"`
+                + ` aria-label="${escHtml(label)}">`
+                + AUG_REROLL_ICON
+                + `</button>`
+                + `</div>`
+            );
+        }).join('');
+        const rerollBtn = '';
         let verdict = '';
         if (reveal) {
             const hit = last.id === last.bestId;
@@ -7035,8 +7103,9 @@
             augDraftPick(pickBtn.getAttribute('data-aug-pick'));
             return;
         }
-        if (ev.target.closest('#aug-reroll')) {
-            augDraftReroll();
+        const rerollBtn = ev.target.closest('[data-aug-reroll]');
+        if (rerollBtn) {
+            if (!rerollBtn.disabled) augDraftRerollSlot(rerollBtn.getAttribute('data-aug-reroll'));
             return;
         }
         if (ev.target.closest('#aug-next')) {
