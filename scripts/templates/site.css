@@ -6195,6 +6195,27 @@
         gap: 10px;
         margin: 0 0 16px;
     }
+    /* Champion you are drafting for — the pool is champion-specific, so this
+       stays pinned at the top-left while you read the cards. */
+    .aug-champ-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-right: 4px;
+        padding: 3px 10px 3px 3px;
+        border-radius: 999px;
+        background: var(--chip-bg, #1f2530);
+        border: 1px solid var(--border, #2f3645);
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .aug-champ-badge img {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        flex: none;
+    }
     .aug-ladder-label {
         font-size: 12px;
         font-weight: 600;
@@ -6337,8 +6358,9 @@
     .aug-draft-card.is-silver    { --aug-colour: #c7cdd6; }
     .aug-draft-card.is-gold      { --aug-colour: #f5c518; }
     .aug-draft-card.is-prismatic { --aug-colour: #c084fc; }
+    /* Your pick is signalled by the gold frame; "best of the six" is signalled
+       by the badge alone, so a card can carry both at once. */
     .aug-draft-card.is-picked { --aug-colour: #f5c518; }
-    .aug-draft-card.is-best   { --aug-colour: #4ade80; }
     /* Rerolled-away options stay on screen at reveal because they still count
        toward the score — hiding them would make the reroll look consequence-free. */
     .aug-draft-card.is-stale { opacity: 0.45; box-shadow: none; }
@@ -6352,13 +6374,17 @@
         border-radius: 999px;
         font-size: 10px;
         font-weight: 700;
-        background: var(--aug-colour, #f5c518);
-        color: #0e1116;
-    }
-    .aug-draft-card.is-stale .aug-draft-badge {
         background: var(--border, #2f3645);
         color: var(--text-muted, #9aa0a6);
     }
+    .aug-draft-badge.is-best-badge {
+        background: #4ade80;
+        color: #0e1116;
+    }
+    /* Stale cards fade, but a stale card that WAS the best must stay legible —
+       that is the whole lesson of the round. */
+    .aug-draft-card.is-stale { opacity: 0.45; }
+    .aug-draft-card.is-stale:has(.is-best-badge) { opacity: 0.8; }
     .aug-draft-art {
         display: flex;
         align-items: center;
