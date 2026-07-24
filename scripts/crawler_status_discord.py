@@ -33,6 +33,10 @@ DEFAULT_DB = ROOT / "data" / "lcu" / "games.db"
 DEFAULT_STATE = ROOT / "data" / "monitor" / "mayhem_lcu_watchdog.jsonl"
 DEFAULT_WEBHOOK_FILE = ROOT / "data" / "monitor" / "discord_crawler_webhook.txt"
 DEFAULT_LOG_DIR = ROOT / ".codex" / "logs" / "mayhem_lcu_watchdog"
+# Static-site publisher artifacts.  The state file's last_publish_at_unix only
+# advances on a *successful* publish; the err log grows on every crash.
+DEFAULT_PUBLISH_STATE = ROOT / "data" / "site" / "static_publish_state.json"
+DEFAULT_PUBLISH_ERR_LOG = ROOT / "data" / "site" / "static_publish.err.log"
 
 
 def utc_now() -> dt.datetime:
@@ -262,6 +266,63 @@ def publish_status(repo_root: Path, stale_hours: float) -> dict[str, Any]:
     return out
 
 
+def site_publish_status(
+    state_file: Path,
+    err_log: Path,
+    stale_hours: float,
+    crash_window_min: float = 15.0,
+) -> dict[str, Any]:
+    """Health of the static-site auto-publisher — the leg that turns fresh DB
+    games into a rebuilt site.
+
+    publish_status() (above) watches for commits that don't *push*.  This is the
+    complementary failure the 2026-07-25 outage exposed: the publisher
+    crash-looped on a dirty docs/api/tier-list.json and never reached the commit
+    step at all, so publish_status stayed green while the site rotted 3 days.
+
+    Two independent signals, both cheap (no DB scan, no git):
+      * last_publish_age_h — from ``last_publish_at_unix`` in the state file,
+        which advances ONLY on a successful publish.  Stale while the crawler is
+        still producing games == publishing is stuck.
+      * crashing — the err log was written within ``crash_window_min`` AND its
+        tail carries a traceback.  Catches an active crash-loop immediately,
+        before the staleness threshold trips.
+    """
+    out: dict[str, Any] = {
+        "ok": False,
+        "last_publish_age_h": None,
+        "last_published_total": None,
+        "stale": False,
+        "crashing": False,
+        "stale_hours": stale_hours,
+    }
+    try:
+        if state_file.exists():
+            state = json.loads(state_file.read_text(encoding="utf-8"))
+            ts = state.get("last_publish_at_unix")
+            if isinstance(ts, (int, float)) and ts > 0:
+                out["ok"] = True
+                age_h = (time.time() - float(ts)) / 3600.0
+                out["last_publish_age_h"] = round(age_h, 1)
+                out["last_published_total"] = state.get("last_published_total")
+                out["stale"] = age_h >= stale_hours
+        # An active crash-loop: err log touched very recently with a traceback in
+        # its tail.  Stale crashes (old mtime) are ignored — the publisher may
+        # have recovered since.
+        if err_log.exists():
+            age_min = (time.time() - err_log.stat().st_mtime) / 60.0
+            if age_min <= crash_window_min:
+                tail = read_text_shared(err_log, max_bytes=4000)
+                if "Traceback" in tail or "Error" in tail:
+                    out["crashing"] = True
+                    last = [ln for ln in tail.splitlines() if ln.strip()]
+                    if last:
+                        out["last_error"] = last[-1][:200]
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        out["error"] = f"{type(exc).__name__}: {exc}"
+    return out
+
+
 def current_run_logs(log_dir: Path) -> list[Path]:
     if not log_dir.exists():
         return []
@@ -321,6 +382,7 @@ def health_color(
     lcu_ok: bool | None,
     age_min: float | None,
     publish_stale: bool = False,
+    site_publish_bad: bool = False,
 ) -> int:
     # Discord embed colors
     green = 0x57F287
@@ -331,8 +393,9 @@ def health_color(
     if age_min is not None and age_min > 30:
         return yellow
     # Crawling can be perfectly healthy while the publish leg is dead — that is
-    # exactly how the 2026-07-21 outage looked, so it must not stay green.
-    if publish_stale:
+    # how both the 2026-07-21 (push blocked) and 2026-07-25 (publisher
+    # crash-loop) outages looked, so neither must stay green.
+    if publish_stale or site_publish_bad:
         return yellow
     return green
 
@@ -343,7 +406,10 @@ def build_status(
     log_dir: Path,
     window_hours: int,
     publish_stale_hours: float = 3.0,
+    site_publish_stale_hours: float = 12.0,
     repo_root: Path = ROOT,
+    publish_state_file: Path = DEFAULT_PUBLISH_STATE,
+    publish_err_log: Path = DEFAULT_PUBLISH_ERR_LOG,
 ) -> dict[str, Any]:
     workers = live_workers()
     watchdog = live_watchdog()
@@ -352,6 +418,9 @@ def build_status(
     stats = db_stats(db, window_hours=window_hours)
     logs = worker_log_stats(log_dir)
     publish = publish_status(repo_root, stale_hours=publish_stale_hours)
+    site_publish = site_publish_status(
+        publish_state_file, publish_err_log, stale_hours=site_publish_stale_hours
+    )
 
     lcu = (state or {}).get("lcu") or {}
     lcu_ok = lcu.get("ok") if state else None
@@ -384,6 +453,7 @@ def build_status(
         "capture_age_min": age,
         "db": stats,
         "publish": publish,
+        "site_publish": site_publish,
         "worker_logs": logs,
         "patch_mix_recent": dict(sorted(patch_mix.items(), key=lambda kv: (-kv[1], kv[0]))),
         "window_hours": window_hours,
@@ -396,12 +466,24 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
     age = status.get("capture_age_min")
     publish = status.get("publish") or {}
     publish_stale = bool(publish.get("stale"))
+    site_publish = status.get("site_publish") or {}
+    # Crawler must be producing for staleness to mean "stuck" vs "legitimately
+    # idle" (a quiet patch can sit below the +10% publish gate for a while).
+    crawler_producing = isinstance(window_saves_probe := (status.get("db") or {}).get("window_saves"), int) and window_saves_probe > 0
+    site_crashing = bool(site_publish.get("crashing"))
+    site_stale = bool(site_publish.get("stale")) and crawler_producing
+    site_publish_bad = site_crashing or site_stale
     color = health_color(
-        workers, lcu_ok if isinstance(lcu_ok, bool) else None, age, publish_stale
+        workers, lcu_ok if isinstance(lcu_ok, bool) else None, age,
+        publish_stale, site_publish_bad,
     )
 
-    if publish_stale:
+    if site_crashing:
+        headline = "爬蟲正常但發布器崩潰中"
+    elif publish_stale:
         headline = "爬蟲正常但發布卡住"
+    elif site_stale:
+        headline = "爬蟲正常但網站太久沒更新"
     elif workers >= 2 and lcu_ok and (age is None or age < 5):
         headline = "運作正常"
     elif workers >= 1 and lcu_ok:
@@ -486,6 +568,27 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
     else:
         publish_text = f"**{ahead}** 個 commit 待推\n最舊 {unpushed_age} 小時"
 
+    # Static-site publisher (rebuild leg) — separate from the git push leg above.
+    sp_age = site_publish.get("last_publish_age_h")
+    sp_total = site_publish.get("last_published_total")
+    if site_publish.get("error"):
+        site_publish_text = f"無法判斷（{str(site_publish['error'])[:80]}）"
+    elif site_crashing:
+        err = site_publish.get("last_error") or ""
+        site_publish_text = (
+            f"🔴 發布器崩潰中\n上次成功發布 **{sp_age}** 小時前\n`{err[:90]}`"
+        )
+    elif site_stale:
+        site_publish_text = (
+            f"⚠️ 已 **{sp_age}** 小時沒發布（門檻 {site_publish.get('stale_hours')}h）\n"
+            f"crawler 仍在收場 → 發布器可能卡住"
+        )
+    elif not site_publish.get("ok"):
+        site_publish_text = "無發布記錄"
+    else:
+        total_txt = f"（上次 {sp_total} 場）" if sp_total else ""
+        site_publish_text = f"上次發布 **{sp_age}** 小時前 {total_txt}"
+
     fields = [
         {
             "name": "LCU / 客戶端",
@@ -524,8 +627,13 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
             "inline": True,
         },
         {
-            "name": "網站發布",
+            "name": "Git 推送",
             "value": publish_text,
+            "inline": True,
+        },
+        {
+            "name": "網站重建",
+            "value": site_publish_text,
             "inline": True,
         },
         {
@@ -596,6 +704,13 @@ def main(argv: list[str] | None = None) -> int:
         default=3.0,
         help="Unpushed commits older than this flag the report yellow",
     )
+    parser.add_argument(
+        "--site-publish-stale-hours",
+        type=float,
+        default=12.0,
+        help="Hours since last successful site publish before flagging yellow "
+        "(only while the crawler is still producing games)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print payload, do not POST")
     parser.add_argument("--save-webhook", action="store_true", help="Write --webhook to webhook file")
     args = parser.parse_args(argv)
@@ -620,6 +735,7 @@ def main(argv: list[str] | None = None) -> int:
         log_dir=args.log_dir,
         window_hours=args.window_hours,
         publish_stale_hours=args.publish_stale_hours,
+        site_publish_stale_hours=args.site_publish_stale_hours,
     )
     payload = format_message(status)
 
