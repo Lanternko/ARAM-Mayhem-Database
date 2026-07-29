@@ -1591,6 +1591,32 @@ def build_item_role_filter_map(
     return out
 
 
+def _team_score_for_payload(team_score_bundle: dict[str, object] | None) -> dict:
+    """Ship the trained team-score block with pair shrinkage disabled.
+
+    site.js pairLiftBetween() re-shrinks whatever lift it receives:
+        lift_final = lift * g / (g + pair_prior_games)
+    That existed because the payload used to carry the RAW pair residual.  The
+    build now ships an already-shrunk lift (PAIR_PREV_PATCH_PRIOR_GAMES), so
+    leaving the client knob at its trained value shrinks twice: measured on
+    16.14, stacking drops the input SD feeding the calibrated pair weight to 38%
+    of what that weight was fitted against, versus 79% with the client step off.
+    Server-only also scores best out-of-sample (RMSE 2.79pp / r=+0.244 at 120k
+    games, against 2.84 / +0.234 stacked and 2.87 / +0.134 for the old raw path).
+
+    Only the shrinkage knob is neutralised; every other trained field is passed
+    through untouched.  pair_logit_weight is still calibrated against the older,
+    wider input, so synergy stays roughly 21% under-weighted in the estimated win
+    probability until the recommender model is next refreshed -- a conservative
+    bias, and the ranking it drives is strictly better meanwhile.
+    """
+    team_score = dict((team_score_bundle or {}).get("team_score") or {})
+    if team_score.get("pair_prior_games"):
+        team_score["pair_prior_games_trained"] = team_score["pair_prior_games"]
+        team_score["pair_prior_games"] = 0.0
+    return team_score
+
+
 def render_html(
     records: list[dict],
     champ_meta: dict[int, dict],
@@ -2064,7 +2090,7 @@ def render_html(
         "min_synergy_games": min_synergy_games,
         "patchChanges": patch_changes or {},
         "recommendation_composition": recommendation_composition,
-        "team_score": dict((team_score_bundle or {}).get("team_score") or {}),
+        "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": load_draft_composition_lr_payload(),
     }
     if icon_assets_dir is not None:

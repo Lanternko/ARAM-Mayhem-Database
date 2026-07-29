@@ -450,12 +450,15 @@ def main(
         f"[tierlist] {len(picks)} champions have >= 1 rarity-bucketed pair "
         f"(games >= {min_pair_games})"
     )
+    # prior_games=0: this ranks rows for payload slimming, and `lift` already
+    # carries its shrinkage (PAIR_PREV_PATCH_PRIOR_GAMES).  Re-applying the
+    # trained pair prior here would shrink a second time and bias slimming toward
+    # high-sample partners -- the same double-shrink _team_score_for_payload
+    # disables on the client side.  Keep the two in step.
     synergy = build_champ_synergy_index(
         champ_pairs,
         min_games=min_synergy_games,
-        prior_games=float(
-            ((team_score_bundle or {}).get("team_score") or {}).get("pair_prior_games") or 0.0
-        ),
+        prior_games=0.0,
     )
     click.echo(
         f"[tierlist] {len(synergy)} champions have >= 1 teammate synergy row "
