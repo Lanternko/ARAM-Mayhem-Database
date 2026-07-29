@@ -5,7 +5,7 @@ from pathlib import Path
 
 import click
 
-from .db import latest_patch_prefix
+from .db import SITE_PATCH_MIN_GAMES, latest_patch_prefix
 from .static_publish import DEFAULT_SITE_URL, DEFAULT_STATE_PATH, publish_static_site_once
 
 
@@ -19,7 +19,7 @@ from .static_publish import DEFAULT_SITE_URL, DEFAULT_STATE_PATH, publish_static
 @click.option(
     "--auto-patch-min-games",
     type=int,
-    default=50_000,
+    default=SITE_PATCH_MIN_GAMES,
     show_default=True,
     help="In auto mode, keep the newest mature patch until a newer patch reaches this many games.",
 )

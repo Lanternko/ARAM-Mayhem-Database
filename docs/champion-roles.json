@@ -355,6 +355,426 @@
         "Support"
       ]
     },
+    "Jade_Ahri": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Alistar": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Amumu": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Anivia": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Annie": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Ashe": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Blitzcrank": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Brand": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Chogath": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Corki": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_DrMundo": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Evelynn": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Jade_Ezreal": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Fiddlesticks": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Gangplank": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Garen": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Gragas": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Heimerdinger": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Janna": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_JarvanIV": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Jax": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Karthus": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Kassadin": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Jade_Katarina": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Jade_Kayle": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_KogMaw": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_LeeSin": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Leona": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Lulu": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_Lux": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Malphite": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Malzahar": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_MasterYi": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_MissFortune": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Morgana": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_Nasus": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Nidalee": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Jade_Nunu": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Olaf": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Pantheon": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Rammus": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Ryze": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Shaco": {
+      "primary": "Assassin",
+      "secondary": "",
+      "tags": [
+        "Assassin"
+      ]
+    },
+    "Jade_Singed": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Sion": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Sivir": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Skarner": {
+      "primary": "Tank",
+      "secondary": "",
+      "tags": [
+        "Tank"
+      ]
+    },
+    "Jade_Sona": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_Soraka": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_Taric": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
+    "Jade_Teemo": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Tristana": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Tryndamere": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_TwistedFate": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Twitch": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Vayne": {
+      "primary": "Marksman",
+      "secondary": "",
+      "tags": [
+        "Marksman"
+      ]
+    },
+    "Jade_Veigar": {
+      "primary": "Mage",
+      "secondary": "",
+      "tags": [
+        "Mage"
+      ]
+    },
+    "Jade_Warwick": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Wukong": {
+      "primary": "Fighter",
+      "secondary": "",
+      "tags": [
+        "Fighter"
+      ]
+    },
+    "Jade_Zilean": {
+      "primary": "Support",
+      "secondary": "",
+      "tags": [
+        "Support"
+      ]
+    },
     "Janna": {
       "primary": "Support",
       "secondary": "",
@@ -1247,8 +1667,8 @@
       ]
     }
   },
-  "data_dragon_version": "16.14.1",
-  "generated_at": "2026-07-22T04:37:33Z",
+  "data_dragon_version": "16.15.1",
+  "generated_at": "2026-07-29T10:45:43Z",
   "patch_prefix": "16.14",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",

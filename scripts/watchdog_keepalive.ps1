@@ -42,8 +42,18 @@ $argsList = @(
     "--static-publish-threshold", "0",
     # Keep the current mature patch until a newer patch has enough data; then the normal
     # site build retrains empirical profiles and team-score calibration before publishing.
+    # 30,000, lowered from 50,000.  The binding constraint is NOT champion win rate --
+    # that is fine from ~5k games now that it is shrunk toward the previous patch
+    # (CHAMP_PREV_PATCH_PRIOR_GAMES).  It is teammate synergy, which needs ~40 games per
+    # ordered pair across ~29,756 possible pairs.  Measured coverage replaying 16.14:
+    #     5k games ->   8 qualifying pairs,   6/173 champions get any synergy row
+    #    30k games -> 11,662 pairs,         161/173 champions, 153 with >=5 rows
+    #    50k games -> 18,998 pairs,         170/173 champions, 168 with >=5 rows
+    # 30k is where the synergy section stops looking broken, and it cuts the post-patch
+    # wait from ~1.5 days to ~1 day.  Do not drop this to 5k for cadence: it would flip
+    # the site to a day-one patch with a dead 組隊推薦 section.
     "--static-publish-patch-prefix", "auto",
-    "--static-publish-auto-patch-min-games", "50000"
+    "--static-publish-auto-patch-min-games", "30000"
 )
 
 $pythonw = Join-Path (Split-Path (Get-Command python).Source -Parent) "pythonw.exe"
