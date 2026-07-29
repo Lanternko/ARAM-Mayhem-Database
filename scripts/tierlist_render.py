@@ -1901,6 +1901,13 @@ def render_html(
             {
                 "id": row["teammate_id"],
                 "g": row["games"],
+                # wr stays the RAW observed rate: it is a fact about what happened
+                # over `g` games and the tooltip presents it as such.  lift is the
+                # shrunk estimate of how much of that is attributable to the
+                # pairing, which the tooltip already labels "residual".  Publishing
+                # expected+lift as "wr" instead would dress a counterfactual up as
+                # an observation (a 44-game pair would read 36.7% after winning
+                # 54.5%), so the two are deliberately allowed to differ.
                 "wr": round(row["raw_wr"], 4),
                 "expected": round(row["expected_wr"], 4),
                 "lift": round(row["lift"], 4),

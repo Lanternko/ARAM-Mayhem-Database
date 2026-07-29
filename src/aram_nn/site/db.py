@@ -85,16 +85,19 @@ def _patch_major_minor(patch: str) -> str | None:
     return patch or None
 
 
-# Games a patch needs before the SITE will switch to it.  Gated by teammate-synergy
-# coverage (~40 games across ~29,756 ordered champion pairs), not by win-rate
-# accuracy -- champion WR is fine from ~5k games now that it is shrunk toward the
-# previous patch.  Measured replaying 16.14: 5k games -> 6/173 champions get any
-# synergy row; 30k -> 161/173; 50k -> 170/173.  Both the tier-list builder's
-# "--patch-prefix auto" and the publisher's "--auto-patch-min-games" must use this
-# same floor, or `auto` silently means two different patches (it did: the builder's
-# old 1,000 default would flip the site to a day-old patch with a dead synergy
-# section while the publisher was still correctly holding the mature one).
-SITE_PATCH_MIN_GAMES = 30_000
+# Games a patch needs before the SITE will switch to it.  Still gated by
+# teammate-synergy coverage rather than win-rate accuracy, but both of those are
+# now shrunk toward the previous patch, which moved the floor twice:
+#   50,000 -> 30,000  once champion WR stopped needing a mature sample
+#   30,000 -> 10,000  once pair lift did too.  With the display floor at 10 games
+#                     (see --min-synergy-games), replaying 16.14 at a 10,000-game
+#                     patch covers 169 of 173 champions at 2.12pp RMSE -- better
+#                     than the 4.92pp the old raw build shipped at 120,000 games.
+# Both the tier-list builder's "--patch-prefix auto" and the publisher's
+# "--auto-patch-min-games" must use this same floor, or `auto` silently means two
+# different patches (it did: the builder's old 1,000 default would flip the site to
+# a day-old patch while the publisher was still holding the mature one).
+SITE_PATCH_MIN_GAMES = 10_000
 
 
 def latest_patch_prefix(
