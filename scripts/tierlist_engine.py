@@ -130,6 +130,25 @@ CHAMP_PREV_PATCH_PRIOR_GAMES = 2000.0
 # prior.  A mature patch gives even the rarest champion several thousand games, so
 # this only bites on brand-new releases and on reruns over a truncated patch.
 CHAMP_PREV_PATCH_MIN_GAMES = 500
+# Same treatment for same-team pair synergy, which needs it far more than champions
+# do.  Measured on 16.13/16.14: a pair's lift has a split-half reliability of only
+# ~0.23 across a FULL mature patch -- i.e. the raw number the site used to show was
+# roughly 80% noise even at 420k games -- while 88% of whatever reliable signal does
+# exist survives the patch boundary.  True synergy is a small effect (SD ~1.3pp)
+# hiding under a large sampling error, which is exactly the regime shrinkage fixes.
+#
+# lift = (g*raw_lift + K*prior) / (g + K), prior = previous patch's lift shrunk
+# toward 0 by its own sample (g_prev / (g_prev + SHRINK)).  Feeding in the raw
+# previous lift instead makes things WORSE at large N -- that estimate carries its
+# own noise, and predicting 0 beats predicting noise when the true effect is 1.3pp.
+#
+# Replaying 16.14 (fit on first N games, scored on the rest), RMSE / correlation
+# against out-of-sample truth:
+#   N= 10,000   raw 7.19pp r=+0.16  ->  blended 1.52pp r=+0.57
+#   N= 30,000   raw 6.29pp r=+0.12  ->  blended 1.94pp r=+0.39
+#   N=120,000   raw 4.92pp r=+0.11  ->  blended 2.79pp r=+0.24
+PAIR_PREV_PATCH_PRIOR_GAMES = 3000.0
+PAIR_PREV_PATCH_SHRINK_GAMES = 1600.0
 EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.csv")
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
@@ -1271,6 +1290,8 @@ def compute_winrates(
     k: int = 200,
     prev_wr_by_champ: dict[int, float] | None = None,
     prev_k: float = CHAMP_PREV_PATCH_PRIOR_GAMES,
+    prev_pair_lift: dict[tuple[int, int], tuple[float, int]] | None = None,
+    prev_pair_k: float = PAIR_PREV_PATCH_PRIOR_GAMES,
 ):
     """Compute champion winrates + per-(champion, augment) winrates.
 
@@ -1282,10 +1303,22 @@ def compute_winrates(
     patch had no data) fall back to the flat ``prior`` / ``k`` path.  Pass nothing
     when computing the baseline patch itself, or the prior would chain backwards.
 
+    ``prev_pair_lift`` maps (champion_id, teammate_id) -> (that pair's raw lift on
+    the PREVIOUS patch, its game count there).  Supplying it switches ``lift`` from
+    the raw residual to the shrunk estimate described at
+    PAIR_PREV_PATCH_PRIOR_GAMES; pairs with no previous-patch entry still shrink,
+    toward 0.  Pass nothing when computing the baseline patch itself -- the prior
+    is built FROM those raw lifts, so blending them first would double-shrink.
+
     Returns: (champ_records, champ_aug_records, champ_pair_records)
       champ_records: list of dicts with champion_id, games, wins, raw_wr, bayes_wr,
                     prev_wr (prior used, None if flat) and prev_mix (0..1 share of
                     the headline number contributed by the previous patch)
+      champ_pair_records: ``lift`` is the shrunk estimate when prev_pair_lift is
+                    given, with ``raw_lift`` keeping the unshrunk residual and
+                    ``lift_prev_mix`` the prior's share.  ``raw_wr`` stays the
+                    observed pair rate and is deliberately NOT reconciled with the
+                    shrunk lift -- one is an observation, the other an estimate.
       champ_aug_records: list of dicts with champion_id, augment_id, games, wins,
                         raw_wr, smoothed_wr, lift (smoothed_wr - champ_baseline_wr)
       champ_pair_records: list of dicts with champion_id, teammate_id, games,
@@ -1431,6 +1464,21 @@ def compute_winrates(
             rest_wr = anchor_wr
             delta_vs_rest = raw - rest_wr
 
+        # Shrink the residual toward the previous patch's (itself shrunk) lift.
+        # Without a prior map this is a no-op, which is what the baseline pass wants.
+        if prev_pair_lift is None:
+            lift = delta_vs_expected
+            lift_prev_mix = 0.0
+        else:
+            prev_entry = prev_pair_lift.get((cid, teammate_id))
+            if prev_entry:
+                prev_lift, prev_games = prev_entry
+                prior = prev_lift * (prev_games / (prev_games + PAIR_PREV_PATCH_SHRINK_GAMES))
+            else:
+                prior = 0.0
+            lift = (g * delta_vs_expected + prev_pair_k * prior) / (g + prev_pair_k)
+            lift_prev_mix = prev_pair_k / (g + prev_pair_k)
+
         champ_pair_records.append({
             "champion_id": cid,
             "teammate_id": teammate_id,
@@ -1441,7 +1489,9 @@ def compute_winrates(
             "baseline_wr": anchor_wr,
             "teammate_wr": teammate_wr,
             "rest_wr": rest_wr,
-            "lift": delta_vs_expected,
+            "lift": lift,
+            "raw_lift": delta_vs_expected,
+            "lift_prev_mix": lift_prev_mix,
             "delta_vs_rest": delta_vs_rest,
             "z_score": z_score,
         })

@@ -79,7 +79,13 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
               help="Output HTML path (default: docs/index.html — the only non-root folder GitHub Pages serves from)")
 @click.option("--min-games", type=int, default=50, help="Drop champions below this game count")
 @click.option("--min-pair-games", type=int, default=15, help="Min games per (champ, augment) pair")
-@click.option("--min-synergy-games", type=int, default=40,
+# 10, lowered from 40.  The old floor existed to hide raw lifts that were wild
+# below ~40 games; the shrinkage at PAIR_PREV_PATCH_PRIOR_GAMES removes that noise
+# instead of hiding it, so the floor now only controls coverage.  Replaying 16.14 at
+# a 10,000-game patch: floor 40 shows 500 pairs / 73 of 173 champions, floor 10 shows
+# 8,101 pairs / 169 champions at 2.12pp RMSE -- still 3x better than the 7.19pp the
+# old raw-lift-at-floor-40 build shipped.
+@click.option("--min-synergy-games", type=int, default=10,
               help="Min games per same-team champion pair for synergy / recommendation ranking")
 @click.option("--top-n", type=int, default=16,
               help="Max best augments per rarity (default 16; 0 keeps all — bloats payload)")
@@ -191,8 +197,9 @@ def main(
     baseline_champ_records: list[dict] = []
     baseline_champ_aug: list[dict] = []
     prev_wr_by_champ: dict[int, float] = {}
+    prev_pair_lift: dict[tuple[int, int], tuple[float, int]] = {}
     if baseline_patch_prefix:
-        baseline_champ_records, baseline_champ_aug, _ = compute_winrates(
+        baseline_champ_records, baseline_champ_aug, baseline_champ_pairs = compute_winrates(
             db, queue_id, baseline_patch_prefix
         )
         prev_wr_by_champ = {
@@ -200,14 +207,32 @@ def main(
             for r in baseline_champ_records
             if int(r["games"]) >= CHAMP_PREV_PATCH_MIN_GAMES
         }
+        # Raw (unshrunk) baseline lifts: compute_winrates shrinks them on the way
+        # in, not on the way out, so the prior must stay raw here.
+        prev_pair_lift = {
+            (int(r["champion_id"]), int(r["teammate_id"])): (
+                float(r["lift"]),
+                int(r["games"]),
+            )
+            for r in baseline_champ_pairs
+        }
         click.echo(
             f"[tierlist] prev-patch WR prior: {len(prev_wr_by_champ)} champions from "
             f"{baseline_patch_prefix} (k={CHAMP_PREV_PATCH_PRIOR_GAMES:g} pseudo-games, "
             f"min {CHAMP_PREV_PATCH_MIN_GAMES} games)"
         )
+        click.echo(
+            f"[tierlist] prev-patch synergy prior: {len(prev_pair_lift):,} pairs from "
+            f"{baseline_patch_prefix} (k={PAIR_PREV_PATCH_PRIOR_GAMES:g}, "
+            f"prior shrink {PAIR_PREV_PATCH_SHRINK_GAMES:g})"
+        )
 
     all_champ_records, champ_aug, champ_pairs = compute_winrates(
-        db, queue_id, patch_prefix, prev_wr_by_champ=prev_wr_by_champ or None
+        db,
+        queue_id,
+        patch_prefix,
+        prev_wr_by_champ=prev_wr_by_champ or None,
+        prev_pair_lift=prev_pair_lift if baseline_patch_prefix else None,
     )
     total_games = sum(r["games"] for r in all_champ_records) // 10
     # Games that actually carry augment data — the denominator for the augment
