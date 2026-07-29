@@ -107,6 +107,29 @@ AUGMENT_CURRENT_MIN_GAMES = 500
 # the previous patch.  Raise it to also cut augments that are technically present but
 # vanishingly rare this patch.
 AUGMENT_PRESENT_MIN_GAMES = 1
+# Champion headline win rate is empirical-Bayes shrunk toward the PREVIOUS patch's
+# win rate for that same champion, not toward a flat 0.50.  Measured true champion
+# WR drift across 16.10->16.14 is only tau ~= 1.2pp (0.65pp on a quiet patch, 1.9pp
+# on a balance patch), i.e. last patch is a far better prior than "everyone is 50%".
+# k is the prior's weight in pseudo-games; backtesting the 16.12 / 16.13 / 16.14
+# rollouts (fit on the patch's first N games, scored against the rest of the patch)
+# puts the RMSE optimum on a broad plateau between 1500 and 4000 for every
+# transition, so 2000 is a safe universal pick:
+#   N=5,000 games   raw 3.2-4.0pp | toward 0.50 2.5-2.9pp | toward prev 0.8-2.0pp
+#   N=50,000 games  raw 1.2-2.1pp | toward 0.50 1.2-2.1pp | toward prev 0.7-1.8pp
+# The prior dissolves on its own as the patch matures (a mature patch gives each
+# champion ~40k games, leaving the prior <5% weight), so no cutover switch is needed.
+# Known cost: a genuinely buffed/nerfed champion is under-reported for the first
+# day or two.  That is information the sample does not yet contain -- a
+# limited-translation (Efron-Morris) clamp was tested and did NOT recover it -- so
+# it is surfaced in the UI via prevMix instead of being papered over with math.
+CHAMP_PREV_PATCH_PRIOR_GAMES = 2000.0
+# A champion needs at least this many previous-patch games before its previous-patch
+# rate is trusted as a prior.  Below that the "prior" is itself mostly noise and
+# would inject error rather than remove it, so those champions keep the flat 0.50
+# prior.  A mature patch gives even the rarest champion several thousand games, so
+# this only bites on brand-new releases and on reruns over a truncated patch.
+CHAMP_PREV_PATCH_MIN_GAMES = 500
 EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.csv")
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
@@ -1246,11 +1269,23 @@ def compute_winrates(
     patch_prefix: str | None,
     prior: float = 0.5,
     k: int = 200,
+    prev_wr_by_champ: dict[int, float] | None = None,
+    prev_k: float = CHAMP_PREV_PATCH_PRIOR_GAMES,
 ):
     """Compute champion winrates + per-(champion, augment) winrates.
 
+    ``prev_wr_by_champ`` maps champion_id -> that champion's PREVIOUS-patch win
+    rate.  When supplied, a champion's ``bayes_wr`` is shrunk toward its own
+    previous-patch rate with ``prev_k`` pseudo-games instead of toward the flat
+    ``prior`` -- see CHAMP_PREV_PATCH_PRIOR_GAMES for why and for the measured
+    error reduction.  Champions absent from the map (brand new, or the previous
+    patch had no data) fall back to the flat ``prior`` / ``k`` path.  Pass nothing
+    when computing the baseline patch itself, or the prior would chain backwards.
+
     Returns: (champ_records, champ_aug_records, champ_pair_records)
-      champ_records: list of dicts with champion_id, games, wins, raw_wr, bayes_wr
+      champ_records: list of dicts with champion_id, games, wins, raw_wr, bayes_wr,
+                    prev_wr (prior used, None if flat) and prev_mix (0..1 share of
+                    the headline number contributed by the previous patch)
       champ_aug_records: list of dicts with champion_id, augment_id, games, wins,
                         raw_wr, smoothed_wr, lift (smoothed_wr - champ_baseline_wr)
       champ_pair_records: list of dicts with champion_id, teammate_id, games,
@@ -1318,13 +1353,21 @@ def compute_winrates(
     for cid, g in games.items():
         w = wins[cid]
         raw = w / g if g else 0.0
-        bayes = (w + prior * k) / (g + k)
+        prev_wr = (prev_wr_by_champ or {}).get(cid)
+        if prev_wr is None:
+            bayes = (w + prior * k) / (g + k)
+            prev_mix = 0.0
+        else:
+            bayes = (w + prev_wr * prev_k) / (g + prev_k)
+            prev_mix = prev_k / (g + prev_k)
         champ_records.append({
             "champion_id": cid,
             "games": g,
             "wins": w,
             "raw_wr": raw,
             "bayes_wr": bayes,
+            "prev_wr": prev_wr,
+            "prev_mix": prev_mix,
         })
     champ_records.sort(key=lambda d: -d["bayes_wr"])
 

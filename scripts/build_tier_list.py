@@ -139,12 +139,19 @@ def main(
         click.echo(f"[tierlist] production Meta Pick API: {meta_pick_api_url}")
 
     if patch_prefix == "auto":
-        from aram_nn.site.db import latest_patch_prefix as _latest
-        patch_prefix = _latest(db, queue_id=queue_id)
+        from aram_nn.site.db import SITE_PATCH_MIN_GAMES, latest_patch_prefix as _latest
+        # Same maturity floor the publisher uses (SITE_PATCH_MIN_GAMES): a patch that
+        # is too thin to fill the synergy / item sections must not win "auto" here
+        # either.  fallback_latest stays on so a fresh DB with no mature patch still
+        # builds something rather than hard-failing.
+        patch_prefix = _latest(db, queue_id=queue_id, min_games=SITE_PATCH_MIN_GAMES)
         if not patch_prefix:
             click.echo("[tierlist] error: could not auto-detect patch from DB", err=True)
             raise SystemExit(1)
-        click.echo(f"[tierlist] auto-detected patch prefix: {patch_prefix}")
+        click.echo(
+            f"[tierlist] auto-detected patch prefix: {patch_prefix} "
+            f"(maturity floor {SITE_PATCH_MIN_GAMES:,} games)"
+        )
     else:
         patch_prefix = patch_prefix or None
     click.echo(f"[tierlist] db={db}  queue={queue_id}  patch_prefix={patch_prefix}")
@@ -175,7 +182,33 @@ def main(
     spell_meta = load_summoner_spell_metadata(version)
     click.echo(f"[tierlist] summoner-spell catalogue: {len(spell_meta)} entries")
 
-    all_champ_records, champ_aug, champ_pairs = compute_winrates(db, queue_id, patch_prefix)
+    # The previous patch has to be scanned FIRST: its per-champion win rate is the
+    # empirical-Bayes prior the current patch's headline number is shrunk toward
+    # (CHAMP_PREV_PATCH_PRIOR_GAMES).  On a day-old patch that prior is most of the
+    # signal; on a mature one it dissolves to noise.  Baseline itself is computed
+    # with the flat prior so the chain stops at one patch back.
+    baseline_patch_prefix = previous_patch_prefix(patch_prefix)
+    baseline_champ_records: list[dict] = []
+    baseline_champ_aug: list[dict] = []
+    prev_wr_by_champ: dict[int, float] = {}
+    if baseline_patch_prefix:
+        baseline_champ_records, baseline_champ_aug, _ = compute_winrates(
+            db, queue_id, baseline_patch_prefix
+        )
+        prev_wr_by_champ = {
+            int(r["champion_id"]): float(r["raw_wr"])
+            for r in baseline_champ_records
+            if int(r["games"]) >= CHAMP_PREV_PATCH_MIN_GAMES
+        }
+        click.echo(
+            f"[tierlist] prev-patch WR prior: {len(prev_wr_by_champ)} champions from "
+            f"{baseline_patch_prefix} (k={CHAMP_PREV_PATCH_PRIOR_GAMES:g} pseudo-games, "
+            f"min {CHAMP_PREV_PATCH_MIN_GAMES} games)"
+        )
+
+    all_champ_records, champ_aug, champ_pairs = compute_winrates(
+        db, queue_id, patch_prefix, prev_wr_by_champ=prev_wr_by_champ or None
+    )
     total_games = sum(r["games"] for r in all_champ_records) // 10
     # Games that actually carry augment data — the denominator for the augment
     # board's per-game appearance rate (see build_augment_global_stats).
@@ -187,10 +220,9 @@ def main(
 
     patch_changes = None
     new_aug_ids: frozenset[int] = frozenset()
-    baseline_champ_aug: list[dict] = []
-    baseline_patch_prefix = previous_patch_prefix(patch_prefix)
     if baseline_patch_prefix:
-        baseline_champ_records, baseline_champ_aug, _ = compute_winrates(db, queue_id, baseline_patch_prefix)
+        # baseline_champ_records / baseline_champ_aug were already scanned above to
+        # build the prev-patch WR prior; reuse them rather than rescanning the patch.
         baseline_total_games = sum(r["games"] for r in baseline_champ_records) // 10
         new_aug_ids = derive_recent_augment_ids(
             db,

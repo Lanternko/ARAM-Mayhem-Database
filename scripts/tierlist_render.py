@@ -1952,6 +1952,13 @@ def render_html(
             "wr": round(float(champ_stat_by_cid.get(cid, {}).get("bayes_wr", 0.0) or 0.0), 4),
             "rawWr": round(float(champ_stat_by_cid.get(cid, {}).get("raw_wr", 0.0) or 0.0), 4),
             "g": int(champ_stat_by_cid.get(cid, {}).get("games", 0) or 0),
+            # Share of the headline wr contributed by the PREVIOUS patch's rate for
+            # this champion (see CHAMP_PREV_PATCH_PRIOR_GAMES).  Near 1 on a day-old
+            # patch, ~0 on a mature one.  Shipped so the card can say so out loud
+            # instead of presenting a mostly-last-patch number as this patch's.
+            "prevMix": round(
+                float(champ_stat_by_cid.get(cid, {}).get("prev_mix", 0.0) or 0.0), 3
+            ),
         }
     aug_cat_overrides = load_augment_category_overrides()
     if aug_cat_overrides:
@@ -2367,6 +2374,40 @@ def render_html(
     )
     parts.append("</div>")  # /search-rail
 
+    # Thin-patch disclosure.  Champion win rates are shrunk toward the previous
+    # patch's rate (CHAMP_PREV_PATCH_PRIOR_GAMES); on a day-old patch that prior is
+    # most of the displayed number.  prev_mix is driven by patch-wide sample size,
+    # so it is near-identical across champions -- a property of the patch, not of
+    # any one champion.  Hence one banner rather than a badge on all 170 tiles.
+    # It disappears on its own once the patch matures past the 10% floor.
+    _mixes = sorted(float(r.get("prev_mix") or 0.0) for r in records)
+    _mix = _mixes[len(_mixes) // 2] if _mixes else 0.0
+    _prev_patch = display_patch_prefix(previous_patch_prefix(patch_prefix))
+    if _mix >= 0.10 and _prev_patch and display_patch:
+        _mix_pct = f"{_mix * 100:.0f}%"
+        _zh = (
+            f"{display_patch} 目前 {total_games:,} 場，樣本還薄。勝率已混合上一版 "
+            f"{_prev_patch} 的資料拉回（混合比重約 {_mix_pct}），避免改版首日的雜訊被當成強度。"
+            "場數累積後混合會自動退場。"
+        )
+        _cn = (
+            f"{display_patch} 目前 {total_games:,} 场，样本还薄。胜率已混合上一版 "
+            f"{_prev_patch} 的数据拉回（混合比重约 {_mix_pct}），避免改版首日的噪声被当成强度。"
+            "场数累积后混合会自动退场。"
+        )
+        _en = (
+            f"{display_patch} has only {total_games:,} games so far. Win rates are "
+            f"blended back toward {_prev_patch} (about {_mix_pct} of the number) so "
+            "day-one noise is not read as strength. The blend fades out as games accumulate."
+        )
+        parts.append(
+            "<div class='blend-note' data-nosnippet role='note' "
+            f"data-i18n-zh=\"{html.escape(_zh, quote=True)}\" "
+            f"data-i18n-zh-cn=\"{html.escape(_cn, quote=True)}\" "
+            f"data-i18n-en=\"{html.escape(_en, quote=True)}\">"
+            f"{html.escape(_zh)}</div>"
+        )
+
     for tier in TIER_ORDER:
         entries = by_tier[tier]
         if not entries:
@@ -2399,9 +2440,13 @@ def render_html(
             secondary_role = tags[1] if len(tags) > 1 else ""
             alias = meta.get("alias", "")
             search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
+            # Per-champion blend detail lives on the tooltip; the page-level
+            # banner already carries the headline disclosure (see .blend-note).
+            _pm = float(r.get("prev_mix") or 0.0)
+            blend_hint = f" · 混合上版 {_pm*100:.0f}%" if _pm >= 0.10 else ""
             title = (
                 f"{r['name']} · WR {wr_pct} · games {r['games']:,} · "
-                f"raw {r['raw_wr']*100:.1f}%"
+                f"raw {r['raw_wr']*100:.1f}%{blend_hint}"
             )
             aria_label = f"{r['name']} {alias}，tier {tier}，勝率 {wr_pct}"
             parts.append(
@@ -2886,6 +2931,11 @@ def _run_shell_only(
         records.append({
             "champion_id": cid, "games": g, "wins": round(raw * g),
             "raw_wr": raw, "bayes_wr": float(c.get("wr") or 0.0),
+            # Carried through so a frontend-only reship keeps the thin-patch
+            # disclosure banner.  Without it a shell-only build during a fresh
+            # patch would silently drop the .blend-note that the full build
+            # rendered, leaving blended numbers on screen with nothing saying so.
+            "prev_mix": float(c.get("prevMix") or 0.0),
         })
         champ_meta[cid] = {
             k: c.get(k)

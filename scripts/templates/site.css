@@ -289,6 +289,26 @@
     .search-rail .search:focus {
         box-shadow: none;
     }
+    /* Thin-patch disclosure: sits above the first tier block on a freshly
+       released patch, telling the reader the displayed win rates are still
+       partly last patch.  Server-rendered only while the blend is material,
+       so there is no empty-state to style. */
+    .blend-note {
+        margin: 0 0 16px;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent, #6aa9ff);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--accent, #6aa9ff) 7%, transparent);
+        /* Full-strength --text, not --text-dim: measured 4.32:1 against this
+           tinted panel in dark mode, under the 4.5:1 AA floor.  This note is a
+           correctness caveat about the numbers directly below it, so it has to
+           be comfortably readable; the accent border + tint already mark it as
+           secondary chrome without dimming the text. */
+        color: var(--text, inherit);
+        font-size: 13px;
+        line-height: 1.6;
+    }
     .role-chips {
         display: flex;
         flex-wrap: wrap;
