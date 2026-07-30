@@ -486,8 +486,10 @@ def main(
             )
             click.echo(f"[tierlist] wrote {og_asset_path}  ({og_asset_path.stat().st_size:,} bytes)")
             if site_url:
-                og_version = (build_date or _dt.date.today().isoformat()).replace("-", "")
-                og_image = site_url.rstrip("/") + "/" + og_asset_path.name + f"?v={og_version}-thumb"
+                # Content hash of the just-written thumbnail, not the date, so the
+                # cache-bust changes iff the image did (see og_cache_bust).
+                og_version = og_cache_bust(og_asset_path, build_date)
+                og_image = site_url.rstrip("/") + "/" + og_asset_path.name + f"?v={og_version}"
         except Exception as exc:
             click.echo(f"[tierlist] WARN: og image generation failed: {exc}")
 

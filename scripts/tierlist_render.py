@@ -150,6 +150,28 @@ def _draw_prismatic_frame(img, box: tuple[int, int, int, int], radius: int) -> N
         width=4,
     )
 
+def og_cache_bust(og_path, build_date: str = "") -> str:
+    """Cache-bust token for the og:image URL, derived from the file's CONTENTS.
+
+    The token was a build DATE, so multiple rebuilds on the same day reused one
+    URL even though the rendered thumbnail (which draws the live game count) had
+    changed -- social scrapers keep serving the first version they cached, so the
+    share card visibly lagged until the next calendar day.  Hashing the actual PNG
+    bytes makes the URL change exactly when the image does, and stay stable when it
+    does not.  Falls back to the date only if the file cannot be read (e.g. a
+    shell-only run before any full build produced one).
+    """
+    import hashlib
+    from pathlib import Path as _Path
+
+    try:
+        digest = hashlib.sha1(_Path(og_path).read_bytes()).hexdigest()[:10]
+        return f"{digest}-thumb"
+    except OSError:
+        stamp = (build_date or _dt.date.today().isoformat()).replace("-", "")
+        return f"{stamp}-thumb"
+
+
 def write_og_image(
     out_path: Path,
     records: list[dict],
@@ -3000,7 +3022,10 @@ def _run_shell_only(
     }
 
     if not og_image and site_url:
-        og_image = site_url.rstrip("/") + "/og-image.png" + f"?v={build_date.replace('-', '')}-thumb"
+        # Shell-only reuses the og-image.png the last full build wrote; hash its
+        # bytes so the cache-bust matches that image rather than today's date.
+        og_token = og_cache_bust(out_path.parent / "og-image.png", build_date)
+        og_image = site_url.rstrip("/") + "/og-image.png" + f"?v={og_token}"
 
     html = render_html(
         records, champ_meta,
