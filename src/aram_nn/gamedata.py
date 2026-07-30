@@ -53,6 +53,37 @@ def _where(queue_id: int | None, patch_prefix: str | None) -> tuple[str, list]:
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
 
 
+JADE_CHAMPION_ID_OFFSET = 60_000
+JADE_CHAMPION_ID_RANGE = (60_000, 61_000)
+
+
+def base_champion_id(champion_id: int) -> int:
+    """Map a 經典 (queue 4310, gameMode JADE) champion id onto the normal one.
+
+    That mode ships every champion as a separate ``Jade_*`` entry numbered
+    ``60000 + base_id`` -- 60001 Jade_Annie for Annie (1), 60062 Jade_Wukong for
+    MonkeyKing (62) -- so its games store ids no other queue uses.  Verified
+    against the live LCU catalogue: all 60 entries map exactly, with only the
+    two alias spellings differing (``FiddleSticks`` casing and Wukong's internal
+    ``MonkeyKing``); the numeric offset itself is exact.
+
+    Anything joining 4310 games against champion metadata must go through this,
+    or all 60 champions silently become "unknown" and the games are dropped.
+    Ids outside the Jade range are returned unchanged, so this is safe to apply
+    unconditionally across mixed-queue data.
+    """
+    low, high = JADE_CHAMPION_ID_RANGE
+    if low <= champion_id < high:
+        return champion_id - JADE_CHAMPION_ID_OFFSET
+    return champion_id
+
+
+def is_jade_champion_id(champion_id: int) -> bool:
+    """True for the 經典-mode champion id space (see base_champion_id)."""
+    low, high = JADE_CHAMPION_ID_RANGE
+    return low <= champion_id < high
+
+
 def participant_won(participant: dict, blue_wins: int | bool) -> bool:
     """A participant won iff they are on blue (teamId=100) and blue won,
     or on red (200) and blue lost."""

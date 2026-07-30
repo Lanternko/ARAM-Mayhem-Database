@@ -187,6 +187,28 @@ def _extract_selected_stats(participant: dict, stats: dict, challenges: dict) ->
     return selected
 
 
+def _extract_perks(stats: dict) -> dict:
+    """Pull the rune page (perk0-5 + primary/sub style) when the mode has one.
+
+    Returns {} when every field is zero, which is the case for every queue we
+    currently collect -- Mayhem (2400), 大混戰經典風 (2450) and 經典 (4310) all
+    report zeros, verified against live games -- so stored payloads for those
+    modes are byte-identical to before this existed.  Only ARAM (450) and any
+    Summoner's Rift game that lands in the net can produce a non-empty result.
+
+    Captured despite currently yielding nothing for 4310 because the LCU keeps
+    only ~20 games per player: if Riot later wires runes up for that mode, the
+    games played in between cannot be re-fetched.  Storing the field now is the
+    only way to not lose them.
+    """
+    ids = [_to_int(stats.get(f"perk{idx}")) or 0 for idx in range(6)]
+    primary = _to_int(stats.get("perkPrimaryStyle")) or 0
+    sub = _to_int(stats.get("perkSubStyle")) or 0
+    if not any(ids) and not primary and not sub:
+        return {}
+    return {"perks": {"ids": ids, "styles": [primary, sub]}}
+
+
 def _extract_lane_role(raw: dict) -> dict:
     """Pull timeline.lane / timeline.role when the mode actually has lanes.
 
@@ -236,6 +258,8 @@ def _build_participant_record(team_id: int, champion_id: int, raw: dict) -> dict
     lane_role = _extract_lane_role(raw)
     if lane_role:
         record.update(lane_role)
+
+    record.update(_extract_perks(stats))
 
     items = [item_id for item_id in item_slots if item_id > 0]
     if items:
