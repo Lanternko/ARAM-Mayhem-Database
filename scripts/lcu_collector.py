@@ -1179,8 +1179,9 @@ def _build_snowball_subprocess_args(
               show_default=True, help="SQLite database path")
 @click.option("--interval", default=30, show_default=True, type=int,
               help="Poll interval in seconds")
-@click.option("--queue", multiple=True, type=int, default=(450, 2400),
-              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400, 2450, 4310),
+              help="Queue IDs to capture (repeatable).  Default: 450 ARAM, 2400 Mayhem, "
+                   "2450 大混戰經典風, 4310 經典 (JADE, map 453).")
 def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
     """Run the collector — blocks until Ctrl-C.
 
@@ -1215,8 +1216,9 @@ def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
               help="Reclaim an in-progress queue item if a worker disappears for this long")
 @click.option("--player-requeue-cooldown-sec", default=45, show_default=True, type=int,
               help="Cooldown before a newer rediscovery can requeue the same processed player")
-@click.option("--queue", multiple=True, type=int, default=(450, 2400),
-              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400, 2450, 4310),
+              help="Queue IDs to capture (repeatable).  Default: 450 ARAM, 2400 Mayhem, "
+                   "2450 大混戰經典風, 4310 經典 (JADE, map 453).")
 @click.option("--seed-self/--no-seed-self", default=True, show_default=True,
               help="Seed the crawl with the current summoner")
 @click.option("--seed-friends/--no-seed-friends", default=True, show_default=True,
@@ -1354,8 +1356,9 @@ def snowball(
               help="Reclaim an in-progress queue item if a worker disappears for this long")
 @click.option("--player-requeue-cooldown-sec", default=45, show_default=True, type=int,
               help="Cooldown before a newer rediscovery can requeue the same processed player")
-@click.option("--queue", multiple=True, type=int, default=(450, 2400),
-              help="Queue IDs to capture (repeatable).  Default: 450 and 2400.")
+@click.option("--queue", multiple=True, type=int, default=(450, 2400, 2450, 4310),
+              help="Queue IDs to capture (repeatable).  Default: 450 ARAM, 2400 Mayhem, "
+                   "2450 大混戰經典風, 4310 經典 (JADE, map 453).")
 @click.option("--seed-self/--no-seed-self", default=True, show_default=True,
               help="Seed the crawl with the current summoner")
 @click.option("--seed-friends/--no-seed-friends", default=True, show_default=True,
@@ -2091,7 +2094,7 @@ def verify_share(sources: tuple[Path, ...], strict: bool) -> None:
                     warnings.append(f"bad_rows={bad_rows}")
                 if dupe_ids:
                     warnings.append(f"duplicate_game_ids={dupe_ids}")
-                unknown_queues = {q for q in queues_seen if q not in (450, 2400)}
+                unknown_queues = {q for q in queues_seen if q not in (450, 2400, 2450, 4310)}
                 if unknown_queues:
                     warnings.append(f"unexpected_queues={sorted(unknown_queues)}")
 
