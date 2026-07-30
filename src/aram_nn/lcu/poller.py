@@ -187,6 +187,25 @@ def _extract_selected_stats(participant: dict, stats: dict, challenges: dict) ->
     return selected
 
 
+def _extract_lane_role(raw: dict) -> dict:
+    """Pull timeline.lane / timeline.role when the mode actually has lanes.
+
+    Returns {} for ARAM / Mayhem, where the fields are missing or "NONE", so the
+    stored payload for those modes is byte-identical to before this existed.
+    """
+    timeline = raw.get("timeline")
+    if not isinstance(timeline, dict):
+        return {}
+    out: dict = {}
+    for src, dst in (("lane", "lane"), ("role", "role")):
+        value = timeline.get(src)
+        if isinstance(value, str):
+            value = value.strip().upper()
+            if value and value != "NONE":
+                out[dst] = value
+    return out
+
+
 def _build_participant_record(team_id: int, champion_id: int, raw: dict) -> dict:
     stats_raw = raw.get("stats") or {}
     stats = stats_raw if isinstance(stats_raw, dict) else {}
@@ -202,6 +221,21 @@ def _build_participant_record(team_id: int, champion_id: int, raw: dict) -> dict
     spells = _extract_summoner_spells(raw, stats)
     if spells:
         record["spells"] = spells
+
+    # Lane / role for the laned modes (queue 4310 "經典" on map 453, and any
+    # Summoner's Rift game that lands in the net).  ARAM and Mayhem are played on
+    # map 12 where these are absent or NONE, so nothing is stored for them.
+    #
+    # These come from Riot's OLD lane/role inference and are demonstrably wrong --
+    # a sampled 4310 game had three JUNGLEs on one team and no TOP or MIDDLE.  The
+    # accurate field (teamPosition) is match-v5 only and the LCU endpoint does not
+    # carry it.  They are stored raw anyway, unadjusted, because position has to be
+    # re-derived later from spells (11 = Smite) + items + these hints, and the LCU
+    # keeps only ~20 games per player: whatever is not captured now is gone for good.
+    # Anything reading these must treat them as a weak signal, never ground truth.
+    lane_role = _extract_lane_role(raw)
+    if lane_role:
+        record.update(lane_role)
 
     items = [item_id for item_id in item_slots if item_id > 0]
     if items:

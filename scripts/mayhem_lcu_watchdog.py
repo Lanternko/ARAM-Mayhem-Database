@@ -491,6 +491,17 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
         "450",
         "--queue",
         "2400",
+        # 2450 隨機單中大混戰：經典風 (KIWI, map 12) and 4310 經典 (JADE_RANKED_SOLO_5x5,
+        # map 453) both launched 2026-07-30 ~02:15.  Collected opportunistically:
+        # match history comes back unfiltered, so DISCOVERING them is free and only
+        # the per-game detail fetch costs anything -- measured at ~1.7% of sampled
+        # history (26 + 10 games across 99 players), so a negligible throughput hit
+        # on Mayhem.  Worth taking now because the LCU keeps only ~20 games per
+        # player: games not captured today cannot be back-filled later.
+        "--queue",
+        "2450",
+        "--queue",
+        "4310",
         "--seed-riot-id-file",
         str(args.seed_riot_id_file),
         "--seed-self",
