@@ -103,7 +103,55 @@ _PARTICIPANT_STAT_ALIASES: dict[str, tuple[str, ...]] = {
     "effective_heal_and_shielding": ("effectiveHealAndShielding",),
     "turret_kills": ("turretKills",),
     "inhibitor_kills": ("inhibitorKills", "inhibKills"),
+    # --- Added once 經典 (4310) collection started ---
+    # Multi-kill / spree counts.  largest_killing_spree above is the LONGEST spree;
+    # killing_sprees is HOW MANY sprees, a different signal (one 5-spree vs five
+    # 1-sprees) that the snowball axis work could not distinguish before.
+    "double_kills": ("doubleKills",),
+    "triple_kills": ("tripleKills",),
+    "quadra_kills": ("quadraKills",),
+    "penta_kills": ("pentaKills",),
+    "killing_sprees": ("killingSprees",),
+    "longest_time_spent_living": ("longestTimeSpentLiving",),
+    # First-objective flags.  Zero on the ARAM map (no lanes to take early), real
+    # on map 453.
+    "first_tower_kill": ("firstTowerKill",),
+    "first_tower_assist": ("firstTowerAssist",),
+    "first_inhibitor_kill": ("firstInhibitorKill",),
+    "first_inhibitor_assist": ("firstInhibitorAssist",),
+    # Vision and jungle.  Dead weight for ARAM/Mayhem (map 12 has neither), but
+    # populated in 經典 -- sampled games showed visionScore up to 55 and wardsPlaced
+    # up to 44.
+    "vision_score": ("visionScore",),
+    "wards_placed": ("wardsPlaced",),
+    "wards_killed": ("wardsKilled",),
+    "vision_wards_bought": ("visionWardsBoughtInGame",),
+    "sight_wards_bought": ("sightWardsBoughtInGame",),
+    "neutral_minions_enemy_jungle": ("neutralMinionsKilledEnemyJungle",),
+    "neutral_minions_team_jungle": ("neutralMinionsKilledTeamJungle",),
 }
+
+# Keys omitted from the stored payload when their value is 0, instead of written
+# out as an explicit zero like every field above them.
+#
+# These are all mode-specific: vision, jungle and lane-objective mechanics that do
+# not exist on the ARAM map, plus rare multi-kill tiers.  Writing them as zeros
+# measured +3,770 bytes per Mayhem game (+35.6%), which at ~1,600 games/hour is
+# +0.14 GB/day of pure zeros -- and Mayhem is >99% of collection volume, so
+# essentially all of that cost buys nothing.
+#
+# Consumers must read these with ``.get(key, 0)``.  That is already required for
+# every field here: _extract_selected_stats has always omitted keys the LCU did
+# not report, so absence never meant anything other than "treat as zero".
+_SPARSE_ZERO_STAT_KEYS = frozenset({
+    "double_kills", "triple_kills", "quadra_kills", "penta_kills",
+    "killing_sprees", "longest_time_spent_living",
+    "first_tower_kill", "first_tower_assist",
+    "first_inhibitor_kill", "first_inhibitor_assist",
+    "vision_score", "wards_placed", "wards_killed",
+    "vision_wards_bought", "sight_wards_bought",
+    "neutral_minions_enemy_jungle", "neutral_minions_team_jungle",
+})
 
 
 @dataclass
@@ -182,8 +230,14 @@ def _extract_selected_stats(participant: dict, stats: dict, challenges: dict) ->
     selected: dict[str, int] = {}
     for out_key, aliases in _PARTICIPANT_STAT_ALIASES.items():
         value = _to_int(_lookup_raw_value([stats, challenges, participant], aliases))
-        if value is not None:
-            selected[out_key] = value
+        if value is None:
+            continue
+        # Mode-specific keys are stored only when non-zero; see the comment on
+        # _SPARSE_ZERO_STAT_KEYS for why (Mayhem is >99% of volume and would carry
+        # ~3.8 KB of meaningless zeros per game otherwise).
+        if not value and out_key in _SPARSE_ZERO_STAT_KEYS:
+            continue
+        selected[out_key] = value
     return selected
 
 
