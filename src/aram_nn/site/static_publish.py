@@ -91,8 +91,22 @@ DEFAULT_DOC_PATHS = (
     Path("docs/zh-CN"),
     # Social share thumbnail (og:image / twitter:image).  Re-rendered every build
     # with the live champion data + game count; referenced by every shell above
-    # via a date cache-bust.  Must ship with them or the share preview is stale.
+    # via a content-hash cache-bust.  Must ship with them or the share preview is stale.
     Path("docs/og-image.png"),
+    # Static info pages (write_site_info_pages): about / privacy / contact.  Each
+    # embeds a "last updated" date rewritten on every build, so like the shells
+    # above they drift out of the publish and the live pages show an ever-older
+    # date.  Same fix -- track them so they commit with the rest.
+    Path("docs/about"),
+    Path("docs/privacy"),
+    Path("docs/contact"),
+    # Build artifact (champion role spec) regenerated with the current patch each
+    # build.  The live site does not fetch it -- only the offline
+    # build_semantic_score_review_page.py reads it -- so its staleness is harmless
+    # to users, but leaving it untracked means it shows as drift in every git
+    # status and has to be hand-staged.  Committing it with each publish keeps the
+    # tree clean and the offline consumer current.
+    Path("docs/champion-roles.json"),
 )
 
 
