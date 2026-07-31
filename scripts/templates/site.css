@@ -294,19 +294,17 @@
        partly last patch.  Server-rendered only while the blend is material,
        so there is no empty-state to style. */
     .blend-note {
+        /* Background disclosure, not an alert: the boxed border + tinted panel
+           read with the same weight as a real warning, which overstated a
+           caveat that merely explains the numbers.  Demoted to a quiet
+           footnote — a thin left rule, no fill, no box.  With the tint gone the
+           note sits on the page --bg, where --text-dim clears AA, so it can dim
+           to secondary without hurting readability. */
         margin: 0 0 16px;
-        padding: 10px 14px;
-        border: 1px solid var(--border);
-        border-left: 3px solid var(--accent, #6aa9ff);
-        border-radius: 10px;
-        background: color-mix(in srgb, var(--accent, #6aa9ff) 7%, transparent);
-        /* Full-strength --text, not --text-dim: measured 4.32:1 against this
-           tinted panel in dark mode, under the 4.5:1 AA floor.  This note is a
-           correctness caveat about the numbers directly below it, so it has to
-           be comfortably readable; the accent border + tint already mark it as
-           secondary chrome without dimming the text. */
-        color: var(--text, inherit);
-        font-size: 13px;
+        padding: 2px 0 2px 12px;
+        border-left: 2px solid color-mix(in srgb, var(--accent, #6aa9ff) 45%, transparent);
+        color: var(--text-dim, inherit);
+        font-size: 12.5px;
         line-height: 1.6;
     }
     .role-chips {
