@@ -249,11 +249,17 @@ overflow:hidden}
 .seg button{background:transparent;border:0;color:var(--text-muted);padding:8px 14px;
 font-size:13px;cursor:pointer;font-family:inherit}
 .seg button.on{background:var(--accent);color:#14110a;font-weight:700}
-.tier-block{margin-bottom:22px;position:relative}
+/* Every tier block carries the SAME padding, even though only OP/T1 paint a
+   background wash. .tier-grid derives its column COUNT from container width via
+   auto-fill, so padding on only some blocks silently changes how many columns
+   fit -- 6px each side was enough to drop OP/T1 from 15 columns to 14 at 1500px,
+   making their icons render ~7% larger than every other tier's. */
+.tier-block{margin-bottom:22px;position:relative;border-radius:12px;
+padding:2px 6px 8px}
 .tier-block[data-tier="OP"]{background:radial-gradient(ellipse 70% 60% at 50% 60%,
-rgba(216,184,255,.045) 0%,transparent 75%);border-radius:12px;padding:2px 6px 8px}
+rgba(216,184,255,.045) 0%,transparent 75%)}
 .tier-block[data-tier="T1"]{background:radial-gradient(ellipse 70% 60% at 50% 60%,
-rgba(255,90,60,.035) 0%,transparent 75%);border-radius:12px;padding:2px 6px 8px}
+rgba(255,90,60,.035) 0%,transparent 75%)}
 .tier-heading{display:flex;align-items:center;gap:10px;margin:16px 0 10px;
 padding-bottom:8px;font-size:14px;font-weight:600;
 border-bottom:1px solid color-mix(in oklab,var(--tier-color,#555) 30%,transparent)}
