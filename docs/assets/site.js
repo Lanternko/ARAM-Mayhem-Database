@@ -745,7 +745,7 @@
     const DATE_STR_ZH = "更新於 2026-07-31";
     const BUILD_DATE = "2026-07-31";
     const PATCH_LABEL = "patch 26.15";
-    const TOTAL_GAMES = "49,804";
+    const TOTAL_GAMES = "49,972";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes / column.
