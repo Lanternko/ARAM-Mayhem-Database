@@ -218,7 +218,9 @@ CSS = """
 :root{color-scheme:dark;--bg:#0a0b0d;--surface:#101114;--surface-2:#161a20;
 --chip-bg:#1a1d21;--text:#e8eaed;--text-muted:#9aa0a6;--text-dim:#6b7280;
 --border:rgba(255,255,255,.09);--border-strong:rgba(255,255,255,.15);
---accent:#f5c518;--r-sm:8px;--r-md:12px;--container:1320px}
+--accent:#f5c518;--r-sm:8px;--r-md:12px;--container:1320px;
+/* Fine speckle used as a "worn metal" texture on the vintage wordmark. */
+--grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='36'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E")}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
 font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -230,14 +232,45 @@ background:color-mix(in srgb,var(--bg) 72%,transparent);
 -webkit-backdrop-filter:saturate(180%) blur(14px);
 backdrop-filter:saturate(180%) blur(14px);
 border-bottom:1px solid var(--border)}
+/* Warm brass hairline under the bar — the one vintage cue applied to the
+   chrome itself; everything below the header keeps the main site's palette. */
+.site-header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;
+height:1px;background:linear-gradient(90deg,transparent,
+rgba(201,164,78,.28) 18%,rgba(201,164,78,.28) 82%,transparent)}
 .site-header-inner{display:flex;align-items:center;gap:12px;height:56px;
 max-width:var(--container);margin:0 auto;padding:0 16px}
-.brand-title{font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+/* Vintage wordmark: aged engraved brass, not the main site's bright #f5c518.
+   The saturated accent reads as "alert" next to a nostalgia mode, so the mark
+   drops to a desaturated antique gold and earns its richness from a gradient
+   sweep + speckle grain + letterpress emboss instead of raw chroma.
+   .grain is a real element (not ::after on the gradient span) because
+   background-clip:text on the parent would clip the noise away too. */
+.brand-title{position:relative;display:inline-block;
+font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
 font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;
 white-space:nowrap;color:var(--text)}
-.brand-aram{color:var(--accent);font-weight:800}
-.brand-meta{color:var(--text);font-weight:700}
-.brand-div{color:var(--text-muted);font-size:14px;font-weight:500;white-space:nowrap}
+.brand-ink{position:relative;
+background:linear-gradient(168deg,#e8d9a8 0%,#c9a44e 26%,#8f7433 52%,
+#d8c07a 72%,#a4842f 100%);
+-webkit-background-clip:text;background-clip:text;color:transparent;
+/* Emboss: light lip above, dark shadow below — struck-metal, not glow. */
+filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 -1px 0 rgba(255,240,200,.12))}
+/* Weight is the ONLY thing that may differ between these two spans.  Anything
+   that creates a stacking context here (opacity, filter, transform) detaches
+   the span from the parent's background-clip:text and renders it invisible —
+   `meta` vanished exactly this way. */
+.brand-aram{font-weight:800}
+.brand-meta{font-weight:500}
+/* Grain sits over the letters only (mask = the same text), so the speckle
+   never bleeds onto the header bar. */
+.brand-grain{position:absolute;inset:0;background-image:var(--grain);
+mix-blend-mode:overlay;opacity:.55;pointer-events:none}
+.brand-div{color:#8a7f66;font-size:13px;font-weight:500;white-space:nowrap;
+font-family:"Noto Serif TC","Source Han Serif TC",serif;letter-spacing:.08em}
+/* Hairline rule between mark and label — a small engraved-plate cue. */
+.brand-div::before{content:"";display:inline-block;width:1px;height:15px;
+margin-right:11px;vertical-align:-3px;
+background:linear-gradient(180deg,transparent,rgba(201,164,78,.5),transparent)}
 .unlisted{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;
 border-radius:999px;background:rgba(245,197,24,.14);color:var(--accent);
 border:1px solid rgba(245,197,24,.35);white-space:nowrap}
@@ -433,32 +466,39 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     # Unlisted: keep it out of search results and out of the sitemap.
     p.append("<meta name='robots' content='noindex,nofollow'>")
     p.append("<title>經典模式 英雄勝率（內部預覽）· classicmeta</title>")
-    # Same brand face as the main site: Outfit for the Latin wordmark, Noto Sans TC body.
+    # Same brand face as the main site: Outfit for the Latin wordmark, Noto Sans TC
+    # body.  Noto Serif TC is the extra here — the 經典模式 label is set in serif
+    # to sell the nostalgia framing.
     p.append(
         "<link rel='preconnect' href='https://fonts.googleapis.com'>"
         "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
         "<link rel='stylesheet' href='https://fonts.googleapis.com/css2"
         "?family=Outfit:wght@500;600;700"
-        "&family=Noto+Sans+TC:wght@400;500;600;700&display=swap'>"
+        "&family=Noto+Sans+TC:wght@400;500;600;700"
+        "&family=Noto+Serif+TC:wght@400;500&display=swap'>"
     )
     p.append(f"<style>{CSS}</style></head><body>")
 
     # Sticky top chrome mirrors the main site header (the "劉海"): blurred bar,
-    # bottom hairline, Outfit wordmark.  classicmeta ｜ 經典模式.
+    # bottom hairline.  The wordmark is aged brass rather than the main site's
+    # bright accent — see .brand-ink.  aria-label carries the plain text since
+    # the mark is split across gradient + grain layers.
     p.append("<header class='site-header'><div class='site-header-inner'>")
     p.append(
-        "<span class='brand-title'>"
+        "<span class='brand-title' role='img' aria-label='classicmeta'>"
+        "<span class='brand-ink' aria-hidden='true'>"
         "<span class='brand-aram'>classic</span><span class='brand-meta'>meta</span>"
         "</span>"
+        "<span class='brand-grain' aria-hidden='true'></span>"
+        "</span>"
     )
-    p.append("<span class='brand-div'>｜ 經典模式</span>")
+    p.append("<span class='brand-div'>經典模式</span>")
     p.append("<span class='unlisted'>UNLISTED · 內部預覽</span>")
     p.append("</div></header>")
+    # No subtitle line here: queue / gameMode / champion count / build time all
+    # already live in the footer, and the main site goes straight from header to
+    # content too. Repeating them under the wordmark was pure noise.
     p.append("<div class='wrap'>")
-    p.append(
-        "<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · "
-        f"資料截至 {built}</p>"
-    )
 
     # One line, computed from the data rather than hardcoded, so the stated
     # error shrinks on its own as the sample grows instead of going stale.
