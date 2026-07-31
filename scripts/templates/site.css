@@ -1205,7 +1205,20 @@
         font-weight: 600;
         font-size: 16px;
     }
-    .tier-block { margin-bottom: 22px; position: relative; }
+    /* Padding lives on the BASE rule, not just on the OP/T1 washes below, because
+       .tier-grid derives its column COUNT from container width via auto-fill.
+       Padding only some blocks made those 12px narrower, which flipped them to
+       one column fewer at ~15% of desktop widths (e.g. 974-983px: 11 cols vs 12)
+       and 1fr then spread the freed space, rendering OP/T1 icons ~7% larger than
+       every other tier.  On mobile, where the grid is locked to 6 fixed columns,
+       the same 12px made them consistently SMALLER instead.  Every block must
+       reserve the same width; only the background may differ. */
+    .tier-block {
+        margin-bottom: 22px;
+        position: relative;
+        border-radius: 12px;
+        padding: 2px 6px 8px;
+    }
     .tier-block.hidden { display: none; }
     /* Tier name on its own line above the grid (replaces the old left-side
        full-height ornament bar).  A hairline rule tinted with the tier's
@@ -1227,15 +1240,11 @@
         background:
             radial-gradient(ellipse 70% 60% at 50% 60%,
                 rgba(216,184,255,0.045) 0%, transparent 75%);
-        border-radius: 12px;
-        padding: 2px 6px 8px;
     }
     .tier-block[data-tier="T1"] {
         background:
             radial-gradient(ellipse 70% 60% at 50% 60%,
                 rgba(255,120,80,0.028) 0%, transparent 75%);
-        border-radius: 12px;
-        padding: 2px 6px 8px;
     }
     .tier-pill {
         position: relative;
