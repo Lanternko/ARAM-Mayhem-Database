@@ -2441,19 +2441,16 @@ def render_html(
     if _mix >= 0.10 and _prev_patch and display_patch:
         _mix_pct = f"{_mix * 100:.0f}%"
         _zh = (
-            f"{display_patch} 目前 {total_games:,} 場，樣本還薄。勝率已混合上一版 "
-            f"{_prev_patch} 的資料拉回（混合比重約 {_mix_pct}），避免改版首日的雜訊被當成強度。"
-            "場數累積後混合會自動退場。"
+            f"{display_patch} 目前 {total_games:,} 場，樣本數不足，"
+            f"因此混合了上一版的資料（{_mix_pct}）"
         )
         _cn = (
-            f"{display_patch} 目前 {total_games:,} 场，样本还薄。胜率已混合上一版 "
-            f"{_prev_patch} 的数据拉回（混合比重约 {_mix_pct}），避免改版首日的噪声被当成强度。"
-            "场数累积后混合会自动退场。"
+            f"{display_patch} 目前 {total_games:,} 场，样本数不足，"
+            f"因此混合了上一版的数据（{_mix_pct}）"
         )
         _en = (
-            f"{display_patch} has only {total_games:,} games so far. Win rates are "
-            f"blended back toward {_prev_patch} (about {_mix_pct} of the number) so "
-            "day-one noise is not read as strength. The blend fades out as games accumulate."
+            f"{display_patch} has {total_games:,} games — sample is thin, "
+            f"so win rates are blended with the previous patch ({_mix_pct})."
         )
         parts.append(
             "<div class='blend-note' data-nosnippet role='note' "
