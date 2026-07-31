@@ -218,9 +218,7 @@ CSS = """
 :root{color-scheme:dark;--bg:#0a0b0d;--surface:#101114;--surface-2:#161a20;
 --chip-bg:#1a1d21;--text:#e8eaed;--text-muted:#9aa0a6;--text-dim:#6b7280;
 --border:rgba(255,255,255,.09);--border-strong:rgba(255,255,255,.15);
---accent:#f5c518;--r-sm:8px;--r-md:12px;--container:1320px;
-/* Fine speckle used as a "worn metal" texture on the vintage wordmark. */
---grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='36'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E")}
+--accent:#f5c518;--r-sm:8px;--r-md:12px;--container:1320px}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
 font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -232,55 +230,21 @@ background:color-mix(in srgb,var(--bg) 72%,transparent);
 -webkit-backdrop-filter:saturate(180%) blur(14px);
 backdrop-filter:saturate(180%) blur(14px);
 border-bottom:1px solid var(--border)}
-/* Warm brass hairline under the bar — the one vintage cue applied to the
-   chrome itself; everything below the header keeps the main site's palette. */
-.site-header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;
-height:1px;background:linear-gradient(90deg,transparent,
-rgba(201,164,78,.28) 18%,rgba(201,164,78,.28) 82%,transparent)}
 .site-header-inner{display:flex;align-items:center;gap:12px;height:56px;
 max-width:var(--container);margin:0 auto;padding:0 16px}
-/* Vintage wordmark: aged engraved brass, not the main site's bright #f5c518.
-   The saturated accent reads as "alert" next to a nostalgia mode, so the mark
-   drops to a desaturated antique gold and earns its richness from a gradient
-   sweep + speckle grain + letterpress emboss instead of raw chroma.
-   .grain is a real element (not ::after on the gradient span) because
-   background-clip:text on the parent would clip the noise away too. */
-.brand-title{position:relative;display:inline-block;
-font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+/* Wordmark: identical treatment to the main site (site.css .brand-title) —
+   Outfit, weight split across the two halves, no gradient / texture. */
+.brand-title{font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
 font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;
 white-space:nowrap;color:var(--text)}
-.brand-ink{position:relative;
-background:linear-gradient(168deg,#e8d9a8 0%,#c9a44e 26%,#8f7433 52%,
-#d8c07a 72%,#a4842f 100%);
--webkit-background-clip:text;background-clip:text;color:transparent;
-/* Emboss: light lip above, dark shadow below — struck-metal, not glow. */
-filter:drop-shadow(0 1px 0 rgba(0,0,0,.55)) drop-shadow(0 -1px 0 rgba(255,240,200,.12))}
-/* Weight is the ONLY thing that may differ between these two spans.  Anything
-   that creates a stacking context here (opacity, filter, transform) detaches
-   the span from the parent's background-clip:text and renders it invisible —
-   `meta` vanished exactly this way. */
-.brand-aram{font-weight:800}
-.brand-meta{font-weight:500}
-/* Grain sits over the letters only (mask = the same text), so the speckle
-   never bleeds onto the header bar. */
-.brand-grain{position:absolute;inset:0;background-image:var(--grain);
-mix-blend-mode:overlay;opacity:.55;pointer-events:none}
-.brand-div{color:#8a7f66;font-size:13px;font-weight:500;white-space:nowrap;
-font-family:"Noto Serif TC","Source Han Serif TC",serif;letter-spacing:.08em}
-/* Hairline rule between mark and label — a small engraved-plate cue. */
-.brand-div::before{content:"";display:inline-block;width:1px;height:15px;
-margin-right:11px;vertical-align:-3px;
-background:linear-gradient(180deg,transparent,rgba(201,164,78,.5),transparent)}
+.brand-aram{font-weight:500;color:var(--text-muted)}
+.brand-meta{font-weight:700;color:var(--text)}
+.brand-div{color:var(--text-muted);font-size:13px;font-weight:500;white-space:nowrap}
+.brand-div::before{content:"";display:inline-block;width:1px;height:14px;
+margin-right:11px;vertical-align:-2px;background:var(--border-strong)}
 .unlisted{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;
 border-radius:999px;background:rgba(245,197,24,.14);color:var(--accent);
 border:1px solid rgba(245,197,24,.35);white-space:nowrap}
-.sub{color:var(--text-muted);font-size:13px;margin:0 0 18px}
-.banner{border-left:3px solid var(--accent);background:var(--surface);
-border-radius:0 var(--r-sm) var(--r-sm) 0;padding:12px 16px;margin:0 0 22px;
-font-size:13.5px;line-height:1.7;color:#e2e5e9}
-.banner b{color:var(--accent)}
-.banner.warn{border-left-color:#ff5a3c}
-.banner.warn b{color:#ff8b76}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}
 #q{flex:1;min-width:220px;max-width:360px;background:var(--surface);color:var(--text);
 border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;font-size:14px}
@@ -291,6 +255,10 @@ overflow:hidden}
 .seg button{background:transparent;border:0;color:var(--text-muted);padding:8px 14px;
 font-size:13px;cursor:pointer;font-family:inherit}
 .seg button.on{background:var(--accent);color:#14110a;font-weight:700}
+/* Sample-size caveat: quiet, inline, right of the view switch.  Only the two
+   numbers take the warn colour so the line reads as a caption, not an alarm. */
+.caveat{color:var(--text-dim);font-size:12px;line-height:1.5;white-space:nowrap}
+.caveat b{color:#c9846f;font-weight:600;font-variant-numeric:tabular-nums}
 /* Every tier block carries the SAME padding, even though only OP/T1 paint a
    background wash. .tier-grid derives its column COUNT from container width via
    auto-fill, so padding on only some blocks silently changes how many columns
@@ -383,6 +351,8 @@ footer code{color:var(--text-muted)}
 .site-header-inner{height:52px;padding:0 10px;gap:8px}
 .brand-title{font-size:21px}.brand-div{font-size:12.5px}
 .unlisted{display:none}
+/* Toolbar wraps here, so the caveat drops to its own line and may wrap. */
+.caveat{white-space:normal;font-size:11.5px}
 .tier-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .bar{width:110px}}
 """
@@ -480,16 +450,11 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     p.append(f"<style>{CSS}</style></head><body>")
 
     # Sticky top chrome mirrors the main site header (the "劉海"): blurred bar,
-    # bottom hairline.  The wordmark is aged brass rather than the main site's
-    # bright accent — see .brand-ink.  aria-label carries the plain text since
-    # the mark is split across gradient + grain layers.
+    # bottom hairline, same wordmark treatment.
     p.append("<header class='site-header'><div class='site-header-inner'>")
     p.append(
-        "<span class='brand-title' role='img' aria-label='classicmeta'>"
-        "<span class='brand-ink' aria-hidden='true'>"
+        "<span class='brand-title'>"
         "<span class='brand-aram'>classic</span><span class='brand-meta'>meta</span>"
-        "</span>"
-        "<span class='brand-grain' aria-hidden='true'></span>"
         "</span>"
     )
     p.append("<span class='brand-div'>經典模式</span>")
@@ -500,26 +465,28 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     # content too. Repeating them under the wordmark was pure noise.
     p.append("<div class='wrap'>")
 
-    # One line, computed from the data rather than hardcoded, so the stated
-    # error shrinks on its own as the sample grows instead of going stale.
-    p.append(
-        "<div class='banner warn'>"
-        f"目前資料只有 <b>{total_games:,} 場</b>，"
-        f"勝率的平均誤差大約是 <b>±{mean_err * 100:.1f}%</b>。"
-        "</div>"
-    )
-
     p.append("<div class='toolbar'>")
     p.append(
         "<input id='q' type='search' placeholder='搜尋英雄（中 / 英）' "
         "autocomplete='off' spellcheck='false'>"
     )
+    # Two views only. 「兩者」 was dropped: it made the control a three-way
+    # choice where the honest default (the tier board) already answers the
+    # question, and stacking both views just doubled the scroll.
     p.append(
         "<div class='seg'>"
-        "<button data-view='both' class='on'>兩者</button>"
-        "<button data-view='board'>Tier 榜</button>"
+        "<button data-view='board' class='on'>Tier 榜</button>"
         "<button data-view='table'>明細表</button>"
         "</div>"
+    )
+    # The sample-size caveat rides in the toolbar next to the view switch
+    # rather than as a full-width banner: it is a standing property of the
+    # data, not an alert, and a banner-sized warning above the fold was
+    # shouting a footnote.  Numbers stay computed, so it self-updates.
+    p.append(
+        "<span class='caveat'>"
+        f"僅 <b>{total_games:,}</b> 場 · 平均誤差 <b>±{mean_err * 100:.1f}%</b>"
+        "</span>"
     )
     p.append("</div>")
 
@@ -563,7 +530,9 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     p.append("</div>")
 
     # ---- Detail table -----------------------------------------------------
-    p.append("<section id='table-sec'>")
+    # Hidden on first paint: the board is the default view now that 「兩者」 is
+    # gone.  Inline rather than JS-on-load so it never flashes open.
+    p.append("<section id='table-sec' style='display:none'>")
     p.append("<h2 class='sec'>完整明細（含誤差範圍）</h2>")
     p.append(
         "<p class='sec-note'>"
