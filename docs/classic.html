@@ -1,7 +1,8 @@
 <!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>
 <meta name='viewport' content='width=device-width,initial-scale=1'>
 <meta name='robots' content='noindex,nofollow'>
-<title>經典模式 英雄勝率（內部預覽）· arammeta</title>
+<title>經典模式 英雄勝率（內部預覽）· classicmeta</title>
+<link rel='preconnect' href='https://fonts.googleapis.com'><link rel='preconnect' href='https://fonts.gstatic.com' crossorigin><link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap'>
 <style>
 :root{color-scheme:dark;--bg:#0a0b0d;--surface:#101114;--surface-2:#161a20;
 --chip-bg:#1a1d21;--text:#e8eaed;--text-muted:#9aa0a6;--text-dim:#6b7280;
@@ -12,21 +13,30 @@ body{margin:0;background:var(--bg);color:var(--text);
 font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 -webkit-font-smoothing:antialiased}
 .wrap{max-width:var(--container);margin:0 auto;padding:24px 16px 80px}
-header.top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-h1{font-size:22px;margin:0;letter-spacing:.3px}
-.logo-mark{color:var(--accent);font-weight:800}
+/* Sticky top bar cloned from the main site header (site.css .site-header). */
+.site-header{position:sticky;top:0;z-index:45;
+background:color-mix(in srgb,var(--bg) 72%,transparent);
+-webkit-backdrop-filter:saturate(180%) blur(14px);
+backdrop-filter:saturate(180%) blur(14px);
+border-bottom:1px solid var(--border)}
+.site-header-inner{display:flex;align-items:center;gap:12px;height:56px;
+max-width:var(--container);margin:0 auto;padding:0 16px}
+.brand-title{font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;
+white-space:nowrap;color:var(--text)}
+.brand-aram{color:var(--accent);font-weight:800}
+.brand-meta{color:var(--text);font-weight:700}
+.brand-div{color:var(--text-muted);font-size:14px;font-weight:500;white-space:nowrap}
 .unlisted{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;
 border-radius:999px;background:rgba(245,197,24,.14);color:var(--accent);
-border:1px solid rgba(245,197,24,.35)}
+border:1px solid rgba(245,197,24,.35);white-space:nowrap}
 .sub{color:var(--text-muted);font-size:13px;margin:0 0 18px}
 .banner{border-left:3px solid var(--accent);background:var(--surface);
-border-radius:0 var(--r-sm) var(--r-sm) 0;padding:12px 16px;margin:0 0 8px;
+border-radius:0 var(--r-sm) var(--r-sm) 0;padding:12px 16px;margin:0 0 22px;
 font-size:13.5px;line-height:1.7;color:#e2e5e9}
 .banner b{color:var(--accent)}
 .banner.warn{border-left-color:#ff5a3c}
 .banner.warn b{color:#ff8b76}
-.banner + .banner{margin-top:8px}
-.banner-stack{margin-bottom:22px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}
 #q{flex:1;min-width:220px;max-width:360px;background:var(--surface);color:var(--text);
 border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;font-size:14px}
@@ -125,20 +135,21 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--border);
 color:var(--text-dim);font-size:12px;line-height:1.9}
 footer code{color:var(--text-muted)}
 @media (max-width:640px){
-.wrap{padding:16px 10px 60px}h1{font-size:18px}
+.wrap{padding:16px 10px 60px}
+.site-header-inner{height:52px;padding:0 10px;gap:8px}
+.brand-title{font-size:21px}.brand-div{font-size:12.5px}
+.unlisted{display:none}
 .tier-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .bar{width:110px}}
-</style></head><body><div class='wrap'>
-<header class='top'>
-<h1><span class='logo-mark'>aram</span>meta ｜ 經典模式</h1>
+</style></head><body>
+<header class='site-header'><div class='site-header-inner'>
+<span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span>
+<span class='brand-div'>｜ 經典模式</span>
 <span class='unlisted'>UNLISTED · 內部預覽</span>
-</header>
-<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · 資料截至 2026-07-31 23:27</p>
-<div class='banner-stack'>
-<div class='banner warn'><b>樣本量警告：目前僅 2,386 場</b>（主站 Mayhem 是 200 萬場級別）。這頁的每個數字都還在雜訊區間內，<b>不要當成強度結論</b>。一隻 300 場的英雄，95% 信賴區間大約是 ±5.7pp — 也就是「55%」和「49%」在統計上分不出來。</div>
-<div class='banner'>版本分佈：16.15.800 (2,027)、16.15.799 (272)、16.15.801 (87)。資料幾乎全集中在單一版本，<b>跨版本穩定性完全未驗證</b>；換版之後這張表可能整個重排。</div>
-<div class='banner'><b>勝率是「英雄在場的隊伍勝率」，不是英雄強度。</b>沒有扣掉隊友、分路、玩家自選傾向。經典有分路 / 視野 / 野區，現有的 position-free 模型不適用，所以這裡<b>只做描述統計，不做預測</b>。</div>
-</div>
+</div></header>
+<div class='wrap'>
+<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · 資料截至 2026-07-31 23:36</p>
+<div class='banner warn'>目前資料只有 <b>2,414 場</b>，勝率的平均誤差大約是 <b>±5.7%</b>。</div>
 <div class='toolbar'>
 <input id='q' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false'>
 <div class='seg'><button data-view='both' class='on'>兩者</button><button data-view='board'>Tier 榜</button><button data-view='table'>明細表</button></div>
@@ -147,13 +158,15 @@ footer code{color:var(--text-muted)}
 <div class='tier-block' data-tier='OP' style='--tier-color:#d8b8ff; --tier-bg:linear-gradient(135deg,#ffffff 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#ffffff 100%);'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>OP</span></span>
-<span class='tier-count'>2 隻</span>
+<span class='tier-count'>3 隻</span>
 </h2>
 <div class='tier-grid'>
 <div class='champ' data-search="布里茨 蒸汽巨神兵 blitzcrank jade_blitzcrank" title="布里茨　蒸汽巨神兵
-調整後 58.8% · 原始 61.5% · 637 場 · 95% CI 57.7–65.2%"><img loading='lazy' src='assets/icons/classic/60053.png' alt=''><span class='n'>637</span><span class='wr'>58.8%</span><span class='name'>布里茨</span></div>
+調整後 58.9% · 原始 61.6% · 646 場 · 95% CI 57.8–65.3%"><img loading='lazy' src='assets/icons/classic/60053.png' alt=''><span class='n'>646</span><span class='wr'>58.9%</span><span class='name'>布里茨</span></div>
 <div class='champ' data-search="魔甘娜 墮落天使 morgana jade_morgana" title="魔甘娜　墮落天使
-調整後 55.2% · 原始 58.1% · 356 場 · 95% CI 53.0–63.2%"><img loading='lazy' src='assets/icons/classic/60025.png' alt=''><span class='n'>356</span><span class='wr'>55.2%</span><span class='name'>魔甘娜</span></div>
+調整後 55.2% · 原始 58.1% · 358 場 · 95% CI 52.9–63.1%"><img loading='lazy' src='assets/icons/classic/60025.png' alt=''><span class='n'>358</span><span class='wr'>55.2%</span><span class='name'>魔甘娜</span></div>
+<div class='champ' data-search="沃維克 嗜血獵手 warwick jade_warwick" title="沃維克　嗜血獵手
+調整後 55.1% · 原始 56.3% · 804 場 · 95% CI 52.9–59.7%"><img loading='lazy' src='assets/icons/classic/60019.png' alt=''><span class='n'>804</span><span class='wr'>55.1%</span><span class='name'>沃維克</span></div>
 </div></div>
 <div class='tier-block' data-tier='T1' style='--tier-color:#ff5a3c; --tier-bg:#ff5a3c;'>
 <h2 class='tier-heading'>
@@ -161,106 +174,104 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>11 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="沃維克 嗜血獵手 warwick jade_warwick" title="沃維克　嗜血獵手
-調整後 55.0% · 原始 56.2% · 793 場 · 95% CI 52.8–59.7%"><img loading='lazy' src='assets/icons/classic/60019.png' alt=''><span class='n'>793</span><span class='wr'>55.0%</span><span class='name'>沃維克</span></div>
 <div class='champ' data-search="史加納 水晶戰蠍 skarner jade_skarner" title="史加納　水晶戰蠍
-調整後 54.9% · 原始 60.6% · 170 場 · 95% CI 53.1–67.6%"><img loading='lazy' src='assets/icons/classic/60072.png' alt=''><span class='n'>170</span><span class='wr'>54.9%</span><span class='name'>史加納</span></div>
+調整後 55.0% · 原始 60.8% · 171 場 · 95% CI 53.3–67.8%"><img loading='lazy' src='assets/icons/classic/60072.png' alt=''><span class='n'>171</span><span class='wr'>55.0%</span><span class='name'>史加納</span></div>
 <div class='champ' data-search="泰達米爾 蠻族之王 tryndamere jade_tryndamere" title="泰達米爾　蠻族之王
-調整後 54.4% · 原始 57.2% · 311 場 · 95% CI 51.7–62.6%"><img loading='lazy' src='assets/icons/classic/60023.png' alt=''><span class='n'>311</span><span class='wr'>54.4%</span><span class='name'>泰達米爾</span></div>
+調整後 54.3% · 原始 57.0% · 316 場 · 95% CI 51.5–62.3%"><img loading='lazy' src='assets/icons/classic/60023.png' alt=''><span class='n'>316</span><span class='wr'>54.3%</span><span class='name'>泰達米爾</span></div>
 <div class='champ' data-search="逆命 卡牌大師 twisted fate jade_twistedfate" title="逆命　卡牌大師
-調整後 53.9% · 原始 57.5% · 214 場 · 95% CI 50.8–63.9%"><img loading='lazy' src='assets/icons/classic/60004.png' alt=''><span class='n'>214</span><span class='wr'>53.9%</span><span class='name'>逆命</span></div>
+調整後 54.2% · 原始 58.1% · 217 場 · 95% CI 51.4–64.4%"><img loading='lazy' src='assets/icons/classic/60004.png' alt=''><span class='n'>217</span><span class='wr'>54.2%</span><span class='name'>逆命</span></div>
 <div class='champ' data-search="納瑟斯 沙漠死神 nasus jade_nasus" title="納瑟斯　沙漠死神
-調整後 53.7% · 原始 56.1% · 303 場 · 95% CI 50.5–61.6%"><img loading='lazy' src='assets/icons/classic/60075.png' alt=''><span class='n'>303</span><span class='wr'>53.7%</span><span class='name'>納瑟斯</span></div>
+調整後 53.8% · 原始 56.3% · 309 場 · 95% CI 50.7–61.7%"><img loading='lazy' src='assets/icons/classic/60075.png' alt=''><span class='n'>309</span><span class='wr'>53.8%</span><span class='name'>納瑟斯</span></div>
 <div class='champ' data-search="庫奇 英勇投彈手 corki jade_corki" title="庫奇　英勇投彈手
-調整後 53.0% · 原始 55.4% · 249 場 · 95% CI 49.2–61.5%"><img loading='lazy' src='assets/icons/classic/60042.png' alt=''><span class='n'>249</span><span class='wr'>53.0%</span><span class='name'>庫奇</span></div>
+調整後 53.1% · 原始 55.6% · 252 場 · 95% CI 49.4–61.6%"><img loading='lazy' src='assets/icons/classic/60042.png' alt=''><span class='n'>252</span><span class='wr'>53.1%</span><span class='name'>庫奇</span></div>
 <div class='champ' data-search="嘉文四世 蒂瑪西亞楷模 jarvan iv jade_jarvaniv" title="嘉文四世　蒂瑪西亞楷模
-調整後 52.9% · 原始 54.3% · 392 場 · 95% CI 49.4–59.2%"><img loading='lazy' src='assets/icons/classic/60059.png' alt=''><span class='n'>392</span><span class='wr'>52.9%</span><span class='name'>嘉文四世</span></div>
+調整後 52.9% · 原始 54.4% · 397 場 · 95% CI 49.5–59.2%"><img loading='lazy' src='assets/icons/classic/60059.png' alt=''><span class='n'>397</span><span class='wr'>52.9%</span><span class='name'>嘉文四世</span></div>
 <div class='champ' data-search="雷歐娜 黎明之光 leona jade_leona" title="雷歐娜　黎明之光
-調整後 52.5% · 原始 54.8% · 219 場 · 95% CI 48.2–61.2%"><img loading='lazy' src='assets/icons/classic/60089.png' alt=''><span class='n'>219</span><span class='wr'>52.5%</span><span class='name'>雷歐娜</span></div>
+調整後 52.5% · 原始 54.8% · 221 場 · 95% CI 48.2–61.2%"><img loading='lazy' src='assets/icons/classic/60089.png' alt=''><span class='n'>221</span><span class='wr'>52.5%</span><span class='name'>雷歐娜</span></div>
 <div class='champ' data-search="卡特蓮娜 不祥之刃 katarina jade_katarina" title="卡特蓮娜　不祥之刃
-調整後 52.4% · 原始 52.9% · 1,042 場 · 95% CI 49.8–55.9%"><img loading='lazy' src='assets/icons/classic/60055.png' alt=''><span class='n'>1042</span><span class='wr'>52.4%</span><span class='name'>卡特蓮娜</span></div>
-<div class='champ' data-search="索娜 琴仙 sona jade_sona" title="索娜　琴仙
-調整後 52.2% · 原始 53.2% · 457 場 · 95% CI 48.6–57.7%"><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span class='n'>457</span><span class='wr'>52.2%</span><span class='name'>索娜</span></div>
+調整後 52.4% · 原始 52.8% · 1,053 場 · 95% CI 49.8–55.8%"><img loading='lazy' src='assets/icons/classic/60055.png' alt=''><span class='n'>1053</span><span class='wr'>52.4%</span><span class='name'>卡特蓮娜</span></div>
+<div class='champ' data-search="伊芙琳 黑寡婦 evelynn jade_evelynn" title="伊芙琳　黑寡婦
+調整後 52.1% · 原始 53.1% · 458 場 · 95% CI 48.5–57.6%"><img loading='lazy' src='assets/icons/classic/60028.png' alt=''><span class='n'>458</span><span class='wr'>52.1%</span><span class='name'>伊芙琳</span></div>
+<div class='champ' data-search="希維爾 戰爭女神 sivir jade_sivir" title="希維爾　戰爭女神
+調整後 52.1% · 原始 54.8% · 157 場 · 95% CI 47.0–62.4%"><img loading='lazy' src='assets/icons/classic/60015.png' alt=''><span class='n'>157</span><span class='wr'>52.1%</span><span class='name'>希維爾</span></div>
 <div class='champ' data-search="布蘭德 復仇業火 brand jade_brand" title="布蘭德　復仇業火
-調整後 52.0% · 原始 55.5% · 119 場 · 95% CI 46.5–64.1%"><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span class='n'>119</span><span class='wr'>52.0%</span><span class='name'>布蘭德</span></div>
+調整後 52.0% · 原始 55.4% · 121 場 · 95% CI 46.5–63.9%"><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span class='n'>121</span><span class='wr'>52.0%</span><span class='name'>布蘭德</span></div>
 </div></div>
 <div class='tier-block' data-tier='T2' style='--tier-color:#f5c518; --tier-bg:#f5c518;'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>T2</span></span>
-<span class='tier-count'>19 隻</span>
+<span class='tier-count'>20 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="伊芙琳 黑寡婦 evelynn jade_evelynn" title="伊芙琳　黑寡婦
-調整後 52.0% · 原始 52.9% · 456 場 · 95% CI 48.3–57.4%"><img loading='lazy' src='assets/icons/classic/60028.png' alt=''><span class='n'>456</span><span class='wr'>52.0%</span><span class='name'>伊芙琳</span></div>
-<div class='champ' data-search="希維爾 戰爭女神 sivir jade_sivir" title="希維爾　戰爭女神
-調整後 51.8% · 原始 54.2% · 155 場 · 95% CI 46.3–61.8%"><img loading='lazy' src='assets/icons/classic/60015.png' alt=''><span class='n'>155</span><span class='wr'>51.8%</span><span class='name'>希維爾</span></div>
 <div class='champ' data-search="珍娜 風暴女神 janna jade_janna" title="珍娜　風暴女神
-調整後 51.7% · 原始 53.7% · 177 場 · 95% CI 46.3–60.9%"><img loading='lazy' src='assets/icons/classic/60040.png' alt=''><span class='n'>177</span><span class='wr'>51.7%</span><span class='name'>珍娜</span></div>
+調整後 52.0% · 原始 54.2% · 179 場 · 95% CI 46.9–61.3%"><img loading='lazy' src='assets/icons/classic/60040.png' alt=''><span class='n'>179</span><span class='wr'>52.0%</span><span class='name'>珍娜</span></div>
+<div class='champ' data-search="索娜 琴仙 sona jade_sona" title="索娜　琴仙
+調整後 51.9% · 原始 52.7% · 463 場 · 95% CI 48.1–57.2%"><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span class='n'>463</span><span class='wr'>51.9%</span><span class='name'>索娜</span></div>
 <div class='champ' data-search="阿璃 九尾妖狐 ahri jade_ahri" title="阿璃　九尾妖狐
-調整後 51.5% · 原始 52.3% · 394 場 · 95% CI 47.4–57.2%"><img loading='lazy' src='assets/icons/classic/60103.png' alt=''><span class='n'>394</span><span class='wr'>51.5%</span><span class='name'>阿璃</span></div>
+調整後 51.6% · 原始 52.4% · 397 場 · 95% CI 47.5–57.3%"><img loading='lazy' src='assets/icons/classic/60103.png' alt=''><span class='n'>397</span><span class='wr'>51.6%</span><span class='name'>阿璃</span></div>
 <div class='champ' data-search="安妮 黑暗之女 annie jade_annie" title="安妮　黑暗之女
-調整後 51.4% · 原始 53.9% · 115 場 · 95% CI 44.8–62.7%"><img loading='lazy' src='assets/icons/classic/60001.png' alt=''><span class='n'>115</span><span class='wr'>51.4%</span><span class='name'>安妮</span></div>
+調整後 51.4% · 原始 53.8% · 117 場 · 95% CI 44.8–62.6%"><img loading='lazy' src='assets/icons/classic/60001.png' alt=''><span class='n'>117</span><span class='wr'>51.4%</span><span class='name'>安妮</span></div>
 <div class='champ' data-search="圖奇 瘟疫之源 twitch jade_twitch" title="圖奇　瘟疫之源
-調整後 51.4% · 原始 52.3% · 302 場 · 95% CI 46.7–57.9%"><img loading='lazy' src='assets/icons/classic/60029.png' alt=''><span class='n'>302</span><span class='wr'>51.4%</span><span class='name'>圖奇</span></div>
-<div class='champ' data-search="伊澤瑞爾 探險家 ezreal jade_ezreal" title="伊澤瑞爾　探險家
-調整後 51.1% · 原始 51.3% · 1,515 場 · 95% CI 48.8–53.8%"><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span class='n'>1515</span><span class='wr'>51.1%</span><span class='name'>伊澤瑞爾</span></div>
-<div class='champ' data-search="賈克斯 武器達人 jax jade_jax" title="賈克斯　武器達人
-調整後 51.0% · 原始 51.5% · 437 場 · 95% CI 46.8–56.1%"><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span class='n'>437</span><span class='wr'>51.0%</span><span class='name'>賈克斯</span></div>
-<div class='champ' data-search="墨菲特 幻石碎片 malphite jade_malphite" title="墨菲特　幻石碎片
-調整後 50.9% · 原始 52.3% · 132 場 · 95% CI 43.8–60.6%"><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span class='n'>132</span><span class='wr'>50.9%</span><span class='name'>墨菲特</span></div>
+調整後 51.4% · 原始 52.3% · 304 場 · 95% CI 46.7–57.9%"><img loading='lazy' src='assets/icons/classic/60029.png' alt=''><span class='n'>304</span><span class='wr'>51.4%</span><span class='name'>圖奇</span></div>
 <div class='champ' data-search="馬爾札哈 虛空先知 malzahar jade_malzahar" title="馬爾札哈　虛空先知
-調整後 50.9% · 原始 52.1% · 142 場 · 95% CI 43.9–60.2%"><img loading='lazy' src='assets/icons/classic/60090.png' alt=''><span class='n'>142</span><span class='wr'>50.9%</span><span class='name'>馬爾札哈</span></div>
-<div class='champ' data-search="提摩 迅捷斥候 teemo jade_teemo" title="提摩　迅捷斥候
-調整後 50.8% · 原始 51.4% · 292 場 · 95% CI 45.7–57.0%"><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span class='n'>292</span><span class='wr'>50.8%</span><span class='name'>提摩</span></div>
+調整後 51.0% · 原始 52.4% · 143 場 · 95% CI 44.3–60.5%"><img loading='lazy' src='assets/icons/classic/60090.png' alt=''><span class='n'>143</span><span class='wr'>51.0%</span><span class='name'>馬爾札哈</span></div>
+<div class='champ' data-search="伊澤瑞爾 探險家 ezreal jade_ezreal" title="伊澤瑞爾　探險家
+調整後 51.0% · 原始 51.1% · 1,531 場 · 95% CI 48.6–53.6%"><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span class='n'>1531</span><span class='wr'>51.0%</span><span class='name'>伊澤瑞爾</span></div>
 <div class='champ' data-search="科加斯 虛空恐懼 cho&#x27;gath jade_chogath" title="科加斯　虛空恐懼
-調整後 50.8% · 原始 51.7% · 172 場 · 95% CI 44.3–59.1%"><img loading='lazy' src='assets/icons/classic/60031.png' alt=''><span class='n'>172</span><span class='wr'>50.8%</span><span class='name'>科加斯</span></div>
-<div class='champ' data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana" title="崔絲塔娜　麥格靈炮手
-調整後 50.7% · 原始 51.0% · 557 場 · 95% CI 46.8–55.1%"><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span class='n'>557</span><span class='wr'>50.7%</span><span class='name'>崔絲塔娜</span></div>
+調整後 50.9% · 原始 52.0% · 173 場 · 95% CI 44.6–59.3%"><img loading='lazy' src='assets/icons/classic/60031.png' alt=''><span class='n'>173</span><span class='wr'>50.9%</span><span class='name'>科加斯</span></div>
+<div class='champ' data-search="墨菲特 幻石碎片 malphite jade_malphite" title="墨菲特　幻石碎片
+調整後 50.9% · 原始 52.2% · 134 場 · 95% CI 43.8–60.5%"><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span class='n'>134</span><span class='wr'>50.9%</span><span class='name'>墨菲特</span></div>
+<div class='champ' data-search="提摩 迅捷斥候 teemo jade_teemo" title="提摩　迅捷斥候
+調整後 50.8% · 原始 51.4% · 296 場 · 95% CI 45.7–57.0%"><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span class='n'>296</span><span class='wr'>50.8%</span><span class='name'>提摩</span></div>
+<div class='champ' data-search="賈克斯 武器達人 jax jade_jax" title="賈克斯　武器達人
+調整後 50.8% · 原始 51.1% · 440 場 · 95% CI 46.5–55.8%"><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span class='n'>440</span><span class='wr'>50.8%</span><span class='name'>賈克斯</span></div>
+<div class='champ' data-search="潘森 戰爭之王 pantheon jade_pantheon" title="潘森　戰爭之王
+調整後 50.8% · 原始 50.9% · 929 場 · 95% CI 47.7–54.1%"><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span class='n'>929</span><span class='wr'>50.8%</span><span class='name'>潘森</span></div>
 <div class='champ' data-search="極靈 時光守護者 zilean jade_zilean" title="極靈　時光守護者
 調整後 50.6% · 原始 51.8% · 114 場 · 95% CI 42.7–60.7%"><img loading='lazy' src='assets/icons/classic/60026.png' alt=''><span class='n'>114</span><span class='wr'>50.6%</span><span class='name'>極靈</span></div>
-<div class='champ' data-search="潘森 戰爭之王 pantheon jade_pantheon" title="潘森　戰爭之王
-調整後 50.6% · 原始 50.8% · 916 場 · 95% CI 47.5–54.0%"><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span class='n'>916</span><span class='wr'>50.6%</span><span class='name'>潘森</span></div>
-<div class='champ' data-search="汎 暗夜獵人 vayne jade_vayne" title="汎　暗夜獵人
-調整後 50.2% · 原始 50.3% · 1,012 場 · 95% CI 47.2–53.4%"><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span class='n'>1012</span><span class='wr'>50.2%</span><span class='name'>汎</span></div>
-<div class='champ' data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks" title="費德提克　末日使者
-調整後 50.1% · 原始 50.1% · 507 場 · 95% CI 45.8–54.4%"><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span class='n'>507</span><span class='wr'>50.1%</span><span class='name'>費德提克</span></div>
+<div class='champ' data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana" title="崔絲塔娜　麥格靈炮手
+調整後 50.6% · 原始 50.8% · 561 場 · 95% CI 46.7–54.9%"><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span class='n'>561</span><span class='wr'>50.6%</span><span class='name'>崔絲塔娜</span></div>
 <div class='champ' data-search="漢默丁格 大發明家 heimerdinger jade_heimerdinger" title="漢默丁格　大發明家
-調整後 50.0% · 原始 50.0% · 128 場 · 95% CI 41.5–58.5%"><img loading='lazy' src='assets/icons/classic/60074.png' alt=''><span class='n'>128</span><span class='wr'>50.0%</span><span class='name'>漢默丁格</span></div>
+調整後 50.5% · 原始 51.1% · 131 場 · 95% CI 42.7–59.5%"><img loading='lazy' src='assets/icons/classic/60074.png' alt=''><span class='n'>131</span><span class='wr'>50.5%</span><span class='name'>漢默丁格</span></div>
+<div class='champ' data-search="汎 暗夜獵人 vayne jade_vayne" title="汎　暗夜獵人
+調整後 50.3% · 原始 50.3% · 1,023 場 · 95% CI 47.3–53.4%"><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span class='n'>1023</span><span class='wr'>50.3%</span><span class='name'>汎</span></div>
 <div class='champ' data-search="辛吉德 瘋狂煉金師 singed jade_singed" title="辛吉德　瘋狂煉金師
-調整後 50.0% · 原始 50.0% · 88 場 · 95% CI 39.8–60.2%"><img loading='lazy' src='assets/icons/classic/60027.png' alt=''><span class='n'>88</span><span class='wr'>50.0%</span><span class='name'>辛吉德</span></div>
+調整後 50.2% · 原始 50.5% · 91 場 · 95% CI 40.5–60.6%"><img loading='lazy' src='assets/icons/classic/60027.png' alt=''><span class='n'>91</span><span class='wr'>50.2%</span><span class='name'>辛吉德</span></div>
+<div class='champ' data-search="寇格魔 深淵巨口 kog&#x27;maw jade_kogmaw" title="寇格魔　深淵巨口
+調整後 50.1% · 原始 50.3% · 181 場 · 95% CI 43.1–57.5%"><img loading='lazy' src='assets/icons/classic/60096.png' alt=''><span class='n'>181</span><span class='wr'>50.1%</span><span class='name'>寇格魔</span></div>
+<div class='champ' data-search="古拉格斯 酒桶之王 gragas jade_gragas" title="古拉格斯　酒桶之王
+調整後 50.1% · 原始 50.1% · 553 場 · 95% CI 45.9–54.2%"><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span class='n'>553</span><span class='wr'>50.1%</span><span class='name'>古拉格斯</span></div>
+<div class='champ' data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia" title="艾妮維亞　冰晶鳳凰
+調整後 50.0% · 原始 50.0% · 222 場 · 95% CI 43.5–56.5%"><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span class='n'>222</span><span class='wr'>50.0%</span><span class='name'>艾妮維亞</span></div>
 </div></div>
 <div class='tier-block' data-tier='T3' style='--tier-color:#8ec441; --tier-bg:#8ec441;'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>T3</span></span>
-<span class='tier-count'>14 隻</span>
+<span class='tier-count'>12 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="古拉格斯 酒桶之王 gragas jade_gragas" title="古拉格斯　酒桶之王
-調整後 49.9% · 原始 49.9% · 547 場 · 95% CI 45.7–54.1%"><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span class='n'>547</span><span class='wr'>49.9%</span><span class='name'>古拉格斯</span></div>
-<div class='champ' data-search="悟空  wukong jade_wukong" title="悟空　
-調整後 49.9% · 原始 49.8% · 209 場 · 95% CI 43.0–56.5%"><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span class='n'>209</span><span class='wr'>49.9%</span><span class='name'>悟空</span></div>
-<div class='champ' data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia" title="艾妮維亞　冰晶鳳凰
-調整後 49.8% · 原始 49.5% · 220 場 · 95% CI 43.0–56.1%"><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span class='n'>220</span><span class='wr'>49.8%</span><span class='name'>艾妮維亞</span></div>
-<div class='champ' data-search="寇格魔 深淵巨口 kog&#x27;maw jade_kogmaw" title="寇格魔　深淵巨口
-調整後 49.7% · 原始 49.4% · 176 場 · 95% CI 42.1–56.8%"><img loading='lazy' src='assets/icons/classic/60096.png' alt=''><span class='n'>176</span><span class='wr'>49.7%</span><span class='name'>寇格魔</span></div>
-<div class='champ' data-search="塔里克 寶石騎士 taric jade_taric" title="塔里克　寶石騎士
-調整後 49.7% · 原始 49.6% · 361 場 · 95% CI 44.5–54.7%"><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span class='n'>361</span><span class='wr'>49.7%</span><span class='name'>塔里克</span></div>
+<div class='champ' data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks" title="費德提克　末日使者
+調整後 49.9% · 原始 49.9% · 511 場 · 95% CI 45.6–54.2%"><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span class='n'>511</span><span class='wr'>49.9%</span><span class='name'>費德提克</span></div>
 <div class='champ' data-search="奈德麗 狂野獵手 nidalee jade_nidalee" title="奈德麗　狂野獵手
-調整後 49.7% · 原始 49.5% · 289 場 · 95% CI 43.8–55.2%"><img loading='lazy' src='assets/icons/classic/60076.png' alt=''><span class='n'>289</span><span class='wr'>49.7%</span><span class='name'>奈德麗</span></div>
+調整後 49.6% · 原始 49.3% · 290 場 · 95% CI 43.6–55.0%"><img loading='lazy' src='assets/icons/classic/60076.png' alt=''><span class='n'>290</span><span class='wr'>49.6%</span><span class='name'>奈德麗</span></div>
+<div class='champ' data-search="塔里克 寶石騎士 taric jade_taric" title="塔里克　寶石騎士
+調整後 49.5% · 原始 49.2% · 368 場 · 95% CI 44.1–54.3%"><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span class='n'>368</span><span class='wr'>49.5%</span><span class='name'>塔里克</span></div>
 <div class='champ' data-search="凱爾 審判天使 kayle jade_kayle" title="凱爾　審判天使
 調整後 49.5% · 原始 49.0% · 257 場 · 95% CI 43.0–55.1%"><img loading='lazy' src='assets/icons/classic/60010.png' alt=''><span class='n'>257</span><span class='wr'>49.5%</span><span class='name'>凱爾</span></div>
+<div class='champ' data-search="悟空  wukong jade_wukong" title="悟空　
+調整後 49.4% · 原始 48.8% · 215 場 · 95% CI 42.2–55.5%"><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span class='n'>215</span><span class='wr'>49.4%</span><span class='name'>悟空</span></div>
 <div class='champ' data-search="李星 盲眼武僧 lee sin jade_leesin" title="李星　盲眼武僧
-調整後 49.2% · 原始 49.0% · 998 場 · 95% CI 45.9–52.1%"><img loading='lazy' src='assets/icons/classic/60064.png' alt=''><span class='n'>998</span><span class='wr'>49.2%</span><span class='name'>李星</span></div>
+調整後 49.2% · 原始 49.0% · 1,012 場 · 95% CI 45.9–52.1%"><img loading='lazy' src='assets/icons/classic/60064.png' alt=''><span class='n'>1012</span><span class='wr'>49.2%</span><span class='name'>李星</span></div>
 <div class='champ' data-search="努努和威朗普 雪人騎士 nunu &amp; willump jade_nunu" title="努努和威朗普　雪人騎士
-調整後 49.1% · 原始 48.8% · 686 場 · 95% CI 45.1–52.6%"><img loading='lazy' src='assets/icons/classic/60020.png' alt=''><span class='n'>686</span><span class='wr'>49.1%</span><span class='name'>努努和威朗普</span></div>
+調整後 49.0% · 原始 48.8% · 693 場 · 95% CI 45.1–52.5%"><img loading='lazy' src='assets/icons/classic/60020.png' alt=''><span class='n'>693</span><span class='wr'>49.0%</span><span class='name'>努努和威朗普</span></div>
 <div class='champ' data-search="阿姆姆 殤之木乃伊 amumu jade_amumu" title="阿姆姆　殤之木乃伊
 調整後 49.0% · 原始 47.5% · 141 場 · 95% CI 39.5–55.7%"><img loading='lazy' src='assets/icons/classic/60032.png' alt=''><span class='n'>141</span><span class='wr'>49.0%</span><span class='name'>阿姆姆</span></div>
 <div class='champ' data-search="雷茲 流浪法師 ryze jade_ryze" title="雷茲　流浪法師
-調整後 48.7% · 原始 48.3% · 601 場 · 95% CI 44.3–52.2%"><img loading='lazy' src='assets/icons/classic/60013.png' alt=''><span class='n'>601</span><span class='wr'>48.7%</span><span class='name'>雷茲</span></div>
+調整後 48.6% · 原始 48.1% · 607 場 · 95% CI 44.2–52.1%"><img loading='lazy' src='assets/icons/classic/60013.png' alt=''><span class='n'>607</span><span class='wr'>48.6%</span><span class='name'>雷茲</span></div>
 <div class='champ' data-search="拉姆斯 披甲龍龜 rammus jade_rammus" title="拉姆斯　披甲龍龜
 調整後 48.5% · 原始 45.8% · 107 場 · 95% CI 36.7–55.2%"><img loading='lazy' src='assets/icons/classic/60033.png' alt=''><span class='n'>107</span><span class='wr'>48.5%</span><span class='name'>拉姆斯</span></div>
-<div class='champ' data-search="露璐 精靈魔法使 lulu jade_lulu" title="露璐　精靈魔法使
-調整後 48.1% · 原始 47.0% · 328 場 · 95% CI 41.6–52.4%"><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span class='n'>328</span><span class='wr'>48.1%</span><span class='name'>露璐</span></div>
+<div class='champ' data-search="剛普朗克 海洋之災 gangplank jade_gangplank" title="剛普朗克　海洋之災
+調整後 48.2% · 原始 47.8% · 947 場 · 95% CI 44.7–51.0%"><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span class='n'>947</span><span class='wr'>48.2%</span><span class='name'>剛普朗克</span></div>
 <div class='champ' data-search="卡爾瑟斯 死亡頌唱者 karthus jade_karthus" title="卡爾瑟斯　死亡頌唱者
 調整後 48.0% · 原始 44.9% · 127 場 · 95% CI 36.5–53.6%"><img loading='lazy' src='assets/icons/classic/60030.png' alt=''><span class='n'>127</span><span class='wr'>48.0%</span><span class='name'>卡爾瑟斯</span></div>
 </div></div>
@@ -270,22 +281,22 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>8 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="剛普朗克 海洋之災 gangplank jade_gangplank" title="剛普朗克　海洋之災
-調整後 48.0% · 原始 47.6% · 942 場 · 95% CI 44.4–50.8%"><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span class='n'>942</span><span class='wr'>48.0%</span><span class='name'>剛普朗克</span></div>
-<div class='champ' data-search="維迦 邪惡小法師 veigar jade_veigar" title="維迦　邪惡小法師
-調整後 47.6% · 原始 44.2% · 138 場 · 95% CI 36.2–52.5%"><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span class='n'>138</span><span class='wr'>47.6%</span><span class='name'>維迦</span></div>
+<div class='champ' data-search="露璐 精靈魔法使 lulu jade_lulu" title="露璐　精靈魔法使
+調整後 47.6% · 原始 46.1% · 334 場 · 95% CI 40.8–51.5%"><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span class='n'>334</span><span class='wr'>47.6%</span><span class='name'>露璐</span></div>
 <div class='champ' data-search="艾希 冰霜射手 ashe jade_ashe" title="艾希　冰霜射手
-調整後 47.5% · 原始 46.6% · 532 場 · 95% CI 42.4–50.9%"><img loading='lazy' src='assets/icons/classic/60022.png' alt=''><span class='n'>532</span><span class='wr'>47.5%</span><span class='name'>艾希</span></div>
+調整後 47.4% · 原始 46.5% · 542 場 · 95% CI 42.3–50.7%"><img loading='lazy' src='assets/icons/classic/60022.png' alt=''><span class='n'>542</span><span class='wr'>47.4%</span><span class='name'>艾希</span></div>
+<div class='champ' data-search="維迦 邪惡小法師 veigar jade_veigar" title="維迦　邪惡小法師
+調整後 47.4% · 原始 43.8% · 144 場 · 95% CI 35.9–51.9%"><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span class='n'>144</span><span class='wr'>47.4%</span><span class='name'>維迦</span></div>
 <div class='champ' data-search="賽恩 亡靈勇士 sion jade_sion" title="賽恩　亡靈勇士
-調整後 46.9% · 原始 45.9% · 640 場 · 95% CI 42.1–49.8%"><img loading='lazy' src='assets/icons/classic/60014.png' alt=''><span class='n'>640</span><span class='wr'>46.9%</span><span class='name'>賽恩</span></div>
+調整後 46.7% · 原始 45.7% · 645 場 · 95% CI 41.9–49.6%"><img loading='lazy' src='assets/icons/classic/60014.png' alt=''><span class='n'>645</span><span class='wr'>46.7%</span><span class='name'>賽恩</span></div>
 <div class='champ' data-search="蓋倫 蒂瑪西亞之力 garen jade_garen" title="蓋倫　蒂瑪西亞之力
-調整後 46.4% · 原始 44.3% · 345 場 · 95% CI 39.2–49.6%"><img loading='lazy' src='assets/icons/classic/60086.png' alt=''><span class='n'>345</span><span class='wr'>46.4%</span><span class='name'>蓋倫</span></div>
-<div class='champ' data-search="薩科 惡魔小丑 shaco jade_shaco" title="薩科　惡魔小丑
-調整後 46.3% · 原始 44.0% · 327 場 · 95% CI 38.8–49.5%"><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span class='n'>327</span><span class='wr'>46.3%</span><span class='name'>薩科</span></div>
+調整後 46.5% · 原始 44.6% · 350 場 · 95% CI 39.5–49.8%"><img loading='lazy' src='assets/icons/classic/60086.png' alt=''><span class='n'>350</span><span class='wr'>46.5%</span><span class='name'>蓋倫</span></div>
 <div class='champ' data-search="亞歷斯塔 牛頭酋長 alistar jade_alistar" title="亞歷斯塔　牛頭酋長
-調整後 46.2% · 原始 43.9% · 328 場 · 95% CI 38.6–49.3%"><img loading='lazy' src='assets/icons/classic/60012.png' alt=''><span class='n'>328</span><span class='wr'>46.2%</span><span class='name'>亞歷斯塔</span></div>
-<div class='champ' data-search="歐拉夫 狂戰士 olaf jade_olaf" title="歐拉夫　狂戰士
-調整後 46.1% · 原始 40.4% · 136 場 · 95% CI 32.6–48.8%"><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span class='n'>136</span><span class='wr'>46.1%</span><span class='name'>歐拉夫</span></div>
+調整後 46.4% · 原始 44.3% · 332 場 · 95% CI 39.0–49.7%"><img loading='lazy' src='assets/icons/classic/60012.png' alt=''><span class='n'>332</span><span class='wr'>46.4%</span><span class='name'>亞歷斯塔</span></div>
+<div class='champ' data-search="薩科 惡魔小丑 shaco jade_shaco" title="薩科　惡魔小丑
+調整後 46.1% · 原始 43.8% · 331 場 · 95% CI 38.6–49.2%"><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span class='n'>331</span><span class='wr'>46.1%</span><span class='name'>薩科</span></div>
+<div class='champ' data-search="卡薩丁 虛空行者 kassadin jade_kassadin" title="卡薩丁　虛空行者
+調整後 46.1% · 原始 43.2% · 264 場 · 95% CI 37.3–49.2%"><img loading='lazy' src='assets/icons/classic/60038.png' alt=''><span class='n'>264</span><span class='wr'>46.1%</span><span class='name'>卡薩丁</span></div>
 </div></div>
 <div class='tier-block' data-tier='T5' style='--tier-color:#7a7f8a; --tier-bg:#7a7f8a;'>
 <h2 class='tier-heading'>
@@ -293,18 +304,18 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>6 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="卡薩丁 虛空行者 kassadin jade_kassadin" title="卡薩丁　虛空行者
-調整後 46.0% · 原始 42.9% · 259 場 · 95% CI 37.0–48.9%"><img loading='lazy' src='assets/icons/classic/60038.png' alt=''><span class='n'>259</span><span class='wr'>46.0%</span><span class='name'>卡薩丁</span></div>
-<div class='champ' data-search="易大師 無極劍聖 master yi jade_masteryi" title="易大師　無極劍聖
-調整後 45.1% · 原始 43.9% · 825 場 · 95% CI 40.5–47.3%"><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span class='n'>825</span><span class='wr'>45.1%</span><span class='name'>易大師</span></div>
+<div class='champ' data-search="歐拉夫 狂戰士 olaf jade_olaf" title="歐拉夫　狂戰士
+調整後 45.9% · 原始 39.9% · 138 場 · 95% CI 32.1–48.2%"><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span class='n'>138</span><span class='wr'>45.9%</span><span class='name'>歐拉夫</span></div>
 <div class='champ' data-search="拉克絲 光之少女 lux jade_lux" title="拉克絲　光之少女
-調整後 44.9% · 原始 42.0% · 343 場 · 95% CI 36.9–47.3%"><img loading='lazy' src='assets/icons/classic/60099.png' alt=''><span class='n'>343</span><span class='wr'>44.9%</span><span class='name'>拉克絲</span></div>
+調整後 45.2% · 原始 42.4% · 349 場 · 95% CI 37.3–47.6%"><img loading='lazy' src='assets/icons/classic/60099.png' alt=''><span class='n'>349</span><span class='wr'>45.2%</span><span class='name'>拉克絲</span></div>
+<div class='champ' data-search="易大師 無極劍聖 master yi jade_masteryi" title="易大師　無極劍聖
+調整後 45.1% · 原始 44.0% · 837 場 · 95% CI 40.6–47.3%"><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span class='n'>837</span><span class='wr'>45.1%</span><span class='name'>易大師</span></div>
 <div class='champ' data-search="索拉卡 眾星之子 soraka jade_soraka" title="索拉卡　眾星之子
-調整後 44.5% · 原始 42.5% · 557 場 · 95% CI 38.5–46.7%"><img loading='lazy' src='assets/icons/classic/60016.png' alt=''><span class='n'>557</span><span class='wr'>44.5%</span><span class='name'>索拉卡</span></div>
+調整後 44.5% · 原始 42.6% · 561 場 · 95% CI 38.6–46.7%"><img loading='lazy' src='assets/icons/classic/60016.png' alt=''><span class='n'>561</span><span class='wr'>44.5%</span><span class='name'>索拉卡</span></div>
 <div class='champ' data-search="蒙多醫生 佐恩狂人 dr. mundo jade_drmundo" title="蒙多醫生　佐恩狂人
-調整後 42.8% · 原始 35.4% · 195 場 · 95% CI 29.0–42.3%"><img loading='lazy' src='assets/icons/classic/60036.png' alt=''><span class='n'>195</span><span class='wr'>42.8%</span><span class='name'>蒙多醫生</span></div>
+調整後 42.8% · 原始 35.5% · 197 場 · 95% CI 29.2–42.4%"><img loading='lazy' src='assets/icons/classic/60036.png' alt=''><span class='n'>197</span><span class='wr'>42.8%</span><span class='name'>蒙多醫生</span></div>
 <div class='champ' data-search="好運姐 賞金獵人 miss fortune jade_missfortune" title="好運姐　賞金獵人
-調整後 41.7% · 原始 37.3% · 373 場 · 95% CI 32.5–42.3%"><img loading='lazy' src='assets/icons/classic/60021.png' alt=''><span class='n'>373</span><span class='wr'>41.7%</span><span class='name'>好運姐</span></div>
+調整後 41.5% · 原始 36.9% · 379 場 · 95% CI 32.2–41.9%"><img loading='lazy' src='assets/icons/classic/60021.png' alt=''><span class='n'>379</span><span class='wr'>41.5%</span><span class='name'>好運姐</span></div>
 </div></div>
 </div>
 <section id='table-sec'>
@@ -321,264 +332,264 @@ footer code{color:var(--text-muted)}
 <th>選用率</th>
 </tr></thead><tbody>
 <tr data-search="布里茨 蒸汽巨神兵 blitzcrank jade_blitzcrank">
-<td data-v='0.587814'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
+<td data-v='0.588652'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60053.png' alt=''><span>布里茨 <small>Blitzcrank</small><em>蒸汽巨神兵</em></span></span></td>
-<td class='num' data-v='637'>637</td>
-<td class='num' data-v='0.615385'>61.5%</td>
-<td class='num' data-v='0.587814'>58.8%</td>
-<td class='num' data-v='0.577019'>57.7–65.2%</td>
-<td data-v='0.075348'><span class='bar' style='--bc:#8ec441'><i style='left:69.25%;width:18.84%'></i><b style='left:78.85%'></b></span></td>
-<td class='num' data-v='0.133487'>13.3%</td>
+<td class='num' data-v='646'>646</td>
+<td class='num' data-v='0.616099'>61.6%</td>
+<td class='num' data-v='0.588652'>58.9%</td>
+<td class='num' data-v='0.578014'>57.8–65.3%</td>
+<td data-v='0.074798'><span class='bar' style='--bc:#8ec441'><i style='left:69.50%;width:18.70%'></i><b style='left:79.02%'></b></span></td>
+<td class='num' data-v='0.133803'>13.4%</td>
 </tr>
 <tr data-search="魔甘娜 墮落天使 morgana jade_morgana">
-<td data-v='0.552158'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
+<td data-v='0.551971'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60025.png' alt=''><span>魔甘娜 <small>Morgana</small><em>墮落天使</em></span></span></td>
-<td class='num' data-v='356'>356</td>
-<td class='num' data-v='0.581461'>58.1%</td>
-<td class='num' data-v='0.552158'>55.2%</td>
-<td class='num' data-v='0.529612'>53.0–63.2%</td>
-<td data-v='0.101958'><span class='bar' style='--bc:#8ec441'><i style='left:57.40%;width:25.49%'></i><b style='left:70.37%'></b></span></td>
-<td class='num' data-v='0.074602'>7.5%</td>
+<td class='num' data-v='358'>358</td>
+<td class='num' data-v='0.581006'>58.1%</td>
+<td class='num' data-v='0.551971'>55.2%</td>
+<td class='num' data-v='0.529300'>52.9–63.1%</td>
+<td data-v='0.101691'><span class='bar' style='--bc:#8ec441'><i style='left:57.32%;width:25.42%'></i><b style='left:70.25%'></b></span></td>
+<td class='num' data-v='0.074151'>7.4%</td>
 </tr>
 <tr data-search="沃維克 嗜血獵手 warwick jade_warwick">
-<td data-v='0.549849'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.550797'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60019.png' alt=''><span>沃維克 <small>Warwick</small><em>嗜血獵手</em></span></span></td>
-<td class='num' data-v='793'>793</td>
-<td class='num' data-v='0.562421'>56.2%</td>
-<td class='num' data-v='0.549849'>55.0%</td>
-<td class='num' data-v='0.527674'>52.8–59.7%</td>
-<td data-v='0.068893'><span class='bar' style='--bc:#8ec441'><i style='left:56.92%;width:17.22%'></i><b style='left:65.61%'></b></span></td>
-<td class='num' data-v='0.166178'>16.6%</td>
+<td class='num' data-v='804'>804</td>
+<td class='num' data-v='0.563433'>56.3%</td>
+<td class='num' data-v='0.550797'>55.1%</td>
+<td class='num' data-v='0.528929'>52.9–59.7%</td>
+<td data-v='0.068405'><span class='bar' style='--bc:#8ec441'><i style='left:57.23%;width:17.10%'></i><b style='left:65.86%'></b></span></td>
+<td class='num' data-v='0.166529'>16.7%</td>
 </tr>
 <tr data-search="史加納 水晶戰蠍 skarner jade_skarner">
-<td data-v='0.548649'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.549865'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60072.png' alt=''><span>史加納 <small>Skarner</small><em>水晶戰蠍</em></span></span></td>
-<td class='num' data-v='170'>170</td>
-<td class='num' data-v='0.605882'>60.6%</td>
-<td class='num' data-v='0.548649'>54.9%</td>
-<td class='num' data-v='0.530863'>53.1–67.6%</td>
-<td data-v='0.145359'><span class='bar' style='--bc:#8ec441'><i style='left:57.72%;width:36.34%'></i><b style='left:76.47%'></b></span></td>
-<td class='num' data-v='0.035624'>3.6%</td>
+<td class='num' data-v='171'>171</td>
+<td class='num' data-v='0.608187'>60.8%</td>
+<td class='num' data-v='0.549865'>55.0%</td>
+<td class='num' data-v='0.533412'>53.3–67.8%</td>
+<td data-v='0.144796'><span class='bar' style='--bc:#8ec441'><i style='left:58.35%;width:36.20%'></i><b style='left:77.05%'></b></span></td>
+<td class='num' data-v='0.035418'>3.5%</td>
 </tr>
 <tr data-search="泰達米爾 蠻族之王 tryndamere jade_tryndamere">
-<td data-v='0.544031'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.542636'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60023.png' alt=''><span>泰達米爾 <small>Tryndamere</small><em>蠻族之王</em></span></span></td>
-<td class='num' data-v='311'>311</td>
-<td class='num' data-v='0.572347'>57.2%</td>
-<td class='num' data-v='0.544031'>54.4%</td>
-<td class='num' data-v='0.516808'>51.7–62.6%</td>
-<td data-v='0.109313'><span class='bar' style='--bc:#8ec441'><i style='left:54.20%;width:27.33%'></i><b style='left:68.09%'></b></span></td>
-<td class='num' data-v='0.065172'>6.5%</td>
+<td class='num' data-v='316'>316</td>
+<td class='num' data-v='0.569620'>57.0%</td>
+<td class='num' data-v='0.542636'>54.3%</td>
+<td class='num' data-v='0.514514'>51.5–62.3%</td>
+<td data-v='0.108540'><span class='bar' style='--bc:#8ec441'><i style='left:53.63%;width:27.13%'></i><b style='left:67.41%'></b></span></td>
+<td class='num' data-v='0.065452'>6.5%</td>
 </tr>
 <tr data-search="逆命 卡牌大師 twisted fate jade_twistedfate">
-<td data-v='0.538647'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.541966'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60004.png' alt=''><span>逆命 <small>Twisted Fate</small><em>卡牌大師</em></span></span></td>
-<td class='num' data-v='214'>214</td>
-<td class='num' data-v='0.574766'>57.5%</td>
-<td class='num' data-v='0.538647'>53.9%</td>
-<td class='num' data-v='0.507783'>50.8–63.9%</td>
-<td data-v='0.131330'><span class='bar' style='--bc:#8ec441'><i style='left:51.95%;width:32.83%'></i><b style='left:68.69%'></b></span></td>
-<td class='num' data-v='0.044845'>4.5%</td>
+<td class='num' data-v='217'>217</td>
+<td class='num' data-v='0.580645'>58.1%</td>
+<td class='num' data-v='0.541966'>54.2%</td>
+<td class='num' data-v='0.514145'>51.4–64.4%</td>
+<td data-v='0.130195'><span class='bar' style='--bc:#8ec441'><i style='left:53.54%;width:32.55%'></i><b style='left:70.16%'></b></span></td>
+<td class='num' data-v='0.044946'>4.5%</td>
 </tr>
 <tr data-search="納瑟斯 沙漠死神 nasus jade_nasus">
-<td data-v='0.536779'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.538310'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60075.png' alt=''><span>納瑟斯 <small>Nasus</small><em>沙漠死神</em></span></span></td>
-<td class='num' data-v='303'>303</td>
-<td class='num' data-v='0.561056'>56.1%</td>
-<td class='num' data-v='0.536779'>53.7%</td>
-<td class='num' data-v='0.504759'>50.5–61.6%</td>
-<td data-v='0.111065'><span class='bar' style='--bc:#8ec441'><i style='left:51.19%;width:27.77%'></i><b style='left:65.26%'></b></span></td>
-<td class='num' data-v='0.063495'>6.3%</td>
+<td class='num' data-v='309'>309</td>
+<td class='num' data-v='0.563107'>56.3%</td>
+<td class='num' data-v='0.538310'>53.8%</td>
+<td class='num' data-v='0.507363'>50.7–61.7%</td>
+<td data-v='0.109939'><span class='bar' style='--bc:#8ec441'><i style='left:51.84%;width:27.48%'></i><b style='left:65.78%'></b></span></td>
+<td class='num' data-v='0.064002'>6.4%</td>
 </tr>
 <tr data-search="庫奇 英勇投彈手 corki jade_corki">
-<td data-v='0.530067'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.530973'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60042.png' alt=''><span>庫奇 <small>Corki</small><em>英勇投彈手</em></span></span></td>
-<td class='num' data-v='249'>249</td>
-<td class='num' data-v='0.554217'>55.4%</td>
-<td class='num' data-v='0.530067'>53.0%</td>
-<td class='num' data-v='0.492120'>49.2–61.5%</td>
-<td data-v='0.122547'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.03%;width:30.64%'></i><b style='left:63.55%'></b></span></td>
-<td class='num' data-v='0.052179'>5.2%</td>
+<td class='num' data-v='252'>252</td>
+<td class='num' data-v='0.555556'>55.6%</td>
+<td class='num' data-v='0.530973'>53.1%</td>
+<td class='num' data-v='0.493826'>49.4–61.6%</td>
+<td data-v='0.121791'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.46%;width:30.45%'></i><b style='left:63.89%'></b></span></td>
+<td class='num' data-v='0.052196'>5.2%</td>
 </tr>
 <tr data-search="嘉文四世 蒂瑪西亞楷模 jarvan iv jade_jarvaniv">
-<td data-v='0.528716'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.529313'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60059.png' alt=''><span>嘉文四世 <small>Jarvan IV</small><em>蒂瑪西亞楷模</em></span></span></td>
-<td class='num' data-v='392'>392</td>
-<td class='num' data-v='0.543367'>54.3%</td>
-<td class='num' data-v='0.528716'>52.9%</td>
-<td class='num' data-v='0.493874'>49.4–59.2%</td>
-<td data-v='0.098146'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.47%;width:24.54%'></i><b style='left:60.84%'></b></span></td>
-<td class='num' data-v='0.082146'>8.2%</td>
+<td class='num' data-v='397'>397</td>
+<td class='num' data-v='0.544081'>54.4%</td>
+<td class='num' data-v='0.529313'>52.9%</td>
+<td class='num' data-v='0.494898'>49.5–59.2%</td>
+<td data-v='0.097520'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.72%;width:24.38%'></i><b style='left:61.02%'></b></span></td>
+<td class='num' data-v='0.082229'>8.2%</td>
 </tr>
 <tr data-search="雷歐娜 黎明之光 leona jade_leona">
-<td data-v='0.525060'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.524941'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60089.png' alt=''><span>雷歐娜 <small>Leona</small><em>黎明之光</em></span></span></td>
-<td class='num' data-v='219'>219</td>
-<td class='num' data-v='0.547945'>54.8%</td>
-<td class='num' data-v='0.525060'>52.5%</td>
-<td class='num' data-v='0.481767'>48.2–61.2%</td>
-<td data-v='0.130703'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.44%;width:32.68%'></i><b style='left:61.99%'></b></span></td>
-<td class='num' data-v='0.045893'>4.6%</td>
+<td class='num' data-v='221'>221</td>
+<td class='num' data-v='0.547511'>54.8%</td>
+<td class='num' data-v='0.524941'>52.5%</td>
+<td class='num' data-v='0.481634'>48.2–61.2%</td>
+<td data-v='0.130131'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.41%;width:32.53%'></i><b style='left:61.88%'></b></span></td>
+<td class='num' data-v='0.045775'>4.6%</td>
 </tr>
 <tr data-search="卡特蓮娜 不祥之刃 katarina jade_katarina">
-<td data-v='0.524155'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td data-v='0.523543'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60055.png' alt=''><span>卡特蓮娜 <small>Katarina</small><em>不祥之刃</em></span></span></td>
-<td class='num' data-v='1042'>1,042</td>
-<td class='num' data-v='0.528791'>52.9%</td>
-<td class='num' data-v='0.524155'>52.4%</td>
-<td class='num' data-v='0.498432'>49.8–55.9%</td>
-<td data-v='0.060507'><span class='bar' style='--bc:#9aa0a6'><i style='left:49.61%;width:15.13%'></i><b style='left:57.20%'></b></span></td>
-<td class='num' data-v='0.218357'>21.8%</td>
-</tr>
-<tr data-search="索娜 琴仙 sona jade_sona">
-<td data-v='0.522070'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span>索娜 <small>Sona</small><em>琴仙</em></span></span></td>
-<td class='num' data-v='457'>457</td>
-<td class='num' data-v='0.531729'>53.2%</td>
-<td class='num' data-v='0.522070'>52.2%</td>
-<td class='num' data-v='0.485904'>48.6–57.7%</td>
-<td data-v='0.091120'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.48%;width:22.78%'></i><b style='left:57.93%'></b></span></td>
-<td class='num' data-v='0.095767'>9.6%</td>
-</tr>
-<tr data-search="布蘭德 復仇業火 brand jade_brand">
-<td data-v='0.520376'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span>布蘭德 <small>Brand</small><em>復仇業火</em></span></span></td>
-<td class='num' data-v='119'>119</td>
-<td class='num' data-v='0.554622'>55.5%</td>
-<td class='num' data-v='0.520376'>52.0%</td>
-<td class='num' data-v='0.465006'>46.5–64.1%</td>
-<td data-v='0.175816'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.25%;width:43.95%'></i><b style='left:63.66%'></b></span></td>
-<td class='num' data-v='0.024937'>2.5%</td>
+<td class='num' data-v='1053'>1,053</td>
+<td class='num' data-v='0.528015'>52.8%</td>
+<td class='num' data-v='0.523543'>52.4%</td>
+<td class='num' data-v='0.497815'>49.8–55.8%</td>
+<td data-v='0.060196'><span class='bar' style='--bc:#9aa0a6'><i style='left:49.45%;width:15.05%'></i><b style='left:57.00%'></b></span></td>
+<td class='num' data-v='0.218103'>21.8%</td>
 </tr>
 <tr data-search="伊芙琳 黑寡婦 evelynn jade_evelynn">
-<td data-v='0.519817'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.521277'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60028.png' alt=''><span>伊芙琳 <small>Evelynn</small><em>黑寡婦</em></span></span></td>
-<td class='num' data-v='456'>456</td>
-<td class='num' data-v='0.528509'>52.9%</td>
-<td class='num' data-v='0.519817'>52.0%</td>
-<td class='num' data-v='0.482644'>48.3–57.4%</td>
-<td data-v='0.091254'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.66%;width:22.81%'></i><b style='left:57.13%'></b></span></td>
-<td class='num' data-v='0.095557'>9.6%</td>
+<td class='num' data-v='458'>458</td>
+<td class='num' data-v='0.530568'>53.1%</td>
+<td class='num' data-v='0.521277'>52.1%</td>
+<td class='num' data-v='0.484796'>48.5–57.6%</td>
+<td data-v='0.091034'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.20%;width:22.76%'></i><b style='left:57.64%'></b></span></td>
+<td class='num' data-v='0.094863'>9.5%</td>
 </tr>
 <tr data-search="希維爾 戰爭女神 sivir jade_sivir">
-<td data-v='0.518310'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.521008'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60015.png' alt=''><span>希維爾 <small>Sivir</small><em>戰爭女神</em></span></span></td>
-<td class='num' data-v='155'>155</td>
-<td class='num' data-v='0.541935'>54.2%</td>
-<td class='num' data-v='0.518310'>51.8%</td>
-<td class='num' data-v='0.463431'>46.3–61.8%</td>
-<td data-v='0.154981'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.86%;width:38.75%'></i><b style='left:60.48%'></b></span></td>
-<td class='num' data-v='0.032481'>3.2%</td>
+<td class='num' data-v='157'>157</td>
+<td class='num' data-v='0.547771'>54.8%</td>
+<td class='num' data-v='0.521008'>52.1%</td>
+<td class='num' data-v='0.469702'>47.0–62.4%</td>
+<td data-v='0.153856'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.43%;width:38.46%'></i><b style='left:61.94%'></b></span></td>
+<td class='num' data-v='0.032519'>3.3%</td>
+</tr>
+<tr data-search="布蘭德 復仇業火 brand jade_brand">
+<td data-v='0.520249'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span>布蘭德 <small>Brand</small><em>復仇業火</em></span></span></td>
+<td class='num' data-v='121'>121</td>
+<td class='num' data-v='0.553719'>55.4%</td>
+<td class='num' data-v='0.520249'>52.0%</td>
+<td class='num' data-v='0.464849'>46.5–63.9%</td>
+<td data-v='0.174435'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.21%;width:43.61%'></i><b style='left:63.43%'></b></span></td>
+<td class='num' data-v='0.025062'>2.5%</td>
 </tr>
 <tr data-search="珍娜 風暴女神 janna jade_janna">
-<td data-v='0.517241'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.519789'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60040.png' alt=''><span>珍娜 <small>Janna</small><em>風暴女神</em></span></span></td>
-<td class='num' data-v='177'>177</td>
-<td class='num' data-v='0.536723'>53.7%</td>
-<td class='num' data-v='0.517241'>51.7%</td>
-<td class='num' data-v='0.463261'>46.3–60.9%</td>
-<td data-v='0.145364'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.82%;width:36.34%'></i><b style='left:59.18%'></b></span></td>
-<td class='num' data-v='0.037091'>3.7%</td>
+<td class='num' data-v='179'>179</td>
+<td class='num' data-v='0.541899'>54.2%</td>
+<td class='num' data-v='0.519789'>52.0%</td>
+<td class='num' data-v='0.468794'>46.9–61.3%</td>
+<td data-v='0.144451'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.20%;width:36.11%'></i><b style='left:60.47%'></b></span></td>
+<td class='num' data-v='0.037075'>3.7%</td>
+</tr>
+<tr data-search="索娜 琴仙 sona jade_sona">
+<td data-v='0.518854'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span>索娜 <small>Sona</small><em>琴仙</em></span></span></td>
+<td class='num' data-v='463'>463</td>
+<td class='num' data-v='0.526998'>52.7%</td>
+<td class='num' data-v='0.518854'>51.9%</td>
+<td class='num' data-v='0.481485'>48.1–57.2%</td>
+<td data-v='0.090582'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.37%;width:22.65%'></i><b style='left:56.75%'></b></span></td>
+<td class='num' data-v='0.095899'>9.6%</td>
 </tr>
 <tr data-search="阿璃 九尾妖狐 ahri jade_ahri">
-<td data-v='0.515152'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.515913'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60103.png' alt=''><span>阿璃 <small>Ahri</small><em>九尾妖狐</em></span></span></td>
-<td class='num' data-v='394'>394</td>
-<td class='num' data-v='0.522843'>52.3%</td>
-<td class='num' data-v='0.515152'>51.5%</td>
-<td class='num' data-v='0.473540'>47.4–57.2%</td>
-<td data-v='0.098164'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.39%;width:24.54%'></i><b style='left:55.71%'></b></span></td>
-<td class='num' data-v='0.082565'>8.3%</td>
+<td class='num' data-v='397'>397</td>
+<td class='num' data-v='0.523929'>52.4%</td>
+<td class='num' data-v='0.515913'>51.6%</td>
+<td class='num' data-v='0.474807'>47.5–57.3%</td>
+<td data-v='0.097786'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.70%;width:24.45%'></i><b style='left:55.98%'></b></span></td>
+<td class='num' data-v='0.082229'>8.2%</td>
 </tr>
 <tr data-search="安妮 黑暗之女 annie jade_annie">
-<td data-v='0.514286'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.514196'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60001.png' alt=''><span>安妮 <small>Annie</small><em>黑暗之女</em></span></span></td>
-<td class='num' data-v='115'>115</td>
-<td class='num' data-v='0.539130'>53.9%</td>
-<td class='num' data-v='0.514286'>51.4%</td>
-<td class='num' data-v='0.448236'>44.8–62.7%</td>
-<td data-v='0.179259'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.06%;width:44.81%'></i><b style='left:59.78%'></b></span></td>
-<td class='num' data-v='0.024099'>2.4%</td>
+<td class='num' data-v='117'>117</td>
+<td class='num' data-v='0.538462'>53.8%</td>
+<td class='num' data-v='0.514196'>51.4%</td>
+<td class='num' data-v='0.448345'>44.8–62.6%</td>
+<td data-v='0.177787'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.09%;width:44.45%'></i><b style='left:59.62%'></b></span></td>
+<td class='num' data-v='0.024234'>2.4%</td>
 </tr>
 <tr data-search="圖奇 瘟疫之源 twitch jade_twitch">
-<td data-v='0.513944'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.513889'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60029.png' alt=''><span>圖奇 <small>Twitch</small><em>瘟疫之源</em></span></span></td>
-<td class='num' data-v='302'>302</td>
-<td class='num' data-v='0.523179'>52.3%</td>
-<td class='num' data-v='0.513944'>51.4%</td>
-<td class='num' data-v='0.466910'>46.7–57.9%</td>
-<td data-v='0.111956'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.73%;width:27.99%'></i><b style='left:55.79%'></b></span></td>
-<td class='num' data-v='0.063286'>6.3%</td>
-</tr>
-<tr data-search="伊澤瑞爾 探險家 ezreal jade_ezreal">
-<td data-v='0.511370'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span>伊澤瑞爾 <small>Ezreal</small><em>探險家</em></span></span></td>
-<td class='num' data-v='1515'>1,515</td>
-<td class='num' data-v='0.512871'>51.3%</td>
-<td class='num' data-v='0.511370'>51.1%</td>
-<td class='num' data-v='0.487701'>48.8–53.8%</td>
-<td data-v='0.050275'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.93%;width:12.57%'></i><b style='left:53.22%'></b></span></td>
-<td class='num' data-v='0.317477'>31.7%</td>
-</tr>
-<tr data-search="賈克斯 武器達人 jax jade_jax">
-<td data-v='0.510204'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span>賈克斯 <small>Jax</small><em>武器達人</em></span></span></td>
-<td class='num' data-v='437'>437</td>
-<td class='num' data-v='0.514874'>51.5%</td>
-<td class='num' data-v='0.510204'>51.0%</td>
-<td class='num' data-v='0.468090'>46.8–56.1%</td>
-<td data-v='0.093309'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.02%;width:23.33%'></i><b style='left:53.72%'></b></span></td>
-<td class='num' data-v='0.091576'>9.2%</td>
-</tr>
-<tr data-search="墨菲特 幻石碎片 malphite jade_malphite">
-<td data-v='0.509036'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span>墨菲特 <small>Malphite</small><em>幻石碎片</em></span></span></td>
-<td class='num' data-v='132'>132</td>
-<td class='num' data-v='0.522727'>52.3%</td>
-<td class='num' data-v='0.509036'>50.9%</td>
-<td class='num' data-v='0.438086'>43.8–60.6%</td>
-<td data-v='0.167998'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.52%;width:42.00%'></i><b style='left:55.68%'></b></span></td>
-<td class='num' data-v='0.027661'>2.8%</td>
+<td class='num' data-v='304'>304</td>
+<td class='num' data-v='0.523026'>52.3%</td>
+<td class='num' data-v='0.513889'>51.4%</td>
+<td class='num' data-v='0.466942'>46.7–57.9%</td>
+<td data-v='0.111593'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.74%;width:27.90%'></i><b style='left:55.76%'></b></span></td>
+<td class='num' data-v='0.062966'>6.3%</td>
 </tr>
 <tr data-search="馬爾札哈 虛空先知 malzahar jade_malzahar">
-<td data-v='0.508772'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.510204'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60090.png' alt=''><span>馬爾札哈 <small>Malzahar</small><em>虛空先知</em></span></span></td>
-<td class='num' data-v='142'>142</td>
-<td class='num' data-v='0.521127'>52.1%</td>
-<td class='num' data-v='0.508772'>50.9%</td>
-<td class='num' data-v='0.439491'>43.9–60.2%</td>
-<td data-v='0.162158'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.87%;width:40.54%'></i><b style='left:55.28%'></b></span></td>
-<td class='num' data-v='0.029757'>3.0%</td>
+<td class='num' data-v='143'>143</td>
+<td class='num' data-v='0.524476'>52.4%</td>
+<td class='num' data-v='0.510204'>51.0%</td>
+<td class='num' data-v='0.443057'>44.3–60.5%</td>
+<td data-v='0.161556'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.76%;width:40.39%'></i><b style='left:56.12%'></b></span></td>
+<td class='num' data-v='0.029619'>3.0%</td>
 </tr>
-<tr data-search="提摩 迅捷斥候 teemo jade_teemo">
-<td data-v='0.508130'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span>提摩 <small>Teemo</small><em>迅捷斥候</em></span></span></td>
-<td class='num' data-v='292'>292</td>
-<td class='num' data-v='0.513699'>51.4%</td>
-<td class='num' data-v='0.508130'>50.8%</td>
-<td class='num' data-v='0.456565'>45.7–57.0%</td>
-<td data-v='0.113911'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.14%;width:28.48%'></i><b style='left:53.42%'></b></span></td>
-<td class='num' data-v='0.061190'>6.1%</td>
+<tr data-search="伊澤瑞爾 探險家 ezreal jade_ezreal">
+<td data-v='0.510110'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span>伊澤瑞爾 <small>Ezreal</small><em>探險家</em></span></span></td>
+<td class='num' data-v='1531'>1,531</td>
+<td class='num' data-v='0.511430'>51.1%</td>
+<td class='num' data-v='0.510110'>51.0%</td>
+<td class='num' data-v='0.486394'>48.6–53.6%</td>
+<td data-v='0.050016'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.60%;width:12.50%'></i><b style='left:52.86%'></b></span></td>
+<td class='num' data-v='0.317109'>31.7%</td>
 </tr>
 <tr data-search="科加斯 虛空恐懼 cho&#x27;gath jade_chogath">
-<td data-v='0.508065'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.509383'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60031.png' alt=''><span>科加斯 <small>Cho&#x27;Gath</small><em>虛空恐懼</em></span></span></td>
-<td class='num' data-v='172'>172</td>
-<td class='num' data-v='0.517442'>51.7%</td>
-<td class='num' data-v='0.508065'>50.8%</td>
-<td class='num' data-v='0.443201'>44.3–59.1%</td>
-<td data-v='0.147719'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.80%;width:36.93%'></i><b style='left:54.36%'></b></span></td>
-<td class='num' data-v='0.036044'>3.6%</td>
+<td class='num' data-v='173'>173</td>
+<td class='num' data-v='0.520231'>52.0%</td>
+<td class='num' data-v='0.509383'>50.9%</td>
+<td class='num' data-v='0.446156'>44.6–59.3%</td>
+<td data-v='0.147271'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.54%;width:36.82%'></i><b style='left:55.06%'></b></span></td>
+<td class='num' data-v='0.035833'>3.6%</td>
 </tr>
-<tr data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana">
-<td data-v='0.507266'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span>崔絲塔娜 <small>Tristana</small><em>麥格靈炮手</em></span></span></td>
-<td class='num' data-v='557'>557</td>
-<td class='num' data-v='0.509874'>51.0%</td>
-<td class='num' data-v='0.507266'>50.7%</td>
-<td class='num' data-v='0.468433'>46.8–55.1%</td>
-<td data-v='0.082747'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.11%;width:20.69%'></i><b style='left:52.47%'></b></span></td>
-<td class='num' data-v='0.116723'>11.7%</td>
+<tr data-search="墨菲特 幻石碎片 malphite jade_malphite">
+<td data-v='0.508982'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span>墨菲特 <small>Malphite</small><em>幻石碎片</em></span></span></td>
+<td class='num' data-v='134'>134</td>
+<td class='num' data-v='0.522388'>52.2%</td>
+<td class='num' data-v='0.508982'>50.9%</td>
+<td class='num' data-v='0.438374'>43.8–60.5%</td>
+<td data-v='0.166779'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.59%;width:41.69%'></i><b style='left:55.60%'></b></span></td>
+<td class='num' data-v='0.027755'>2.8%</td>
+</tr>
+<tr data-search="提摩 迅捷斥候 teemo jade_teemo">
+<td data-v='0.508065'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span>提摩 <small>Teemo</small><em>迅捷斥候</em></span></span></td>
+<td class='num' data-v='296'>296</td>
+<td class='num' data-v='0.513514'>51.4%</td>
+<td class='num' data-v='0.508065'>50.8%</td>
+<td class='num' data-v='0.456766'>45.7–57.0%</td>
+<td data-v='0.113150'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.19%;width:28.29%'></i><b style='left:53.38%'></b></span></td>
+<td class='num' data-v='0.061309'>6.1%</td>
+</tr>
+<tr data-search="賈克斯 武器達人 jax jade_jax">
+<td data-v='0.507812'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span>賈克斯 <small>Jax</small><em>武器達人</em></span></span></td>
+<td class='num' data-v='440'>440</td>
+<td class='num' data-v='0.511364'>51.1%</td>
+<td class='num' data-v='0.507812'>50.8%</td>
+<td class='num' data-v='0.464760'>46.5–55.8%</td>
+<td data-v='0.093010'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.19%;width:23.25%'></i><b style='left:52.84%'></b></span></td>
+<td class='num' data-v='0.091135'>9.1%</td>
+</tr>
+<tr data-search="潘森 戰爭之王 pantheon jade_pantheon">
+<td data-v='0.507529'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span>潘森 <small>Pantheon</small><em>戰爭之王</em></span></span></td>
+<td class='num' data-v='929'>929</td>
+<td class='num' data-v='0.509150'>50.9%</td>
+<td class='num' data-v='0.507529'>50.8%</td>
+<td class='num' data-v='0.477031'>47.7–54.1%</td>
+<td data-v='0.064162'><span class='bar' style='--bc:#9aa0a6'><i style='left:44.26%;width:16.04%'></i><b style='left:52.29%'></b></span></td>
+<td class='num' data-v='0.192419'>19.2%</td>
 </tr>
 <tr data-search="極靈 時光守護者 zilean jade_zilean">
 <td data-v='0.506369'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
@@ -588,117 +599,107 @@ footer code{color:var(--text-muted)}
 <td class='num' data-v='0.506369'>50.6%</td>
 <td class='num' data-v='0.426749'>42.7–60.7%</td>
 <td data-v='0.180446'><span class='bar' style='--bc:#9aa0a6'><i style='left:31.69%;width:45.11%'></i><b style='left:54.39%'></b></span></td>
-<td class='num' data-v='0.023889'>2.4%</td>
+<td class='num' data-v='0.023612'>2.4%</td>
 </tr>
-<tr data-search="潘森 戰爭之王 pantheon jade_pantheon">
-<td data-v='0.506272'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span>潘森 <small>Pantheon</small><em>戰爭之王</em></span></span></td>
-<td class='num' data-v='916'>916</td>
-<td class='num' data-v='0.507642'>50.8%</td>
-<td class='num' data-v='0.506272'>50.6%</td>
-<td class='num' data-v='0.475301'>47.5–54.0%</td>
-<td data-v='0.064617'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.83%;width:16.15%'></i><b style='left:51.91%'></b></span></td>
-<td class='num' data-v='0.191953'>19.2%</td>
-</tr>
-<tr data-search="汎 暗夜獵人 vayne jade_vayne">
-<td data-v='0.502475'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span>汎 <small>Vayne</small><em>暗夜獵人</em></span></span></td>
-<td class='num' data-v='1012'>1,012</td>
-<td class='num' data-v='0.502964'>50.3%</td>
-<td class='num' data-v='0.502475'>50.2%</td>
-<td class='num' data-v='0.472206'>47.2–53.4%</td>
-<td data-v='0.061494'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.05%;width:15.37%'></i><b style='left:50.74%'></b></span></td>
-<td class='num' data-v='0.212070'>21.2%</td>
-</tr>
-<tr data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks">
-<td data-v='0.500707'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span>費德提克 <small>Fiddlesticks</small><em>末日使者</em></span></span></td>
-<td class='num' data-v='507'>507</td>
-<td class='num' data-v='0.500986'>50.1%</td>
-<td class='num' data-v='0.500707'>50.1%</td>
-<td class='num' data-v='0.457619'>45.8–54.4%</td>
-<td data-v='0.086719'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.40%;width:21.68%'></i><b style='left:50.25%'></b></span></td>
-<td class='num' data-v='0.106245'>10.6%</td>
+<tr data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana">
+<td data-v='0.505913'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span>崔絲塔娜 <small>Tristana</small><em>麥格靈炮手</em></span></span></td>
+<td class='num' data-v='561'>561</td>
+<td class='num' data-v='0.508021'>50.8%</td>
+<td class='num' data-v='0.505913'>50.6%</td>
+<td class='num' data-v='0.466737'>46.7–54.9%</td>
+<td data-v='0.082459'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.68%;width:20.61%'></i><b style='left:52.01%'></b></span></td>
+<td class='num' data-v='0.116197'>11.6%</td>
 </tr>
 <tr data-search="漢默丁格 大發明家 heimerdinger jade_heimerdinger">
-<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.504532'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60074.png' alt=''><span>漢默丁格 <small>Heimerdinger</small><em>大發明家</em></span></span></td>
-<td class='num' data-v='128'>128</td>
-<td class='num' data-v='0.500000'>50.0%</td>
-<td class='num' data-v='0.500000'>50.0%</td>
-<td class='num' data-v='0.414651'>41.5–58.5%</td>
-<td data-v='0.170699'><span class='bar' style='--bc:#9aa0a6'><i style='left:28.66%;width:42.67%'></i><b style='left:50.00%'></b></span></td>
-<td class='num' data-v='0.026823'>2.7%</td>
+<td class='num' data-v='131'>131</td>
+<td class='num' data-v='0.511450'>51.1%</td>
+<td class='num' data-v='0.504532'>50.5%</td>
+<td class='num' data-v='0.426751'>42.7–59.5%</td>
+<td data-v='0.168746'><span class='bar' style='--bc:#9aa0a6'><i style='left:31.69%;width:42.19%'></i><b style='left:52.86%'></b></span></td>
+<td class='num' data-v='0.027133'>2.7%</td>
+</tr>
+<tr data-search="汎 暗夜獵人 vayne jade_vayne">
+<td data-v='0.502862'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span>汎 <small>Vayne</small><em>暗夜獵人</em></span></span></td>
+<td class='num' data-v='1023'>1,023</td>
+<td class='num' data-v='0.503421'>50.3%</td>
+<td class='num' data-v='0.502862'>50.3%</td>
+<td class='num' data-v='0.472827'>47.3–53.4%</td>
+<td data-v='0.061164'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.21%;width:15.29%'></i><b style='left:50.86%'></b></span></td>
+<td class='num' data-v='0.211889'>21.2%</td>
 </tr>
 <tr data-search="辛吉德 瘋狂煉金師 singed jade_singed">
-<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td data-v='0.501718'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60027.png' alt=''><span>辛吉德 <small>Singed</small><em>瘋狂煉金師</em></span></span></td>
-<td class='num' data-v='88'>88</td>
-<td class='num' data-v='0.500000'>50.0%</td>
-<td class='num' data-v='0.500000'>50.0%</td>
-<td class='num' data-v='0.397740'>39.8–60.2%</td>
-<td data-v='0.204520'><span class='bar' style='--bc:#9aa0a6'><i style='left:24.43%;width:51.13%'></i><b style='left:50.00%'></b></span></td>
-<td class='num' data-v='0.018441'>1.8%</td>
-</tr>
-<tr data-search="古拉格斯 酒桶之王 gragas jade_gragas">
-<td data-v='0.499331'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span>古拉格斯 <small>Gragas</small><em>酒桶之王</em></span></span></td>
-<td class='num' data-v='547'>547</td>
-<td class='num' data-v='0.499086'>49.9%</td>
-<td class='num' data-v='0.499331'>49.9%</td>
-<td class='num' data-v='0.457337'>45.7–54.1%</td>
-<td data-v='0.083511'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.33%;width:20.88%'></i><b style='left:49.77%'></b></span></td>
-<td class='num' data-v='0.114627'>11.5%</td>
-</tr>
-<tr data-search="悟空  wukong jade_wukong">
-<td data-v='0.498778'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span>悟空 <small>Wukong</small><em></em></span></span></td>
-<td class='num' data-v='209'>209</td>
-<td class='num' data-v='0.497608'>49.8%</td>
-<td class='num' data-v='0.498778'>49.9%</td>
-<td class='num' data-v='0.430478'>43.0–56.5%</td>
-<td data-v='0.134345'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.62%;width:33.59%'></i><b style='left:49.40%'></b></span></td>
-<td class='num' data-v='0.043797'>4.4%</td>
-</tr>
-<tr data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia">
-<td data-v='0.497619'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span>艾妮維亞 <small>Anivia</small><em>冰晶鳳凰</em></span></span></td>
-<td class='num' data-v='220'>220</td>
-<td class='num' data-v='0.495455'>49.5%</td>
-<td class='num' data-v='0.497619'>49.8%</td>
-<td class='num' data-v='0.430033'>43.0–56.1%</td>
-<td data-v='0.130999'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.51%;width:32.75%'></i><b style='left:48.86%'></b></span></td>
-<td class='num' data-v='0.046102'>4.6%</td>
+<td class='num' data-v='91'>91</td>
+<td class='num' data-v='0.505495'>50.5%</td>
+<td class='num' data-v='0.501718'>50.2%</td>
+<td class='num' data-v='0.404648'>40.5–60.6%</td>
+<td data-v='0.201248'><span class='bar' style='--bc:#9aa0a6'><i style='left:26.16%;width:50.31%'></i><b style='left:51.37%'></b></span></td>
+<td class='num' data-v='0.018848'>1.9%</td>
 </tr>
 <tr data-search="寇格魔 深淵巨口 kog&#x27;maw jade_kogmaw">
-<td data-v='0.497340'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td data-v='0.501312'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60096.png' alt=''><span>寇格魔 <small>Kog&#x27;Maw</small><em>深淵巨口</em></span></span></td>
-<td class='num' data-v='176'>176</td>
-<td class='num' data-v='0.494318'>49.4%</td>
-<td class='num' data-v='0.497340'>49.7%</td>
-<td class='num' data-v='0.421367'>42.1–56.8%</td>
-<td data-v='0.146145'><span class='bar' style='--bc:#9aa0a6'><i style='left:30.34%;width:36.54%'></i><b style='left:48.58%'></b></span></td>
-<td class='num' data-v='0.036882'>3.7%</td>
+<td class='num' data-v='181'>181</td>
+<td class='num' data-v='0.502762'>50.3%</td>
+<td class='num' data-v='0.501312'>50.1%</td>
+<td class='num' data-v='0.430624'>43.1–57.5%</td>
+<td data-v='0.144162'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.66%;width:36.04%'></i><b style='left:50.69%'></b></span></td>
+<td class='num' data-v='0.037490'>3.7%</td>
 </tr>
-<tr data-search="塔里克 寶石騎士 taric jade_taric">
-<td data-v='0.497326'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span>塔里克 <small>Taric</small><em>寶石騎士</em></span></span></td>
-<td class='num' data-v='361'>361</td>
-<td class='num' data-v='0.495845'>49.6%</td>
-<td class='num' data-v='0.497326'>49.7%</td>
-<td class='num' data-v='0.444584'>44.5–54.7%</td>
-<td data-v='0.102610'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.15%;width:25.65%'></i><b style='left:48.96%'></b></span></td>
-<td class='num' data-v='0.075650'>7.6%</td>
+<tr data-search="古拉格斯 酒桶之王 gragas jade_gragas">
+<td data-v='0.500664'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span>古拉格斯 <small>Gragas</small><em>酒桶之王</em></span></span></td>
+<td class='num' data-v='553'>553</td>
+<td class='num' data-v='0.500904'>50.1%</td>
+<td class='num' data-v='0.500664'>50.1%</td>
+<td class='num' data-v='0.459368'>45.9–54.2%</td>
+<td data-v='0.083060'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.84%;width:20.76%'></i><b style='left:50.23%'></b></span></td>
+<td class='num' data-v='0.114540'>11.5%</td>
+</tr>
+<tr data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia">
+<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span>艾妮維亞 <small>Anivia</small><em>冰晶鳳凰</em></span></span></td>
+<td class='num' data-v='222'>222</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.434789'>43.5–56.5%</td>
+<td data-v='0.130423'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.70%;width:32.61%'></i><b style='left:50.00%'></b></span></td>
+<td class='num' data-v='0.045982'>4.6%</td>
+</tr>
+<tr data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks">
+<td data-v='0.499297'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span>費德提克 <small>Fiddlesticks</small><em>末日使者</em></span></span></td>
+<td class='num' data-v='511'>511</td>
+<td class='num' data-v='0.499022'>49.9%</td>
+<td class='num' data-v='0.499297'>49.9%</td>
+<td class='num' data-v='0.455838'>45.6–54.2%</td>
+<td data-v='0.086381'><span class='bar' style='--bc:#9aa0a6'><i style='left:38.96%;width:21.60%'></i><b style='left:49.76%'></b></span></td>
+<td class='num' data-v='0.105841'>10.6%</td>
 </tr>
 <tr data-search="奈德麗 狂野獵手 nidalee jade_nidalee">
-<td data-v='0.496933'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td data-v='0.495918'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60076.png' alt=''><span>奈德麗 <small>Nidalee</small><em>狂野獵手</em></span></span></td>
-<td class='num' data-v='289'>289</td>
-<td class='num' data-v='0.494810'>49.5%</td>
-<td class='num' data-v='0.496933'>49.7%</td>
-<td class='num' data-v='0.437613'>43.8–55.2%</td>
-<td data-v='0.114529'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.40%;width:28.63%'></i><b style='left:48.70%'></b></span></td>
-<td class='num' data-v='0.060562'>6.1%</td>
+<td class='num' data-v='290'>290</td>
+<td class='num' data-v='0.493103'>49.3%</td>
+<td class='num' data-v='0.495918'>49.6%</td>
+<td class='num' data-v='0.436029'>43.6–55.0%</td>
+<td data-v='0.114330'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.01%;width:28.58%'></i><b style='left:48.28%'></b></span></td>
+<td class='num' data-v='0.060066'>6.0%</td>
+</tr>
+<tr data-search="塔里克 寶石騎士 taric jade_taric">
+<td data-v='0.494718'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span>塔里克 <small>Taric</small><em>寶石騎士</em></span></span></td>
+<td class='num' data-v='368'>368</td>
+<td class='num' data-v='0.491848'>49.2%</td>
+<td class='num' data-v='0.494718'>49.5%</td>
+<td class='num' data-v='0.441117'>44.1–54.3%</td>
+<td data-v='0.101630'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.28%;width:25.41%'></i><b style='left:47.96%'></b></span></td>
+<td class='num' data-v='0.076222'>7.6%</td>
 </tr>
 <tr data-search="凱爾 審判天使 kayle jade_kayle">
 <td data-v='0.494530'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
@@ -708,27 +709,37 @@ footer code{color:var(--text-muted)}
 <td class='num' data-v='0.494530'>49.5%</td>
 <td class='num' data-v='0.429748'>43.0–55.1%</td>
 <td data-v='0.121335'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.44%;width:30.33%'></i><b style='left:47.57%'></b></span></td>
-<td class='num' data-v='0.053856'>5.4%</td>
+<td class='num' data-v='0.053231'>5.3%</td>
+</tr>
+<tr data-search="悟空  wukong jade_wukong">
+<td data-v='0.493976'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span>悟空 <small>Wukong</small><em></em></span></span></td>
+<td class='num' data-v='215'>215</td>
+<td class='num' data-v='0.488372'>48.8%</td>
+<td class='num' data-v='0.493976'>49.4%</td>
+<td class='num' data-v='0.422348'>42.2–55.5%</td>
+<td data-v='0.132457'><span class='bar' style='--bc:#9aa0a6'><i style='left:30.59%;width:33.11%'></i><b style='left:47.09%'></b></span></td>
+<td class='num' data-v='0.044532'>4.5%</td>
 </tr>
 <tr data-search="李星 盲眼武僧 lee sin jade_leesin">
-<td data-v='0.491653'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td data-v='0.491749'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60064.png' alt=''><span>李星 <small>Lee Sin</small><em>盲眼武僧</em></span></span></td>
-<td class='num' data-v='998'>998</td>
-<td class='num' data-v='0.489980'>49.0%</td>
-<td class='num' data-v='0.491653'>49.2%</td>
-<td class='num' data-v='0.459063'>45.9–52.1%</td>
-<td data-v='0.061911'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.77%;width:15.48%'></i><b style='left:47.49%'></b></span></td>
-<td class='num' data-v='0.209137'>20.9%</td>
+<td class='num' data-v='1012'>1,012</td>
+<td class='num' data-v='0.490119'>49.0%</td>
+<td class='num' data-v='0.491749'>49.2%</td>
+<td class='num' data-v='0.459414'>45.9–52.1%</td>
+<td data-v='0.061483'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.85%;width:15.37%'></i><b style='left:47.53%'></b></span></td>
+<td class='num' data-v='0.209611'>21.0%</td>
 </tr>
 <tr data-search="努努和威朗普 雪人騎士 nunu &amp; willump jade_nunu">
-<td data-v='0.490971'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td data-v='0.490482'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60020.png' alt=''><span>努努和威朗普 <small>Nunu &amp; Willump</small><em>雪人騎士</em></span></span></td>
-<td class='num' data-v='686'>686</td>
-<td class='num' data-v='0.488338'>48.8%</td>
-<td class='num' data-v='0.490971'>49.1%</td>
-<td class='num' data-v='0.451101'>45.1–52.6%</td>
-<td data-v='0.074604'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.78%;width:18.65%'></i><b style='left:47.08%'></b></span></td>
-<td class='num' data-v='0.143755'>14.4%</td>
+<td class='num' data-v='693'>693</td>
+<td class='num' data-v='0.487734'>48.8%</td>
+<td class='num' data-v='0.490482'>49.0%</td>
+<td class='num' data-v='0.450689'>45.1–52.5%</td>
+<td data-v='0.074227'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.67%;width:18.56%'></i><b style='left:46.93%'></b></span></td>
+<td class='num' data-v='0.143538'>14.4%</td>
 </tr>
 <tr data-search="阿姆姆 殤之木乃伊 amumu jade_amumu">
 <td data-v='0.489736'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
@@ -738,17 +749,17 @@ footer code{color:var(--text-muted)}
 <td class='num' data-v='0.489736'>49.0%</td>
 <td class='num' data-v='0.394504'>39.5–55.7%</td>
 <td data-v='0.162663'><span class='bar' style='--bc:#9aa0a6'><i style='left:23.63%;width:40.67%'></i><b style='left:43.79%'></b></span></td>
-<td class='num' data-v='0.029547'>3.0%</td>
+<td class='num' data-v='0.029205'>2.9%</td>
 </tr>
 <tr data-search="雷茲 流浪法師 ryze jade_ryze">
-<td data-v='0.486891'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td data-v='0.485750'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60013.png' alt=''><span>雷茲 <small>Ryze</small><em>流浪法師</em></span></span></td>
-<td class='num' data-v='601'>601</td>
-<td class='num' data-v='0.482529'>48.3%</td>
-<td class='num' data-v='0.486891'>48.7%</td>
-<td class='num' data-v='0.442816'>44.3–52.2%</td>
-<td data-v='0.079647'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.70%;width:19.91%'></i><b style='left:45.63%'></b></span></td>
-<td class='num' data-v='0.125943'>12.6%</td>
+<td class='num' data-v='607'>607</td>
+<td class='num' data-v='0.481054'>48.1%</td>
+<td class='num' data-v='0.485750'>48.6%</td>
+<td class='num' data-v='0.441550'>44.2–52.1%</td>
+<td data-v='0.079247'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.39%;width:19.81%'></i><b style='left:45.26%'></b></span></td>
+<td class='num' data-v='0.125725'>12.6%</td>
 </tr>
 <tr data-search="拉姆斯 披甲龍龜 rammus jade_rammus">
 <td data-v='0.485342'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
@@ -758,17 +769,17 @@ footer code{color:var(--text-muted)}
 <td class='num' data-v='0.485342'>48.5%</td>
 <td class='num' data-v='0.366636'>36.7–55.2%</td>
 <td data-v='0.185531'><span class='bar' style='--bc:#9aa0a6'><i style='left:16.66%;width:46.38%'></i><b style='left:39.49%'></b></span></td>
-<td class='num' data-v='0.022422'>2.2%</td>
+<td class='num' data-v='0.022162'>2.2%</td>
 </tr>
-<tr data-search="露璐 精靈魔法使 lulu jade_lulu">
-<td data-v='0.481061'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span>露璐 <small>Lulu</small><em>精靈魔法使</em></span></span></td>
-<td class='num' data-v='328'>328</td>
-<td class='num' data-v='0.469512'>47.0%</td>
-<td class='num' data-v='0.481061'>48.1%</td>
-<td class='num' data-v='0.416167'>41.6–52.4%</td>
-<td data-v='0.107397'><span class='bar' style='--bc:#9aa0a6'><i style='left:29.04%;width:26.85%'></i><b style='left:42.38%'></b></span></td>
-<td class='num' data-v='0.068734'>6.9%</td>
+<tr data-search="剛普朗克 海洋之災 gangplank jade_gangplank">
+<td data-v='0.482127'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span>剛普朗克 <small>Gangplank</small><em>海洋之災</em></span></span></td>
+<td class='num' data-v='947'>947</td>
+<td class='num' data-v='0.478353'>47.8%</td>
+<td class='num' data-v='0.482127'>48.2%</td>
+<td class='num' data-v='0.446689'>44.7–51.0%</td>
+<td data-v='0.063503'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.67%;width:15.88%'></i><b style='left:44.59%'></b></span></td>
+<td class='num' data-v='0.196147'>19.6%</td>
 </tr>
 <tr data-search="卡爾瑟斯 死亡頌唱者 karthus jade_karthus">
 <td data-v='0.480122'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
@@ -778,151 +789,151 @@ footer code{color:var(--text-muted)}
 <td class='num' data-v='0.480122'>48.0%</td>
 <td class='num' data-v='0.365084'>36.5–53.6%</td>
 <td data-v='0.170476'><span class='bar' style='--bc:#9aa0a6'><i style='left:16.27%;width:42.62%'></i><b style='left:37.20%'></b></span></td>
-<td class='num' data-v='0.026614'>2.7%</td>
+<td class='num' data-v='0.026305'>2.6%</td>
 </tr>
-<tr data-search="剛普朗克 海洋之災 gangplank jade_gangplank">
-<td data-v='0.479860'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span>剛普朗克 <small>Gangplank</small><em>海洋之災</em></span></span></td>
-<td class='num' data-v='942'>942</td>
-<td class='num' data-v='0.475584'>47.6%</td>
-<td class='num' data-v='0.479860'>48.0%</td>
-<td class='num' data-v='0.443856'>44.4–50.8%</td>
-<td data-v='0.063655'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.96%;width:15.91%'></i><b style='left:43.90%'></b></span></td>
-<td class='num' data-v='0.197402'>19.7%</td>
-</tr>
-<tr data-search="維迦 邪惡小法師 veigar jade_veigar">
-<td data-v='0.476331'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span>維迦 <small>Veigar</small><em>邪惡小法師</em></span></span></td>
-<td class='num' data-v='138'>138</td>
-<td class='num' data-v='0.442029'>44.2%</td>
-<td class='num' data-v='0.476331'>47.6%</td>
-<td class='num' data-v='0.361853'>36.2–52.5%</td>
-<td data-v='0.163492'><span class='bar' style='--bc:#9aa0a6'><i style='left:15.46%;width:40.87%'></i><b style='left:35.51%'></b></span></td>
-<td class='num' data-v='0.028919'>2.9%</td>
+<tr data-search="露璐 精靈魔法使 lulu jade_lulu">
+<td data-v='0.475655'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span>露璐 <small>Lulu</small><em>精靈魔法使</em></span></span></td>
+<td class='num' data-v='334'>334</td>
+<td class='num' data-v='0.461078'>46.1%</td>
+<td class='num' data-v='0.475655'>47.6%</td>
+<td class='num' data-v='0.408363'>40.8–51.5%</td>
+<td data-v='0.106315'><span class='bar' style='--bc:#9aa0a6'><i style='left:27.09%;width:26.58%'></i><b style='left:40.27%'></b></span></td>
+<td class='num' data-v='0.069180'>6.9%</td>
 </tr>
 <tr data-search="艾希 冰霜射手 ashe jade_ashe">
-<td data-v='0.475410'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td data-v='0.474394'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60022.png' alt=''><span>艾希 <small>Ashe</small><em>冰霜射手</em></span></span></td>
-<td class='num' data-v='532'>532</td>
-<td class='num' data-v='0.466165'>46.6%</td>
-<td class='num' data-v='0.475410'>47.5%</td>
-<td class='num' data-v='0.424169'>42.4–50.9%</td>
-<td data-v='0.084479'><span class='bar' style='--bc:#9aa0a6'><i style='left:31.04%;width:21.12%'></i><b style='left:41.54%'></b></span></td>
-<td class='num' data-v='0.111484'>11.1%</td>
+<td class='num' data-v='542'>542</td>
+<td class='num' data-v='0.464945'>46.5%</td>
+<td class='num' data-v='0.474394'>47.4%</td>
+<td class='num' data-v='0.423348'>42.3–50.7%</td>
+<td data-v='0.083687'><span class='bar' style='--bc:#9aa0a6'><i style='left:30.84%;width:20.92%'></i><b style='left:41.24%'></b></span></td>
+<td class='num' data-v='0.112262'>11.2%</td>
+</tr>
+<tr data-search="維迦 邪惡小法師 veigar jade_veigar">
+<td data-v='0.473837'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span>維迦 <small>Veigar</small><em>邪惡小法師</em></span></span></td>
+<td class='num' data-v='144'>144</td>
+<td class='num' data-v='0.437500'>43.8%</td>
+<td class='num' data-v='0.473837'>47.4%</td>
+<td class='num' data-v='0.359141'>35.9–51.9%</td>
+<td data-v='0.159966'><span class='bar' style='--bc:#9aa0a6'><i style='left:14.79%;width:39.99%'></i><b style='left:34.38%'></b></span></td>
+<td class='num' data-v='0.029826'>3.0%</td>
 </tr>
 <tr data-search="賽恩 亡靈勇士 sion jade_sion">
-<td data-v='0.469048'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td data-v='0.467456'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60014.png' alt=''><span>賽恩 <small>Sion</small><em>亡靈勇士</em></span></span></td>
-<td class='num' data-v='640'>640</td>
-<td class='num' data-v='0.459375'>45.9%</td>
-<td class='num' data-v='0.469048'>46.9%</td>
-<td class='num' data-v='0.421122'>42.1–49.8%</td>
-<td data-v='0.076990'><span class='bar' style='--bc:#ff5a3c'><i style='left:30.28%;width:19.25%'></i><b style='left:39.84%'></b></span></td>
-<td class='num' data-v='0.134116'>13.4%</td>
+<td class='num' data-v='645'>645</td>
+<td class='num' data-v='0.457364'>45.7%</td>
+<td class='num' data-v='0.467456'>46.7%</td>
+<td class='num' data-v='0.419283'>41.9–49.6%</td>
+<td data-v='0.076668'><span class='bar' style='--bc:#ff5a3c'><i style='left:29.82%;width:19.17%'></i><b style='left:39.34%'></b></span></td>
+<td class='num' data-v='0.133596'>13.4%</td>
 </tr>
 <tr data-search="蓋倫 蒂瑪西亞之力 garen jade_garen">
-<td data-v='0.464220'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td data-v='0.465455'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60086.png' alt=''><span>蓋倫 <small>Garen</small><em>蒂瑪西亞之力</em></span></span></td>
-<td class='num' data-v='345'>345</td>
-<td class='num' data-v='0.443478'>44.3%</td>
-<td class='num' data-v='0.464220'>46.4%</td>
-<td class='num' data-v='0.391963'>39.2–49.6%</td>
-<td data-v='0.104275'><span class='bar' style='--bc:#ff5a3c'><i style='left:22.99%;width:26.07%'></i><b style='left:35.87%'></b></span></td>
-<td class='num' data-v='0.072297'>7.2%</td>
-</tr>
-<tr data-search="薩科 惡魔小丑 shaco jade_shaco">
-<td data-v='0.462998'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span>薩科 <small>Shaco</small><em>惡魔小丑</em></span></span></td>
-<td class='num' data-v='327'>327</td>
-<td class='num' data-v='0.440367'>44.0%</td>
-<td class='num' data-v='0.462998'>46.3%</td>
-<td class='num' data-v='0.387561'>38.8–49.5%</td>
-<td data-v='0.106997'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.89%;width:26.75%'></i><b style='left:35.09%'></b></span></td>
-<td class='num' data-v='0.068525'>6.9%</td>
+<td class='num' data-v='350'>350</td>
+<td class='num' data-v='0.445714'>44.6%</td>
+<td class='num' data-v='0.465455'>46.5%</td>
+<td class='num' data-v='0.394510'>39.5–49.8%</td>
+<td data-v='0.103587'><span class='bar' style='--bc:#ff5a3c'><i style='left:23.63%;width:25.90%'></i><b style='left:36.43%'></b></span></td>
+<td class='num' data-v='0.072494'>7.2%</td>
 </tr>
 <tr data-search="亞歷斯塔 牛頭酋長 alistar jade_alistar">
-<td data-v='0.462121'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td data-v='0.464286'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60012.png' alt=''><span>亞歷斯塔 <small>Alistar</small><em>牛頭酋長</em></span></span></td>
-<td class='num' data-v='328'>328</td>
-<td class='num' data-v='0.439024'>43.9%</td>
-<td class='num' data-v='0.462121'>46.2%</td>
-<td class='num' data-v='0.386330'>38.6–49.3%</td>
-<td data-v='0.106801'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.58%;width:26.70%'></i><b style='left:34.76%'></b></span></td>
-<td class='num' data-v='0.068734'>6.9%</td>
+<td class='num' data-v='332'>332</td>
+<td class='num' data-v='0.442771'>44.3%</td>
+<td class='num' data-v='0.464286'>46.4%</td>
+<td class='num' data-v='0.390297'>39.0–49.7%</td>
+<td data-v='0.106257'><span class='bar' style='--bc:#ff5a3c'><i style='left:22.57%;width:26.56%'></i><b style='left:35.69%'></b></span></td>
+<td class='num' data-v='0.068766'>6.9%</td>
 </tr>
-<tr data-search="歐拉夫 狂戰士 olaf jade_olaf">
-<td data-v='0.461310'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span>歐拉夫 <small>Olaf</small><em>狂戰士</em></span></span></td>
-<td class='num' data-v='136'>136</td>
-<td class='num' data-v='0.404412'>40.4%</td>
-<td class='num' data-v='0.461310'>46.1%</td>
-<td class='num' data-v='0.325652'>32.6–48.8%</td>
-<td data-v='0.162772'><span class='bar' style='--bc:#ff5a3c'><i style='left:6.41%;width:40.69%'></i><b style='left:26.10%'></b></span></td>
-<td class='num' data-v='0.028500'>2.8%</td>
+<tr data-search="薩科 惡魔小丑 shaco jade_shaco">
+<td data-v='0.461394'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span>薩科 <small>Shaco</small><em>惡魔小丑</em></span></span></td>
+<td class='num' data-v='331'>331</td>
+<td class='num' data-v='0.438066'>43.8%</td>
+<td class='num' data-v='0.461394'>46.1%</td>
+<td class='num' data-v='0.385629'>38.6–49.2%</td>
+<td data-v='0.106296'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.41%;width:26.57%'></i><b style='left:34.52%'></b></span></td>
+<td class='num' data-v='0.068558'>6.9%</td>
 </tr>
 <tr data-search="卡薩丁 虛空行者 kassadin jade_kassadin">
-<td data-v='0.459695'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td data-v='0.461207'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60038.png' alt=''><span>卡薩丁 <small>Kassadin</small><em>虛空行者</em></span></span></td>
-<td class='num' data-v='259'>259</td>
-<td class='num' data-v='0.428571'>42.9%</td>
-<td class='num' data-v='0.459695'>46.0%</td>
-<td class='num' data-v='0.369779'>37.0–48.9%</td>
-<td data-v='0.119673'><span class='bar' style='--bc:#ff5a3c'><i style='left:17.44%;width:29.92%'></i><b style='left:32.14%'></b></span></td>
-<td class='num' data-v='0.054275'>5.4%</td>
+<td class='num' data-v='264'>264</td>
+<td class='num' data-v='0.431818'>43.2%</td>
+<td class='num' data-v='0.461207'>46.1%</td>
+<td class='num' data-v='0.373467'>37.3–49.2%</td>
+<td data-v='0.118659'><span class='bar' style='--bc:#ff5a3c'><i style='left:18.37%;width:29.66%'></i><b style='left:32.95%'></b></span></td>
+<td class='num' data-v='0.054681'>5.5%</td>
 </tr>
-<tr data-search="易大師 無極劍聖 master yi jade_masteryi">
-<td data-v='0.450732'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span>易大師 <small>Master Yi</small><em>無極劍聖</em></span></span></td>
-<td class='num' data-v='825'>825</td>
-<td class='num' data-v='0.438788'>43.9%</td>
-<td class='num' data-v='0.450732'>45.1%</td>
-<td class='num' data-v='0.405286'>40.5–47.3%</td>
-<td data-v='0.067570'><span class='bar' style='--bc:#ff5a3c'><i style='left:26.32%;width:16.89%'></i><b style='left:34.70%'></b></span></td>
-<td class='num' data-v='0.172883'>17.3%</td>
+<tr data-search="歐拉夫 狂戰士 olaf jade_olaf">
+<td data-v='0.458580'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span>歐拉夫 <small>Olaf</small><em>狂戰士</em></span></span></td>
+<td class='num' data-v='138'>138</td>
+<td class='num' data-v='0.398551'>39.9%</td>
+<td class='num' data-v='0.458580'>45.9%</td>
+<td class='num' data-v='0.320677'>32.1–48.2%</td>
+<td data-v='0.161242'><span class='bar' style='--bc:#ff5a3c'><i style='left:5.17%;width:40.31%'></i><b style='left:24.64%'></b></span></td>
+<td class='num' data-v='0.028583'>2.9%</td>
 </tr>
 <tr data-search="拉克絲 光之少女 lux jade_lux">
-<td data-v='0.449355'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td data-v='0.451730'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60099.png' alt=''><span>拉克絲 <small>Lux</small><em>光之少女</em></span></span></td>
-<td class='num' data-v='343'>343</td>
-<td class='num' data-v='0.419825'>42.0%</td>
-<td class='num' data-v='0.449355'>44.9%</td>
-<td class='num' data-v='0.368765'>36.9–47.3%</td>
-<td data-v='0.103896'><span class='bar' style='--bc:#ff5a3c'><i style='left:17.19%;width:25.97%'></i><b style='left:29.96%'></b></span></td>
-<td class='num' data-v='0.071878'>7.2%</td>
+<td class='num' data-v='349'>349</td>
+<td class='num' data-v='0.424069'>42.4%</td>
+<td class='num' data-v='0.451730'>45.2%</td>
+<td class='num' data-v='0.373322'>37.3–47.6%</td>
+<td data-v='0.103147'><span class='bar' style='--bc:#ff5a3c'><i style='left:18.33%;width:25.79%'></i><b style='left:31.02%'></b></span></td>
+<td class='num' data-v='0.072287'>7.2%</td>
+</tr>
+<tr data-search="易大師 無極劍聖 master yi jade_masteryi">
+<td data-v='0.451302'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span>易大師 <small>Master Yi</small><em>無極劍聖</em></span></span></td>
+<td class='num' data-v='837'>837</td>
+<td class='num' data-v='0.439665'>44.0%</td>
+<td class='num' data-v='0.451302'>45.1%</td>
+<td class='num' data-v='0.406391'>40.6–47.3%</td>
+<td data-v='0.067101'><span class='bar' style='--bc:#ff5a3c'><i style='left:26.60%;width:16.78%'></i><b style='left:34.92%'></b></span></td>
+<td class='num' data-v='0.173364'>17.3%</td>
 </tr>
 <tr data-search="索拉卡 眾星之子 soraka jade_soraka">
-<td data-v='0.445178'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td data-v='0.445466'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60016.png' alt=''><span>索拉卡 <small>Soraka</small><em>眾星之子</em></span></span></td>
-<td class='num' data-v='557'>557</td>
-<td class='num' data-v='0.425494'>42.5%</td>
-<td class='num' data-v='0.445178'>44.5%</td>
-<td class='num' data-v='0.385081'>38.5–46.7%</td>
-<td data-v='0.081845'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.27%;width:20.46%'></i><b style='left:31.37%'></b></span></td>
-<td class='num' data-v='0.116723'>11.7%</td>
+<td class='num' data-v='561'>561</td>
+<td class='num' data-v='0.426025'>42.6%</td>
+<td class='num' data-v='0.445466'>44.5%</td>
+<td class='num' data-v='0.385744'>38.6–46.7%</td>
+<td data-v='0.081568'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.44%;width:20.39%'></i><b style='left:31.51%'></b></span></td>
+<td class='num' data-v='0.116197'>11.6%</td>
 </tr>
 <tr data-search="蒙多醫生 佐恩狂人 dr. mundo jade_drmundo">
-<td data-v='0.427848'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td data-v='0.428212'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60036.png' alt=''><span>蒙多醫生 <small>Dr. Mundo</small><em>佐恩狂人</em></span></span></td>
-<td class='num' data-v='195'>195</td>
-<td class='num' data-v='0.353846'>35.4%</td>
-<td class='num' data-v='0.427848'>42.8%</td>
-<td class='num' data-v='0.290147'>29.0–42.3%</td>
-<td data-v='0.133045'><span class='bar' style='--bc:#ff5a3c'><i style='left:0.00%;width:30.80%'></i><b style='left:13.46%'></b></span></td>
-<td class='num' data-v='0.040863'>4.1%</td>
+<td class='num' data-v='197'>197</td>
+<td class='num' data-v='0.355330'>35.5%</td>
+<td class='num' data-v='0.428212'>42.8%</td>
+<td class='num' data-v='0.291846'>29.2–42.4%</td>
+<td data-v='0.132502'><span class='bar' style='--bc:#ff5a3c'><i style='left:0.00%;width:31.09%'></i><b style='left:13.83%'></b></span></td>
+<td class='num' data-v='0.040804'>4.1%</td>
 </tr>
 <tr data-search="好運姐 賞金獵人 miss fortune jade_missfortune">
-<td data-v='0.417103'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td data-v='0.414508'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
 <td><span class='cname'><img loading='lazy' src='assets/icons/classic/60021.png' alt=''><span>好運姐 <small>Miss Fortune</small><em>賞金獵人</em></span></span></td>
-<td class='num' data-v='373'>373</td>
-<td class='num' data-v='0.372654'>37.3%</td>
-<td class='num' data-v='0.417103'>41.7%</td>
-<td class='num' data-v='0.325117'>32.5–42.3%</td>
-<td data-v='0.097671'><span class='bar' style='--bc:#ff5a3c'><i style='left:6.28%;width:24.42%'></i><b style='left:18.16%'></b></span></td>
-<td class='num' data-v='0.078164'>7.8%</td>
+<td class='num' data-v='379'>379</td>
+<td class='num' data-v='0.369393'>36.9%</td>
+<td class='num' data-v='0.414508'>41.5%</td>
+<td class='num' data-v='0.322339'>32.2–41.9%</td>
+<td data-v='0.096730'><span class='bar' style='--bc:#ff5a3c'><i style='left:5.58%;width:24.18%'></i><b style='left:17.35%'></b></span></td>
+<td class='num' data-v='0.078500'>7.9%</td>
 </tr>
 </tbody></table></div></section>
 <footer>
-queue 4310（經典 / JADE）· 2,386 場 · 60 隻英雄 · 頭像與稱號取自 Jade_* 條目（CommunityDragon），非現行版本美術<br>Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>由 <code>scripts/build_classic_page.py</code> 產生 · 2026-07-31 23:27<br>未公開頁面（noindex），不在主站導覽列。
+queue 4310（經典 / JADE）· 2,414 場 · 60 隻英雄 · 頭像與稱號取自 Jade_* 條目（CommunityDragon），非現行版本美術<br>版本分佈：16.15.800 (2,039)、16.15.799 (272)、16.15.801 (103)<br>Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>由 <code>scripts/build_classic_page.py</code> 產生 · 2026-07-31 23:36<br>未公開頁面（noindex），不在主站導覽列。
 </footer>
 </div><script>
 (function(){
