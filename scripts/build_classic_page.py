@@ -224,21 +224,30 @@ body{margin:0;background:var(--bg);color:var(--text);
 font-family:"Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 -webkit-font-smoothing:antialiased}
 .wrap{max-width:var(--container);margin:0 auto;padding:24px 16px 80px}
-header.top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-h1{font-size:22px;margin:0;letter-spacing:.3px}
-.logo-mark{color:var(--accent);font-weight:800}
+/* Sticky top bar cloned from the main site header (site.css .site-header). */
+.site-header{position:sticky;top:0;z-index:45;
+background:color-mix(in srgb,var(--bg) 72%,transparent);
+-webkit-backdrop-filter:saturate(180%) blur(14px);
+backdrop-filter:saturate(180%) blur(14px);
+border-bottom:1px solid var(--border)}
+.site-header-inner{display:flex;align-items:center;gap:12px;height:56px;
+max-width:var(--container);margin:0 auto;padding:0 16px}
+.brand-title{font-family:"Outfit","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+font-size:26px;font-weight:600;letter-spacing:-.035em;line-height:1;
+white-space:nowrap;color:var(--text)}
+.brand-aram{color:var(--accent);font-weight:800}
+.brand-meta{color:var(--text);font-weight:700}
+.brand-div{color:var(--text-muted);font-size:14px;font-weight:500;white-space:nowrap}
 .unlisted{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;
 border-radius:999px;background:rgba(245,197,24,.14);color:var(--accent);
-border:1px solid rgba(245,197,24,.35)}
+border:1px solid rgba(245,197,24,.35);white-space:nowrap}
 .sub{color:var(--text-muted);font-size:13px;margin:0 0 18px}
 .banner{border-left:3px solid var(--accent);background:var(--surface);
-border-radius:0 var(--r-sm) var(--r-sm) 0;padding:12px 16px;margin:0 0 8px;
+border-radius:0 var(--r-sm) var(--r-sm) 0;padding:12px 16px;margin:0 0 22px;
 font-size:13.5px;line-height:1.7;color:#e2e5e9}
 .banner b{color:var(--accent)}
 .banner.warn{border-left-color:#ff5a3c}
 .banner.warn b{color:#ff8b76}
-.banner + .banner{margin-top:8px}
-.banner-stack{margin-bottom:22px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}
 #q{flex:1;min-width:220px;max-width:360px;background:var(--surface);color:var(--text);
 border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;font-size:14px}
@@ -337,7 +346,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--border);
 color:var(--text-dim);font-size:12px;line-height:1.9}
 footer code{color:var(--text-muted)}
 @media (max-width:640px){
-.wrap{padding:16px 10px 60px}h1{font-size:18px}
+.wrap{padding:16px 10px 60px}
+.site-header-inner{height:52px;padding:0 10px;gap:8px}
+.brand-title{font-size:21px}.brand-div{font-size:12.5px}
+.unlisted{display:none}
 .tier-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .bar{width:110px}}
 """
@@ -409,49 +421,53 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
         f"{p} ({n:,})" for p, n in sorted(per_patch.items(), key=lambda kv: -kv[1])
     )
     built = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    # Mean Wilson half-width across champions — the headline "how wrong is this
+    # number, typically" figure, so the banner never has to be re-tuned by hand.
+    mean_err = (
+        sum((r["ci_hi"] - r["ci_lo"]) / 2 for r in rows) / len(rows) if rows else 0.0
+    )
 
     p: list[str] = []
     p.append("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>")
     p.append("<meta name='viewport' content='width=device-width,initial-scale=1'>")
     # Unlisted: keep it out of search results and out of the sitemap.
     p.append("<meta name='robots' content='noindex,nofollow'>")
-    p.append("<title>經典模式 英雄勝率（內部預覽）· arammeta</title>")
-    p.append(f"<style>{CSS}</style></head><body><div class='wrap'>")
+    p.append("<title>經典模式 英雄勝率（內部預覽）· classicmeta</title>")
+    # Same brand face as the main site: Outfit for the Latin wordmark, Noto Sans TC body.
+    p.append(
+        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
+        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2"
+        "?family=Outfit:wght@500;600;700"
+        "&family=Noto+Sans+TC:wght@400;500;600;700&display=swap'>"
+    )
+    p.append(f"<style>{CSS}</style></head><body>")
 
-    p.append("<header class='top'>")
-    p.append("<h1><span class='logo-mark'>aram</span>meta ｜ 經典模式</h1>")
+    # Sticky top chrome mirrors the main site header (the "劉海"): blurred bar,
+    # bottom hairline, Outfit wordmark.  classicmeta ｜ 經典模式.
+    p.append("<header class='site-header'><div class='site-header-inner'>")
+    p.append(
+        "<span class='brand-title'>"
+        "<span class='brand-aram'>classic</span><span class='brand-meta'>meta</span>"
+        "</span>"
+    )
+    p.append("<span class='brand-div'>｜ 經典模式</span>")
     p.append("<span class='unlisted'>UNLISTED · 內部預覽</span>")
-    p.append("</header>")
+    p.append("</div></header>")
+    p.append("<div class='wrap'>")
     p.append(
         "<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · "
         f"資料截至 {built}</p>"
     )
 
-    p.append("<div class='banner-stack'>")
+    # One line, computed from the data rather than hardcoded, so the stated
+    # error shrinks on its own as the sample grows instead of going stale.
     p.append(
         "<div class='banner warn'>"
-        f"<b>樣本量警告：目前僅 {total_games:,} 場</b>（主站 Mayhem 是 200 萬場級別）。"
-        "這頁的每個數字都還在雜訊區間內，<b>不要當成強度結論</b>。"
-        "一隻 300 場的英雄，95% 信賴區間大約是 ±5.7pp — "
-        "也就是「55%」和「49%」在統計上分不出來。"
+        f"目前資料只有 <b>{total_games:,} 場</b>，"
+        f"勝率的平均誤差大約是 <b>±{mean_err * 100:.1f}%</b>。"
         "</div>"
     )
-    p.append(
-        "<div class='banner'>"
-        f"版本分佈：{html.escape(patch_str)}。"
-        "資料幾乎全集中在單一版本，<b>跨版本穩定性完全未驗證</b>；"
-        "換版之後這張表可能整個重排。"
-        "</div>"
-    )
-    p.append(
-        "<div class='banner'>"
-        "<b>勝率是「英雄在場的隊伍勝率」，不是英雄強度。</b>"
-        "沒有扣掉隊友、分路、玩家自選傾向。"
-        "經典有分路 / 視野 / 野區，現有的 position-free 模型不適用，"
-        "所以這裡<b>只做描述統計，不做預測</b>。"
-        "</div>"
-    )
-    p.append("</div>")
 
     p.append("<div class='toolbar'>")
     p.append(
@@ -590,6 +606,7 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
         f"queue 4310（經典 / JADE）· {total_games:,} 場 · "
         f"{len(rows)} 隻英雄 · 頭像與稱號取自 Jade_* 條目（CommunityDragon），"
         f"非現行版本美術<br>"
+        f"版本分佈：{html.escape(patch_str)}<br>"
         f"Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · "
         f"T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>"
         f"由 <code>scripts/build_classic_page.py</code> 產生 · {built}<br>"
