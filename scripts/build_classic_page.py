@@ -66,7 +66,19 @@ PRIOR_GAMES = 200
 # table but kept out of the tier board rather than shown as a confident cut.
 TIER_BOARD_MIN_GAMES = 50
 
-DDRAGON_VERSIONS = "https://ddragon.leagueoflegends.com/api/versions.json"
+# 經典 ships its own champion art and its own (old) titles under the Jade_* ids,
+# so this page must NOT use the normal Data Dragon portraits — Jade_Kayle is
+# 「審判天使」 with the pre-rework icon, not the modern 「正義天使」.  Only
+# CommunityDragon exposes those entries, keyed by the Jade id (60000 + base).
+CDRAGON_BASE = (
+    "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global"
+)
+CHAMPION_SUMMARY = "/v1/champion-summary.json"
+# CommunityDragon is unreliable to hotlink from the live site (see the augment
+# icons, which are self-hosted for the same reason), so the portraits are copied
+# into docs/assets/ at build time and served from our own origin.
+ICON_DIR = Path("docs/assets/icons/classic")
+ICON_URL_PREFIX = "assets/icons/classic"
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
@@ -92,42 +104,62 @@ def assign_tier(wr: float) -> str:
     return "T5"
 
 
-def load_champion_metadata(version: str | None) -> tuple[str, dict[int, dict]]:
-    """champion_id -> {name_zh, name_en, alias, image} straight from Data Dragon.
+def load_classic_champion_metadata() -> dict[int, dict]:
+    """base champion_id -> the 經典 (Jade_*) name, old title, and portrait id.
 
-    Keyed by the NORMAL champion id; callers must map Jade ids through
-    ``base_champion_id()`` before looking anything up here.
+    Keyed by the NORMAL champion id so callers can look up straight from
+    ``base_champion_id()``, but every value here comes from the Jade entry —
+    including ``title_zh``, which is the mode's period-correct title.
     """
-    if version is None:
-        r = httpx.get(DDRAGON_VERSIONS, timeout=15)
-        r.raise_for_status()
-        version = r.json()[0]
-    r_zh = httpx.get(
-        f"https://ddragon.leagueoflegends.com/cdn/{version}/data/zh_TW/champion.json",
-        timeout=30,
-    )
-    r_en = httpx.get(
-        f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json",
-        timeout=30,
-    )
+    r_en = httpx.get(f"{CDRAGON_BASE}/default{CHAMPION_SUMMARY}", timeout=40)
     r_en.raise_for_status()
-    raw_en = r_en.json()["data"]
-    raw_zh = r_zh.json()["data"] if r_zh.status_code == 200 else {}
+    r_zh = httpx.get(f"{CDRAGON_BASE}/zh_tw{CHAMPION_SUMMARY}", timeout=40)
+
+    zh_by_id: dict[int, dict] = {}
+    if r_zh.status_code == 200:
+        zh_by_id = {int(c["id"]): c for c in r_zh.json() if int(c.get("id", 0)) >= 60000}
 
     by_id: dict[int, dict] = {}
-    for alias, entry_en in raw_en.items():
-        entry_zh = raw_zh.get(alias, entry_en)
-        by_id[int(entry_en["key"])] = {
-            "alias": alias,
-            "name_zh": entry_zh.get("name") or entry_en.get("name") or alias,
-            "name_en": entry_en.get("name") or alias,
-            "tags": entry_en.get("tags") or [],
-            "image": (
-                f"https://ddragon.leagueoflegends.com/cdn/{version}"
-                f"/img/champion/{alias}.png"
-            ),
+    for c in r_en.json():
+        jade_id = int(c.get("id", 0))
+        if jade_id < 60000:
+            continue
+        base = base_champion_id(jade_id)
+        zh = zh_by_id.get(jade_id, {})
+        by_id[base] = {
+            "jade_id": jade_id,
+            "alias": c.get("alias", f"Jade_{base}"),
+            "name_zh": zh.get("name") or c.get("name") or str(base),
+            "title_zh": zh.get("description") or "",
+            "name_en": c.get("name") or str(base),
+            "title_en": c.get("description") or "",
+            "image": f"{ICON_URL_PREFIX}/{jade_id}.png",
         }
-    return version, by_id
+    return by_id
+
+
+def download_icons(meta: dict[int, dict], icon_dir: Path, refresh: bool) -> int:
+    """Copy the Jade portraits into docs/assets/ so the page serves its own icons.
+
+    Already-present files are skipped, so a rebuild costs no network; pass
+    ``refresh`` to re-pull them after a patch changes the art.
+    """
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    fetched = 0
+    with httpx.Client(timeout=40) as client:
+        for entry in sorted(meta.values(), key=lambda e: e["jade_id"]):
+            jade_id = entry["jade_id"]
+            dest = icon_dir / f"{jade_id}.png"
+            if dest.exists() and not refresh:
+                continue
+            url = f"{CDRAGON_BASE}/default/v1/champion-icons/{jade_id}.png"
+            r = client.get(url)
+            if r.status_code != 200 or not r.content:
+                click.echo(f"[classic] WARNING: icon {jade_id} -> HTTP {r.status_code}")
+                continue
+            dest.write_bytes(r.content)
+            fetched += 1
+    return fetched
 
 
 def collect_stats(db: Path, patch_prefix: str | None) -> tuple[dict, dict, int, dict]:
@@ -164,6 +196,7 @@ def build_rows(games: dict, wins: dict, total_games: int, meta: dict) -> list[di
             "alias": m.get("alias", f"#{cid}"),
             "name_zh": m.get("name_zh", f"#{cid}"),
             "name_en": m.get("name_en", f"#{cid}"),
+            "title_zh": m.get("title_zh", ""),
             "image": m.get("image", ""),
             "games": g,
             "wins": w,
@@ -279,8 +312,12 @@ td.num{font-variant-numeric:tabular-nums lining-nums}
 .tchip{display:inline-block;min-width:26px;text-align:center;padding:1px 6px;
 border-radius:4px;font-size:11px;font-weight:700;color:#0e1116}
 .cname{display:flex;align-items:center;gap:8px}
-.cname img{width:26px;height:26px;border-radius:5px;display:block}
+.cname img{width:28px;height:28px;border-radius:5px;display:block;flex:none}
 .cname small{color:var(--text-dim);font-weight:400}
+/* The Jade entries ship the mode's period-correct titles (凱爾 is 審判天使
+   here, not 正義天使), which is half the point of a nostalgia mode. */
+.cname em{display:block;font-style:normal;font-size:11px;color:var(--text-dim);
+margin-top:1px}
 /* Error bar: the whole point of the table. Shows the 95% Wilson interval as a
    span against a 30-70% axis, with a hairline at the 50% coin-flip mark. */
 .bar{position:relative;width:190px;height:16px;background:rgba(255,255,255,.05);
@@ -355,7 +392,7 @@ JS = """
 """
 
 
-def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str) -> str:
+def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     board_rows = [r for r in rows if r["games"] >= TIER_BOARD_MIN_GAMES]
     thin = len(rows) - len(board_rows)
     by_tier: dict[str, list] = {t: [] for t in TIER_ORDER}
@@ -442,10 +479,12 @@ def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str)
         for r in entries:
             wr = f"{r['shrunk_wr'] * 100:.1f}%"
             search = html.escape(
-                f"{r['name_zh']} {r['name_en']} {r['alias']}".lower(), quote=True
+                f"{r['name_zh']} {r['title_zh']} {r['name_en']} {r['alias']}".lower(),
+                quote=True,
             )
             title = (
-                f"{r['name_zh']} · 調整後 {wr} · 原始 {r['raw_wr'] * 100:.1f}% · "
+                f"{r['name_zh']}　{r['title_zh']}\n"
+                f"調整後 {wr} · 原始 {r['raw_wr'] * 100:.1f}% · "
                 f"{r['games']:,} 場 · 95% CI "
                 f"{r['ci_lo'] * 100:.1f}–{r['ci_hi'] * 100:.1f}%"
             )
@@ -482,7 +521,8 @@ def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str)
     p.append("</tr></thead><tbody>")
     for r in rows:
         search = html.escape(
-            f"{r['name_zh']} {r['name_en']} {r['alias']}".lower(), quote=True
+            f"{r['name_zh']} {r['title_zh']} {r['name_en']} {r['alias']}".lower(),
+            quote=True,
         )
         tier = r["tier"] if r["games"] >= TIER_BOARD_MIN_GAMES else "—"
         chip_bg = TIER_COLOR.get(tier, "#3a3f47")
@@ -510,7 +550,8 @@ def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str)
             f"<td><span class='cname'>"
             f"<img loading='lazy' src='{r['image']}' alt=''>"
             f"<span>{html.escape(r['name_zh'])} "
-            f"<small>{html.escape(r['name_en'])}</small></span></span></td>"
+            f"<small>{html.escape(r['name_en'])}</small>"
+            f"<em>{html.escape(r['title_zh'])}</em></span></span></td>"
         )
         p.append(f"<td class='num' data-v='{r['games']}'>{r['games']:,}</td>")
         p.append(
@@ -541,7 +582,8 @@ def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str)
     p.append("<footer>")
     p.append(
         f"queue 4310（經典 / JADE）· {total_games:,} 場 · "
-        f"{len(rows)} 隻英雄 · Data Dragon {html.escape(dd_version)}<br>"
+        f"{len(rows)} 隻英雄 · 頭像與稱號取自 Jade_* 條目（CommunityDragon），"
+        f"非現行版本美術<br>"
         f"Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · "
         f"T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>"
         f"由 <code>scripts/build_classic_page.py</code> 產生 · {built}<br>"
@@ -557,8 +599,9 @@ def render(rows: list[dict], total_games: int, per_patch: dict, dd_version: str)
 @click.option("--db", default="data/lcu/games.db", type=click.Path(exists=True))
 @click.option("--out", default="docs/classic.html", type=click.Path())
 @click.option("--patch", "patch_prefix", default="", help="版本前綴過濾；省略＝全收")
-@click.option("--dd-version", default=None, help="Data Dragon 版本；省略＝抓最新")
-def main(db: str, out: str, patch_prefix: str, dd_version: str | None) -> None:
+@click.option("--icon-dir", default=str(ICON_DIR), type=click.Path())
+@click.option("--refresh-icons", is_flag=True, help="重新下載頭像（改版換美術時用）")
+def main(db: str, out: str, patch_prefix: str, icon_dir: str, refresh_icons: bool) -> None:
     db_path = Path(db)
     prefix = patch_prefix or None
 
@@ -568,18 +611,25 @@ def main(db: str, out: str, patch_prefix: str, dd_version: str | None) -> None:
         raise click.ClickException(f"no queue {CLASSIC_QUEUE_ID} games found in {db}")
     click.echo(f"[classic] {total:,} games, {len(games)} champions")
 
-    click.echo("[classic] fetching champion metadata from Data Dragon ...")
-    version, meta = load_champion_metadata(dd_version)
+    click.echo("[classic] fetching Jade_* champion metadata from CommunityDragon ...")
+    meta = load_classic_champion_metadata()
+    click.echo(f"[classic] {len(meta)} Jade entries")
     unknown = [c for c in games if c not in meta]
     if unknown:
         # base_champion_id() should make this impossible; if it fires, the Jade
         # offset assumption has drifted and the page would silently drop champs.
         click.echo(f"[classic] WARNING: {len(unknown)} unmapped champion ids: {unknown}")
 
+    fetched = download_icons(meta, Path(icon_dir), refresh_icons)
+    click.echo(
+        f"[classic] icons: {fetched} downloaded, "
+        f"{len(list(Path(icon_dir).glob('*.png')))} on disk -> {icon_dir}"
+    )
+
     rows = build_rows(games, wins, total, meta)
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render(rows, total, per_patch, version), encoding="utf-8")
+    out_path.write_text(render(rows, total, per_patch), encoding="utf-8")
 
     size_kb = out_path.stat().st_size / 1024
     click.echo(f"[classic] wrote {out_path} ({size_kb:.0f} KB)")

@@ -100,8 +100,12 @@ td.num{font-variant-numeric:tabular-nums lining-nums}
 .tchip{display:inline-block;min-width:26px;text-align:center;padding:1px 6px;
 border-radius:4px;font-size:11px;font-weight:700;color:#0e1116}
 .cname{display:flex;align-items:center;gap:8px}
-.cname img{width:26px;height:26px;border-radius:5px;display:block}
+.cname img{width:28px;height:28px;border-radius:5px;display:block;flex:none}
 .cname small{color:var(--text-dim);font-weight:400}
+/* The Jade entries ship the mode's period-correct titles (凱爾 is 審判天使
+   here, not 正義天使), which is half the point of a nostalgia mode. */
+.cname em{display:block;font-style:normal;font-size:11px;color:var(--text-dim);
+margin-top:1px}
 /* Error bar: the whole point of the table. Shows the 95% Wilson interval as a
    span against a 30-70% axis, with a hairline at the 50% coin-flip mark. */
 .bar{position:relative;width:190px;height:16px;background:rgba(255,255,255,.05);
@@ -123,10 +127,10 @@ footer code{color:var(--text-muted)}
 <h1><span class='logo-mark'>aram</span>meta ｜ 經典模式</h1>
 <span class='unlisted'>UNLISTED · 內部預覽</span>
 </header>
-<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · 資料截至 2026-07-31 23:04</p>
+<p class='sub'>queue 4310 · gameMode JADE · 60 英雄固定池 · 資料截至 2026-07-31 23:23</p>
 <div class='banner-stack'>
-<div class='banner warn'><b>樣本量警告：目前僅 2,361 場</b>（主站 Mayhem 是 200 萬場級別）。這頁的每個數字都還在雜訊區間內，<b>不要當成強度結論</b>。一隻 300 場的英雄，95% 信賴區間大約是 ±5.7pp — 也就是「55%」和「49%」在統計上分不出來。</div>
-<div class='banner'>版本分佈：16.15.800 (2,018)、16.15.799 (272)、16.15.801 (71)。資料幾乎全集中在單一版本，<b>跨版本穩定性完全未驗證</b>；換版之後這張表可能整個重排。</div>
+<div class='banner warn'><b>樣本量警告：目前僅 2,380 場</b>（主站 Mayhem 是 200 萬場級別）。這頁的每個數字都還在雜訊區間內，<b>不要當成強度結論</b>。一隻 300 場的英雄，95% 信賴區間大約是 ±5.7pp — 也就是「55%」和「49%」在統計上分不出來。</div>
+<div class='banner'>版本分佈：16.15.800 (2,027)、16.15.799 (272)、16.15.801 (81)。資料幾乎全集中在單一版本，<b>跨版本穩定性完全未驗證</b>；換版之後這張表可能整個重排。</div>
 <div class='banner'><b>勝率是「英雄在場的隊伍勝率」，不是英雄強度。</b>沒有扣掉隊友、分路、玩家自選傾向。經典有分路 / 視野 / 野區，現有的 position-free 模型不適用，所以這裡<b>只做描述統計，不做預測</b>。</div>
 </div>
 <div class='toolbar'>
@@ -140,9 +144,12 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>3 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="布里茨 blitzcrank blitzcrank" title="布里茨 · 調整後 58.6% · 原始 61.3% · 630 場 · 95% CI 57.4–65.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Blitzcrank.png' alt=''><span class='n'>630</span><span class='wr'>58.6%</span><span class='name'>布里茨</span></div>
-<div class='champ' data-search="沃維克 warwick warwick" title="沃維克 · 調整後 55.1% · 原始 56.4% · 783 場 · 95% CI 53.0–59.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Warwick.png' alt=''><span class='n'>783</span><span class='wr'>55.1%</span><span class='name'>沃維克</span></div>
-<div class='champ' data-search="魔甘娜 morgana morgana" title="魔甘娜 · 調整後 55.1% · 原始 58.0% · 355 場 · 95% CI 52.8–63.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Morgana.png' alt=''><span class='n'>355</span><span class='wr'>55.1%</span><span class='name'>魔甘娜</span></div>
+<div class='champ' data-search="布里茨 蒸汽巨神兵 blitzcrank jade_blitzcrank" title="布里茨　蒸汽巨神兵
+調整後 58.8% · 原始 61.5% · 634 場 · 95% CI 57.7–65.2%"><img loading='lazy' src='assets/icons/classic/60053.png' alt=''><span class='n'>634</span><span class='wr'>58.8%</span><span class='name'>布里茨</span></div>
+<div class='champ' data-search="魔甘娜 墮落天使 morgana jade_morgana" title="魔甘娜　墮落天使
+調整後 55.2% · 原始 58.1% · 356 場 · 95% CI 53.0–63.2%"><img loading='lazy' src='assets/icons/classic/60025.png' alt=''><span class='n'>356</span><span class='wr'>55.2%</span><span class='name'>魔甘娜</span></div>
+<div class='champ' data-search="沃維克 嗜血獵手 warwick jade_warwick" title="沃維克　嗜血獵手
+調整後 55.1% · 原始 56.3% · 788 場 · 95% CI 52.9–59.8%"><img loading='lazy' src='assets/icons/classic/60019.png' alt=''><span class='n'>788</span><span class='wr'>55.1%</span><span class='name'>沃維克</span></div>
 </div></div>
 <div class='tier-block' data-tier='T1' style='--tier-color:#ff5a3c; --tier-bg:#ff5a3c;'>
 <h2 class='tier-heading'>
@@ -150,78 +157,129 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>9 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="史加納 skarner skarner" title="史加納 · 調整後 54.7% · 原始 60.4% · 169 場 · 95% CI 52.8–67.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Skarner.png' alt=''><span class='n'>169</span><span class='wr'>54.7%</span><span class='name'>史加納</span></div>
-<div class='champ' data-search="泰達米爾 tryndamere tryndamere" title="泰達米爾 · 調整後 54.4% · 原始 57.3% · 309 場 · 95% CI 51.7–62.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Tryndamere.png' alt=''><span class='n'>309</span><span class='wr'>54.4%</span><span class='name'>泰達米爾</span></div>
-<div class='champ' data-search="逆命 twisted fate twistedfate" title="逆命 · 調整後 53.8% · 原始 57.3% · 213 場 · 95% CI 50.6–63.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/TwistedFate.png' alt=''><span class='n'>213</span><span class='wr'>53.8%</span><span class='name'>逆命</span></div>
-<div class='champ' data-search="納瑟斯 nasus nasus" title="納瑟斯 · 調整後 53.6% · 原始 56.0% · 300 場 · 95% CI 50.3–61.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nasus.png' alt=''><span class='n'>300</span><span class='wr'>53.6%</span><span class='name'>納瑟斯</span></div>
-<div class='champ' data-search="庫奇 corki corki" title="庫奇 · 調整後 53.0% · 原始 55.5% · 245 場 · 95% CI 49.2–61.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Corki.png' alt=''><span class='n'>245</span><span class='wr'>53.0%</span><span class='name'>庫奇</span></div>
-<div class='champ' data-search="嘉文四世 jarvan iv jarvaniv" title="嘉文四世 · 調整後 52.9% · 原始 54.4% · 388 場 · 95% CI 49.4–59.3%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/JarvanIV.png' alt=''><span class='n'>388</span><span class='wr'>52.9%</span><span class='name'>嘉文四世</span></div>
-<div class='champ' data-search="卡特蓮娜 katarina katarina" title="卡特蓮娜 · 調整後 52.5% · 原始 53.0% · 1,037 場 · 95% CI 50.0–56.1%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Katarina.png' alt=''><span class='n'>1037</span><span class='wr'>52.5%</span><span class='name'>卡特蓮娜</span></div>
-<div class='champ' data-search="雷歐娜 leona leona" title="雷歐娜 · 調整後 52.4% · 原始 54.7% · 214 場 · 95% CI 48.0–61.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Leona.png' alt=''><span class='n'>214</span><span class='wr'>52.4%</span><span class='name'>雷歐娜</span></div>
-<div class='champ' data-search="索娜 sona sona" title="索娜 · 調整後 52.2% · 原始 53.2% · 451 場 · 95% CI 48.6–57.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sona.png' alt=''><span class='n'>451</span><span class='wr'>52.2%</span><span class='name'>索娜</span></div>
+<div class='champ' data-search="史加納 水晶戰蠍 skarner jade_skarner" title="史加納　水晶戰蠍
+調整後 54.9% · 原始 60.6% · 170 場 · 95% CI 53.1–67.6%"><img loading='lazy' src='assets/icons/classic/60072.png' alt=''><span class='n'>170</span><span class='wr'>54.9%</span><span class='name'>史加納</span></div>
+<div class='champ' data-search="泰達米爾 蠻族之王 tryndamere jade_tryndamere" title="泰達米爾　蠻族之王
+調整後 54.4% · 原始 57.2% · 311 場 · 95% CI 51.7–62.6%"><img loading='lazy' src='assets/icons/classic/60023.png' alt=''><span class='n'>311</span><span class='wr'>54.4%</span><span class='name'>泰達米爾</span></div>
+<div class='champ' data-search="逆命 卡牌大師 twisted fate jade_twistedfate" title="逆命　卡牌大師
+調整後 53.9% · 原始 57.5% · 214 場 · 95% CI 50.8–63.9%"><img loading='lazy' src='assets/icons/classic/60004.png' alt=''><span class='n'>214</span><span class='wr'>53.9%</span><span class='name'>逆命</span></div>
+<div class='champ' data-search="納瑟斯 沙漠死神 nasus jade_nasus" title="納瑟斯　沙漠死神
+調整後 53.7% · 原始 56.1% · 303 場 · 95% CI 50.5–61.6%"><img loading='lazy' src='assets/icons/classic/60075.png' alt=''><span class='n'>303</span><span class='wr'>53.7%</span><span class='name'>納瑟斯</span></div>
+<div class='champ' data-search="庫奇 英勇投彈手 corki jade_corki" title="庫奇　英勇投彈手
+調整後 53.0% · 原始 55.4% · 249 場 · 95% CI 49.2–61.5%"><img loading='lazy' src='assets/icons/classic/60042.png' alt=''><span class='n'>249</span><span class='wr'>53.0%</span><span class='name'>庫奇</span></div>
+<div class='champ' data-search="嘉文四世 蒂瑪西亞楷模 jarvan iv jade_jarvaniv" title="嘉文四世　蒂瑪西亞楷模
+調整後 52.9% · 原始 54.3% · 392 場 · 95% CI 49.4–59.2%"><img loading='lazy' src='assets/icons/classic/60059.png' alt=''><span class='n'>392</span><span class='wr'>52.9%</span><span class='name'>嘉文四世</span></div>
+<div class='champ' data-search="卡特蓮娜 不祥之刃 katarina jade_katarina" title="卡特蓮娜　不祥之刃
+調整後 52.5% · 原始 53.0% · 1,040 場 · 95% CI 49.9–56.0%"><img loading='lazy' src='assets/icons/classic/60055.png' alt=''><span class='n'>1040</span><span class='wr'>52.5%</span><span class='name'>卡特蓮娜</span></div>
+<div class='champ' data-search="雷歐娜 黎明之光 leona jade_leona" title="雷歐娜　黎明之光
+調整後 52.4% · 原始 54.6% · 218 場 · 95% CI 48.0–61.1%"><img loading='lazy' src='assets/icons/classic/60089.png' alt=''><span class='n'>218</span><span class='wr'>52.4%</span><span class='name'>雷歐娜</span></div>
+<div class='champ' data-search="索娜 琴仙 sona jade_sona" title="索娜　琴仙
+調整後 52.3% · 原始 53.3% · 454 場 · 95% CI 48.7–57.8%"><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span class='n'>454</span><span class='wr'>52.3%</span><span class='name'>索娜</span></div>
 </div></div>
 <div class='tier-block' data-tier='T2' style='--tier-color:#f5c518; --tier-bg:#f5c518;'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>T2</span></span>
-<span class='tier-count'>20 隻</span>
+<span class='tier-count'>21 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="伊芙琳 evelynn evelynn" title="伊芙琳 · 調整後 51.9% · 原始 52.7% · 448 場 · 95% CI 48.1–57.3%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Evelynn.png' alt=''><span class='n'>448</span><span class='wr'>51.9%</span><span class='name'>伊芙琳</span></div>
-<div class='champ' data-search="希維爾 sivir sivir" title="希維爾 · 調整後 51.8% · 原始 54.2% · 155 場 · 95% CI 46.3–61.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sivir.png' alt=''><span class='n'>155</span><span class='wr'>51.8%</span><span class='name'>希維爾</span></div>
-<div class='champ' data-search="布蘭德 brand brand" title="布蘭德 · 調整後 51.7% · 原始 54.7% · 117 場 · 95% CI 45.7–63.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Brand.png' alt=''><span class='n'>117</span><span class='wr'>51.7%</span><span class='name'>布蘭德</span></div>
-<div class='champ' data-search="阿璃 ahri ahri" title="阿璃 · 調整後 51.6% · 原始 52.5% · 387 場 · 95% CI 47.5–57.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ahri.png' alt=''><span class='n'>387</span><span class='wr'>51.6%</span><span class='name'>阿璃</span></div>
-<div class='champ' data-search="安妮 annie annie" title="安妮 · 調整後 51.6% · 原始 54.4% · 114 場 · 95% CI 45.2–63.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Annie.png' alt=''><span class='n'>114</span><span class='wr'>51.6%</span><span class='name'>安妮</span></div>
-<div class='champ' data-search="珍娜 janna janna" title="珍娜 · 調整後 51.5% · 原始 53.1% · 175 場 · 95% CI 45.8–60.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Janna.png' alt=''><span class='n'>175</span><span class='wr'>51.5%</span><span class='name'>珍娜</span></div>
-<div class='champ' data-search="圖奇 twitch twitch" title="圖奇 · 調整後 51.1% · 原始 51.9% · 297 場 · 95% CI 46.2–57.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Twitch.png' alt=''><span class='n'>297</span><span class='wr'>51.1%</span><span class='name'>圖奇</span></div>
-<div class='champ' data-search="伊澤瑞爾 ezreal ezreal" title="伊澤瑞爾 · 調整後 51.1% · 原始 51.2% · 1,497 場 · 95% CI 48.7–53.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ezreal.png' alt=''><span class='n'>1497</span><span class='wr'>51.1%</span><span class='name'>伊澤瑞爾</span></div>
-<div class='champ' data-search="科加斯 cho&#x27;gath chogath" title="科加斯 · 調整後 51.1% · 原始 52.4% · 170 場 · 95% CI 44.9–59.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Chogath.png' alt=''><span class='n'>170</span><span class='wr'>51.1%</span><span class='name'>科加斯</span></div>
-<div class='champ' data-search="墨菲特 malphite malphite" title="墨菲特 · 調整後 50.9% · 原始 52.3% · 132 場 · 95% CI 43.8–60.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Malphite.png' alt=''><span class='n'>132</span><span class='wr'>50.9%</span><span class='name'>墨菲特</span></div>
-<div class='champ' data-search="極靈 zilean zilean" title="極靈 · 調整後 50.8% · 原始 52.2% · 113 場 · 95% CI 43.1–61.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Zilean.png' alt=''><span class='n'>113</span><span class='wr'>50.8%</span><span class='name'>極靈</span></div>
-<div class='champ' data-search="賈克斯 jax jax" title="賈克斯 · 調整後 50.8% · 原始 51.2% · 434 場 · 95% CI 46.5–55.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Jax.png' alt=''><span class='n'>434</span><span class='wr'>50.8%</span><span class='name'>賈克斯</span></div>
-<div class='champ' data-search="崔絲塔娜 tristana tristana" title="崔絲塔娜 · 調整後 50.7% · 原始 51.0% · 551 場 · 95% CI 46.8–55.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Tristana.png' alt=''><span class='n'>551</span><span class='wr'>50.7%</span><span class='name'>崔絲塔娜</span></div>
-<div class='champ' data-search="潘森 pantheon pantheon" title="潘森 · 調整後 50.7% · 原始 50.9% · 904 場 · 95% CI 47.6–54.1%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Pantheon.png' alt=''><span class='n'>904</span><span class='wr'>50.7%</span><span class='name'>潘森</span></div>
-<div class='champ' data-search="提摩 teemo teemo" title="提摩 · 調整後 50.7% · 原始 51.2% · 287 場 · 95% CI 45.5–56.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Teemo.png' alt=''><span class='n'>287</span><span class='wr'>50.7%</span><span class='name'>提摩</span></div>
-<div class='champ' data-search="馬爾札哈 malzahar malzahar" title="馬爾札哈 · 調整後 50.6% · 原始 51.4% · 140 場 · 95% CI 43.2–59.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Malzahar.png' alt=''><span class='n'>140</span><span class='wr'>50.6%</span><span class='name'>馬爾札哈</span></div>
-<div class='champ' data-search="悟空 wukong monkeyking" title="悟空 · 調整後 50.5% · 原始 51.0% · 204 場 · 95% CI 44.2–57.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MonkeyKing.png' alt=''><span class='n'>204</span><span class='wr'>50.5%</span><span class='name'>悟空</span></div>
-<div class='champ' data-search="汎 vayne vayne" title="汎 · 調整後 50.3% · 原始 50.4% · 1,004 場 · 95% CI 47.3–53.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Vayne.png' alt=''><span class='n'>1004</span><span class='wr'>50.3%</span><span class='name'>汎</span></div>
-<div class='champ' data-search="漢默丁格 heimerdinger heimerdinger" title="漢默丁格 · 調整後 50.2% · 原始 50.4% · 127 場 · 95% CI 41.8–58.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Heimerdinger.png' alt=''><span class='n'>127</span><span class='wr'>50.2%</span><span class='name'>漢默丁格</span></div>
-<div class='champ' data-search="奈德麗 nidalee nidalee" title="奈德麗 · 調整後 50.1% · 原始 50.2% · 285 場 · 95% CI 44.4–55.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nidalee.png' alt=''><span class='n'>285</span><span class='wr'>50.1%</span><span class='name'>奈德麗</span></div>
+<div class='champ' data-search="伊芙琳 黑寡婦 evelynn jade_evelynn" title="伊芙琳　黑寡婦
+調整後 51.9% · 原始 52.8% · 453 場 · 95% CI 48.2–57.3%"><img loading='lazy' src='assets/icons/classic/60028.png' alt=''><span class='n'>453</span><span class='wr'>51.9%</span><span class='name'>伊芙琳</span></div>
+<div class='champ' data-search="布蘭德 復仇業火 brand jade_brand" title="布蘭德　復仇業火
+調整後 51.9% · 原始 55.1% · 118 場 · 95% CI 46.1–63.8%"><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span class='n'>118</span><span class='wr'>51.9%</span><span class='name'>布蘭德</span></div>
+<div class='champ' data-search="希維爾 戰爭女神 sivir jade_sivir" title="希維爾　戰爭女神
+調整後 51.8% · 原始 54.2% · 155 場 · 95% CI 46.3–61.8%"><img loading='lazy' src='assets/icons/classic/60015.png' alt=''><span class='n'>155</span><span class='wr'>51.8%</span><span class='name'>希維爾</span></div>
+<div class='champ' data-search="珍娜 風暴女神 janna jade_janna" title="珍娜　風暴女神
+調整後 51.6% · 原始 53.4% · 176 場 · 95% CI 46.0–60.6%"><img loading='lazy' src='assets/icons/classic/60040.png' alt=''><span class='n'>176</span><span class='wr'>51.6%</span><span class='name'>珍娜</span></div>
+<div class='champ' data-search="阿璃 九尾妖狐 ahri jade_ahri" title="阿璃　九尾妖狐
+調整後 51.5% · 原始 52.3% · 392 場 · 95% CI 47.4–57.2%"><img loading='lazy' src='assets/icons/classic/60103.png' alt=''><span class='n'>392</span><span class='wr'>51.5%</span><span class='name'>阿璃</span></div>
+<div class='champ' data-search="安妮 黑暗之女 annie jade_annie" title="安妮　黑暗之女
+調整後 51.4% · 原始 53.9% · 115 場 · 95% CI 44.8–62.7%"><img loading='lazy' src='assets/icons/classic/60001.png' alt=''><span class='n'>115</span><span class='wr'>51.4%</span><span class='name'>安妮</span></div>
+<div class='champ' data-search="圖奇 瘟疫之源 twitch jade_twitch" title="圖奇　瘟疫之源
+調整後 51.4% · 原始 52.3% · 302 場 · 95% CI 46.7–57.9%"><img loading='lazy' src='assets/icons/classic/60029.png' alt=''><span class='n'>302</span><span class='wr'>51.4%</span><span class='name'>圖奇</span></div>
+<div class='champ' data-search="伊澤瑞爾 探險家 ezreal jade_ezreal" title="伊澤瑞爾　探險家
+調整後 51.2% · 原始 51.3% · 1,510 場 · 95% CI 48.8–53.8%"><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span class='n'>1510</span><span class='wr'>51.2%</span><span class='name'>伊澤瑞爾</span></div>
+<div class='champ' data-search="提摩 迅捷斥候 teemo jade_teemo" title="提摩　迅捷斥候
+調整後 50.9% · 原始 51.5% · 291 場 · 95% CI 45.8–57.2%"><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span class='n'>291</span><span class='wr'>50.9%</span><span class='name'>提摩</span></div>
+<div class='champ' data-search="墨菲特 幻石碎片 malphite jade_malphite" title="墨菲特　幻石碎片
+調整後 50.9% · 原始 52.3% · 132 場 · 95% CI 43.8–60.6%"><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span class='n'>132</span><span class='wr'>50.9%</span><span class='name'>墨菲特</span></div>
+<div class='champ' data-search="賈克斯 武器達人 jax jade_jax" title="賈克斯　武器達人
+調整後 50.9% · 原始 51.3% · 435 場 · 95% CI 46.6–55.9%"><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span class='n'>435</span><span class='wr'>50.9%</span><span class='name'>賈克斯</span></div>
+<div class='champ' data-search="科加斯 虛空恐懼 cho&#x27;gath jade_chogath" title="科加斯　虛空恐懼
+調整後 50.8% · 原始 51.7% · 172 場 · 95% CI 44.3–59.1%"><img loading='lazy' src='assets/icons/classic/60031.png' alt=''><span class='n'>172</span><span class='wr'>50.8%</span><span class='name'>科加斯</span></div>
+<div class='champ' data-search="極靈 時光守護者 zilean jade_zilean" title="極靈　時光守護者
+調整後 50.8% · 原始 52.2% · 113 場 · 95% CI 43.1–61.2%"><img loading='lazy' src='assets/icons/classic/60026.png' alt=''><span class='n'>113</span><span class='wr'>50.8%</span><span class='name'>極靈</span></div>
+<div class='champ' data-search="潘森 戰爭之王 pantheon jade_pantheon" title="潘森　戰爭之王
+調整後 50.8% · 原始 50.9% · 913 場 · 95% CI 47.7–54.2%"><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span class='n'>913</span><span class='wr'>50.8%</span><span class='name'>潘森</span></div>
+<div class='champ' data-search="馬爾札哈 虛空先知 malzahar jade_malzahar" title="馬爾札哈　虛空先知
+調整後 50.7% · 原始 51.8% · 141 場 · 95% CI 43.6–59.9%"><img loading='lazy' src='assets/icons/classic/60090.png' alt=''><span class='n'>141</span><span class='wr'>50.7%</span><span class='name'>馬爾札哈</span></div>
+<div class='champ' data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana" title="崔絲塔娜　麥格靈炮手
+調整後 50.7% · 原始 51.0% · 555 場 · 95% CI 46.8–55.1%"><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span class='n'>555</span><span class='wr'>50.7%</span><span class='name'>崔絲塔娜</span></div>
+<div class='champ' data-search="汎 暗夜獵人 vayne jade_vayne" title="汎　暗夜獵人
+調整後 50.2% · 原始 50.2% · 1,010 場 · 95% CI 47.1–53.3%"><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span class='n'>1010</span><span class='wr'>50.2%</span><span class='name'>汎</span></div>
+<div class='champ' data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks" title="費德提克　末日使者
+調整後 50.1% · 原始 50.1% · 507 場 · 95% CI 45.8–54.4%"><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span class='n'>507</span><span class='wr'>50.1%</span><span class='name'>費德提克</span></div>
+<div class='champ' data-search="漢默丁格 大發明家 heimerdinger jade_heimerdinger" title="漢默丁格　大發明家
+調整後 50.0% · 原始 50.0% · 128 場 · 95% CI 41.5–58.5%"><img loading='lazy' src='assets/icons/classic/60074.png' alt=''><span class='n'>128</span><span class='wr'>50.0%</span><span class='name'>漢默丁格</span></div>
+<div class='champ' data-search="悟空  wukong jade_wukong" title="悟空　
+調整後 50.0% · 原始 50.0% · 208 場 · 95% CI 43.3–56.7%"><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span class='n'>208</span><span class='wr'>50.0%</span><span class='name'>悟空</span></div>
+<div class='champ' data-search="辛吉德 瘋狂煉金師 singed jade_singed" title="辛吉德　瘋狂煉金師
+調整後 50.0% · 原始 50.0% · 88 場 · 95% CI 39.8–60.2%"><img loading='lazy' src='assets/icons/classic/60027.png' alt=''><span class='n'>88</span><span class='wr'>50.0%</span><span class='name'>辛吉德</span></div>
 </div></div>
 <div class='tier-block' data-tier='T3' style='--tier-color:#8ec441; --tier-bg:#8ec441;'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>T3</span></span>
-<span class='tier-count'>12 隻</span>
+<span class='tier-count'>13 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="費德提克 fiddlesticks fiddlesticks" title="費德提克 · 調整後 49.9% · 原始 49.9% · 503 場 · 95% CI 45.5–54.3%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Fiddlesticks.png' alt=''><span class='n'>503</span><span class='wr'>49.9%</span><span class='name'>費德提克</span></div>
-<div class='champ' data-search="艾妮維亞 anivia anivia" title="艾妮維亞 · 調整後 49.9% · 原始 49.8% · 219 場 · 95% CI 43.2–56.3%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Anivia.png' alt=''><span class='n'>219</span><span class='wr'>49.9%</span><span class='name'>艾妮維亞</span></div>
-<div class='champ' data-search="古拉格斯 gragas gragas" title="古拉格斯 · 調整後 49.9% · 原始 49.8% · 544 場 · 95% CI 45.6–54.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Gragas.png' alt=''><span class='n'>544</span><span class='wr'>49.9%</span><span class='name'>古拉格斯</span></div>
-<div class='champ' data-search="辛吉德 singed singed" title="辛吉德 · 調整後 49.8% · 原始 49.4% · 85 場 · 95% CI 39.0–59.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Singed.png' alt=''><span class='n'>85</span><span class='wr'>49.8%</span><span class='name'>辛吉德</span></div>
-<div class='champ' data-search="凱爾 kayle kayle" title="凱爾 · 調整後 49.8% · 原始 49.6% · 252 場 · 95% CI 43.5–55.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Kayle.png' alt=''><span class='n'>252</span><span class='wr'>49.8%</span><span class='name'>凱爾</span></div>
-<div class='champ' data-search="寇格魔 kog&#x27;maw kogmaw" title="寇格魔 · 調整後 49.7% · 原始 49.4% · 176 場 · 95% CI 42.1–56.8%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/KogMaw.png' alt=''><span class='n'>176</span><span class='wr'>49.7%</span><span class='name'>寇格魔</span></div>
-<div class='champ' data-search="塔里克 taric taric" title="塔里克 · 調整後 49.7% · 原始 49.6% · 357 場 · 95% CI 44.4–54.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Taric.png' alt=''><span class='n'>357</span><span class='wr'>49.7%</span><span class='name'>塔里克</span></div>
-<div class='champ' data-search="努努和威朗普 nunu &amp; willump nunu" title="努努和威朗普 · 調整後 49.2% · 原始 49.0% · 680 場 · 95% CI 45.2–52.7%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nunu.png' alt=''><span class='n'>680</span><span class='wr'>49.2%</span><span class='name'>努努和威朗普</span></div>
-<div class='champ' data-search="李星 lee sin leesin" title="李星 · 調整後 49.1% · 原始 48.9% · 993 場 · 95% CI 45.8–52.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/LeeSin.png' alt=''><span class='n'>993</span><span class='wr'>49.1%</span><span class='name'>李星</span></div>
-<div class='champ' data-search="阿姆姆 amumu amumu" title="阿姆姆 · 調整後 48.8% · 原始 47.1% · 140 場 · 95% CI 39.1–55.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Amumu.png' alt=''><span class='n'>140</span><span class='wr'>48.8%</span><span class='name'>阿姆姆</span></div>
-<div class='champ' data-search="拉姆斯 rammus rammus" title="拉姆斯 · 調整後 48.5% · 原始 45.8% · 107 場 · 95% CI 36.7–55.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Rammus.png' alt=''><span class='n'>107</span><span class='wr'>48.5%</span><span class='name'>拉姆斯</span></div>
-<div class='champ' data-search="雷茲 ryze ryze" title="雷茲 · 調整後 48.5% · 原始 48.0% · 594 場 · 95% CI 44.0–52.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ryze.png' alt=''><span class='n'>594</span><span class='wr'>48.5%</span><span class='name'>雷茲</span></div>
+<div class='champ' data-search="古拉格斯 酒桶之王 gragas jade_gragas" title="古拉格斯　酒桶之王
+調整後 49.9% · 原始 49.8% · 546 場 · 95% CI 45.6–54.0%"><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span class='n'>546</span><span class='wr'>49.9%</span><span class='name'>古拉格斯</span></div>
+<div class='champ' data-search="塔里克 寶石騎士 taric jade_taric" title="塔里克　寶石騎士
+調整後 49.8% · 原始 49.7% · 360 場 · 95% CI 44.6–54.9%"><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span class='n'>360</span><span class='wr'>49.8%</span><span class='name'>塔里克</span></div>
+<div class='champ' data-search="奈德麗 狂野獵手 nidalee jade_nidalee" title="奈德麗　狂野獵手
+調整後 49.8% · 原始 49.7% · 288 場 · 95% CI 43.9–55.4%"><img loading='lazy' src='assets/icons/classic/60076.png' alt=''><span class='n'>288</span><span class='wr'>49.8%</span><span class='name'>奈德麗</span></div>
+<div class='champ' data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia" title="艾妮維亞　冰晶鳳凰
+調整後 49.8% · 原始 49.5% · 220 場 · 95% CI 43.0–56.1%"><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span class='n'>220</span><span class='wr'>49.8%</span><span class='name'>艾妮維亞</span></div>
+<div class='champ' data-search="寇格魔 深淵巨口 kog&#x27;maw jade_kogmaw" title="寇格魔　深淵巨口
+調整後 49.7% · 原始 49.4% · 176 場 · 95% CI 42.1–56.8%"><img loading='lazy' src='assets/icons/classic/60096.png' alt=''><span class='n'>176</span><span class='wr'>49.7%</span><span class='name'>寇格魔</span></div>
+<div class='champ' data-search="凱爾 審判天使 kayle jade_kayle" title="凱爾　審判天使
+調整後 49.6% · 原始 49.2% · 256 場 · 95% CI 43.2–55.3%"><img loading='lazy' src='assets/icons/classic/60010.png' alt=''><span class='n'>256</span><span class='wr'>49.6%</span><span class='name'>凱爾</span></div>
+<div class='champ' data-search="李星 盲眼武僧 lee sin jade_leesin" title="李星　盲眼武僧
+調整後 49.2% · 原始 49.0% · 996 場 · 95% CI 45.9–52.1%"><img loading='lazy' src='assets/icons/classic/60064.png' alt=''><span class='n'>996</span><span class='wr'>49.2%</span><span class='name'>李星</span></div>
+<div class='champ' data-search="努努和威朗普 雪人騎士 nunu &amp; willump jade_nunu" title="努努和威朗普　雪人騎士
+調整後 49.2% · 原始 48.9% · 685 場 · 95% CI 45.2–52.6%"><img loading='lazy' src='assets/icons/classic/60020.png' alt=''><span class='n'>685</span><span class='wr'>49.2%</span><span class='name'>努努和威朗普</span></div>
+<div class='champ' data-search="阿姆姆 殤之木乃伊 amumu jade_amumu" title="阿姆姆　殤之木乃伊
+調整後 49.0% · 原始 47.5% · 141 場 · 95% CI 39.5–55.7%"><img loading='lazy' src='assets/icons/classic/60032.png' alt=''><span class='n'>141</span><span class='wr'>49.0%</span><span class='name'>阿姆姆</span></div>
+<div class='champ' data-search="雷茲 流浪法師 ryze jade_ryze" title="雷茲　流浪法師
+調整後 48.7% · 原始 48.3% · 601 場 · 95% CI 44.3–52.2%"><img loading='lazy' src='assets/icons/classic/60013.png' alt=''><span class='n'>601</span><span class='wr'>48.7%</span><span class='name'>雷茲</span></div>
+<div class='champ' data-search="拉姆斯 披甲龍龜 rammus jade_rammus" title="拉姆斯　披甲龍龜
+調整後 48.5% · 原始 45.8% · 107 場 · 95% CI 36.7–55.2%"><img loading='lazy' src='assets/icons/classic/60033.png' alt=''><span class='n'>107</span><span class='wr'>48.5%</span><span class='name'>拉姆斯</span></div>
+<div class='champ' data-search="卡爾瑟斯 死亡頌唱者 karthus jade_karthus" title="卡爾瑟斯　死亡頌唱者
+調整後 48.0% · 原始 44.9% · 127 場 · 95% CI 36.5–53.6%"><img loading='lazy' src='assets/icons/classic/60030.png' alt=''><span class='n'>127</span><span class='wr'>48.0%</span><span class='name'>卡爾瑟斯</span></div>
+<div class='champ' data-search="露璐 精靈魔法使 lulu jade_lulu" title="露璐　精靈魔法使
+調整後 48.0% · 原始 46.8% · 327 場 · 95% CI 41.4–52.2%"><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span class='n'>327</span><span class='wr'>48.0%</span><span class='name'>露璐</span></div>
 </div></div>
 <div class='tier-block' data-tier='T4' style='--tier-color:#3aa0ff; --tier-bg:#3aa0ff;'>
 <h2 class='tier-heading'>
 <span class='tier-pill'><span>T4</span></span>
-<span class='tier-count'>10 隻</span>
+<span class='tier-count'>8 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="露璐 lulu lulu" title="露璐 · 調整後 47.9% · 原始 46.6% · 324 場 · 95% CI 41.2–52.0%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Lulu.png' alt=''><span class='n'>324</span><span class='wr'>47.9%</span><span class='name'>露璐</span></div>
-<div class='champ' data-search="剛普朗克 gangplank gangplank" title="剛普朗克 · 調整後 47.9% · 原始 47.4% · 932 場 · 95% CI 44.2–50.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Gangplank.png' alt=''><span class='n'>932</span><span class='wr'>47.9%</span><span class='name'>剛普朗克</span></div>
-<div class='champ' data-search="卡爾瑟斯 karthus karthus" title="卡爾瑟斯 · 調整後 47.9% · 原始 44.4% · 126 場 · 95% CI 36.1–53.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Karthus.png' alt=''><span class='n'>126</span><span class='wr'>47.9%</span><span class='name'>卡爾瑟斯</span></div>
-<div class='champ' data-search="艾希 ashe ashe" title="艾希 · 調整後 47.7% · 原始 46.9% · 525 場 · 95% CI 42.6–51.1%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ashe.png' alt=''><span class='n'>525</span><span class='wr'>47.7%</span><span class='name'>艾希</span></div>
-<div class='champ' data-search="維迦 veigar veigar" title="維迦 · 調整後 47.6% · 原始 44.2% · 138 場 · 95% CI 36.2–52.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Veigar.png' alt=''><span class='n'>138</span><span class='wr'>47.6%</span><span class='name'>維迦</span></div>
-<div class='champ' data-search="賽恩 sion sion" title="賽恩 · 調整後 47.0% · 原始 46.1% · 634 場 · 95% CI 42.2–49.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sion.png' alt=''><span class='n'>634</span><span class='wr'>47.0%</span><span class='name'>賽恩</span></div>
-<div class='champ' data-search="蓋倫 garen garen" title="蓋倫 · 調整後 46.4% · 原始 44.3% · 343 場 · 95% CI 39.1–49.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Garen.png' alt=''><span class='n'>343</span><span class='wr'>46.4%</span><span class='name'>蓋倫</span></div>
-<div class='champ' data-search="歐拉夫 olaf olaf" title="歐拉夫 · 調整後 46.4% · 原始 41.0% · 134 場 · 95% CI 33.1–49.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Olaf.png' alt=''><span class='n'>134</span><span class='wr'>46.4%</span><span class='name'>歐拉夫</span></div>
-<div class='champ' data-search="薩科 shaco shaco" title="薩科 · 調整後 46.4% · 原始 44.1% · 322 場 · 95% CI 38.8–49.6%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Shaco.png' alt=''><span class='n'>322</span><span class='wr'>46.4%</span><span class='name'>薩科</span></div>
-<div class='champ' data-search="亞歷斯塔 alistar alistar" title="亞歷斯塔 · 調整後 46.3% · 原始 44.0% · 323 場 · 95% CI 38.7–49.4%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Alistar.png' alt=''><span class='n'>323</span><span class='wr'>46.3%</span><span class='name'>亞歷斯塔</span></div>
+<div class='champ' data-search="剛普朗克 海洋之災 gangplank jade_gangplank" title="剛普朗克　海洋之災
+調整後 47.9% · 原始 47.4% · 938 場 · 95% CI 44.3–50.6%"><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span class='n'>938</span><span class='wr'>47.9%</span><span class='name'>剛普朗克</span></div>
+<div class='champ' data-search="維迦 邪惡小法師 veigar jade_veigar" title="維迦　邪惡小法師
+調整後 47.6% · 原始 44.2% · 138 場 · 95% CI 36.2–52.5%"><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span class='n'>138</span><span class='wr'>47.6%</span><span class='name'>維迦</span></div>
+<div class='champ' data-search="艾希 冰霜射手 ashe jade_ashe" title="艾希　冰霜射手
+調整後 47.6% · 原始 46.7% · 529 場 · 95% CI 42.5–51.0%"><img loading='lazy' src='assets/icons/classic/60022.png' alt=''><span class='n'>529</span><span class='wr'>47.6%</span><span class='name'>艾希</span></div>
+<div class='champ' data-search="賽恩 亡靈勇士 sion jade_sion" title="賽恩　亡靈勇士
+調整後 46.9% · 原始 45.9% · 638 場 · 95% CI 42.1–49.8%"><img loading='lazy' src='assets/icons/classic/60014.png' alt=''><span class='n'>638</span><span class='wr'>46.9%</span><span class='name'>賽恩</span></div>
+<div class='champ' data-search="蓋倫 蒂瑪西亞之力 garen jade_garen" title="蓋倫　蒂瑪西亞之力
+調整後 46.4% · 原始 44.3% · 345 場 · 95% CI 39.2–49.6%"><img loading='lazy' src='assets/icons/classic/60086.png' alt=''><span class='n'>345</span><span class='wr'>46.4%</span><span class='name'>蓋倫</span></div>
+<div class='champ' data-search="薩科 惡魔小丑 shaco jade_shaco" title="薩科　惡魔小丑
+調整後 46.3% · 原始 44.0% · 327 場 · 95% CI 38.8–49.5%"><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span class='n'>327</span><span class='wr'>46.3%</span><span class='name'>薩科</span></div>
+<div class='champ' data-search="亞歷斯塔 牛頭酋長 alistar jade_alistar" title="亞歷斯塔　牛頭酋長
+調整後 46.2% · 原始 43.9% · 328 場 · 95% CI 38.6–49.3%"><img loading='lazy' src='assets/icons/classic/60012.png' alt=''><span class='n'>328</span><span class='wr'>46.2%</span><span class='name'>亞歷斯塔</span></div>
+<div class='champ' data-search="歐拉夫 狂戰士 olaf jade_olaf" title="歐拉夫　狂戰士
+調整後 46.1% · 原始 40.4% · 136 場 · 95% CI 32.6–48.8%"><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span class='n'>136</span><span class='wr'>46.1%</span><span class='name'>歐拉夫</span></div>
 </div></div>
 <div class='tier-block' data-tier='T5' style='--tier-color:#7a7f8a; --tier-bg:#7a7f8a;'>
 <h2 class='tier-heading'>
@@ -229,12 +287,18 @@ footer code{color:var(--text-muted)}
 <span class='tier-count'>6 隻</span>
 </h2>
 <div class='tier-grid'>
-<div class='champ' data-search="卡薩丁 kassadin kassadin" title="卡薩丁 · 調整後 45.9% · 原始 42.7% · 255 場 · 95% CI 36.8–48.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Kassadin.png' alt=''><span class='n'>255</span><span class='wr'>45.9%</span><span class='name'>卡薩丁</span></div>
-<div class='champ' data-search="易大師 master yi masteryi" title="易大師 · 調整後 45.0% · 原始 43.8% · 815 場 · 95% CI 40.4–47.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MasterYi.png' alt=''><span class='n'>815</span><span class='wr'>45.0%</span><span class='name'>易大師</span></div>
-<div class='champ' data-search="拉克絲 lux lux" title="拉克絲 · 調整後 44.9% · 原始 41.9% · 341 場 · 95% CI 36.8–47.2%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Lux.png' alt=''><span class='n'>341</span><span class='wr'>44.9%</span><span class='name'>拉克絲</span></div>
-<div class='champ' data-search="索拉卡 soraka soraka" title="索拉卡 · 調整後 44.3% · 原始 42.3% · 551 場 · 95% CI 38.2–46.5%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Soraka.png' alt=''><span class='n'>551</span><span class='wr'>44.3%</span><span class='name'>索拉卡</span></div>
-<div class='champ' data-search="蒙多醫生 dr. mundo drmundo" title="蒙多醫生 · 調整後 43.1% · 原始 35.9% · 192 場 · 95% CI 29.5–42.9%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/DrMundo.png' alt=''><span class='n'>192</span><span class='wr'>43.1%</span><span class='name'>蒙多醫生</span></div>
-<div class='champ' data-search="好運姐 miss fortune missfortune" title="好運姐 · 調整後 41.8% · 原始 37.3% · 370 場 · 95% CI 32.5–42.3%"><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MissFortune.png' alt=''><span class='n'>370</span><span class='wr'>41.8%</span><span class='name'>好運姐</span></div>
+<div class='champ' data-search="卡薩丁 虛空行者 kassadin jade_kassadin" title="卡薩丁　虛空行者
+調整後 46.0% · 原始 42.9% · 259 場 · 95% CI 37.0–48.9%"><img loading='lazy' src='assets/icons/classic/60038.png' alt=''><span class='n'>259</span><span class='wr'>46.0%</span><span class='name'>卡薩丁</span></div>
+<div class='champ' data-search="易大師 無極劍聖 master yi jade_masteryi" title="易大師　無極劍聖
+調整後 45.0% · 原始 43.8% · 824 場 · 95% CI 40.5–47.2%"><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span class='n'>824</span><span class='wr'>45.0%</span><span class='name'>易大師</span></div>
+<div class='champ' data-search="拉克絲 光之少女 lux jade_lux" title="拉克絲　光之少女
+調整後 44.8% · 原始 41.8% · 342 場 · 95% CI 36.7–47.1%"><img loading='lazy' src='assets/icons/classic/60099.png' alt=''><span class='n'>342</span><span class='wr'>44.8%</span><span class='name'>拉克絲</span></div>
+<div class='champ' data-search="索拉卡 眾星之子 soraka jade_soraka" title="索拉卡　眾星之子
+調整後 44.4% · 原始 42.4% · 556 場 · 95% CI 38.4–46.6%"><img loading='lazy' src='assets/icons/classic/60016.png' alt=''><span class='n'>556</span><span class='wr'>44.4%</span><span class='name'>索拉卡</span></div>
+<div class='champ' data-search="蒙多醫生 佐恩狂人 dr. mundo jade_drmundo" title="蒙多醫生　佐恩狂人
+調整後 42.9% · 原始 35.6% · 194 場 · 95% CI 29.2–42.5%"><img loading='lazy' src='assets/icons/classic/60036.png' alt=''><span class='n'>194</span><span class='wr'>42.9%</span><span class='name'>蒙多醫生</span></div>
+<div class='champ' data-search="好運姐 賞金獵人 miss fortune jade_missfortune" title="好運姐　賞金獵人
+調整後 41.7% · 原始 37.3% · 373 場 · 95% CI 32.5–42.3%"><img loading='lazy' src='assets/icons/classic/60021.png' alt=''><span class='n'>373</span><span class='wr'>41.7%</span><span class='name'>好運姐</span></div>
 </div></div>
 </div>
 <section id='table-sec'>
@@ -250,609 +314,609 @@ footer code{color:var(--text-muted)}
 <th>誤差範圍</th>
 <th>選用率</th>
 </tr></thead><tbody>
-<tr data-search="布里茨 blitzcrank blitzcrank">
-<td data-v='0.585542'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Blitzcrank.png' alt=''><span>布里茨 <small>Blitzcrank</small></span></span></td>
-<td class='num' data-v='630'>630</td>
-<td class='num' data-v='0.612698'>61.3%</td>
-<td class='num' data-v='0.585542'>58.6%</td>
-<td class='num' data-v='0.574085'>57.4–65.0%</td>
-<td data-v='0.075860'><span class='bar' style='--bc:#8ec441'><i style='left:68.52%;width:18.97%'></i><b style='left:78.17%'></b></span></td>
-<td class='num' data-v='0.133418'>13.3%</td>
+<tr data-search="布里茨 蒸汽巨神兵 blitzcrank jade_blitzcrank">
+<td data-v='0.587530'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60053.png' alt=''><span>布里茨 <small>Blitzcrank</small><em>蒸汽巨神兵</em></span></span></td>
+<td class='num' data-v='634'>634</td>
+<td class='num' data-v='0.615142'>61.5%</td>
+<td class='num' data-v='0.587530'>58.8%</td>
+<td class='num' data-v='0.576682'>57.7–65.2%</td>
+<td data-v='0.075534'><span class='bar' style='--bc:#8ec441'><i style='left:69.17%;width:18.88%'></i><b style='left:78.79%'></b></span></td>
+<td class='num' data-v='0.133193'>13.3%</td>
 </tr>
-<tr data-search="沃維克 warwick warwick">
-<td data-v='0.551373'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Warwick.png' alt=''><span>沃維克 <small>Warwick</small></span></span></td>
-<td class='num' data-v='783'>783</td>
-<td class='num' data-v='0.564496'>56.4%</td>
-<td class='num' data-v='0.551373'>55.1%</td>
-<td class='num' data-v='0.529534'>53.0–59.9%</td>
-<td data-v='0.069293'><span class='bar' style='--bc:#8ec441'><i style='left:57.38%;width:17.32%'></i><b style='left:66.12%'></b></span></td>
-<td class='num' data-v='0.165820'>16.6%</td>
+<tr data-search="魔甘娜 墮落天使 morgana jade_morgana">
+<td data-v='0.552158'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60025.png' alt=''><span>魔甘娜 <small>Morgana</small><em>墮落天使</em></span></span></td>
+<td class='num' data-v='356'>356</td>
+<td class='num' data-v='0.581461'>58.1%</td>
+<td class='num' data-v='0.552158'>55.2%</td>
+<td class='num' data-v='0.529612'>53.0–63.2%</td>
+<td data-v='0.101958'><span class='bar' style='--bc:#8ec441'><i style='left:57.40%;width:25.49%'></i><b style='left:70.37%'></b></span></td>
+<td class='num' data-v='0.074790'>7.5%</td>
 </tr>
-<tr data-search="魔甘娜 morgana morgana">
-<td data-v='0.551351'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Morgana.png' alt=''><span>魔甘娜 <small>Morgana</small></span></span></td>
-<td class='num' data-v='355'>355</td>
-<td class='num' data-v='0.580282'>58.0%</td>
-<td class='num' data-v='0.551351'>55.1%</td>
-<td class='num' data-v='0.528352'>52.8–63.0%</td>
-<td data-v='0.102140'><span class='bar' style='--bc:#8ec441'><i style='left:57.09%;width:25.53%'></i><b style='left:70.07%'></b></span></td>
-<td class='num' data-v='0.075180'>7.5%</td>
+<tr data-search="沃維克 嗜血獵手 warwick jade_warwick">
+<td data-v='0.550607'><span class='tchip' style='background:#d8b8ff;color:#0e1116'>OP</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60019.png' alt=''><span>沃維克 <small>Warwick</small><em>嗜血獵手</em></span></span></td>
+<td class='num' data-v='788'>788</td>
+<td class='num' data-v='0.563452'>56.3%</td>
+<td class='num' data-v='0.550607'>55.1%</td>
+<td class='num' data-v='0.528598'>52.9–59.8%</td>
+<td data-v='0.069092'><span class='bar' style='--bc:#8ec441'><i style='left:57.15%;width:17.27%'></i><b style='left:65.86%'></b></span></td>
+<td class='num' data-v='0.165546'>16.6%</td>
 </tr>
-<tr data-search="史加納 skarner skarner">
-<td data-v='0.547425'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Skarner.png' alt=''><span>史加納 <small>Skarner</small></span></span></td>
-<td class='num' data-v='169'>169</td>
-<td class='num' data-v='0.603550'>60.4%</td>
-<td class='num' data-v='0.547425'>54.7%</td>
-<td class='num' data-v='0.528286'>52.8–67.4%</td>
-<td data-v='0.145925'><span class='bar' style='--bc:#8ec441'><i style='left:57.07%;width:36.48%'></i><b style='left:75.89%'></b></span></td>
-<td class='num' data-v='0.035790'>3.6%</td>
+<tr data-search="史加納 水晶戰蠍 skarner jade_skarner">
+<td data-v='0.548649'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60072.png' alt=''><span>史加納 <small>Skarner</small><em>水晶戰蠍</em></span></span></td>
+<td class='num' data-v='170'>170</td>
+<td class='num' data-v='0.605882'>60.6%</td>
+<td class='num' data-v='0.548649'>54.9%</td>
+<td class='num' data-v='0.530863'>53.1–67.6%</td>
+<td data-v='0.145359'><span class='bar' style='--bc:#8ec441'><i style='left:57.72%;width:36.34%'></i><b style='left:76.47%'></b></span></td>
+<td class='num' data-v='0.035714'>3.6%</td>
 </tr>
-<tr data-search="泰達米爾 tryndamere tryndamere">
-<td data-v='0.544204'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Tryndamere.png' alt=''><span>泰達米爾 <small>Tryndamere</small></span></span></td>
-<td class='num' data-v='309'>309</td>
-<td class='num' data-v='0.572816'>57.3%</td>
-<td class='num' data-v='0.544204'>54.4%</td>
-<td class='num' data-v='0.517098'>51.7–62.7%</td>
-<td data-v='0.109647'><span class='bar' style='--bc:#8ec441'><i style='left:54.27%;width:27.41%'></i><b style='left:68.20%'></b></span></td>
-<td class='num' data-v='0.065438'>6.5%</td>
+<tr data-search="泰達米爾 蠻族之王 tryndamere jade_tryndamere">
+<td data-v='0.544031'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60023.png' alt=''><span>泰達米爾 <small>Tryndamere</small><em>蠻族之王</em></span></span></td>
+<td class='num' data-v='311'>311</td>
+<td class='num' data-v='0.572347'>57.2%</td>
+<td class='num' data-v='0.544031'>54.4%</td>
+<td class='num' data-v='0.516808'>51.7–62.6%</td>
+<td data-v='0.109313'><span class='bar' style='--bc:#8ec441'><i style='left:54.20%;width:27.33%'></i><b style='left:68.09%'></b></span></td>
+<td class='num' data-v='0.065336'>6.5%</td>
 </tr>
-<tr data-search="逆命 twisted fate twistedfate">
-<td data-v='0.537530'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/TwistedFate.png' alt=''><span>逆命 <small>Twisted Fate</small></span></span></td>
-<td class='num' data-v='213'>213</td>
-<td class='num' data-v='0.572770'>57.3%</td>
-<td class='num' data-v='0.537530'>53.8%</td>
-<td class='num' data-v='0.505626'>50.6–63.7%</td>
-<td data-v='0.131710'><span class='bar' style='--bc:#8ec441'><i style='left:51.41%;width:32.93%'></i><b style='left:68.19%'></b></span></td>
-<td class='num' data-v='0.045108'>4.5%</td>
-</tr>
-<tr data-search="納瑟斯 nasus nasus">
-<td data-v='0.536000'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nasus.png' alt=''><span>納瑟斯 <small>Nasus</small></span></span></td>
-<td class='num' data-v='300'>300</td>
-<td class='num' data-v='0.560000'>56.0%</td>
-<td class='num' data-v='0.536000'>53.6%</td>
-<td class='num' data-v='0.503421'>50.3–61.5%</td>
-<td data-v='0.111641'><span class='bar' style='--bc:#8ec441'><i style='left:50.86%;width:27.91%'></i><b style='left:65.00%'></b></span></td>
-<td class='num' data-v='0.063532'>6.4%</td>
-</tr>
-<tr data-search="庫奇 corki corki">
-<td data-v='0.530337'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Corki.png' alt=''><span>庫奇 <small>Corki</small></span></span></td>
-<td class='num' data-v='245'>245</td>
-<td class='num' data-v='0.555102'>55.5%</td>
-<td class='num' data-v='0.530337'>53.0%</td>
-<td class='num' data-v='0.492499'>49.2–61.6%</td>
-<td data-v='0.123504'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.12%;width:30.88%'></i><b style='left:63.78%'></b></span></td>
-<td class='num' data-v='0.051885'>5.2%</td>
-</tr>
-<tr data-search="嘉文四世 jarvan iv jarvaniv">
-<td data-v='0.528912'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/JarvanIV.png' alt=''><span>嘉文四世 <small>Jarvan IV</small></span></span></td>
-<td class='num' data-v='388'>388</td>
-<td class='num' data-v='0.543814'>54.4%</td>
-<td class='num' data-v='0.528912'>52.9%</td>
-<td class='num' data-v='0.494066'>49.4–59.3%</td>
-<td data-v='0.098638'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.52%;width:24.66%'></i><b style='left:60.95%'></b></span></td>
-<td class='num' data-v='0.082169'>8.2%</td>
-</tr>
-<tr data-search="卡特蓮娜 katarina katarina">
-<td data-v='0.525465'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Katarina.png' alt=''><span>卡特蓮娜 <small>Katarina</small></span></span></td>
-<td class='num' data-v='1037'>1,037</td>
-<td class='num' data-v='0.530376'>53.0%</td>
-<td class='num' data-v='0.525465'>52.5%</td>
-<td class='num' data-v='0.499944'>50.0–56.1%</td>
-<td data-v='0.060641'><span class='bar' style='--bc:#9aa0a6'><i style='left:49.99%;width:15.16%'></i><b style='left:57.59%'></b></span></td>
-<td class='num' data-v='0.219610'>22.0%</td>
-</tr>
-<tr data-search="雷歐娜 leona leona">
-<td data-v='0.524155'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Leona.png' alt=''><span>雷歐娜 <small>Leona</small></span></span></td>
+<tr data-search="逆命 卡牌大師 twisted fate jade_twistedfate">
+<td data-v='0.538647'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60004.png' alt=''><span>逆命 <small>Twisted Fate</small><em>卡牌大師</em></span></span></td>
 <td class='num' data-v='214'>214</td>
-<td class='num' data-v='0.546729'>54.7%</td>
-<td class='num' data-v='0.524155'>52.4%</td>
-<td class='num' data-v='0.479792'>48.0–61.2%</td>
-<td data-v='0.132225'><span class='bar' style='--bc:#9aa0a6'><i style='left:44.95%;width:33.06%'></i><b style='left:61.68%'></b></span></td>
-<td class='num' data-v='0.045320'>4.5%</td>
+<td class='num' data-v='0.574766'>57.5%</td>
+<td class='num' data-v='0.538647'>53.9%</td>
+<td class='num' data-v='0.507783'>50.8–63.9%</td>
+<td data-v='0.131330'><span class='bar' style='--bc:#8ec441'><i style='left:51.95%;width:32.83%'></i><b style='left:68.69%'></b></span></td>
+<td class='num' data-v='0.044958'>4.5%</td>
 </tr>
-<tr data-search="索娜 sona sona">
-<td data-v='0.522273'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sona.png' alt=''><span>索娜 <small>Sona</small></span></span></td>
-<td class='num' data-v='451'>451</td>
-<td class='num' data-v='0.532151'>53.2%</td>
-<td class='num' data-v='0.522273'>52.2%</td>
-<td class='num' data-v='0.486022'>48.6–57.8%</td>
-<td data-v='0.091714'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.51%;width:22.93%'></i><b style='left:58.04%'></b></span></td>
-<td class='num' data-v='0.095510'>9.6%</td>
+<tr data-search="納瑟斯 沙漠死神 nasus jade_nasus">
+<td data-v='0.536779'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60075.png' alt=''><span>納瑟斯 <small>Nasus</small><em>沙漠死神</em></span></span></td>
+<td class='num' data-v='303'>303</td>
+<td class='num' data-v='0.561056'>56.1%</td>
+<td class='num' data-v='0.536779'>53.7%</td>
+<td class='num' data-v='0.504759'>50.5–61.6%</td>
+<td data-v='0.111065'><span class='bar' style='--bc:#8ec441'><i style='left:51.19%;width:27.77%'></i><b style='left:65.26%'></b></span></td>
+<td class='num' data-v='0.063655'>6.4%</td>
 </tr>
-<tr data-search="伊芙琳 evelynn evelynn">
-<td data-v='0.518519'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Evelynn.png' alt=''><span>伊芙琳 <small>Evelynn</small></span></span></td>
-<td class='num' data-v='448'>448</td>
-<td class='num' data-v='0.526786'>52.7%</td>
-<td class='num' data-v='0.518519'>51.9%</td>
-<td class='num' data-v='0.480520'>48.1–57.3%</td>
-<td data-v='0.092076'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.13%;width:23.02%'></i><b style='left:56.70%'></b></span></td>
-<td class='num' data-v='0.094875'>9.5%</td>
+<tr data-search="庫奇 英勇投彈手 corki jade_corki">
+<td data-v='0.530067'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60042.png' alt=''><span>庫奇 <small>Corki</small><em>英勇投彈手</em></span></span></td>
+<td class='num' data-v='249'>249</td>
+<td class='num' data-v='0.554217'>55.4%</td>
+<td class='num' data-v='0.530067'>53.0%</td>
+<td class='num' data-v='0.492120'>49.2–61.5%</td>
+<td data-v='0.122547'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.03%;width:30.64%'></i><b style='left:63.55%'></b></span></td>
+<td class='num' data-v='0.052311'>5.2%</td>
 </tr>
-<tr data-search="希維爾 sivir sivir">
+<tr data-search="嘉文四世 蒂瑪西亞楷模 jarvan iv jade_jarvaniv">
+<td data-v='0.528716'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60059.png' alt=''><span>嘉文四世 <small>Jarvan IV</small><em>蒂瑪西亞楷模</em></span></span></td>
+<td class='num' data-v='392'>392</td>
+<td class='num' data-v='0.543367'>54.3%</td>
+<td class='num' data-v='0.528716'>52.9%</td>
+<td class='num' data-v='0.493874'>49.4–59.2%</td>
+<td data-v='0.098146'><span class='bar' style='--bc:#9aa0a6'><i style='left:48.47%;width:24.54%'></i><b style='left:60.84%'></b></span></td>
+<td class='num' data-v='0.082353'>8.2%</td>
+</tr>
+<tr data-search="卡特蓮娜 不祥之刃 katarina jade_katarina">
+<td data-v='0.525000'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60055.png' alt=''><span>卡特蓮娜 <small>Katarina</small><em>不祥之刃</em></span></span></td>
+<td class='num' data-v='1040'>1,040</td>
+<td class='num' data-v='0.529808'>53.0%</td>
+<td class='num' data-v='0.525000'>52.5%</td>
+<td class='num' data-v='0.499419'>49.9–56.0%</td>
+<td data-v='0.060558'><span class='bar' style='--bc:#9aa0a6'><i style='left:49.85%;width:15.14%'></i><b style='left:57.45%'></b></span></td>
+<td class='num' data-v='0.218487'>21.8%</td>
+</tr>
+<tr data-search="雷歐娜 黎明之光 leona jade_leona">
+<td data-v='0.523923'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60089.png' alt=''><span>雷歐娜 <small>Leona</small><em>黎明之光</em></span></span></td>
+<td class='num' data-v='218'>218</td>
+<td class='num' data-v='0.545872'>54.6%</td>
+<td class='num' data-v='0.523923'>52.4%</td>
+<td class='num' data-v='0.479553'>48.0–61.1%</td>
+<td data-v='0.131048'><span class='bar' style='--bc:#9aa0a6'><i style='left:44.89%;width:32.76%'></i><b style='left:61.47%'></b></span></td>
+<td class='num' data-v='0.045798'>4.6%</td>
+</tr>
+<tr data-search="索娜 琴仙 sona jade_sona">
+<td data-v='0.522936'><span class='tchip' style='background:#ff5a3c;color:#0e1116'>T1</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60037.png' alt=''><span>索娜 <small>Sona</small><em>琴仙</em></span></span></td>
+<td class='num' data-v='454'>454</td>
+<td class='num' data-v='0.533040'>53.3%</td>
+<td class='num' data-v='0.522936'>52.3%</td>
+<td class='num' data-v='0.487061'>48.7–57.8%</td>
+<td data-v='0.091402'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.77%;width:22.85%'></i><b style='left:58.26%'></b></span></td>
+<td class='num' data-v='0.095378'>9.5%</td>
+</tr>
+<tr data-search="伊芙琳 黑寡婦 evelynn jade_evelynn">
+<td data-v='0.519142'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60028.png' alt=''><span>伊芙琳 <small>Evelynn</small><em>黑寡婦</em></span></span></td>
+<td class='num' data-v='453'>453</td>
+<td class='num' data-v='0.527594'>52.8%</td>
+<td class='num' data-v='0.519142'>51.9%</td>
+<td class='num' data-v='0.481581'>48.2–57.3%</td>
+<td data-v='0.091562'><span class='bar' style='--bc:#9aa0a6'><i style='left:45.40%;width:22.89%'></i><b style='left:56.90%'></b></span></td>
+<td class='num' data-v='0.095168'>9.5%</td>
+</tr>
+<tr data-search="布蘭德 復仇業火 brand jade_brand">
+<td data-v='0.518868'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60063.png' alt=''><span>布蘭德 <small>Brand</small><em>復仇業火</em></span></span></td>
+<td class='num' data-v='118'>118</td>
+<td class='num' data-v='0.550847'>55.1%</td>
+<td class='num' data-v='0.518868'>51.9%</td>
+<td class='num' data-v='0.460907'>46.1–63.8%</td>
+<td data-v='0.176674'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.23%;width:44.17%'></i><b style='left:62.71%'></b></span></td>
+<td class='num' data-v='0.024790'>2.5%</td>
+</tr>
+<tr data-search="希維爾 戰爭女神 sivir jade_sivir">
 <td data-v='0.518310'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sivir.png' alt=''><span>希維爾 <small>Sivir</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60015.png' alt=''><span>希維爾 <small>Sivir</small><em>戰爭女神</em></span></span></td>
 <td class='num' data-v='155'>155</td>
 <td class='num' data-v='0.541935'>54.2%</td>
 <td class='num' data-v='0.518310'>51.8%</td>
 <td class='num' data-v='0.463431'>46.3–61.8%</td>
 <td data-v='0.154981'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.86%;width:38.75%'></i><b style='left:60.48%'></b></span></td>
-<td class='num' data-v='0.032825'>3.3%</td>
+<td class='num' data-v='0.032563'>3.3%</td>
 </tr>
-<tr data-search="布蘭德 brand brand">
-<td data-v='0.517350'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Brand.png' alt=''><span>布蘭德 <small>Brand</small></span></span></td>
-<td class='num' data-v='117'>117</td>
-<td class='num' data-v='0.547009'>54.7%</td>
-<td class='num' data-v='0.517350'>51.7%</td>
-<td class='num' data-v='0.456747'>45.7–63.4%</td>
-<td data-v='0.177534'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.19%;width:44.38%'></i><b style='left:61.75%'></b></span></td>
-<td class='num' data-v='0.024778'>2.5%</td>
+<tr data-search="珍娜 風暴女神 janna jade_janna">
+<td data-v='0.515957'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60040.png' alt=''><span>珍娜 <small>Janna</small><em>風暴女神</em></span></span></td>
+<td class='num' data-v='176'>176</td>
+<td class='num' data-v='0.534091'>53.4%</td>
+<td class='num' data-v='0.515957'>51.6%</td>
+<td class='num' data-v='0.460452'>46.0–60.6%</td>
+<td data-v='0.145821'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.11%;width:36.46%'></i><b style='left:58.52%'></b></span></td>
+<td class='num' data-v='0.036975'>3.7%</td>
 </tr>
-<tr data-search="阿璃 ahri ahri">
-<td data-v='0.516184'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ahri.png' alt=''><span>阿璃 <small>Ahri</small></span></span></td>
-<td class='num' data-v='387'>387</td>
-<td class='num' data-v='0.524548'>52.5%</td>
-<td class='num' data-v='0.516184'>51.6%</td>
-<td class='num' data-v='0.474795'>47.5–57.4%</td>
-<td data-v='0.099023'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.70%;width:24.76%'></i><b style='left:56.14%'></b></span></td>
-<td class='num' data-v='0.081957'>8.2%</td>
+<tr data-search="阿璃 九尾妖狐 ahri jade_ahri">
+<td data-v='0.515203'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60103.png' alt=''><span>阿璃 <small>Ahri</small><em>九尾妖狐</em></span></span></td>
+<td class='num' data-v='392'>392</td>
+<td class='num' data-v='0.522959'>52.3%</td>
+<td class='num' data-v='0.515203'>51.5%</td>
+<td class='num' data-v='0.473531'>47.4–57.2%</td>
+<td data-v='0.098411'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.38%;width:24.60%'></i><b style='left:55.74%'></b></span></td>
+<td class='num' data-v='0.082353'>8.2%</td>
 </tr>
-<tr data-search="安妮 annie annie">
-<td data-v='0.515924'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Annie.png' alt=''><span>安妮 <small>Annie</small></span></span></td>
-<td class='num' data-v='114'>114</td>
-<td class='num' data-v='0.543860'>54.4%</td>
-<td class='num' data-v='0.515924'>51.6%</td>
-<td class='num' data-v='0.452490'>45.2–63.2%</td>
-<td data-v='0.179881'><span class='bar' style='--bc:#9aa0a6'><i style='left:38.12%;width:44.97%'></i><b style='left:60.96%'></b></span></td>
-<td class='num' data-v='0.024142'>2.4%</td>
+<tr data-search="安妮 黑暗之女 annie jade_annie">
+<td data-v='0.514286'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60001.png' alt=''><span>安妮 <small>Annie</small><em>黑暗之女</em></span></span></td>
+<td class='num' data-v='115'>115</td>
+<td class='num' data-v='0.539130'>53.9%</td>
+<td class='num' data-v='0.514286'>51.4%</td>
+<td class='num' data-v='0.448236'>44.8–62.7%</td>
+<td data-v='0.179259'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.06%;width:44.81%'></i><b style='left:59.78%'></b></span></td>
+<td class='num' data-v='0.024160'>2.4%</td>
 </tr>
-<tr data-search="珍娜 janna janna">
-<td data-v='0.514667'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Janna.png' alt=''><span>珍娜 <small>Janna</small></span></span></td>
-<td class='num' data-v='175'>175</td>
-<td class='num' data-v='0.531429'>53.1%</td>
-<td class='num' data-v='0.514667'>51.5%</td>
-<td class='num' data-v='0.457614'>45.8–60.4%</td>
-<td data-v='0.146279'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.40%;width:36.57%'></i><b style='left:57.86%'></b></span></td>
-<td class='num' data-v='0.037061'>3.7%</td>
+<tr data-search="圖奇 瘟疫之源 twitch jade_twitch">
+<td data-v='0.513944'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60029.png' alt=''><span>圖奇 <small>Twitch</small><em>瘟疫之源</em></span></span></td>
+<td class='num' data-v='302'>302</td>
+<td class='num' data-v='0.523179'>52.3%</td>
+<td class='num' data-v='0.513944'>51.4%</td>
+<td class='num' data-v='0.466910'>46.7–57.9%</td>
+<td data-v='0.111956'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.73%;width:27.99%'></i><b style='left:55.79%'></b></span></td>
+<td class='num' data-v='0.063445'>6.3%</td>
 </tr>
-<tr data-search="圖奇 twitch twitch">
-<td data-v='0.511066'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Twitch.png' alt=''><span>圖奇 <small>Twitch</small></span></span></td>
-<td class='num' data-v='297'>297</td>
-<td class='num' data-v='0.518519'>51.9%</td>
-<td class='num' data-v='0.511066'>51.1%</td>
-<td class='num' data-v='0.461819'>46.2–57.5%</td>
-<td data-v='0.112926'><span class='bar' style='--bc:#9aa0a6'><i style='left:40.45%;width:28.23%'></i><b style='left:54.63%'></b></span></td>
-<td class='num' data-v='0.062897'>6.3%</td>
+<tr data-search="伊澤瑞爾 探險家 ezreal jade_ezreal">
+<td data-v='0.511696'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60081.png' alt=''><span>伊澤瑞爾 <small>Ezreal</small><em>探險家</em></span></span></td>
+<td class='num' data-v='1510'>1,510</td>
+<td class='num' data-v='0.513245'>51.3%</td>
+<td class='num' data-v='0.511696'>51.2%</td>
+<td class='num' data-v='0.488033'>48.8–53.8%</td>
+<td data-v='0.050357'><span class='bar' style='--bc:#9aa0a6'><i style='left:47.01%;width:12.59%'></i><b style='left:53.31%'></b></span></td>
+<td class='num' data-v='0.317227'>31.7%</td>
 </tr>
-<tr data-search="伊澤瑞爾 ezreal ezreal">
-<td data-v='0.510902'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ezreal.png' alt=''><span>伊澤瑞爾 <small>Ezreal</small></span></span></td>
-<td class='num' data-v='1497'>1,497</td>
-<td class='num' data-v='0.512358'>51.2%</td>
-<td class='num' data-v='0.510902'>51.1%</td>
-<td class='num' data-v='0.487038'>48.7–53.8%</td>
-<td data-v='0.050577'><span class='bar' style='--bc:#9aa0a6'><i style='left:46.76%;width:12.64%'></i><b style='left:53.09%'></b></span></td>
-<td class='num' data-v='0.317027'>31.7%</td>
+<tr data-search="提摩 迅捷斥候 teemo jade_teemo">
+<td data-v='0.509165'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60017.png' alt=''><span>提摩 <small>Teemo</small><em>迅捷斥候</em></span></span></td>
+<td class='num' data-v='291'>291</td>
+<td class='num' data-v='0.515464'>51.5%</td>
+<td class='num' data-v='0.509165'>50.9%</td>
+<td class='num' data-v='0.458216'>45.8–57.2%</td>
+<td data-v='0.114092'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.55%;width:28.52%'></i><b style='left:53.87%'></b></span></td>
+<td class='num' data-v='0.061134'>6.1%</td>
 </tr>
-<tr data-search="科加斯 cho&#x27;gath chogath">
-<td data-v='0.510811'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Chogath.png' alt=''><span>科加斯 <small>Cho&#x27;Gath</small></span></span></td>
-<td class='num' data-v='170'>170</td>
-<td class='num' data-v='0.523529'>52.4%</td>
-<td class='num' data-v='0.510811'>51.1%</td>
-<td class='num' data-v='0.448763'>44.9–59.7%</td>
-<td data-v='0.148494'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.19%;width:37.12%'></i><b style='left:55.88%'></b></span></td>
-<td class='num' data-v='0.036002'>3.6%</td>
-</tr>
-<tr data-search="墨菲特 malphite malphite">
+<tr data-search="墨菲特 幻石碎片 malphite jade_malphite">
 <td data-v='0.509036'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Malphite.png' alt=''><span>墨菲特 <small>Malphite</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60054.png' alt=''><span>墨菲特 <small>Malphite</small><em>幻石碎片</em></span></span></td>
 <td class='num' data-v='132'>132</td>
 <td class='num' data-v='0.522727'>52.3%</td>
 <td class='num' data-v='0.509036'>50.9%</td>
 <td class='num' data-v='0.438086'>43.8–60.6%</td>
 <td data-v='0.167998'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.52%;width:42.00%'></i><b style='left:55.68%'></b></span></td>
-<td class='num' data-v='0.027954'>2.8%</td>
+<td class='num' data-v='0.027731'>2.8%</td>
 </tr>
-<tr data-search="極靈 zilean zilean">
+<tr data-search="賈克斯 武器達人 jax jade_jax">
+<td data-v='0.508661'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60024.png' alt=''><span>賈克斯 <small>Jax</small><em>武器達人</em></span></span></td>
+<td class='num' data-v='435'>435</td>
+<td class='num' data-v='0.512644'>51.3%</td>
+<td class='num' data-v='0.508661'>50.9%</td>
+<td class='num' data-v='0.465767'>46.6–55.9%</td>
+<td data-v='0.093533'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.44%;width:23.38%'></i><b style='left:53.16%'></b></span></td>
+<td class='num' data-v='0.091387'>9.1%</td>
+</tr>
+<tr data-search="科加斯 虛空恐懼 cho&#x27;gath jade_chogath">
+<td data-v='0.508065'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60031.png' alt=''><span>科加斯 <small>Cho&#x27;Gath</small><em>虛空恐懼</em></span></span></td>
+<td class='num' data-v='172'>172</td>
+<td class='num' data-v='0.517442'>51.7%</td>
+<td class='num' data-v='0.508065'>50.8%</td>
+<td class='num' data-v='0.443201'>44.3–59.1%</td>
+<td data-v='0.147719'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.80%;width:36.93%'></i><b style='left:54.36%'></b></span></td>
+<td class='num' data-v='0.036134'>3.6%</td>
+</tr>
+<tr data-search="極靈 時光守護者 zilean jade_zilean">
 <td data-v='0.507987'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Zilean.png' alt=''><span>極靈 <small>Zilean</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60026.png' alt=''><span>極靈 <small>Zilean</small><em>時光守護者</em></span></span></td>
 <td class='num' data-v='113'>113</td>
 <td class='num' data-v='0.522124'>52.2%</td>
 <td class='num' data-v='0.507987'>50.8%</td>
 <td class='num' data-v='0.430820'>43.1–61.2%</td>
 <td data-v='0.181153'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.70%;width:45.29%'></i><b style='left:55.53%'></b></span></td>
-<td class='num' data-v='0.023931'>2.4%</td>
+<td class='num' data-v='0.023739'>2.4%</td>
 </tr>
-<tr data-search="賈克斯 jax jax">
-<td data-v='0.507886'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Jax.png' alt=''><span>賈克斯 <small>Jax</small></span></span></td>
-<td class='num' data-v='434'>434</td>
-<td class='num' data-v='0.511521'>51.2%</td>
-<td class='num' data-v='0.507886'>50.8%</td>
-<td class='num' data-v='0.464597'>46.5–55.8%</td>
-<td data-v='0.093645'><span class='bar' style='--bc:#9aa0a6'><i style='left:41.15%;width:23.41%'></i><b style='left:52.88%'></b></span></td>
-<td class='num' data-v='0.091910'>9.2%</td>
+<tr data-search="潘森 戰爭之王 pantheon jade_pantheon">
+<td data-v='0.507637'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60080.png' alt=''><span>潘森 <small>Pantheon</small><em>戰爭之王</em></span></span></td>
+<td class='num' data-v='913'>913</td>
+<td class='num' data-v='0.509310'>50.9%</td>
+<td class='num' data-v='0.507637'>50.8%</td>
+<td class='num' data-v='0.476911'>47.7–54.2%</td>
+<td data-v='0.064719'><span class='bar' style='--bc:#9aa0a6'><i style='left:44.23%;width:16.18%'></i><b style='left:52.33%'></b></span></td>
+<td class='num' data-v='0.191807'>19.2%</td>
 </tr>
-<tr data-search="崔絲塔娜 tristana tristana">
-<td data-v='0.507324'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Tristana.png' alt=''><span>崔絲塔娜 <small>Tristana</small></span></span></td>
-<td class='num' data-v='551'>551</td>
-<td class='num' data-v='0.509982'>51.0%</td>
-<td class='num' data-v='0.507324'>50.7%</td>
-<td class='num' data-v='0.468316'>46.8–55.2%</td>
-<td data-v='0.083193'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.08%;width:20.80%'></i><b style='left:52.50%'></b></span></td>
-<td class='num' data-v='0.116688'>11.7%</td>
+<tr data-search="馬爾札哈 虛空先知 malzahar jade_malzahar">
+<td data-v='0.507331'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60090.png' alt=''><span>馬爾札哈 <small>Malzahar</small><em>虛空先知</em></span></span></td>
+<td class='num' data-v='141'>141</td>
+<td class='num' data-v='0.517730'>51.8%</td>
+<td class='num' data-v='0.507331'>50.7%</td>
+<td class='num' data-v='0.435881'>43.6–59.9%</td>
+<td data-v='0.162758'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.97%;width:40.69%'></i><b style='left:54.43%'></b></span></td>
+<td class='num' data-v='0.029622'>3.0%</td>
 </tr>
-<tr data-search="潘森 pantheon pantheon">
-<td data-v='0.507246'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Pantheon.png' alt=''><span>潘森 <small>Pantheon</small></span></span></td>
-<td class='num' data-v='904'>904</td>
-<td class='num' data-v='0.508850'>50.9%</td>
-<td class='num' data-v='0.507246'>50.7%</td>
-<td class='num' data-v='0.476292'>47.6–54.1%</td>
-<td data-v='0.065040'><span class='bar' style='--bc:#9aa0a6'><i style='left:44.07%;width:16.26%'></i><b style='left:52.21%'></b></span></td>
-<td class='num' data-v='0.191444'>19.1%</td>
+<tr data-search="崔絲塔娜 麥格靈炮手 tristana jade_tristana">
+<td data-v='0.507285'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60018.png' alt=''><span>崔絲塔娜 <small>Tristana</small><em>麥格靈炮手</em></span></span></td>
+<td class='num' data-v='555'>555</td>
+<td class='num' data-v='0.509910'>51.0%</td>
+<td class='num' data-v='0.507285'>50.7%</td>
+<td class='num' data-v='0.468394'>46.8–55.1%</td>
+<td data-v='0.082895'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.10%;width:20.72%'></i><b style='left:52.48%'></b></span></td>
+<td class='num' data-v='0.116597'>11.7%</td>
 </tr>
-<tr data-search="提摩 teemo teemo">
-<td data-v='0.507187'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Teemo.png' alt=''><span>提摩 <small>Teemo</small></span></span></td>
-<td class='num' data-v='287'>287</td>
-<td class='num' data-v='0.512195'>51.2%</td>
-<td class='num' data-v='0.507187'>50.7%</td>
-<td class='num' data-v='0.454587'>45.5–56.9%</td>
-<td data-v='0.114895'><span class='bar' style='--bc:#9aa0a6'><i style='left:38.65%;width:28.72%'></i><b style='left:53.05%'></b></span></td>
-<td class='num' data-v='0.060779'>6.1%</td>
+<tr data-search="汎 暗夜獵人 vayne jade_vayne">
+<td data-v='0.501653'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60067.png' alt=''><span>汎 <small>Vayne</small><em>暗夜獵人</em></span></span></td>
+<td class='num' data-v='1010'>1,010</td>
+<td class='num' data-v='0.501980'>50.2%</td>
+<td class='num' data-v='0.501653'>50.2%</td>
+<td class='num' data-v='0.471195'>47.1–53.3%</td>
+<td data-v='0.061556'><span class='bar' style='--bc:#9aa0a6'><i style='left:42.80%;width:15.39%'></i><b style='left:50.50%'></b></span></td>
+<td class='num' data-v='0.212185'>21.2%</td>
 </tr>
-<tr data-search="馬爾札哈 malzahar malzahar">
-<td data-v='0.505882'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Malzahar.png' alt=''><span>馬爾札哈 <small>Malzahar</small></span></span></td>
-<td class='num' data-v='140'>140</td>
-<td class='num' data-v='0.514286'>51.4%</td>
-<td class='num' data-v='0.505882'>50.6%</td>
-<td class='num' data-v='0.432225'>43.2–59.6%</td>
-<td data-v='0.163358'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.06%;width:40.84%'></i><b style='left:53.57%'></b></span></td>
-<td class='num' data-v='0.029648'>3.0%</td>
+<tr data-search="費德提克 末日使者 fiddlesticks jade_fiddlesticks">
+<td data-v='0.500707'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60009.png' alt=''><span>費德提克 <small>Fiddlesticks</small><em>末日使者</em></span></span></td>
+<td class='num' data-v='507'>507</td>
+<td class='num' data-v='0.500986'>50.1%</td>
+<td class='num' data-v='0.500707'>50.1%</td>
+<td class='num' data-v='0.457619'>45.8–54.4%</td>
+<td data-v='0.086719'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.40%;width:21.68%'></i><b style='left:50.25%'></b></span></td>
+<td class='num' data-v='0.106513'>10.7%</td>
 </tr>
-<tr data-search="悟空 wukong monkeyking">
-<td data-v='0.504950'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MonkeyKing.png' alt=''><span>悟空 <small>Wukong</small></span></span></td>
-<td class='num' data-v='204'>204</td>
-<td class='num' data-v='0.509804'>51.0%</td>
-<td class='num' data-v='0.504950'>50.5%</td>
-<td class='num' data-v='0.441659'>44.2–57.8%</td>
-<td data-v='0.135928'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.41%;width:33.98%'></i><b style='left:52.45%'></b></span></td>
-<td class='num' data-v='0.043202'>4.3%</td>
+<tr data-search="漢默丁格 大發明家 heimerdinger jade_heimerdinger">
+<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60074.png' alt=''><span>漢默丁格 <small>Heimerdinger</small><em>大發明家</em></span></span></td>
+<td class='num' data-v='128'>128</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.414651'>41.5–58.5%</td>
+<td data-v='0.170699'><span class='bar' style='--bc:#9aa0a6'><i style='left:28.66%;width:42.67%'></i><b style='left:50.00%'></b></span></td>
+<td class='num' data-v='0.026891'>2.7%</td>
 </tr>
-<tr data-search="汎 vayne vayne">
-<td data-v='0.503322'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Vayne.png' alt=''><span>汎 <small>Vayne</small></span></span></td>
-<td class='num' data-v='1004'>1,004</td>
-<td class='num' data-v='0.503984'>50.4%</td>
-<td class='num' data-v='0.503322'>50.3%</td>
-<td class='num' data-v='0.473100'>47.3–53.5%</td>
-<td data-v='0.061737'><span class='bar' style='--bc:#9aa0a6'><i style='left:43.28%;width:15.43%'></i><b style='left:51.00%'></b></span></td>
-<td class='num' data-v='0.212622'>21.3%</td>
+<tr data-search="悟空  wukong jade_wukong">
+<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60062.png' alt=''><span>悟空 <small>Wukong</small><em></em></span></span></td>
+<td class='num' data-v='208'>208</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.432668'>43.3–56.7%</td>
+<td data-v='0.134664'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.17%;width:33.67%'></i><b style='left:50.00%'></b></span></td>
+<td class='num' data-v='0.043697'>4.4%</td>
 </tr>
-<tr data-search="漢默丁格 heimerdinger heimerdinger">
-<td data-v='0.501529'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Heimerdinger.png' alt=''><span>漢默丁格 <small>Heimerdinger</small></span></span></td>
-<td class='num' data-v='127'>127</td>
-<td class='num' data-v='0.503937'>50.4%</td>
-<td class='num' data-v='0.501529'>50.2%</td>
-<td class='num' data-v='0.418149'>41.8–58.9%</td>
-<td data-v='0.171344'><span class='bar' style='--bc:#9aa0a6'><i style='left:29.54%;width:42.84%'></i><b style='left:50.98%'></b></span></td>
-<td class='num' data-v='0.026895'>2.7%</td>
+<tr data-search="辛吉德 瘋狂煉金師 singed jade_singed">
+<td data-v='0.500000'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60027.png' alt=''><span>辛吉德 <small>Singed</small><em>瘋狂煉金師</em></span></span></td>
+<td class='num' data-v='88'>88</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.500000'>50.0%</td>
+<td class='num' data-v='0.397740'>39.8–60.2%</td>
+<td data-v='0.204520'><span class='bar' style='--bc:#9aa0a6'><i style='left:24.43%;width:51.13%'></i><b style='left:50.00%'></b></span></td>
+<td class='num' data-v='0.018487'>1.8%</td>
 </tr>
-<tr data-search="奈德麗 nidalee nidalee">
-<td data-v='0.501031'><span class='tchip' style='background:#f5c518;color:#0e1116'>T2</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nidalee.png' alt=''><span>奈德麗 <small>Nidalee</small></span></span></td>
-<td class='num' data-v='285'>285</td>
-<td class='num' data-v='0.501754'>50.2%</td>
-<td class='num' data-v='0.501031'>50.1%</td>
-<td class='num' data-v='0.444069'>44.4–55.9%</td>
-<td data-v='0.115325'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.02%;width:28.83%'></i><b style='left:50.44%'></b></span></td>
-<td class='num' data-v='0.060356'>6.0%</td>
+<tr data-search="古拉格斯 酒桶之王 gragas jade_gragas">
+<td data-v='0.498660'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60079.png' alt=''><span>古拉格斯 <small>Gragas</small><em>酒桶之王</em></span></span></td>
+<td class='num' data-v='546'>546</td>
+<td class='num' data-v='0.498168'>49.8%</td>
+<td class='num' data-v='0.498660'>49.9%</td>
+<td class='num' data-v='0.456388'>45.6–54.0%</td>
+<td data-v='0.083586'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.10%;width:20.90%'></i><b style='left:49.54%'></b></span></td>
+<td class='num' data-v='0.114706'>11.5%</td>
 </tr>
-<tr data-search="費德提克 fiddlesticks fiddlesticks">
-<td data-v='0.499289'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Fiddlesticks.png' alt=''><span>費德提克 <small>Fiddlesticks</small></span></span></td>
-<td class='num' data-v='503'>503</td>
-<td class='num' data-v='0.499006'>49.9%</td>
-<td class='num' data-v='0.499289'>49.9%</td>
-<td class='num' data-v='0.455483'>45.5–54.3%</td>
-<td data-v='0.087060'><span class='bar' style='--bc:#9aa0a6'><i style='left:38.87%;width:21.77%'></i><b style='left:49.75%'></b></span></td>
-<td class='num' data-v='0.106523'>10.7%</td>
+<tr data-search="塔里克 寶石騎士 taric jade_taric">
+<td data-v='0.498214'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60044.png' alt=''><span>塔里克 <small>Taric</small><em>寶石騎士</em></span></span></td>
+<td class='num' data-v='360'>360</td>
+<td class='num' data-v='0.497222'>49.7%</td>
+<td class='num' data-v='0.498214'>49.8%</td>
+<td class='num' data-v='0.445875'>44.6–54.9%</td>
+<td data-v='0.102753'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.47%;width:25.69%'></i><b style='left:49.31%'></b></span></td>
+<td class='num' data-v='0.075630'>7.6%</td>
 </tr>
-<tr data-search="艾妮維亞 anivia anivia">
-<td data-v='0.498807'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Anivia.png' alt=''><span>艾妮維亞 <small>Anivia</small></span></span></td>
-<td class='num' data-v='219'>219</td>
-<td class='num' data-v='0.497717'>49.8%</td>
-<td class='num' data-v='0.498807'>49.9%</td>
-<td class='num' data-v='0.432108'>43.2–56.3%</td>
-<td data-v='0.131297'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.03%;width:32.82%'></i><b style='left:49.43%'></b></span></td>
-<td class='num' data-v='0.046379'>4.6%</td>
+<tr data-search="奈德麗 狂野獵手 nidalee jade_nidalee">
+<td data-v='0.497951'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60076.png' alt=''><span>奈德麗 <small>Nidalee</small><em>狂野獵手</em></span></span></td>
+<td class='num' data-v='288'>288</td>
+<td class='num' data-v='0.496528'>49.7%</td>
+<td class='num' data-v='0.497951'>49.8%</td>
+<td class='num' data-v='0.439209'>43.9–55.4%</td>
+<td data-v='0.114729'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.80%;width:28.68%'></i><b style='left:49.13%'></b></span></td>
+<td class='num' data-v='0.060504'>6.1%</td>
 </tr>
-<tr data-search="古拉格斯 gragas gragas">
-<td data-v='0.498656'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Gragas.png' alt=''><span>古拉格斯 <small>Gragas</small></span></span></td>
-<td class='num' data-v='544'>544</td>
-<td class='num' data-v='0.498162'>49.8%</td>
-<td class='num' data-v='0.498656'>49.9%</td>
-<td class='num' data-v='0.456305'>45.6–54.0%</td>
-<td data-v='0.083739'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.08%;width:20.93%'></i><b style='left:49.54%'></b></span></td>
-<td class='num' data-v='0.115205'>11.5%</td>
+<tr data-search="艾妮維亞 冰晶鳳凰 anivia jade_anivia">
+<td data-v='0.497619'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60034.png' alt=''><span>艾妮維亞 <small>Anivia</small><em>冰晶鳳凰</em></span></span></td>
+<td class='num' data-v='220'>220</td>
+<td class='num' data-v='0.495455'>49.5%</td>
+<td class='num' data-v='0.497619'>49.8%</td>
+<td class='num' data-v='0.430033'>43.0–56.1%</td>
+<td data-v='0.130999'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.51%;width:32.75%'></i><b style='left:48.86%'></b></span></td>
+<td class='num' data-v='0.046218'>4.6%</td>
 </tr>
-<tr data-search="辛吉德 singed singed">
-<td data-v='0.498246'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Singed.png' alt=''><span>辛吉德 <small>Singed</small></span></span></td>
-<td class='num' data-v='85'>85</td>
-<td class='num' data-v='0.494118'>49.4%</td>
-<td class='num' data-v='0.498246'>49.8%</td>
-<td class='num' data-v='0.390407'>39.0–59.8%</td>
-<td data-v='0.207931'><span class='bar' style='--bc:#9aa0a6'><i style='left:22.60%;width:51.98%'></i><b style='left:48.53%'></b></span></td>
-<td class='num' data-v='0.018001'>1.8%</td>
-</tr>
-<tr data-search="凱爾 kayle kayle">
-<td data-v='0.497788'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Kayle.png' alt=''><span>凱爾 <small>Kayle</small></span></span></td>
-<td class='num' data-v='252'>252</td>
-<td class='num' data-v='0.496032'>49.6%</td>
-<td class='num' data-v='0.497788'>49.8%</td>
-<td class='num' data-v='0.434824'>43.5–55.7%</td>
-<td data-v='0.122534'><span class='bar' style='--bc:#9aa0a6'><i style='left:33.71%;width:30.63%'></i><b style='left:49.01%'></b></span></td>
-<td class='num' data-v='0.053367'>5.3%</td>
-</tr>
-<tr data-search="寇格魔 kog&#x27;maw kogmaw">
+<tr data-search="寇格魔 深淵巨口 kog&#x27;maw jade_kogmaw">
 <td data-v='0.497340'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/KogMaw.png' alt=''><span>寇格魔 <small>Kog&#x27;Maw</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60096.png' alt=''><span>寇格魔 <small>Kog&#x27;Maw</small><em>深淵巨口</em></span></span></td>
 <td class='num' data-v='176'>176</td>
 <td class='num' data-v='0.494318'>49.4%</td>
 <td class='num' data-v='0.497340'>49.7%</td>
 <td class='num' data-v='0.421367'>42.1–56.8%</td>
 <td data-v='0.146145'><span class='bar' style='--bc:#9aa0a6'><i style='left:30.34%;width:36.54%'></i><b style='left:48.58%'></b></span></td>
-<td class='num' data-v='0.037272'>3.7%</td>
+<td class='num' data-v='0.036975'>3.7%</td>
 </tr>
-<tr data-search="塔里克 taric taric">
-<td data-v='0.497307'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Taric.png' alt=''><span>塔里克 <small>Taric</small></span></span></td>
-<td class='num' data-v='357'>357</td>
-<td class='num' data-v='0.495798'>49.6%</td>
-<td class='num' data-v='0.497307'>49.7%</td>
-<td class='num' data-v='0.444255'>44.4–54.7%</td>
-<td data-v='0.103177'><span class='bar' style='--bc:#9aa0a6'><i style='left:36.06%;width:25.79%'></i><b style='left:48.95%'></b></span></td>
-<td class='num' data-v='0.075604'>7.6%</td>
+<tr data-search="凱爾 審判天使 kayle jade_kayle">
+<td data-v='0.495614'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60010.png' alt=''><span>凱爾 <small>Kayle</small><em>審判天使</em></span></span></td>
+<td class='num' data-v='256'>256</td>
+<td class='num' data-v='0.492188'>49.2%</td>
+<td class='num' data-v='0.495614'>49.6%</td>
+<td class='num' data-v='0.431515'>43.2–55.3%</td>
+<td data-v='0.121576'><span class='bar' style='--bc:#9aa0a6'><i style='left:32.88%;width:30.39%'></i><b style='left:48.05%'></b></span></td>
+<td class='num' data-v='0.053782'>5.4%</td>
 </tr>
-<tr data-search="努努和威朗普 nunu &amp; willump nunu">
-<td data-v='0.492045'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Nunu.png' alt=''><span>努努和威朗普 <small>Nunu &amp; Willump</small></span></span></td>
-<td class='num' data-v='680'>680</td>
-<td class='num' data-v='0.489706'>49.0%</td>
-<td class='num' data-v='0.492045'>49.2%</td>
-<td class='num' data-v='0.452296'>45.2–52.7%</td>
-<td data-v='0.074935'><span class='bar' style='--bc:#9aa0a6'><i style='left:38.07%;width:18.73%'></i><b style='left:47.43%'></b></span></td>
-<td class='num' data-v='0.144007'>14.4%</td>
+<tr data-search="李星 盲眼武僧 lee sin jade_leesin">
+<td data-v='0.491639'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60064.png' alt=''><span>李星 <small>Lee Sin</small><em>盲眼武僧</em></span></span></td>
+<td class='num' data-v='996'>996</td>
+<td class='num' data-v='0.489960'>49.0%</td>
+<td class='num' data-v='0.491639'>49.2%</td>
+<td class='num' data-v='0.459012'>45.9–52.1%</td>
+<td data-v='0.061973'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.75%;width:15.49%'></i><b style='left:47.49%'></b></span></td>
+<td class='num' data-v='0.209244'>20.9%</td>
 </tr>
-<tr data-search="李星 lee sin leesin">
-<td data-v='0.491199'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/LeeSin.png' alt=''><span>李星 <small>Lee Sin</small></span></span></td>
-<td class='num' data-v='993'>993</td>
-<td class='num' data-v='0.489426'>48.9%</td>
-<td class='num' data-v='0.491199'>49.1%</td>
-<td class='num' data-v='0.458434'>45.8–52.0%</td>
-<td data-v='0.062065'><span class='bar' style='--bc:#9aa0a6'><i style='left:39.61%;width:15.52%'></i><b style='left:47.36%'></b></span></td>
-<td class='num' data-v='0.210292'>21.0%</td>
+<tr data-search="努努和威朗普 雪人騎士 nunu &amp; willump jade_nunu">
+<td data-v='0.491525'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60020.png' alt=''><span>努努和威朗普 <small>Nunu &amp; Willump</small><em>雪人騎士</em></span></span></td>
+<td class='num' data-v='685'>685</td>
+<td class='num' data-v='0.489051'>48.9%</td>
+<td class='num' data-v='0.491525'>49.2%</td>
+<td class='num' data-v='0.451782'>45.2–52.6%</td>
+<td data-v='0.074661'><span class='bar' style='--bc:#9aa0a6'><i style='left:37.95%;width:18.67%'></i><b style='left:47.26%'></b></span></td>
+<td class='num' data-v='0.143908'>14.4%</td>
 </tr>
-<tr data-search="阿姆姆 amumu amumu">
-<td data-v='0.488235'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Amumu.png' alt=''><span>阿姆姆 <small>Amumu</small></span></span></td>
-<td class='num' data-v='140'>140</td>
-<td class='num' data-v='0.471429'>47.1%</td>
-<td class='num' data-v='0.488235'>48.8%</td>
-<td class='num' data-v='0.390610'>39.1–55.4%</td>
-<td data-v='0.163163'><span class='bar' style='--bc:#9aa0a6'><i style='left:22.65%;width:40.79%'></i><b style='left:42.86%'></b></span></td>
-<td class='num' data-v='0.029648'>3.0%</td>
+<tr data-search="阿姆姆 殤之木乃伊 amumu jade_amumu">
+<td data-v='0.489736'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60032.png' alt=''><span>阿姆姆 <small>Amumu</small><em>殤之木乃伊</em></span></span></td>
+<td class='num' data-v='141'>141</td>
+<td class='num' data-v='0.475177'>47.5%</td>
+<td class='num' data-v='0.489736'>49.0%</td>
+<td class='num' data-v='0.394504'>39.5–55.7%</td>
+<td data-v='0.162663'><span class='bar' style='--bc:#9aa0a6'><i style='left:23.63%;width:40.67%'></i><b style='left:43.79%'></b></span></td>
+<td class='num' data-v='0.029622'>3.0%</td>
 </tr>
-<tr data-search="拉姆斯 rammus rammus">
+<tr data-search="雷茲 流浪法師 ryze jade_ryze">
+<td data-v='0.486891'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60013.png' alt=''><span>雷茲 <small>Ryze</small><em>流浪法師</em></span></span></td>
+<td class='num' data-v='601'>601</td>
+<td class='num' data-v='0.482529'>48.3%</td>
+<td class='num' data-v='0.486891'>48.7%</td>
+<td class='num' data-v='0.442816'>44.3–52.2%</td>
+<td data-v='0.079647'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.70%;width:19.91%'></i><b style='left:45.63%'></b></span></td>
+<td class='num' data-v='0.126261'>12.6%</td>
+</tr>
+<tr data-search="拉姆斯 披甲龍龜 rammus jade_rammus">
 <td data-v='0.485342'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Rammus.png' alt=''><span>拉姆斯 <small>Rammus</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60033.png' alt=''><span>拉姆斯 <small>Rammus</small><em>披甲龍龜</em></span></span></td>
 <td class='num' data-v='107'>107</td>
 <td class='num' data-v='0.457944'>45.8%</td>
 <td class='num' data-v='0.485342'>48.5%</td>
 <td class='num' data-v='0.366636'>36.7–55.2%</td>
 <td data-v='0.185531'><span class='bar' style='--bc:#9aa0a6'><i style='left:16.66%;width:46.38%'></i><b style='left:39.49%'></b></span></td>
-<td class='num' data-v='0.022660'>2.3%</td>
+<td class='num' data-v='0.022479'>2.2%</td>
 </tr>
-<tr data-search="雷茲 ryze ryze">
-<td data-v='0.484887'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ryze.png' alt=''><span>雷茲 <small>Ryze</small></span></span></td>
-<td class='num' data-v='594'>594</td>
-<td class='num' data-v='0.479798'>48.0%</td>
-<td class='num' data-v='0.484887'>48.5%</td>
-<td class='num' data-v='0.439880'>44.0–52.0%</td>
-<td data-v='0.080096'><span class='bar' style='--bc:#9aa0a6'><i style='left:34.97%;width:20.02%'></i><b style='left:44.95%'></b></span></td>
-<td class='num' data-v='0.125794'>12.6%</td>
+<tr data-search="卡爾瑟斯 死亡頌唱者 karthus jade_karthus">
+<td data-v='0.480122'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60030.png' alt=''><span>卡爾瑟斯 <small>Karthus</small><em>死亡頌唱者</em></span></span></td>
+<td class='num' data-v='127'>127</td>
+<td class='num' data-v='0.448819'>44.9%</td>
+<td class='num' data-v='0.480122'>48.0%</td>
+<td class='num' data-v='0.365084'>36.5–53.6%</td>
+<td data-v='0.170476'><span class='bar' style='--bc:#9aa0a6'><i style='left:16.27%;width:42.62%'></i><b style='left:37.20%'></b></span></td>
+<td class='num' data-v='0.026681'>2.7%</td>
 </tr>
-<tr data-search="露璐 lulu lulu">
-<td data-v='0.479008'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Lulu.png' alt=''><span>露璐 <small>Lulu</small></span></span></td>
-<td class='num' data-v='324'>324</td>
-<td class='num' data-v='0.466049'>46.6%</td>
-<td class='num' data-v='0.479008'>47.9%</td>
-<td class='num' data-v='0.412446'>41.2–52.0%</td>
-<td data-v='0.108002'><span class='bar' style='--bc:#9aa0a6'><i style='left:28.11%;width:27.00%'></i><b style='left:41.51%'></b></span></td>
-<td class='num' data-v='0.068615'>6.9%</td>
+<tr data-search="露璐 精靈魔法使 lulu jade_lulu">
+<td data-v='0.480076'><span class='tchip' style='background:#8ec441;color:#0e1116'>T3</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60117.png' alt=''><span>露璐 <small>Lulu</small><em>精靈魔法使</em></span></span></td>
+<td class='num' data-v='327'>327</td>
+<td class='num' data-v='0.467890'>46.8%</td>
+<td class='num' data-v='0.480076'>48.0%</td>
+<td class='num' data-v='0.414494'>41.4–52.2%</td>
+<td data-v='0.107537'><span class='bar' style='--bc:#9aa0a6'><i style='left:28.62%;width:26.88%'></i><b style='left:41.97%'></b></span></td>
+<td class='num' data-v='0.068697'>6.9%</td>
 </tr>
-<tr data-search="剛普朗克 gangplank gangplank">
-<td data-v='0.478799'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Gangplank.png' alt=''><span>剛普朗克 <small>Gangplank</small></span></span></td>
-<td class='num' data-v='932'>932</td>
-<td class='num' data-v='0.474249'>47.4%</td>
-<td class='num' data-v='0.478799'>47.9%</td>
-<td class='num' data-v='0.442362'>44.2–50.6%</td>
-<td data-v='0.063985'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.59%;width:16.00%'></i><b style='left:43.56%'></b></span></td>
-<td class='num' data-v='0.197374'>19.7%</td>
+<tr data-search="剛普朗克 海洋之災 gangplank jade_gangplank">
+<td data-v='0.478910'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60041.png' alt=''><span>剛普朗克 <small>Gangplank</small><em>海洋之災</em></span></span></td>
+<td class='num' data-v='938'>938</td>
+<td class='num' data-v='0.474414'>47.4%</td>
+<td class='num' data-v='0.478910'>47.9%</td>
+<td class='num' data-v='0.442627'>44.3–50.6%</td>
+<td data-v='0.063782'><span class='bar' style='--bc:#9aa0a6'><i style='left:35.66%;width:15.95%'></i><b style='left:43.60%'></b></span></td>
+<td class='num' data-v='0.197059'>19.7%</td>
 </tr>
-<tr data-search="卡爾瑟斯 karthus karthus">
-<td data-v='0.478528'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Karthus.png' alt=''><span>卡爾瑟斯 <small>Karthus</small></span></span></td>
-<td class='num' data-v='126'>126</td>
-<td class='num' data-v='0.444444'>44.4%</td>
-<td class='num' data-v='0.478528'>47.9%</td>
-<td class='num' data-v='0.360601'>36.1–53.2%</td>
-<td data-v='0.170975'><span class='bar' style='--bc:#9aa0a6'><i style='left:15.15%;width:42.74%'></i><b style='left:36.11%'></b></span></td>
-<td class='num' data-v='0.026684'>2.7%</td>
-</tr>
-<tr data-search="艾希 ashe ashe">
-<td data-v='0.477241'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Ashe.png' alt=''><span>艾希 <small>Ashe</small></span></span></td>
-<td class='num' data-v='525'>525</td>
-<td class='num' data-v='0.468571'>46.9%</td>
-<td class='num' data-v='0.477241'>47.7%</td>
-<td class='num' data-v='0.426268'>42.6–51.1%</td>
-<td data-v='0.085063'><span class='bar' style='--bc:#9aa0a6'><i style='left:31.57%;width:21.27%'></i><b style='left:42.14%'></b></span></td>
-<td class='num' data-v='0.111182'>11.1%</td>
-</tr>
-<tr data-search="維迦 veigar veigar">
+<tr data-search="維迦 邪惡小法師 veigar jade_veigar">
 <td data-v='0.476331'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Veigar.png' alt=''><span>維迦 <small>Veigar</small></span></span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60045.png' alt=''><span>維迦 <small>Veigar</small><em>邪惡小法師</em></span></span></td>
 <td class='num' data-v='138'>138</td>
 <td class='num' data-v='0.442029'>44.2%</td>
 <td class='num' data-v='0.476331'>47.6%</td>
 <td class='num' data-v='0.361853'>36.2–52.5%</td>
 <td data-v='0.163492'><span class='bar' style='--bc:#9aa0a6'><i style='left:15.46%;width:40.87%'></i><b style='left:35.51%'></b></span></td>
-<td class='num' data-v='0.029225'>2.9%</td>
+<td class='num' data-v='0.028992'>2.9%</td>
 </tr>
-<tr data-search="賽恩 sion sion">
-<td data-v='0.470024'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Sion.png' alt=''><span>賽恩 <small>Sion</small></span></span></td>
-<td class='num' data-v='634'>634</td>
-<td class='num' data-v='0.460568'>46.1%</td>
-<td class='num' data-v='0.470024'>47.0%</td>
-<td class='num' data-v='0.422122'>42.2–49.9%</td>
-<td data-v='0.077367'><span class='bar' style='--bc:#ff5a3c'><i style='left:30.53%;width:19.34%'></i><b style='left:40.14%'></b></span></td>
-<td class='num' data-v='0.134265'>13.4%</td>
+<tr data-search="艾希 冰霜射手 ashe jade_ashe">
+<td data-v='0.475995'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60022.png' alt=''><span>艾希 <small>Ashe</small><em>冰霜射手</em></span></span></td>
+<td class='num' data-v='529'>529</td>
+<td class='num' data-v='0.466919'>46.7%</td>
+<td class='num' data-v='0.475995'>47.6%</td>
+<td class='num' data-v='0.424795'>42.5–51.0%</td>
+<td data-v='0.084725'><span class='bar' style='--bc:#9aa0a6'><i style='left:31.20%;width:21.18%'></i><b style='left:41.73%'></b></span></td>
+<td class='num' data-v='0.111134'>11.1%</td>
 </tr>
-<tr data-search="蓋倫 garen garen">
-<td data-v='0.464088'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Garen.png' alt=''><span>蓋倫 <small>Garen</small></span></span></td>
-<td class='num' data-v='343'>343</td>
-<td class='num' data-v='0.443149'>44.3%</td>
-<td class='num' data-v='0.464088'>46.4%</td>
-<td class='num' data-v='0.391495'>39.1–49.6%</td>
-<td data-v='0.104567'><span class='bar' style='--bc:#ff5a3c'><i style='left:22.87%;width:26.14%'></i><b style='left:35.79%'></b></span></td>
-<td class='num' data-v='0.072639'>7.3%</td>
+<tr data-search="賽恩 亡靈勇士 sion jade_sion">
+<td data-v='0.468974'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60014.png' alt=''><span>賽恩 <small>Sion</small><em>亡靈勇士</em></span></span></td>
+<td class='num' data-v='638'>638</td>
+<td class='num' data-v='0.459248'>45.9%</td>
+<td class='num' data-v='0.468974'>46.9%</td>
+<td class='num' data-v='0.420937'>42.1–49.8%</td>
+<td data-v='0.077109'><span class='bar' style='--bc:#ff5a3c'><i style='left:30.23%;width:19.28%'></i><b style='left:39.81%'></b></span></td>
+<td class='num' data-v='0.134034'>13.4%</td>
 </tr>
-<tr data-search="歐拉夫 olaf olaf">
-<td data-v='0.464072'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Olaf.png' alt=''><span>歐拉夫 <small>Olaf</small></span></span></td>
-<td class='num' data-v='134'>134</td>
-<td class='num' data-v='0.410448'>41.0%</td>
-<td class='num' data-v='0.464072'>46.4%</td>
-<td class='num' data-v='0.330784'>33.1–49.5%</td>
-<td data-v='0.164319'><span class='bar' style='--bc:#ff5a3c'><i style='left:7.70%;width:41.08%'></i><b style='left:27.61%'></b></span></td>
-<td class='num' data-v='0.028378'>2.8%</td>
+<tr data-search="蓋倫 蒂瑪西亞之力 garen jade_garen">
+<td data-v='0.464220'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60086.png' alt=''><span>蓋倫 <small>Garen</small><em>蒂瑪西亞之力</em></span></span></td>
+<td class='num' data-v='345'>345</td>
+<td class='num' data-v='0.443478'>44.3%</td>
+<td class='num' data-v='0.464220'>46.4%</td>
+<td class='num' data-v='0.391963'>39.2–49.6%</td>
+<td data-v='0.104275'><span class='bar' style='--bc:#ff5a3c'><i style='left:22.99%;width:26.07%'></i><b style='left:35.87%'></b></span></td>
+<td class='num' data-v='0.072479'>7.2%</td>
 </tr>
-<tr data-search="薩科 shaco shaco">
-<td data-v='0.463602'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Shaco.png' alt=''><span>薩科 <small>Shaco</small></span></span></td>
-<td class='num' data-v='322'>322</td>
-<td class='num' data-v='0.440994'>44.1%</td>
-<td class='num' data-v='0.463602'>46.4%</td>
-<td class='num' data-v='0.387774'>38.8–49.6%</td>
-<td data-v='0.107831'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.94%;width:26.96%'></i><b style='left:35.25%'></b></span></td>
-<td class='num' data-v='0.068191'>6.8%</td>
+<tr data-search="薩科 惡魔小丑 shaco jade_shaco">
+<td data-v='0.462998'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60035.png' alt=''><span>薩科 <small>Shaco</small><em>惡魔小丑</em></span></span></td>
+<td class='num' data-v='327'>327</td>
+<td class='num' data-v='0.440367'>44.0%</td>
+<td class='num' data-v='0.462998'>46.3%</td>
+<td class='num' data-v='0.387561'>38.8–49.5%</td>
+<td data-v='0.106997'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.89%;width:26.75%'></i><b style='left:35.09%'></b></span></td>
+<td class='num' data-v='0.068697'>6.9%</td>
 </tr>
-<tr data-search="亞歷斯塔 alistar alistar">
-<td data-v='0.462715'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Alistar.png' alt=''><span>亞歷斯塔 <small>Alistar</small></span></span></td>
-<td class='num' data-v='323'>323</td>
-<td class='num' data-v='0.439628'>44.0%</td>
-<td class='num' data-v='0.462715'>46.3%</td>
-<td class='num' data-v='0.386523'>38.7–49.4%</td>
-<td data-v='0.107631'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.63%;width:26.91%'></i><b style='left:34.91%'></b></span></td>
-<td class='num' data-v='0.068403'>6.8%</td>
+<tr data-search="亞歷斯塔 牛頭酋長 alistar jade_alistar">
+<td data-v='0.462121'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60012.png' alt=''><span>亞歷斯塔 <small>Alistar</small><em>牛頭酋長</em></span></span></td>
+<td class='num' data-v='328'>328</td>
+<td class='num' data-v='0.439024'>43.9%</td>
+<td class='num' data-v='0.462121'>46.2%</td>
+<td class='num' data-v='0.386330'>38.6–49.3%</td>
+<td data-v='0.106801'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.58%;width:26.70%'></i><b style='left:34.76%'></b></span></td>
+<td class='num' data-v='0.068908'>6.9%</td>
 </tr>
-<tr data-search="卡薩丁 kassadin kassadin">
-<td data-v='0.459341'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Kassadin.png' alt=''><span>卡薩丁 <small>Kassadin</small></span></span></td>
-<td class='num' data-v='255'>255</td>
-<td class='num' data-v='0.427451'>42.7%</td>
-<td class='num' data-v='0.459341'>45.9%</td>
-<td class='num' data-v='0.368250'>36.8–48.9%</td>
-<td data-v='0.120556'><span class='bar' style='--bc:#ff5a3c'><i style='left:17.06%;width:30.14%'></i><b style='left:31.86%'></b></span></td>
-<td class='num' data-v='0.054003'>5.4%</td>
+<tr data-search="歐拉夫 狂戰士 olaf jade_olaf">
+<td data-v='0.461310'><span class='tchip' style='background:#3aa0ff;color:#0e1116'>T4</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60002.png' alt=''><span>歐拉夫 <small>Olaf</small><em>狂戰士</em></span></span></td>
+<td class='num' data-v='136'>136</td>
+<td class='num' data-v='0.404412'>40.4%</td>
+<td class='num' data-v='0.461310'>46.1%</td>
+<td class='num' data-v='0.325652'>32.6–48.8%</td>
+<td data-v='0.162772'><span class='bar' style='--bc:#ff5a3c'><i style='left:6.41%;width:40.69%'></i><b style='left:26.10%'></b></span></td>
+<td class='num' data-v='0.028571'>2.9%</td>
 </tr>
-<tr data-search="易大師 master yi masteryi">
-<td data-v='0.450246'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MasterYi.png' alt=''><span>易大師 <small>Master Yi</small></span></span></td>
-<td class='num' data-v='815'>815</td>
-<td class='num' data-v='0.438037'>43.8%</td>
-<td class='num' data-v='0.450246'>45.0%</td>
-<td class='num' data-v='0.404343'>40.4–47.2%</td>
-<td data-v='0.067969'><span class='bar' style='--bc:#ff5a3c'><i style='left:26.09%;width:16.99%'></i><b style='left:34.51%'></b></span></td>
-<td class='num' data-v='0.172596'>17.3%</td>
+<tr data-search="卡薩丁 虛空行者 kassadin jade_kassadin">
+<td data-v='0.459695'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60038.png' alt=''><span>卡薩丁 <small>Kassadin</small><em>虛空行者</em></span></span></td>
+<td class='num' data-v='259'>259</td>
+<td class='num' data-v='0.428571'>42.9%</td>
+<td class='num' data-v='0.459695'>46.0%</td>
+<td class='num' data-v='0.369779'>37.0–48.9%</td>
+<td data-v='0.119673'><span class='bar' style='--bc:#ff5a3c'><i style='left:17.44%;width:29.92%'></i><b style='left:32.14%'></b></span></td>
+<td class='num' data-v='0.054412'>5.4%</td>
 </tr>
-<tr data-search="拉克絲 lux lux">
-<td data-v='0.449168'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Lux.png' alt=''><span>拉克絲 <small>Lux</small></span></span></td>
-<td class='num' data-v='341'>341</td>
-<td class='num' data-v='0.419355'>41.9%</td>
-<td class='num' data-v='0.449168'>44.9%</td>
-<td class='num' data-v='0.368163'>36.8–47.2%</td>
-<td data-v='0.104181'><span class='bar' style='--bc:#ff5a3c'><i style='left:17.04%;width:26.05%'></i><b style='left:29.84%'></b></span></td>
-<td class='num' data-v='0.072215'>7.2%</td>
+<tr data-search="易大師 無極劍聖 master yi jade_masteryi">
+<td data-v='0.450195'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60011.png' alt=''><span>易大師 <small>Master Yi</small><em>無極劍聖</em></span></span></td>
+<td class='num' data-v='824'>824</td>
+<td class='num' data-v='0.438107'>43.8%</td>
+<td class='num' data-v='0.450195'>45.0%</td>
+<td class='num' data-v='0.404594'>40.5–47.2%</td>
+<td data-v='0.067600'><span class='bar' style='--bc:#ff5a3c'><i style='left:26.15%;width:16.90%'></i><b style='left:34.53%'></b></span></td>
+<td class='num' data-v='0.173109'>17.3%</td>
 </tr>
-<tr data-search="索拉卡 soraka soraka">
-<td data-v='0.443409'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/Soraka.png' alt=''><span>索拉卡 <small>Soraka</small></span></span></td>
-<td class='num' data-v='551'>551</td>
-<td class='num' data-v='0.422868'>42.3%</td>
-<td class='num' data-v='0.443409'>44.3%</td>
-<td class='num' data-v='0.382291'>38.2–46.5%</td>
-<td data-v='0.082220'><span class='bar' style='--bc:#ff5a3c'><i style='left:20.57%;width:20.56%'></i><b style='left:30.72%'></b></span></td>
-<td class='num' data-v='0.116688'>11.7%</td>
+<tr data-search="拉克絲 光之少女 lux jade_lux">
+<td data-v='0.448339'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60099.png' alt=''><span>拉克絲 <small>Lux</small><em>光之少女</em></span></span></td>
+<td class='num' data-v='342'>342</td>
+<td class='num' data-v='0.418129'>41.8%</td>
+<td class='num' data-v='0.448339'>44.8%</td>
+<td class='num' data-v='0.367044'>36.7–47.1%</td>
+<td data-v='0.103988'><span class='bar' style='--bc:#ff5a3c'><i style='left:16.76%;width:26.00%'></i><b style='left:29.53%'></b></span></td>
+<td class='num' data-v='0.071849'>7.2%</td>
 </tr>
-<tr data-search="蒙多醫生 dr. mundo drmundo">
-<td data-v='0.431122'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/DrMundo.png' alt=''><span>蒙多醫生 <small>Dr. Mundo</small></span></span></td>
-<td class='num' data-v='192'>192</td>
-<td class='num' data-v='0.359375'>35.9%</td>
-<td class='num' data-v='0.431122'>43.1%</td>
-<td class='num' data-v='0.294875'>29.5–42.9%</td>
-<td data-v='0.134516'><span class='bar' style='--bc:#ff5a3c'><i style='left:0.00%;width:32.35%'></i><b style='left:14.84%'></b></span></td>
-<td class='num' data-v='0.040661'>4.1%</td>
+<tr data-search="索拉卡 眾星之子 soraka jade_soraka">
+<td data-v='0.444444'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60016.png' alt=''><span>索拉卡 <small>Soraka</small><em>眾星之子</em></span></span></td>
+<td class='num' data-v='556'>556</td>
+<td class='num' data-v='0.424460'>42.4%</td>
+<td class='num' data-v='0.444444'>44.4%</td>
+<td class='num' data-v='0.384032'>38.4–46.6%</td>
+<td data-v='0.081893'><span class='bar' style='--bc:#ff5a3c'><i style='left:21.01%;width:20.47%'></i><b style='left:31.12%'></b></span></td>
+<td class='num' data-v='0.116807'>11.7%</td>
 </tr>
-<tr data-search="好運姐 miss fortune missfortune">
-<td data-v='0.417544'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
-<td><span class='cname'><img loading='lazy' src='https://ddragon.leagueoflegends.com/cdn/16.15.1/img/champion/MissFortune.png' alt=''><span>好運姐 <small>Miss Fortune</small></span></span></td>
-<td class='num' data-v='370'>370</td>
-<td class='num' data-v='0.372973'>37.3%</td>
-<td class='num' data-v='0.417544'>41.8%</td>
-<td class='num' data-v='0.325239'>32.5–42.3%</td>
-<td data-v='0.098079'><span class='bar' style='--bc:#ff5a3c'><i style='left:6.31%;width:24.52%'></i><b style='left:18.24%'></b></span></td>
-<td class='num' data-v='0.078357'>7.8%</td>
+<tr data-search="蒙多醫生 佐恩狂人 dr. mundo jade_drmundo">
+<td data-v='0.428934'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60036.png' alt=''><span>蒙多醫生 <small>Dr. Mundo</small><em>佐恩狂人</em></span></span></td>
+<td class='num' data-v='194'>194</td>
+<td class='num' data-v='0.355670'>35.6%</td>
+<td class='num' data-v='0.428934'>42.9%</td>
+<td class='num' data-v='0.291706'>29.2–42.5%</td>
+<td data-v='0.133533'><span class='bar' style='--bc:#ff5a3c'><i style='left:0.00%;width:31.31%'></i><b style='left:13.92%'></b></span></td>
+<td class='num' data-v='0.040756'>4.1%</td>
+</tr>
+<tr data-search="好運姐 賞金獵人 miss fortune jade_missfortune">
+<td data-v='0.417103'><span class='tchip' style='background:#7a7f8a;color:#0e1116'>T5</span></td>
+<td><span class='cname'><img loading='lazy' src='assets/icons/classic/60021.png' alt=''><span>好運姐 <small>Miss Fortune</small><em>賞金獵人</em></span></span></td>
+<td class='num' data-v='373'>373</td>
+<td class='num' data-v='0.372654'>37.3%</td>
+<td class='num' data-v='0.417103'>41.7%</td>
+<td class='num' data-v='0.325117'>32.5–42.3%</td>
+<td data-v='0.097671'><span class='bar' style='--bc:#ff5a3c'><i style='left:6.28%;width:24.42%'></i><b style='left:18.16%'></b></span></td>
+<td class='num' data-v='0.078361'>7.8%</td>
 </tr>
 </tbody></table></div></section>
 <footer>
-queue 4310（經典 / JADE）· 2,361 場 · 60 隻英雄 · Data Dragon 16.15.1<br>Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>由 <code>scripts/build_classic_page.py</code> 產生 · 2026-07-31 23:04<br>未公開頁面（noindex），不在主站導覽列。
+queue 4310（經典 / JADE）· 2,380 場 · 60 隻英雄 · 頭像與稱號取自 Jade_* 條目（CommunityDragon），非現行版本美術<br>Tier 切點（調整後勝率）：OP ≥55% · T1 ≥52% · T2 ≥50% · T3 ≥48% · T4 ≥46% · T5 &lt;46%<br>由 <code>scripts/build_classic_page.py</code> 產生 · 2026-07-31 23:23<br>未公開頁面（noindex），不在主站導覽列。
 </footer>
 </div><script>
 (function(){
