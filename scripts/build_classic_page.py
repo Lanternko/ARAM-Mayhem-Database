@@ -79,6 +79,17 @@ CHAMPION_SUMMARY = "/v1/champion-summary.json"
 # into docs/assets/ at build time and served from our own origin.
 ICON_DIR = Path("docs/assets/icons/classic")
 ICON_URL_PREFIX = "assets/icons/classic"
+ITEM_ICON_DIR = Path("docs/assets/icons/classic-items")
+ITEM_ICON_URL_PREFIX = "assets/icons/classic-items"
+ITEM_ICON_VERSION = "16.15.1"
+
+# The client reports JADE inventory ids as ``77`` + the ordinary item id, e.g.
+# 773006 = Berserker's Greaves (3006).  Metadata and Data Dragon art are keyed
+# by the ordinary id, so convert only this documented Classic namespace.
+CLASSIC_ITEM_ID_PREFIX = "77"
+ITEM_BOARD_MIN_GAMES = 50
+HERO_ITEM_MIN_GAMES = 30
+TRINKET_ITEM_IDS = frozenset({3340, 3341, 3342, 3363})
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
@@ -162,13 +173,99 @@ def download_icons(meta: dict[int, dict], icon_dir: Path, refresh: bool) -> int:
     return fetched
 
 
-def collect_stats(db: Path, patch_prefix: str | None) -> tuple[dict, dict, int, dict]:
-    """Per-champion games/wins over queue 4310, plus a per-patch game census."""
+def base_item_id(item_id: int) -> int:
+    """Map a JADE item id back to its ordinary catalogue id when applicable."""
+    text = str(int(item_id))
+    if text.startswith(CLASSIC_ITEM_ID_PREFIX) and len(text) >= 6:
+        return int(text[len(CLASSIC_ITEM_ID_PREFIX):])
+    return int(item_id)
+
+
+def load_classic_item_metadata() -> dict[int, dict]:
+    """Load translated standard-item metadata for JADE's prefixed item ids.
+
+    The mode's client inventory uses a namespace prefix, but its items share
+    normal names and art.  Keep the result local to this standalone builder;
+    importing the main tier-list engine here would couple the two pipelines.
+    """
+    rows_en = httpx.get(f"{CDRAGON_BASE}/default/v1/items.json", timeout=40).json()
+    response_zh = httpx.get(f"{CDRAGON_BASE}/zh_tw/v1/items.json", timeout=40)
+    rows_zh = response_zh.json() if response_zh.status_code == 200 else []
+    zh_by_id = {
+        int(row["id"]): row
+        for row in rows_zh
+        if isinstance(row, dict) and row.get("id") is not None
+    }
+    meta: dict[int, dict] = {}
+    for row in rows_en:
+        if not isinstance(row, dict) or row.get("id") is None:
+            continue
+        item_id = int(row["id"])
+        zh = zh_by_id.get(item_id, {})
+        price = row.get("priceTotal")
+        price_total = int(price.get("amount") or 0) if isinstance(price, dict) else int(price or 0)
+        meta[item_id] = {
+            "item_id": item_id,
+            "name_zh": zh.get("name") or row.get("name") or f"#{item_id}",
+            "name_en": row.get("name") or zh.get("name") or f"#{item_id}",
+            "categories": list(row.get("categories") or zh.get("categories") or []),
+            "price_total": price_total,
+            "upgrades": bool(row.get("to")),
+            "image": f"{ITEM_ICON_URL_PREFIX}/{item_id}.png",
+        }
+    return meta
+
+
+def download_item_icons(meta: dict[int, dict], item_ids: set[int], icon_dir: Path) -> int:
+    """Self-host observed item icons so the preview has no hotlink dependency."""
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    fetched = 0
+    with httpx.Client(timeout=40) as client:
+        for item_id in sorted(item_ids):
+            if item_id not in meta:
+                continue
+            dest = icon_dir / f"{item_id}.png"
+            if dest.exists():
+                continue
+            url = f"https://ddragon.leagueoflegends.com/cdn/{ITEM_ICON_VERSION}/img/item/{item_id}.png"
+            response = client.get(url)
+            if response.status_code != 200 or not response.content:
+                click.echo(f"[classic] WARNING: item icon {item_id} -> HTTP {response.status_code}")
+                continue
+            dest.write_bytes(response.content)
+            fetched += 1
+    return fetched
+
+
+def classify_item(meta: dict) -> str:
+    """Return a UI filter category, not a gameplay recommendation."""
+    item_id = int(meta.get("item_id") or 0)
+    categories = {str(c) for c in meta.get("categories") or []}
+    if item_id in TRINKET_ITEM_IDS or "Trinket" in categories:
+        return "trinket"
+    if "Boots" in categories:
+        return "boots"
+    if bool(meta.get("upgrades")) or int(meta.get("price_total") or 0) < 1000:
+        return "starter"
+    return "complete"
+
+
+def collect_stats(db: Path, patch_prefix: str | None) -> dict:
+    """Aggregate heroes plus final-inventory item association for queue 4310."""
     games: dict[int, int] = defaultdict(int)
     wins: dict[int, int] = defaultdict(int)
     per_patch: dict[str, int] = defaultdict(int)
+    item_games: dict[int, int] = defaultdict(int)
+    item_wins: dict[int, int] = defaultdict(int)
+    hero_item_games: dict[tuple[int, int], int] = defaultdict(int)
+    hero_item_wins: dict[tuple[int, int], int] = defaultdict(int)
     total = 0
-    for g in iter_games(db, queue_id=CLASSIC_QUEUE_ID, patch_prefix=patch_prefix):
+    for g in iter_games(
+        db,
+        queue_id=CLASSIC_QUEUE_ID,
+        patch_prefix=patch_prefix,
+        parse_participants=True,
+    ):
         total += 1
         per_patch[g["patch"] or "?"] += 1
         blue_won = int(g["blue_wins"])
@@ -180,7 +277,32 @@ def collect_stats(db: Path, patch_prefix: str | None) -> tuple[dict, dict, int, 
             base = base_champion_id(int(cid))
             games[base] += 1
             wins[base] += 1 - blue_won
-    return games, wins, total, dict(per_patch)
+        for participant in g["participants"]:
+            champion_id = participant.get("championId")
+            if champion_id is None:
+                continue
+            champion_id = base_champion_id(int(champion_id))
+            held_items = {
+                base_item_id(int(item_id))
+                for item_id in participant.get("items") or []
+                if int(item_id) > 0
+            }
+            won = (participant.get("teamId") == 100) == bool(blue_won)
+            for item_id in held_items:
+                item_games[item_id] += 1
+                item_wins[item_id] += int(won)
+                hero_item_games[(champion_id, item_id)] += 1
+                hero_item_wins[(champion_id, item_id)] += int(won)
+    return {
+        "hero_games": games,
+        "hero_wins": wins,
+        "total_games": total,
+        "per_patch": dict(per_patch),
+        "item_games": item_games,
+        "item_wins": item_wins,
+        "hero_item_games": hero_item_games,
+        "hero_item_wins": hero_item_wins,
+    }
 
 
 def build_rows(games: dict, wins: dict, total_games: int, meta: dict) -> list[dict]:
@@ -212,6 +334,77 @@ def build_rows(games: dict, wins: dict, total_games: int, meta: dict) -> list[di
         })
     rows.sort(key=lambda r: -r["shrunk_wr"])
     return rows
+
+
+def build_item_rows(
+    item_games: dict,
+    item_wins: dict,
+    total_games: int,
+    meta: dict[int, dict],
+) -> list[dict]:
+    """Build global final-inventory association rows with honest uncertainty."""
+    rows = []
+    for item_id, games in item_games.items():
+        item = meta.get(item_id)
+        if not item:
+            continue
+        wins = item_wins[item_id]
+        raw_wr = wins / games if games else 0.0
+        ci_lo, ci_hi = wilson_interval(wins, games)
+        rows.append({
+            **item,
+            "kind": classify_item(item),
+            "games": games,
+            "wins": wins,
+            "raw_wr": raw_wr,
+            "ci_lo": ci_lo,
+            "ci_hi": ci_hi,
+            "hold_rate": games / (total_games * 10) if total_games else 0.0,
+        })
+    rows.sort(key=lambda row: (-row["games"], row["name_zh"]))
+    return rows
+
+
+def attach_hero_items(
+    heroes: list[dict],
+    hero_item_games: dict,
+    hero_item_wins: dict,
+    item_meta: dict[int, dict],
+) -> None:
+    """Attach commonly held, non-trinket final items to each hero detail."""
+    by_champion: dict[int, list[dict]] = defaultdict(list)
+    for (champion_id, item_id), games in hero_item_games.items():
+        item = item_meta.get(item_id)
+        if not item or games < HERO_ITEM_MIN_GAMES or classify_item(item) == "trinket":
+            continue
+        wins = hero_item_wins[(champion_id, item_id)]
+        raw_wr = wins / games
+        ci_lo, ci_hi = wilson_interval(wins, games)
+        by_champion[champion_id].append({
+            "item_id": item_id,
+            "name_zh": item["name_zh"],
+            "name_en": item["name_en"],
+            "image": item["image"],
+            "kind": classify_item(item),
+            "games": games,
+            "raw_wr": raw_wr,
+            "ci_lo": ci_lo,
+            "ci_hi": ci_hi,
+        })
+    for hero in heroes:
+        hero_items = by_champion.get(hero["champion_id"], [])
+        for item in hero_items:
+            item["lift"] = item["raw_wr"] - hero["raw_wr"]
+        hero_items.sort(key=lambda row: (-row["games"], -row["raw_wr"]))
+        hero["items"] = hero_items[:4]
+        if hero["games"] < 100:
+            hero["credibility"] = "探索"
+        elif hero["ci_lo"] <= 0.5 <= hero["ci_hi"]:
+            hero["credibility"] = "未定"
+        elif hero["games"] < 250:
+            hero["credibility"] = "中"
+        else:
+            hero["credibility"] = "高"
 
 
 CSS = """
@@ -355,60 +548,62 @@ footer code{color:var(--text-muted)}
 .caveat{white-space:normal;font-size:11.5px}
 .tier-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .bar{width:110px}}
+
+/* Research-page extension.  The old board remains readable while this layer
+   adds real controls, inline details, and final-inventory item evidence. */
+:root{--focus:oklch(82% .16 86);--surface-3:oklch(18% .012 255);--positive:oklch(73% .15 142);--negative:oklch(68% .18 30);--warning:oklch(73% .12 63)}
+.skip-link{position:fixed;left:12px;top:-64px;z-index:80;padding:10px 14px;border-radius:8px;background:var(--focus);color:#14110a;font-weight:700;text-decoration:none}.skip-link:focus{top:12px}
+.site-header-meta{margin-left:auto;display:flex;gap:12px;align-items:center;color:var(--text-dim);font-size:12px;white-space:nowrap}.site-header-meta span+span{border-left:1px solid var(--border);padding-left:12px}.site-header-meta b{color:var(--warning);font-weight:600}
+.research-context{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:4px 0 18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.research-context strong{font-size:15px}.research-context p{margin:0;color:var(--text-muted);font-size:13px;line-height:1.6}.research-context .data-note{color:var(--warning);font-variant-numeric:tabular-nums}
+.classic-tabs{display:flex;gap:2px;margin:0 0 18px;border-bottom:1px solid var(--border);overflow-x:auto}.classic-tab{position:relative;min-height:44px;padding:0 16px;border:0;background:transparent;color:var(--text-muted);font:600 14px inherit;white-space:nowrap;cursor:pointer}.classic-tab[aria-selected="true"]{color:var(--text)}.classic-tab[aria-selected="true"]::after{content:"";position:absolute;right:16px;bottom:-1px;left:16px;height:2px;background:var(--focus)}
+.research-bar{display:grid;gap:10px;margin-bottom:20px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.control-field{display:grid;gap:5px;min-width:0}.control-field[hidden]{display:none!important}.control-field label{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.control-field input,.control-field select{width:100%;min-height:42px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface-2);color:var(--text);padding:0 11px;font:14px inherit}.control-field select{cursor:pointer}.control-field input::placeholder{color:var(--text-dim)}
+.research-tip{margin:0;color:var(--text-dim);font-size:12px;line-height:1.55}.research-tip b{color:var(--text-muted)}.research-tip[hidden],.view[hidden],.empty-state[hidden],.hero-detail[hidden]{display:none!important}
+.tier-groups{display:grid;gap:20px}.tier-group{padding:0 0 12px;border-bottom:1px solid var(--border)}.tier-group:last-child{border-bottom:0}.tier-group-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}.tier-group-heading h2{margin:0;font-size:16px}.tier-group-heading p{margin:0;color:var(--text-muted);font-size:12px}
+.hero-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.hero-tile{position:relative;min-width:0;aspect-ratio:1;border:1px solid var(--border);border-radius:8px;background:var(--chip-bg);padding:0;overflow:hidden;cursor:pointer;color:var(--text)}.hero-tile img{width:100%;height:100%;object-fit:cover;display:block}.hero-tile::after{content:"";position:absolute;inset:0;background:rgba(10,11,13,.18);pointer-events:none}.hero-tile .tile-name,.hero-tile .tile-stat,.hero-tile .tile-games{position:absolute;z-index:1;font-variant-numeric:tabular-nums;pointer-events:none}.tile-name{bottom:4px;left:5px;right:5px;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;text-shadow:0 1px 4px rgba(10,11,13,.95)}.tile-stat{right:4px;top:4px;padding:2px 4px;border-radius:4px;background:rgba(10,11,13,.9);font-size:10px;font-weight:700}.tile-games{left:4px;top:4px;color:var(--text-muted);font-size:9px}.hero-tile[aria-pressed="true"]{border:2px solid var(--focus);box-shadow:0 0 0 2px rgba(245,197,24,.16)}
+.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:center}.detail-head img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.detail-close{margin-left:auto;min-width:44px;min-height:44px;border:1px solid var(--border-strong);border-radius:8px;background:transparent;color:var(--text-muted);font:14px inherit;cursor:pointer}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-stat dd.positive{color:var(--positive)}.detail-stat dd.uncertain{color:var(--warning)}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
+.detail-items{border-top:1px solid var(--border);padding-top:14px}.detail-items-head{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:9px}.detail-items h3{margin:0;font-size:14px}.detail-items p{margin:0;color:var(--text-dim);font-size:11px}.detail-item-list{display:grid;gap:8px}.detail-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.detail-item:last-child{border-bottom:0}.detail-item img{width:32px;height:32px;border-radius:5px}.detail-item strong{display:block;font-size:13px}.detail-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.detail-item .item-stat{text-align:right;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.item-stat b{color:var(--text);font-size:13px}.item-stat .lift-up{color:var(--positive)}.item-stat .lift-down{color:var(--negative)}
+.data-section-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between;margin:4px 0 12px}.data-section-head h2{margin:0;font-size:18px}.data-section-head p{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5;text-align:right}.table-scroller{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.research-table{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}.research-table th,.research-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;white-space:nowrap}.research-table th:first-child,.research-table td:first-child,.research-table th:nth-child(2),.research-table td:nth-child(2){text-align:left}.research-table th{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--text-muted);font-size:11px;letter-spacing:.03em}.research-table th button{display:inline-flex;gap:4px;align-items:center;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.research-table th button[aria-sort="descending"],.research-table th button[aria-sort="ascending"]{color:var(--focus)}.research-table tbody tr:hover{background:rgba(255,255,255,.025)}.research-table tbody tr:last-child td{border-bottom:0}.table-hero{display:flex;gap:8px;align-items:center;min-width:180px;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer;padding:0;text-align:left}.table-hero img,.table-item img{width:30px;height:30px;border-radius:5px;object-fit:cover}.table-hero small,.table-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.table-item{display:flex;gap:8px;align-items:center;min-width:180px}.rate-positive{color:var(--positive);font-weight:700}.rate-negative{color:var(--negative);font-weight:700}.rate-neutral{color:var(--warning);font-weight:700}.mono{font-variant-numeric:tabular-nums}.item-kind{display:inline-block;padding:2px 6px;border:1px solid var(--border);border-radius:99px;color:var(--text-muted);font-size:11px}.item-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;color:var(--text-muted);font-size:12px;line-height:1.6}.item-note b{color:var(--warning);font-weight:600}.empty-state{padding:28px 14px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--text-muted);text-align:center;font-size:14px}.method{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px;line-height:1.7}.method summary{color:var(--text);font-weight:600;cursor:pointer}.method p{max-width:75ch}.method code{color:var(--text-muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}@media (pointer:fine){.hero-tile:hover{transform:translateY(-2px);border-color:var(--border-strong)}.classic-tab:hover,.detail-close:hover{color:var(--text)}}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media (min-width:700px){.wrap{padding-top:28px}.research-bar{grid-template-columns:minmax(220px,1.4fr) repeat(3,minmax(120px,.65fr));align-items:end}.research-tip{grid-column:1/-1}.hero-grid{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:10px}.hero-detail{grid-template-columns:minmax(220px,.78fr) 1.2fr}.detail-head{grid-row:span 2;align-items:flex-start}.detail-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-items{grid-column:2}.site-header-meta{display:flex}}
+@media (max-width:699px){.site-header-meta{display:none}.research-context{margin-top:0}.research-context strong{width:100%}.classic-tabs{margin-right:-10px;margin-left:-10px;padding:0 10px}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.item-note{align-items:flex-start}}
 """
 
 JS = """
 (function(){
-  var q=document.getElementById('q');
-  var rows=[].slice.call(document.querySelectorAll('tbody tr'));
-  var champs=[].slice.call(document.querySelectorAll('.champ'));
-  function filter(){
-    var v=(q.value||'').trim().toLowerCase();
-    champs.forEach(function(c){
-      c.style.display=!v||c.dataset.search.indexOf(v)>=0?'':'none';
-    });
-    rows.forEach(function(r){
-      r.style.display=!v||r.dataset.search.indexOf(v)>=0?'':'none';
-    });
-    document.querySelectorAll('.tier-block').forEach(function(b){
-      var any=[].slice.call(b.querySelectorAll('.champ')).some(function(c){
-        return c.style.display!=='none';});
-      b.style.display=any?'':'none';
-    });
-  }
-  q.addEventListener('input',filter);
-
-  // Sortable table. Numeric columns carry data-v; the rest sort as text.
-  var tb=document.querySelector('tbody');
-  document.querySelectorAll('thead th').forEach(function(th,i){
-    th.addEventListener('click',function(){
-      var desc=th.dataset.dir!=='desc';
-      document.querySelectorAll('thead th').forEach(function(o){
-        o.classList.remove('sorted');delete o.dataset.dir;});
-      th.classList.add('sorted');th.dataset.dir=desc?'desc':'asc';
-      rows.sort(function(a,b){
-        var x=a.cells[i],y=b.cells[i];
-        var xv=x.dataset.v,yv=y.dataset.v;
-        var r=(xv!==undefined&&yv!==undefined)
-          ?parseFloat(xv)-parseFloat(yv)
-          :x.textContent.localeCompare(y.textContent,'zh-Hant');
-        return desc?-r:r;
-      });
-      rows.forEach(function(r){tb.appendChild(r);});
-    });
-  });
-
-  // Board / table view toggle.
-  document.querySelectorAll('.seg button').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      document.querySelectorAll('.seg button').forEach(function(b){
-        b.classList.remove('on');});
-      btn.classList.add('on');
-      var m=btn.dataset.view;
-      document.getElementById('board').style.display=m==='table'?'none':'';
-      document.getElementById('table-sec').style.display=m==='board'?'none':'';
-    });
-  });
+  var dataEl=document.getElementById('classic-data');
+  if(!dataEl) return;
+  var data=JSON.parse(dataEl.textContent);
+  var state={tab:'tier',heroSort:'shrunk_wr',itemSort:'games',desc:true,heroId:null};
+  var search=document.getElementById('research-search');
+  var tierFilter=document.getElementById('tier-filter');
+  var itemKindFilter=document.getElementById('item-kind-filter');
+  var minGames=document.getElementById('min-games');
+  var heroSort=document.getElementById('hero-sort');
+  var itemSort=document.getElementById('item-sort');
+  var detail=document.getElementById('hero-detail');
+  var tabs=[].slice.call(document.querySelectorAll('[role="tab"]'));
+  var views=[].slice.call(document.querySelectorAll('[data-view]'));
+  function esc(value){return String(value==null?'':value).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});}
+  function pct(value){return (Number(value)*100).toFixed(1)+'%';}
+  function num(value){return Number(value).toLocaleString('zh-TW');}
+  function rateClass(row){return row.ci_lo>0.5?'rate-positive':row.ci_hi<0.5?'rate-negative':'rate-neutral';}
+  function ciMarkup(row){var lo=Math.max(0,Math.min(100,(row.ci_lo-.3)/.4*100)),hi=Math.max(0,Math.min(100,(row.ci_hi-.3)/.4*100)),raw=Math.max(0,Math.min(100,(row.raw_wr-.3)/.4*100));return '<div class="ci-line"><span><b>'+pct(row.ci_lo)+'</b><b>'+pct(row.ci_hi)+'</b></span><div class="ci-track"><i style="left:'+lo.toFixed(2)+'%;width:'+Math.max(hi-lo,1).toFixed(2)+'%"></i><b style="left:'+raw.toFixed(2)+'%"></b></div></div>';}
+  function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),tier=tierFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){return (!query||hero.search.indexOf(query)>=0)&&(!tier||hero.tier===tier)&&hero.games>=minimum;});}
+  function activeItems(){var query=(search.value||'').trim().toLowerCase(),kind=itemKindFilter.value,minimum=Number(minGames.value||0);return data.items.filter(function(item){return (!query||item.search.indexOf(query)>=0)&&(!kind||item.kind===kind)&&item.games>=minimum;});}
+  function compare(field){return function(a,b){var av=a[field],bv=b[field],result=typeof av==='string'?String(av).localeCompare(String(bv),'zh-Hant'):Number(av)-Number(bv);return state.desc?-result:result;};}
+  function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');if(field==='raw_wr')stat.textContent=pct(hero.raw_wr);else if(field==='pick_rate')stat.textContent=pct(hero.pick_rate);else if(field==='games')stat.textContent=num(hero.games);else stat.textContent=pct(hero.shrunk_wr);}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){group.hidden=!group.querySelector('.hero-tile:not([hidden])');});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
+  function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'"><img src="'+esc(hero.image)+'" alt=""><span>'+esc(hero.name_zh)+' <small>'+esc(hero.name_en)+'</small></span></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono">'+pct(hero.raw_wr)+'</td><td class="mono '+rateClass(hero)+'">'+pct(hero.shrunk_wr)+'</td><td>'+ciMarkup(hero)+'</td><td class="mono">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
+  function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+rateClass(item)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
+  function renderItemsForHero(hero){if(!hero.items.length)return '<p class="research-tip">沒有足夠樣本的非飾品終局裝備可呈現。</p>';return '<div class="detail-item-list">'+hero.items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>'+esc(item.kind_label)+' · 持有 '+num(item.games)+' 場 · 95% CI '+pct(item.ci_lo)+'–'+pct(item.ci_hi)+'</small></div><div class="item-stat"><b>'+pct(item.raw_wr)+'</b><br><span class="'+liftClass+'">對英雄 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var rateCls=rateClass(hero),ciState=hero.credibility==='高'?'positive':'uncertain';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+'</p></div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+rateCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>原始勝率</dt><dd>'+pct(hero.raw_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd>'+pct(hero.pick_rate)+'</dd></div><div class="detail-stat"><dt>95% CI</dt><dd>'+pct(hero.ci_lo)+'–'+pct(hero.ci_hi)+'</dd></div></dl><section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>';var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
+  function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';document.getElementById('tier-field').hidden=isItems;document.getElementById('item-kind-field').hidden=!isItems;document.getElementById('hero-sort-field').hidden=isItems;document.getElementById('item-sort-field').hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';if(isItems)closeDetail();}
+  function refresh(){updateTiles();renderHeroes();renderItems();}
+  tabs.forEach(function(tab,index){tab.addEventListener('click',function(){setTab(tab.dataset.tab,false);});tab.addEventListener('keydown',function(event){if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();var next=(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;setTab(tabs[next].dataset.tab,true);});});
+  [search,tierFilter,itemKindFilter,minGames,heroSort,itemSort].forEach(function(control){control.addEventListener(control===search?'input':'change',refresh);});
+  document.addEventListener('click',function(event){var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
+  setTab('tier',false);refresh();
 })();
 """
 
@@ -627,18 +822,158 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     return "\n".join(p)
 
 
+def render_research_preview(
+    heroes: list[dict],
+    items: list[dict],
+    total_games: int,
+    per_patch: dict,
+) -> str:
+    """Render the interactive Classic research preview as a self-contained page."""
+    built = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    mean_err = (
+        sum((row["ci_hi"] - row["ci_lo"]) / 2 for row in heroes) / len(heroes)
+        if heroes else 0.0
+    )
+    patch_str = "、".join(
+        f"{patch} ({count:,})"
+        for patch, count in sorted(per_patch.items(), key=lambda pair: -pair[1])
+    )
+    kind_label = {
+        "complete": "完整裝備",
+        "boots": "鞋子",
+        "starter": "起手／組件",
+        "trinket": "飾品",
+    }
+    payload_heroes = []
+    for hero in heroes:
+        payload_hero = dict(hero)
+        payload_hero["search"] = " ".join(
+            str(hero.get(key) or "").lower()
+            for key in ("name_zh", "name_en", "title_zh", "alias")
+        )
+        for item in payload_hero.get("items") or []:
+            item["kind_label"] = kind_label.get(item["kind"], item["kind"])
+        payload_heroes.append(payload_hero)
+    payload_items = []
+    for item in items:
+        payload_item = dict(item)
+        payload_item["kind_label"] = kind_label.get(item["kind"], item["kind"])
+        payload_item["search"] = " ".join(
+            str(item.get(key) or "").lower()
+            for key in ("name_zh", "name_en", "kind")
+        )
+        payload_items.append(payload_item)
+    payload = json.dumps(
+        {"heroes": payload_heroes, "items": payload_items},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).replace("</", "<\\/")
+
+    page: list[str] = []
+    page.append("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>")
+    page.append("<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
+    page.append("<meta name='robots' content='noindex,nofollow'>")
+    page.append("<title>經典模式資料研究（預覽）· classicmeta</title>")
+    page.append(
+        "<link rel='preconnect' href='https://fonts.googleapis.com'>"
+        "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2"
+        "?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap'>"
+    )
+    page.append(f"<style>{CSS}</style></head><body>")
+    page.append("<a class='skip-link' href='#main-content'>跳至主要內容</a>")
+    page.append("<header class='site-header'><div class='site-header-inner'>")
+    page.append("<span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span>")
+    page.append("<span class='brand-div'>經典模式</span><span class='unlisted'>UNLISTED · 預覽</span>")
+    page.append(
+        "<div class='site-header-meta'><span>queue 4310</span>"
+        f"<span>更新 {built}</span><span><b>樣本仍小</b></span></div>"
+    )
+    page.append("</div></header><main id='main-content' class='wrap'>")
+    page.append(
+        "<section class='research-context' aria-label='資料範圍'>"
+        "<strong>經典模式資料研究</strong>"
+        f"<p><span class='data-note'>{total_games:,} 場 · 平均誤差 ±{mean_err * 100:.1f}%</span>"
+        "　Tier 依調整後勝率分級，點英雄查看完整數據與終局裝備關聯。</p>"
+        "</section>"
+    )
+    page.append("<div class='classic-tabs' role='tablist' aria-label='經典模式資料視圖'>")
+    for tab, label in (("tier", "英雄 Tier"), ("heroes", "英雄明細"), ("items", "裝備")):
+        selected = "true" if tab == "tier" else "false"
+        tabindex = "0" if tab == "tier" else "-1"
+        page.append(
+            f"<button type='button' class='classic-tab' role='tab' data-tab='{tab}' "
+            f"aria-selected='{selected}' aria-controls='view-{tab}' tabindex='{tabindex}'>{label}</button>"
+        )
+    page.append("</div>")
+    page.append("<section class='research-bar' aria-label='篩選與排序'>")
+    page.append("<div class='control-field'><label for='research-search'>搜尋</label><input id='research-search' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false'></div>")
+    page.append("<div class='control-field' id='tier-field'><label for='tier-filter'>Tier</label><select id='tier-filter'><option value=''>全部</option>" + "".join(f"<option value='{tier}'>{tier}</option>" for tier in TIER_ORDER) + "</select></div>")
+    page.append("<div class='control-field' id='item-kind-field' hidden><label for='item-kind-filter'>裝備類型</label><select id='item-kind-filter'><option value=''>全部</option><option value='complete'>完整裝備</option><option value='boots'>鞋子</option><option value='starter'>起手／組件</option><option value='trinket'>飾品</option></select></div>")
+    page.append("<div class='control-field'><label for='min-games'>最低樣本</label><select id='min-games'><option value='50'>至少 50 場</option><option value='100'>至少 100 場</option><option value='250'>至少 250 場</option></select></div>")
+    page.append("<div class='control-field' id='hero-sort-field'><label for='hero-sort'>英雄指標</label><select id='hero-sort'><option value='shrunk_wr'>調整後勝率</option><option value='raw_wr'>原始勝率</option><option value='pick_rate'>選用率</option><option value='games'>樣本數</option></select></div>")
+    page.append("<div class='control-field' id='item-sort-field' hidden><label for='item-sort'>裝備排序指標</label><select id='item-sort'><option value='games'>持有場次</option><option value='raw_wr'>持有者勝率</option><option value='hold_rate'>終局持有率</option></select></div>")
+    page.append("<p class='research-tip'><b>讀法：</b>色條跨過 50% 時，表示現有樣本尚無法與五五波可靠區分。</p></section>")
+
+    page.append("<section class='view' id='view-tier' data-view='tier' role='tabpanel'>")
+    page.append("<div class='tier-groups'>")
+    by_tier = {tier: [hero for hero in heroes if hero["tier"] == tier and hero["games"] >= TIER_BOARD_MIN_GAMES] for tier in TIER_ORDER}
+    for tier in TIER_ORDER:
+        entries = by_tier[tier]
+        if not entries:
+            continue
+        page.append(f"<section class='tier-group' data-tier-group='{tier}'><div class='tier-group-heading'><h2>{tier}</h2><p>{len(entries)} 隻 · 依調整後勝率</p></div><div class='hero-grid'>")
+        for hero in entries:
+            search_text = html.escape(payload_heroes[heroes.index(hero)]["search"], quote=True)
+            label = html.escape(f"查看 {hero['name_zh']} 詳情，調整後勝率 {hero['shrunk_wr'] * 100:.1f}%", quote=True)
+            page.append(
+                f"<button type='button' class='hero-tile' data-hero-id='{hero['champion_id']}' "
+                f"data-search='{search_text}' aria-pressed='false' aria-label='{label}'>"
+                f"<img loading='lazy' src='{html.escape(hero['image'], quote=True)}' alt=''>"
+                f"<span class='tile-games'>{hero['games']:,}</span><span class='tile-stat'>{hero['shrunk_wr'] * 100:.1f}%</span>"
+                f"<span class='tile-name'>{html.escape(hero['name_zh'])}</span></button>"
+            )
+        page.append("</div></section>")
+    page.append("</div><section id='hero-detail' class='hero-detail' hidden aria-live='polite'></section><p id='tier-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
+
+    page.append("<section class='view' id='view-heroes' data-view='heroes' role='tabpanel' hidden><div class='data-section-head'><h2>完整英雄明細</h2><p>Tier 固定以調整後勝率分級；欄位可排序。</p></div><div class='table-scroller'><table class='research-table'><thead><tr>")
+    for field, label in (("tier", "Tier"), ("name_zh", "英雄"), ("games", "場次"), ("raw_wr", "原始勝率"), ("shrunk_wr", "調整後"), ("ci_lo", "95% CI"), ("pick_rate", "選用率")):
+        page.append(f"<th><button type='button' data-sort-target='hero' data-sort='{field}' aria-sort='none'>{label}</button></th>")
+    page.append("</tr></thead><tbody id='hero-tbody'></tbody></table></div><p id='heroes-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
+
+    page.append("<section class='view' id='view-items' data-view='items' role='tabpanel' hidden><div class='data-section-head'><h2>裝備表現</h2><p>依終局背包計算，不代表購買順序或造成勝利。</p></div><p class='item-note'><b>終局持有者勝率</b><span>只描述在對局結束時持有該裝備的玩家勝率。請搭配樣本、95% CI 與英雄本身強度閱讀。</span></p><div class='table-scroller'><table class='research-table'><thead><tr>")
+    for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率"), ("ci_lo", "95% CI")):
+        page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
+    page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
+    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
+    page.append("</main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + JS + "</script></body></html>")
+    return "\n".join(page)
+
+
 @click.command()
 @click.option("--db", default="data/lcu/games.db", type=click.Path(exists=True))
 @click.option("--out", default="docs/classic.html", type=click.Path())
 @click.option("--patch", "patch_prefix", default="", help="版本前綴過濾；省略＝全收")
 @click.option("--icon-dir", default=str(ICON_DIR), type=click.Path())
+@click.option("--item-icon-dir", default=str(ITEM_ICON_DIR), type=click.Path())
 @click.option("--refresh-icons", is_flag=True, help="重新下載頭像（改版換美術時用）")
-def main(db: str, out: str, patch_prefix: str, icon_dir: str, refresh_icons: bool) -> None:
+def main(
+    db: str,
+    out: str,
+    patch_prefix: str,
+    icon_dir: str,
+    item_icon_dir: str,
+    refresh_icons: bool,
+) -> None:
     db_path = Path(db)
     prefix = patch_prefix or None
 
     click.echo(f"[classic] scanning queue {CLASSIC_QUEUE_ID} from {db_path} ...")
-    games, wins, total, per_patch = collect_stats(db_path, prefix)
+    stats = collect_stats(db_path, prefix)
+    games = stats["hero_games"]
+    wins = stats["hero_wins"]
+    total = stats["total_games"]
+    per_patch = stats["per_patch"]
     if not total:
         raise click.ClickException(f"no queue {CLASSIC_QUEUE_ID} games found in {db}")
     click.echo(f"[classic] {total:,} games, {len(games)} champions")
@@ -659,12 +994,30 @@ def main(db: str, out: str, patch_prefix: str, icon_dir: str, refresh_icons: boo
     )
 
     rows = build_rows(games, wins, total, meta)
+    click.echo("[classic] fetching item metadata for final-inventory association ...")
+    item_meta = load_classic_item_metadata()
+    observed_item_ids = set(stats["item_games"])
+    fetched_items = download_item_icons(item_meta, observed_item_ids, Path(item_icon_dir))
+    click.echo(
+        f"[classic] item icons: {fetched_items} downloaded, "
+        f"{len(list(Path(item_icon_dir).glob('*.png')))} on disk -> {item_icon_dir}"
+    )
+    item_rows = build_item_rows(stats["item_games"], stats["item_wins"], total, item_meta)
+    attach_hero_items(
+        rows,
+        stats["hero_item_games"],
+        stats["hero_item_wins"],
+        item_meta,
+    )
+    if not item_rows:
+        raise click.ClickException("no Classic final-inventory items could be resolved")
+
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render(rows, total, per_patch), encoding="utf-8")
+    out_path.write_text(render_research_preview(rows, item_rows, total, per_patch), encoding="utf-8")
 
     size_kb = out_path.stat().st_size / 1024
-    click.echo(f"[classic] wrote {out_path} ({size_kb:.0f} KB)")
+    click.echo(f"[classic] wrote {out_path} ({size_kb:.0f} KB, {len(item_rows)} items)")
     top = rows[0]
     click.echo(
         f"[classic] top: {top['name_zh']} {top['shrunk_wr'] * 100:.1f}% "
