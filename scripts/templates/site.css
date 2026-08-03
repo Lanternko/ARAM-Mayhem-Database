@@ -203,47 +203,6 @@
     .view-home .main-col {
         --filter-row-h: 40px;
     }
-    .site-intro {
-        margin: 0 0 20px;
-        padding: 18px 20px 17px;
-        border: 1px solid var(--border);
-        border-radius: var(--r-lg);
-        background: linear-gradient(135deg, color-mix(in srgb, var(--surface) 94%, var(--accent) 6%), var(--surface));
-    }
-    .site-intro-copy { max-width: 840px; }
-    .site-intro-kicker {
-        margin: 0 0 5px;
-        color: var(--accent);
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-    }
-    .site-intro h1 {
-        margin: 0 0 8px;
-        font-size: clamp(20px, 2.2vw, 28px);
-        line-height: 1.25;
-    }
-    .site-intro p {
-        margin: 0;
-        color: var(--text-muted);
-        font-size: 14px;
-        line-height: 1.75;
-    }
-    .site-intro .site-intro-detail {
-        margin-top: 5px;
-        color: var(--text-dim);
-        font-size: 12px;
-    }
-    .site-intro-link {
-        display: inline-block;
-        margin-top: 10px;
-        color: var(--accent);
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
-    }
-    .site-intro-link:hover { text-decoration: underline; }
     /* Role chips + shown-count: one row; reserve right gutter for sticky search.
        Search-rail is the *next sibling* under .main-col (not nested here) so
        sticky pin lasts for the whole tier/detail scroll. */
@@ -329,24 +288,6 @@
     }
     .search-rail .search:focus {
         box-shadow: none;
-    }
-    /* Thin-patch disclosure: sits above the first tier block on a freshly
-       released patch, telling the reader the displayed win rates are still
-       partly last patch.  Server-rendered only while the blend is material,
-       so there is no empty-state to style. */
-    .blend-note {
-        /* Background disclosure, not an alert: the boxed border + tinted panel
-           read with the same weight as a real warning, which overstated a
-           caveat that merely explains the numbers.  Demoted to a quiet
-           footnote — a thin left rule, no fill, no box.  With the tint gone the
-           note sits on the page --bg, where --text-dim clears AA, so it can dim
-           to secondary without hurting readability. */
-        margin: 0 0 16px;
-        padding: 2px 0 2px 12px;
-        border-left: 2px solid color-mix(in srgb, var(--accent, #6aa9ff) 45%, transparent);
-        color: var(--text-dim, inherit);
-        font-size: 12.5px;
-        line-height: 1.6;
     }
     .role-chips {
         display: flex;
