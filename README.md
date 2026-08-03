@@ -35,59 +35,6 @@ Riot 公開 API 從 patch 14.x 開始**整場移除 Mayhem (queueId 2400)**，de
 
 ---
 
-## 怎麼貢獻 Mayhem 對局資料
-
-整個流程設計成**只送出無 PUUID 的安全檔**、**全程在 GitHub Issue 公開稽核**。多人貢獻同場會自動以 Riot `game_id` 去重，所以不用擔心重複。
-
-### 一次性安裝
-
-```powershell
-git clone https://github.com/Lanternko/ARAM-Mayhem-Database.git
-cd ARAM-Mayhem-Database
-python -m pip install -e .   # 需要 Python 3.13+
-```
-
-### 每次貢獻（2 步）
-
-**步驟 1 — 跑 collector**
-
-打開 League 客戶端（**不需要在玩**，登入在線即可），再開一個 PowerShell 視窗依序貼上兩行：
-
-```powershell
-python scripts/lcu_collector.py seed-opgg-plan --region tw --tier platinum --tier gold --pages-per-tier 2 --out data/seeds/opgg_tw.txt
-python scripts/lcu_collector.py snowball --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 500 --max-players 1000 --games-per-player 4
-```
-
-跑越久收越多場。任何時候 `Ctrl+C` 中斷都可以，下次再跑會從上次的進度續傳。想看現在累積到幾場：
-
-```powershell
-python scripts/lcu_collector.py status
-```
-
-**步驟 2 — 匯出 + 自動開 Issue**
-
-```powershell
-python scripts/lcu_collector.py export-share --queue 2400 --patch-prefix 16.10 --auto-issue
-```
-
-這一行會：
-1. 產出 `data/share/share_<時間戳>.db.zip`（**只含 games 表，無 PUUID；自動 zip 因為 GitHub 不收 `.db`**）
-2. **自動開瀏覽器**到 GitHub Issue 頁，title 和摘要全部 pre-fill 好
-
-接下來在瀏覽器分頁裡 **把 `.db.zip` 檔拖進留言框** → 按 **Submit new issue** 就完成了。
-
-> 為什麼帶 `--patch-prefix 16.10`：tier list 是 patch-sensitive，混 patch 會稀釋訊號。你可以改成當前 patch（例 `16.11`）。不加會把所有歷史 patch 都送，腳本會印警告。
-
-> ⚠ **PowerShell 注意**：不能用 bash 的 `\` 換行。要嘛整段貼成一行，要嘛把 `\` 換成 backtick `` ` ``（且行尾不能有空白）。
->
-> ⚠ **GitHub Issue 附件上限 25 MB**。一般 500–5,000 場都遠低於此；如果超過，加 `--patch-prefix 16.10` 分多檔提交。
-
----
-
-完整流程、為什麼這樣設計、維護者怎麼接收與合併：見 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-詳細 collector 文件（snowball / merge-db / 各種 flag）見 [`CLAUDE.md`](CLAUDE.md) 的 LCU Collector 節。
-
----
 
 ## 自己 build tier list 網站
 
