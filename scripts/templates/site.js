@@ -748,8 +748,8 @@
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
-    // Primary tabs: home (英雄) / augments / draft / game / changes / column.
-    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'column'];
+    // Primary tabs: home (英雄) / augments / draft / game / changes.
+    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [
@@ -8363,16 +8363,11 @@
     //   /en                home (en)
     //   /augments          augment tier (zh)
     //   /en/augments       augment tier (en)
-    //   /column/<id>       article (zh)
-    //   /en/column/<id>    article (en)
-    // Legacy '#view' / '#column/id' hashes (and old /settings) migrate once
+    // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix || '/';
-        if (view === 'column' && sub) {
-            return prefix + '/column/' + encodeURIComponent(sub);
-        }
         return prefix + '/' + view;
     }
     function normalizePathname(pathname) {
@@ -8388,12 +8383,10 @@
         if (rawHash) {
             const cut = rawHash.indexOf('/');
             const hView = cut === -1 ? rawHash : rawHash.slice(0, cut);
-            let hSub = cut === -1 ? '' : rawHash.slice(cut + 1);
-            try { hSub = decodeURIComponent(hSub); } catch {}
             if (VIEWS.includes(hView)) {
                 return {
                     view: hView,
-                    sub: hView === 'column' ? (hSub || '') : '',
+                    sub: '',
                     urlLang: null,
                     legacyHash: true,
                 };
@@ -8417,11 +8410,7 @@
         }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
-        let sub = '';
-        if (view === 'column' && segs.length > 1) {
-            try { sub = decodeURIComponent(segs.slice(1).join('/')); } catch { sub = segs.slice(1).join('/'); }
-        }
-        return { view, sub, urlLang, legacyHash: false };
+        return { view, sub: '', urlLang, legacyHash: false };
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
@@ -8448,8 +8437,7 @@
         if (wantLang !== currentLang) {
             applyLanguage(wantLang, 'none');
         }
-        if (view === 'column') columnArticle = sub || null;
-        else columnArticle = null;
+        columnArticle = null;
         // Migrating an old #hash always replaceStates onto the clean path.
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
         setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode);
@@ -8474,12 +8462,8 @@
             document.querySelectorAll('.view[data-view]').forEach(v => {
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
-            if (name === 'column') {
-                columnArticle ? renderArticle(columnArticle) : renderColumnList();
-            } else {
-                columnArticle = null;
-                document.title = BASE_TITLE;  // leaving an open article restores the base title
-            }
+            columnArticle = null;
+            document.title = BASE_TITLE;
             if (name === 'augments') {
                 renderAugmentTier();
             }
@@ -8492,10 +8476,7 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            // Path is written AFTER render so an invalid article id that fell
-            // back to the list normalises to /column (not a 404 path).
-            const sub = (name === 'column' && columnArticle) ? columnArticle : '';
-            syncUrlToRoute(name, sub, historyMode);
+            syncUrlToRoute(name, '', historyMode);
             window.scrollTo(0, 0);
             moveTabIndicator();
         };

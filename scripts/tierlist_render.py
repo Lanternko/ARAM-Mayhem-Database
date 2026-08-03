@@ -638,6 +638,25 @@ def _info_page_html(
     )
 
 
+def _retire_public_column_code(site_js: str) -> str:
+    """Keep draft column code private while removing it from shipped JS.
+
+    The article source remains in the template for later editorial work, but
+    unpublished articles must not be downloadable as part of the public site
+    bundle.  Routing is disabled separately in the template's VIEWS list.
+    """
+    stripped, count = re.subn(
+        r"const ARTICLES\s*=\s*\[.*?\n\s*\];",
+        "const ARTICLES = [];",
+        site_js,
+        count=1,
+        flags=re.S,
+    )
+    if count != 1:
+        raise ValueError("site.js ARTICLES block not found while retiring column code")
+    return stripped
+
+
 def write_site_info_pages(
     index_path: Path,
     *,
@@ -652,15 +671,18 @@ def write_site_info_pages(
 
     about_body = f"""
 <section><h2>本站提供什麼</h2>
-<p>arammeta 將 ARAM: Mayhem 對戰整理成英雄、增幅、裝備與隊伍搭配資料，並提供 Draft 分析與 Meta Pick 小遊戲。目標是讓玩家在短時間內看懂版本環境，同時保留樣本量與統計限制。</p></section>
-<section><h2>資料怎麼來</h2>
-<p>資料由本機 League Client 介面收集，網站只發布彙總後的對戰統計。公開資料不包含 PUUID、Riot ID、召喚師名稱或可識別個別玩家的原始紀錄。</p>
-<ul><li>對局以 game ID 去除重複。</li><li>英雄勝率使用 Bayesian shrinkage，降低小樣本造成的極端波動。</li><li>版本、樣本數與更新日期會顯示在資料旁，跨版本結果不視為同一環境。</li></ul></section>
-<section><h2>如何解讀</h2>
-<p>勝率代表歷史資料中的關聯，不保證個別對局結果。英雄強度、玩家熟練度、隊伍組成、增幅選擇與版本平衡都會影響結果。樣本較少的組合應視為探索線索，不應當成確定答案。</p></section>
+<p>arammeta 是 ARAM: Mayhem 的獨立資料工具，將實戰對局整理成英雄勝率、增幅搭配、裝備與隊伍組合資料，並提供 Draft 分析與 Meta Pick 小遊戲。它的用途不是只列一張熱門榜，而是讓玩家知道數字從哪裡來、樣本有多大，以及一個選擇在什麼情境下可能有效。</p></section>
+<section><h2>為什麼這份資料稀有</h2>
+<p>Riot 公開 API 在 queue 2400 層級不提供 Mayhem 對局，因此一般 API 統計站無法直接取得這批資料。本站由使用者在自己的本機 League Client 執行 collector，透過 LCU 讀取最近對局，再從自己、好友與已發現的參與者擴張樣本。這套收集流程與整理後的 Mayhem 資料，是本專案自行建立的資料資產。</p>
+<ul><li>每場對局整理雙方各 5 位玩家的英雄、增幅與勝負結果。</li><li>使用 Riot game ID 做精確去重，避免同一場被多人貢獻重複計算。</li><li>網站只發布彙總後的統計，不公開 PUUID、Riot ID、召喚師名稱或其他個人識別資料。</li></ul></section>
+<section><h2>統計怎麼整理</h2>
+<p>英雄排行使用 Bayesian shrinkage，讓小樣本勝率向整體基準收縮；英雄×增幅則以英雄本身的基準作比較，避免把「英雄本來就強」誤判成增幅效果。每個公開數字都會標示版本、樣本數與更新日期，跨版本結果不直接視為同一環境。</p>
+<p>這些數字描述的是歷史資料中的關聯，不保證個別對局結果。玩家熟練度、隊伍組成、增幅選擇、版本平衡與隨機英雄都會影響實戰結果。</p></section>
+<section><h2>如何使用網站</h2>
+<ul><li>在英雄頁依角色或中英文名稱篩選，點開英雄查看增幅、裝備與搭配細節。</li><li>用 Draft 分析比較雙方陣容的預估勝率與隊伍特性。</li><li>用 Meta Pick 小遊戲練習在有限英雄池中組出高分陣容。</li><li>在版本變動頁查看本版與上一版的勝率變化，並搭配樣本數判斷可信度。</li></ul></section>
 <section><h2>開源與回報</h2>
-<p>網站與資料處理工具公開於 GitHub。你可以檢查方法、提出資料問題或回報介面錯誤。</p>
-<p><a class="action" href="{repo_url}" target="_blank" rel="noopener">查看 GitHub 專案</a></p></section>
+<p>收集器、資料整理流程、統計方法與網站程式碼都公開於 GitHub；你可以檢查方法、貢獻去識別化對局資料，或回報資料與介面問題。</p>
+<p><a class="action" href="{repo_url}" target="_blank" rel="noopener">查看 GitHub 專案與收集說明</a></p></section>
 <div class="notice"><p>這是一個獨立社群專案，不是 Riot Games 官方網站，也未獲 Riot Games 贊助。</p></div>
 """
     privacy_body = f"""
@@ -728,36 +750,23 @@ def write_site_info_pages(
     return written
 
 
-def discover_column_article_ids(site_js: str | None = None) -> list[str]:
-    """Article slugs from the ARTICLES array in site.js (shareable /column/<id>)."""
-    text = site_js if site_js is not None else _read_site_template("site.js")
-    m = re.search(r"const ARTICLES\s*=\s*\[(.*?)\n\s*\];", text, re.S)
-    if not m:
-        return []
-    # Only top-level `id: 'slug'` entries inside the array body.
-    return re.findall(r"(?m)^\s*id:\s*'([a-z0-9][a-z0-9-]*)'\s*,?\s*$", m.group(1))
-
-
 # High-traffic History routes get a full copy of index.html (no bounce).
-# Column *articles* stay as tiny stubs — low traffic, many paths.
+# Retired /column routes are deliberately not emitted into the public site.
 SPA_FULL_SHELL_PATHS = frozenset({
     "/augments",
     "/draft",
     "/game",
     "/changes",
-    "/column",
     "/en",
     "/en/augments",
     "/en/draft",
     "/en/game",
     "/en/changes",
-    "/en/column",
     "/zh-CN",
     "/zh-CN/augments",
     "/zh-CN/draft",
     "/zh-CN/game",
     "/zh-CN/changes",
-    "/zh-CN/column",
 })
 
 # Cap shipped per-champion detail rows.  UI carousels only show a handful;
@@ -1087,9 +1096,9 @@ def _spa_deep_link_stub(
 ) -> str:
     """Tiny GH Pages shell: stash path → bounce to / so the real SPA can boot.
 
-    Used for long-tail article paths (many URLs, low traffic).  High-traffic
-    routes get a full shell copy via write_spa_path_shells instead — bounce
-    doubled LCP on /zh-CN and /en (~5s in analytics).
+    The root-path variant is the custom 404 shell and is marked noindex.  It
+    remains a compatibility redirect for live SPA routes, but retired routes
+    must not become indexable thin pages.
     """
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
@@ -1117,11 +1126,13 @@ def _spa_deep_link_stub(
     if og_img:
         og_bits.append(f"<meta property='og:image' content='{esc(og_img, quote=True)}'>")
         og_bits.append(f"<meta name='twitter:image' content='{esc(og_img, quote=True)}'>")
+    robots = "<meta name='robots' content='noindex'>" if path == "/" else ""
     return (
         f"<!doctype html><html lang='{esc(lang, quote=True)}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
-        f"<title>{esc(title)}</title>"
-        f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
+        + robots
+        + f"<title>{esc(title)}</title>"
+        + f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         + "".join(og_bits)
         + "<script>"
         "try{"
@@ -1147,8 +1158,8 @@ def write_spa_path_shells(
 
     High-traffic routes (locale homes, main tabs) get a *full* copy of
     index.html so the browser never pays a bounce-to-/ double load.
-    Long-tail column articles stay as tiny stubs that stash the path and
-    redirect to / (sessionStorage restore in site.js).
+    Retired column routes are not generated; unknown paths use the noindex
+    404 shell instead of leaving thin article pages online.
     """
     index_path = Path(index_path)
     if not index_path.is_file():
@@ -1159,19 +1170,6 @@ def write_spa_path_shells(
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
         og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
-
-    # Pull article titles from site.js for slightly better share cards.
-    site_js = _read_site_template("site.js")
-    article_titles: dict[str, str] = {}
-    for aid in discover_column_article_ids(site_js):
-        # Prefer zh title next to this id block.
-        m = re.search(
-            rf"id:\s*'{re.escape(aid)}'.*?title_zh:\s*'((?:\\'|[^'])*)'",
-            site_js,
-            re.S,
-        )
-        if m:
-            article_titles[aid] = m.group(1).replace("\\'", "'")
 
     # (dest, canonical_path, title, description, html_lang)
     route_specs: list[tuple[Path, str, str, str, str]] = [
@@ -1204,13 +1202,6 @@ def write_spa_path_shells(
             "版本勝率變動",
             "zh-Hant",
         ),
-        (
-            root / "column" / "index.html",
-            "/column",
-            "專欄 · arammeta",
-            "資料背後的思考與玩法解析",
-            "zh-Hant",
-        ),
         # English locale prefix mirrors (shareable /en… links).
         (root / "en" / "index.html", "/en", "arammeta", "ARAM Mayhem tier list", "en"),
         (
@@ -1239,13 +1230,6 @@ def write_spa_path_shells(
             "/en/changes",
             "Patch Changes · arammeta",
             "Patch-over-patch win-rate shifts",
-            "en",
-        ),
-        (
-            root / "en" / "column" / "index.html",
-            "/en/column",
-            "Articles · arammeta",
-            "Data notes and play guides",
             "en",
         ),
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
@@ -1278,43 +1262,7 @@ def write_spa_path_shells(
             "版本胜率变动",
             "zh-Hans",
         ),
-        (
-            root / "zh-CN" / "column" / "index.html",
-            "/zh-CN/column",
-            "专栏 · arammeta",
-            "数据背后的思考与玩法解析",
-            "zh-Hans",
-        ),
     ]
-    for article_id, title in article_titles.items():
-        route_specs.append(
-            (
-                root / "column" / article_id / "index.html",
-                f"/column/{article_id}",
-                f"{title} · arammeta",
-                title,
-                "zh-Hant",
-            )
-        )
-        route_specs.append(
-            (
-                root / "en" / "column" / article_id / "index.html",
-                f"/en/column/{article_id}",
-                f"{title} · arammeta",
-                title,
-                "en",
-            )
-        )
-        route_specs.append(
-            (
-                root / "zh-CN" / "column" / article_id / "index.html",
-                f"/zh-CN/column/{article_id}",
-                f"{title} · arammeta",
-                title,
-                "zh-Hans",
-            )
-        )
-
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2304,7 +2252,7 @@ def render_html(
         ("draft", "Draft", "Draft", None),
         ("game", "小遊戲", "Game", "小游戏"),
         ("changes", "版本變動", "Patch Changes", None),
-        # 專欄 temporarily hidden from primary nav (routes/view still exist).
+        # 專欄 is unpublished; keep its draft source out of the public shell.
         # ("column", "專欄", "Articles", None),
     )
     sun_icon = (
@@ -2408,6 +2356,49 @@ def render_html(
     )
     parts.append("</div>")  # /role-chips
     parts.append("</div>")  # /filter-bar
+    intro_zh = (
+        "arammeta 是 ARAM: Mayhem 的獨立資料工具：把難以從公開 API 取得的 queue 2400 實戰對局，"
+        "整理成英雄勝率、增幅搭配、隊伍推薦與 Draft 分析。"
+    )
+    intro_cn = (
+        "arammeta 是 ARAM: Mayhem 的独立资料工具：把难以从公开 API 取得的 queue 2400 实战对局，"
+        "整理成英雄胜率、海克斯搭配、队伍推荐与 Draft 分析。"
+    )
+    intro_en = (
+        "arammeta is an independent ARAM: Mayhem data tool. It turns hard-to-access queue 2400 matches "
+        "into champion win rates, augment pairings, team recommendations and Draft analysis."
+    )
+    detail_zh = (
+        f"目前頁面顯示 {total_games:,} 場資料；每個數字都會保留版本、樣本數與更新日期，並用貝氏修正降低小樣本誤導。"
+    )
+    detail_cn = (
+        f"目前页面显示 {total_games:,} 场资料；每个数字都会保留版本、样本数与更新日期，并用贝氏修正降低小样本误导。"
+    )
+    detail_en = (
+        f"This page currently covers {total_games:,} games. Version, sample size and update date stay visible, "
+        "and Bayesian shrinkage reduces small-sample noise."
+    )
+    parts.append(
+        "<section class='site-intro' aria-labelledby='site-intro-title'>"
+        "<div class='site-intro-copy'>"
+        "<p class='site-intro-kicker' data-i18n-zh='資料來源與使用方式' "
+        "data-i18n-zh-cn='资料来源与使用方式' data-i18n-en='DATA SOURCE &amp; HOW TO USE'>"
+        "資料來源與使用方式</p>"
+        "<h1 id='site-intro-title' data-i18n-zh='Mayhem 實戰資料，不只是熱門排行' "
+        "data-i18n-zh-cn='Mayhem 实战资料，不只是热门排行' "
+        "data-i18n-en='Mayhem match data, not just a popularity list'>"
+        "Mayhem 實戰資料，不只是熱門排行</h1>"
+        f"<p data-i18n-zh='{html.escape(intro_zh, quote=True)}' "
+        f"data-i18n-zh-cn='{html.escape(intro_cn, quote=True)}' "
+        f"data-i18n-en='{html.escape(intro_en, quote=True)}'>{html.escape(intro_zh)}</p>"
+        f"<p class='site-intro-detail' data-i18n-zh='{html.escape(detail_zh, quote=True)}' "
+        f"data-i18n-zh-cn='{html.escape(detail_cn, quote=True)}' "
+        f"data-i18n-en='{html.escape(detail_en, quote=True)}'>{html.escape(detail_zh)}</p>"
+        "<a class='site-intro-link' href='/about/' data-i18n-zh='查看完整資料方法' "
+        "data-i18n-zh-cn='查看完整资料方法' data-i18n-en='Read the full methodology'>"
+        "查看完整資料方法</a>"
+        "</div></section>"
+    )
     # Search input wrapped in a label with an inline magnifier SVG sitting
     # in the input's left padding (the wrapper is positioned, the input
     # has padding-left to clear the icon).
@@ -2788,17 +2779,11 @@ def render_html(
         "</section>"
     )
 
-    # ---- View: 專欄 (column) — article list + reader, rendered by JS ----
-    parts.append(
-        "<section class='view view-column' id='view-column' data-view='column' role='tabpanel' aria-labelledby='tab-column'>"
-        "<div class='view-column-host' id='column-host'></div>"
-        "</section>"
-    )
-
     # Theme + language live in the header; about / source sit in the home footer.
     parts.append("</main>")
 
     js = _read_site_template("site.js")
+    js = _retire_public_column_code(js)
     payload_expr = (
         f"await loadSitePayload({json.dumps(payload_url, ensure_ascii=False)})"
         if payload_url
@@ -2946,11 +2931,15 @@ def _run_shell_only(
     slim_stats = slim_site_payload(payload)
     if not build_date:
         build_date = _dt.date.today().isoformat()
-    payload_ver = build_date.replace("-", "")
-    try:
-        payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
-    except OSError:
-        pass
+    # A shell-only rebuild must not mint a new data version: it is reusing the
+    # published snapshot, and only the HTML/CSS/JS shell is changing.
+    payload_ver = str(payload.get("detailVersion") or "").strip()
+    if not payload_ver:
+        payload_ver = build_date.replace("-", "")
+        try:
+            payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
+        except OSError:
+            pass
     resolved_payload_url = versioned_payload_url(
         payload_url or "api/tier-list.json",
         payload_ver,
@@ -2996,21 +2985,10 @@ def _run_shell_only(
         }
     records.sort(key=lambda d: -d["bayes_wr"])
 
-    # total_games headline: cheap index-backed COUNT; fall back to the payload sum.
-    try:
-        con = sqlite3.connect(str(db))
-        if patch_prefix:
-            total_games = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ?",
-                (queue_id, f"{patch_prefix}%"),
-            ).fetchone()[0]
-        else:
-            total_games = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=?", (queue_id,)
-            ).fetchone()[0]
-        con.close()
-    except Exception:
-        total_games = sum(r["games"] for r in records) // 10
+    # Keep a shell-only rebuild faithful to the existing public snapshot.  The
+    # local DB may grow while the frontend is being edited, but those games are
+    # not in tier-list.json until a full data build publishes them.
+    total_games = sum(r["games"] for r in records) // 10
 
     aug_meta = {
         int(k): v

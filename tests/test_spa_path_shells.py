@@ -11,10 +11,10 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from tierlist_render import (  # noqa: E402
+    _retire_public_column_code,
     _site_base_href,
     _spa_deep_link_stub,
     champion_detail_base_url,
-    discover_column_article_ids,
     render_adsense_verification_tag,
     slim_site_payload,
     split_champion_detail_payloads,
@@ -27,6 +27,17 @@ from tierlist_render import (  # noqa: E402
 
 
 class SpaPathShellTests(unittest.TestCase):
+    def test_retire_public_column_code_removes_unpublished_article_data(self) -> None:
+        source = (
+            "const ARTICLES = [\n"
+            "  { id: 'draft-only', title: 'Private draft' },\n"
+            "];\n"
+            "const VIEWS = ['home', 'augments'];\n"
+        )
+        output = _retire_public_column_code(source)
+        self.assertIn("const ARTICLES = [];", output)
+        self.assertNotIn("draft-only", output)
+
     def test_adsense_verification_is_production_only(self) -> None:
         self.assertEqual(render_adsense_verification_tag(site_url=""), "")
         self.assertEqual(
@@ -42,12 +53,6 @@ class SpaPathShellTests(unittest.TestCase):
         self.assertEqual(_site_base_href("https://arammeta.com/"), "https://arammeta.com/")
         self.assertEqual(_site_base_href("https://arammeta.com"), "https://arammeta.com/")
         self.assertEqual(_site_base_href(""), "")
-
-    def test_discover_column_article_ids(self) -> None:
-        ids = discover_column_article_ids()
-        self.assertIn("sprees-not-snowball", ids)
-        self.assertIn("how-to-read", ids)
-        self.assertTrue(all(isinstance(x, str) and x for x in ids))
 
     def test_deep_link_stub_stashes_path(self) -> None:
         html = _spa_deep_link_stub(
@@ -76,7 +81,7 @@ class SpaPathShellTests(unittest.TestCase):
         self.assertIn("lang='en'", html)
         self.assertIn("/en/augments", html)
 
-    def test_write_spa_path_shells_creates_article_stub(self) -> None:
+    def test_write_spa_path_shells_does_not_publish_retired_column_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             index = root / "index.html"
@@ -94,13 +99,13 @@ class SpaPathShellTests(unittest.TestCase):
                 og_image="https://arammeta.com/og-image.png",
             )
             self.assertTrue(any(p.name == "404.html" for p in written))
-            article = root / "column" / "sprees-not-snowball" / "index.html"
-            self.assertTrue(article.is_file())
-            body = article.read_text(encoding="utf-8")
-            self.assertLess(article.stat().st_size, 4_000)  # stub, not full SPA
-            self.assertIn("/column/sprees-not-snowball", body)
-            self.assertIn("aram-spa-path", body)
-            self.assertIn("location.replace('/')", body)
+            self.assertFalse((root / "column").exists())
+            self.assertFalse((root / "en" / "column").exists())
+            self.assertFalse((root / "zh-CN" / "column").exists())
+            body_404 = (root / "404.html").read_text(encoding="utf-8")
+            self.assertIn("name='robots' content='noindex'", body_404)
+            self.assertIn("aram-spa-path", body_404)
+            self.assertIn("location.replace('/')", body_404)
             # High-traffic locale/tab routes get the full SPA (no bounce).
             en_home = root / "en" / "index.html"
             self.assertTrue(en_home.is_file())
@@ -115,13 +120,9 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/zh-CN/game", SPA_FULL_SHELL_PATHS)
-            # Article mirrors stay stubs.
-            en_article = root / "en" / "column" / "sprees-not-snowball" / "index.html"
-            self.assertTrue(en_article.is_file())
-            en_article_body = en_article.read_text(encoding="utf-8")
-            self.assertIn("/en/column/sprees-not-snowball", en_article_body)
-            self.assertIn("location.replace('/')", en_article_body)
-            self.assertIn("lang='en'", en_article_body)
+            self.assertNotIn("/column", SPA_FULL_SHELL_PATHS)
+            self.assertNotIn("/en/column", SPA_FULL_SHELL_PATHS)
+            self.assertNotIn("/zh-CN/column", SPA_FULL_SHELL_PATHS)
 
     def test_write_site_info_pages_creates_policy_pages_and_ads_txt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
