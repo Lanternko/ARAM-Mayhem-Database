@@ -102,7 +102,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260803-1785742758");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260803-1785744259");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -748,279 +748,11 @@
     const TOTAL_GAMES = "140,650";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
-    // Primary tabs: home (英雄) / augments / draft / game / changes / column.
-    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'column'];
+    // Primary tabs: home (英雄) / augments / draft / game / changes.
+    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
-    const ARTICLES = [
-        {
-            id: 'sprees-not-snowball',
-            date: '2026-07-07',
-            kicker_zh: '功率曲線', kicker_en: 'Power curve',
-            cover_motif: 'diverge', cover_accent: '#e2574b',
-            cover_zh: '連殺|≠滾雪球', cover_en: 'SPREES|≠ SNOWBALL',
-            title_zh: '你以為的滾雪球，不是滾雪球',
-            title_en: 'Kill sprees do not equal snowballing',
-            summary_zh: '連殺榜和「把比賽提早收掉」的相關性 ρ=−0.03，趨近於零。最快關門的是約瑞科和一排零連殺輔助；連殺王圖奇、劫反而贏得慢。',
-            summary_en: 'Correlation between the kill-spree axis and actually closing games early: rho = −0.03, essentially zero. The fastest closers are Yorick and a row of zero-spree supports, while spree kings like Twitch and Zed win slow.',
-            body_zh: `<p>上一篇〈英雄定位圖〉的 X 軸叫「滾雪球」——平均最大連殺與多殺的加權。當時我們埋了一句但書：「滾雪球量的是人頭爆發，不直接等於把比賽提早結束」。這次直接把這句話抓來驗證，結果但書才是主角。</p>
-<p>先定義「收官速度」：</p>
-<p style="text-align:center;font-size:15px;margin:16px 0"><b>收官速度 ＝ 該英雄勝局的中位時長 − 全體勝局中位（17.6 分）</b></p>
-<p>負值代表贏得比平均快。如果連殺真的會滾成提早勝利，連殺軸和收官速度應該高度相關 —— 實測 <b>Spearman ρ = −0.03</b>（n=173），<b>兩者完全無關</b>。連殺榜量的是「個人擊殺高光」，收官是「全隊」的事，資料說這是兩個獨立的能力。</p>
-<h2>誰真的把勝利收得快</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="約瑞科"><div class="art-meta"><div class="nm">約瑞科</div><div class="sb">勝局中位 16.7 分 · 42% 在 16 分內收掉 · 16,413 場</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="犽宿"><div class="art-meta"><div class="nm">犽宿</div><div class="sb">勝局中位 16.9 分 · 40% 在 16 分內 · 80,180 場</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="吉茵珂絲"><div class="art-meta"><div class="nm">吉茵珂絲</div><div class="sb">勝局中位 16.9 分 · 40% 在 16 分內 · 94,147 場</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="關"><div class="art-meta"><div class="nm">關</div><div class="sb">勝局中位 17.0 分 · 39% 在 16 分內 · 28,063 場</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="賽勒斯"><div class="art-meta"><div class="nm">賽勒斯</div><div class="sb">勝局中位 17.0 分 · 38% 在 16 分內 · 59,989 場</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
-<p>榜首是<b>約瑞科</b> —— 連殺榜第 147 名。他推塔、不收人頭，但他的勝局比全體中位快了近一分鐘。在大亂鬥，把兵線和塔滾起來，比把人頭滾起來收得快。吉茵珂絲是榜上唯一的連殺大戶（第 20 名）：她是少數兩邊都佔的例外，不是規則。</p>
-<h2>連殺王，卻贏得慢</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="圖奇"><div class="art-meta"><div class="nm">圖奇</div><div class="sb">連殺榜 #21 · 勝局中位 18.1 分 · 82,953 場</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="剛普朗克"><div class="art-meta"><div class="nm">剛普朗克</div><div class="sb">連殺榜 #9 · 勝局中位 17.9 分 · 70,797 場</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="劫"><div class="art-meta"><div class="nm">劫</div><div class="sb">連殺榜 #18 · 勝局中位 17.9 分 · 78,616 場</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="塔隆"><div class="art-meta"><div class="nm">塔隆</div><div class="sb">連殺榜 #22 · 勝局中位 17.9 分 · 40,747 場</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="梅爾"><div class="art-meta"><div class="nm">梅爾</div><div class="sb">連殺榜 #3 · 勝局中位 17.8 分 · 85,538 場</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
-<p>刺客和收割型射手農得出大連殺，但連殺沒有轉換成節奏 —— 他們的勝局反而拖得比平均長。最極端的是<b>薩科</b>：連殺不低（前 1/4），卻是全英雄倒數第 2 慢（+54s），而且等一下他還會在「最後期」榜再出現一次。</p>
-<h2>零連殺、最快關門的輔助</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="塔里克"><div class="art-meta"><div class="nm">塔里克</div><div class="sb">連殺榜 #166／173 · 勝局中位 17.1 分 · 21,564 場</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="索娜"><div class="art-meta"><div class="nm">索娜</div><div class="sb">連殺榜 #162 · 勝局中位 17.1 分 · 55,464 場</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="埃爾文"><div class="art-meta"><div class="nm">埃爾文</div><div class="sb">連殺榜 #171 · 勝局中位 17.1 分 · 20,796 場</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="露璐"><div class="art-meta"><div class="nm">露璐</div><div class="sb">連殺榜 #172 · 勝局中位 17.3 分 · 39,842 場</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="珍娜"><div class="art-meta"><div class="nm">珍娜</div><div class="sb">連殺榜 #169 · 勝局中位 17.4 分 · 41,546 場</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
-<p>這排是整篇的關鍵證據：塔里克、索娜、埃爾文的連殺全在倒數 12 名內，但他們的勝局收得比全體快 —— 因為<b>被輔助餵起來的隊伍會快速關門，連殺記在隊友頭上</b>。「滾雪球」是隊伍的事，連殺榜只記個人。</p>
-<h2>那，真正的前期怪／後期怪是誰？</h2>
-<p>比較乾淨的量法是把兩頭直接拉開：<b>左邊是 16 分內結束的局的勝率，右邊是拖過 22 分的局的勝率</b>（中間段刻意丟掉）。</p>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="鄂爾"><div class="art-meta"><div class="nm">鄂爾</div><div class="sb">41.0% → 57.1% · 22,905 場</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="薩科"><div class="art-meta"><div class="nm">薩科</div><div class="sb">38.0% → 51.0% · 40,300 場</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="圖奇"><div class="art-meta"><div class="nm">圖奇</div><div class="sb">41.6% → 54.4% · 38,266 場</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="瑟菈紛"><div class="art-meta"><div class="nm">瑟菈紛</div><div class="sb">63.4% → 50.1% · 40,015 場</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="赫威"><div class="art-meta"><div class="nm">赫威</div><div class="sb">61.8% → 49.3% · 27,456 場</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="賽恩"><div class="art-meta"><div class="nm">賽恩</div><div class="sb">63.6% → 51.9% · 31,327 場</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
-<p><b>鄂爾</b>是全場最大爬坡：他的神器升級等於白送隊友上千金的裝備屬性，快局 41% 慘輸、拖過 22 分變 57.1%，而且他同時是全場第 4 慢收官（+48s）—— 標準的「拖到後期才贏」。經典模式的大型資料集（8M 場、鑽石以上）也把鄂爾標成平手局爬坡最猛的英雄之一，兩個完全不同的資料集對到同一隻。<b>瑟菈紛</b>則是最大前期怪：16 分內結束的局她贏將近三分之二（63.4%），拖過 22 分就掉回五五波。而<b>薩科、圖奇</b>在這張榜再次出現 —— 連殺農得多、贏得慢、越後期越強，三個訊號指向同一個結論：他們的連殺是「拖出來的」，不是「滾出來的」。</p>
-<h2>一個誠實的但書</h2>
-<p>收官速度的效果量<b>不大</b>：全英雄的勝局中位只在全體中位 ±1 分鐘內晃 —— 時長是 10 個人共同決定的，單一英雄的影響天生會被稀釋。它也是<b>描述性</b>統計：長局不一定是他「拖」出來的，可能只是勢均力敵的局才拖得長。另外，前後期傾向會隨版本窗口變：卡薩丁上個窗口讀起來近乎平坦，這個窗口是 −3.3pp 的輕微前期傾向 —— 整條軸跨版本很穩（r≈0.86–0.93），但中期尖峰型的個別英雄要小心讀。</p>
-<p>資料：本機 games.db · queue 2400（Mayhem）· 版本 16.11–16.13 · 951,931 場（收集器邊跑邊寫，兩次掃描差 38 場）· 每英雄勝、敗局各 ≥500 場 · 收官速度＝勝局中位時長 − 全體勝局中位 17.6 分 · 連殺軸 vs 收官速度 Spearman ρ=−0.03 · 前後期＝WR(≥22 分) − WR(≤16 分)。</p>`,
-            body_en: `<p>The previous champion-map article used an X axis called "snowball" — a weighted average of largest killing spree and multi-kill. We buried a caveat back then: "snowball measures kill bursts, it does not directly mean ending games early." This time we put that sentence on trial, and the caveat turned out to be the whole story.</p>
-<p>First, define win tempo:</p>
-<p style="text-align:center;font-size:15px;margin:16px 0"><b>Win tempo = median duration of that champion's WINS − global median win (17.6 min)</b></p>
-<p>Negative = wins faster than average. If sprees really rolled into early wins, the spree axis and win tempo should correlate strongly. Measured: <b>Spearman rho = −0.03</b> (n=173) — <b>no relationship at all</b>. The spree axis measures personal kill highlights; closing a game is a team property. The data says these are two independent skills.</p>
-<h2>Who actually closes games fast</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="Yorick"><div class="art-meta"><div class="nm">Yorick</div><div class="sb">median win 16.7 min · 42% closed by 16 min · 16,413 games</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="Yasuo"><div class="art-meta"><div class="nm">Yasuo</div><div class="sb">median win 16.9 min · 40% by 16 min · 80,180 games</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="Jinx"><div class="art-meta"><div class="nm">Jinx</div><div class="sb">median win 16.9 min · 40% by 16 min · 94,147 games</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="Gwen"><div class="art-meta"><div class="nm">Gwen</div><div class="sb">median win 17.0 min · 39% by 16 min · 28,063 games</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="Sylas"><div class="art-meta"><div class="nm">Sylas</div><div class="sb">median win 17.0 min · 38% by 16 min · 59,989 games</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
-<p>The fastest closer is <b>Yorick</b> — spree rank 147. He pushes towers, not kill feeds, and his wins land almost a full minute under the global median. In ARAM, snowballing waves and towers closes games faster than snowballing kills. Jinx is the one big spree champ on the list (rank 20): she is the exception that holds both ends, not the rule.</p>
-<h2>Spree kings who win slow</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">spree rank #21 · median win 18.1 min · 82,953 games</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="Gangplank"><div class="art-meta"><div class="nm">Gangplank</div><div class="sb">spree rank #9 · median win 17.9 min · 70,797 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="Zed"><div class="art-meta"><div class="nm">Zed</div><div class="sb">spree rank #18 · median win 17.9 min · 78,616 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="Talon"><div class="art-meta"><div class="nm">Talon</div><div class="sb">spree rank #22 · median win 17.9 min · 40,747 games</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="Mel"><div class="art-meta"><div class="nm">Mel</div><div class="sb">spree rank #3 · median win 17.8 min · 85,538 games</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
-<p>Assassins and cleanup carries farm huge sprees, but the sprees do not convert into tempo — their wins actually run longer than average. The extreme case is <b>Shaco</b>: top-quarter sprees, yet the 2nd-slowest closer of all champions (+54s) — and he is about to show up again on the late-game board below.</p>
-<h2>Zero sprees, fastest closers: the supports</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="Taric"><div class="art-meta"><div class="nm">Taric</div><div class="sb">spree rank #166 of 173 · median win 17.1 min · 21,564 games</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="Sona"><div class="art-meta"><div class="nm">Sona</div><div class="sb">spree rank #162 · median win 17.1 min · 55,464 games</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="Ivern"><div class="art-meta"><div class="nm">Ivern</div><div class="sb">spree rank #171 · median win 17.1 min · 20,796 games</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">spree rank #172 · median win 17.3 min · 39,842 games</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="Janna"><div class="art-meta"><div class="nm">Janna</div><div class="sb">spree rank #169 · median win 17.4 min · 41,546 games</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
-<p>This row is the key evidence: Taric, Sona and Ivern all sit in the bottom 12 of the spree board, yet their wins close faster than average — because <b>a team fed by its enchanter closes fast while the kills land on someone else's scoreboard</b>. Snowballing is a team property; the spree board only credits individuals.</p>
-<h2>So who are the real early and late champions?</h2>
-<p>The cleaner measure pulls the two ends apart directly: <b>the left number is the win rate in games that end by 16 minutes, the right is in games past 22 minutes</b> (the middle is dropped on purpose).</p>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="Ornn"><div class="art-meta"><div class="nm">Ornn</div><div class="sb">41.0% → 57.1% · 22,905 games</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="Shaco"><div class="art-meta"><div class="nm">Shaco</div><div class="sb">38.0% → 51.0% · 40,300 games</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">41.6% → 54.4% · 38,266 games</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="Seraphine"><div class="art-meta"><div class="nm">Seraphine</div><div class="sb">63.4% → 50.1% · 40,015 games</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="Hwei"><div class="art-meta"><div class="nm">Hwei</div><div class="sb">61.8% → 49.3% · 27,456 games</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">63.6% → 51.9% · 31,327 games</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
-<p><b>Ornn</b> is the biggest climber in the game: his Masterwork upgrades hand teammates a thousand gold of free item stats, so he loses short games hard (41%) and wins long ones (57.1%) — and he is also the 4th-slowest closer (+48s). A classic "wins by dragging it out" profile. The big Summoner's Rift dataset (8M games, Diamond+) also flags Ornn as one of the strongest even-state climbers — two completely different datasets landing on the same champion. <b>Seraphine</b> is the biggest early-game monster: she wins nearly two thirds (63.4%) of games that end by 16 minutes, then falls back to a coin flip past 22. And <b>Shaco and Twitch</b> reappear here — big sprees, slow wins, stronger the later it gets. Three signals, one conclusion: their sprees are farmed in long games, not rolled into fast ones.</p>
-<h2>One honest caveat</h2>
-<p>The win-tempo effect is <b>small</b>: every champion's median win sits within about ±1 minute of the global median — game length is decided by ten players, so any one champion's influence is diluted by construction. It is also <b>descriptive</b>: a long game is not necessarily one he dragged out; even matchups simply run longer. And the early/late tilt shifts with the patch window: Kassadin read as nearly flat in the previous window and −3.3pp mildly early in this one — the axis is very stable across patches overall (r≈0.86–0.93), but read individual mid-game-spike champions with care.</p>
-<p>Data: local games.db · queue 2400 (Mayhem) · patches 16.11–16.13 · 951,931 games (collector writes while we scan; the two passes differ by 38 games) · ≥500 wins and ≥500 losses per champion · win tempo = median win duration − global median win 17.6 min · spree axis vs win tempo Spearman rho = −0.03 · early/late = WR(≥22 min) − WR(≤16 min).</p>`,
-        },
-        {
-            id: 'skill-scaling',
-            date: '2026-06-28',
-            kicker_zh: '操作係數', kicker_en: 'Skill-scaling',
-            cover_motif: 'diverge', cover_accent: '#3aa0ff',
-            cover_zh: '吃操作|或屠低分', cover_en: 'SKILL|OR STOMP',
-            title_zh: '操作係數：誰吃操作，誰專屠低分',
-            title_en: 'Skill-scaling: who rewards skill, who farms low elo',
-            summary_zh: '同一隻英雄，在高手局和菜雞局的勝率差多少？汎 +5.0pp、賽恩 −4.3pp —— 一張表看誰吃操作、誰只會屠低分。',
-            summary_en: 'The same champion, split by lobby skill: Vayne climbs +5.0pp in strong lobbies, Sion drops −4.3pp. Who rewards good play, and who just farms weak games.',
-            body_zh: `<p>大亂鬥隨機發英雄，又靠配對把勝率拉回五五波，所以「牌位」幾乎被磨平 —— 出裝大家抄一樣的、英雄又不能選。那 ARAM 還有沒有高低手之分？有，只是它不藏在「選什麼」，而藏在「同一隻英雄，你榨得出多少」。</p>
-<p>我把每一場依玩家平均效率分成<b>高分局（前 25%）</b>與<b>低分局（後 25%）</b>，再看每隻英雄在這兩種局裡的勝率差。這個差就是<b>操作係數</b>：</p>
-<p style="text-align:center;font-size:15px;margin:16px 0"><b>操作係數 ＝ 高分局勝率 − 低分局勝率</b></p>
-<p>正值代表<b>吃操作</b> —— 高手手上更強；負值代表<b>低分強勢</b> —— 在弱局屠殺、遇到高手就現形。下面每一列，<b>箭頭左邊是低分局勝率、右邊是高分局勝率</b>。</p>
-<h2>最吃操作（高手手上更強）</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="汎"><div class="art-meta"><div class="nm">汎</div><div class="sb">55.0% → 60.0% · 23,659 場</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="露璐"><div class="art-meta"><div class="nm">露璐</div><div class="sb">46.1% → 50.6% · 9,704 場</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="塔莉雅"><div class="art-meta"><div class="nm">塔莉雅</div><div class="sb">46.3% → 50.5% · 7,804 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="弗拉迪米爾"><div class="art-meta"><div class="nm">弗拉迪米爾</div><div class="sb">46.5% → 50.7% · 12,907 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="史矛德"><div class="art-meta"><div class="nm">史矛德</div><div class="sb">45.6% → 49.8% · 23,583 場</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="葵恩"><div class="art-meta"><div class="nm">葵恩</div><div class="sb">43.8% → 48.1% · 6,628 場</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<h2>最低分強勢（專屠弱局）</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="悟空"><div class="art-meta"><div class="nm">悟空</div><div class="sb">51.9% → 47.4% · 9,927 場</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="賽恩"><div class="art-meta"><div class="nm">賽恩</div><div class="sb">61.3% → 57.0% · 18,598 場</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="賈克斯"><div class="art-meta"><div class="nm">賈克斯</div><div class="sb">53.8% → 49.6% · 10,341 場</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="納瑟斯"><div class="art-meta"><div class="nm">納瑟斯</div><div class="sb">53.0% → 49.2% · 13,004 場</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="斯溫"><div class="art-meta"><div class="nm">斯溫</div><div class="sb">49.5% → 45.9% · 20,924 場</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="卡爾瑟斯"><div class="art-meta"><div class="nm">卡爾瑟斯</div><div class="sb">52.3% → 48.8% · 24,173 場</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
-<h2>讀出來的故事</h2>
-<p>排行幾乎照著老常識走：<b>吃操作</b>那端清一色是機制難、上限高的後排 carry（汎、史矛德、貝爾薇斯）跟要搭 carry 的<b>露璐</b> —— 高手才餵得動、站得穩。<b>低分強勢</b>那端則是好上手的前排戰坦（賽恩、納瑟斯、悟空）：點一點就有貢獻，在亂打的局裡屠殺，一旦對手會閃、會集火，就被針對。</p>
-<p>賽恩是最戲劇化的例子：低分局他有 <b>61.3%</b> 勝率（全英雄數一數二），到高分局掉到 57.0% —— 還是強，但「躺贏」那一截被抽掉了。</p>
-<h2>一個誠實的但書</h2>
-<p>這個訊號是<b>真的</b>（跨版本穩定、統計顯著），但<b>不大</b> —— 最極端也就 ±5pp 上下。它能告訴你「這隻吃不吃操作」，卻<b>不能</b>反推某個玩家的牌位：大亂鬥勝負雜訊太大，個人分數會被拉回中段。把它當「選角／練哪隻」的參考剛剛好，別當天梯分。</p>
-<p>資料：本機 games.db · queue 2400（Mayhem）· 版本 16.11–16.13 · 對局水平＝玩家「同英雄傷害／經濟效率」，高低分各取前後 25%，每英雄樣本 ≥800 場 · 操作係數跨版本相關 r≈0.5。</p>`,
-            body_en: `<p>ARAM hands you random champions and matchmaking drags every win rate back toward 50% — so "rank" gets ground flat: everyone copies the same build, and you don't pick your champ. Is there still a skill gap? Yes — it doesn't live in <i>what you pick</i>, but in <i>how much you squeeze out of the same champion</i>.</p>
-<p>I split every game by average player efficiency into a <b>high-skill half (top 25%)</b> and a <b>low-skill half (bottom 25%)</b>, then measured each champion's win-rate gap between them. That gap is the <b>skill-scaling</b> coefficient:</p>
-<p style="text-align:center;font-size:15px;margin:16px 0"><b>Skill-scaling = WR(high-skill lobbies) − WR(low-skill lobbies)</b></p>
-<p>Positive = <b>rewards skill</b> (stronger in good hands); negative = <b>stomps low elo</b> (farms weak games, exposed against good players). In every row below, <b>the left number is the low-skill-lobby win rate, the right is the high-skill-lobby win rate</b>.</p>
-<h2>Rewards skill the most</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="Vayne"><div class="art-meta"><div class="nm">Vayne</div><div class="sb">55.0% → 60.0% · 23,659 games</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">46.1% → 50.6% · 9,704 games</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="Taliyah"><div class="art-meta"><div class="nm">Taliyah</div><div class="sb">46.3% → 50.5% · 7,804 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="Vladimir"><div class="art-meta"><div class="nm">Vladimir</div><div class="sb">46.5% → 50.7% · 12,907 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="Smolder"><div class="art-meta"><div class="nm">Smolder</div><div class="sb">45.6% → 49.8% · 23,583 games</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="Quinn"><div class="art-meta"><div class="nm">Quinn</div><div class="sb">43.8% → 48.1% · 6,628 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
-<h2>Farms low elo the most</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="Wukong"><div class="art-meta"><div class="nm">Wukong</div><div class="sb">51.9% → 47.4% · 9,927 games</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">61.3% → 57.0% · 18,598 games</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="Jax"><div class="art-meta"><div class="nm">Jax</div><div class="sb">53.8% → 49.6% · 10,341 games</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="Nasus"><div class="art-meta"><div class="nm">Nasus</div><div class="sb">53.0% → 49.2% · 13,004 games</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="Swain"><div class="art-meta"><div class="nm">Swain</div><div class="sb">49.5% → 45.9% · 20,924 games</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="Karthus"><div class="art-meta"><div class="nm">Karthus</div><div class="sb">52.3% → 48.8% · 24,173 games</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
-<h2>What it says</h2>
-<p>The ranking tracks common sense: the <b>rewards-skill</b> end is mechanically demanding, high-ceiling carries (Vayne, Smolder, Bel'Veth) plus the carry-dependent <b>Lulu</b> — they only pay off in good hands. The <b>low-elo</b> end is simple frontline bruisers (Sion, Nasus, Wukong): point-and-click value that stomps messy games, but gets exposed once enemies flash and focus-fire.</p>
-<p>Sion is the most dramatic case: <b>61.3%</b> win rate in low-skill lobbies (one of the highest of any champion), falling to 57.0% in high-skill ones — still strong, just with the free-win cushion stripped away.</p>
-<h2>One honest caveat</h2>
-<p>The signal is <b>real</b> (patch-stable, statistically significant) but <b>small</b> — at most ±5pp. It tells you whether a champion rewards skill; it <b>cannot</b> be flipped around to read a player's rank, because ARAM outcomes are too noisy and individual scores regress to the middle. Use it to pick a champ or decide what to practice — not as a ladder rating.</p>
-<p>Data: local games.db · queue 2400 (Mayhem) · patches 16.11–16.13 · lobby skill = players' champ-controlled damage/gold efficiency, top vs bottom 25%, ≥800 games per champion · skill-scaling cross-patch correlation r≈0.5.</p>`,
-        },
-        {
-            id: 'scaling-snowball',
-            date: '2026-06-28',
-            kicker_zh: '英雄地圖', kicker_en: 'Champion map',
-            cover_motif: 'scatter', cover_accent: '#48b868',
-            cover_zh: '英雄定位圖', cover_en: 'CHAMPION|MAP',
-            title_zh: '後期 × 滾雪球：英雄定位圖',
-            title_en: 'Late game × snowball: a champion map',
-            summary_zh: '把全英雄畫在「能不能滾雪球」與「能不能撐到後期」兩條軸上，一眼看出誰是速攻、誰是發育、誰是全能。',
-            summary_en: 'Every champion plotted on two axes — snowball potential and late-game strength — so you can see who rushes, who scales, and who does both.',
-            body_zh: `<p>每隻英雄在 Mayhem 都有兩種「怎麼贏」的傾向：能不能<b>滾雪球</b>（靠人頭擴大優勢），以及能不能撐到<b>後期</b>。這張圖把全英雄同時畫在這兩條軸上。</p>
-<div class="scatter-wrap"><div class="scatter-chart" id="scatter-host"></div>
-<div class="scatter-legend"><span><span class="dot" style="background:#d64545"></span>低勝率</span><span><span class="dot" style="background:#d0b23a"></span>中</span><span><span class="dot" style="background:#48b868"></span>高勝率</span><span style="color:var(--text-dim)">· 滑鼠移到頭像看詳細數據</span></div></div>
-<h2>怎麼讀</h2>
-<ul><li><b>X 軸 滾雪球</b>＝0.6×平均最大連殺 ＋ 0.4×平均最大多殺。越右邊代表越會打出大連殺、滾成肥 carry。</li>
-<li><b>Y 軸 後期</b>＝比賽 ≥22 分鐘的勝率 − ≤16 分鐘的勝率。越上面代表局拖越久越強。</li>
-<li><b>外框顏色</b>＝該英雄平均勝率（紅→黃→綠）。</li>
-<li>虛線是全英雄<b>中位數</b>，把圖切成四象限。</li></ul>
-<h2>四象限</h2>
-<ul><li><b>右上（滾雪球強・後期強）</b>：全能型，前中後期都能打。</li>
-<li><b>左上（後期強）</b>：發育型，前期低調、愈拖愈強。</li>
-<li><b>右下（滾雪球強・後期弱）</b>：速攻型，要趁早靠人頭結束，拖久會虛。</li>
-<li><b>左下（兩者皆弱）</b>：較吃節奏，仰賴隊友或特定增幅。</li></ul>
-<p>一個常見誤解：滾雪球量的是「人頭爆發／收割能力」，<b>不直接等於把比賽提早結束</b>——它只反映擊殺面的擴張力，與局長是兩件事。本資料中位數時長約 17.6 分鐘。</p>
-<p>資料：本機 games.db · queue 2400（Mayhem）· 後期／滾雪球取自 <code>champ-empirical-axes.json</code>，每英雄樣本 ≥400 場。</p>`,
-            body_en: `<p>In Mayhem every champion leans two ways to win: how well they <b>snowball</b> (turn kills into a lead) and how well they <b>scale into the late game</b>. This chart plots all champions on both axes at once.</p>
-<div class="scatter-wrap"><div class="scatter-chart" id="scatter-host"></div>
-<div class="scatter-legend"><span><span class="dot" style="background:#d64545"></span>Low WR</span><span><span class="dot" style="background:#d0b23a"></span>Mid</span><span><span class="dot" style="background:#48b868"></span>High WR</span><span style="color:var(--text-dim)">· hover an icon for details</span></div></div>
-<h2>How to read it</h2>
-<ul><li><b>X axis — snowball</b> = 0.6×avg largest killing spree + 0.4×avg largest multi-kill. Further right = bigger kill streaks, snowballs into a fed carry.</li>
-<li><b>Y axis — late game</b> = WR(games ≥22 min) − WR(games ≤16 min). Higher = stronger the longer the game runs.</li>
-<li><b>Ring color</b> = the champion's average win rate (red → yellow → green).</li>
-<li>The dashed lines are the all-champion <b>medians</b>, splitting the map into four quadrants.</li></ul>
-<h2>The four quadrants</h2>
-<ul><li><b>Top-right (snowball + late)</b>: all-rounders, strong at every stage.</li>
-<li><b>Top-left (late)</b>: scalers, quiet early and stronger the longer it goes.</li>
-<li><b>Bottom-right (snowball, weak late)</b>: rushers — close it out early on kills, fade if it drags.</li>
-<li><b>Bottom-left (neither)</b>: tempo-dependent, lean on teammates or specific augments.</li></ul>
-<p>One common misread: snowball measures kill burst / cleanup potential, it does <b>not</b> directly mean ending the game early — it only reflects kill-side expansion, which is separate from game length. The median game here is about 17.6 minutes.</p>
-<p>Data: local games.db · queue 2400 (Mayhem) · late/snowball from <code>champ-empirical-axes.json</code>, ≥400 games per champion.</p>`,
-        },
-        {
-            id: 'draw-your-sword',
-            date: '2026-06-28',
-            kicker_zh: '增幅深入', kicker_en: 'Augment deep-dive',
-            cover_motif: 'blade', cover_accent: '#ff6a3d',
-            cover_zh: '拔劍吧', cover_en: 'DRAW YOUR|SWORD',
-            cover_image_zh: 'assets/covers/draw-your-sword-zh.webp',
-            cover_image_en: 'assets/covers/draw-your-sword-en.webp',
-            title_zh: '拔劍吧：誰用最強，怎麼出裝',
-            title_en: 'Draw Your Sword: who abuses it, and how to build',
-            summary_zh: '依 lift（已扣除英雄本身強度）排名，煞蜜拉以 +20.7pp 居首；附實測最佳出裝與「雙開不拖」的證據。',
-            summary_en: 'Ranked by lift (champion strength removed): Samira tops at +20.7pp, plus the data-backed core build.',
-            body_zh: `<p><b>拔劍吧</b>（Draw Your Sword）：附近沒有敵人時蓄力，下次攻擊向前突進斬擊、造成額外傷害。本質是「進場 ＋ 收割」的爆發型增幅。</p>
-<p>下面依 <b>lift</b> 排名 —— 也就是「裝了這個增幅後，勝率比該英雄平常高多少」，已扣除英雄本身的強度，所以衡量的是「這個增幅成就了誰」，而不是誰本來就強。</p>
-<h2>最強使用者（依 lift）</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="煞蜜拉"><div class="art-meta"><div class="nm">煞蜜拉</div><div class="sb">46.4% → 67.1% · 2,171 場</div></div><span class="lf">+20.7<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="亞菲利歐"><div class="art-meta"><div class="nm">亞菲利歐</div><div class="sb">52.3% → 67.9% · 589 場</div></div><span class="lf">+15.6<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="葛雷夫"><div class="art-meta"><div class="nm">葛雷夫</div><div class="sb">50.7% → 65.2% · 5,283 場</div></div><span class="lf">+14.6<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="凱特琳"><div class="art-meta"><div class="nm">凱特琳</div><div class="sb">52.5% → 67.1% · 1,330 場</div></div><span class="lf">+14.5<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="法洛士"><div class="art-meta"><div class="nm">法洛士</div><div class="sb">48.6% → 62.0% · 1,044 場</div></div><span class="lf">+13.3<small>pp</small></span></div>
-<p>煞蜜拉登頂的原因很直覺：她本體勝率只有 46%、偏弱，痛點正是「進不去」；拔劍吧的突進剛好補足進場，於是勝率直接噴到 67%。這個增幅不是錦上添花，而是補她的命門。</p>
-<h2>推薦核心出裝</h2>
-<p>全都是實測正向的單品，依建議順序：</p>
-<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="蒐集者"><div class="it-nm">蒐集者</div><div class="it-tag">①核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="無盡之刃"><div class="it-nm">無盡之刃</div><div class="it-tag">②核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="貪婪護脛"><div class="it-nm">貪婪護脛</div><div class="it-tag">③鞋</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="傲慢"><div class="it-nm">傲慢</div><div class="it-tag">④滾雪球</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="多明尼克的問候"><div class="it-nm">多明尼克</div><div class="it-tag">⑤破甲</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="死亡之舞"><div class="it-nm">死亡之舞</div><div class="it-tag">⑥防爆</div></div></div>
-<ul><li><b>① 蒐集者</b> — 最便宜、斬殺 ＋ 暴擊，最快成戰力</li>
-<li><b>② 無盡之刃</b> — 暴擊乘區核心</li>
-<li><b>③ 貪婪護脛</b> — 補移速 ＋ 擊殺疊吸血（被風箏兇可提前）</li>
-<li><b>④ 傲慢</b> — 靠擊殺滾 AD，越早越強</li>
-<li><b>⑤ 多明尼克的問候</b> — 對面有坦克／高護甲再提前</li>
-<li><b>⑥ 死亡之舞</b> — 後期防爆收尾</li></ul>
-<h2>三個關鍵心得</h2>
-<ul><li><b>蒐集者 ＋ 傲慢雙開不拖節奏。</b>四象限實測雙開 67.4% 是最高，平均時長只比單開多約 30 秒 —— 兩件都是中價位即戰力，戰力曲線連續上升，沒有空窗。</li>
-<li><b>不要疊兩件吸血。</b>嗜血者（61.9%）與無盡飢渴（60.9%）在骨架上都明顯低於基準；爆發流要的是傷害，不是續航。</li>
-<li><b>鞋子要出，首選貪婪護脛（67.2%）。</b>「不出鞋勝率較高」是反向因果（贏太快來不及買第六件），不是策略；對面 AP／控制多時改水星之靴。</li></ul>
-<p><b>lift</b> ＝ 裝此增幅後勝率 − 該英雄不帶此增幅的勝率（pp）。資料：本機 games.db · queue 2400（Mayhem）· patch 16.12 · 每英雄帶此增幅 ≥150 場。</p>`,
-            body_en: `<p><b>Draw Your Sword</b>: when no enemy is nearby you charge up, and your next attack dashes forward with a slash for bonus damage. It is fundamentally an engage-and-cleanup burst augment.</p>
-<p>The ranking below is by <b>lift</b> — how much higher a champion's win rate is with this augment than their usual baseline, with the champion's own strength removed. So it measures who the augment <b>elevates</b>, not who was already strong.</p>
-<h2>Top users (by lift)</h2>
-<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="Samira"><div class="art-meta"><div class="nm">Samira</div><div class="sb">46.4% → 67.1% · 2,171 games</div></div><span class="lf">+20.7<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="Aphelios"><div class="art-meta"><div class="nm">Aphelios</div><div class="sb">52.3% → 67.9% · 589 games</div></div><span class="lf">+15.6<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="Graves"><div class="art-meta"><div class="nm">Graves</div><div class="sb">50.7% → 65.2% · 5,283 games</div></div><span class="lf">+14.6<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="Caitlyn"><div class="art-meta"><div class="nm">Caitlyn</div><div class="sb">52.5% → 67.1% · 1,330 games</div></div><span class="lf">+14.5<small>pp</small></span></div>
-<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="Varus"><div class="art-meta"><div class="nm">Varus</div><div class="sb">48.6% → 62.0% · 1,044 games</div></div><span class="lf">+13.3<small>pp</small></span></div>
-<p>Samira tops the list for an intuitive reason: her baseline is only 46% — on the weak side — and her core problem is reaching the fight. The dash fixes exactly that, and her win rate jumps to 67%. The augment patches her weakness rather than padding a strength.</p>
-<h2>Recommended core build</h2>
-<p>Every item below tests positive; in suggested order:</p>
-<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="The Collector"><div class="it-nm">Collector</div><div class="it-tag">① core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="Infinity Edge"><div class="it-nm">Infinity Edge</div><div class="it-tag">② core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="Gluttonous Greaves"><div class="it-nm">Greaves</div><div class="it-tag">③ boots</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="Hubris"><div class="it-nm">Hubris</div><div class="it-tag">④ snowball</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="Lord Dominik's Regards"><div class="it-nm">Dominik's</div><div class="it-tag">⑤ armor pen</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="Death's Dance"><div class="it-nm">Death's Dance</div><div class="it-tag">⑥ anti-burst</div></div></div>
-<ul><li><b>① The Collector</b> — cheapest, execute + crit, fastest power spike</li>
-<li><b>② Infinity Edge</b> — the crit-multiplier core</li>
-<li><b>③ Gluttonous Greaves</b> — movement + kill-stacked omnivamp (rush earlier if kited hard)</li>
-<li><b>④ Hubris</b> — stacks AD off kills; the earlier the better</li>
-<li><b>⑤ Lord Dominik's Regards</b> — pull earlier vs tanks / heavy armor</li>
-<li><b>⑥ Death's Dance</b> — late-game anti-burst to close it out</li></ul>
-<h2>Three key takeaways</h2>
-<ul><li><b>Collector + Hubris together does not slow you down.</b> In the four-quadrant test, running both is the highest at 67.4%, and games are only ~30s longer than running one — both are mid-cost, immediately useful items, so the power curve climbs without a gap.</li>
-<li><b>Do not stack two lifesteal items.</b> Bloodthirster (61.9%) and the omnivamp lifesteal option (60.9%) both sit clearly below baseline on the skeleton; a burst build wants damage, not sustain.</li>
-<li><b>Buy boots — Gluttonous Greaves first (67.2%).</b> "No boots wins more" is reverse causation (you snowball too fast to afford a sixth item), not a strategy; swap to Mercury's Treads vs heavy AP / CC.</li></ul>
-<p><b>lift</b> = win rate with this augment − the champion's win rate without it (pp). Data: local games.db · queue 2400 (Mayhem) · patch 16.12 · ≥150 games per champion with this augment.</p>`,
-        },
-        {
-            id: 'how-to-read',
-            date: '2026-06-27',
-            kicker_zh: '入門', kicker_en: 'Basics',
-            cover_motif: 'tiers', cover_accent: '#f5c518',
-            cover_zh: '先看懂|這三欄', cover_en: 'READ|THIS FIRST',
-            title_zh: '如何閱讀這份 Tier List',
-            title_en: 'How to read this tier list',
-            summary_zh: '勝率、貝氏修正、樣本數 — 三個你該先看懂的欄位，別被小樣本誤導。',
-            summary_en: 'Win rate, Bayesian shrinkage, sample size — the three columns to read first so small samples do not fool you.',
-            body_zh: `<p>這份 tier list 把英雄依「貝氏修正後的勝率」分級，而不是單純的原始勝率。原因很簡單：小樣本的原始勝率非常不穩。</p>
-<h2>三個關鍵欄位</h2>
-<ul><li><b>勝率</b>：經貝氏收縮後的估計值，樣本越少越會被拉回整體基準。</li>
-<li><b>場次</b>：樣本數，決定你該多相信這個數字。</li>
-<li><b>原始勝率</b>：未修正的真實勝率，和上面對照看落差。</li></ul>
-<p>當原始勝率很高、但場次很低時，修正後的勝率會明顯被往下壓 — 這是刻意的保守，避免你追到只打了幾場的假強勢。</p>`,
-            body_en: `<p>This tier list ranks champions by a <b>Bayesian-shrunk win rate</b>, not the raw win rate. The reason is simple: raw win rate is very noisy on small samples.</p>
-<h2>Three columns that matter</h2>
-<ul><li><b>Win rate</b>: the shrunk estimate; the fewer the games, the more it is pulled back toward the overall baseline.</li>
-<li><b>Games</b>: the sample size — how much to trust the number.</li>
-<li><b>Raw win rate</b>: the unadjusted figure; compare it against the shrunk one.</li></ul>
-<p>When the raw win rate is high but games are few, the shrunk win rate is pushed down noticeably — a deliberate caution that keeps you from chasing a few-game mirage.</p>`,
-        },
-    ];
+    const ARTICLES = [];
     let columnArticle = null;
     const SET_RESIDUAL_THRESHOLD = 0.02;
     function trackEvent(name, params = {}) {
@@ -8363,16 +8095,11 @@
     //   /en                home (en)
     //   /augments          augment tier (zh)
     //   /en/augments       augment tier (en)
-    //   /column/<id>       article (zh)
-    //   /en/column/<id>    article (en)
-    // Legacy '#view' / '#column/id' hashes (and old /settings) migrate once
+    // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix || '/';
-        if (view === 'column' && sub) {
-            return prefix + '/column/' + encodeURIComponent(sub);
-        }
         return prefix + '/' + view;
     }
     function normalizePathname(pathname) {
@@ -8388,12 +8115,10 @@
         if (rawHash) {
             const cut = rawHash.indexOf('/');
             const hView = cut === -1 ? rawHash : rawHash.slice(0, cut);
-            let hSub = cut === -1 ? '' : rawHash.slice(cut + 1);
-            try { hSub = decodeURIComponent(hSub); } catch {}
             if (VIEWS.includes(hView)) {
                 return {
                     view: hView,
-                    sub: hView === 'column' ? (hSub || '') : '',
+                    sub: '',
                     urlLang: null,
                     legacyHash: true,
                 };
@@ -8417,11 +8142,7 @@
         }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
-        let sub = '';
-        if (view === 'column' && segs.length > 1) {
-            try { sub = decodeURIComponent(segs.slice(1).join('/')); } catch { sub = segs.slice(1).join('/'); }
-        }
-        return { view, sub, urlLang, legacyHash: false };
+        return { view, sub: '', urlLang, legacyHash: false };
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
@@ -8448,8 +8169,7 @@
         if (wantLang !== currentLang) {
             applyLanguage(wantLang, 'none');
         }
-        if (view === 'column') columnArticle = sub || null;
-        else columnArticle = null;
+        columnArticle = null;
         // Migrating an old #hash always replaceStates onto the clean path.
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
         setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode);
@@ -8474,12 +8194,8 @@
             document.querySelectorAll('.view[data-view]').forEach(v => {
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
-            if (name === 'column') {
-                columnArticle ? renderArticle(columnArticle) : renderColumnList();
-            } else {
-                columnArticle = null;
-                document.title = BASE_TITLE;  // leaving an open article restores the base title
-            }
+            columnArticle = null;
+            document.title = BASE_TITLE;
             if (name === 'augments') {
                 renderAugmentTier();
             }
@@ -8492,10 +8208,7 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            // Path is written AFTER render so an invalid article id that fell
-            // back to the list normalises to /column (not a 404 path).
-            const sub = (name === 'column' && columnArticle) ? columnArticle : '';
-            syncUrlToRoute(name, sub, historyMode);
+            syncUrlToRoute(name, '', historyMode);
             window.scrollTo(0, 0);
             moveTabIndicator();
         };

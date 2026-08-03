@@ -142,14 +142,17 @@ li + li { margin-top: 8px; }
 }
 </style></head><body><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/'>首頁</a><a href='/about/' aria-current='page'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/'>聯絡</a></nav></div></header><main><p class='eyebrow'>About</p><h1>關於 arammeta</h1><p class='lede'>ARAM Mayhem 的獨立資料工具、統計方法與開源資訊。</p><p class='updated'>最後更新：2026-08-03</p>
 <section><h2>本站提供什麼</h2>
-<p>arammeta 將 ARAM: Mayhem 對戰整理成英雄、增幅、裝備與隊伍搭配資料，並提供 Draft 分析與 Meta Pick 小遊戲。目標是讓玩家在短時間內看懂版本環境，同時保留樣本量與統計限制。</p></section>
-<section><h2>資料怎麼來</h2>
-<p>資料由本機 League Client 介面收集，網站只發布彙總後的對戰統計。公開資料不包含 PUUID、Riot ID、召喚師名稱或可識別個別玩家的原始紀錄。</p>
-<ul><li>對局以 game ID 去除重複。</li><li>英雄勝率使用 Bayesian shrinkage，降低小樣本造成的極端波動。</li><li>版本、樣本數與更新日期會顯示在資料旁，跨版本結果不視為同一環境。</li></ul></section>
-<section><h2>如何解讀</h2>
-<p>勝率代表歷史資料中的關聯，不保證個別對局結果。英雄強度、玩家熟練度、隊伍組成、增幅選擇與版本平衡都會影響結果。樣本較少的組合應視為探索線索，不應當成確定答案。</p></section>
+<p>arammeta 是 ARAM: Mayhem 的獨立資料工具，將實戰對局整理成英雄勝率、增幅搭配、裝備與隊伍組合資料，並提供 Draft 分析與 Meta Pick 小遊戲。它的用途不是只列一張熱門榜，而是讓玩家知道數字從哪裡來、樣本有多大，以及一個選擇在什麼情境下可能有效。</p></section>
+<section><h2>為什麼這份資料稀有</h2>
+<p>Riot 公開 API 在 queue 2400 層級不提供 Mayhem 對局，因此一般 API 統計站無法直接取得這批資料。本站由使用者在自己的本機 League Client 執行 collector，透過 LCU 讀取最近對局，再從自己、好友與已發現的參與者擴張樣本。這套收集流程與整理後的 Mayhem 資料，是本專案自行建立的資料資產。</p>
+<ul><li>每場對局整理雙方各 5 位玩家的英雄、增幅與勝負結果。</li><li>使用 Riot game ID 做精確去重，避免同一場被多人貢獻重複計算。</li><li>網站只發布彙總後的統計，不公開 PUUID、Riot ID、召喚師名稱或其他個人識別資料。</li></ul></section>
+<section><h2>統計怎麼整理</h2>
+<p>英雄排行使用 Bayesian shrinkage，讓小樣本勝率向整體基準收縮；英雄×增幅則以英雄本身的基準作比較，避免把「英雄本來就強」誤判成增幅效果。每個公開數字都會標示版本、樣本數與更新日期，跨版本結果不直接視為同一環境。</p>
+<p>這些數字描述的是歷史資料中的關聯，不保證個別對局結果。玩家熟練度、隊伍組成、增幅選擇、版本平衡與隨機英雄都會影響實戰結果。</p></section>
+<section><h2>如何使用網站</h2>
+<ul><li>在英雄頁依角色或中英文名稱篩選，點開英雄查看增幅、裝備與搭配細節。</li><li>用 Draft 分析比較雙方陣容的預估勝率與隊伍特性。</li><li>用 Meta Pick 小遊戲練習在有限英雄池中組出高分陣容。</li><li>在版本變動頁查看本版與上一版的勝率變化，並搭配樣本數判斷可信度。</li></ul></section>
 <section><h2>開源與回報</h2>
-<p>網站與資料處理工具公開於 GitHub。你可以檢查方法、提出資料問題或回報介面錯誤。</p>
-<p><a class="action" href="https://github.com/Lanternko/ARAM-Mayhem-Database" target="_blank" rel="noopener">查看 GitHub 專案</a></p></section>
+<p>收集器、資料整理流程、統計方法與網站程式碼都公開於 GitHub；你可以檢查方法、貢獻去識別化對局資料，或回報資料與介面問題。</p>
+<p><a class="action" href="https://github.com/Lanternko/ARAM-Mayhem-Database" target="_blank" rel="noopener">查看 GitHub 專案與收集說明</a></p></section>
 <div class="notice"><p>這是一個獨立社群專案，不是 Riot Games 官方網站，也未獲 Riot Games 贊助。</p></div>
 </main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/'>首頁</a><a href='/about/' aria-current='page'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/'>聯絡</a></nav><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></div></footer></body></html>
