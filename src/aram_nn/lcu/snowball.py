@@ -119,6 +119,23 @@ ON crawl_queue(
 );
 """
 
+# _sync_source_priorities filters both frontier tables by ``source`` on every
+# worker start.  Neither table had an index on it, so each of the 9 sources cost a
+# full scan of ~600k rows, twice -- ~11M rows examined inside one write
+# transaction.  Two workers starting together meant one held the write lock long
+# enough for the other to blow past busy_timeout and die with "database is
+# locked" before it consumed anything.  The existing
+# idx_crawl_queue_status_priority cannot serve this: it leads with ``status``.
+_CREATE_SOURCE_PRIORITY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_seen_source_priority
+ON crawl_seen(source, priority);
+"""
+
+_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_source_priority
+ON crawl_queue(source, priority);
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -361,6 +378,8 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
 
     con.execute(_CREATE_CRAWL_QUEUE_INDEX_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL)
+    con.execute(_CREATE_SOURCE_PRIORITY_INDEX_SQL)
+    con.execute(_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL)
 
     # The large one-time backfills below scan crawl_queue / games and hold the
     # write lock. Skip them once completed so worker startup stays sub-second
@@ -599,31 +618,55 @@ def _purge_invalid_riot_tier_rows(con: sqlite3.Connection) -> int:
     return removed
 
 
-def _sync_source_priorities(con: sqlite3.Connection) -> int:
+def _sync_source_priorities(con: sqlite3.Connection, *, worker_id: str | None = None) -> int:
+    """Re-apply _SOURCE_PRIORITY to the frontier tables.  Best-effort.
+
+    This used to issue an unconditional UPDATE per (source, table) -- 18 writes
+    inside one transaction on every worker start.  Priorities only actually change
+    when _SOURCE_PRIORITY is edited, so in the steady state all 18 matched zero
+    rows yet still took (and held) the write lock.  With both frontier tables near
+    600k rows and no index on ``source``, that was ~11M rows scanned under lock,
+    long enough for a second worker starting alongside to exceed busy_timeout and
+    die with "database is locked" before consuming anything.
+
+    Now each (source, table) is probed with an index-backed read first and only
+    written when something genuinely differs, so a normal start performs no writes
+    at all.  Lock contention is downgraded from fatal to skipped: this is
+    maintenance, and a worker that cannot re-stamp priorities right now should get
+    on with crawling rather than abort -- the next start retries it.
+    """
     updated = 0
-    for source, priority in _SOURCE_PRIORITY.items():
-        before = con.total_changes
-        con.execute(
-            """
-            UPDATE crawl_seen
-            SET priority = ?
-            WHERE source = ?
-              AND priority != ?
-            """,
-            (priority, source, priority),
+    try:
+        for source, priority in _SOURCE_PRIORITY.items():
+            for table in ("crawl_seen", "crawl_queue"):
+                stale = con.execute(
+                    f"SELECT 1 FROM {table} WHERE source = ? AND priority != ? LIMIT 1",
+                    (source, priority),
+                ).fetchone()
+                if stale is None:
+                    continue
+                before = con.total_changes
+                con.execute(
+                    f"UPDATE {table} SET priority = ? WHERE source = ? AND priority != ?",
+                    (priority, source, priority),
+                )
+                updated += con.total_changes - before
+        if updated:
+            con.commit()
+    except sqlite3.OperationalError as exc:
+        message = str(exc).lower()
+        if "locked" not in message:
+            raise
+        print(
+            f"[snowball] source-priority sync skipped (db busy): {exc}  "
+            f"worker={worker_id or '?'}",
+            flush=True,
         )
-        con.execute(
-            """
-            UPDATE crawl_queue
-            SET priority = ?
-            WHERE source = ?
-              AND priority != ?
-            """,
-            (priority, source, priority),
-        )
-        updated += con.total_changes - before
-    if updated:
-        con.commit()
+        try:
+            con.rollback()
+        except sqlite3.Error:
+            pass
+        return 0
     return updated
 
 
@@ -723,6 +766,35 @@ def _extract_target_game_ids(history: list[dict], target_queues: set[int]) -> li
         if queue_id in target_queues and game_id is not None:
             game_ids.append(str(game_id))
     return game_ids
+
+
+def _adaptive_target_game_ids(
+    history: list[dict],
+    target_queues: set[int],
+    *,
+    probe_size: int = 4,
+    full_history_min_mayhem: int = 3,
+) -> list[str]:
+    """Choose a cheap or full history expansion based on recent Mayhem density.
+
+    LCU exposes a recent mixed-queue window.  We always inspect the first four
+    metadata rows, but only fetch details when they contain Mayhem.  One or two
+    Mayhem rows means expand the recent probe; three or more means the player is
+    likely an ARAM regular, so expand every target-queue row returned by LCU.
+    Queue 2400 is deliberately the classifier; other target queues are still
+    included in the selected detail IDs.
+    """
+    all_target = _extract_target_game_ids(history, target_queues)
+    if 2400 not in target_queues:
+        return all_target[:probe_size]
+
+    probe = history[: max(0, int(probe_size))]
+    mayhem_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
+    if mayhem_count >= max(1, int(full_history_min_mayhem)):
+        return all_target
+    if mayhem_count >= 1:
+        return _extract_target_game_ids(probe, target_queues)
+    return []
 
 
 def _latest_target_match_created_ms(history: list[dict], target_queues: set[int]) -> int:
@@ -2228,7 +2300,7 @@ def run_snowball(
     _ensure_schema_with_retry(con, worker_id=worker_id)
     migrated = _migrate_legacy_crawl_players(con)
     purged_riot_tier = _purge_invalid_riot_tier_rows(con)
-    synced_priorities = _sync_source_priorities(con)
+    synced_priorities = _sync_source_priorities(con, worker_id=worker_id)
     claim_timeout_ms = max(1, claim_timeout_sec) * 1000
     player_requeue_cooldown_ms = max(0, player_requeue_cooldown_sec) * 1000
     worker_id = worker_id or f"pid-{os.getpid()}"
@@ -2660,7 +2732,9 @@ def run_snowball(
                 )
                 continue
             game_ids = _extract_target_game_ids(history, target_queues)
-            if games_per_player is not None and games_per_player > 0:
+            if games_per_player == 0:
+                game_ids = _adaptive_target_game_ids(history, target_queues)
+            elif games_per_player is not None and games_per_player > 0:
                 game_ids = game_ids[:games_per_player]
             print(
                 f"[snowball] player {stats.processed_players}/{max_players}  "
@@ -2671,8 +2745,9 @@ def run_snowball(
 
             new_games_for_player = 0
             for game_id in game_ids:
-                if stats.saved_games >= target_games:
-                    break
+                # Finish the claimed player's history window before honoring the
+                # worker target.  Stopping mid-player strands the remaining recent
+                # games until a newer rediscovery, defeating full-window capture.
                 if game_id in expanded_game_ids:
                     continue
                 if not _claim_game_id(con, game_id, worker_id=worker_id, claim_timeout_ms=claim_timeout_ms):
