@@ -107,22 +107,12 @@ AUGMENT_CURRENT_MIN_GAMES = 500
 # the previous patch.  Raise it to also cut augments that are technically present but
 # vanishingly rare this patch.
 AUGMENT_PRESENT_MIN_GAMES = 1
-# Champion headline win rate is empirical-Bayes shrunk toward the PREVIOUS patch's
-# win rate for that same champion, not toward a flat 0.50.  Measured true champion
-# WR drift across 16.10->16.14 is only tau ~= 1.2pp (0.65pp on a quiet patch, 1.9pp
-# on a balance patch), i.e. last patch is a far better prior than "everyone is 50%".
-# k is the prior's weight in pseudo-games; backtesting the 16.12 / 16.13 / 16.14
-# rollouts (fit on the patch's first N games, scored against the rest of the patch)
-# puts the RMSE optimum on a broad plateau between 1500 and 4000 for every
-# transition, so 2000 is a safe universal pick:
-#   N=5,000 games   raw 3.2-4.0pp | toward 0.50 2.5-2.9pp | toward prev 0.8-2.0pp
-#   N=50,000 games  raw 1.2-2.1pp | toward 0.50 1.2-2.1pp | toward prev 0.7-1.8pp
-# The prior dissolves on its own as the patch matures (a mature patch gives each
-# champion ~40k games, leaving the prior <5% weight), so no cutover switch is needed.
-# Known cost: a genuinely buffed/nerfed champion is under-reported for the first
-# day or two.  That is information the sample does not yet contain -- a
-# limited-translation (Efron-Morris) clamp was tested and did NOT recover it -- so
-# it is surfaced in the UI via prevMix instead of being papered over with math.
+# Champion headline win rate may use the PREVIOUS patch's win rate as an early-patch
+# prior, but only while the current patch is still immature.  Once the current patch
+# has 100,000 complete games, its own sample is the source of truth: do not let a
+# fixed cross-patch pseudo-sample hide real balance changes.  The previous patch is
+# still retained for the version-comparison view.
+CURRENT_PATCH_MATURE_GAMES = 100_000
 CHAMP_PREV_PATCH_PRIOR_GAMES = 2000.0
 # A champion needs at least this many previous-patch games before its previous-patch
 # rate is trusted as a prior.  Below that the "prior" is itself mostly noise and
@@ -1497,6 +1487,29 @@ def compute_winrates(
         })
 
     return champ_records, champ_aug_records, champ_pair_records
+
+def count_patch_games(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+) -> int:
+    """Return the total number of games in the requested queue / patch scope."""
+    con = sqlite3.connect(str(db_path))
+    try:
+        if patch_prefix:
+            row = con.execute(
+                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ?",
+                (queue_id, f"{patch_prefix}%"),
+            ).fetchone()
+        else:
+            row = con.execute(
+                "SELECT COUNT(*) FROM games WHERE queue_id=?",
+                (queue_id,),
+            ).fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        con.close()
+
 
 def count_participant_games(
     db_path: Path,

@@ -52,6 +52,62 @@ def refresh_empirical_champion_profiles(
     return True
 
 
+def team_score_artifact_path(*, queue_id: int, patch_prefix: str | None) -> Path:
+    artifact_patch = str(patch_prefix or "all").replace("/", "_").replace("\\", "_")
+    return Path("data/cache") / f"team_score_{queue_id}_{artifact_patch}.json"
+
+
+def load_team_score_artifact(*, queue_id: int, patch_prefix: str | None) -> dict | None:
+    artifact = team_score_artifact_path(queue_id=queue_id, patch_prefix=patch_prefix)
+    if not artifact.exists():
+        return None
+    try:
+        return json.loads(artifact.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        click.echo(f"[tierlist] WARN: cached team-score artifact unreadable: {exc}")
+        return None
+
+
+def train_and_save_team_score_bundle(
+    *,
+    db: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    champ_profiles: dict,
+    champ_meta: dict,
+    min_synergy_games: int,
+) -> dict:
+    from aram_nn.site.team_score_training import train_team_score_bundle
+
+    bundle = train_team_score_bundle(
+        db,
+        queue_id=queue_id,
+        patch_prefix=patch_prefix,
+        champ_profiles=champ_profiles,
+        champ_meta=champ_meta,
+        lack_thresholds=COMPOSITION_LACK_THRESHOLDS,
+        table_weights=RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS,
+        composition_clamp=RECOMMENDATION_COMPOSITION_CLAMP,
+        min_synergy_games=min_synergy_games,
+    )
+    score_meta = bundle["team_score"]
+    score_metrics = score_meta["metrics"]["test"]
+    click.echo(
+        "[tierlist] team score retrained "
+        f"patch={patch_prefix} games={score_meta['trained_games']:,} "
+        f"pair_prior={score_meta['pair_prior_games']:g} "
+        f"pair_logit={score_meta['pair_logit_weight']:.3f} "
+        f"composition_logit={score_meta['composition_logit_weight']:.3f} "
+        f"test_auc={score_metrics['base']['auc']:.4f}->{score_metrics['full']['auc']:.4f} "
+        f"test_ll={score_metrics['base']['log_loss']:.5f}->{score_metrics['full']['log_loss']:.5f}"
+    )
+    artifact = team_score_artifact_path(queue_id=queue_id, patch_prefix=patch_prefix)
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(json.dumps(bundle, ensure_ascii=False, indent=2), encoding="utf-8")
+    click.echo(f"[tierlist] wrote {artifact}")
+    return bundle
+
+
 def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
     """Keep production builds wired to the one public leaderboard API."""
     normalized_site = site_url.strip().rstrip("/")
@@ -112,6 +168,11 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
                    "production and search still works (the client rebuilds its search index from "
                    "the payload on load). Use while iterating on site.css / site.js / copy; run a "
                    "normal build to refresh the data.")
+@click.option("--reuse-model-artifacts", is_flag=True, default=False,
+              help="Refresh current-patch statistics while reusing cached empirical profiles "
+                   "and team-score artifacts; useful when only the data payload changed.")
+@click.option("--skip-patch-comparison", is_flag=True, default=False,
+              help="Skip the expensive item/augment version-comparison tables for a data-only refresh.")
 @click.option(
     "--meta-pick-api-url",
     envvar="ARAM_META_PICK_API_URL",
@@ -138,6 +199,8 @@ def main(
     payload_out: Path | None,
     payload_url: str,
     shell_only: bool,
+    reuse_model_artifacts: bool,
+    skip_patch_comparison: bool,
     meta_pick_api_url: str,
 ) -> None:
     meta_pick_api_url = resolve_meta_pick_api_url(site_url, meta_pick_api_url)
@@ -188,12 +251,21 @@ def main(
     spell_meta = load_summoner_spell_metadata(version)
     click.echo(f"[tierlist] summoner-spell catalogue: {len(spell_meta)} entries")
 
-    # The previous patch has to be scanned FIRST: its per-champion win rate is the
-    # empirical-Bayes prior the current patch's headline number is shrunk toward
-    # (CHAMP_PREV_PATCH_PRIOR_GAMES).  On a day-old patch that prior is most of the
-    # signal; on a mature one it dissolves to noise.  Baseline itself is computed
-    # with the flat prior so the chain stops at one patch back.
+    # The previous patch is scanned for the version-comparison view and, while the
+    # current patch is still small, as an early-patch prior.  A mature current patch
+    # is deliberately published from its own data only; otherwise a fixed prior can
+    # hide a real balance shift in the headline number.
     baseline_patch_prefix = previous_patch_prefix(patch_prefix)
+    current_total_games = count_patch_games(db, queue_id, patch_prefix)
+    use_prev_patch_blend = current_total_games < CURRENT_PATCH_MATURE_GAMES
+    click.echo(
+        f"[tierlist] current patch games={current_total_games:,}; "
+        + (
+            f"early-patch prior enabled (< {CURRENT_PATCH_MATURE_GAMES:,})"
+            if use_prev_patch_blend
+            else f"mature-patch cutoff reached (>= {CURRENT_PATCH_MATURE_GAMES:,}); current data only"
+        )
+    )
     baseline_champ_records: list[dict] = []
     baseline_champ_aug: list[dict] = []
     prev_wr_by_champ: dict[int, float] = {}
@@ -202,30 +274,36 @@ def main(
         baseline_champ_records, baseline_champ_aug, baseline_champ_pairs = compute_winrates(
             db, queue_id, baseline_patch_prefix
         )
-        prev_wr_by_champ = {
-            int(r["champion_id"]): float(r["raw_wr"])
-            for r in baseline_champ_records
-            if int(r["games"]) >= CHAMP_PREV_PATCH_MIN_GAMES
-        }
-        # Raw (unshrunk) baseline lifts: compute_winrates shrinks them on the way
-        # in, not on the way out, so the prior must stay raw here.
-        prev_pair_lift = {
-            (int(r["champion_id"]), int(r["teammate_id"])): (
-                float(r["lift"]),
-                int(r["games"]),
+        if use_prev_patch_blend:
+            prev_wr_by_champ = {
+                int(r["champion_id"]): float(r["raw_wr"])
+                for r in baseline_champ_records
+                if int(r["games"]) >= CHAMP_PREV_PATCH_MIN_GAMES
+            }
+            # Raw (unshrunk) baseline lifts: compute_winrates shrinks them on the way
+            # in, not on the way out, so the prior must stay raw here.
+            prev_pair_lift = {
+                (int(r["champion_id"]), int(r["teammate_id"])): (
+                    float(r["lift"]),
+                    int(r["games"]),
+                )
+                for r in baseline_champ_pairs
+            }
+            click.echo(
+                f"[tierlist] prev-patch WR prior: {len(prev_wr_by_champ)} champions from "
+                f"{baseline_patch_prefix} (k={CHAMP_PREV_PATCH_PRIOR_GAMES:g} pseudo-games, "
+                f"min {CHAMP_PREV_PATCH_MIN_GAMES} games)"
             )
-            for r in baseline_champ_pairs
-        }
-        click.echo(
-            f"[tierlist] prev-patch WR prior: {len(prev_wr_by_champ)} champions from "
-            f"{baseline_patch_prefix} (k={CHAMP_PREV_PATCH_PRIOR_GAMES:g} pseudo-games, "
-            f"min {CHAMP_PREV_PATCH_MIN_GAMES} games)"
-        )
-        click.echo(
-            f"[tierlist] prev-patch synergy prior: {len(prev_pair_lift):,} pairs from "
-            f"{baseline_patch_prefix} (k={PAIR_PREV_PATCH_PRIOR_GAMES:g}, "
-            f"prior shrink {PAIR_PREV_PATCH_SHRINK_GAMES:g})"
-        )
+            click.echo(
+                f"[tierlist] prev-patch synergy prior: {len(prev_pair_lift):,} pairs from "
+                f"{baseline_patch_prefix} (k={PAIR_PREV_PATCH_PRIOR_GAMES:g}, "
+                f"prior shrink {PAIR_PREV_PATCH_SHRINK_GAMES:g})"
+            )
+        else:
+            click.echo(
+                f"[tierlist] skipping previous-patch smoothing for current stats; "
+                f"{baseline_patch_prefix} remains comparison-only"
+            )
 
     all_champ_records, champ_aug, champ_pairs = compute_winrates(
         db,
@@ -245,7 +323,7 @@ def main(
 
     patch_changes = None
     new_aug_ids: frozenset[int] = frozenset()
-    if baseline_patch_prefix:
+    if baseline_patch_prefix and not skip_patch_comparison:
         # baseline_champ_records / baseline_champ_aug were already scanned above to
         # build the prev-patch WR prior; reuse them rather than rescanning the patch.
         baseline_total_games = sum(r["games"] for r in baseline_champ_records) // 10
@@ -281,6 +359,8 @@ def main(
                     f"[tierlist] patch changes: {baseline_patch_prefix} -> {patch_prefix} "
                     f"({baseline_total_games:,} vs {total_games:,} games)"
                 )
+    elif baseline_patch_prefix and skip_patch_comparison:
+        click.echo("[tierlist] skipped cross-patch augment discovery and comparison tables")
 
     aug_prior_strength = estimate_augment_prior_strength(champ_aug)
     click.echo(
@@ -290,50 +370,37 @@ def main(
     affinity_min_games = max(min_pair_games * 3, 45)
     item_style_min_games = max(affinity_min_games, ITEM_STYLE_MIN_GAMES)
     augment_type_min_games = max(affinity_min_games, AUGMENT_TYPE_MIN_GAMES)
-    refresh_empirical_champion_profiles(
-        db=db,
-        queue_id=queue_id,
-        patch_prefix=patch_prefix,
-    )
-    champ_profiles = load_champion_pick_profiles(champ_meta)
-    team_score_bundle = None
-    try:
-        from aram_nn.site.team_score_training import train_team_score_bundle
-
-        team_score_bundle = train_team_score_bundle(
-            db,
+    if reuse_model_artifacts:
+        click.echo("[tierlist] reusing cached empirical profiles and team-score artifact")
+    else:
+        refresh_empirical_champion_profiles(
+            db=db,
             queue_id=queue_id,
             patch_prefix=patch_prefix,
-            champ_profiles=champ_profiles,
-            champ_meta=champ_meta,
-            lack_thresholds=COMPOSITION_LACK_THRESHOLDS,
-            table_weights=RECOMMENDATION_COMPOSITION_TABLE_WEIGHTS,
-            composition_clamp=RECOMMENDATION_COMPOSITION_CLAMP,
-            min_synergy_games=min_synergy_games,
         )
-        score_meta = team_score_bundle["team_score"]
-        score_metrics = score_meta["metrics"]["test"]
-        click.echo(
-            "[tierlist] team score retrained "
-            f"patch={patch_prefix} games={score_meta['trained_games']:,} "
-            f"pair_prior={score_meta['pair_prior_games']:g} "
-            f"pair_logit={score_meta['pair_logit_weight']:.3f} "
-            f"composition_logit={score_meta['composition_logit_weight']:.3f} "
-            f"test_auc={score_metrics['base']['auc']:.4f}->{score_metrics['full']['auc']:.4f} "
-            f"test_ll={score_metrics['base']['log_loss']:.5f}->{score_metrics['full']['log_loss']:.5f}"
+    champ_profiles = load_champion_pick_profiles(champ_meta)
+    if reuse_model_artifacts:
+        team_score_bundle = load_team_score_artifact(
+            queue_id=queue_id,
+            patch_prefix=patch_prefix,
         )
-        artifact_patch = str(patch_prefix or "all").replace("/", "_").replace("\\", "_")
-        score_artifact = Path("data/cache") / f"team_score_{queue_id}_{artifact_patch}.json"
-        score_artifact.parent.mkdir(parents=True, exist_ok=True)
-        score_artifact.write_text(
-            json.dumps(team_score_bundle, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        click.echo(f"[tierlist] wrote {score_artifact}")
-    except ValueError as exc:
-        click.echo(f"[tierlist] WARN: {exc}; using explicit legacy team-score fallback")
-    except Exception as exc:
-        click.echo(f"[tierlist] WARN: team-score retraining failed: {exc}; using legacy fallback")
+        if team_score_bundle is None:
+            click.echo("[tierlist] WARN: no cached team-score artifact; using legacy fallback")
+    else:
+        team_score_bundle = None
+        try:
+            team_score_bundle = train_and_save_team_score_bundle(
+                db=db,
+                queue_id=queue_id,
+                patch_prefix=patch_prefix,
+                champ_profiles=champ_profiles,
+                champ_meta=champ_meta,
+                min_synergy_games=min_synergy_games,
+            )
+        except ValueError as exc:
+            click.echo(f"[tierlist] WARN: {exc}; using explicit legacy team-score fallback")
+        except Exception as exc:
+            click.echo(f"[tierlist] WARN: team-score retraining failed: {exc}; using legacy fallback")
     set_affinity, item_style_affinity, augment_type_affinity = compute_champ_category_affinities(
         db,
         queue_id,
@@ -501,13 +568,17 @@ def main(
         champ_aug,
         aug_meta,
         appearance_games=aug_appearance_games,
-        prev_champ_aug_records=baseline_champ_aug,
+        prev_champ_aug_records=baseline_champ_aug if use_prev_patch_blend else None,
     )
     blended_n = sum(1 for v in aug_global.values() if v.get("prevMix", 0))
     click.echo(
         f"[tierlist] augment tier: {len(aug_global)} augments rolled up to a global win-rate "
-        f"(current {patch_prefix}; {blended_n} thin augments topped up from "
-        f"{baseline_patch_prefix or 'n/a'} below {AUGMENT_CURRENT_MIN_GAMES} games)"
+        + (
+            f"(current {patch_prefix}; {blended_n} thin augments topped up from "
+            f"{baseline_patch_prefix or 'n/a'} below {AUGMENT_CURRENT_MIN_GAMES} games)"
+            if use_prev_patch_blend
+            else f"(current {patch_prefix}; current-patch data only)"
+        )
     )
     html = render_html(
         champ_records,
