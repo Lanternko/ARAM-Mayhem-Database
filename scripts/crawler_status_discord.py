@@ -37,6 +37,7 @@ DEFAULT_LOG_DIR = ROOT / ".codex" / "logs" / "mayhem_lcu_watchdog"
 # advances on a *successful* publish; the err log grows on every crash.
 DEFAULT_PUBLISH_STATE = ROOT / "data" / "site" / "static_publish_state.json"
 DEFAULT_PUBLISH_ERR_LOG = ROOT / "data" / "site" / "static_publish.err.log"
+DEFAULT_STALL_STATE_FILE = ROOT / "data" / "monitor" / "stall_alert_state.json"
 
 
 def utc_now() -> dt.datetime:
@@ -214,6 +215,157 @@ def db_stats(db: Path, window_hours: int) -> dict[str, Any]:
     if latest_ts:
         out["latest_age_min"] = round((utc_now() - latest_ts).total_seconds() / 60, 2)
     return out
+
+
+STALL_TARGET_QUEUES = (450, 2400, 2450, 4310)
+
+
+def latest_capture_age_min_fast(db: Path, queues: tuple[int, ...] = STALL_TARGET_QUEUES) -> float | None:
+    """Cheap freshness probe for the stall watch, meant to run every few minutes.
+
+    ``db_stats``'s ``max(captured_at) WHERE queue_id=...`` is correct but scans
+    every matching row -- measured at ~17-25s against this DB (2.1M rows), because
+    captured_at carries no index.  Run on a 5-minute cadence that would spend
+    5-8% of its own interval holding a read transaction, right back into the same
+    kind of write-lock contention that crashed the snowball workers earlier this
+    session (see the 2026-08-04 commit fixing _sync_source_priorities).
+
+    Instead, read the physically last ~500 rows by rowid.  New games are always
+    appended, so rowid order tracks capture order for our purposes; scanning the
+    tail for the newest row in our target queues costs single-digit milliseconds
+    versus tens of seconds for the full aggregate.  Verified to agree with
+    db_stats's answer within the polling interval on live data.
+    """
+    if not db.exists():
+        return None
+    try:
+        uri = db.resolve().as_uri() + "?mode=ro"
+        con = sqlite3.connect(uri, uri=True, timeout=10)
+        try:
+            con.execute("pragma query_only=on")
+            rows = con.execute(
+                "SELECT captured_at, queue_id FROM games ORDER BY rowid DESC LIMIT 500"
+            ).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    want = set(queues)
+    latest = max((r[0] for r in rows if r[1] in want), default=None)
+    ts = parse_iso(latest)
+    if ts is None:
+        return None
+    return round((utc_now() - ts).total_seconds() / 60, 2)
+
+
+def load_stall_state(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_stall_state(path: Path, state: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def run_stall_alert(
+    *,
+    db: Path,
+    webhook: str,
+    state_path: Path,
+    stall_minutes: float,
+    renotify_minutes: float,
+    dry_run: bool,
+) -> int:
+    """Silent-unless-broken watch, meant to run every few minutes.
+
+    Complements the 6-hourly full report from ``format_message``/``build_status``:
+    that one is a scheduled health digest and, by design, only reaches Discord on
+    its own clock. Every stall this session (the client dying and taking the
+    workers with it) sat undetected for hours between digests. This instead pings
+    the moment the gap crosses ``stall_minutes``, then reminds every
+    ``renotify_minutes`` while it stays down (a multi-hour outage should not be a
+    single ping followed by silence), and posts once more the moment it recovers.
+    Healthy runs post nothing at all.
+    """
+    age = latest_capture_age_min_fast(db)
+    state = load_stall_state(state_path)
+    was_alerting = bool(state.get("alerting"))
+    now = utc_now()
+
+    if age is None:
+        # Cannot tell -- do not cry wolf over a transient DB read hiccup, and do
+        # not clear an in-progress alert on missing information either.
+        return 0
+
+    is_stalled = age > stall_minutes
+
+    if not is_stalled:
+        if was_alerting:
+            recovered_msg = {
+                "username": "arammeta 爬蟲",
+                "embeds": [
+                    {
+                        "title": "爬蟲已恢復收集 ✅",
+                        "color": 0x57F287,
+                        "description": (
+                            f"距上次收場已回到 **{age:.1f}** 分鐘"
+                            f"（停擺門檻 {stall_minutes:.0f} 分）"
+                        ),
+                        "timestamp": now.isoformat(),
+                    }
+                ],
+            }
+            if dry_run:
+                print(json.dumps(recovered_msg, ensure_ascii=False, indent=2))
+            else:
+                post_webhook(webhook, recovered_msg)
+            print(f"ok stall-alert recovered age={age}")
+        save_stall_state(state_path, {"alerting": False})
+        return 0
+
+    since = state.get("since") if was_alerting else now.isoformat()
+    last_notified = parse_iso(state.get("last_notified_at"))
+    should_notify = (
+        not was_alerting
+        or last_notified is None
+        or (now - last_notified).total_seconds() / 60.0 >= renotify_minutes
+    )
+
+    if should_notify:
+        since_ts = parse_iso(since) or now
+        down_for_min = round((now - since_ts).total_seconds() / 60.0, 1)
+        alert_msg = {
+            "username": "arammeta 爬蟲",
+            "embeds": [
+                {
+                    "title": "🔴 爬蟲停擺",
+                    "color": 0xED4245,
+                    "description": (
+                        f"距上次收場 **{age:.1f}** 分鐘（門檻 {stall_minutes:.0f} 分）\n"
+                        f"已持續約 **{down_for_min:.0f}** 分鐘\n\n"
+                        f"多半是 League 客戶端斷線 / 卡在登入畫面，需要手動登入。"
+                    ),
+                    "timestamp": now.isoformat(),
+                }
+            ],
+        }
+        if dry_run:
+            print(json.dumps(alert_msg, ensure_ascii=False, indent=2))
+        else:
+            post_webhook(webhook, alert_msg)
+        print(f"ok stall-alert fired age={age} down_for_min={down_for_min}")
+        save_stall_state(
+            state_path,
+            {"alerting": True, "since": since, "last_notified_at": now.isoformat()},
+        )
+    else:
+        save_stall_state(state_path, {"alerting": True, "since": since, "last_notified_at": state.get("last_notified_at")})
+    return 0
 
 
 def publish_status(repo_root: Path, stale_hours: float) -> dict[str, Any]:
@@ -713,6 +865,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--dry-run", action="store_true", help="Print payload, do not POST")
     parser.add_argument("--save-webhook", action="store_true", help="Write --webhook to webhook file")
+    parser.add_argument(
+        "--stall-alert",
+        action="store_true",
+        help="Run the lightweight, silent-unless-broken stall watch instead of the "
+        "full 6-hourly report. Meant for a short (e.g. 5min) schedule.",
+    )
+    parser.add_argument(
+        "--stall-state-file", type=Path, default=DEFAULT_STALL_STATE_FILE,
+        help="Debounce state for --stall-alert",
+    )
+    parser.add_argument(
+        "--stall-minutes", type=float, default=20.0,
+        help="Minutes since the last capture before --stall-alert fires",
+    )
+    parser.add_argument(
+        "--stall-renotify-minutes", type=float, default=45.0,
+        help="Minutes between repeat --stall-alert reminders while still down",
+    )
     args = parser.parse_args(argv)
 
     if args.save_webhook:
@@ -727,6 +897,17 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.setdefault(
             "DISCORD_CRAWLER_WEBHOOK",
             args.webhook_file.read_text(encoding="utf-8").strip(),
+        )
+
+    if args.stall_alert:
+        webhook = "" if args.dry_run else resolve_webhook(args.webhook)
+        return run_stall_alert(
+            db=args.db,
+            webhook=webhook,
+            state_path=args.stall_state_file,
+            stall_minutes=args.stall_minutes,
+            renotify_minutes=args.stall_renotify_minutes,
+            dry_run=args.dry_run,
         )
 
     status = build_status(
