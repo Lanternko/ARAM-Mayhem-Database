@@ -6,6 +6,7 @@
 - `build_tier_list.py` — Tier-list 網站 build CLI 入口（re-export tierlist_engine + tierlist_render）
 - `tierlist_engine.py` — 勝率/augment/affinity/cluster 計算引擎
 - `tierlist_render.py` — HTML render + `--shell-only` 快速預覽 + OG/favicon 圖產生
+- `settle_patch.py` — 把「已結束的版本」凍結成 `data/patch_snapshots/q<queue>-<patch>.json`（`--status` 看現況）；build 會自動結算，這支只用在改版當天想立刻凍或要 `--force` 重算
 - `templates/site.css` + `templates/site.js` — 站台 CSS/JS 模板，`tierlist_render.py` 讀檔注入
 - `champion_roles.py` — 英雄職業（role）對照表，Mayhem 專用
 - `publish_static_site.py` — 靜態站台自動發布 CLI（wraps `static_publish_cli`，`--patch-prefix auto` 每 cycle 重解析）

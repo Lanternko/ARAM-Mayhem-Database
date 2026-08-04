@@ -13,6 +13,7 @@ Repo 名留 `aram-winrate-nn` 是歷史包袱，**所有訓練 / tier list / 推
 - `src/aram_nn/ingest/` — Riot API 爬蟲：`riot_client.py` / `snowball.py` / `extract.py`
 - `src/aram_nn/lcu/` — 本機 LCU collector / graph snowball：`process.py` / `client.py` / `poller.py` / `snowball.py`
 - `src/aram_nn/models/` — `logreg.py` / `deepsets.py`
+- `src/aram_nn/patch_snapshot.py` — 「版本結算」：已結束 patch 的 counters 凍進 `data/patch_snapshots/q<queue>-<patch>.json`，build 不再重掃。改版當天第一次 build 自動結算；該 patch 場數再長 +10%（LCU 每人只留 ~20 場造成的落後尾巴）才重算。手動：`scripts/settle_patch.py --status` / `--patch 16.14 --force`
 - `src/aram_nn/gamedata.py` — games.db 共用 loader（`iter_games` / `load_games_df` / `count_games`，read-only 連線），編碼 queue/patch 過濾、champs 升序、participants 解析等慣例；**新分析腳本從這裡 import，別再手刻 sqlite loader**。帶 participants 預設無序循序掃（~70s/patch）；`ordered=True` 是 seek-bound two-pass，只在真要時間序時用
 - `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
 - `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（單一 `games` 表含全部 queue，`queue_id` 過濾 + `crawl_seen` set + `crawl_queue` priority frontier）。collector 收 queue 2400/450/2450/4310（見 NEVER 分表 / Jade id 兩條）
@@ -93,6 +94,7 @@ python scripts/lcu_collector.py export --queue 2400 --out data/raw/mayhem_games.
 - **Never pass `--patch ""`** in PowerShell to CLI — PowerShell 5.1 會把空字串吃掉導致 Click argument shift；省略 `--patch` 即為全收（預設值已是空字串）。
 - **Never publish the tier-list site from `/site`** — GitHub Pages 「Deploy from a branch」只接受 `/(root)` 或 `/docs`；用 `/site` Save 不會生效。永遠輸出到 `docs/index.html`（`build_tier_list.py` 預設）。
 - **Never `git add -A` / `git add .` when deploying the site** — 工作樹常有未追蹤的 WIP scripts；只 stage `docs/index.html`、`docs/assets/site.js`（外部化 app script，HTML 以 content-hash `?v=` 引用，漏 stage 會讓線上跑舊 JS）、`docs/api/tier-list.json`，以及本輪生成且確認需要的 `docs/champion-roles.json` / `docs/og-image.png`。不要 stage `scripts/build_tier_list.py`，除非 generator change 本身也要發布。
+- **Never settle the current patch, and never freeze derived win rates** — 結算只給已結束的 patch（baseline 比較 + 新-augment walk-back）；當前 patch 每分鐘在長，凍住等於首頁停在過去。快照存的是 raw counters 不是平滑後的數字 —— 平滑常數 / tier 切點 / lift 公式都還會改，凍成品會讓舊快照悄悄用舊公式。
 - **Never import a script from another script for shared code** — `from train_ability_nn import ...` 這類耦合已讓 3 支腳本被 30+ 支下游綁死、動一支壞一片。既有的凍結腳本不動；**新**共用函式一律進 `src/aram_nn/`（資料存取用現成的 `gamedata.py`），腳本只從 package import。
 
 ## Riot API 注意事項

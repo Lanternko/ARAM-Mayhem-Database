@@ -271,8 +271,11 @@ def main(
     prev_wr_by_champ: dict[int, float] = {}
     prev_pair_lift: dict[tuple[int, int], tuple[float, int]] = {}
     if baseline_patch_prefix:
-        baseline_champ_records, baseline_champ_aug, baseline_champ_pairs = compute_winrates(
-            db, queue_id, baseline_patch_prefix
+        # The baseline patch is closed: read it from its settled snapshot (and
+        # write one on the first build after the flip).  See
+        # aram_nn.patch_snapshot for the re-settle rule.
+        baseline_champ_records, baseline_champ_aug, baseline_champ_pairs = compute_settled_winrates(
+            db, queue_id, baseline_patch_prefix, log=click.echo
         )
         if use_prev_patch_blend:
             prev_wr_by_champ = {
@@ -334,6 +337,7 @@ def main(
             champ_aug,
             baseline_prefix=baseline_patch_prefix,
             baseline_champ_aug=baseline_champ_aug,
+            log=click.echo,
         )
         click.echo(
             f"[tierlist] {len(new_aug_ids)} augments new within last "
@@ -353,6 +357,7 @@ def main(
                 champ_aug_records=champ_aug,
                 baseline_champ_aug=baseline_champ_aug,
                 aug_meta=aug_meta,
+                log=click.echo,
             )
             if patch_changes:
                 click.echo(
