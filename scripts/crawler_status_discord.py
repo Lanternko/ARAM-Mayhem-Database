@@ -272,6 +272,182 @@ def save_stall_state(path: Path, state: dict[str, Any]) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+DEFAULT_BREADCRUMB_FILE = ROOT / "data" / "monitor" / "net_breadcrumbs.jsonl"
+DEFAULT_FORENSICS_DIR = ROOT / "data" / "monitor" / "stall_forensics"
+BREADCRUMB_KEEP = 2000  # ~7 days at one line per 5 minutes
+
+
+def _powershell(script: str, timeout_sec: float = 25.0) -> str:
+    """Run a PowerShell snippet and return stdout ('' on any failure).
+
+    Windows event logs and adapter/route state have no usable Python API here, so
+    the few things that genuinely need them go through powershell.exe.  Never
+    raises: this is diagnostics, and a probe that fails must not take the alert
+    down with it.
+    """
+    try:
+        proc = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=timeout_sec,
+        )
+        return (proc.stdout or "").strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def net_breadcrumb() -> dict[str, Any]:
+    """Cheap per-tick snapshot of *which* network path is currently live.
+
+    The point is to have the minutes BEFORE a stall on record.  Once the crawler
+    has already been dead for 20 minutes, "which adapter held the default route"
+    and "were both Wi-Fi NICs up" are no longer observable -- but they are exactly
+    what separates a Wi-Fi/routing cause from a Riot-side or client-side one.
+    Kept to two short queries so it can run every 5 minutes for free.
+    """
+    out: dict[str, Any] = {"ts": utc_now().isoformat()}
+    raw = _powershell(
+        "$r = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | "
+        "Sort-Object {$_.RouteMetric + (Get-NetIPInterface -InterfaceIndex $_.ifIndex "
+        "-AddressFamily IPv4 -EA SilentlyContinue).InterfaceMetric} | Select-Object -First 1; "
+        "$a = Get-NetAdapter -EA SilentlyContinue | Where-Object {$_.Status -eq 'Up'} | "
+        "Select-Object Name,ifIndex,LinkSpeed; "
+        "ConvertTo-Json -Compress -Depth 3 @{ route = @{ ifIndex=$r.ifIndex; nextHop=$r.NextHop }; "
+        "adapters = @($a) }",
+        timeout_sec=20.0,
+    )
+    if raw:
+        try:
+            out.update(json.loads(raw))
+        except json.JSONDecodeError:
+            out["parse_error"] = raw[:200]
+    return out
+
+
+def append_breadcrumb(path: Path, row: dict[str, Any], keep: int = BREADCRUMB_KEEP) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        # Trim occasionally rather than every tick.
+        if row.get("ts", "").endswith(("0:00", "5:00")) or path.stat().st_size > 2_000_000:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            if len(lines) > keep:
+                path.write_text("\n".join(lines[-keep:]) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def capture_stall_forensics(out_dir: Path, breadcrumb_file: Path, age_min: float) -> dict[str, Any]:
+    """Snapshot the volatile evidence at the moment a stall is detected.
+
+    Answers "why did it stop this time?" without needing anyone at the keyboard.
+    Each probe targets one competing explanation:
+      * wlan_events   -- did the wireless layer actually drop or re-auth?
+      * app_errors    -- did LeagueClient/Vanguard crash (Application log)?
+      * league_tail   -- what did the client itself say last (SSL/platform errors)?
+      * route/adapters + breadcrumbs -- did the default route move between the two
+        same-subnet Wi-Fi NICs, and what did it look like before the failure?
+      * connectivity  -- is the path to Riot reachable right now?
+    Written to a timestamped file so evidence from separate incidents can be
+    compared instead of overwritten.
+    """
+    stamp = utc_now().strftime("%Y%m%dT%H%M%SZ")
+    report: dict[str, Any] = {"ts": utc_now().isoformat(), "capture_age_min": age_min}
+
+    report["wlan_events"] = _powershell(
+        "Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-WLAN-AutoConfig/Operational';"
+        "StartTime=(Get-Date).AddMinutes(-60)} -EA SilentlyContinue | "
+        "Select-Object -First 25 TimeCreated,Id,"
+        "@{n='adapter';e={if($_.Message -match 'Network Adapter:\\s*(.+)'){$matches[1].Trim()}}} | "
+        "Format-Table -AutoSize | Out-String -Width 200"
+    )
+    report["app_errors"] = _powershell(
+        "Get-WinEvent -FilterHashtable @{LogName='Application';Level=2;"
+        "StartTime=(Get-Date).AddMinutes(-60)} -EA SilentlyContinue | "
+        "Where-Object {$_.Message -match 'League|Riot|vgc|vanguard'} | "
+        "Select-Object -First 10 TimeCreated,Id,"
+        "@{n='app';e={if($_.Message -match 'Faulting application name: ([^,]+)'){$matches[1]}}} | "
+        "Format-Table -AutoSize | Out-String -Width 200"
+    )
+    report["adapters_and_route"] = _powershell(
+        "Get-NetAdapter -EA SilentlyContinue | Where-Object {$_.Status -eq 'Up'} | "
+        "Select-Object Name,ifIndex,LinkSpeed,InterfaceDescription | Format-Table -AutoSize | Out-String -Width 200; "
+        "Get-NetRoute -DestinationPrefix '0.0.0.0/0' -EA SilentlyContinue | "
+        "Select-Object ifIndex,NextHop,RouteMetric | Format-Table -AutoSize | Out-String -Width 200; "
+        "Get-NetIPAddress -AddressFamily IPv4 -EA SilentlyContinue | "
+        "Where-Object {$_.InterfaceAlias -match 'Wi-Fi|Ethernet'} | "
+        "Select-Object InterfaceAlias,IPAddress | Format-Table -AutoSize | Out-String -Width 200"
+    )
+    report["connectivity"] = _powershell(
+        "$r = Test-NetConnection -ComputerName 'riotgames.com' -Port 443 -WarningAction SilentlyContinue; "
+        "\"riot443=$($r.TcpTestSucceeded) gw=$((Test-Connection 192.168.0.1 -Count 1 -Quiet -EA SilentlyContinue))\""
+    )
+
+    # The client's own account of its last moments.
+    try:
+        log_root = Path("C:/Riot Games/League of Legends/Logs/LeagueClient Logs")
+        if log_root.exists():
+            newest = max(log_root.glob("*.log"), key=lambda p: p.stat().st_mtime, default=None)
+            if newest is not None:
+                report["league_log"] = newest.name
+                report["league_log_mtime"] = dt.datetime.fromtimestamp(
+                    newest.stat().st_mtime, tz=dt.timezone.utc
+                ).isoformat()
+                tail = read_text_shared(newest, max_bytes=30000)
+                lines = tail.splitlines()
+                keep = [ln for ln in lines if re.search(r"ERROR|WARN|Disconnect|SSL|RTMP", ln)]
+                report["league_tail"] = "\n".join(keep[-25:])
+                # A client that died without logging an error leaves no matching
+                # lines at all; the raw last lines are then the only record of
+                # what it was doing when it stopped, so keep them either way.
+                report["league_tail_raw"] = "\n".join(lines[-15:])
+    except OSError as exc:
+        report["league_log_error"] = str(exc)
+
+    # What the network looked like in the minutes BEFORE the stall.
+    try:
+        if breadcrumb_file.exists():
+            lines = breadcrumb_file.read_text(encoding="utf-8", errors="replace").splitlines()
+            report["breadcrumbs_before"] = lines[-12:]
+    except OSError:
+        pass
+
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"stall_{stamp}.json"
+        path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        report["_saved_to"] = str(path)
+    except OSError as exc:
+        report["_save_error"] = str(exc)
+    return report
+
+
+def summarize_forensics(f: dict[str, Any]) -> str:
+    """One-glance verdict for the Discord alert; full detail stays in the file."""
+    bits: list[str] = []
+    conn = f.get("connectivity") or ""
+    if "riot443=True" in conn:
+        bits.append("網路到 Riot：**通**")
+    elif "riot443=False" in conn:
+        bits.append("網路到 Riot：**不通** ⚠️")
+    if "gw=True" in conn:
+        bits.append("閘道：通")
+    elif "gw=False" in conn:
+        bits.append("閘道：**不通** ⚠️")
+
+    app = (f.get("app_errors") or "").strip()
+    bits.append("客戶端當機記錄：**有** ⚠️" if app else "客戶端當機記錄：無")
+
+    wlan = (f.get("wlan_events") or "").strip()
+    wlan_lines = [ln for ln in wlan.splitlines() if re.search(r"\d{4}", ln)]
+    bits.append(f"近 1 小時 WLAN 事件：{len(wlan_lines)} 筆")
+
+    tail = (f.get("league_tail") or "")
+    if "SSL" in tail or "RTMP" in tail:
+        bits.append("League 日誌：**有 SSL/RTMP 錯誤** ⚠️")
+    return "\n".join(bits)
+
+
 def run_stall_alert(
     *,
     db: Path,
@@ -296,6 +472,12 @@ def run_stall_alert(
     state = load_stall_state(state_path)
     was_alerting = bool(state.get("alerting"))
     now = utc_now()
+
+    # Record the live network path on every tick, healthy or not.  By the time a
+    # stall is detected the pre-failure state is gone, and that is precisely what
+    # distinguishes a Wi-Fi/route cause from a Riot-side or client-side one.
+    if not dry_run:
+        append_breadcrumb(DEFAULT_BREADCRUMB_FILE, net_breadcrumb())
 
     if age is None:
         # Cannot tell -- do not cry wolf over a transient DB read hiccup, and do
@@ -339,17 +521,32 @@ def run_stall_alert(
     if should_notify:
         since_ts = parse_iso(since) or now
         down_for_min = round((now - since_ts).total_seconds() / 60.0, 1)
+        # Only on the FIRST notification of an outage: the volatile evidence is
+        # already as stale as it will get, and re-capturing it on every 45-minute
+        # reminder would just overwrite the useful snapshot with a later, less
+        # informative one.
+        forensics = None
+        if not was_alerting:
+            forensics = capture_stall_forensics(
+                DEFAULT_FORENSICS_DIR, DEFAULT_BREADCRUMB_FILE, age
+            )
+        desc = (
+            f"距上次收場 **{age:.1f}** 分鐘（門檻 {stall_minutes:.0f} 分）\n"
+            f"已持續約 **{down_for_min:.0f}** 分鐘\n\n"
+        )
+        if forensics:
+            desc += summarize_forensics(forensics) + "\n\n"
+            saved = forensics.get("_saved_to")
+            if saved:
+                desc += f"完整採證：`{Path(saved).name}`\n"
+        desc += "多半是 League 客戶端斷線 / 卡在登入畫面，需要手動登入。"
         alert_msg = {
             "username": "arammeta 爬蟲",
             "embeds": [
                 {
                     "title": "🔴 爬蟲停擺",
                     "color": 0xED4245,
-                    "description": (
-                        f"距上次收場 **{age:.1f}** 分鐘（門檻 {stall_minutes:.0f} 分）\n"
-                        f"已持續約 **{down_for_min:.0f}** 分鐘\n\n"
-                        f"多半是 League 客戶端斷線 / 卡在登入畫面，需要手動登入。"
-                    ),
+                    "description": desc,
                     "timestamp": now.isoformat(),
                 }
             ],
