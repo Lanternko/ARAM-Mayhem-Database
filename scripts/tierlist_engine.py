@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import csv
+import hashlib
 import html
 from io import BytesIO
 import json
@@ -31,6 +32,8 @@ from pathlib import Path
 
 import click
 import httpx
+
+from aram_nn import patch_snapshot
 
 try:
     from champion_roles import (
@@ -1272,47 +1275,16 @@ def load_item_metadata(
         }
     return out
 
-def compute_winrates(
+def _scan_patch_counters(
     db_path: Path,
     queue_id: int,
     patch_prefix: str | None,
-    prior: float = 0.5,
-    k: int = 200,
-    prev_wr_by_champ: dict[int, float] | None = None,
-    prev_k: float = CHAMP_PREV_PATCH_PRIOR_GAMES,
-    prev_pair_lift: dict[tuple[int, int], tuple[float, int]] | None = None,
-    prev_pair_k: float = PAIR_PREV_PATCH_PRIOR_GAMES,
-):
-    """Compute champion winrates + per-(champion, augment) winrates.
+) -> dict[str, Counter]:
+    """One pass over a patch's games -> the raw tallies every stat is built from.
 
-    ``prev_wr_by_champ`` maps champion_id -> that champion's PREVIOUS-patch win
-    rate.  When supplied, a champion's ``bayes_wr`` is shrunk toward its own
-    previous-patch rate with ``prev_k`` pseudo-games instead of toward the flat
-    ``prior`` -- see CHAMP_PREV_PATCH_PRIOR_GAMES for why and for the measured
-    error reduction.  Champions absent from the map (brand new, or the previous
-    patch had no data) fall back to the flat ``prior`` / ``k`` path.  Pass nothing
-    when computing the baseline patch itself, or the prior would chain backwards.
-
-    ``prev_pair_lift`` maps (champion_id, teammate_id) -> (that pair's raw lift on
-    the PREVIOUS patch, its game count there).  Supplying it switches ``lift`` from
-    the raw residual to the shrunk estimate described at
-    PAIR_PREV_PATCH_PRIOR_GAMES; pairs with no previous-patch entry still shrink,
-    toward 0.  Pass nothing when computing the baseline patch itself -- the prior
-    is built FROM those raw lifts, so blending them first would double-shrink.
-
-    Returns: (champ_records, champ_aug_records, champ_pair_records)
-      champ_records: list of dicts with champion_id, games, wins, raw_wr, bayes_wr,
-                    prev_wr (prior used, None if flat) and prev_mix (0..1 share of
-                    the headline number contributed by the previous patch)
-      champ_pair_records: ``lift`` is the shrunk estimate when prev_pair_lift is
-                    given, with ``raw_lift`` keeping the unshrunk residual and
-                    ``lift_prev_mix`` the prior's share.  ``raw_wr`` stays the
-                    observed pair rate and is deliberately NOT reconciled with the
-                    shrunk lift -- one is an observation, the other an estimate.
-      champ_aug_records: list of dicts with champion_id, augment_id, games, wins,
-                        raw_wr, smoothed_wr, lift (smoothed_wr - champ_baseline_wr)
-      champ_pair_records: list of dicts with champion_id, teammate_id, games,
-                        wins, expected_wr, lift, delta_vs_rest, z_score
+    Split out of ``compute_winrates`` so a settled (non-current) patch can be
+    frozen as counters and re-derived without re-reading hundreds of thousands
+    of rows; see ``aram_nn.patch_snapshot`` for the settle / re-settle rules.
     """
     con = sqlite3.connect(str(db_path))
     if patch_prefix:
@@ -1371,6 +1343,92 @@ def compute_winrates(
                     ca_wins[(cid, a)] += player_won
     finally:
         con.close()
+
+    return {
+        "games": games,
+        "wins": wins,
+        "ca_games": ca_games,
+        "ca_wins": ca_wins,
+        "cp_games": cp_games,
+        "cp_wins": cp_wins,
+    }
+
+
+def compute_winrates(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    prior: float = 0.5,
+    k: int = 200,
+    prev_wr_by_champ: dict[int, float] | None = None,
+    prev_k: float = CHAMP_PREV_PATCH_PRIOR_GAMES,
+    prev_pair_lift: dict[tuple[int, int], tuple[float, int]] | None = None,
+    prev_pair_k: float = PAIR_PREV_PATCH_PRIOR_GAMES,
+):
+    """Compute champion winrates + per-(champion, augment) winrates.
+
+    ``prev_wr_by_champ`` maps champion_id -> that champion's PREVIOUS-patch win
+    rate.  When supplied, a champion's ``bayes_wr`` is shrunk toward its own
+    previous-patch rate with ``prev_k`` pseudo-games instead of toward the flat
+    ``prior`` -- see CHAMP_PREV_PATCH_PRIOR_GAMES for why and for the measured
+    error reduction.  Champions absent from the map (brand new, or the previous
+    patch had no data) fall back to the flat ``prior`` / ``k`` path.  Pass nothing
+    when computing the baseline patch itself, or the prior would chain backwards.
+
+    ``prev_pair_lift`` maps (champion_id, teammate_id) -> (that pair's raw lift on
+    the PREVIOUS patch, its game count there).  Supplying it switches ``lift`` from
+    the raw residual to the shrunk estimate described at
+    PAIR_PREV_PATCH_PRIOR_GAMES; pairs with no previous-patch entry still shrink,
+    toward 0.  Pass nothing when computing the baseline patch itself -- the prior
+    is built FROM those raw lifts, so blending them first would double-shrink.
+
+    Returns: (champ_records, champ_aug_records, champ_pair_records)
+      champ_records: list of dicts with champion_id, games, wins, raw_wr, bayes_wr,
+                    prev_wr (prior used, None if flat) and prev_mix (0..1 share of
+                    the headline number contributed by the previous patch)
+      champ_pair_records: ``lift`` is the shrunk estimate when prev_pair_lift is
+                    given, with ``raw_lift`` keeping the unshrunk residual and
+                    ``lift_prev_mix`` the prior's share.  ``raw_wr`` stays the
+                    observed pair rate and is deliberately NOT reconciled with the
+                    shrunk lift -- one is an observation, the other an estimate.
+      champ_aug_records: list of dicts with champion_id, augment_id, games, wins,
+                        raw_wr, smoothed_wr, lift (smoothed_wr - champ_baseline_wr)
+      champ_pair_records: list of dicts with champion_id, teammate_id, games,
+                        wins, expected_wr, lift, delta_vs_rest, z_score
+    """
+    return _derive_winrate_records(
+        _scan_patch_counters(db_path, queue_id, patch_prefix),
+        prior=prior,
+        k=k,
+        prev_wr_by_champ=prev_wr_by_champ,
+        prev_k=prev_k,
+        prev_pair_lift=prev_pair_lift,
+        prev_pair_k=prev_pair_k,
+    )
+
+
+def _derive_winrate_records(
+    counters: dict[str, Counter],
+    *,
+    prior: float = 0.5,
+    k: int = 200,
+    prev_wr_by_champ: dict[int, float] | None = None,
+    prev_k: float = CHAMP_PREV_PATCH_PRIOR_GAMES,
+    prev_pair_lift: dict[tuple[int, int], tuple[float, int]] | None = None,
+    prev_pair_k: float = PAIR_PREV_PATCH_PRIOR_GAMES,
+):
+    """Turn raw patch counters into the three record lists compute_winrates returns.
+
+    Kept separate from the scan so the smoothing can keep changing without
+    invalidating settled patch snapshots: those freeze counters, and the current
+    formulas are re-applied to them on every build.
+    """
+    games = counters["games"]
+    wins = counters["wins"]
+    ca_games = counters["ca_games"]
+    ca_wins = counters["ca_wins"]
+    cp_games = counters["cp_games"]
+    cp_wins = counters["cp_wins"]
 
     champ_records = []
     for cid, g in games.items():
@@ -1487,6 +1545,119 @@ def compute_winrates(
         })
 
     return champ_records, champ_aug_records, champ_pair_records
+
+SNAPSHOT_CHAMP_SECTION = "champ_counters"
+SNAPSHOT_ITEM_SECTION = "core_item_counters"
+
+
+def _encode_champ_counters(counters: dict[str, Counter]) -> dict:
+    """Counters -> JSON.  Tuple keys become flat rows; ints stay ints."""
+    return {
+        "champ": [[int(cid), int(g), int(counters["wins"][cid])] for cid, g in counters["games"].items()],
+        "champ_aug": [
+            [int(cid), int(aid), int(g), int(counters["ca_wins"][(cid, aid)])]
+            for (cid, aid), g in counters["ca_games"].items()
+        ],
+        "champ_pair": [
+            [int(cid), int(tid), int(g), int(counters["cp_wins"][(cid, tid)])]
+            for (cid, tid), g in counters["cp_games"].items()
+        ],
+    }
+
+
+def _decode_champ_counters(payload: dict) -> dict[str, Counter]:
+    games: Counter[int] = Counter()
+    wins: Counter[int] = Counter()
+    ca_games: Counter[tuple[int, int]] = Counter()
+    ca_wins: Counter[tuple[int, int]] = Counter()
+    cp_games: Counter[tuple[int, int]] = Counter()
+    cp_wins: Counter[tuple[int, int]] = Counter()
+    for cid, g, w in payload.get("champ") or []:
+        games[int(cid)] = int(g)
+        wins[int(cid)] = int(w)
+    for cid, aid, g, w in payload.get("champ_aug") or []:
+        ca_games[(int(cid), int(aid))] = int(g)
+        ca_wins[(int(cid), int(aid))] = int(w)
+    for cid, tid, g, w in payload.get("champ_pair") or []:
+        cp_games[(int(cid), int(tid))] = int(g)
+        cp_wins[(int(cid), int(tid))] = int(w)
+    return {
+        "games": games,
+        "wins": wins,
+        "ca_games": ca_games,
+        "ca_wins": ca_wins,
+        "cp_games": cp_games,
+        "cp_wins": cp_wins,
+    }
+
+
+def settled_patch_counters(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    *,
+    snapshot_dir: Path | None = None,
+    live_games: int | None = None,
+    log=None,
+) -> dict[str, Counter]:
+    """Patch counters for a CLOSED patch, reusing its frozen snapshot when valid.
+
+    Only ever call this for a patch that is no longer the current one -- the
+    current patch grows by the minute, so freezing it would publish stale
+    headline numbers.  Everything else (the comparison baseline, the walk-back
+    the 新-augment window does) is settled data and is read from
+    data/patch_snapshots instead of rescanning the DB.
+    """
+    total = count_patch_games(db_path, queue_id, patch_prefix) if live_games is None else live_games
+    payload, status = patch_snapshot.load_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_CHAMP_SECTION,
+        live_games=total,
+        snapshot_dir=snapshot_dir,
+    )
+    if log:
+        log(f"[settle] {patch_prefix} champ counters: {status.describe()}")
+    if payload is not None:
+        return _decode_champ_counters(payload)
+    counters = _scan_patch_counters(db_path, queue_id, patch_prefix)
+    patch_snapshot.save_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_CHAMP_SECTION,
+        payload=_encode_champ_counters(counters),
+        live_games=total,
+        snapshot_dir=snapshot_dir,
+    )
+    return counters
+
+
+def compute_settled_winrates(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    *,
+    snapshot_dir: Path | None = None,
+    live_games: int | None = None,
+    log=None,
+):
+    """``compute_winrates`` for a closed patch, served from its patch snapshot.
+
+    Deliberately takes no prior arguments: every settled-patch caller (the
+    comparison baseline, the 新-augment walk-back) wants the unsmoothed-by-prior
+    form, and chaining priors backwards across patches is what the compute_winrates
+    docstring warns against.
+    """
+    counters = settled_patch_counters(
+        db_path,
+        queue_id,
+        patch_prefix,
+        snapshot_dir=snapshot_dir,
+        live_games=live_games,
+        log=log,
+    )
+    return _derive_winrate_records(counters)
+
 
 def count_patch_games(
     db_path: Path,
@@ -2486,6 +2657,7 @@ def derive_recent_augment_ids(
     window: int = NEW_AUGMENT_PATCH_WINDOW,
     baseline_prefix: str | None = None,
     baseline_champ_aug: list[dict] | None = None,
+    log=None,
 ) -> frozenset[int]:
     """Augment ids introduced within the last ``window`` patches.
 
@@ -2505,7 +2677,10 @@ def derive_recent_augment_ids(
         if prev_prefix == baseline_prefix and baseline_champ_aug is not None:
             prev_rows = baseline_champ_aug
         else:
-            prev_rows = compute_winrates(db, queue_id, prev_prefix)[1]
+            # Every hop here is a closed patch, so it is served from (or seeds)
+            # that patch's settled snapshot instead of a full rescan -- this walk
+            # used to re-read entire 500k-game patches on every build.
+            prev_rows = compute_settled_winrates(db, queue_id, prev_prefix, log=log)[1]
         new_ids |= set(derive_new_augment_ids(cur_rows, prev_rows))
         cur_rows = prev_rows
         cur_prefix = prev_prefix
@@ -3375,16 +3550,64 @@ def _compute_core_item_patch_stats(
     item_meta: dict[int, dict],
     champ_records: list[dict],
 ) -> dict[str, object]:
+    return _apply_core_item_baselines(
+        _scan_core_item_counters(db_path, queue_id, patch_prefix, item_meta),
+        champ_records,
+    )
+
+
+def _apply_core_item_baselines(
+    counters: dict[str, object],
+    champ_records: list[dict],
+) -> dict[str, object]:
+    """Attach the champion-baseline terms to raw item counters.
+
+    ``baseline_sum`` is just games x that champion's raw win rate, and
+    ``global_wr`` comes straight from champ_records, so neither belongs in a
+    frozen snapshot -- both are re-derived here from whatever records the caller
+    computed this build.
+    """
     champ_baseline = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5) or 0.5)
         for row in champ_records
     }
+    champ_item_stats: dict[tuple[int, int], dict[str, float]] = {}
+    for (cid, item_id), bucket in (counters["champ_item"] or {}).items():
+        games = float(bucket["games"])
+        champ_item_stats[(int(cid), int(item_id))] = {
+            "games": games,
+            "wins": float(bucket["wins"]),
+            "baseline_sum": games * champ_baseline.get(int(cid), 0.5),
+        }
+    return {
+        "item": counters["item"],
+        "champ_item": champ_item_stats,
+        "champ_games": counters["champ_games"],
+        "global_wr": _record_global_wr(champ_records),
+    }
+
+
+def _scan_core_item_counters(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    item_meta: dict[int, dict],
+) -> dict[str, object]:
+    """One pass over a patch's builds -> raw (games, wins) per item and champ x item.
+
+    ``observed_item_ids`` keeps every item id the patch actually contained,
+    filter or no filter, so a settled snapshot can tell whether a later change to
+    _is_recommendable_core_item would have changed what it counted (see
+    _core_item_fingerprint) without re-invalidating on every unrelated Data
+    Dragon addition.
+    """
     item_stats: dict[int, dict[str, float]] = defaultdict(
         lambda: {"games": 0.0, "wins": 0.0}
     )
     champ_item_stats: dict[tuple[int, int], dict[str, float]] = defaultdict(
-        lambda: {"games": 0.0, "wins": 0.0, "baseline_sum": 0.0}
+        lambda: {"games": 0.0, "wins": 0.0}
     )
+    observed_item_ids: set[int] = set()
     # Denominator for the relative (pick-share) floor on 版本變動: how many games
     # this champion had *with any core item*, i.e. the same population the
     # champ_item numerators are drawn from.
@@ -3419,6 +3642,7 @@ def _compute_core_item_patch_stats(
                         continue
                     if item_id <= 0 or item_id in seen_ids:
                         continue
+                    observed_item_ids.add(item_id)
                     if not _is_recommendable_core_item(item_meta.get(item_id)):
                         continue
                     selected_ids.append(item_id)
@@ -3426,7 +3650,6 @@ def _compute_core_item_patch_stats(
                 if not selected_ids:
                     continue
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                baseline = champ_baseline.get(cid, 0.5)
                 champ_games_stats[cid] += 1
                 for item_id in selected_ids:
                     item_bucket = item_stats[item_id]
@@ -3435,15 +3658,107 @@ def _compute_core_item_patch_stats(
                     champ_bucket = champ_item_stats[(cid, item_id)]
                     champ_bucket["games"] += 1
                     champ_bucket["wins"] += player_won
-                    champ_bucket["baseline_sum"] += baseline
     finally:
         con.close()
     return {
         "item": item_stats,
         "champ_item": champ_item_stats,
         "champ_games": champ_games_stats,
-        "global_wr": _record_global_wr(champ_records),
+        "observed_item_ids": sorted(observed_item_ids),
     }
+
+
+def _core_item_fingerprint(observed_item_ids, item_meta: dict[int, dict]) -> str:
+    """Identity of the core-item FILTER as applied to one patch's observed items.
+
+    A snapshot must be rebuilt when _is_recommendable_core_item starts including
+    or excluding an item that patch actually had -- but not when a later Data
+    Dragon adds items that never appeared in it.  Hashing the filter's verdict
+    over the snapshot's own observed ids gives exactly that.
+    """
+    core = [int(i) for i in sorted(observed_item_ids) if _is_recommendable_core_item(item_meta.get(int(i)))]
+    digest = hashlib.sha1(json.dumps(core, separators=(",", ":")).encode("utf-8"))
+    return digest.hexdigest()[:16]
+
+
+def _encode_core_item_counters(counters: dict[str, object]) -> dict:
+    return {
+        "item": [[int(i), int(b["games"]), int(b["wins"])] for i, b in counters["item"].items()],
+        "champ_item": [
+            [int(cid), int(iid), int(b["games"]), int(b["wins"])]
+            for (cid, iid), b in counters["champ_item"].items()
+        ],
+        "champ_games": [[int(cid), int(n)] for cid, n in counters["champ_games"].items()],
+        "observed_item_ids": [int(i) for i in counters["observed_item_ids"]],
+    }
+
+
+def _decode_core_item_counters(payload: dict) -> dict[str, object]:
+    item_stats: dict[int, dict[str, float]] = {}
+    for iid, games, wins in payload.get("item") or []:
+        item_stats[int(iid)] = {"games": float(games), "wins": float(wins)}
+    champ_item: dict[tuple[int, int], dict[str, float]] = {}
+    for cid, iid, games, wins in payload.get("champ_item") or []:
+        champ_item[(int(cid), int(iid))] = {"games": float(games), "wins": float(wins)}
+    champ_games: dict[int, float] = {
+        int(cid): float(n) for cid, n in (payload.get("champ_games") or [])
+    }
+    return {
+        "item": item_stats,
+        "champ_item": champ_item,
+        "champ_games": champ_games,
+        "observed_item_ids": [int(i) for i in (payload.get("observed_item_ids") or [])],
+    }
+
+
+def settled_core_item_patch_stats(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    item_meta: dict[int, dict],
+    champ_records: list[dict],
+    *,
+    snapshot_dir: Path | None = None,
+    live_games: int | None = None,
+    log=None,
+) -> dict[str, object]:
+    """``_compute_core_item_patch_stats`` for a closed patch, from its snapshot.
+
+    Only for non-current patches -- same rule as settled_patch_counters.
+    """
+    total = count_patch_games(db_path, queue_id, patch_prefix) if live_games is None else live_games
+    stored = patch_snapshot.read_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_ITEM_SECTION,
+        snapshot_dir=snapshot_dir,
+    )
+    stored_observed = ((stored or {}).get("payload") or {}).get("observed_item_ids") or []
+    payload, status = patch_snapshot.load_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_ITEM_SECTION,
+        live_games=total,
+        # Recomputed from the snapshot's OWN observed ids, so it matches what was
+        # stored unless the filter's verdict on those ids actually changed.
+        fingerprint=_core_item_fingerprint(stored_observed, item_meta) if stored else None,
+        snapshot_dir=snapshot_dir,
+    )
+    if log:
+        log(f"[settle] {patch_prefix} core-item counters: {status.describe()}")
+    if payload is not None:
+        return _apply_core_item_baselines(_decode_core_item_counters(payload), champ_records)
+    counters = _scan_core_item_counters(db_path, queue_id, patch_prefix, item_meta)
+    patch_snapshot.save_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_ITEM_SECTION,
+        payload=_encode_core_item_counters(counters),
+        live_games=total,
+        fingerprint=_core_item_fingerprint(counters["observed_item_ids"], item_meta),
+        snapshot_dir=snapshot_dir,
+    )
+    return _apply_core_item_baselines(counters, champ_records)
 
 def compute_patch_changes(
     db_path: Path,
@@ -3457,6 +3772,7 @@ def compute_patch_changes(
     champ_aug_records: list[dict] | None = None,
     baseline_champ_aug: list[dict] | None = None,
     aug_meta: dict[int, dict] | None = None,
+    log=None,
 ) -> dict[str, object] | None:
     if not current_patch or not baseline_patch:
         return None
@@ -3488,8 +3804,10 @@ def compute_patch_changes(
     current_item_stats = _compute_core_item_patch_stats(
         db_path, queue_id, current_patch, item_meta, current_records
     )
-    baseline_item_stats = _compute_core_item_patch_stats(
-        db_path, queue_id, baseline_patch, item_meta, baseline_records
+    # The baseline patch is closed, so its item tallies come from (or seed) its
+    # settled snapshot; the current patch is always rescanned.
+    baseline_item_stats = settled_core_item_patch_stats(
+        db_path, queue_id, baseline_patch, item_meta, baseline_records, log=log
     )
     current_global_wr = float(current_item_stats["global_wr"])
     baseline_global_wr = float(baseline_item_stats["global_wr"])
