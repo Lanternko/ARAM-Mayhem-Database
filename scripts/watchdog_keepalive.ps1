@@ -32,11 +32,19 @@ $argsList = @(
     "--degraded-workers", "1",
     "--degrade-client-mb", "5200",
     "--client-restart-mb", "5800",
-    "--worker-start-max-client-mb", "4200",
+    # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
+    # running are left alone, so the old value created a trap -- workers were
+    # observed running fine with the client at 5,199MB, but once they needed a
+    # restart at that size the watchdog refused forever (LeagueClient idles between
+    # ~1.8GB and ~6GB, and nothing brings it back down without a client restart).
+    # Sat there logging keep_worker_stopped with LCU healthy and collection at zero.
+    # 6500 stays above the observed-good ceiling while still catching a client that
+    # has genuinely run away.
+    "--worker-start-max-client-mb", "6500",
     "--manual-seed-pending-cap", "120",
     "--check-interval-sec", "60",
     "--client-ready-timeout-sec", "600",
-    "--games-per-player", "4",
+    "--games-per-player", "0",
     "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),
     "--static-publish-growth-ratio", "0.10",
     "--static-publish-threshold", "0",
