@@ -1459,6 +1459,43 @@ def _next_pending_wait_ms(con: sqlite3.Connection) -> int | None:
     return max(0, int(row[0]) - _now_ms())
 
 
+# Visits needed before a player's observed yield is trusted enough to throttle on.
+# Below this the crawler has no real evidence and keeps the flat base cooldown.
+_YIELD_BACKOFF_MIN_VISITS = 3
+# Yield (new games per visit) above which a player is treated as productive and
+# left completely alone.  Measured over 1.63M visits: players at >=0.5 account for
+# 83% of all visits and essentially all output, and revisits overall are nearly as
+# productive as first visits (1.304 vs 1.388 games/visit) -- so a blanket revisit
+# reduction would cost real data.  The waste is concentrated far below this line:
+# the <0.01 band burns 122k visits (7.5% of everything) to produce 20 games total.
+_YIELD_PRODUCTIVE = 0.5
+_YIELD_MARGINAL = 0.1
+_YIELD_BACKOFF_MARGINAL = 20    # base 45s -> 15min
+_YIELD_BACKOFF_DEAD = 240       # base 45s -> 3h
+
+
+def _requeue_cooldown_for(
+    new_games_found_total: int, process_count: int, base_cooldown_ms: int
+) -> int:
+    """Scale a player's requeue cooldown by how much they have actually yielded.
+
+    The frontier re-queues a player whenever they show up in a game newer than the
+    one we last crawled them at, which for an active player can happen constantly;
+    with a flat 45s cooldown that produced individuals crawled 1,200+ times for
+    almost nothing. Productive players keep the base cooldown -- they are where the
+    data comes from -- while players with a long, well-evidenced record of yielding
+    nothing back off hard instead of being rescanned every minute forever.
+    """
+    if process_count < _YIELD_BACKOFF_MIN_VISITS:
+        return base_cooldown_ms
+    rate = new_games_found_total / float(process_count)
+    if rate >= _YIELD_PRODUCTIVE:
+        return base_cooldown_ms
+    if rate >= _YIELD_MARGINAL:
+        return base_cooldown_ms * _YIELD_BACKOFF_MARGINAL
+    return base_cooldown_ms * _YIELD_BACKOFF_DEAD
+
+
 def _mark_player_done(
     con: sqlite3.Connection,
     puuid: str,
@@ -1475,7 +1512,8 @@ def _mark_player_done(
     now = _utc_now()
     row = con.execute(
         """
-        SELECT latest_seen_match_created_ms, last_crawled_match_created_ms
+        SELECT latest_seen_match_created_ms, last_crawled_match_created_ms,
+               process_count, new_games_found
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1483,6 +1521,10 @@ def _mark_player_done(
     ).fetchone()
     latest_seen_match_ms = int(row[0]) if row else 0
     last_crawled_match_ms = int(row[1]) if row else 0
+    # Counts BEFORE this visit is folded in; add the current result so the
+    # backoff decision reflects the visit that just happened.
+    prior_process_count = int(row[2] or 0) if row else 0
+    prior_new_games = int(row[3] or 0) if row else 0
     crawled_match_ms = max(
         last_crawled_match_ms,
         int(claimed_match_created_ms),
@@ -1491,7 +1533,12 @@ def _mark_player_done(
     needs_requeue = latest_seen_match_ms > crawled_match_ms
 
     if needs_requeue:
-        eligible_at_ms = _now_ms() + max(0, requeue_cooldown_ms)
+        effective_cooldown_ms = _requeue_cooldown_for(
+            prior_new_games + int(new_games_found),
+            prior_process_count + 1,
+            max(0, requeue_cooldown_ms),
+        )
+        eligible_at_ms = _now_ms() + effective_cooldown_ms
         con.execute(
             """
             UPDATE crawl_seen
