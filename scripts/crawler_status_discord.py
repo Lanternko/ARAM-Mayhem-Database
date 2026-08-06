@@ -1073,7 +1073,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Debounce state for --stall-alert",
     )
     parser.add_argument(
-        "--stall-minutes", type=float, default=20.0,
+        # 45, raised from a guessed 20 after measuring the real gap distribution.
+        # Saves are bursty: the crawler keeps scanning players but only writes when
+        # it hits one with unseen games, so quiet stretches are normal operation,
+        # not failure. Over 27h / 30k intervals: P99.9 = 5.7min, largest natural
+        # gap 31.9min, and >20min happened 10 times while >45min happened 0 times.
+        # A 20-minute threshold therefore sat inside normal behaviour and fired 15
+        # alerts in a day that all "recovered" on their own within 5-10 minutes --
+        # forensics showed network up, client alive and mid-session every time.
+        # Real outages are hours long, so 45 still catches them well inside an hour.
+        "--stall-minutes", type=float, default=45.0,
         help="Minutes since the last capture before --stall-alert fires",
     )
     parser.add_argument(
