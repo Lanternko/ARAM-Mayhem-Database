@@ -13,6 +13,7 @@ not champion composition.
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import os
@@ -1522,6 +1523,60 @@ _YIELD_BACKOFF_MARGINAL = 20    # base 45s -> 15min
 _YIELD_BACKOFF_DEAD = 240       # base 45s -> 3h
 
 
+# --- Revisit-interval A/B -------------------------------------------------
+# Arm is a stable hash of the puuid, NOT a per-worker setting: both workers share
+# one crawl_queue, and the cooldown is written to a shared eligible_at_ms, so a
+# per-worker split would have each arm overwriting the other's decisions. Hashing
+# the player keeps the treatment consistent no matter who claims them.
+#
+# Treatment tests the interval implied by measurement rather than the guessed
+# tiers. Sampling 60k games / 209k players: a player needs a median 178h (7.4
+# days) to actually play 20 games -- P10 71h, P90 580h -- while control revisits
+# after 45s to 3h. That is three orders of magnitude early, which is why a revisit
+# returns ~1.5 games instead of anything near the 20 the LCU could hold.
+_REVISIT_AB_ENABLED = True
+_REVISIT_TREATMENT_TARGET_GAMES = 15.0   # under 20 so nothing rolls off unseen
+_REVISIT_TREATMENT_MIN_MS = 6 * 3600_000
+_REVISIT_TREATMENT_MAX_MS = 21 * 24 * 3600_000
+
+
+def revisit_arm(puuid: str) -> str:
+    """Stable 50/50 split. 'control' keeps the shipped tiers, 'treatment' uses
+    the measured accumulation rate."""
+    if not _REVISIT_AB_ENABLED:
+        return "control"
+    digest = hashlib.sha1(str(puuid).encode("utf-8", "replace")).digest()
+    return "treatment" if digest[0] & 1 else "control"
+
+
+def _treatment_cooldown_ms(
+    new_games_found_total: int, first_seen_at: str | None, now_ts: float
+) -> int:
+    """Wait roughly until the player should have accumulated the target games.
+
+    Rate comes from what this player has actually produced for us over their
+    observed lifetime, so it adapts per player instead of assuming one interval
+    fits a population whose 20-game span runs from 3 days to 24.
+    """
+    hours = 0.0
+    if first_seen_at:
+        try:
+            seen = datetime.fromisoformat(first_seen_at)
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            hours = max(0.0, (now_ts - seen.timestamp()) / 3600.0)
+        except (ValueError, TypeError):
+            hours = 0.0
+    if hours < 24 or new_games_found_total <= 0:
+        # Not enough observation to estimate a rate; use the low end rather than
+        # guessing high and stranding a possibly-active player for weeks.
+        return _REVISIT_TREATMENT_MIN_MS
+    rate_per_hour = new_games_found_total / hours
+    wait_hours = _REVISIT_TREATMENT_TARGET_GAMES / max(rate_per_hour, 1e-6)
+    return int(min(max(wait_hours * 3600_000, _REVISIT_TREATMENT_MIN_MS),
+                   _REVISIT_TREATMENT_MAX_MS))
+
+
 def _requeue_cooldown_for(
     new_games_found_total: int, process_count: int, base_cooldown_ms: int
 ) -> int:
@@ -1561,7 +1616,7 @@ def _mark_player_done(
     row = con.execute(
         """
         SELECT latest_seen_match_created_ms, last_crawled_match_created_ms,
-               process_count, new_games_found
+               process_count, new_games_found, first_seen_at
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1573,6 +1628,7 @@ def _mark_player_done(
     # backoff decision reflects the visit that just happened.
     prior_process_count = int(row[2] or 0) if row else 0
     prior_new_games = int(row[3] or 0) if row else 0
+    prior_first_seen_at = row[4] if row else None
     crawled_match_ms = max(
         last_crawled_match_ms,
         int(claimed_match_created_ms),
@@ -1581,11 +1637,17 @@ def _mark_player_done(
     needs_requeue = latest_seen_match_ms > crawled_match_ms
 
     if needs_requeue:
-        effective_cooldown_ms = _requeue_cooldown_for(
-            prior_new_games + int(new_games_found),
-            prior_process_count + 1,
-            max(0, requeue_cooldown_ms),
-        )
+        total_games = prior_new_games + int(new_games_found)
+        if revisit_arm(puuid) == "treatment":
+            effective_cooldown_ms = _treatment_cooldown_ms(
+                total_games, prior_first_seen_at, time.time()
+            )
+        else:
+            effective_cooldown_ms = _requeue_cooldown_for(
+                total_games,
+                prior_process_count + 1,
+                max(0, requeue_cooldown_ms),
+            )
         eligible_at_ms = _now_ms() + effective_cooldown_ms
         con.execute(
             """
