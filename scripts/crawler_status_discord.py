@@ -726,6 +726,12 @@ def worker_log_stats(log_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
+# Captures newer than this mean data is still arriving regardless of what the
+# worker-count sample says.  Kept well under the stall alert's 45min so the two
+# never disagree about whether the crawler is alive.
+STALE_CAPTURE_MIN = 15.0
+
+
 def health_color(
     workers: int,
     lcu_ok: bool | None,
@@ -737,8 +743,15 @@ def health_color(
     green = 0x57F287
     yellow = 0xFEE75C
     red = 0xED4245
+    # Worker count is a single instantaneous sample, and workers get restarted
+    # routinely (three W02 restarts inside three minutes has been observed), so a
+    # digest that lands in one of those windows sees zero. Fresh captures prove
+    # data is still arriving, so trust them over the sample: red is reserved for
+    # cases where nothing is actually coming in. Same reasoning as the stall
+    # alert, which keys on capture age precisely because it does not lie.
+    data_flowing = age_min is not None and age_min <= STALE_CAPTURE_MIN
     if not lcu_ok or workers <= 0:
-        return red
+        return yellow if data_flowing else red
     if age_min is not None and age_min > 30:
         return yellow
     # Crawling can be perfectly healthy while the publish leg is dead — that is
@@ -839,6 +852,11 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
         headline = "爬蟲有在跑（請留意收場間隔）"
     elif workers >= 1:
         headline = "Worker 還在，LCU 不健康"
+    elif age is not None and age <= STALE_CAPTURE_MIN:
+        # Zero workers but captures still landing: sampled mid-restart, not down.
+        # Calling this "已停止" next to "距上次收場 2.75 分鐘" in the same embed
+        # was actively misleading.
+        headline = f"Worker 重啟中（{age:.1f} 分前仍在收場）"
     else:
         headline = "爬蟲已停止"
 
