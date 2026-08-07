@@ -55,12 +55,43 @@ def test_control_skips_pure_classic_player():
     assert got == []
 
 
-def test_treatment_expands_pure_classic_player():
+def test_probe_arm_expands_classic_only_within_probe_window():
+    # Visible but cheap: a 經典 player costs the probe window, not a full fetch.
     from aram_nn.lcu.snowball import _adaptive_target_game_ids
     got = _adaptive_target_game_ids(
-        _classic_history(), {450, 2400, 2450, 4310}, puuid=_arm_puuid("treatment")
+        _classic_history(20), {450, 2400, 2450, 4310}, puuid=_arm_puuid("probe")
     )
-    assert len(got) == 6
+    assert len(got) == 4
+
+
+def test_full_arm_expands_classic_history_completely():
+    from aram_nn.lcu.snowball import _adaptive_target_game_ids
+    got = _adaptive_target_game_ids(
+        _classic_history(20), {450, 2400, 2450, 4310}, puuid=_arm_puuid("full")
+    )
+    assert len(got) == 20
+
+
+def test_all_arms_skip_traditional_rift_players():
+    # 400/420/430/440 are not target queues, so they never make a player visible.
+    from aram_nn.lcu.snowball import _adaptive_target_game_ids
+    rift = [{"gameId": f"s{i}", "queueId": 420} for i in range(6)]
+    for arm in ("control", "probe", "full"):
+        assert _adaptive_target_game_ids(
+            rift, {450, 2400, 2450, 4310}, puuid=_arm_puuid(arm)
+        ) == []
+
+
+def test_mayhem_heavy_player_is_identical_across_arms():
+    # The main data stream must not be perturbed by the experiment.
+    from aram_nn.lcu.snowball import _adaptive_target_game_ids
+    hist = [{"gameId": f"m{i}", "queueId": 2400} for i in range(3)]
+    hist += [{"gameId": f"j{i}", "queueId": 4310} for i in range(10)]
+    sizes = {
+        len(_adaptive_target_game_ids(hist, {450, 2400, 2450, 4310}, puuid=_arm_puuid(a)))
+        for a in ("control", "probe", "full")
+    }
+    assert len(sizes) == 1
 
 
 def test_no_puuid_keeps_control_semantics():
@@ -70,16 +101,20 @@ def test_no_puuid_keeps_control_semantics():
 
 def test_history_and_revisit_arms_are_independent():
     from aram_nn.lcu.snowball import history_arm, revisit_arm
-    ids = [f"indep-{i}" for i in range(4000)]
-    agree = sum(1 for i in ids if history_arm(i) == revisit_arm(i))
-    # Perfectly correlated splits would make the two concurrent experiments
-    # impossible to attribute separately.
+    ids = [f"indep-{i}" for i in range(6000)]
+    # Treatment-vs-control agreement across the two splits; correlated splits
+    # would make the concurrent experiments impossible to attribute separately.
+    agree = sum(
+        1 for i in ids
+        if (history_arm(i) != "control") == (revisit_arm(i) == "treatment")
+    )
     assert 0.40 < agree / len(ids) < 0.60
 
 
 def test_history_arm_is_stable_and_balanced():
     from aram_nn.lcu.snowball import history_arm
     assert history_arm("same") == history_arm("same")
-    ids = [f"bal-{i}" for i in range(4000)]
-    share = sum(1 for i in ids if history_arm(i) == "treatment") / len(ids)
-    assert 0.45 < share < 0.55
+    ids = [f"bal-{i}" for i in range(9000)]
+    for arm in ("control", "probe", "full"):
+        share = sum(1 for i in ids if history_arm(i) == arm) / len(ids)
+        assert 0.28 < share < 0.39, (arm, share)
