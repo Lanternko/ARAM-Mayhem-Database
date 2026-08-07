@@ -1,17 +1,22 @@
 /* ============================================================
-   Washoku-Zen preview v3 (hidden) — CSS only
-   Inspired by 和色: large areas = 墨/消炭/銀鼠/白練 (no neon, no fog)
-   Signals = 2 hues × 3 steps (通貨玫 + 青磁), sat strictly high→low
-   No gradients. No purple rings. Numbers always dark-on-soft or solid mid.
+   Washoku-Zen preview v4 (hidden) — CSS only
+   ----------------------------------------------------------
+   Design principles:
+   1. Large surfaces = 和色 neutrals (墨 / 消炭 / 銀鼠 / 白練)
+   2. Chrome accent = restrained 桃紅 (not neon, not purple)
+   3. Functional color language KEPT (role = archetype, gold = gold)
+      — only sat/lightness standardized (not flattened to 2 hues)
+   4. Strength (WR / pick / tier) uses filter grammar:
+      框 border · 內底 background · 字 text (白底/白字/黑字 轉換)
+   5. No gradients. No floating detail rail. No purple rings.
    ============================================================ */
 
-/* ---------- Token system ---------- */
 :root {
     color-scheme: dark;
 
-    /* 和色 neutrals (large area) */
-    --bg: #1a1a1a;              /* 墨 */
-    --surface: #2c2c2c;         /* 消炭 */
+    /* ---- 和色 neutrals ---- */
+    --bg: #1a1a1a;
+    --surface: #2c2c2c;
     --surface-2: #353535;
     --surface-sunken: #121212;
     --surface-raised: #323232;
@@ -25,36 +30,32 @@
     --border-strong: rgba(145, 152, 159, 0.28);
     --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 
-    /* Hue A — 玫 (currency rose), sat high → low */
-    --rose-1: #d11b6b;          /* OP  S≈0.78 */
-    --rose-2: #b84d88;          /* T1  S≈0.45 */
-    --rose-3: #8b6580;          /* T2  S≈0.18 */
-
-    /* Hue B — 青磁 (div celadon), sat mid → low (never brighter than rose-2) */
-    --teal-1: #2a6b6b;          /* T3 */
-    --teal-2: #4a787a;          /* T4 */
-    --teal-3: #6b7575;          /* T5 bridge → 銀鼠 */
-
-    /* Chrome accent = rose-2 (readable on dark, not neon hot) */
-    --accent: #b84d88;
-    --accent-soft: #d4a0be;
+    /* ---- Accent: 克制桃紅 ---- */
+    --accent: #c45c8a;
+    --accent-soft: #d9a0b8;
+    --accent-deep: #8a3a5e;
     --accent-on: #1a1a1a;
-    --accent-deep: #7a1948;
 
-    /* WR / pick semantics — solid mid, never light-on-light */
-    --wr-up-bg: #5c9e7a;
-    --wr-up-fg: #0f1f18;
-    --wr-down-bg: #c4788a;
-    --wr-down-fg: #1a1014;
-    --wr-up-text: #7dbe9a;      /* text-only (no pill) */
-    --wr-down-text: #d49aa8;
+    /* ---- Functional families (standardized sat ≈ 0.55–0.65, L mid) ---- */
+    --fn-assassin: #d45a6a;     /* red */
+    --fn-fighter:  #d4844a;     /* orange */
+    --fn-mage:     #5b7fd4;     /* blue / magic */
+    --fn-marksman: #5aaf6a;     /* green */
+    --fn-support:  #c45c8a;     /* 桃紅 = accent family */
+    --fn-tank:     #6b7db8;     /* steel blue (not neon purple) */
+    --fn-gold:     #c9a227;     /* gold augment — restrained */
+    --fn-gold-soft:#e0c56a;
+
+    /* ---- Strength filter triad helpers ---- */
+    --filter-white: #f2f0eb;
+    --filter-black: #121212;
 
     --header-h: 56px;
 }
 
 :root[data-theme="light"] {
     color-scheme: light;
-    --bg: #f3f1ec;              /* 生成紙 */
+    --bg: #f3f1ec;
     --surface: #faf9f6;
     --surface-2: #ebe7e0;
     --surface-sunken: #e5e1da;
@@ -69,27 +70,25 @@
     --border-strong: rgba(26, 26, 26, 0.18);
     --shadow: 0 16px 40px rgba(26, 26, 26, 0.10);
 
-    --rose-1: #b01658;
-    --rose-2: #9a3d72;
-    --rose-3: #7a5a6e;
-    --teal-1: #1f5a5a;
-    --teal-2: #3d6668;
-    --teal-3: #5c6666;
-
-    --accent: #9a3d72;
-    --accent-soft: #7a1948;
+    --accent: #a84872;
+    --accent-soft: #8a3a5e;
+    --accent-deep: #6a2a48;
     --accent-on: #faf9f6;
-    --accent-deep: #5c1038;
 
-    --wr-up-bg: #3d7a5c;
-    --wr-up-fg: #f2f0eb;
-    --wr-down-bg: #a85a6c;
-    --wr-down-fg: #f2f0eb;
-    --wr-up-text: #1f5a3d;
-    --wr-down-text: #8a3048;
+    --fn-assassin: #c44a5a;
+    --fn-fighter:  #c4743a;
+    --fn-mage:     #4a6fc4;
+    --fn-marksman: #4a9a5a;
+    --fn-support:  #a84872;
+    --fn-tank:     #5a6ca8;
+    --fn-gold:     #a8861a;
+    --fn-gold-soft:#8a6e14;
+
+    --filter-white: #faf9f6;
+    --filter-black: #1a1a1a;
 }
 
-/* ---------- Surfaces ---------- */
+/* ========== Surfaces ========== */
 :root:not([data-theme="light"]) body {
     background: var(--bg) !important;
 }
@@ -105,86 +104,95 @@
     box-shadow: none !important;
 }
 
-/* Kill all tier-block fog / radial washes */
+/* Kill tier fog / purple rings / prism */
 .tier-block[data-tier] {
     background: transparent !important;
     box-shadow: none !important;
 }
 
-/* ---------- Tier 2×3 ladder (sat high → low) ----------
-   OP rose-1 · T1 rose-2 · T2 rose-3
-   T3 teal-1 · T4 teal-2 · T5 teal-3/銀鼠
+/* ========== Tier strength — filter triad (框/底/字) ==========
+   High value → white fill + black text + strong border
+   Mid → colored fill + white text
+   Low → dark fill + muted text / thin border
 */
 .tier-block[data-tier="OP"] {
-    --tier-color: var(--rose-1) !important;
-    --tier-bg: var(--rose-1) !important;
+    --tier-color: var(--fn-gold) !important;
+    --tier-bg: var(--filter-white) !important;
 }
 .tier-block[data-tier="T1"] {
-    --tier-color: var(--rose-2) !important;
-    --tier-bg: var(--rose-2) !important;
+    --tier-color: var(--accent) !important;
+    --tier-bg: var(--accent) !important;
 }
 .tier-block[data-tier="T2"] {
-    --tier-color: var(--rose-3) !important;
-    --tier-bg: var(--rose-3) !important;
+    --tier-color: var(--accent-deep) !important;
+    --tier-bg: var(--accent-deep) !important;
 }
 .tier-block[data-tier="T3"] {
-    --tier-color: var(--teal-1) !important;
-    --tier-bg: var(--teal-1) !important;
+    --tier-color: var(--fn-mage) !important;
+    --tier-bg: color-mix(in srgb, var(--fn-mage) 55%, var(--surface)) !important;
 }
 .tier-block[data-tier="T4"] {
-    --tier-color: var(--teal-2) !important;
-    --tier-bg: var(--teal-2) !important;
+    --tier-color: var(--text-muted) !important;
+    --tier-bg: var(--surface-2) !important;
 }
 .tier-block[data-tier="T5"] {
-    --tier-color: var(--text-muted) !important;
-    --tier-bg: var(--text-muted) !important;
+    --tier-color: var(--text-dim) !important;
+    --tier-bg: var(--surface) !important;
 }
 
-/* Pills: solid only, no animation / prism / halo */
 .tier-block[data-tier] .tier-pill {
     animation: none !important;
     background: var(--tier-bg) !important;
     background-image: none !important;
     box-shadow: none !important;
     text-shadow: none !important;
-    color: #f2f0eb !important;
+    border: 1px solid var(--tier-color) !important;
     font-weight: 700 !important;
 }
-.tier-block[data-tier="T2"] .tier-pill,
-.tier-block[data-tier="T5"] .tier-pill {
-    /* slightly lighter fills → dark ink for contrast */
-    color: #1a1a1a !important;
+/* OP: 白底黑字 + 金框 (filter peak) */
+.tier-block[data-tier="OP"] .tier-pill {
+    color: var(--filter-black) !important;
+    border-color: var(--fn-gold) !important;
+    background: var(--filter-white) !important;
 }
 .tier-block[data-tier="OP"] .tier-pill::before,
 .tier-block[data-tier="OP"] .tier-pill::after {
     display: none !important;
 }
+/* T1–T2: 色底白字 */
+.tier-block[data-tier="T1"] .tier-pill,
+.tier-block[data-tier="T2"] .tier-pill {
+    color: var(--filter-white) !important;
+}
+/* T3–T5: 暗底淺字 */
+.tier-block[data-tier="T3"] .tier-pill,
+.tier-block[data-tier="T4"] .tier-pill,
+.tier-block[data-tier="T5"] .tier-pill {
+    color: var(--text) !important;
+}
 
-/* Champ cards: 1px solid tier border — no multi-stop gradient frame */
-.tier-block[data-tier="OP"] .champ,
-.tier-block[data-tier="T1"] .champ,
-.tier-block[data-tier="T2"] .champ,
-.tier-block[data-tier="T3"] .champ,
-.tier-block[data-tier="T4"] .champ,
-.tier-block[data-tier="T5"] .champ {
+/* Champ frames: solid border only (filter 框) */
+.tier-block[data-tier] .champ {
     border: 2px solid var(--tier-color) !important;
     background: var(--surface-raised) !important;
     background-image: none !important;
     box-shadow: none !important;
 }
+.tier-block[data-tier="OP"] .champ {
+    border-color: var(--fn-gold) !important;
+    box-shadow: inset 0 0 0 1px var(--filter-white) !important;
+}
 .tier-block[data-tier] .champ:hover {
     box-shadow: none !important;
-    border-color: color-mix(in srgb, var(--tier-color) 80%, #fff) !important;
+    border-color: color-mix(in srgb, var(--tier-color) 75%, #fff) !important;
 }
 
-/* ---------- Chrome / nav ---------- */
+/* ========== Chrome accent (克制桃紅) ========== */
 .brand-meta { color: var(--accent) !important; }
 .nav-tab.active,
 .nav-tab[aria-selected="true"] {
     color: var(--accent) !important;
     background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
-}
-.nav-tab.active {
     box-shadow: inset 0 -2px 0 var(--accent) !important;
 }
 .change-tab.active,
@@ -198,88 +206,166 @@
 }
 .chip[data-role=""] { --role-color: var(--accent); }
 
-/* Role chips — desaturated 玫/青 only */
-.chip[data-role="Assassin"]  { --role-color: var(--rose-2); }
-.chip[data-role="Fighter"]   { --role-color: var(--rose-3); }
-.chip[data-role="Mage"]      { --role-color: var(--rose-1); }
-.chip[data-role="Marksman"]  { --role-color: var(--teal-1); }
-.chip[data-role="Support"]   { --role-color: var(--rose-2); }
-.chip[data-role="Tank"]      { --role-color: var(--teal-2); }
+/* ========== Functional roles (standardized sat) ========== */
+.chip[data-role="Assassin"]  { --role-color: var(--fn-assassin); }
+.chip[data-role="Fighter"]   { --role-color: var(--fn-fighter); }
+.chip[data-role="Mage"]      { --role-color: var(--fn-mage); }
+.chip[data-role="Marksman"]  { --role-color: var(--fn-marksman); }
+.chip[data-role="Support"]   { --role-color: var(--fn-support); }
+.chip[data-role="Tank"]      { --role-color: var(--fn-tank); }
 
-.detail-role-tag[data-role="Assassin"] { --role-color: var(--rose-2); }
-.detail-role-tag[data-role="Fighter"]  { --role-color: var(--rose-3); }
-.detail-role-tag[data-role="Mage"]     { --role-color: var(--rose-1); }
-.detail-role-tag[data-role="Marksman"] { --role-color: var(--teal-1); }
-.detail-role-tag[data-role="Support"]  { --role-color: var(--rose-2); }
-.detail-role-tag[data-role="Tank"]     { --role-color: var(--teal-2); }
+.detail-role-tag[data-role="Assassin"] { --role-color: var(--fn-assassin); }
+.detail-role-tag[data-role="Fighter"]  { --role-color: var(--fn-fighter); }
+.detail-role-tag[data-role="Mage"]     { --role-color: var(--fn-mage); }
+.detail-role-tag[data-role="Marksman"] { --role-color: var(--fn-marksman); }
+.detail-role-tag[data-role="Support"]  { --role-color: var(--fn-support); }
+.detail-role-tag[data-role="Tank"]     { --role-color: var(--fn-tank); }
 
-/* ---------- WR / delta numbers — MUST stay readable ---------- */
-/* Patch-change pills: keep dark ink on soft solid (fix light-on-light) */
+.alt-role-badge[data-alt-role="Assassin"] { --badge-color: var(--fn-assassin); }
+.alt-role-badge[data-alt-role="Fighter"]  { --badge-color: var(--fn-fighter); }
+.alt-role-badge[data-alt-role="Mage"]     { --badge-color: var(--fn-mage); }
+.alt-role-badge[data-alt-role="Marksman"] { --badge-color: var(--fn-marksman); }
+.alt-role-badge[data-alt-role="Support"]  { --badge-color: var(--fn-support); }
+.alt-role-badge[data-alt-role="Tank"]     { --badge-color: var(--fn-tank); }
+
+/* Gold augment stays gold */
+.aug-rarity-chip.rarity-kGold.is-active,
+.aug-cat-chip.cat-gold,
+.item-role-chip.role-common {
+    --role-color: var(--fn-gold);
+    --cat-color: var(--fn-gold);
+    border-color: var(--fn-gold) !important;
+    color: var(--fn-gold-soft) !important;
+    background: color-mix(in srgb, var(--fn-gold) 14%, transparent) !important;
+}
+
+/* ========== WR ladder — filter triad, high end POP ==========
+   wr-5 peak: 白底 + 黑字 + 綠框
+   wr-4: 綠底 + 白字
+   wr-3: 中性字
+   wr-2: 淡玫字
+   wr-1 low: 玫底 + 白字
+*/
+.aug .awr {
+    border-radius: 4px !important;
+    padding: 0 4px !important;
+    border: 1px solid transparent !important;
+    line-height: 1.4 !important;
+}
+.aug .awr.wr-5 {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border-color: var(--fn-marksman) !important;
+    font-weight: 800 !important;
+}
+.aug .awr.wr-4 {
+    color: var(--filter-white) !important;
+    background: var(--fn-marksman) !important;
+    border-color: var(--fn-marksman) !important;
+    font-weight: 700 !important;
+}
+.aug .awr.wr-3 {
+    color: var(--text-secondary) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+.aug .awr.wr-2 {
+    color: color-mix(in srgb, var(--accent) 75%, var(--text-muted)) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+.aug .awr.wr-1 {
+    color: var(--filter-white) !important;
+    background: var(--fn-assassin) !important;
+    border-color: var(--fn-assassin) !important;
+    font-weight: 700 !important;
+}
+
+/* ========== Pick ladder — filter triad, high pick OBVIOUS ==========
+   pick-5: 白底 + 黑字 + 桃紅框  (peak — 集齊 filter 三要素)
+   pick-4: 桃紅底 + 白字
+   pick-3: 桃紅字
+   pick-2: 近白字
+   pick-1: 銀鼠字
+*/
+.aug .alift {
+    border-radius: 4px !important;
+    padding: 0 4px !important;
+    border: 1px solid transparent !important;
+    line-height: 1.4 !important;
+}
+.aug .alift.pick-5 {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border-color: var(--accent) !important;
+    font-weight: 800 !important;
+}
+.aug .alift.pick-4 {
+    color: var(--filter-white) !important;
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    font-weight: 700 !important;
+}
+.aug .alift.pick-3 {
+    color: var(--accent-soft) !important;
+    background: transparent !important;
+    font-weight: 650 !important;
+}
+.aug .alift.pick-2 {
+    color: var(--text) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+.aug .alift.pick-1 {
+    color: var(--text-dim) !important;
+    background: transparent !important;
+    font-weight: 500 !important;
+}
+
+/* Patch-change delta pills — dark ink on soft solid (readable) */
 .change-delta.up {
-    color: var(--wr-up-fg) !important;
-    background: var(--wr-up-bg) !important;
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border: 1px solid var(--fn-marksman) !important;
 }
 .change-delta.down {
-    color: var(--wr-down-fg) !important;
-    background: var(--wr-down-bg) !important;
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border: 1px solid var(--fn-assassin) !important;
 }
 
 /* Text-only deltas */
 .team-delta.tone-pos-2,
 .team-eval-wr.is-good .team-wr-num,
-.change-delta.up .num,
 .alt-role-tooltip-lift.is-good,
 .fit-tip-lift.is-good,
-.augch-val.up {
-    color: var(--wr-up-text) !important;
-}
-.team-delta.tone-pos-1 { color: color-mix(in srgb, var(--wr-up-text) 75%, var(--text-muted)) !important; }
+.augch-val.up,
+.mwr { color: var(--fn-marksman) !important; }
+.team-delta.tone-pos-1 { color: color-mix(in srgb, var(--fn-marksman) 70%, var(--text-muted)) !important; }
 .team-delta.tone-neg-2,
 .team-eval-wr.is-bad .team-wr-num,
 .alt-role-tooltip-lift.is-bad,
 .fit-tip-lift.is-bad,
-.augch-val.down {
-    color: var(--wr-down-text) !important;
-}
-.team-delta.tone-neg-1 { color: color-mix(in srgb, var(--wr-down-text) 75%, var(--text-muted)) !important; }
+.augch-val.down { color: var(--fn-assassin) !important; }
+.team-delta.tone-neg-1 { color: color-mix(in srgb, var(--fn-assassin) 70%, var(--text-muted)) !important; }
 .team-delta.tone-zero { color: var(--text-muted) !important; }
 
-.team-comp-row.is-good .ab-bar > span { background: var(--teal-1) !important; }
-.team-comp-row.is-bad .ab-bar > span { background: var(--rose-2) !important; }
+.team-comp-row.is-good .ab-bar > span { background: var(--fn-marksman) !important; }
+.team-comp-row.is-bad .ab-bar > span { background: var(--fn-assassin) !important; }
 
-/* Aug WR tone ladder → 玫/青, not rainbow */
-.aug .awr.wr-5 { color: var(--wr-up-text) !important; }
-.aug .awr.wr-4 { color: color-mix(in srgb, var(--wr-up-text) 70%, var(--text)) !important; }
-.aug .awr.wr-3 { color: var(--text) !important; }
-.aug .awr.wr-2 { color: color-mix(in srgb, var(--wr-down-text) 70%, var(--text)) !important; }
-.aug .awr.wr-1 { color: var(--wr-down-text) !important; }
-
-/* Pick heat: rose sat ladder only (no yellow/cyan) */
-.aug .alift.pick-1 { color: var(--text-dim) !important; font-weight: 500 !important; }
-.aug .alift.pick-2 { color: var(--text-muted) !important; font-weight: 600 !important; }
-.aug .alift.pick-3 { color: var(--rose-3) !important; font-weight: 650 !important; }
-.aug .alift.pick-4 { color: var(--rose-2) !important; font-weight: 700 !important; }
-.aug .alift.pick-5 { color: var(--rose-1) !important; font-weight: 700 !important; }
-
-/* ---------- Detail panel (accent playground, solid only) ---------- */
+/* ========== Detail panel — no floating rail ========== */
 .detail {
     background: var(--surface) !important;
     border: 1px solid var(--border) !important;
     box-shadow: var(--shadow) !important;
 }
-/* Solid rail — NO gradient */
-.detail::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 12px; bottom: 12px;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--accent) !important;
-    opacity: 1;
-    pointer-events: none;
+.detail::before,
+.detail::after {
+    content: none !important;
+    display: none !important;
 }
 .detail-avatar {
-    border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent) !important;
+    border: 1px solid var(--border-strong) !important;
     box-shadow: none !important;
 }
 .detail-role-tag {
@@ -294,7 +380,7 @@
 .detail .panel-title {
     color: var(--accent-soft) !important;
 }
-.detail a { color: var(--teal-1) !important; }
+.detail a { color: var(--fn-mage) !important; }
 .detail a:hover { color: var(--accent) !important; }
 
 .detail .chip.is-active,
@@ -304,17 +390,16 @@
 .detail .aug-cat-chip.is-active {
     border-color: var(--accent) !important;
     color: var(--accent-soft) !important;
-    background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+    background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
 }
 
 .detail .ab-bar > span,
-.detail .bar-fill,
-.detail .meter > span {
+.detail .bar-fill {
     background: var(--accent) !important;
 }
 .detail .ab-bar.is-good > span,
 .detail .bar-fill.good {
-    background: var(--teal-1) !important;
+    background: var(--fn-marksman) !important;
 }
 .detail .aug:hover,
 .detail .item-card:hover,
@@ -323,17 +408,7 @@
 }
 .detail .rec-rank { color: var(--accent-soft) !important; }
 
-/* Gold rarity → rose */
-.aug-rarity-chip.rarity-kGold.is-active,
-.aug-cat-chip.cat-gold,
-.item-role-chip.role-common {
-    --role-color: var(--rose-1);
-    --cat-color: var(--rose-1);
-    border-color: var(--accent) !important;
-    color: var(--accent-soft) !important;
-}
-
-/* Patch-change chrome */
+/* Patch chrome */
 .change-chip {
     border-color: color-mix(in srgb, var(--accent) 28%, transparent) !important;
     background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
@@ -363,7 +438,7 @@ button.change-row:hover {
 .draft-mode-tab.is-active::after { background: var(--accent) !important; }
 .draft-leg.is-ally { color: var(--accent-soft) !important; }
 
-/* ---------- Preview banner ---------- */
+/* ========== Preview banner ========== */
 .washoku-preview-banner {
     position: sticky;
     top: 0;
@@ -388,6 +463,6 @@ button.change-row:hover {
     width: 14px; height: 14px; border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.2);
 }
-.washoku-preview-banner a { color: var(--teal-1); text-decoration: none; }
+.washoku-preview-banner a { color: var(--fn-mage); text-decoration: none; }
 .washoku-preview-banner a:hover { text-decoration: underline; }
 .washoku-preview-banner code { font-size: 11px; color: var(--text-muted); }

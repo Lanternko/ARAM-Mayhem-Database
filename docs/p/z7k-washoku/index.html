@@ -10,42 +10,41 @@
     html, body { margin: 0; background: #1a1a1a; color: #f2f0eb;
       font-family: "Noto Sans TC", -apple-system, sans-serif; }
     .boot { min-height: 100vh; display: grid; place-items: center; padding: 24px; text-align: center; }
-    .boot .err { color: #c4788a; margin-top: 12px; max-width: 36rem; }
+    .boot .err { color: #d45a6a; margin-top: 12px; max-width: 36rem; }
     .boot .hint { margin-top: 8px; font-size: 12px; color: #91989f; }
   </style>
 </head>
 <body>
   <div class="boot" id="boot">
     <div>
-      <div>載入正式站殼 + 和色 v3…</div>
-      <div class="hint">2×3 色階 · 無漸層 · 數字深色底 · 詳情實色 accent</div>
+      <div>載入正式站殼 + 和色 v4…</div>
+      <div class="hint">克制桃紅 accent · 功能色保留 · filter 框/底/字 · 無浮槓</div>
     </div>
   </div>
   <script>
   (async function () {
-    /* 2 hues × 3 steps — sat high → low */
+    /* Tier filter grammar: OP white+gold, T1–T2 桃紅 fill, T3+ muted */
     const TIER = {
-      OP: { color: '#d11b6b', bg: '#d11b6b' }, /* rose-1 */
-      T1: { color: '#b84d88', bg: '#b84d88' }, /* rose-2 */
-      T2: { color: '#8b6580', bg: '#8b6580' }, /* rose-3 */
-      T3: { color: '#2a6b6b', bg: '#2a6b6b' }, /* teal-1 */
-      T4: { color: '#4a787a', bg: '#4a787a' }, /* teal-2 */
-      T5: { color: '#91989f', bg: '#91989f' }, /* 銀鼠 */
+      OP: { color: '#c9a227', bg: '#f2f0eb' },
+      T1: { color: '#c45c8a', bg: '#c45c8a' },
+      T2: { color: '#8a3a5e', bg: '#8a3a5e' },
+      T3: { color: '#5b7fd4', bg: '#3a4560' },
+      T4: { color: '#91989f', bg: '#353535' },
+      T5: { color: '#6e6e6e', bg: '#2c2c2c' },
     };
 
-    /* Gold → restrained rose (no neon hot pink) */
+    /* Gold chrome → restrained gold (functional). Academy black → 墨. */
     const GOLD_MAP = {
-      '#f5c518': '#b84d88', '#F5C518': '#b84d88',
-      '#f5d780': '#d4a0be', '#F5D780': '#d4a0be',
-      '#e0a500': '#7a1948', '#9a7100': '#8b6580',
-      '#ffe9a3': '#d4a0be', '#ffe87a': '#d4a0be',
-      '#d99908': '#7a1948', '#231802': '#1a1a1a', '#14110a': '#1a1a1a',
+      '#f5c518': '#c9a227', '#F5C518': '#c9a227',
+      '#f5d780': '#e0c56a', '#F5D780': '#e0c56a',
+      '#e0a500': '#a8861a', '#9a7100': '#8a6e14',
+      '#ffe9a3': '#e0c56a', '#ffe87a': '#e0c56a',
+      '#d99908': '#a8861a', '#231802': '#1a1a1a', '#14110a': '#1a1a1a',
       '#0a0b0d': '#1a1a1a', '#0e151d': '#1a1a1a',
       '#101114': '#2c2c2c', '#0b0d0f': '#121212',
       '#161a20': '#353535', '#1a1d21': '#323232',
       '#1e2329': '#3a3a3a', '#0e1116': '#1a1a1a',
       '#1b2030': '#2c2c2c', '#11151d': '#1a1a1a',
-      '#7ddc8a': '#5c9e7a', '#ff9aa5': '#c4788a',
     };
 
     function rewriteGold(css) {
@@ -68,22 +67,19 @@
     const banner = `
 <div class="washoku-preview-banner" role="note">
   <div>
-    <strong>預覽 · 和色 v3</strong>
-    · 2×3：玫 OP/T1/T2 · 青磁 T3/T4 · 銀鼠 T5
-    · 無漸層／無紫環 · 勝率 pill 深色字
-    · 點英雄看詳情 · <code>noindex</code>
+    <strong>預覽 · 和色 v4</strong>
+    · accent 克制桃紅 · 功能色保留（金/法師藍…）
+    · 高勝率/高選用 = filter 白底黑字+框
+    · 無浮槓 · <code>noindex</code>
   </div>
   <div class="swatches" aria-hidden="true">
     <span class="swatch" style="background:#1a1a1a" title="墨"></span>
     <span class="swatch" style="background:#2c2c2c" title="消炭"></span>
-    <span class="swatch" style="background:#91989f" title="銀鼠"></span>
-    <span class="swatch" style="background:#d11b6b" title="OP"></span>
-    <span class="swatch" style="background:#b84d88" title="T1"></span>
-    <span class="swatch" style="background:#8b6580" title="T2"></span>
-    <span class="swatch" style="background:#2a6b6b" title="T3"></span>
-    <span class="swatch" style="background:#4a787a" title="T4"></span>
-    <span class="swatch" style="background:#5c9e7a" title="WR+"></span>
-    <span class="swatch" style="background:#c4788a" title="WR-"></span>
+    <span class="swatch" style="background:#c45c8a" title="accent"></span>
+    <span class="swatch" style="background:#c9a227" title="gold"></span>
+    <span class="swatch" style="background:#5b7fd4" title="mage"></span>
+    <span class="swatch" style="background:#5aaf6a" title="WR"></span>
+    <span class="swatch" style="background:#f2f0eb;border-color:#c45c8a" title="filter peak"></span>
   </div>
   <a href="https://arammeta.com/">← 回正式站</a>
 </div>`;
@@ -122,7 +118,7 @@
     }
 
     try {
-      const themeUrl = new URL('theme.css?v=20260808e', location.href).href;
+      const themeUrl = new URL('theme.css?v=20260808g', location.href).href;
       const themeRes = await fetch(themeUrl, { cache: 'no-cache' });
       if (!themeRes.ok) throw new Error('theme.css ' + themeRes.status);
       const theme = await themeRes.text();
