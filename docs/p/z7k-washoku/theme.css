@@ -1,155 +1,123 @@
 /* ============================================================
-   Washoku-Zen preview theme (hidden path)
-   - Large surfaces: 和色 neutrals (墨 / 消炭 / 銀鼠 / 白練)
-   - Signal hues only: 通貨玫 + Scarab 紫 (OP) + Div 青 (次訊號)
-   - Weaker tiers → lower saturation (filter ladder grammar)
-   Non-production. Injected after main site CSS.
+   Washoku-Zen preview (hidden) — CSS only, production shell
+   Neutrals: 墨 / 消炭 / 銀鼠 / 白練
+   Signals:  通貨玫 (high) · Scarab 紫 (OP only, no fog) · Div 青 (low)
+   Ladder:   OP ≥ T1 > T2 > T3 > T4 > T5  (weaker → lower sat / less bright)
+   Accent play: champion .detail panel (not grid fog)
    ============================================================ */
 
 :root {
     color-scheme: dark;
 
-    /* ---- 和色 neutrals (large area) ---- */
-    --bg: #1c1c1c;              /* 墨 */
-    --surface: #2b2b2b;         /* 消炭 */
-    --surface-2: #363636;       /* 鈍色寄り */
-    --surface-sunken: #141414;  /* 漆黒寄り */
+    /* 和色 neutrals — large surfaces */
+    --bg: #1c1c1c;                 /* 墨 */
+    --surface: #2b2b2b;            /* 消炭 */
+    --surface-2: #363636;
+    --surface-sunken: #141414;
     --surface-raised: #323232;
     --chip-bg: #323232;
     --overlay: #3a3a3a;
-    --text: #f3f3f2;            /* 白練 */
-    --text-muted: #91989f;      /* 銀鼠 */
-    --text-dim: #6b6b6b;        /* 薄鼠 */
-    --border: rgba(145, 152, 159, 0.18);
-    --border-strong: rgba(145, 152, 159, 0.32);
+    --text: #f3f3f2;               /* 白練 */
+    --text-muted: #91989f;         /* 銀鼠 */
+    --text-dim: #6b6b6b;
+    --text-secondary: #a8a8a8;
+    --border: rgba(145, 152, 159, 0.16);
+    --border-strong: rgba(145, 152, 159, 0.30);
 
-    /* ---- Signal: 通貨 Currency rose/magenta ladder ---- */
-    --accent: #ea57df;          /* currency high (chrome-friendly) */
-    --accent-soft: #ce6395;     /* currency mid */
-    --accent-hot: #ff0097;      /* currency T1 hot */
-    --accent-deep: #970e60;     /* currency T2 deep */
-    --accent-muted: #c48cab;    /* currency T5 soft */
-    --accent-faint: #aca0bc;    /* currency T6 → near 鼠 */
+    /* 通貨 Currency rose — primary accent ladder */
+    --accent: #ea57df;             /* chrome / selected */
+    --accent-soft: #f3a0eb;        /* soft text on dark */
+    --accent-hot: #ff0097;         /* T1 peak */
+    --accent-deep: #970e60;        /* pressed / deep */
+    --accent-mid: #ce6395;         /* mid rose */
+    --accent-muted: #c48cab;       /* low rose */
+    --accent-faint: #aca0bc;       /* near 鼠 */
     --accent-on: #1c1c1c;
 
-    /* ---- Signal: Div card teal (secondary) ---- */
+    /* Div card teal — secondary / low tiers / positive delta */
     --signal-div: #2be7cf;
     --signal-div-deep: #00667e;
     --signal-div-mid: #3a9ba6;
     --signal-div-soft: #91b493;
 
-    /* ---- Signal: Scarab (apex only) ---- */
+    /* Scarab — OP only (solid, no wash) */
     --signal-scarab: #ac37ff;
     --signal-scarab-blue: #276eff;
-    --signal-scarab-soft: #948cb9;
 
     --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    --header-h: 56px;
 }
 
 :root[data-theme="light"] {
     color-scheme: light;
-    --bg: #f3f3f0;              /* 生成寄り */
+    --bg: #f3f3f0;
     --surface: #fafaf7;
     --surface-2: #ebe8e1;
     --surface-sunken: #e5e2db;
     --surface-raised: #ffffff;
     --chip-bg: #ebe8e1;
     --overlay: #ffffff;
-    --text: #1c1c1c;            /* 墨 */
-    --text-muted: #727171;      /* 鈍色 */
+    --text: #1c1c1c;
+    --text-muted: #727171;
     --text-dim: #91989f;
+    --text-secondary: #5c5c5c;
     --border: rgba(28, 28, 28, 0.10);
     --border-strong: rgba(28, 28, 28, 0.18);
     --accent: #970e60;
-    --accent-soft: #ce6395;
+    --accent-soft: #c04098;
     --accent-hot: #ff0097;
     --accent-deep: #640064;
+    --accent-mid: #ce6395;
     --accent-muted: #c48cab;
     --accent-faint: #aca0bc;
     --accent-on: #f3f3f0;
     --shadow: 0 18px 50px rgba(28, 28, 28, 0.12);
 }
 
-/* Body wash: pure 墨, no cool-slate / gold academy feel */
+/* ---- Body: pure 墨, no cool slate / purple wash ---- */
 :root:not([data-theme="light"]) body {
-    background: linear-gradient(#1c1c1c, #1c1c1c 72%, #242422) 0 0 / cover no-repeat fixed !important;
+    background: #1c1c1c !important;
+}
+:root:not([data-theme="light"]) body::before,
+:root:not([data-theme="light"]) body::after {
+    background: none !important;
+    opacity: 0 !important;
 }
 
-/* ---- Remap hardcoded gold accents from main CSS ---- */
-.page-actions .icon-btn:hover,
-.page-actions .gh-star:hover {
-    color: var(--text) !important;
-}
-.tool-btn.active,
-.tool-btn.header-update-tab.active,
-button.tool-btn.active {
-    background: var(--accent) !important;
-    border-color: var(--accent) !important;
-    color: var(--accent-on) !important;
-}
-.tool-btn.is-on,
-.nav-tab.active,
-.view-tab.active,
-[aria-selected="true"].nav-tab {
-    border-color: var(--accent) !important;
-    color: var(--accent) !important;
-}
-.chip[data-role=""],
-.chip.is-active,
-.chip[aria-pressed="true"] {
-    --role-color: var(--accent);
-}
-
-/* Active underlines / gold hairlines → currency soft */
-.title-patch { color: var(--text-dim) !important; }
-
-/* ---- Tier ladder (data-tier attribute on blocks/pills) ----
-   OP  Scarab violet
-   T1  Currency hot rose
-   T2  Currency mid rose
-   T3  Div teal
-   T4  Div soft sage
-   T5  銀鼠 neutral
-*/
-.tier-block[data-tier="OP"] {
-    background:
-        radial-gradient(ellipse 70% 60% at 50% 60%,
-            rgba(172, 55, 255, 0.07) 0%, transparent 75%) !important;
-}
-.tier-block[data-tier="T1"] {
-    background:
-        radial-gradient(ellipse 70% 60% at 50% 60%,
-            rgba(255, 0, 151, 0.05) 0%, transparent 75%) !important;
-}
-.tier-block[data-tier="T2"] {
-    background:
-        radial-gradient(ellipse 70% 60% at 50% 60%,
-            rgba(206, 99, 149, 0.04) 0%, transparent 75%) !important;
-}
+/* Kill OP/T1 radial "紫霧" completely */
+.tier-block[data-tier="OP"],
+.tier-block[data-tier="T1"],
+.tier-block[data-tier="T2"],
 .tier-block[data-tier="T3"],
 .tier-block[data-tier="T4"],
 .tier-block[data-tier="T5"] {
     background: transparent !important;
+    box-shadow: none !important;
 }
 
-/* Override inline --tier-color / --tier-bg from baked HTML */
+/* ---- Tier ladder (bright/sat decreases down) ----
+   OP  Scarab solid violet   (apex, no fog)
+   T1  Currency hot #ff0097  brightest rose
+   T2  Currency mid #ea57df  still vivid, dimmer than T1
+   T3  Div deep #00667e      cooler + darker than T2
+   T4  Div soft #3a9ba6      muted
+   T5  銀鼠 #91989f
+*/
 .tier-block[data-tier="OP"] {
     --tier-color: #ac37ff !important;
-    --tier-bg: linear-gradient(135deg,
-        #ffffff 0%, #e8d5ff 22%, #c4a0ff 48%,
-        #ac37ff 72%, #276eff 100%) !important;
+    --tier-bg: #ac37ff !important;
 }
 .tier-block[data-tier="T1"] {
     --tier-color: #ff0097 !important;
     --tier-bg: #ff0097 !important;
 }
 .tier-block[data-tier="T2"] {
-    --tier-color: #ce6395 !important;
-    --tier-bg: #ce6395 !important;
+    --tier-color: #ea57df !important;
+    --tier-bg: #ea57df !important;
 }
 .tier-block[data-tier="T3"] {
-    --tier-color: #2be7cf !important;
-    --tier-bg: #2be7cf !important;
+    --tier-color: #00667e !important;
+    --tier-bg: #00667e !important;
 }
 .tier-block[data-tier="T4"] {
     --tier-color: #3a9ba6 !important;
@@ -160,79 +128,86 @@ button.tool-btn.active {
     --tier-bg: #91989f !important;
 }
 
-.tier-block[data-tier="OP"] .tier-pill {
-    color: #1c1c1c !important;
-    box-shadow:
-        0 0 12px rgba(172, 55, 255, 0.45),
-        0 0 28px rgba(39, 110, 255, 0.22),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.45) !important;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) !important;
-}
-.tier-block[data-tier="T1"] .tier-pill {
-    color: #fff !important;
-    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25) !important;
-}
+/* Pills: solid fills, readable text, no prism animation / purple halo */
+.tier-block[data-tier="OP"] .tier-pill,
+.tier-block[data-tier="T1"] .tier-pill,
 .tier-block[data-tier="T2"] .tier-pill,
-.tier-block[data-tier="T3"] .tier-pill {
-    color: #1c1c1c !important;
-    text-shadow: none !important;
-}
+.tier-block[data-tier="T3"] .tier-pill,
 .tier-block[data-tier="T4"] .tier-pill,
 .tier-block[data-tier="T5"] .tier-pill {
+    animation: none !important;
+    background: var(--tier-bg) !important;
+    background-size: auto !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+.tier-block[data-tier="OP"] .tier-pill::before,
+.tier-block[data-tier="OP"] .tier-pill::after {
+    display: none !important;
+}
+.tier-block[data-tier="OP"] .tier-pill,
+.tier-block[data-tier="T1"] .tier-pill {
+    color: #fff !important;
+}
+.tier-block[data-tier="T2"] .tier-pill {
     color: #1c1c1c !important;
 }
+.tier-block[data-tier="T3"] .tier-pill,
+.tier-block[data-tier="T4"] .tier-pill,
+.tier-block[data-tier="T5"] .tier-pill {
+    color: #f3f3f2 !important;
+}
 
-/* Champ card prism borders (OP / T1 gradient frames) */
-.tier-block[data-tier="OP"] .champ {
+/* Champ frames: thin solid tier border — no multi-stop prism fog */
+.tier-block[data-tier="OP"] .champ,
+.tier-block[data-tier="T1"] .champ,
+.tier-block[data-tier="T2"] .champ {
+    border-color: transparent !important;
     background:
         linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
-        linear-gradient(135deg,
-            #ffffff 0%, #e8d5ff 18%, #ac37ff 42%,
-            #276eff 68%, #cdcbff 100%) border-box !important;
+        linear-gradient(var(--tier-color), var(--tier-color)) border-box !important;
+    box-shadow: none !important;
 }
-.tier-block[data-tier="T1"] .champ {
-    background:
-        linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
-        linear-gradient(135deg,
-            #ffb0d9 0%, #ff0097 40%, #970e60 78%, #640064 100%) border-box !important;
+.tier-block[data-tier="OP"] .champ:hover,
+.tier-block[data-tier="T1"] .champ:hover,
+.tier-block[data-tier="T2"] .champ:hover {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tier-color) 55%, transparent) !important;
 }
 
-/* Light-theme champ frames stay readable */
-:root[data-theme="light"] .tier-block[data-tier="OP"] .champ,
-:root[data-theme="light"] .tier-block[data-tier="T1"] .champ {
-    background:
-        linear-gradient(#ffffff, #ffffff) padding-box,
-        linear-gradient(135deg,
-            #ffffff 0%, #e8d5ff 18%, #ac37ff 50%, #276eff 100%) border-box !important;
+/* ---- Chrome / nav: currency accent, no gold ---- */
+.site-header {
+    background: color-mix(in srgb, var(--bg) 88%, transparent) !important;
+    border-bottom-color: var(--border) !important;
 }
-:root[data-theme="light"] .tier-block[data-tier="T1"] .champ {
-    background:
-        linear-gradient(#ffffff, #ffffff) padding-box,
-        linear-gradient(135deg,
-            #ffb0d9 0%, #ff0097 45%, #970e60 100%) border-box !important;
+.brand-meta,
+.nav-tab.active,
+.nav-tab[aria-selected="true"] {
+    color: var(--accent) !important;
+}
+.nav-tab.active {
+    background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+.chip.is-active,
+.chip[aria-pressed="true"],
+.chip[data-role=""].is-active {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-on) !important;
+    --role-color: var(--accent);
+}
+.tool-btn.active,
+.tool-btn.is-on {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-on) !important;
+}
+.tool-btn:focus-visible,
+.nav-tab:focus-visible,
+.chip:focus-visible {
+    outline-color: var(--accent-soft) !important;
 }
 
-/* ---- Positive / negative deltas: Div teal vs soft currency rose ---- */
-.team-eval-wr.is-good .team-wr-num,
-.team-delta.tone-pos-2,
-.team-comp-row.is-good .ab-bar > span,
-.change-delta.up {
-    color: #2be7cf !important;
-}
-.team-delta.tone-pos-1 { color: #3a9ba6 !important; }
-.team-eval-wr.is-bad .team-wr-num,
-.team-delta.tone-neg-2,
-.team-comp-row.is-bad .ab-bar > span,
-.change-delta.down,
-.rec-row.least-fit .rec-rank {
-    color: #ce6395 !important;
-}
-.team-delta.tone-neg-1 { color: #c48cab !important; }
-
-.team-comp-row.is-good .ab-bar > span { background: #2be7cf !important; }
-.team-comp-row.is-bad .ab-bar > span { background: #ce6395 !important; }
-
-/* ---- Role chips: desaturate toward 和色 + 1 signal family ---- */
+/* Role chips — low-sat, same families only */
 .chip[data-role="Assassin"]  { --role-color: #ce6395; }
 .chip[data-role="Fighter"]   { --role-color: #c48cab; }
 .chip[data-role="Mage"]      { --role-color: #ac37ff; }
@@ -240,35 +215,149 @@ button.tool-btn.active {
 .chip[data-role="Support"]   { --role-color: #ea57df; }
 .chip[data-role="Tank"]      { --role-color: #948cb9; }
 
-.alt-role-badge[data-alt-role="Assassin"],
-.detail-role-tag[data-role="Assassin"] { --badge-color: #ce6395; --role-color: #ce6395; }
-.alt-role-badge[data-alt-role="Fighter"],
-.detail-role-tag[data-role="Fighter"]  { --badge-color: #c48cab; --role-color: #c48cab; }
-.alt-role-badge[data-alt-role="Mage"],
-.detail-role-tag[data-role="Mage"]     { --badge-color: #ac37ff; --role-color: #ac37ff; }
-.alt-role-badge[data-alt-role="Marksman"],
-.detail-role-tag[data-role="Marksman"] { --badge-color: #2be7cf; --role-color: #2be7cf; }
-.alt-role-badge[data-alt-role="Support"],
-.detail-role-tag[data-role="Support"]  { --badge-color: #ea57df; --role-color: #ea57df; }
-.alt-role-badge[data-alt-role="Tank"],
-.detail-role-tag[data-role="Tank"]     { --badge-color: #948cb9; --role-color: #948cb9; }
+/* Deltas: Div teal up / currency rose down */
+.team-eval-wr.is-good .team-wr-num,
+.team-delta.tone-pos-2,
+.change-delta.up { color: #2be7cf !important; }
+.team-delta.tone-pos-1 { color: #3a9ba6 !important; }
+.team-eval-wr.is-bad .team-wr-num,
+.team-delta.tone-neg-2,
+.change-delta.down,
+.rec-row.least-fit .rec-rank { color: #ce6395 !important; }
+.team-delta.tone-neg-1 { color: #c48cab !important; }
+.team-comp-row.is-good .ab-bar > span { background: #2be7cf !important; }
+.team-comp-row.is-bad .ab-bar > span { background: #ce6395 !important; }
 
-/* ---- Surfaces that still hardcode charcoal/gold ---- */
-.champ,
-.aug,
-.panel,
-.detail-panel,
-.settings-panel,
-.drawer,
-.modal-card {
-    /* let var(--surface*) win where they already use vars; nudge legacy */
+/* ============================================================
+   DETAIL PAGE — accent playground (currency + div + scarab sparingly)
+   ============================================================ */
+
+.detail {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+}
+.detail::before {
+    /* left accent rail — currency → div */
+    content: "";
+    position: absolute;
+    left: 0; top: 10px; bottom: 10px;
+    width: 3px;
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--accent-hot), var(--accent), var(--signal-div-deep));
+    opacity: 0.9;
+    pointer-events: none;
+}
+.detail-head .cname {
+    color: var(--text) !important;
+}
+.detail-avatar {
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent) !important;
+}
+.detail-role-tag {
+    background: color-mix(in srgb, var(--surface-2) 80%, transparent) !important;
+    border-color: var(--border) !important;
+}
+.detail-role-tag[data-role="Assassin"] { --role-color: #ce6395; }
+.detail-role-tag[data-role="Fighter"]  { --role-color: #c48cab; }
+.detail-role-tag[data-role="Mage"]     { --role-color: #ac37ff; }
+.detail-role-tag[data-role="Marksman"] { --role-color: #2be7cf; }
+.detail-role-tag[data-role="Support"]  { --role-color: #ea57df; }
+.detail-role-tag[data-role="Tank"]     { --role-color: #948cb9; }
+
+/* Section headings / tabs inside detail */
+.detail h3,
+.detail h4,
+.detail .section-title,
+.detail .detail-section-title,
+.detail .panel-title {
+    color: var(--accent-soft) !important;
+}
+.detail a {
+    color: var(--signal-div) !important;
+}
+.detail a:hover {
+    color: var(--accent) !important;
 }
 
-/* Preview ribbon so you know this is not production */
+/* WR / lift numbers in detail */
+.detail .wr,
+.detail .winrate,
+.detail .pct-good,
+.detail .lift-pos,
+.detail .alift.is-good {
+    color: var(--signal-div) !important;
+}
+.detail .pct-bad,
+.detail .lift-neg,
+.detail .alift.is-bad {
+    color: var(--accent-mid) !important;
+}
+
+/* Active filters / chips inside detail */
+.detail .chip.is-active,
+.detail .tool-btn.active,
+.detail .aug-rarity-chip.is-active,
+.detail .item-role-chip.is-active,
+.detail .aug-cat-chip.is-active {
+    border-color: var(--accent) !important;
+    color: var(--accent-soft) !important;
+    background: color-mix(in srgb, var(--accent) 16%, transparent) !important;
+}
+
+/* Gold rarity → currency rose family */
+.aug-rarity-chip.rarity-kGold.is-active,
+.aug-cat-chip.cat-gold,
+.item-role-chip.role-common {
+    --role-color: var(--accent-hot);
+    --cat-color: var(--accent-hot);
+    border-color: var(--accent) !important;
+    color: var(--accent-soft) !important;
+}
+
+/* Selected / focus rings in detail & pool */
+.detail :focus-visible,
+.champ:focus-visible {
+    outline-color: var(--accent-soft) !important;
+}
+
+/* Bars / progress in detail */
+.detail .ab-bar > span,
+.detail .bar-fill,
+.detail .meter > span {
+    background: linear-gradient(90deg, var(--accent-deep), var(--accent)) !important;
+}
+.detail .ab-bar.is-good > span,
+.detail .bar-fill.good {
+    background: linear-gradient(90deg, var(--signal-div-deep), var(--signal-div)) !important;
+}
+
+/* Item / aug cards in detail — hover border accent */
+.detail .aug:hover,
+.detail .item-card:hover,
+.detail .rec-row:hover {
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+.detail .rec-rank {
+    color: var(--accent-soft) !important;
+}
+
+/* Draft ally accents */
+.draft-mode-tab.is-active::after { background: var(--accent) !important; }
+.draft-leg.is-ally { color: var(--accent-soft) !important; }
+
+[class*="gold"],
+.rarity-kGold,
+.cat-gold {
+    --cat-color: var(--accent-hot);
+}
+
+/* Preview banner */
 .washoku-preview-banner {
     position: sticky;
     top: 0;
-    z-index: 9999;
+    z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -276,34 +365,21 @@ button.tool-btn.active {
     flex-wrap: wrap;
     padding: 8px 14px;
     background: #2b2b2b;
-    border-bottom: 1px solid rgba(234, 87, 223, 0.35);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
     color: #f3f3f2;
     font-size: 12px;
     font-family: "Noto Sans TC", -apple-system, sans-serif;
 }
-.washoku-preview-banner strong {
-    color: #ea57df;
-    font-weight: 600;
-}
+.washoku-preview-banner strong { color: var(--accent); font-weight: 600; }
 .washoku-preview-banner .swatches {
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
+    display: inline-flex; gap: 6px; align-items: center;
 }
 .washoku-preview-banner .swatch {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
+    width: 14px; height: 14px; border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.25);
 }
-.washoku-preview-banner a {
-    color: #2be7cf;
-    text-decoration: none;
-}
+.washoku-preview-banner a { color: var(--signal-div); text-decoration: none; }
 .washoku-preview-banner a:hover { text-decoration: underline; }
-
-/* Soften remaining pure gold utility classes if any slip through */
-[style*="#f5c518"],
-[style*="#f5d780"] {
-    /* can't override inline style attrs via CSS; JS helper handles those */
+.washoku-preview-banner code {
+    font-size: 11px; color: var(--text-muted);
 }
