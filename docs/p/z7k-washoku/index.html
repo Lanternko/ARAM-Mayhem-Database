@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="googlebot" content="noindex, nofollow">
+  <title>【預覽】和色 Zen · ARAM 大亂鬥資料庫</title>
+  <style>
+    html, body { margin: 0; background: #1c1c1c; color: #f3f3f2;
+      font-family: "Noto Sans TC", -apple-system, sans-serif; }
+    .boot {
+      min-height: 100vh; display: grid; place-items: center;
+      padding: 24px; text-align: center;
+    }
+    .boot code { color: #ea57df; }
+    .boot .err { color: #ce6395; margin-top: 12px; max-width: 36rem; }
+  </style>
+</head>
+<body>
+  <div class="boot" id="boot">
+    <div>
+      <div>載入和色 Zen 預覽…</div>
+      <div style="margin-top:8px;font-size:12px;color:#91989f">
+        墨 / 消炭 / 銀鼠 · 通貨玫 · Scarab 紫 · Div 青
+      </div>
+    </div>
+  </div>
+  <script>
+  (async function () {
+    const TIER = {
+      OP: { color: '#ac37ff', bg: 'linear-gradient(135deg,#ffffff 0%,#e8d5ff 22%,#c4a0ff 48%,#ac37ff 72%,#276eff 100%)' },
+      T1: { color: '#ff0097', bg: '#ff0097' },
+      T2: { color: '#ce6395', bg: '#ce6395' },
+      T3: { color: '#2be7cf', bg: '#2be7cf' },
+      T4: { color: '#3a9ba6', bg: '#3a9ba6' },
+      T5: { color: '#91989f', bg: '#91989f' },
+    };
+    const GOLD_MAP = {
+      '#f5c518': '#ea57df', '#F5C518': '#ea57df',
+      '#f5d780': '#ce6395', '#F5D780': '#ce6395',
+      '#e0a500': '#970e60', '#9a7100': '#c48cab',
+      '#231802': '#1c1c1c', '#14110a': '#1c1c1c',
+      '#0a0b0d': '#1c1c1c', '#0e151d': '#242422',
+      '#101114': '#2b2b2b', '#0b0d0f': '#141414',
+      '#161a20': '#363636', '#1a1d21': '#323232',
+      '#1e2329': '#3a3a3a', '#0e1116': '#1c1c1c',
+    };
+
+    function rewriteGold(css) {
+      let out = css;
+      for (const [a, b] of Object.entries(GOLD_MAP)) out = out.split(a).join(b);
+      return out;
+    }
+
+    function rewriteTierInline(html) {
+      return html.replace(
+        /data-tier=(['"])(OP|T[1-5])\1\s+style=(['"])--tier-color:[^'"]*;\s*--tier-bg:[^'"]*;\3/g,
+        (m, q1, tier, q2) => {
+          const conf = TIER[tier];
+          if (!conf) return m;
+          return `data-tier=${q1}${tier}${q1} style=${q2}--tier-color:${conf.color}; --tier-bg:${conf.bg};${q2}`;
+        }
+      );
+    }
+
+    const banner = `
+<div class="washoku-preview-banner" role="note">
+  <div>
+    <strong>預覽 · 和色 Zen</strong>
+    · 大面積：墨 / 消炭 / 銀鼠 · 訊號：通貨玫 + Scarab 紫 + Div 青
+    · 非正式站，<code>noindex</code>
+  </div>
+  <div class="swatches" aria-hidden="true">
+    <span class="swatch" style="background:#1c1c1c" title="墨"></span>
+    <span class="swatch" style="background:#2b2b2b" title="消炭"></span>
+    <span class="swatch" style="background:#91989f" title="銀鼠"></span>
+    <span class="swatch" style="background:#ea57df" title="通貨"></span>
+    <span class="swatch" style="background:#ac37ff" title="Scarab"></span>
+    <span class="swatch" style="background:#2be7cf" title="Div"></span>
+  </div>
+  <a href="/">← 回正式站</a>
+</div>`;
+
+    const bootJs = `
+<script id="washoku-zen-boot">
+(function () {
+  const TIER = ${JSON.stringify(TIER)};
+  function applyTier(root) {
+    (root || document).querySelectorAll('[data-tier]').forEach(el => {
+      const t = el.getAttribute('data-tier');
+      const conf = TIER[t];
+      if (!conf) return;
+      el.style.setProperty('--tier-color', conf.color);
+      el.style.setProperty('--tier-bg', conf.bg);
+    });
+  }
+  applyTier(document);
+  document.addEventListener('DOMContentLoaded', () => applyTier(document));
+  const mo = new MutationObserver(muts => {
+    for (const m of muts) {
+      m.addedNodes && m.addedNodes.forEach(n => {
+        if (n.nodeType === 1) applyTier(n);
+      });
+    }
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+})();
+<\/script>`;
+
+    try {
+      const themeUrl = new URL('theme.css', location.href).href;
+      const [htmlRes, themeRes] = await Promise.all([
+        fetch('/index.html', { cache: 'no-cache' }),
+        fetch(themeUrl, { cache: 'no-cache' }),
+      ]);
+      if (!htmlRes.ok) throw new Error('index.html ' + htmlRes.status);
+      if (!themeRes.ok) throw new Error('theme.css ' + themeRes.status);
+      let html = await htmlRes.text();
+      const theme = await themeRes.text();
+
+      html = html.replace(/(<style>)([\s\S]*?)(<\/style>)/, (_, a, body, c) => a + rewriteGold(body) + c);
+      html = rewriteTierInline(html);
+
+      html = html.replace(
+        /<title>[^<]*<\/title>/,
+        '<title>【預覽】和色 Zen · ARAM 大亂鬥資料庫</title>'
+      );
+      if (!/name=["']robots["']/.test(html)) {
+        html = html.replace('<head>', '<head><meta name="robots" content="noindex, nofollow">');
+      }
+
+      const themeTag = `<style id="washoku-zen-theme">\n${theme}\n</style>`;
+      html = html.replace('</head>', themeTag + '\n</head>');
+
+      if (/<body[^>]*>/.test(html)) {
+        html = html.replace(/<body([^>]*)>/, (m, attrs) => `<body${attrs}>${banner}`);
+      }
+      html = html.replace('</body>', bootJs + '\n</body>');
+
+      document.open();
+      document.write(html);
+      document.close();
+    } catch (err) {
+      const el = document.getElementById('boot');
+      if (el) {
+        el.innerHTML = `<div><div>預覽載入失敗</div><div class="err">${String(err && err.message || err)}</div>
+          <div style="margin-top:16px;font-size:12px;color:#91989f">請確認從站根提供靜態檔（例如 docs/ 的 http.server）</div></div>`;
+      }
+    }
+  })();
+  </script>
+</body>
+</html>

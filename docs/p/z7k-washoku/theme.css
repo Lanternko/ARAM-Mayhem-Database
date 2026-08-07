@@ -1,0 +1,309 @@
+/* ============================================================
+   Washoku-Zen preview theme (hidden path)
+   - Large surfaces: 和色 neutrals (墨 / 消炭 / 銀鼠 / 白練)
+   - Signal hues only: 通貨玫 + Scarab 紫 (OP) + Div 青 (次訊號)
+   - Weaker tiers → lower saturation (filter ladder grammar)
+   Non-production. Injected after main site CSS.
+   ============================================================ */
+
+:root {
+    color-scheme: dark;
+
+    /* ---- 和色 neutrals (large area) ---- */
+    --bg: #1c1c1c;              /* 墨 */
+    --surface: #2b2b2b;         /* 消炭 */
+    --surface-2: #363636;       /* 鈍色寄り */
+    --surface-sunken: #141414;  /* 漆黒寄り */
+    --surface-raised: #323232;
+    --chip-bg: #323232;
+    --overlay: #3a3a3a;
+    --text: #f3f3f2;            /* 白練 */
+    --text-muted: #91989f;      /* 銀鼠 */
+    --text-dim: #6b6b6b;        /* 薄鼠 */
+    --border: rgba(145, 152, 159, 0.18);
+    --border-strong: rgba(145, 152, 159, 0.32);
+
+    /* ---- Signal: 通貨 Currency rose/magenta ladder ---- */
+    --accent: #ea57df;          /* currency high (chrome-friendly) */
+    --accent-soft: #ce6395;     /* currency mid */
+    --accent-hot: #ff0097;      /* currency T1 hot */
+    --accent-deep: #970e60;     /* currency T2 deep */
+    --accent-muted: #c48cab;    /* currency T5 soft */
+    --accent-faint: #aca0bc;    /* currency T6 → near 鼠 */
+    --accent-on: #1c1c1c;
+
+    /* ---- Signal: Div card teal (secondary) ---- */
+    --signal-div: #2be7cf;
+    --signal-div-deep: #00667e;
+    --signal-div-mid: #3a9ba6;
+    --signal-div-soft: #91b493;
+
+    /* ---- Signal: Scarab (apex only) ---- */
+    --signal-scarab: #ac37ff;
+    --signal-scarab-blue: #276eff;
+    --signal-scarab-soft: #948cb9;
+
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f3f3f0;              /* 生成寄り */
+    --surface: #fafaf7;
+    --surface-2: #ebe8e1;
+    --surface-sunken: #e5e2db;
+    --surface-raised: #ffffff;
+    --chip-bg: #ebe8e1;
+    --overlay: #ffffff;
+    --text: #1c1c1c;            /* 墨 */
+    --text-muted: #727171;      /* 鈍色 */
+    --text-dim: #91989f;
+    --border: rgba(28, 28, 28, 0.10);
+    --border-strong: rgba(28, 28, 28, 0.18);
+    --accent: #970e60;
+    --accent-soft: #ce6395;
+    --accent-hot: #ff0097;
+    --accent-deep: #640064;
+    --accent-muted: #c48cab;
+    --accent-faint: #aca0bc;
+    --accent-on: #f3f3f0;
+    --shadow: 0 18px 50px rgba(28, 28, 28, 0.12);
+}
+
+/* Body wash: pure 墨, no cool-slate / gold academy feel */
+:root:not([data-theme="light"]) body {
+    background: linear-gradient(#1c1c1c, #1c1c1c 72%, #242422) 0 0 / cover no-repeat fixed !important;
+}
+
+/* ---- Remap hardcoded gold accents from main CSS ---- */
+.page-actions .icon-btn:hover,
+.page-actions .gh-star:hover {
+    color: var(--text) !important;
+}
+.tool-btn.active,
+.tool-btn.header-update-tab.active,
+button.tool-btn.active {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent-on) !important;
+}
+.tool-btn.is-on,
+.nav-tab.active,
+.view-tab.active,
+[aria-selected="true"].nav-tab {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+.chip[data-role=""],
+.chip.is-active,
+.chip[aria-pressed="true"] {
+    --role-color: var(--accent);
+}
+
+/* Active underlines / gold hairlines → currency soft */
+.title-patch { color: var(--text-dim) !important; }
+
+/* ---- Tier ladder (data-tier attribute on blocks/pills) ----
+   OP  Scarab violet
+   T1  Currency hot rose
+   T2  Currency mid rose
+   T3  Div teal
+   T4  Div soft sage
+   T5  銀鼠 neutral
+*/
+.tier-block[data-tier="OP"] {
+    background:
+        radial-gradient(ellipse 70% 60% at 50% 60%,
+            rgba(172, 55, 255, 0.07) 0%, transparent 75%) !important;
+}
+.tier-block[data-tier="T1"] {
+    background:
+        radial-gradient(ellipse 70% 60% at 50% 60%,
+            rgba(255, 0, 151, 0.05) 0%, transparent 75%) !important;
+}
+.tier-block[data-tier="T2"] {
+    background:
+        radial-gradient(ellipse 70% 60% at 50% 60%,
+            rgba(206, 99, 149, 0.04) 0%, transparent 75%) !important;
+}
+.tier-block[data-tier="T3"],
+.tier-block[data-tier="T4"],
+.tier-block[data-tier="T5"] {
+    background: transparent !important;
+}
+
+/* Override inline --tier-color / --tier-bg from baked HTML */
+.tier-block[data-tier="OP"] {
+    --tier-color: #ac37ff !important;
+    --tier-bg: linear-gradient(135deg,
+        #ffffff 0%, #e8d5ff 22%, #c4a0ff 48%,
+        #ac37ff 72%, #276eff 100%) !important;
+}
+.tier-block[data-tier="T1"] {
+    --tier-color: #ff0097 !important;
+    --tier-bg: #ff0097 !important;
+}
+.tier-block[data-tier="T2"] {
+    --tier-color: #ce6395 !important;
+    --tier-bg: #ce6395 !important;
+}
+.tier-block[data-tier="T3"] {
+    --tier-color: #2be7cf !important;
+    --tier-bg: #2be7cf !important;
+}
+.tier-block[data-tier="T4"] {
+    --tier-color: #3a9ba6 !important;
+    --tier-bg: #3a9ba6 !important;
+}
+.tier-block[data-tier="T5"] {
+    --tier-color: #91989f !important;
+    --tier-bg: #91989f !important;
+}
+
+.tier-block[data-tier="OP"] .tier-pill {
+    color: #1c1c1c !important;
+    box-shadow:
+        0 0 12px rgba(172, 55, 255, 0.45),
+        0 0 28px rgba(39, 110, 255, 0.22),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.45) !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+}
+.tier-block[data-tier="T1"] .tier-pill {
+    color: #fff !important;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25) !important;
+}
+.tier-block[data-tier="T2"] .tier-pill,
+.tier-block[data-tier="T3"] .tier-pill {
+    color: #1c1c1c !important;
+    text-shadow: none !important;
+}
+.tier-block[data-tier="T4"] .tier-pill,
+.tier-block[data-tier="T5"] .tier-pill {
+    color: #1c1c1c !important;
+}
+
+/* Champ card prism borders (OP / T1 gradient frames) */
+.tier-block[data-tier="OP"] .champ {
+    background:
+        linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+        linear-gradient(135deg,
+            #ffffff 0%, #e8d5ff 18%, #ac37ff 42%,
+            #276eff 68%, #cdcbff 100%) border-box !important;
+}
+.tier-block[data-tier="T1"] .champ {
+    background:
+        linear-gradient(var(--surface-raised), var(--surface-raised)) padding-box,
+        linear-gradient(135deg,
+            #ffb0d9 0%, #ff0097 40%, #970e60 78%, #640064 100%) border-box !important;
+}
+
+/* Light-theme champ frames stay readable */
+:root[data-theme="light"] .tier-block[data-tier="OP"] .champ,
+:root[data-theme="light"] .tier-block[data-tier="T1"] .champ {
+    background:
+        linear-gradient(#ffffff, #ffffff) padding-box,
+        linear-gradient(135deg,
+            #ffffff 0%, #e8d5ff 18%, #ac37ff 50%, #276eff 100%) border-box !important;
+}
+:root[data-theme="light"] .tier-block[data-tier="T1"] .champ {
+    background:
+        linear-gradient(#ffffff, #ffffff) padding-box,
+        linear-gradient(135deg,
+            #ffb0d9 0%, #ff0097 45%, #970e60 100%) border-box !important;
+}
+
+/* ---- Positive / negative deltas: Div teal vs soft currency rose ---- */
+.team-eval-wr.is-good .team-wr-num,
+.team-delta.tone-pos-2,
+.team-comp-row.is-good .ab-bar > span,
+.change-delta.up {
+    color: #2be7cf !important;
+}
+.team-delta.tone-pos-1 { color: #3a9ba6 !important; }
+.team-eval-wr.is-bad .team-wr-num,
+.team-delta.tone-neg-2,
+.team-comp-row.is-bad .ab-bar > span,
+.change-delta.down,
+.rec-row.least-fit .rec-rank {
+    color: #ce6395 !important;
+}
+.team-delta.tone-neg-1 { color: #c48cab !important; }
+
+.team-comp-row.is-good .ab-bar > span { background: #2be7cf !important; }
+.team-comp-row.is-bad .ab-bar > span { background: #ce6395 !important; }
+
+/* ---- Role chips: desaturate toward 和色 + 1 signal family ---- */
+.chip[data-role="Assassin"]  { --role-color: #ce6395; }
+.chip[data-role="Fighter"]   { --role-color: #c48cab; }
+.chip[data-role="Mage"]      { --role-color: #ac37ff; }
+.chip[data-role="Marksman"]  { --role-color: #2be7cf; }
+.chip[data-role="Support"]   { --role-color: #ea57df; }
+.chip[data-role="Tank"]      { --role-color: #948cb9; }
+
+.alt-role-badge[data-alt-role="Assassin"],
+.detail-role-tag[data-role="Assassin"] { --badge-color: #ce6395; --role-color: #ce6395; }
+.alt-role-badge[data-alt-role="Fighter"],
+.detail-role-tag[data-role="Fighter"]  { --badge-color: #c48cab; --role-color: #c48cab; }
+.alt-role-badge[data-alt-role="Mage"],
+.detail-role-tag[data-role="Mage"]     { --badge-color: #ac37ff; --role-color: #ac37ff; }
+.alt-role-badge[data-alt-role="Marksman"],
+.detail-role-tag[data-role="Marksman"] { --badge-color: #2be7cf; --role-color: #2be7cf; }
+.alt-role-badge[data-alt-role="Support"],
+.detail-role-tag[data-role="Support"]  { --badge-color: #ea57df; --role-color: #ea57df; }
+.alt-role-badge[data-alt-role="Tank"],
+.detail-role-tag[data-role="Tank"]     { --badge-color: #948cb9; --role-color: #948cb9; }
+
+/* ---- Surfaces that still hardcode charcoal/gold ---- */
+.champ,
+.aug,
+.panel,
+.detail-panel,
+.settings-panel,
+.drawer,
+.modal-card {
+    /* let var(--surface*) win where they already use vars; nudge legacy */
+}
+
+/* Preview ribbon so you know this is not production */
+.washoku-preview-banner {
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    background: #2b2b2b;
+    border-bottom: 1px solid rgba(234, 87, 223, 0.35);
+    color: #f3f3f2;
+    font-size: 12px;
+    font-family: "Noto Sans TC", -apple-system, sans-serif;
+}
+.washoku-preview-banner strong {
+    color: #ea57df;
+    font-weight: 600;
+}
+.washoku-preview-banner .swatches {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+.washoku-preview-banner .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.25);
+}
+.washoku-preview-banner a {
+    color: #2be7cf;
+    text-decoration: none;
+}
+.washoku-preview-banner a:hover { text-decoration: underline; }
+
+/* Soften remaining pure gold utility classes if any slip through */
+[style*="#f5c518"],
+[style*="#f5d780"] {
+    /* can't override inline style attrs via CSS; JS helper handles those */
+}
