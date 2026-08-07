@@ -37,7 +37,15 @@ from .process import get_credentials
 
 DEFAULT_QUEUES = {450, 2400}
 
-_MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450}
+# Fallback only: consulted when LCU history omits queueId (see
+# _queue_id_from_meta).  JADE is the 經典 mode (queue 4310, map 453) and was
+# missing, so those games resolved to -1 and went invisible to both the
+# classifier and _extract_target_game_ids.
+#
+# KIWI is ambiguous and cannot be fixed here: queue 2400 (大混戰) and 2450
+# (大混戰經典風) both report gameMode=KIWI, so a row missing queueId can only
+# be guessed at.  It maps to 2400 as the overwhelmingly more common case.
+_MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450, "JADE": 4310}
 
 _CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS games (
