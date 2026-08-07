@@ -7,42 +7,45 @@
   <meta name="googlebot" content="noindex, nofollow">
   <title>【預覽】和色 Zen · arammeta</title>
   <style>
-    html, body { margin: 0; background: #1c1c1c; color: #f3f3f2;
+    html, body { margin: 0; background: #1a1a1a; color: #f2f0eb;
       font-family: "Noto Sans TC", -apple-system, sans-serif; }
     .boot { min-height: 100vh; display: grid; place-items: center; padding: 24px; text-align: center; }
-    .boot .err { color: #ce6395; margin-top: 12px; max-width: 36rem; }
+    .boot .err { color: #c4788a; margin-top: 12px; max-width: 36rem; }
     .boot .hint { margin-top: 8px; font-size: 12px; color: #91989f; }
   </style>
 </head>
 <body>
   <div class="boot" id="boot">
     <div>
-      <div>載入正式站殼 + 和色主題…</div>
-      <div class="hint">來源：arammeta.com · 無紫霧 · T1&gt;T2&gt;T3 · 點英雄看詳情 accent</div>
+      <div>載入正式站殼 + 和色 v3…</div>
+      <div class="hint">2×3 色階 · 無漸層 · 數字深色底 · 詳情實色 accent</div>
     </div>
   </div>
   <script>
   (async function () {
-    /* Ladder: OP ≥ T1 > T2 > T3 > T4 > T5 (weaker = less bright) */
+    /* 2 hues × 3 steps — sat high → low */
     const TIER = {
-      OP: { color: '#ac37ff', bg: '#ac37ff' },
-      T1: { color: '#ff0097', bg: '#ff0097' },
-      T2: { color: '#ea57df', bg: '#ea57df' },
-      T3: { color: '#00667e', bg: '#00667e' },
-      T4: { color: '#3a9ba6', bg: '#3a9ba6' },
-      T5: { color: '#91989f', bg: '#91989f' },
+      OP: { color: '#d11b6b', bg: '#d11b6b' }, /* rose-1 */
+      T1: { color: '#b84d88', bg: '#b84d88' }, /* rose-2 */
+      T2: { color: '#8b6580', bg: '#8b6580' }, /* rose-3 */
+      T3: { color: '#2a6b6b', bg: '#2a6b6b' }, /* teal-1 */
+      T4: { color: '#4a787a', bg: '#4a787a' }, /* teal-2 */
+      T5: { color: '#91989f', bg: '#91989f' }, /* 銀鼠 */
     };
+
+    /* Gold → restrained rose (no neon hot pink) */
     const GOLD_MAP = {
-      '#f5c518': '#ea57df', '#F5C518': '#ea57df',
-      '#f5d780': '#f3a0eb', '#F5D780': '#f3a0eb',
-      '#e0a500': '#970e60', '#9a7100': '#c48cab',
-      '#ffe9a3': '#f3a0eb', '#ffe87a': '#f3a0eb',
-      '#d99908': '#970e60', '#231802': '#1c1c1c', '#14110a': '#1c1c1c',
-      '#0a0b0d': '#1c1c1c', '#0e151d': '#1c1c1c',
-      '#101114': '#2b2b2b', '#0b0d0f': '#141414',
-      '#161a20': '#363636', '#1a1d21': '#323232',
-      '#1e2329': '#3a3a3a', '#0e1116': '#1c1c1c',
-      '#1b2030': '#2b2b2b', '#11151d': '#1c1c1c',
+      '#f5c518': '#b84d88', '#F5C518': '#b84d88',
+      '#f5d780': '#d4a0be', '#F5D780': '#d4a0be',
+      '#e0a500': '#7a1948', '#9a7100': '#8b6580',
+      '#ffe9a3': '#d4a0be', '#ffe87a': '#d4a0be',
+      '#d99908': '#7a1948', '#231802': '#1a1a1a', '#14110a': '#1a1a1a',
+      '#0a0b0d': '#1a1a1a', '#0e151d': '#1a1a1a',
+      '#101114': '#2c2c2c', '#0b0d0f': '#121212',
+      '#161a20': '#353535', '#1a1d21': '#323232',
+      '#1e2329': '#3a3a3a', '#0e1116': '#1a1a1a',
+      '#1b2030': '#2c2c2c', '#11151d': '#1a1a1a',
+      '#7ddc8a': '#5c9e7a', '#ff9aa5': '#c4788a',
     };
 
     function rewriteGold(css) {
@@ -65,18 +68,22 @@
     const banner = `
 <div class="washoku-preview-banner" role="note">
   <div>
-    <strong>預覽 · 和色 Zen</strong>
-    · 正式站殼 · 無紫霧 · 階：OP紫 / T1熱玫 / T2玫 / T3深青 / T4青 / T5鼠
-    · 點英雄看詳情 accent · <code>noindex</code>
+    <strong>預覽 · 和色 v3</strong>
+    · 2×3：玫 OP/T1/T2 · 青磁 T3/T4 · 銀鼠 T5
+    · 無漸層／無紫環 · 勝率 pill 深色字
+    · 點英雄看詳情 · <code>noindex</code>
   </div>
   <div class="swatches" aria-hidden="true">
-    <span class="swatch" style="background:#1c1c1c" title="墨"></span>
-    <span class="swatch" style="background:#2b2b2b" title="消炭"></span>
+    <span class="swatch" style="background:#1a1a1a" title="墨"></span>
+    <span class="swatch" style="background:#2c2c2c" title="消炭"></span>
     <span class="swatch" style="background:#91989f" title="銀鼠"></span>
-    <span class="swatch" style="background:#ff0097" title="T1"></span>
-    <span class="swatch" style="background:#ea57df" title="T2"></span>
-    <span class="swatch" style="background:#00667e" title="T3"></span>
-    <span class="swatch" style="background:#ac37ff" title="OP"></span>
+    <span class="swatch" style="background:#d11b6b" title="OP"></span>
+    <span class="swatch" style="background:#b84d88" title="T1"></span>
+    <span class="swatch" style="background:#8b6580" title="T2"></span>
+    <span class="swatch" style="background:#2a6b6b" title="T3"></span>
+    <span class="swatch" style="background:#4a787a" title="T4"></span>
+    <span class="swatch" style="background:#5c9e7a" title="WR+"></span>
+    <span class="swatch" style="background:#c4788a" title="WR-"></span>
   </div>
   <a href="https://arammeta.com/">← 回正式站</a>
 </div>`;
@@ -107,26 +114,20 @@
 
     function shellCandidates() {
       const host = location.hostname;
-      const list = [];
-      list.push('https://arammeta.com/');
-      list.push('https://arammeta.com/index.html');
+      const list = ['https://arammeta.com/', 'https://arammeta.com/index.html'];
       if (host && host !== '127.0.0.1' && host !== 'localhost') {
-        list.unshift(location.origin + '/');
-        list.unshift(location.origin + '/index.html');
+        list.unshift(location.origin + '/', location.origin + '/index.html');
       }
       return list;
     }
 
     try {
-      // Cache-bust: GH Pages / Fastly can hold stale theme.css for minutes.
-      const themeUrl = new URL('theme.css?v=20260808c', location.href).href;
+      const themeUrl = new URL('theme.css?v=20260808e', location.href).href;
       const themeRes = await fetch(themeUrl, { cache: 'no-cache' });
       if (!themeRes.ok) throw new Error('theme.css ' + themeRes.status);
       const theme = await themeRes.text();
 
-      let html = null;
-      let used = null;
-      let lastErr = null;
+      let html = null, used = null, lastErr = null;
       for (const url of shellCandidates()) {
         try {
           const r = await fetch(url, { cache: 'no-cache', mode: 'cors' });
@@ -136,9 +137,7 @@
             lastErr = url + ' missing modern shell';
             continue;
           }
-          html = text;
-          used = url;
-          break;
+          html = text; used = url; break;
         } catch (e) {
           lastErr = url + ' ' + (e && e.message || e);
         }
@@ -155,8 +154,7 @@
         html = html.replace(/<head[^>]*>/i, m => m + '<base href="https://arammeta.com/">');
       }
 
-      const themeTag = `<style id="washoku-zen-theme">\n/* shell: ${used} */\n${theme}\n</style>`;
-      html = html.replace(/<\/head>/i, themeTag + '\n</head>');
+      html = html.replace(/<\/head>/i, `<style id="washoku-zen-theme">\n/* shell: ${used} */\n${theme}\n</style>\n</head>`);
       if (/<body[^>]*>/i.test(html)) {
         html = html.replace(/<body([^>]*)>/i, (m, attrs) => `<body${attrs}>${banner}`);
       }
@@ -168,8 +166,7 @@
     } catch (err) {
       const el = document.getElementById('boot');
       if (el) {
-        el.innerHTML = `<div><div>預覽載入失敗</div><div class="err">${String(err && err.message || err)}</div>
-          <div class="hint">需要能 fetch arammeta.com 與 theme.css</div></div>`;
+        el.innerHTML = `<div><div>預覽載入失敗</div><div class="err">${String(err && err.message || err)}</div></div>`;
       }
     }
   })();
