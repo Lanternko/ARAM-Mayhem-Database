@@ -171,7 +171,15 @@ CREATE INDEX IF NOT EXISTS idx_crawl_game_claims_status
 ON crawl_game_claims(status, claimed_at_ms, updated_at, game_id);
 """
 
-_MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450}
+# Fallback only: consulted when LCU history omits queueId (see
+# _queue_id_from_meta).  JADE is the 經典 mode (queue 4310, map 453) and was
+# missing, so those games resolved to -1 and went invisible to both the
+# classifier and _extract_target_game_ids.
+#
+# KIWI is ambiguous and cannot be fixed here: queue 2400 (大混戰) and 2450
+# (大混戰經典風) both report gameMode=KIWI, so a row missing queueId can only
+# be guessed at.  It maps to 2400 as the overwhelmingly more common case.
+_MODE_TO_QUEUE = {"KIWI": 2400, "ARAM": 450, "JADE": 4310}
 _SOURCE_PRIORITY = {
     "self": 0,
     "match": 10,
@@ -776,6 +784,7 @@ def _adaptive_target_game_ids(
     *,
     probe_size: int = 4,
     full_history_min_mayhem: int = 3,
+    puuid: str | None = None,
 ) -> list[str]:
     """Choose a cheap or full history expansion based on recent Mayhem density.
 
@@ -791,10 +800,22 @@ def _adaptive_target_game_ids(
         return all_target[:probe_size]
 
     probe = history[: max(0, int(probe_size))]
-    mayhem_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
-    if mayhem_count >= max(1, int(full_history_min_mayhem)):
+    # Control counts Mayhem only; treatment counts any target queue.  Under
+    # control a player whose first four rows are all 經典 scores zero and returns
+    # [], so the whole player is skipped, the visit records zero yield, and the
+    # backoff then defers them -- a pure 經典 player is effectively invisible.
+    # That is why 4310 volume tracks the Mayhem curve at a flat 2-4% instead of
+    # tracking its own popularity: it only ever arrives as a passenger on players
+    # we visited for Mayhem.
+    if puuid is not None and history_arm(puuid) == "treatment":
+        hit_count = sum(
+            _queue_id_from_meta(game) in target_queues for game in probe
+        )
+    else:
+        hit_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
+    if hit_count >= max(1, int(full_history_min_mayhem)):
         return all_target
-    if mayhem_count >= 1:
+    if hit_count >= 1:
         return _extract_target_game_ids(probe, target_queues)
     return []
 
@@ -1538,6 +1559,25 @@ _REVISIT_AB_ENABLED = True
 _REVISIT_TREATMENT_TARGET_GAMES = 15.0   # under 20 so nothing rolls off unseen
 _REVISIT_TREATMENT_MIN_MS = 6 * 3600_000
 _REVISIT_TREATMENT_MAX_MS = 21 * 24 * 3600_000
+
+
+_QUEUE_LOG_LABEL = {2400: "Mayhem", 450: "ARAM", 2450: "KiwiCl", 4310: "Jade"}
+
+_HISTORY_AB_ENABLED = True
+
+
+def history_arm(puuid: str) -> str:
+    """Stable 50/50 split for the history-expansion classifier.
+
+    Salted differently from revisit_arm on purpose.  Reusing that split would put
+    the same players in both treatments, making the two experiments perfectly
+    correlated and impossible to attribute separately -- they run concurrently, so
+    the salt is what keeps them independent.
+    """
+    if not _HISTORY_AB_ENABLED:
+        return "control"
+    digest = hashlib.sha1(b"history-ab|" + str(puuid).encode("utf-8", "replace")).digest()
+    return "treatment" if digest[0] & 1 else "control"
 
 
 def revisit_arm(puuid: str) -> str:
@@ -2890,7 +2930,9 @@ def run_snowball(
                 continue
             game_ids = _extract_target_game_ids(history, target_queues)
             if games_per_player == 0:
-                game_ids = _adaptive_target_game_ids(history, target_queues)
+                game_ids = _adaptive_target_game_ids(
+                    history, target_queues, puuid=puuid
+                )
             elif games_per_player is not None and games_per_player > 0:
                 game_ids = game_ids[:games_per_player]
             print(
@@ -2937,7 +2979,10 @@ def run_snowball(
                         _mark_game_done(con, record["game_id"])
                         stats.saved_games += 1
                         new_games_for_player += 1
-                        label = "Mayhem" if record["queue_id"] == 2400 else "ARAM"
+                        # Was "Mayhem" or else "ARAM", which printed every 經典
+                        # (4310) and 大混戰經典風 (2450) save as ARAM and made the
+                        # log actively misleading when diagnosing queue coverage.
+                        label = _QUEUE_LOG_LABEL.get(record["queue_id"], str(record["queue_id"]))
                         print(
                             f"  [saved] {label:<6}  game_id={record['game_id']}  "
                             f"patch={record['patch']}  total_saved={stats.saved_games}  "
