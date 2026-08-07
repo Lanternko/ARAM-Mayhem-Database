@@ -807,15 +807,24 @@ def _adaptive_target_game_ids(
     # That is why 4310 volume tracks the Mayhem curve at a flat 2-4% instead of
     # tracking its own popularity: it only ever arrives as a passenger on players
     # we visited for Mayhem.
-    if puuid is not None and history_arm(puuid) == "treatment":
-        hit_count = sum(
-            _queue_id_from_meta(game) in target_queues for game in probe
+    arm = history_arm(puuid) if puuid is not None else "control"
+    mayhem_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
+    other_count = 0
+    if arm != "control":
+        other_count = sum(
+            _queue_id_from_meta(game) in target_queues
+            and _queue_id_from_meta(game) != 2400
+            for game in probe
         )
-    else:
-        hit_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
-    if hit_count >= max(1, int(full_history_min_mayhem)):
+
+    # Full expansion is gated on Mayhem density under control and probe; only the
+    # 'full' arm lets a non-Mayhem queue earn the 20-game fetch.
+    full_trigger = mayhem_count
+    if arm == "full":
+        full_trigger = mayhem_count + other_count
+    if full_trigger >= max(1, int(full_history_min_mayhem)):
         return all_target
-    if hit_count >= 1:
+    if mayhem_count + other_count >= 1:
         return _extract_target_game_ids(probe, target_queues)
     return []
 
@@ -1567,17 +1576,29 @@ _HISTORY_AB_ENABLED = True
 
 
 def history_arm(puuid: str) -> str:
-    """Stable 50/50 split for the history-expansion classifier.
+    """Stable three-way split for the history-expansion classifier.
 
-    Salted differently from revisit_arm on purpose.  Reusing that split would put
-    the same players in both treatments, making the two experiments perfectly
-    correlated and impossible to attribute separately -- they run concurrently, so
-    the salt is what keeps them independent.
+    control  Mayhem-only classifier. A player with no Mayhem in the probe window
+             is skipped entirely -- the behaviour that made 經典 invisible.
+    probe    Any target queue makes the player visible, but qualifying on a
+             non-Mayhem queue only ever expands the probe window (~4 games).
+             Cheap visibility: 經典 players stop being skipped without any one of
+             them costing a full 20-game expansion.
+    full     Any target queue counts for everything, including the >=3 rule that
+             triggers a full 20-game expansion.
+
+    probe exists because the interesting question is not merely whether including
+    經典 helps, but whether it is worth a full expansion per player. Separating
+    the two isolates the cost from the benefit instead of confounding them.
+
+    Salted differently from revisit_arm on purpose: reusing that split would place
+    the same players in both concurrent treatments and make the experiments
+    impossible to attribute separately.
     """
     if not _HISTORY_AB_ENABLED:
         return "control"
     digest = hashlib.sha1(b"history-ab|" + str(puuid).encode("utf-8", "replace")).digest()
-    return "treatment" if digest[0] & 1 else "control"
+    return ("control", "probe", "full")[digest[0] % 3]
 
 
 def revisit_arm(puuid: str) -> str:
