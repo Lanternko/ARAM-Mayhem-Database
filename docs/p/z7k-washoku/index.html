@@ -7,49 +7,50 @@
   <meta name="googlebot" content="noindex, nofollow">
   <title>【預覽】和色 Zen · arammeta</title>
   <style>
-    html, body { margin: 0; background: #1a1a1a; color: #f2f0eb;
+    html, body { margin: 0; background: #1c1c1c; color: #fcfaf2;
       font-family: "Noto Sans TC", -apple-system, sans-serif; }
     .boot { min-height: 100vh; display: grid; place-items: center; padding: 24px; text-align: center; }
-    .boot .err { color: #d45a6a; margin-top: 12px; max-width: 36rem; }
-    .boot .hint { margin-top: 8px; font-size: 12px; color: #91989f; }
+    .boot .err { color: #cb4042; margin-top: 12px; max-width: 36rem; }
+    .boot .hint { margin-top: 8px; font-size: 12px; color: #91989f; max-width: 28rem; margin-left: auto; margin-right: auto; }
   </style>
 </head>
 <body>
   <div class="boot" id="boot">
     <div>
-      <div>載入正式站殼 + 和色 v4…</div>
-      <div class="hint">克制桃紅 accent · 功能色保留 · filter 框/底/字 · 無浮槓</div>
+      <div>載入正式站殼 + NIPPON COLORS 選色…</div>
+      <div class="hint">墨／藍墨茶底 · 今様注意 · 常磐勝／赤紅負 · 職業同飽和轉色相 · filter 峰強度</div>
     </div>
   </div>
   <script>
   (async function () {
-    /* Tier filter grammar: OP white+gold, T1–T2 桃紅 fill, T3+ muted */
+    /* Tier from library grammar — see PHILOSOPHY.md */
     const TIER = {
-      OP: { color: '#c9a227', bg: '#f2f0eb' },
-      T1: { color: '#c45c8a', bg: '#c45c8a' },
-      T2: { color: '#8a3a5e', bg: '#8a3a5e' },
-      T3: { color: '#5b7fd4', bg: '#3a4560' },
-      T4: { color: '#91989f', bg: '#353535' },
-      T5: { color: '#6e6e6e', bg: '#2c2c2c' },
+      OP: { color: '#d19826', bg: '#fffffb' }, /* 山吹茶框 + 胡粉底 */
+      T1: { color: '#d05a6e', bg: '#d05a6e' }, /* 今様 */
+      T2: { color: '#8e354a', bg: '#8e354a' }, /* 蘇芳 */
+      T3: { color: '#477dae', bg: '#3a4550' }, /* 瑠璃克制 */
+      T4: { color: '#91989f', bg: '#434343' }, /* 銀鼠／消炭 */
+      T5: { color: '#787d7b', bg: '#373c38' }, /* 素鼠／藍墨茶 */
     };
 
-    /* Gold chrome → restrained gold (functional). Academy black → 墨. */
-    const GOLD_MAP = {
-      '#f5c518': '#c9a227', '#F5C518': '#c9a227',
+    /* Academy gold → 山吹茶；冷灰底 → 墨／藍墨茶 */
+    const REWRITE = {
+      '#f5c518': '#d19826', '#F5C518': '#d19826',
       '#f5d780': '#e0c56a', '#F5D780': '#e0c56a',
-      '#e0a500': '#a8861a', '#9a7100': '#8a6e14',
+      '#e0a500': '#b07a14', '#9a7100': '#8a6e14',
       '#ffe9a3': '#e0c56a', '#ffe87a': '#e0c56a',
-      '#d99908': '#a8861a', '#231802': '#1a1a1a', '#14110a': '#1a1a1a',
-      '#0a0b0d': '#1a1a1a', '#0e151d': '#1a1a1a',
-      '#101114': '#2c2c2c', '#0b0d0f': '#121212',
-      '#161a20': '#353535', '#1a1d21': '#323232',
-      '#1e2329': '#3a3a3a', '#0e1116': '#1a1a1a',
-      '#1b2030': '#2c2c2c', '#11151d': '#1a1a1a',
+      '#d99908': '#b07a14', '#231802': '#1c1c1c', '#14110a': '#1c1c1c',
+      '#0a0b0d': '#1c1c1c', '#0e151d': '#1c1c1c',
+      '#101114': '#373c38', '#0b0d0f': '#161816',
+      '#161a20': '#434343', '#1a1d21': '#3f4440',
+      '#1e2329': '#4a4f4b', '#0e1116': '#1c1c1c',
+      '#1b2030': '#373c38', '#11151d': '#1c1c1c',
+      '#7ddc8a': '#5dac81', '#ff9aa5': '#e87a90',
     };
 
-    function rewriteGold(css) {
+    function rewrite(css) {
       let out = css;
-      for (const [a, b] of Object.entries(GOLD_MAP)) out = out.split(a).join(b);
+      for (const [a, b] of Object.entries(REWRITE)) out = out.split(a).join(b);
       return out;
     }
 
@@ -67,19 +68,20 @@
     const banner = `
 <div class="washoku-preview-banner" role="note">
   <div>
-    <strong>預覽 · 和色 v4</strong>
-    · accent 克制桃紅 · 功能色保留（金/法師藍…）
-    · 高勝率/高選用 = filter 白底黑字+框
-    · 無浮槓 · <code>noindex</code>
+    <strong>預覽 · NIPPON COLORS</strong>
+    · 色庫挑選（非單錨）· 墨／藍墨茶底 · 今様注意 · 常磐／赤紅 · 職業同 S 轉 H
+    · filter 峰：胡粉+墨字+框 · <code>noindex</code>
   </div>
   <div class="swatches" aria-hidden="true">
-    <span class="swatch" style="background:#1a1a1a" title="墨"></span>
-    <span class="swatch" style="background:#2c2c2c" title="消炭"></span>
-    <span class="swatch" style="background:#c45c8a" title="accent"></span>
-    <span class="swatch" style="background:#c9a227" title="gold"></span>
-    <span class="swatch" style="background:#5b7fd4" title="mage"></span>
-    <span class="swatch" style="background:#5aaf6a" title="WR"></span>
-    <span class="swatch" style="background:#f2f0eb;border-color:#c45c8a" title="filter peak"></span>
+    <span class="swatch" style="background:#1c1c1c" title="墨"></span>
+    <span class="swatch" style="background:#373c38" title="藍墨茶"></span>
+    <span class="swatch" style="background:#91989f" title="銀鼠"></span>
+    <span class="swatch" style="background:#d05a6e" title="今様"></span>
+    <span class="swatch" style="background:#d19826" title="山吹茶"></span>
+    <span class="swatch" style="background:#1b813e" title="常磐"></span>
+    <span class="swatch" style="background:#cb4042" title="赤紅"></span>
+    <span class="swatch" style="background:#477dae" title="瑠璃"></span>
+    <span class="swatch" style="background:#fffffb;border-color:#d05a6e" title="filter peak"></span>
   </div>
   <a href="https://arammeta.com/">← 回正式站</a>
 </div>`;
@@ -118,7 +120,7 @@
     }
 
     try {
-      const themeUrl = new URL('theme.css?v=20260808g', location.href).href;
+      const themeUrl = new URL('theme.css?v=20260808n', location.href).href;
       const themeRes = await fetch(themeUrl, { cache: 'no-cache' });
       if (!themeRes.ok) throw new Error('theme.css ' + themeRes.status);
       const theme = await themeRes.text();
@@ -140,7 +142,7 @@
       }
       if (!html) throw new Error('no shell: ' + lastErr);
 
-      html = html.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/i, (_, a, body, c) => a + rewriteGold(body) + c);
+      html = html.replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/i, (_, a, body, c) => a + rewrite(body) + c);
       html = rewriteTierInline(html);
       html = html.replace(/<title>[^<]*<\/title>/i, '<title>【預覽】和色 Zen · arammeta</title>');
       if (!/name=["']robots["']/.test(html)) {
