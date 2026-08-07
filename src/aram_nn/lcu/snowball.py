@@ -13,6 +13,7 @@ not champion composition.
 """
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -1378,21 +1379,55 @@ def _claim_next_player(
         """,
         (now_text, cutoff_ms),
     )
-    row = con.execute(
-        """
-        SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
-               seed_family
-        FROM crawl_queue
-        WHERE status = 'pending'
-          AND eligible_at_ms <= ?
-        ORDER BY discovered_match_created_ms DESC,
-                 priority ASC,
-                 depth ASC,
-                 updated_at ASC,
-                 queue_idx ASC
-        LIMIT 1
-        """
-    , (now_ms,)).fetchone()
+    # Reserve a share of claims for players never crawled before.
+    #
+    # Ordering by discovered_match_created_ms DESC means an active player jumps to
+    # the front every time they turn up in a new game, so the crawler re-milled a
+    # hot set of ~15k while 250k never-crawled players sat behind them: 91% of all
+    # claims were revisits, first visits ran at ~44/hour, and draining the backlog
+    # at that rate would have taken ~237 days. It is starvation, not a small player
+    # pool.
+    #
+    # Revisits are still worth doing -- they are how fresh games arrive -- so this
+    # reserves rather than reorders. Unvisited players are also worth more per
+    # scan: 6.21 games on a first visit against ~1.5 on a revisit, because a
+    # player's recent games are largely already captured via their teammates.
+    take_unvisited = (_claim_counter() % _UNVISITED_CLAIM_PERIOD) == 0
+    row = None
+    if take_unvisited:
+        row = con.execute(
+            """
+            SELECT q.queue_idx, q.puuid, q.depth, q.source,
+                   q.discovered_match_created_ms, q.seed_family
+            FROM crawl_queue q
+            WHERE q.status = 'pending'
+              AND q.eligible_at_ms <= ?
+              AND NOT EXISTS (
+                    SELECT 1 FROM crawl_seen s
+                    WHERE s.puuid = q.puuid AND s.process_count > 0)
+            ORDER BY q.discovered_match_created_ms DESC,
+                     q.priority ASC,
+                     q.depth ASC,
+                     q.queue_idx ASC
+            LIMIT 1
+            """
+        , (now_ms,)).fetchone()
+    if row is None:
+        row = con.execute(
+            """
+            SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
+                   seed_family
+            FROM crawl_queue
+            WHERE status = 'pending'
+              AND eligible_at_ms <= ?
+            ORDER BY discovered_match_created_ms DESC,
+                     priority ASC,
+                     depth ASC,
+                     updated_at ASC,
+                     queue_idx ASC
+            LIMIT 1
+            """
+        , (now_ms,)).fetchone()
     if row is None:
         con.commit()
         return None
@@ -1461,6 +1496,19 @@ def _next_pending_wait_ms(con: sqlite3.Connection) -> int | None:
 
 # Visits needed before a player's observed yield is trusted enough to throttle on.
 # Below this the crawler has no real evidence and keeps the flat base cooldown.
+# Every Nth claim is reserved for a never-crawled player. 1-in-3 lifts first
+# visits from ~9% of claims to ~33% without starving revisits in turn; at the
+# current ~5k games/hour that drains the 250k backlog in weeks rather than the
+# ~237 days the unreserved ordering implied. Falls through to the normal query
+# when no unvisited player is eligible, so an empty backlog costs nothing.
+_UNVISITED_CLAIM_PERIOD = 3
+_CLAIM_COUNT = itertools.count()
+
+
+def _claim_counter() -> int:
+    return next(_CLAIM_COUNT)
+
+
 _YIELD_BACKOFF_MIN_VISITS = 3
 # Yield (new games per visit) above which a player is treated as productive and
 # left completely alone.  Measured over 1.63M visits: players at >=0.5 account for
