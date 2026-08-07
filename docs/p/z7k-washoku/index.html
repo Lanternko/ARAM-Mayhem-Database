@@ -118,7 +118,8 @@
     }
 
     try {
-      const themeUrl = new URL('theme.css', location.href).href;
+      // Cache-bust: GH Pages / Fastly can hold stale theme.css for minutes.
+      const themeUrl = new URL('theme.css?v=20260808c', location.href).href;
       const themeRes = await fetch(themeUrl, { cache: 'no-cache' });
       if (!themeRes.ok) throw new Error('theme.css ' + themeRes.status);
       const theme = await themeRes.text();
