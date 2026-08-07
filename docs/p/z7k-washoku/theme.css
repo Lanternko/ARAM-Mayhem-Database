@@ -1,94 +1,95 @@
 /* ============================================================
-   Washoku-Zen preview v4 (hidden) — CSS only
-   ----------------------------------------------------------
-   Design principles:
-   1. Large surfaces = 和色 neutrals (墨 / 消炭 / 銀鼠 / 白練)
-   2. Chrome accent = restrained 桃紅 (not neon, not purple)
-   3. Functional color language KEPT (role = archetype, gold = gold)
-      — only sat/lightness standardized (not flattened to 2 hues)
-   4. Strength (WR / pick / tier) uses filter grammar:
-      框 border · 內底 background · 字 text (白底/白字/黑字 轉換)
-   5. No gradients. No floating detail rail. No purple rings.
+   Washoku-Zen preview — rebuilt from NIPPON COLORS library
+   Source: https://nipponcolors.com/ (full 250-color set; not one anchor)
+   Spec:   PHILOSOPHY.md
    ============================================================ */
 
 :root {
     color-scheme: dark;
 
-    /* ---- 和色 neutrals ---- */
-    --bg: #1a1a1a;
-    --surface: #2c2c2c;
-    --surface-2: #353535;
-    --surface-sunken: #121212;
-    --surface-raised: #323232;
-    --chip-bg: #333333;
-    --overlay: #3a3a3a;
-    --text: #f2f0eb;            /* 白練 */
-    --text-muted: #91989f;      /* 銀鼠 */
-    --text-dim: #6e6e6e;
-    --text-secondary: #a3a3a3;
-    --border: rgba(145, 152, 159, 0.14);
-    --border-strong: rgba(145, 152, 159, 0.28);
-    --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+    /* ---- Neutrals (大面積) ---- */
+    --bg: #1c1c1c;                 /* 墨 SUMI */
+    --surface: #373c38;            /* 藍墨茶 AISUMICHA */
+    --surface-2: #434343;          /* 消炭 KESHIZUMI */
+    --surface-sunken: #161816;
+    --surface-raised: #3f4440;
+    --chip-bg: #434343;
+    --overlay: #4a4f4b;
+    --text: #fcfaf2;               /* 白練 SHIRONERI */
+    --text-muted: #91989f;         /* 銀鼠 GINNEZUMI */
+    --text-dim: #787d7b;           /* 素鼠 SUNEZUMI */
+    --text-secondary: #a8aea9;
+    --border: rgba(145, 152, 159, 0.16);
+    --border-strong: rgba(145, 152, 159, 0.30);
+    --shadow: 0 16px 40px rgba(0, 0, 0, 0.50);
 
-    /* ---- Accent: 克制桃紅 ---- */
-    --accent: #c45c8a;
-    --accent-soft: #d9a0b8;
-    --accent-deep: #8a3a5e;
-    --accent-on: #1a1a1a;
+    /* ---- Accent / attention（克制；滿強度少用） ---- */
+    --accent: #d05a6e;             /* 今様 IMAYOH */
+    --accent-soft: #e87a90;        /* 薄紅 USUBENI — text on dark */
+    --accent-deep: #8e354a;        /* 蘇芳 SUOH */
+    --accent-on: #1c1c1c;
 
-    /* ---- Functional families (standardized sat ≈ 0.55–0.65, L mid) ---- */
-    --fn-assassin: #d45a6a;     /* red */
-    --fn-fighter:  #d4844a;     /* orange */
-    --fn-mage:     #5b7fd4;     /* blue / magic */
-    --fn-marksman: #5aaf6a;     /* green */
-    --fn-support:  #c45c8a;     /* 桃紅 = accent family */
-    --fn-tank:     #6b7db8;     /* steel blue (not neon purple) */
-    --fn-gold:     #c9a227;     /* gold augment — restrained */
-    --fn-gold-soft:#e0c56a;
+    /* ---- Gold / 貴重 ---- */
+    --gold: #d19826;               /* 山吹茶 YAMABUKICHA */
+    --gold-soft: #e0c56a;
 
-    /* ---- Strength filter triad helpers ---- */
-    --filter-white: #f2f0eb;
-    --filter-black: #121212;
+    /* ---- Win / Loss（各 1 相，改深淺） ---- */
+    --win: #1b813e;                /* 常磐 TOKIWA */
+    --win-soft: #5dac81;           /* 若竹 WAKATAKE */
+    --win-pale: #a8d8b9;           /* 白緑 BYAKUROKU */
+    --lose: #cb4042;               /* 赤紅 AKABENI */
+    --lose-soft: #e87a90;          /* 薄紅 */
+
+    /* ---- Filter peak ---- */
+    --filter-white: #fffffb;       /* 胡粉 GOFUN */
+    --filter-black: #1c1c1c;       /* 墨 */
+
+    /* ---- Roles: same S≈42 L≈48, hue only（庫種子正規化） ---- */
+    --fn-assassin: #ae4748;        /* 赤紅 */
+    --fn-fighter:  #ae6647;        /* 樺茶 */
+    --fn-mage:     #477dae;        /* 瑠璃 */
+    --fn-marksman: #47ae6a;        /* 常磐 */
+    --fn-support:  #ae4758;        /* 今様 */
+    --fn-tank:     #4795ae;        /* 藍鼠 */
 
     --header-h: 56px;
 }
 
 :root[data-theme="light"] {
     color-scheme: light;
-    --bg: #f3f1ec;
-    --surface: #faf9f6;
-    --surface-2: #ebe7e0;
-    --surface-sunken: #e5e1da;
-    --surface-raised: #ffffff;
-    --chip-bg: #ebe7e0;
-    --overlay: #ffffff;
-    --text: #1a1a1a;
-    --text-muted: #6b6b6b;
-    --text-dim: #8a8a8a;
-    --text-secondary: #555555;
-    --border: rgba(26, 26, 26, 0.10);
-    --border-strong: rgba(26, 26, 26, 0.18);
-    --shadow: 0 16px 40px rgba(26, 26, 26, 0.10);
+    --bg: #fcfaf2;                 /* 白練 page */
+    --surface: #fffffb;            /* 胡粉 */
+    --surface-2: #e8e6df;
+    --surface-sunken: #ebe8e0;
+    --surface-raised: #fffffb;
+    --chip-bg: #e8e6df;
+    --overlay: #fffffb;
+    --text: #1c1c1c;
+    --text-muted: #787d7b;
+    --text-dim: #91989f;
+    --text-secondary: #5a5e5c;
+    --border: rgba(28, 28, 28, 0.10);
+    --border-strong: rgba(28, 28, 28, 0.18);
+    --shadow: 0 16px 40px rgba(28, 28, 28, 0.10);
 
-    --accent: #a84872;
-    --accent-soft: #8a3a5e;
-    --accent-deep: #6a2a48;
-    --accent-on: #faf9f6;
+    --accent: #8e354a;             /* 蘇芳 — light 上稍深才克制 */
+    --accent-soft: #8e354a;
+    --accent-deep: #64363c;
+    --accent-on: #fcfaf2;
 
-    --fn-assassin: #c44a5a;
-    --fn-fighter:  #c4743a;
-    --fn-mage:     #4a6fc4;
-    --fn-marksman: #4a9a5a;
-    --fn-support:  #a84872;
-    --fn-tank:     #5a6ca8;
-    --fn-gold:     #a8861a;
-    --fn-gold-soft:#8a6e14;
+    --gold: #b07a14;
+    --gold-soft: #8a6e14;
+    --win: #1b813e;
+    --win-soft: #3d8f5c;
+    --win-pale: #5dac81;
+    --lose: #cb4042;
+    --lose-soft: #a83840;
 
-    --filter-white: #faf9f6;
-    --filter-black: #1a1a1a;
+    --filter-white: #fffffb;
+    --filter-black: #1c1c1c;
 }
 
-/* ========== Surfaces ========== */
+/* ========== Background ========== */
 :root:not([data-theme="light"]) body {
     background: var(--bg) !important;
 }
@@ -99,24 +100,26 @@
 }
 
 .site-header {
-    background: color-mix(in srgb, var(--bg) 92%, transparent) !important;
+    background: color-mix(in srgb, var(--bg) 90%, transparent) !important;
     border-bottom: 1px solid var(--border) !important;
     box-shadow: none !important;
 }
 
-/* Kill tier fog / purple rings / prism */
+/* Kill fog / prism / purple rings */
 .tier-block[data-tier] {
     background: transparent !important;
     box-shadow: none !important;
 }
 
-/* ========== Tier strength — filter triad (框/底/字) ==========
-   High value → white fill + black text + strong border
-   Mid → colored fill + white text
-   Low → dark fill + muted text / thin border
+/* ========== Tier：1～2 相 + filter 強度 ==========
+   OP  峰：胡粉底 + 墨字 + 山吹茶框
+   T1  高：今様底 + 白練字
+   T2  中深：蘇芳底 + 白練字
+   T3  功能藍（法師語意的克制版）低飽和
+   T4–T5 鼠系
 */
 .tier-block[data-tier="OP"] {
-    --tier-color: var(--fn-gold) !important;
+    --tier-color: var(--gold) !important;
     --tier-bg: var(--filter-white) !important;
 }
 .tier-block[data-tier="T1"] {
@@ -129,7 +132,7 @@
 }
 .tier-block[data-tier="T3"] {
     --tier-color: var(--fn-mage) !important;
-    --tier-bg: color-mix(in srgb, var(--fn-mage) 55%, var(--surface)) !important;
+    --tier-bg: color-mix(in srgb, var(--fn-mage) 35%, var(--surface)) !important;
 }
 .tier-block[data-tier="T4"] {
     --tier-color: var(--text-muted) !important;
@@ -149,29 +152,25 @@
     border: 1px solid var(--tier-color) !important;
     font-weight: 700 !important;
 }
-/* OP: 白底黑字 + 金框 (filter peak) */
 .tier-block[data-tier="OP"] .tier-pill {
     color: var(--filter-black) !important;
-    border-color: var(--fn-gold) !important;
     background: var(--filter-white) !important;
+    border-color: var(--gold) !important;
 }
 .tier-block[data-tier="OP"] .tier-pill::before,
 .tier-block[data-tier="OP"] .tier-pill::after {
     display: none !important;
 }
-/* T1–T2: 色底白字 */
 .tier-block[data-tier="T1"] .tier-pill,
 .tier-block[data-tier="T2"] .tier-pill {
-    color: var(--filter-white) !important;
+    color: var(--text) !important;
 }
-/* T3–T5: 暗底淺字 */
 .tier-block[data-tier="T3"] .tier-pill,
 .tier-block[data-tier="T4"] .tier-pill,
 .tier-block[data-tier="T5"] .tier-pill {
     color: var(--text) !important;
 }
 
-/* Champ frames: solid border only (filter 框) */
 .tier-block[data-tier] .champ {
     border: 2px solid var(--tier-color) !important;
     background: var(--surface-raised) !important;
@@ -179,34 +178,44 @@
     box-shadow: none !important;
 }
 .tier-block[data-tier="OP"] .champ {
-    border-color: var(--fn-gold) !important;
-    box-shadow: inset 0 0 0 1px var(--filter-white) !important;
+    border-color: var(--gold) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filter-white) 35%, transparent) !important;
 }
 .tier-block[data-tier] .champ:hover {
     box-shadow: none !important;
-    border-color: color-mix(in srgb, var(--tier-color) 75%, #fff) !important;
+    border-color: color-mix(in srgb, var(--tier-color) 70%, var(--text)) !important;
 }
 
-/* ========== Chrome accent (克制桃紅) ========== */
+/* ========== Chrome / buttons（filter 挪用：主按鈕 = 色底白字） ========== */
 .brand-meta { color: var(--accent) !important; }
+
 .nav-tab.active,
 .nav-tab[aria-selected="true"] {
-    color: var(--accent) !important;
+    color: var(--accent-soft) !important;
     background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
     box-shadow: inset 0 -2px 0 var(--accent) !important;
 }
+
+/* Primary / active controls */
+.tool-btn.active,
+.tool-btn.is-on,
 .change-tab.active,
 .chip.is-active,
-.chip[aria-pressed="true"],
-.tool-btn.active,
-.tool-btn.is-on {
+.chip[aria-pressed="true"] {
     background: var(--accent) !important;
-    border-color: var(--accent) !important;
-    color: var(--accent-on) !important;
+    border: 1px solid var(--accent) !important;
+    color: var(--text) !important;
 }
 .chip[data-role=""] { --role-color: var(--accent); }
 
-/* ========== Functional roles (standardized sat) ========== */
+/* Quiet default buttons */
+.tool-btn:not(.active):not(.is-on) {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+    color: var(--text-muted) !important;
+}
+
+/* ========== Roles（平行語言：同 S，只轉 H） ========== */
 .chip[data-role="Assassin"]  { --role-color: var(--fn-assassin); }
 .chip[data-role="Fighter"]   { --role-color: var(--fn-fighter); }
 .chip[data-role="Mage"]      { --role-color: var(--fn-mage); }
@@ -228,40 +237,36 @@
 .alt-role-badge[data-alt-role="Support"]  { --badge-color: var(--fn-support); }
 .alt-role-badge[data-alt-role="Tank"]     { --badge-color: var(--fn-tank); }
 
-/* Gold augment stays gold */
+/* Gold stays gold（功能語言） */
 .aug-rarity-chip.rarity-kGold.is-active,
 .aug-cat-chip.cat-gold,
 .item-role-chip.role-common {
-    --role-color: var(--fn-gold);
-    --cat-color: var(--fn-gold);
-    border-color: var(--fn-gold) !important;
-    color: var(--fn-gold-soft) !important;
-    background: color-mix(in srgb, var(--fn-gold) 14%, transparent) !important;
+    --role-color: var(--gold);
+    --cat-color: var(--gold);
+    border-color: var(--gold) !important;
+    color: var(--gold-soft) !important;
+    background: color-mix(in srgb, var(--gold) 12%, transparent) !important;
 }
 
-/* ========== WR ladder — filter triad, high end POP ==========
-   wr-5 peak: 白底 + 黑字 + 綠框
-   wr-4: 綠底 + 白字
-   wr-3: 中性字
-   wr-2: 淡玫字
-   wr-1 low: 玫底 + 白字
-*/
+/* ========== WR：常磐 1 相 + filter（高強度才跳） ========== */
 .aug .awr {
     border-radius: 4px !important;
-    padding: 0 4px !important;
+    padding: 0 5px !important;
     border: 1px solid transparent !important;
-    line-height: 1.4 !important;
+    line-height: 1.45 !important;
 }
+/* 峰：胡粉底 + 墨字 + 常磐框 */
 .aug .awr.wr-5 {
     color: var(--filter-black) !important;
     background: var(--filter-white) !important;
-    border-color: var(--fn-marksman) !important;
+    border-color: var(--win) !important;
     font-weight: 800 !important;
 }
+/* 高：常磐底 + 白字 */
 .aug .awr.wr-4 {
-    color: var(--filter-white) !important;
-    background: var(--fn-marksman) !important;
-    border-color: var(--fn-marksman) !important;
+    color: var(--text) !important;
+    background: var(--win) !important;
+    border-color: var(--win) !important;
     font-weight: 700 !important;
 }
 .aug .awr.wr-3 {
@@ -270,30 +275,26 @@
     font-weight: 600 !important;
 }
 .aug .awr.wr-2 {
-    color: color-mix(in srgb, var(--accent) 75%, var(--text-muted)) !important;
+    color: color-mix(in srgb, var(--lose) 70%, var(--text-muted)) !important;
     background: transparent !important;
     font-weight: 600 !important;
 }
+/* 低注意：赤紅底 + 白字 */
 .aug .awr.wr-1 {
-    color: var(--filter-white) !important;
-    background: var(--fn-assassin) !important;
-    border-color: var(--fn-assassin) !important;
+    color: var(--text) !important;
+    background: var(--lose) !important;
+    border-color: var(--lose) !important;
     font-weight: 700 !important;
 }
 
-/* ========== Pick ladder — filter triad, high pick OBVIOUS ==========
-   pick-5: 白底 + 黑字 + 桃紅框  (peak — 集齊 filter 三要素)
-   pick-4: 桃紅底 + 白字
-   pick-3: 桃紅字
-   pick-2: 近白字
-   pick-1: 銀鼠字
-*/
+/* ========== Pick：今様 1 相 + filter ========== */
 .aug .alift {
     border-radius: 4px !important;
-    padding: 0 4px !important;
+    padding: 0 5px !important;
     border: 1px solid transparent !important;
-    line-height: 1.4 !important;
+    line-height: 1.45 !important;
 }
+/* 峰：胡粉底 + 墨字 + 今様框 — 高選用最醒目 */
 .aug .alift.pick-5 {
     color: var(--filter-black) !important;
     background: var(--filter-white) !important;
@@ -301,7 +302,7 @@
     font-weight: 800 !important;
 }
 .aug .alift.pick-4 {
-    color: var(--filter-white) !important;
+    color: var(--text) !important;
     background: var(--accent) !important;
     border-color: var(--accent) !important;
     font-weight: 700 !important;
@@ -312,7 +313,7 @@
     font-weight: 650 !important;
 }
 .aug .alift.pick-2 {
-    color: var(--text) !important;
+    color: var(--text-muted) !important;
     background: transparent !important;
     font-weight: 600 !important;
 }
@@ -322,38 +323,38 @@
     font-weight: 500 !important;
 }
 
-/* Patch-change delta pills — dark ink on soft solid (readable) */
+/* Patch deltas：峰式可讀（墨字 + 胡粉底 + 框） */
 .change-delta.up {
     color: var(--filter-black) !important;
     background: var(--filter-white) !important;
-    border: 1px solid var(--fn-marksman) !important;
+    border: 1px solid var(--win) !important;
 }
 .change-delta.down {
     color: var(--filter-black) !important;
     background: var(--filter-white) !important;
-    border: 1px solid var(--fn-assassin) !important;
+    border: 1px solid var(--lose) !important;
 }
 
-/* Text-only deltas */
+/* Text-only deltas（中強度，不搶） */
 .team-delta.tone-pos-2,
 .team-eval-wr.is-good .team-wr-num,
 .alt-role-tooltip-lift.is-good,
 .fit-tip-lift.is-good,
-.augch-val.up,
-.mwr { color: var(--fn-marksman) !important; }
-.team-delta.tone-pos-1 { color: color-mix(in srgb, var(--fn-marksman) 70%, var(--text-muted)) !important; }
+.augch-val.up { color: var(--win-soft) !important; }
+.team-delta.tone-pos-1 { color: color-mix(in srgb, var(--win-soft) 70%, var(--text-muted)) !important; }
 .team-delta.tone-neg-2,
 .team-eval-wr.is-bad .team-wr-num,
 .alt-role-tooltip-lift.is-bad,
 .fit-tip-lift.is-bad,
-.augch-val.down { color: var(--fn-assassin) !important; }
-.team-delta.tone-neg-1 { color: color-mix(in srgb, var(--fn-assassin) 70%, var(--text-muted)) !important; }
+.augch-val.down { color: var(--lose-soft) !important; }
+.team-delta.tone-neg-1 { color: color-mix(in srgb, var(--lose-soft) 70%, var(--text-muted)) !important; }
 .team-delta.tone-zero { color: var(--text-muted) !important; }
+.mwr { color: var(--win-soft) !important; }
 
-.team-comp-row.is-good .ab-bar > span { background: var(--fn-marksman) !important; }
-.team-comp-row.is-bad .ab-bar > span { background: var(--fn-assassin) !important; }
+.team-comp-row.is-good .ab-bar > span { background: var(--win) !important; }
+.team-comp-row.is-bad .ab-bar > span { background: var(--lose) !important; }
 
-/* ========== Detail panel — no floating rail ========== */
+/* ========== Detail：無浮槓；面用藍墨茶 ========== */
 .detail {
     background: var(--surface) !important;
     border: 1px solid var(--border) !important;
@@ -381,7 +382,7 @@
     color: var(--accent-soft) !important;
 }
 .detail a { color: var(--fn-mage) !important; }
-.detail a:hover { color: var(--accent) !important; }
+.detail a:hover { color: var(--accent-soft) !important; }
 
 .detail .chip.is-active,
 .detail .tool-btn.active,
@@ -392,15 +393,10 @@
     color: var(--accent-soft) !important;
     background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
 }
-
 .detail .ab-bar > span,
-.detail .bar-fill {
-    background: var(--accent) !important;
-}
+.detail .bar-fill { background: var(--accent-deep) !important; }
 .detail .ab-bar.is-good > span,
-.detail .bar-fill.good {
-    background: var(--fn-marksman) !important;
-}
+.detail .bar-fill.good { background: var(--win) !important; }
 .detail .aug:hover,
 .detail .item-card:hover,
 .detail .rec-row:hover {
@@ -410,7 +406,7 @@
 
 /* Patch chrome */
 .change-chip {
-    border-color: color-mix(in srgb, var(--accent) 28%, transparent) !important;
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent) !important;
     background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
     color: var(--text-muted) !important;
 }
@@ -422,7 +418,7 @@
 .change-tab.active {
     background: var(--accent) !important;
     border-color: var(--accent) !important;
-    color: var(--accent-on) !important;
+    color: var(--text) !important;
 }
 .change-row {
     background: var(--surface) !important;
@@ -438,7 +434,7 @@ button.change-row:hover {
 .draft-mode-tab.is-active::after { background: var(--accent) !important; }
 .draft-leg.is-ally { color: var(--accent-soft) !important; }
 
-/* ========== Preview banner ========== */
+/* ========== Banner ========== */
 .washoku-preview-banner {
     position: sticky;
     top: 0;
@@ -455,13 +451,13 @@ button.change-row:hover {
     font-size: 12px;
     font-family: "Noto Sans TC", -apple-system, sans-serif;
 }
-.washoku-preview-banner strong { color: var(--accent); font-weight: 600; }
+.washoku-preview-banner strong { color: var(--accent-soft); font-weight: 600; }
 .washoku-preview-banner .swatches {
     display: inline-flex; gap: 5px; align-items: center;
 }
 .washoku-preview-banner .swatch {
     width: 14px; height: 14px; border-radius: 3px;
-    border: 1px solid rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.18);
 }
 .washoku-preview-banner a { color: var(--fn-mage); text-decoration: none; }
 .washoku-preview-banner a:hover { text-decoration: underline; }
