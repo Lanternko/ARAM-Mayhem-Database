@@ -313,6 +313,50 @@ def git_output(runner: CommandRunner, command: Sequence[str]) -> str:
     return result.stdout.strip()
 
 
+def merge_upstream(runner: CommandRunner, branch: str) -> str | None:
+    """Merge any new origin/<branch> commits so the publish push fast-forwards.
+
+    A commit pushed to the branch from anywhere else (another machine, the GitHub
+    web UI) used to wedge this publisher permanently: every cycle rebuilt, staged
+    and committed fine, then died on `push` with non-fast-forward -- the site sat
+    17 hours stale behind a perfectly healthy crawler.
+
+    Merge, not rebase: this repo's working tree is habitually dirty with WIP
+    scripts, which rebase refuses outright while merge tolerates as long as the
+    incoming commits leave those paths alone.  A real conflict is a human's call,
+    so abort and let the error reach the alert instead of guessing a resolution.
+    """
+    # Plain `fetch origin`, not `fetch origin <branch>`: only the configured
+    # refspec is guaranteed to update refs/remotes/origin/<branch>, which is what
+    # the behind-count below reads.  The branch-specific form only promises
+    # FETCH_HEAD.
+    _run_checked(runner, ["git", "fetch", "origin"])
+    behind = git_output(runner, ["git", "rev-list", "--count", f"HEAD..origin/{branch}"])
+    if behind in {"", "0"}:
+        return None
+    result = runner(["git", "merge", "--no-edit", f"origin/{branch}"])
+    if result.returncode != 0:
+        runner(["git", "merge", "--abort"])
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise RuntimeError(
+            f"cannot merge {behind} upstream commit(s) from origin/{branch}: {detail}"
+        )
+    return f"merged {behind} upstream commit(s) from origin/{branch}"
+
+
+def push_with_upstream_merge(runner: CommandRunner, branch: str) -> str | None:
+    """Push, absorbing upstream commits first and once more if we lose a race."""
+    merged = merge_upstream(runner, branch)
+    result = runner(["git", "push", "origin", branch])
+    if result.returncode == 0:
+        return merged
+    # Something landed upstream between our fetch and our push. Absorb it and
+    # retry once; a second failure is not a race and should surface.
+    merged = merge_upstream(runner, branch) or merged
+    _run_checked(runner, ["git", "push", "origin", branch])
+    return merged
+
+
 def dirty_paths(runner: CommandRunner, paths: Sequence[Path]) -> list[str]:
     command = ["git", "status", "--short", "--", *(str(path) for path in paths)]
     output = git_output(runner, command)
@@ -595,7 +639,7 @@ def publish_static_site_once(
 
     _run_checked(runner, ["git", "add", *(str(path) for path in DEFAULT_DOC_PATHS)])
     _run_checked(runner, ["git", "commit", "-m", message])
-    _run_checked(runner, ["git", "push", "origin", branch])
+    merged = push_with_upstream_merge(runner, branch)
     commit = git_output(runner, ["git", "rev-parse", "--short", "HEAD"])
 
     _record_patch_state(
@@ -623,6 +667,7 @@ def publish_static_site_once(
         "threshold": decision.threshold,
         "growth_ratio": decision.growth_ratio,
         "commit": commit,
+        "merged_upstream": merged,
         "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
         "commit_message": message,
         "comp_fit": comp_fit,

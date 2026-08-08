@@ -10,6 +10,7 @@ from aram_nn.site.static_publish import (
     CommandResult,
     decide_static_publish,
     publish_static_site_once,
+    push_with_upstream_merge,
 )
 
 
@@ -194,6 +195,56 @@ class StaticSitePublishTests(unittest.TestCase):
         self.assertEqual(result["reason"], "check only: delta 3 >= 3")
         self.assertTrue(result["would_publish"])
         self.assertEqual(commands, [])
+
+    def test_merges_upstream_commits_instead_of_wedging_on_push(self) -> None:
+        """A commit pushed to main from elsewhere must not stall the publisher:
+        fetch, merge it, then push.  Left unmerged this rejected every push for
+        17 hours while the crawler kept collecting."""
+        commands: list[list[str]] = []
+        merged = False
+
+        def runner(command: Sequence[str]) -> CommandResult:
+            nonlocal merged
+            cmd = list(command)
+            commands.append(cmd)
+            if cmd[:2] == ["git", "merge"]:
+                merged = True
+                return CommandResult(0, "")
+            if cmd[:3] == ["git", "rev-list", "--count"]:
+                return CommandResult(0, "0\n" if merged else "6\n")
+            if cmd[:2] == ["git", "push"]:
+                if not merged:
+                    return CommandResult(1, "", "! [rejected] main -> main (non-fast-forward)")
+                return CommandResult(0, "")
+            return CommandResult(0, "")
+
+        self.assertEqual(push_with_upstream_merge(runner, "main"), "merged 6 upstream commit(s) from origin/main")
+        self.assertIn(["git", "fetch", "origin"], commands)
+        self.assertIn(["git", "merge", "--no-edit", "origin/main"], commands)
+        self.assertEqual(commands[-1], ["git", "push", "origin", "main"])
+        # Nothing upstream -> no merge commit manufactured, just a plain push.
+        commands.clear()
+        self.assertIsNone(push_with_upstream_merge(runner, "main"))
+        self.assertFalse(any(cmd[:2] == ["git", "merge"] for cmd in commands))
+
+    def test_merge_conflict_surfaces_instead_of_publishing(self) -> None:
+        """A genuine conflict is a human's call -- abort and raise so the alert
+        fires, rather than pushing a half-merged tree to the live site."""
+        commands: list[list[str]] = []
+
+        def runner(command: Sequence[str]) -> CommandResult:
+            cmd = list(command)
+            commands.append(cmd)
+            if cmd[:3] == ["git", "rev-list", "--count"]:
+                return CommandResult(0, "2\n")
+            if cmd[:2] == ["git", "merge"] and "--abort" not in cmd:
+                return CommandResult(1, "", "CONFLICT (content): docs/index.html")
+            return CommandResult(0, "")
+
+        with self.assertRaisesRegex(RuntimeError, "cannot merge 2 upstream commit"):
+            push_with_upstream_merge(runner, "main")
+        self.assertIn(["git", "merge", "--abort"], commands)
+        self.assertFalse(any(cmd[:2] == ["git", "push"] for cmd in commands))
 
     def test_refuses_to_overwrite_dirty_docs_outputs(self) -> None:
         def runner(command: Sequence[str]) -> CommandResult:
