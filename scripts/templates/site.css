@@ -27,6 +27,18 @@
         --accent: #f5c518;
         --accent-soft: #f5d780;
         --accent-on: #14110a;
+        /* Zen data surfaces: one quiet elevation for panels, one for their
+           contents, and low-chroma status colors so the numbers stay legible
+           without turning every row into a traffic light. */
+        --panel-surface: oklch(0.235 0.012 255);
+        --panel-inner: oklch(0.195 0.012 255);
+        --panel-quiet: oklch(0.175 0.01 255);
+        --panel-line: color-mix(in oklab, var(--text) 11%, transparent);
+        --panel-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
+        --wr-positive: oklch(0.78 0.055 155);
+        --wr-negative: oklch(0.79 0.05 18);
+        --wr-neutral: var(--text-muted);
+        --pick-quiet: var(--text-muted);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -60,6 +72,15 @@
         --accent: #e0a500;
         --accent-soft: #9a7100;
         --accent-on: #14110a;
+        --panel-surface: oklch(0.99 0.006 250);
+        --panel-inner: oklch(0.965 0.008 250);
+        --panel-quiet: oklch(0.95 0.008 250);
+        --panel-line: color-mix(in oklab, var(--text) 14%, transparent);
+        --panel-shadow: 0 10px 32px rgba(31, 41, 55, 0.10);
+        --wr-positive: oklch(0.53 0.09 155);
+        --wr-negative: oklch(0.56 0.09 18);
+        --wr-neutral: var(--text-muted);
+        --pick-quiet: var(--text-muted);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -8134,6 +8155,144 @@
     @media (max-width: 520px) {
         .game-board-ranks { display: none; }
         .game-settle-actions { grid-template-columns: 1fr; }
+    }
+
+    /* ===== Zen panel pass ==================================================
+       Keep the information architecture intact, but make the surfaces quiet:
+       the panel is one elevation, its rows are one step below, and color is
+       reserved for the headline state.  Pick-rate tiers still differ by
+       weight, not hue. */
+    .detail,
+    .side-panel {
+        background: var(--panel-surface);
+        border: 1px solid var(--panel-line);
+        box-shadow: var(--panel-shadow);
+    }
+    .detail-main-tabs > .detail-tab-rail {
+        background: color-mix(in oklab, var(--panel-surface) 94%, transparent);
+        border-bottom-color: var(--panel-line);
+    }
+    .core-group,
+    .item-build-card,
+    .boot-rail-row,
+    .cg-option,
+    .rec-row {
+        background: var(--panel-inner);
+        border-color: var(--panel-line);
+    }
+    .item-build-card,
+    .core-group,
+    .boot-rail-row.is-top {
+        border-color: color-mix(in oklab, var(--accent) 18%, var(--panel-line));
+    }
+    .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--accent) 5%, var(--panel-inner));
+    }
+    .item-build-icons,
+    .cg-option,
+    .boot-rail-row,
+    .rec-row:hover {
+        background: var(--panel-quiet);
+    }
+    .item-build-card:hover,
+    .rec-row:hover {
+        border-color: color-mix(in oklab, var(--accent) 30%, var(--panel-line));
+        transform: none;
+    }
+    .rec-row.least-fit,
+    .rec-row.least-fit:hover {
+        background: var(--panel-inner);
+        border-color: var(--panel-line);
+    }
+
+    /* WR carries meaning; it no longer competes with pick-rate decoration. */
+    .team-eval-wr.is-good .team-wr-num,
+    .item-build-wr.is-good,
+    .cg-core-wr.is-good,
+    .cg-option-wr.is-good,
+    .boot-rail-wr.is-good,
+    .aug .awr.wr-5,
+    .aug .awr.wr-4 {
+        color: var(--wr-positive);
+    }
+    .team-eval-wr.is-bad .team-wr-num,
+    .item-build-wr.is-bad,
+    .cg-core-wr.is-bad,
+    .cg-option-wr.is-bad,
+    .boot-rail-wr.is-bad,
+    .aug .awr.wr-1,
+    .aug .awr.wr-2 {
+        color: var(--wr-negative);
+    }
+    .team-eval-wr.is-even .team-wr-num,
+    .item-build-wr.is-even,
+    .cg-core-wr.is-even,
+    .cg-option-wr.is-even,
+    .boot-rail-wr.is-even,
+    .aug .awr.wr-3 {
+        color: var(--wr-neutral);
+    }
+    .team-delta.tone-pos-2,
+    .team-delta.tone-pos-1,
+    .team-delta.tone-neg-1,
+    .team-delta.tone-neg-2,
+    .team-delta.tone-zero {
+        color: var(--wr-neutral);
+    }
+    .team-delta.tone-pos-2,
+    .team-delta.tone-neg-2 { font-weight: 700; }
+
+    /* Selection frequency is useful context, not a second heatmap. */
+    .cluster-pick.pick-1,
+    .cg-option-pick.pick-1,
+    .item-build-pick.pick-1,
+    .boot-rail-pick.pick-1,
+    .cg-core-share.pick-1,
+    .aug .alift.pick-1,
+    .cluster-pick.pick-2,
+    .cg-option-pick.pick-2,
+    .item-build-pick.pick-2,
+    .boot-rail-pick.pick-2,
+    .cg-core-share.pick-2,
+    .aug .alift.pick-2,
+    .cluster-pick.pick-3,
+    .cg-option-pick.pick-3,
+    .item-build-pick.pick-3,
+    .boot-rail-pick.pick-3,
+    .cg-core-share.pick-3,
+    .aug .alift.pick-3,
+    .cluster-pick.pick-4,
+    .cg-option-pick.pick-4,
+    .item-build-pick.pick-4,
+    .boot-rail-pick.pick-4,
+    .cg-core-share.pick-4,
+    .aug .alift.pick-4,
+    .cluster-pick.pick-5,
+    .cg-option-pick.pick-5,
+    .item-build-pick.pick-5,
+    .boot-rail-pick.pick-5,
+    .cg-core-share.pick-5,
+    .aug .alift.pick-5 {
+        color: var(--pick-quiet);
+    }
+    .cluster-pick.pick-1,
+    .cg-option-pick.pick-1,
+    .item-build-pick.pick-1,
+    .boot-rail-pick.pick-1,
+    .cg-core-share.pick-1,
+    .aug .alift.pick-1 { font-weight: 500; }
+    .cluster-pick.pick-5,
+    .cg-option-pick.pick-5,
+    .item-build-pick.pick-5,
+    .boot-rail-pick.pick-5,
+    .cg-core-share.pick-5,
+    .aug .alift.pick-5 { font-weight: 700; }
+    .lane-badge.lane-popular,
+    .lane-badge.lane-winrate,
+    .lane-badge.lane-combined {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--panel-line);
     }
 
     /* Reduced-motion override.  Disables prismShift / shineSweep /
