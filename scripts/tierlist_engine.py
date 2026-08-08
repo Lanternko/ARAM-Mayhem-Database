@@ -260,6 +260,24 @@ PATCH_CHANGE_CHAMP_ITEM_BASELINE_MIN_GAMES = 120
 # build purely because the absolute count is easier to hit.
 PATCH_CHANGE_CHAMP_ITEM_MIN_PICK = 0.015
 PATCH_CHANGE_ITEM_PRIOR_GAMES = 200
+# Confidence weight applied to the item patch-change DELTA before ranking.
+#
+# PATCH_CHANGE_ITEM_PRIOR_GAMES already shrinks each patch's win rate toward its
+# own global mean, but it does that to the two rates independently -- it does not
+# stop a thin item's delta from being noise. Ranking on the raw delta therefore
+# handed the leaderboard to the smallest samples: 闇影戰戟 (2,644 uses) and
+# 鬼使彎刀 (1,580) led the fallers while 芮蘭颶風箭 (225,160) sat tenth, a 143x
+# spread in sample size across a single board.
+#
+# Ranking now uses delta * n/(n+k) with n the harmonic mean of the two patches'
+# usage, so an item needs volume in BOTH patches to hold a place. Replaying the
+# shipped board: at k=0 the top three fallers are 2.6k / 92.9k / 1.6k uses; at
+# k=5000 they are 92.9k / 225.2k / 54.3k. Beyond ~5000 the ordering stops
+# changing and larger values only compress every number, so this is the knee.
+#
+# Displayed win rates and deltas are untouched -- this only decides who makes the
+# board, the same split the augment board already draws between display and rank.
+PATCH_CHANGE_ITEM_RANK_PRIOR_GAMES = 5000
 PATCH_CHANGE_CHAMP_ITEM_PRIOR_GAMES = 30
 PATCH_CHANGE_AUGMENT_CURRENT_MIN_GAMES = 500
 PATCH_CHANGE_AUGMENT_BASELINE_MIN_GAMES = 800
@@ -3760,6 +3778,21 @@ def settled_core_item_patch_stats(
     )
     return _apply_core_item_baselines(counters, champ_records)
 
+def _item_rank_score(row: dict) -> float:
+    """Confidence-weighted delta used only for ordering the patch-change board.
+
+    Weighs by the harmonic mean of the two patches' usage so an item cannot rank
+    on volume it only had in one of them; see PATCH_CHANGE_ITEM_RANK_PRIOR_GAMES.
+    """
+    current = float(row.get("current_games", 0) or 0)
+    baseline = float(row.get("baseline_games", 0) or 0)
+    total = current + baseline
+    effective = (2.0 * current * baseline / total) if total else 0.0
+    denom = effective + PATCH_CHANGE_ITEM_RANK_PRIOR_GAMES
+    weight = (effective / denom) if denom else 0.0
+    return float(row.get("delta", 0.0) or 0.0) * weight
+
+
 def compute_patch_changes(
     db_path: Path,
     queue_id: int,
@@ -3995,8 +4028,8 @@ def compute_patch_changes(
         "minChampItemPick": PATCH_CHANGE_CHAMP_ITEM_MIN_PICK,
         "heroRisers": sorted(hero_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
         "heroFallers": sorted(hero_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
-        "itemRisers": sorted(item_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
-        "itemFallers": sorted(item_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
+        "itemRisers": sorted(item_rows, key=_item_rank_score, reverse=True)[:PATCH_CHANGE_TOP_N],
+        "itemFallers": sorted(item_rows, key=_item_rank_score)[:PATCH_CHANGE_TOP_N],
         "champItemRisers": sorted(champ_item_rows, key=lambda row: row["delta"], reverse=True)[:PATCH_CHANGE_TOP_N],
         "champItemFallers": sorted(champ_item_rows, key=lambda row: row["delta"])[:PATCH_CHANGE_TOP_N],
         "minAugmentGames": PATCH_CHANGE_AUGMENT_CURRENT_MIN_GAMES,
