@@ -1,0 +1,464 @@
+/* ============================================================
+   Washoku-Zen preview — rebuilt from NIPPON COLORS library
+   Source: https://nipponcolors.com/ (full 250-color set; not one anchor)
+   Spec:   PHILOSOPHY.md
+   ============================================================ */
+
+:root {
+    color-scheme: dark;
+
+    /* ---- Neutrals (大面積) ---- */
+    --bg: #1c1c1c;                 /* 墨 SUMI */
+    --surface: #373c38;            /* 藍墨茶 AISUMICHA */
+    --surface-2: #434343;          /* 消炭 KESHIZUMI */
+    --surface-sunken: #161816;
+    --surface-raised: #3f4440;
+    --chip-bg: #434343;
+    --overlay: #4a4f4b;
+    --text: #fcfaf2;               /* 白練 SHIRONERI */
+    --text-muted: #91989f;         /* 銀鼠 GINNEZUMI */
+    --text-dim: #787d7b;           /* 素鼠 SUNEZUMI */
+    --text-secondary: #a8aea9;
+    --border: rgba(145, 152, 159, 0.16);
+    --border-strong: rgba(145, 152, 159, 0.30);
+    --shadow: 0 16px 40px rgba(0, 0, 0, 0.50);
+
+    /* ---- Accent / attention（克制；滿強度少用） ---- */
+    --accent: #d05a6e;             /* 今様 IMAYOH */
+    --accent-soft: #e87a90;        /* 薄紅 USUBENI — text on dark */
+    --accent-deep: #8e354a;        /* 蘇芳 SUOH */
+    --accent-on: #1c1c1c;
+
+    /* ---- Gold / 貴重 ---- */
+    --gold: #d19826;               /* 山吹茶 YAMABUKICHA */
+    --gold-soft: #e0c56a;
+
+    /* ---- Win / Loss（各 1 相，改深淺） ---- */
+    --win: #1b813e;                /* 常磐 TOKIWA */
+    --win-soft: #5dac81;           /* 若竹 WAKATAKE */
+    --win-pale: #a8d8b9;           /* 白緑 BYAKUROKU */
+    --lose: #cb4042;               /* 赤紅 AKABENI */
+    --lose-soft: #e87a90;          /* 薄紅 */
+
+    /* ---- Filter peak ---- */
+    --filter-white: #fffffb;       /* 胡粉 GOFUN */
+    --filter-black: #1c1c1c;       /* 墨 */
+
+    /* ---- Roles: same S≈42 L≈48, hue only（庫種子正規化） ---- */
+    --fn-assassin: #ae4748;        /* 赤紅 */
+    --fn-fighter:  #ae6647;        /* 樺茶 */
+    --fn-mage:     #477dae;        /* 瑠璃 */
+    --fn-marksman: #47ae6a;        /* 常磐 */
+    --fn-support:  #ae4758;        /* 今様 */
+    --fn-tank:     #4795ae;        /* 藍鼠 */
+
+    --header-h: 56px;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #fcfaf2;                 /* 白練 page */
+    --surface: #fffffb;            /* 胡粉 */
+    --surface-2: #e8e6df;
+    --surface-sunken: #ebe8e0;
+    --surface-raised: #fffffb;
+    --chip-bg: #e8e6df;
+    --overlay: #fffffb;
+    --text: #1c1c1c;
+    --text-muted: #787d7b;
+    --text-dim: #91989f;
+    --text-secondary: #5a5e5c;
+    --border: rgba(28, 28, 28, 0.10);
+    --border-strong: rgba(28, 28, 28, 0.18);
+    --shadow: 0 16px 40px rgba(28, 28, 28, 0.10);
+
+    --accent: #8e354a;             /* 蘇芳 — light 上稍深才克制 */
+    --accent-soft: #8e354a;
+    --accent-deep: #64363c;
+    --accent-on: #fcfaf2;
+
+    --gold: #b07a14;
+    --gold-soft: #8a6e14;
+    --win: #1b813e;
+    --win-soft: #3d8f5c;
+    --win-pale: #5dac81;
+    --lose: #cb4042;
+    --lose-soft: #a83840;
+
+    --filter-white: #fffffb;
+    --filter-black: #1c1c1c;
+}
+
+/* ========== Background ========== */
+:root:not([data-theme="light"]) body {
+    background: var(--bg) !important;
+}
+:root:not([data-theme="light"]) body::before,
+:root:not([data-theme="light"]) body::after {
+    content: none !important;
+    display: none !important;
+}
+
+.site-header {
+    background: color-mix(in srgb, var(--bg) 90%, transparent) !important;
+    border-bottom: 1px solid var(--border) !important;
+    box-shadow: none !important;
+}
+
+/* Kill fog / prism / purple rings */
+.tier-block[data-tier] {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* ========== Tier：1～2 相 + filter 強度 ==========
+   OP  峰：胡粉底 + 墨字 + 山吹茶框
+   T1  高：今様底 + 白練字
+   T2  中深：蘇芳底 + 白練字
+   T3  功能藍（法師語意的克制版）低飽和
+   T4–T5 鼠系
+*/
+.tier-block[data-tier="OP"] {
+    --tier-color: var(--gold) !important;
+    --tier-bg: var(--filter-white) !important;
+}
+.tier-block[data-tier="T1"] {
+    --tier-color: var(--accent) !important;
+    --tier-bg: var(--accent) !important;
+}
+.tier-block[data-tier="T2"] {
+    --tier-color: var(--accent-deep) !important;
+    --tier-bg: var(--accent-deep) !important;
+}
+.tier-block[data-tier="T3"] {
+    --tier-color: var(--fn-mage) !important;
+    --tier-bg: color-mix(in srgb, var(--fn-mage) 35%, var(--surface)) !important;
+}
+.tier-block[data-tier="T4"] {
+    --tier-color: var(--text-muted) !important;
+    --tier-bg: var(--surface-2) !important;
+}
+.tier-block[data-tier="T5"] {
+    --tier-color: var(--text-dim) !important;
+    --tier-bg: var(--surface) !important;
+}
+
+.tier-block[data-tier] .tier-pill {
+    animation: none !important;
+    background: var(--tier-bg) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border: 1px solid var(--tier-color) !important;
+    font-weight: 700 !important;
+}
+.tier-block[data-tier="OP"] .tier-pill {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border-color: var(--gold) !important;
+}
+.tier-block[data-tier="OP"] .tier-pill::before,
+.tier-block[data-tier="OP"] .tier-pill::after {
+    display: none !important;
+}
+.tier-block[data-tier="T1"] .tier-pill,
+.tier-block[data-tier="T2"] .tier-pill {
+    color: var(--text) !important;
+}
+.tier-block[data-tier="T3"] .tier-pill,
+.tier-block[data-tier="T4"] .tier-pill,
+.tier-block[data-tier="T5"] .tier-pill {
+    color: var(--text) !important;
+}
+
+.tier-block[data-tier] .champ {
+    border: 2px solid var(--tier-color) !important;
+    background: var(--surface-raised) !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+.tier-block[data-tier="OP"] .champ {
+    border-color: var(--gold) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--filter-white) 35%, transparent) !important;
+}
+.tier-block[data-tier] .champ:hover {
+    box-shadow: none !important;
+    border-color: color-mix(in srgb, var(--tier-color) 70%, var(--text)) !important;
+}
+
+/* ========== Chrome / buttons（filter 挪用：主按鈕 = 色底白字） ========== */
+.brand-meta { color: var(--accent) !important; }
+
+.nav-tab.active,
+.nav-tab[aria-selected="true"] {
+    color: var(--accent-soft) !important;
+    background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+    box-shadow: inset 0 -2px 0 var(--accent) !important;
+}
+
+/* Primary / active controls */
+.tool-btn.active,
+.tool-btn.is-on,
+.change-tab.active,
+.chip.is-active,
+.chip[aria-pressed="true"] {
+    background: var(--accent) !important;
+    border: 1px solid var(--accent) !important;
+    color: var(--text) !important;
+}
+.chip[data-role=""] { --role-color: var(--accent); }
+
+/* Quiet default buttons */
+.tool-btn:not(.active):not(.is-on) {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+    color: var(--text-muted) !important;
+}
+
+/* ========== Roles（平行語言：同 S，只轉 H） ========== */
+.chip[data-role="Assassin"]  { --role-color: var(--fn-assassin); }
+.chip[data-role="Fighter"]   { --role-color: var(--fn-fighter); }
+.chip[data-role="Mage"]      { --role-color: var(--fn-mage); }
+.chip[data-role="Marksman"]  { --role-color: var(--fn-marksman); }
+.chip[data-role="Support"]   { --role-color: var(--fn-support); }
+.chip[data-role="Tank"]      { --role-color: var(--fn-tank); }
+
+.detail-role-tag[data-role="Assassin"] { --role-color: var(--fn-assassin); }
+.detail-role-tag[data-role="Fighter"]  { --role-color: var(--fn-fighter); }
+.detail-role-tag[data-role="Mage"]     { --role-color: var(--fn-mage); }
+.detail-role-tag[data-role="Marksman"] { --role-color: var(--fn-marksman); }
+.detail-role-tag[data-role="Support"]  { --role-color: var(--fn-support); }
+.detail-role-tag[data-role="Tank"]     { --role-color: var(--fn-tank); }
+
+.alt-role-badge[data-alt-role="Assassin"] { --badge-color: var(--fn-assassin); }
+.alt-role-badge[data-alt-role="Fighter"]  { --badge-color: var(--fn-fighter); }
+.alt-role-badge[data-alt-role="Mage"]     { --badge-color: var(--fn-mage); }
+.alt-role-badge[data-alt-role="Marksman"] { --badge-color: var(--fn-marksman); }
+.alt-role-badge[data-alt-role="Support"]  { --badge-color: var(--fn-support); }
+.alt-role-badge[data-alt-role="Tank"]     { --badge-color: var(--fn-tank); }
+
+/* Gold stays gold（功能語言） */
+.aug-rarity-chip.rarity-kGold.is-active,
+.aug-cat-chip.cat-gold,
+.item-role-chip.role-common {
+    --role-color: var(--gold);
+    --cat-color: var(--gold);
+    border-color: var(--gold) !important;
+    color: var(--gold-soft) !important;
+    background: color-mix(in srgb, var(--gold) 12%, transparent) !important;
+}
+
+/* ========== WR：常磐 1 相 + filter（高強度才跳） ========== */
+.aug .awr {
+    border-radius: 4px !important;
+    padding: 0 5px !important;
+    border: 1px solid transparent !important;
+    line-height: 1.45 !important;
+}
+/* 峰：胡粉底 + 墨字 + 常磐框 */
+.aug .awr.wr-5 {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border-color: var(--win) !important;
+    font-weight: 800 !important;
+}
+/* 高：常磐底 + 白字 */
+.aug .awr.wr-4 {
+    color: var(--text) !important;
+    background: var(--win) !important;
+    border-color: var(--win) !important;
+    font-weight: 700 !important;
+}
+.aug .awr.wr-3 {
+    color: var(--text-secondary) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+.aug .awr.wr-2 {
+    color: color-mix(in srgb, var(--lose) 70%, var(--text-muted)) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+/* 低注意：赤紅底 + 白字 */
+.aug .awr.wr-1 {
+    color: var(--text) !important;
+    background: var(--lose) !important;
+    border-color: var(--lose) !important;
+    font-weight: 700 !important;
+}
+
+/* ========== Pick：今様 1 相 + filter ========== */
+.aug .alift {
+    border-radius: 4px !important;
+    padding: 0 5px !important;
+    border: 1px solid transparent !important;
+    line-height: 1.45 !important;
+}
+/* 峰：胡粉底 + 墨字 + 今様框 — 高選用最醒目 */
+.aug .alift.pick-5 {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border-color: var(--accent) !important;
+    font-weight: 800 !important;
+}
+.aug .alift.pick-4 {
+    color: var(--text) !important;
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    font-weight: 700 !important;
+}
+.aug .alift.pick-3 {
+    color: var(--accent-soft) !important;
+    background: transparent !important;
+    font-weight: 650 !important;
+}
+.aug .alift.pick-2 {
+    color: var(--text-muted) !important;
+    background: transparent !important;
+    font-weight: 600 !important;
+}
+.aug .alift.pick-1 {
+    color: var(--text-dim) !important;
+    background: transparent !important;
+    font-weight: 500 !important;
+}
+
+/* Patch deltas：峰式可讀（墨字 + 胡粉底 + 框） */
+.change-delta.up {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border: 1px solid var(--win) !important;
+}
+.change-delta.down {
+    color: var(--filter-black) !important;
+    background: var(--filter-white) !important;
+    border: 1px solid var(--lose) !important;
+}
+
+/* Text-only deltas（中強度，不搶） */
+.team-delta.tone-pos-2,
+.team-eval-wr.is-good .team-wr-num,
+.alt-role-tooltip-lift.is-good,
+.fit-tip-lift.is-good,
+.augch-val.up { color: var(--win-soft) !important; }
+.team-delta.tone-pos-1 { color: color-mix(in srgb, var(--win-soft) 70%, var(--text-muted)) !important; }
+.team-delta.tone-neg-2,
+.team-eval-wr.is-bad .team-wr-num,
+.alt-role-tooltip-lift.is-bad,
+.fit-tip-lift.is-bad,
+.augch-val.down { color: var(--lose-soft) !important; }
+.team-delta.tone-neg-1 { color: color-mix(in srgb, var(--lose-soft) 70%, var(--text-muted)) !important; }
+.team-delta.tone-zero { color: var(--text-muted) !important; }
+.mwr { color: var(--win-soft) !important; }
+
+.team-comp-row.is-good .ab-bar > span { background: var(--win) !important; }
+.team-comp-row.is-bad .ab-bar > span { background: var(--lose) !important; }
+
+/* ========== Detail：無浮槓；面用藍墨茶 ========== */
+.detail {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--shadow) !important;
+}
+.detail::before,
+.detail::after {
+    content: none !important;
+    display: none !important;
+}
+.detail-avatar {
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: none !important;
+}
+.detail-role-tag {
+    background: var(--surface-2) !important;
+    border-color: var(--border) !important;
+    color: var(--text-muted) !important;
+}
+.detail h3,
+.detail h4,
+.detail .section-title,
+.detail .detail-section-title,
+.detail .panel-title {
+    color: var(--accent-soft) !important;
+}
+.detail a { color: var(--fn-mage) !important; }
+.detail a:hover { color: var(--accent-soft) !important; }
+
+.detail .chip.is-active,
+.detail .tool-btn.active,
+.detail .aug-rarity-chip.is-active,
+.detail .item-role-chip.is-active,
+.detail .aug-cat-chip.is-active {
+    border-color: var(--accent) !important;
+    color: var(--accent-soft) !important;
+    background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+.detail .ab-bar > span,
+.detail .bar-fill { background: var(--accent-deep) !important; }
+.detail .ab-bar.is-good > span,
+.detail .bar-fill.good { background: var(--win) !important; }
+.detail .aug:hover,
+.detail .item-card:hover,
+.detail .rec-row:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent) !important;
+}
+.detail .rec-rank { color: var(--accent-soft) !important; }
+
+/* Patch chrome */
+.change-chip {
+    border-color: color-mix(in srgb, var(--accent) 25%, transparent) !important;
+    background: color-mix(in srgb, var(--accent) 8%, transparent) !important;
+    color: var(--text-muted) !important;
+}
+.change-tab {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+    color: var(--text-muted) !important;
+}
+.change-tab.active {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--text) !important;
+}
+.change-row {
+    background: var(--surface) !important;
+    border-color: var(--border) !important;
+}
+button.change-row:hover {
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border)) !important;
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface)) !important;
+}
+.change-name { color: var(--text) !important; }
+.change-meta { color: var(--text-dim) !important; }
+
+.draft-mode-tab.is-active::after { background: var(--accent) !important; }
+.draft-leg.is-ally { color: var(--accent-soft) !important; }
+
+/* ========== Banner ========== */
+.washoku-preview-banner {
+    position: sticky;
+    top: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    font-family: "Noto Sans TC", -apple-system, sans-serif;
+}
+.washoku-preview-banner strong { color: var(--accent-soft); font-weight: 600; }
+.washoku-preview-banner .swatches {
+    display: inline-flex; gap: 5px; align-items: center;
+}
+.washoku-preview-banner .swatch {
+    width: 14px; height: 14px; border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.18);
+}
+.washoku-preview-banner a { color: var(--fn-mage); text-decoration: none; }
+.washoku-preview-banner a:hover { text-decoration: underline; }
+.washoku-preview-banner code { font-size: 11px; color: var(--text-muted); }
