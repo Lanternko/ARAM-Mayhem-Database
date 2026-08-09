@@ -26,6 +26,7 @@ import json
 import math
 from collections import defaultdict
 from datetime import datetime, timezone
+from itertools import combinations
 from pathlib import Path
 
 import click
@@ -101,6 +102,9 @@ HERO_ITEM_MIN_GAMES = 30
 HERO_COMPLETE_ITEM_LIMIT = 6
 HERO_BOOTS_ITEM_LIMIT = 3
 HERO_COMPONENT_ITEM_LIMIT = 8
+RELATION_MIN_GAMES = 100
+RELATION_PRIOR_GAMES = 100
+RELATION_LIMIT = 4
 TRINKET_ITEM_IDS = frozenset({3340, 3341, 3342, 3363})
 
 
@@ -125,6 +129,32 @@ def assign_tier(wr: float) -> str:
         if wr >= cut:
             return tier
     return "T5"
+
+
+def clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
+
+def logit(probability: float) -> float:
+    probability = clamp(probability, 1e-6, 1 - 1e-6)
+    return math.log(probability / (1 - probability))
+
+
+def sigmoid(value: float) -> float:
+    return 1 / (1 + math.exp(-value))
+
+
+def wr_tone_class(wr: float) -> str:
+    """Five-step semantic tone shared by initial tiles and client rendering."""
+    if wr >= 0.55:
+        return "rate-wr-5"
+    if wr >= 0.52:
+        return "rate-wr-4"
+    if wr > 0.48:
+        return "rate-wr-3"
+    if wr > 0.45:
+        return "rate-wr-2"
+    return "rate-wr-1"
 
 
 def load_classic_champion_metadata() -> dict[int, dict]:
@@ -272,6 +302,13 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     hero_item_games: dict[tuple[int, int], int] = defaultdict(int)
     hero_item_wins: dict[tuple[int, int], int] = defaultdict(int)
     hero_position_games: dict[tuple[int, str], int] = defaultdict(int)
+    ally_pair_games: dict[tuple[int, int], int] = defaultdict(int)
+    ally_pair_wins: dict[tuple[int, int], int] = defaultdict(int)
+    matchup_games: dict[tuple[int, int], int] = defaultdict(int)
+    matchup_wins: dict[tuple[int, int], int] = defaultdict(int)
+    hero_combat_sums: dict[int, dict[str, float]] = defaultdict(
+        lambda: defaultdict(float)
+    )
     position_observations = 0
     total = 0
     for g in iter_games(
@@ -283,6 +320,8 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         total += 1
         per_patch[g["patch"] or "?"] += 1
         blue_won = int(g["blue_wins"])
+        duration_minutes = max(float(g.get("duration_sec") or 0) / 60, 1.0)
+        team_champions: dict[int, list[int]] = {100: [], 200: []}
         for cid in g["blue_champs"]:
             base = base_champion_id(int(cid))
             games[base] += 1
@@ -296,6 +335,9 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
             if champion_id is None:
                 continue
             champion_id = base_champion_id(int(champion_id))
+            team_id = int(participant.get("teamId") or 0)
+            if team_id in team_champions:
+                team_champions[team_id].append(champion_id)
             lane = str(participant.get("lane") or "").upper()
             role = str(participant.get("role") or "").upper()
             position = ""
@@ -312,11 +354,41 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
                 if int(item_id) > 0
             }
             won = (participant.get("teamId") == 100) == bool(blue_won)
+            combat = hero_combat_sums[champion_id]
+            combat["games"] += 1
+            combat["minutes"] += duration_minutes
+            participant_stats = participant.get("stats") or {}
+            for stat_name in (
+                "kills",
+                "deaths",
+                "assists",
+                "total_damage_dealt_to_champions",
+                "gold_earned",
+                "total_minions_killed",
+                "neutral_minions_killed",
+            ):
+                combat[stat_name] += float(participant_stats.get(stat_name) or 0)
             for item_id in held_items:
                 item_games[item_id] += 1
                 item_wins[item_id] += int(won)
                 hero_item_games[(champion_id, item_id)] += 1
                 hero_item_wins[(champion_id, item_id)] += int(won)
+        for team_id, champion_ids in team_champions.items():
+            team_won = int((team_id == 100) == bool(blue_won))
+            for first, second in combinations(sorted(set(champion_ids)), 2):
+                key = (first, second)
+                ally_pair_games[key] += 1
+                ally_pair_wins[key] += team_won
+        blue_ids = sorted(set(team_champions[100]))
+        red_ids = sorted(set(team_champions[200]))
+        for blue_id in blue_ids:
+            for red_id in red_ids:
+                if blue_id == red_id:
+                    continue
+                matchup_games[(blue_id, red_id)] += 1
+                matchup_wins[(blue_id, red_id)] += blue_won
+                matchup_games[(red_id, blue_id)] += 1
+                matchup_wins[(red_id, blue_id)] += 1 - blue_won
     return {
         "hero_games": games,
         "hero_wins": wins,
@@ -327,6 +399,11 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         "hero_item_games": hero_item_games,
         "hero_item_wins": hero_item_wins,
         "hero_position_games": hero_position_games,
+        "ally_pair_games": ally_pair_games,
+        "ally_pair_wins": ally_pair_wins,
+        "matchup_games": matchup_games,
+        "matchup_wins": matchup_wins,
+        "hero_combat_sums": hero_combat_sums,
         "position_observations": position_observations,
     }
 
@@ -379,6 +456,130 @@ def build_rows(
         })
     rows.sort(key=lambda r: -r["shrunk_wr"])
     return rows
+
+
+def attach_combat_profiles(
+    heroes: list[dict],
+    combat_sums: dict[int, dict[str, float]],
+) -> None:
+    """Attach stable per-game and per-minute combat context to hero details."""
+    for hero in heroes:
+        totals = combat_sums.get(hero["champion_id"], {})
+        games = max(float(totals.get("games") or 0), 1.0)
+        minutes = max(float(totals.get("minutes") or 0), 1.0)
+        deaths = float(totals.get("deaths") or 0)
+        hero["combat"] = {
+            "kills_per_game": float(totals.get("kills") or 0) / games,
+            "deaths_per_game": deaths / games,
+            "assists_per_game": float(totals.get("assists") or 0) / games,
+            "kda": (
+                float(totals.get("kills") or 0)
+                + float(totals.get("assists") or 0)
+            ) / max(deaths, 1.0),
+            "damage_per_minute": (
+                float(totals.get("total_damage_dealt_to_champions") or 0)
+                / minutes
+            ),
+            "gold_per_minute": float(totals.get("gold_earned") or 0) / minutes,
+            "cs_per_minute": (
+                float(totals.get("total_minions_killed") or 0)
+                + float(totals.get("neutral_minions_killed") or 0)
+            ) / minutes,
+        }
+
+
+def attach_relationships(
+    heroes: list[dict],
+    ally_pair_games: dict[tuple[int, int], int],
+    ally_pair_wins: dict[tuple[int, int], int],
+    matchup_games: dict[tuple[int, int], int],
+    matchup_wins: dict[tuple[int, int], int],
+) -> None:
+    """Attach conservative 5v5 teammate and opponent associations.
+
+    Both signals are shrunk toward an expectation based on the two champions'
+    individual adjusted win rates.  This prevents a 100-game cell from
+    outranking a 1,000-game cell on noise alone, while keeping the UI honest:
+    these remain team-level associations, never lane-duel or causal claims.
+    """
+    by_id = {int(hero["champion_id"]): hero for hero in heroes}
+    teammates: dict[int, list[dict]] = defaultdict(list)
+    opponents: dict[int, list[dict]] = defaultdict(list)
+
+    for (first, second), games in ally_pair_games.items():
+        if games < RELATION_MIN_GAMES or first not in by_id or second not in by_id:
+            continue
+        wins = int(ally_pair_wins[(first, second)])
+        expected = clamp(
+            sigmoid(logit(by_id[first]["shrunk_wr"]) + logit(by_id[second]["shrunk_wr"])),
+            0.35,
+            0.65,
+        )
+        adjusted = (wins + expected * RELATION_PRIOR_GAMES) / (
+            games + RELATION_PRIOR_GAMES
+        )
+        lift = adjusted - expected
+        standard_error = math.sqrt(
+            max(adjusted * (1 - adjusted), 1e-6)
+            / (games + RELATION_PRIOR_GAMES)
+        )
+        for champion_id, other_id in ((first, second), (second, first)):
+            other = by_id[other_id]
+            teammates[champion_id].append({
+                "champion_id": other_id,
+                "name_zh": other["name_zh"],
+                "name_en": other["name_en"],
+                "image": other["image"],
+                "games": games,
+                "adjusted_wr": adjusted,
+                "lift": lift,
+                "rank_score": lift - standard_error,
+            })
+
+    for (champion_id, opponent_id), games in matchup_games.items():
+        if (
+            games < RELATION_MIN_GAMES
+            or champion_id not in by_id
+            or opponent_id not in by_id
+        ):
+            continue
+        wins = int(matchup_wins[(champion_id, opponent_id)])
+        expected = clamp(
+            sigmoid(
+                logit(by_id[champion_id]["shrunk_wr"])
+                - logit(by_id[opponent_id]["shrunk_wr"])
+            ),
+            0.35,
+            0.65,
+        )
+        adjusted = (wins + expected * RELATION_PRIOR_GAMES) / (
+            games + RELATION_PRIOR_GAMES
+        )
+        edge = adjusted - expected
+        standard_error = math.sqrt(
+            max(adjusted * (1 - adjusted), 1e-6)
+            / (games + RELATION_PRIOR_GAMES)
+        )
+        opponent = by_id[opponent_id]
+        opponents[champion_id].append({
+            "champion_id": opponent_id,
+            "name_zh": opponent["name_zh"],
+            "name_en": opponent["name_en"],
+            "image": opponent["image"],
+            "games": games,
+            "adjusted_wr": adjusted,
+            "lift": edge,
+            "rank_score": edge + standard_error,
+        })
+
+    for hero in heroes:
+        champion_id = int(hero["champion_id"])
+        ally_rows = teammates.get(champion_id, [])
+        enemy_rows = opponents.get(champion_id, [])
+        ally_rows.sort(key=lambda row: (-row["rank_score"], -row["games"]))
+        enemy_rows.sort(key=lambda row: (row["rank_score"], -row["games"]))
+        hero["teammates"] = ally_rows[:RELATION_LIMIT]
+        hero["tough_matchups"] = enemy_rows[:RELATION_LIMIT]
 
 
 def build_item_rows(
@@ -603,7 +804,9 @@ footer code{color:var(--text-muted)}
 
 /* Research-page extension.  The old board remains readable while this layer
    adds real controls, inline details, and final-inventory item evidence. */
-:root{--focus:oklch(82% .16 86);--surface-3:oklch(18% .012 255);--positive:oklch(73% .15 142);--negative:oklch(68% .18 30);--warning:oklch(73% .12 63)}
+:root{--focus:oklch(82% .16 86);--surface-3:oklch(18% .012 255);--positive:oklch(73% .15 142);--negative:oklch(68% .18 30);--warning:oklch(73% .12 63);
+--wr-5:oklch(84% .17 145);--wr-4:oklch(78% .10 150);--wr-3:oklch(78% .025 255);--wr-2:oklch(77% .10 25);--wr-1:oklch(72% .19 25);
+--pick-5:oklch(85% .14 205);--pick-4:oklch(85% .15 92);--pick-3:oklch(76% .09 80);--pick-2:oklch(76% .035 245);--pick-1:oklch(62% .025 250)}
 .skip-link{position:fixed;left:12px;top:-64px;z-index:80;padding:10px 14px;border-radius:8px;background:var(--focus);color:#14110a;font-weight:700;text-decoration:none}.skip-link:focus{top:12px}
 .site-header-meta{margin-left:auto;display:flex;gap:12px;align-items:center;color:var(--text-dim);font-size:12px;white-space:nowrap}.site-header-meta span+span{border-left:1px solid var(--border);padding-left:12px}.site-header-meta b{color:var(--warning);font-weight:600}
 .research-context{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:30px 0 0;padding-top:16px;border-top:1px solid var(--border)}
@@ -611,15 +814,17 @@ footer code{color:var(--text-muted)}
 .classic-tabs{display:flex;gap:2px;width:100%;max-width:var(--container);margin:0 auto;padding:0 16px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}.classic-tabs::-webkit-scrollbar{display:none}.classic-tab{position:relative;min-height:44px;padding:0 16px;border:0;background:transparent;color:var(--text-muted);font:600 14px inherit;white-space:nowrap;cursor:pointer}.classic-tab[aria-selected="true"]{color:var(--text)}.classic-tab[aria-selected="true"]::after{content:"";position:absolute;right:16px;bottom:-1px;left:16px;height:2px;background:var(--focus)}.classic-tab:focus-visible{outline:2px solid color-mix(in oklab,var(--focus) 65%,transparent);outline-offset:-4px;border-radius:7px}
 .research-bar{display:flex;align-items:center;gap:12px;min-height:40px;margin:0 0 18px;padding:0;background:transparent}.filter-chips{display:flex;align-items:center;gap:6px;min-width:0}.filter-chip{min-height:30px;padding:5px 12px;border:1px solid transparent;border-radius:18px;background:var(--chip-bg);color:var(--text-muted);font:500 12px inherit;white-space:nowrap;cursor:pointer;transition:background .1s,border-color .1s,color .1s}.filter-chip:hover{background:var(--overlay)}.filter-chip.active{border-color:var(--focus);background:var(--focus);color:#0e1116}.filter-count{flex:0 0 auto;padding:0 2px;color:var(--text-muted);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}.filter-search{position:relative;display:block;width:min(280px,32vw);min-width:180px;margin-left:auto}.filter-search svg{position:absolute;top:50%;left:11px;transform:translateY(-50%);color:var(--text-dim);pointer-events:none}.filter-search:focus-within svg{color:var(--text-muted)}.filter-search input{width:100%;height:40px;padding:0 12px 0 32px;border:1px solid var(--border);border-radius:12px;background:color-mix(in oklab,var(--surface-2) 88%,transparent);color:var(--text);font:14px inherit;outline:none;transition:border-color .12s,box-shadow .12s}.filter-search input::placeholder{color:var(--text-dim)}.filter-search input:focus{border-color:rgba(148,163,184,.4);box-shadow:0 0 0 3px rgba(88,96,107,.16)}.filter-source{display:none!important}
 .research-tip{margin:0;color:var(--text-dim);font-size:12px;line-height:1.55}.research-tip b{color:var(--text-muted)}.research-tip[hidden],.view[hidden],.empty-state[hidden],.hero-detail[hidden],.filter-chips[hidden]{display:none!important}
-.tier-groups{display:grid;gap:20px}.tier-group{padding:0 0 12px;border-bottom:1px solid var(--border)}.tier-group:last-child{border-bottom:0}.tier-group-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}.tier-group-heading h2{margin:0;font-size:16px}.tier-group-heading p{margin:0;color:var(--text-muted);font-size:12px}
-.hero-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 8px}.hero-tile{display:grid;gap:5px;min-width:0;border:0;background:transparent;padding:0;cursor:pointer;color:var(--text);text-align:left}.tile-icon{position:relative;aspect-ratio:1;border:2px solid var(--tier-color,#555);border-radius:8px;background:var(--chip-bg);overflow:hidden;transition:transform .08s,box-shadow .08s,border-color .08s}.hero-tile img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}.tile-icon::after{content:"";position:absolute;inset:2px;border-radius:6px;background:rgba(10,11,13,.08);pointer-events:none}.tile-name,.tile-stat{font-variant-numeric:tabular-nums;pointer-events:none}.tile-name{padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;line-height:1.25}.tile-stat{position:absolute;z-index:1;left:0;bottom:0;padding:1px 4px;border-radius:0 6px 0 0;background:rgba(14,17,22,.9);color:#e6e8eb;font-size:10px;font-weight:700;line-height:1.2}.tier-group[data-tier-group="OP"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;box-shadow:0 0 8px rgba(220,180,255,.45)}.tier-group[data-tier-group="T1"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;box-shadow:0 0 6px rgba(255,90,60,.42)}.hero-tile[aria-pressed="true"] .tile-icon{filter:brightness(1.08);box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
-.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:center}.detail-head img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.detail-close{margin-left:auto;min-width:44px;min-height:44px;border:1px solid var(--border-strong);border-radius:8px;background:transparent;color:var(--text-muted);font:14px inherit;cursor:pointer}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-stat dd.positive{color:var(--positive)}.detail-stat dd.uncertain{color:var(--warning)}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
+.tier-groups{display:grid;gap:20px}.tier-group{padding:0 0 12px;border-bottom:1px solid var(--border)}.tier-group:last-child{border-bottom:0}.tier-group-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 10px}.tier-group-heading h2{margin:0;color:var(--tier-color);font-size:20px;font-weight:800;letter-spacing:.025em}.tier-group-heading p{margin:0;color:var(--text-muted);font-size:12px}.tier-group-heading p span{color:var(--text);font-weight:700}.tier-group[data-tier-group="OP"] .tier-group-heading h2{color:oklch(86% .13 305);text-shadow:0 0 12px color-mix(in oklab,oklch(86% .13 305) 24%,transparent)}.tier-group[data-tier-group="T5"] .tier-group-heading h2{color:var(--wr-1);text-shadow:0 0 10px color-mix(in oklab,var(--wr-1) 20%,transparent)}
+.hero-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 8px}.hero-tile{display:grid;gap:5px;min-width:0;border:0;background:transparent;padding:0;cursor:pointer;color:var(--text);text-align:left}.tile-icon{position:relative;aspect-ratio:1;border:2px solid var(--tier-color,#555);border-radius:8px;background:var(--chip-bg);overflow:hidden;transition:transform .08s,box-shadow .08s,border-color .08s}.hero-tile img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}.tile-icon::after{content:"";position:absolute;inset:2px;border-radius:6px;background:rgba(10,11,13,.08);pointer-events:none}.tile-name,.tile-stat{font-variant-numeric:tabular-nums;pointer-events:none}.tile-name{padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;line-height:1.25}.tile-stat{position:absolute;z-index:1;left:0;bottom:0;padding:2px 5px;border-radius:0 6px 0 0;background:rgba(10,12,16,.92);font-size:10px;font-weight:700;line-height:1.2}.tier-group[data-tier-group="OP"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;box-shadow:0 0 8px rgba(220,180,255,.45)}.tier-group[data-tier-group="T1"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;box-shadow:0 0 6px rgba(255,90,60,.42)}.hero-tile[aria-pressed="true"] .tile-icon{filter:brightness(1.08);box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
+.rate-wr-5{color:var(--wr-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-5) 20%,transparent)}.rate-wr-4{color:var(--wr-4);font-weight:750}.rate-wr-3{color:var(--wr-3);font-weight:650}.rate-wr-2{color:var(--wr-2);font-weight:700}.rate-wr-1{color:var(--wr-1);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-1) 22%,transparent)}.rate-pick-5{color:var(--pick-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--pick-5) 20%,transparent)}.rate-pick-4{color:var(--pick-4);font-weight:750}.rate-pick-3{color:var(--pick-3);font-weight:700}.rate-pick-2{color:var(--pick-2);font-weight:650}.rate-pick-1{color:var(--pick-1);font-weight:600}
+.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:flex-start}.detail-head>img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-identity{min-width:0;flex:1}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.combat-profile{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}.combat-profile span{display:grid;gap:1px}.combat-profile b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.combat-profile small{color:var(--text-dim);font-size:10px}.detail-close{margin-left:auto;min-width:44px;min-height:44px;border:1px solid var(--border-strong);border-radius:8px;background:transparent;color:var(--text-muted);font:14px inherit;cursor:pointer}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-stat dd.positive{color:var(--positive)}.detail-stat dd.uncertain{color:var(--warning)}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
 .detail-items{border-top:1px solid var(--border);padding-top:14px}.detail-items-head{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:9px}.detail-items h3{margin:0;font-size:14px}.detail-items p{margin:0;color:var(--text-dim);font-size:11px}.detail-item-list{display:grid;gap:8px}.detail-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.detail-item:last-child{border-bottom:0}.detail-item img{width:32px;height:32px;border-radius:5px}.detail-item strong{display:block;font-size:13px}.detail-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.detail-item .item-stat{text-align:right;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.item-stat b{color:var(--text);font-size:13px}.item-stat .lift-up{color:var(--positive)}.item-stat .lift-down{color:var(--negative)}
 .detail-item-group{margin-top:14px}.detail-item-group:first-of-type{margin-top:0}.detail-item-group h4{display:flex;align-items:baseline;gap:7px;margin:0 0 3px;color:var(--text-muted);font-size:12px;font-weight:600}.detail-item-group h4 span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.component-items{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}.component-items summary{display:flex;align-items:center;gap:7px;min-height:32px;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;list-style:none}.component-items summary::-webkit-details-marker{display:none}.component-items summary::before{content:"›";color:var(--text-dim);font-size:17px;line-height:1;transform:rotate(0);transition:transform .14s ease-out}.component-items[open] summary::before{transform:rotate(90deg)}.component-items summary span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.component-items .detail-item-list{margin-top:4px}
+.detail-relationships{grid-column:1/-1;border-top:1px solid var(--border);padding-top:14px}.relationship-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.relationship-group h3{margin:0;font-size:14px}.relationship-group>p{margin:3px 0 7px;color:var(--text-dim);font-size:11px;line-height:1.45}.relationship-list{display:grid}.relationship-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.relationship-row:last-child{border-bottom:0}.relationship-row img{width:28px;height:28px;border-radius:5px}.relationship-row strong{display:block;font-size:12px}.relationship-row small{display:block;margin-top:1px;color:var(--text-dim);font-size:10px}.relationship-stat{text-align:right;font-size:11px;font-variant-numeric:tabular-nums}.relationship-stat b{display:block;color:var(--text);font-size:12px}.relationship-stat .lift-up{color:var(--positive)}.relationship-stat .lift-down{color:var(--negative)}
 .data-section-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between;margin:4px 0 12px}.data-section-head h2{margin:0;font-size:18px}.data-section-head p{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5;text-align:right}.table-scroller{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.research-table{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}.research-table th,.research-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;white-space:nowrap}.research-table th:first-child,.research-table td:first-child,.research-table th:nth-child(2),.research-table td:nth-child(2){text-align:left}.research-table th{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--text-muted);font-size:11px;letter-spacing:.03em}.research-table th button{display:inline-flex;gap:4px;align-items:center;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.research-table th button[aria-sort="descending"],.research-table th button[aria-sort="ascending"]{color:var(--focus)}.research-table tbody tr:hover{background:rgba(255,255,255,.025)}.research-table tbody tr:last-child td{border-bottom:0}.table-hero{display:flex;gap:8px;align-items:center;min-width:180px;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer;padding:0;text-align:left}.table-hero img,.table-item img{width:30px;height:30px;border-radius:5px;object-fit:cover}.table-hero small,.table-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.table-item{display:flex;gap:8px;align-items:center;min-width:180px}.rate-positive{color:var(--positive);font-weight:700}.rate-negative{color:var(--negative);font-weight:700}.rate-neutral{color:var(--warning);font-weight:700}.mono{font-variant-numeric:tabular-nums}.item-kind{display:inline-block;padding:2px 6px;border:1px solid var(--border);border-radius:99px;color:var(--text-muted);font-size:11px}.item-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;color:var(--text-muted);font-size:12px;line-height:1.6}.item-note b{color:var(--warning);font-weight:600}.empty-state{padding:28px 14px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--text-muted);text-align:center;font-size:14px}.method{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px;line-height:1.7}.method summary{color:var(--text);font-weight:600;cursor:pointer}.method p{max-width:75ch}.method code{color:var(--text-muted)}
 button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}@media (pointer:fine){.hero-tile:hover{transform:translateY(-3px) scale(1.015)}.hero-tile:hover .tile-icon{border-color:color-mix(in srgb,var(--focus) 55%,var(--tier-color,#555));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px -8px rgba(245,197,24,.35)}.classic-tab:hover,.detail-close:hover{color:var(--text)}}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media (min-width:700px){.wrap{padding-top:28px}.hero-grid{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:10px}.hero-detail{grid-template-columns:minmax(220px,.78fr) 1.2fr}.detail-head{grid-row:span 2;align-items:flex-start}.detail-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.detail-items{grid-column:2}.site-header-meta{display:flex}}
-@media (max-width:699px){.site-header-meta{display:none}.research-context{margin-top:24px}.research-context strong{width:100%}.classic-tabs{padding:0 10px}.research-bar{align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}.filter-chips{width:100%;max-width:100%;flex-wrap:wrap;gap:4px}.filter-chip{min-height:34px;padding:4px 10px;font-size:11px}.filter-count{display:none}.filter-search{width:100%;min-width:0;margin-left:0}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.item-note{align-items:flex-start}}
+@media (max-width:699px){.site-header-meta{display:none}.research-context{margin-top:24px}.research-context strong{width:100%}.classic-tabs{padding:0 10px}.research-bar{align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}.filter-chips{width:100%;max-width:100%;flex-wrap:wrap;gap:4px}.filter-chip{min-height:34px;padding:4px 10px;font-size:11px}.filter-count{display:none}.filter-search{width:100%;min-width:0;margin-left:0}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.combat-profile{gap:10px}.relationship-columns{grid-template-columns:1fr;gap:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.item-note{align-items:flex-start}}
 """
 
 JS = """
@@ -645,17 +850,21 @@ JS = """
   function esc(value){return String(value==null?'':value).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});}
   function pct(value){return (Number(value)*100).toFixed(1)+'%';}
   function num(value){return Number(value).toLocaleString('zh-TW');}
-  function rateClass(row){return row.ci_lo>0.5?'rate-positive':row.ci_hi<0.5?'rate-negative':'rate-neutral';}
+  function wrToneClass(value){var v=Number(value)||0;return v>=.55?'rate-wr-5':v>=.52?'rate-wr-4':v>.48?'rate-wr-3':v>.45?'rate-wr-2':'rate-wr-1';}
+  function pickToneClass(value){var v=Number(value)||0;return v>=.18?'rate-pick-5':v>=.12?'rate-pick-4':v>=.07?'rate-pick-3':v>=.04?'rate-pick-2':'rate-pick-1';}
+  function clearToneClass(element){element.className=element.className.replace(/\\brate-(?:wr|pick)-[1-5]\\b/g,'').trim();}
   function ciMarkup(row){var lo=Math.max(0,Math.min(100,(row.ci_lo-.3)/.4*100)),hi=Math.max(0,Math.min(100,(row.ci_hi-.3)/.4*100)),raw=Math.max(0,Math.min(100,(row.raw_wr-.3)/.4*100));return '<div class="ci-line"><span><b>'+pct(row.ci_lo)+'</b><b>'+pct(row.ci_hi)+'</b></span><div class="ci-track"><i style="left:'+lo.toFixed(2)+'%;width:'+Math.max(hi-lo,1).toFixed(2)+'%"></i><b style="left:'+raw.toFixed(2)+'%"></b></div></div>';}
   function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),position=positionFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){return (!query||hero.search.indexOf(query)>=0)&&(!position||hero.position===position)&&hero.games>=minimum;});}
   function activeItems(){var query=(search.value||'').trim().toLowerCase(),kind=itemKindFilter.value,minimum=Number(minGames.value||0);return data.items.filter(function(item){return (!query||item.search.indexOf(query)>=0)&&(!kind||item.kind===kind)&&item.games>=minimum;});}
   function compare(field){return function(a,b){var av=a[field],bv=b[field],result=typeof av==='string'?String(av).localeCompare(String(bv),'zh-Hant'):Number(av)-Number(bv);return state.desc?-result:result;};}
-  function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');if(field==='raw_wr')stat.textContent=pct(hero.raw_wr);else if(field==='pick_rate')stat.textContent=pct(hero.pick_rate);else if(field==='games')stat.textContent=num(hero.games);else stat.textContent=pct(hero.shrunk_wr);}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
-  function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'"><img src="'+esc(hero.image)+'" alt=""><span>'+esc(hero.name_zh)+' <small>'+esc(hero.name_en)+'</small></span></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono">'+pct(hero.raw_wr)+'</td><td class="mono '+rateClass(hero)+'">'+pct(hero.shrunk_wr)+'</td><td>'+ciMarkup(hero)+'</td><td class="mono">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
-  function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+rateClass(item)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
-  function itemRows(items){return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>持有 '+num(item.games)+' 場 · 95% CI '+pct(item.ci_lo)+'–'+pct(item.ci_hi)+'</small></div><div class="item-stat"><b>'+pct(item.raw_wr)+'</b><br><span class="'+liftClass+'">對英雄 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
+  function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');clearToneClass(stat);if(field==='raw_wr'){stat.textContent=pct(hero.raw_wr);stat.classList.add(wrToneClass(hero.raw_wr));}else if(field==='pick_rate'){stat.textContent=pct(hero.pick_rate);stat.classList.add(pickToneClass(hero.pick_rate));}else if(field==='games')stat.textContent=num(hero.games);else{stat.textContent=pct(hero.shrunk_wr);stat.classList.add(wrToneClass(hero.shrunk_wr));}}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
+  function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'"><img src="'+esc(hero.image)+'" alt=""><span>'+esc(hero.name_zh)+' <small>'+esc(hero.name_en)+'</small></span></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono '+wrToneClass(hero.raw_wr)+'">'+pct(hero.raw_wr)+'</td><td class="mono '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</td><td>'+ciMarkup(hero)+'</td><td class="mono '+pickToneClass(hero.pick_rate)+'">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
+  function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono '+pickToneClass(item.hold_rate)+'">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
+  function itemRows(items){return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>持有 '+num(item.games)+' 場 · 95% CI '+pct(item.ci_lo)+'–'+pct(item.ci_hi)+'</small></div><div class="item-stat"><b class="'+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</b><br><span class="'+liftClass+'">對英雄 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
   function renderItemsForHero(hero){var complete=hero.items.filter(function(item){return item.kind==='complete';}),boots=hero.items.filter(function(item){return item.kind==='boots';}),components=hero.component_items||[],sections=[];if(complete.length)sections.push('<section class="detail-item-group"><h4>完整裝備 <span>'+num(complete.length)+'</span></h4>'+itemRows(complete)+'</section>');if(boots.length)sections.push('<section class="detail-item-group"><h4>鞋子 <span>'+num(boots.length)+'</span></h4>'+itemRows(boots)+'</section>');if(components.length)sections.push('<details class="component-items"><summary>常見組件 <span>'+num(components.length)+' 件</span></summary>'+itemRows(components)+'</details>');return sections.length?sections.join(''):'<p class="research-tip">沒有足夠樣本的非飾品終局裝備可呈現。</p>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var rateCls=rateClass(hero),ciState=hero.credibility==='高'?'positive':'uncertain';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p></div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+rateCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>原始勝率</dt><dd>'+pct(hero.raw_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd>'+pct(hero.pick_rate)+'</dd></div><div class="detail-stat"><dt>95% CI</dt><dd>'+pct(hero.ci_lo)+'–'+pct(hero.ci_hi)+'</dd></div></dl><section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>';var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function relationshipRows(rows){if(!rows.length)return '<p class="research-tip">目前沒有達到 100 場門檻的組合。</p>';return '<div class="relationship-list">'+rows.map(function(row){var lift=Number(row.lift)||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="relationship-row"><img src="'+esc(row.image)+'" alt=""><div><strong>'+esc(row.name_zh)+'</strong><small>'+num(row.games)+' 場共同樣本</small></div><div class="relationship-stat"><b class="'+wrToneClass(row.adjusted_wr)+'">'+pct(row.adjusted_wr)+'</b><span class="'+liftClass+'">相對預期 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
+  function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var adjustedWrCls=wrToneClass(hero.shrunk_wr),rawWrCls=wrToneClass(hero.raw_wr),pickCls=pickToneClass(hero.pick_rate),ciState=hero.credibility==='高'?'positive':'uncertain',combat=hero.combat||{},combatMarkup='<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p>'+combatMarkup+'</div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+adjustedWrCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>原始勝率</dt><dd class="'+rawWrCls+'">'+pct(hero.raw_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd class="'+pickCls+'">'+pct(hero.pick_rate)+'</dd></div><div class="detail-stat"><dt>95% CI</dt><dd>'+pct(hero.ci_lo)+'–'+pct(hero.ci_hi)+'</dd></div></dl><section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>'+renderRelationships(hero);var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
@@ -1000,7 +1209,7 @@ def render_research_preview(
                 f"<button type='button' class='hero-tile' data-hero-id='{hero['champion_id']}' "
                 f"data-search='{search_text}' aria-pressed='false' aria-label='{label}'>"
                 f"<span class='tile-icon'><img loading='lazy' src='{html.escape(hero['image'], quote=True)}' alt=''>"
-                f"<span class='tile-stat'>{hero['shrunk_wr'] * 100:.1f}%</span></span>"
+                f"<span class='tile-stat {wr_tone_class(hero['shrunk_wr'])}'>{hero['shrunk_wr'] * 100:.1f}%</span></span>"
                 f"<span class='tile-name'>{html.escape(hero['name_zh'])}</span></button>"
             )
         page.append("</div></section>")
@@ -1015,7 +1224,7 @@ def render_research_preview(
     for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率"), ("ci_lo", "95% CI")):
         page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
-    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路取每位英雄在 LCU timeline.lane／role 中最多的分類；這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
+    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路取每位英雄在 LCU timeline.lane／role 中最多的分類；這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 " + str(RELATION_MIN_GAMES) + " 場的組合，並以 " + str(RELATION_PRIOR_GAMES) + " 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮；它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線，因此本頁不顯示或推測這兩項。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
     page.append(
         "<footer class='research-context' aria-label='資料範圍'>"
         "<strong>經典模式資料研究</strong>"
@@ -1071,6 +1280,14 @@ def main(
     )
 
     rows = build_rows(games, wins, total, meta, stats["hero_position_games"])
+    attach_combat_profiles(rows, stats["hero_combat_sums"])
+    attach_relationships(
+        rows,
+        stats["ally_pair_games"],
+        stats["ally_pair_wins"],
+        stats["matchup_games"],
+        stats["matchup_wins"],
+    )
     click.echo("[classic] fetching item metadata for final-inventory association ...")
     item_meta = load_classic_item_metadata()
     observed_item_ids = set(stats["item_games"])
