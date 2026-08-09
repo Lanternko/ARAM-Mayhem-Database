@@ -887,13 +887,13 @@ def render_research_preview(
     page.append("<span class='brand-div'>經典模式</span><span class='unlisted'>UNLISTED · 預覽</span>")
     page.append(
         "<div class='site-header-meta'><span>queue 4310</span>"
-        f"<span>更新 {built}</span><span><b>樣本仍小</b></span></div>"
+        f"<span>更新 {built}</span><span><b>初步可用</b></span></div>"
     )
     page.append("</div></header><main id='main-content' class='wrap'>")
     page.append(
         "<section class='research-context' aria-label='資料範圍'>"
         "<strong>經典模式資料研究</strong>"
-        f"<p><span class='data-note'>{total_games:,} 場 · 平均誤差 ±{mean_err * 100:.1f}%</span>"
+        f"<p><span class='data-note'>{total_games:,} 場 · 平均 95% CI 半寬 ±{mean_err * 100:.1f}pp</span>"
         "　Tier 依調整後勝率分級，點英雄查看完整數據與終局裝備關聯。</p>"
         "</section>"
     )
