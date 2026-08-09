@@ -54,6 +54,15 @@ TIER_LABEL_BG["OP"] = (
     "#ffd5ec 58%,#fff1c8 78%,#ffffff 100%)"
 )
 
+POSITION_ORDER = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "SUPPORT"]
+POSITION_LABELS = {
+    "TOP": "上路",
+    "JUNGLE": "打野",
+    "MIDDLE": "中路",
+    "BOTTOM": "下路",
+    "SUPPORT": "輔助",
+}
+
 # Flat Beta prior toward 50%, in pseudo-games.  The main site uses k=200 against
 # ~40k games per champion, where it is a rounding error; here the median champion
 # has ~300 games, so the same k is doing real work — which is the point.  A raw
@@ -262,6 +271,8 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     item_wins: dict[int, int] = defaultdict(int)
     hero_item_games: dict[tuple[int, int], int] = defaultdict(int)
     hero_item_wins: dict[tuple[int, int], int] = defaultdict(int)
+    hero_position_games: dict[tuple[int, str], int] = defaultdict(int)
+    position_observations = 0
     total = 0
     for g in iter_games(
         db,
@@ -285,6 +296,16 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
             if champion_id is None:
                 continue
             champion_id = base_champion_id(int(champion_id))
+            lane = str(participant.get("lane") or "").upper()
+            role = str(participant.get("role") or "").upper()
+            position = ""
+            if lane in {"TOP", "JUNGLE", "MIDDLE"}:
+                position = lane
+            elif lane == "BOTTOM":
+                position = "SUPPORT" if role == "SUPPORT" else "BOTTOM"
+            if position:
+                hero_position_games[(champion_id, position)] += 1
+                position_observations += 1
             held_items = {
                 base_item_id(int(item_id))
                 for item_id in participant.get("items") or []
@@ -305,17 +326,34 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         "item_wins": item_wins,
         "hero_item_games": hero_item_games,
         "hero_item_wins": hero_item_wins,
+        "hero_position_games": hero_position_games,
+        "position_observations": position_observations,
     }
 
 
-def build_rows(games: dict, wins: dict, total_games: int, meta: dict) -> list[dict]:
+def build_rows(
+    games: dict,
+    wins: dict,
+    total_games: int,
+    meta: dict,
+    position_games: dict[tuple[int, str], int] | None = None,
+) -> list[dict]:
     rows = []
+    position_games = position_games or {}
     for cid, g in games.items():
         w = wins[cid]
         raw = w / g if g else 0.0
         shrunk = (w + PRIOR_WR * PRIOR_GAMES) / (g + PRIOR_GAMES)
         lo, hi = wilson_interval(w, g)
         m = meta.get(cid, {})
+        observed_positions = {
+            position: int(position_games.get((cid, position), 0))
+            for position in POSITION_ORDER
+        }
+        position, position_count = max(
+            observed_positions.items(), key=lambda pair: pair[1]
+        )
+        position_total = sum(observed_positions.values())
         rows.append({
             "champion_id": cid,
             "alias": m.get("alias", f"#{cid}"),
@@ -334,6 +372,10 @@ def build_rows(games: dict, wins: dict, total_games: int, meta: dict) -> list[di
             # unique per team here, so team-presence = picks / (games * 2).
             "pick_rate": (g / (total_games * 2)) if total_games else 0.0,
             "tier": assign_tier(shrunk),
+            "position": position if position_count else "",
+            "position_label": POSITION_LABELS.get(position, "未分類") if position_count else "未分類",
+            "position_games": position_count,
+            "position_share": position_count / position_total if position_total else 0.0,
         })
     rows.sort(key=lambda r: -r["shrunk_wr"])
     return rows
@@ -587,13 +629,13 @@ JS = """
   var data=JSON.parse(dataEl.textContent);
   var state={tab:'tier',heroSort:'shrunk_wr',itemSort:'games',desc:true,heroId:null};
   var search=document.getElementById('research-search');
-  var tierFilter=document.getElementById('tier-filter');
+  var positionFilter=document.getElementById('position-filter');
   var itemKindFilter=document.getElementById('item-kind-filter');
   var minGames=document.getElementById('min-games');
   var heroSort=document.getElementById('hero-sort');
   var itemSort=document.getElementById('item-sort');
   var detail=document.getElementById('hero-detail');
-  var tierChips=document.getElementById('tier-chips');
+  var positionChips=document.getElementById('position-chips');
   var itemKindChips=document.getElementById('item-kind-chips');
   var shownN=document.getElementById('shown-n');
   var shownTotal=document.getElementById('shown-total');
@@ -605,23 +647,23 @@ JS = """
   function num(value){return Number(value).toLocaleString('zh-TW');}
   function rateClass(row){return row.ci_lo>0.5?'rate-positive':row.ci_hi<0.5?'rate-negative':'rate-neutral';}
   function ciMarkup(row){var lo=Math.max(0,Math.min(100,(row.ci_lo-.3)/.4*100)),hi=Math.max(0,Math.min(100,(row.ci_hi-.3)/.4*100)),raw=Math.max(0,Math.min(100,(row.raw_wr-.3)/.4*100));return '<div class="ci-line"><span><b>'+pct(row.ci_lo)+'</b><b>'+pct(row.ci_hi)+'</b></span><div class="ci-track"><i style="left:'+lo.toFixed(2)+'%;width:'+Math.max(hi-lo,1).toFixed(2)+'%"></i><b style="left:'+raw.toFixed(2)+'%"></b></div></div>';}
-  function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),tier=tierFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){return (!query||hero.search.indexOf(query)>=0)&&(!tier||hero.tier===tier)&&hero.games>=minimum;});}
+  function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),position=positionFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){return (!query||hero.search.indexOf(query)>=0)&&(!position||hero.position===position)&&hero.games>=minimum;});}
   function activeItems(){var query=(search.value||'').trim().toLowerCase(),kind=itemKindFilter.value,minimum=Number(minGames.value||0);return data.items.filter(function(item){return (!query||item.search.indexOf(query)>=0)&&(!kind||item.kind===kind)&&item.games>=minimum;});}
   function compare(field){return function(a,b){var av=a[field],bv=b[field],result=typeof av==='string'?String(av).localeCompare(String(bv),'zh-Hant'):Number(av)-Number(bv);return state.desc?-result:result;};}
-  function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');if(field==='raw_wr')stat.textContent=pct(hero.raw_wr);else if(field==='pick_rate')stat.textContent=pct(hero.pick_rate);else if(field==='games')stat.textContent=num(hero.games);else stat.textContent=pct(hero.shrunk_wr);}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){group.hidden=!group.querySelector('.hero-tile:not([hidden])');});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
+  function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');if(field==='raw_wr')stat.textContent=pct(hero.raw_wr);else if(field==='pick_rate')stat.textContent=pct(hero.pick_rate);else if(field==='games')stat.textContent=num(hero.games);else stat.textContent=pct(hero.shrunk_wr);}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
   function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'"><img src="'+esc(hero.image)+'" alt=""><span>'+esc(hero.name_zh)+' <small>'+esc(hero.name_en)+'</small></span></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono">'+pct(hero.raw_wr)+'</td><td class="mono '+rateClass(hero)+'">'+pct(hero.shrunk_wr)+'</td><td>'+ciMarkup(hero)+'</td><td class="mono">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
   function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+rateClass(item)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
   function itemRows(items){return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>持有 '+num(item.games)+' 場 · 95% CI '+pct(item.ci_lo)+'–'+pct(item.ci_hi)+'</small></div><div class="item-stat"><b>'+pct(item.raw_wr)+'</b><br><span class="'+liftClass+'">對英雄 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
   function renderItemsForHero(hero){var complete=hero.items.filter(function(item){return item.kind==='complete';}),boots=hero.items.filter(function(item){return item.kind==='boots';}),components=hero.component_items||[],sections=[];if(complete.length)sections.push('<section class="detail-item-group"><h4>完整裝備 <span>'+num(complete.length)+'</span></h4>'+itemRows(complete)+'</section>');if(boots.length)sections.push('<section class="detail-item-group"><h4>鞋子 <span>'+num(boots.length)+'</span></h4>'+itemRows(boots)+'</section>');if(components.length)sections.push('<details class="component-items"><summary>常見組件 <span>'+num(components.length)+' 件</span></summary>'+itemRows(components)+'</details>');return sections.length?sections.join(''):'<p class="research-tip">沒有足夠樣本的非飾品終局裝備可呈現。</p>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var rateCls=rateClass(hero),ciState=hero.credibility==='高'?'positive':'uncertain';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+'</p></div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+rateCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>原始勝率</dt><dd>'+pct(hero.raw_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd>'+pct(hero.pick_rate)+'</dd></div><div class="detail-stat"><dt>95% CI</dt><dd>'+pct(hero.ci_lo)+'–'+pct(hero.ci_hi)+'</dd></div></dl><section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>';var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var rateCls=rateClass(hero),ciState=hero.credibility==='高'?'positive':'uncertain';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p></div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+rateCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>原始勝率</dt><dd>'+pct(hero.raw_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd>'+pct(hero.pick_rate)+'</dd></div><div class="detail-stat"><dt>95% CI</dt><dd>'+pct(hero.ci_lo)+'–'+pct(hero.ci_hi)+'</dd></div></dl><section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>';var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
-  function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';tierChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
+  function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
   function refresh(){updateTiles();renderHeroes();renderItems();updateCount();}
   tabs.forEach(function(tab,index){tab.addEventListener('click',function(){setTab(tab.dataset.tab,false);});tab.addEventListener('keydown',function(event){if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();var next=(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;setTab(tabs[next].dataset.tab,true);});});
-  [ ].slice.call(document.querySelectorAll('[data-tier-filter]')).forEach(function(button){button.addEventListener('click',function(){tierFilter.value=button.dataset.tierFilter;[ ].slice.call(document.querySelectorAll('[data-tier-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
+  [ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(button){button.addEventListener('click',function(){positionFilter.value=button.dataset.positionFilter;[ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
   [ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(button){button.addEventListener('click',function(){itemKindFilter.value=button.dataset.itemKindFilter;[ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
-  [search,tierFilter,itemKindFilter,minGames,heroSort,itemSort].forEach(function(control){control.addEventListener(control===search?'input':'change',refresh);});
+  [search,positionFilter,itemKindFilter,minGames,heroSort,itemSort].forEach(function(control){control.addEventListener(control===search?'input':'change',refresh);});
   document.addEventListener('click',function(event){var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
   setTab('tier',false);
 })();
@@ -847,6 +889,7 @@ def render_research_preview(
     items: list[dict],
     total_games: int,
     per_patch: dict,
+    position_observations: int,
 ) -> str:
     """Render the interactive Classic research preview as a self-contained page."""
     built = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
@@ -915,7 +958,7 @@ def render_research_preview(
         "<section class='research-context' aria-label='資料範圍'>"
         "<strong>經典模式資料研究</strong>"
         f"<p><span class='data-note'>{total_games:,} 場 · 平均 95% CI 半寬 ±{mean_err * 100:.1f}pp</span>"
-        "　Tier 依調整後勝率分級，點英雄查看完整數據與終局裝備關聯。</p>"
+        f"　常見分路由 {position_observations:,} 筆 LCU lane／role 紀錄推估；點英雄查看完整數據與終局裝備關聯。</p>"
         "</section>"
     )
     page.append("<div class='classic-tabs' role='tablist' aria-label='經典模式資料視圖'>")
@@ -928,11 +971,11 @@ def render_research_preview(
         )
     page.append("</div>")
     page.append("<section class='research-bar' aria-label='篩選與搜尋'>")
-    page.append("<div class='filter-chips' id='tier-chips' aria-label='Tier 篩選'>")
-    page.append("<button type='button' class='filter-chip active' data-tier-filter='' aria-pressed='true'>★ All</button>")
+    page.append("<div class='filter-chips' id='position-chips' aria-label='常見分路篩選'>")
+    page.append("<button type='button' class='filter-chip active' data-position-filter='' aria-pressed='true'>★ 全部</button>")
     page.extend(
-        f"<button type='button' class='filter-chip' data-tier-filter='{tier}' aria-pressed='false'>{tier}</button>"
-        for tier in TIER_ORDER
+        f"<button type='button' class='filter-chip' data-position-filter='{position}' aria-pressed='false'>{POSITION_LABELS[position]}</button>"
+        for position in POSITION_ORDER
     )
     page.append("</div>")
     page.append("<div class='filter-chips' id='item-kind-chips' aria-label='裝備類型篩選' hidden>")
@@ -943,7 +986,7 @@ def render_research_preview(
     page.append("</div>")
     page.append(f"<span class='filter-count'><span id='shown-n'>{len(heroes)}</span> / <span id='shown-total'>{len(heroes)}</span> <span id='shown-unit'>隻</span></span>")
     page.append("<label class='filter-search'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'></circle><line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg><input id='research-search' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false' aria-label='搜尋英雄'></label>")
-    page.append("<select class='filter-source' id='tier-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option>" + "".join(f"<option value='{tier}'>{tier}</option>" for tier in TIER_ORDER) + "</select>")
+    page.append("<select class='filter-source' id='position-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option>" + "".join(f"<option value='{position}'>{POSITION_LABELS[position]}</option>" for position in POSITION_ORDER) + "</select>")
     page.append("<select class='filter-source' id='item-kind-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option><option value='complete'>完整裝備</option><option value='boots'>鞋子</option><option value='starter'>起手／組件</option><option value='trinket'>飾品</option></select>")
     page.append("<input class='filter-source' id='min-games' type='hidden' value='50'>")
     page.append("<select class='filter-source' id='hero-sort' tabindex='-1' aria-hidden='true'><option value='shrunk_wr'>調整後勝率</option><option value='raw_wr'>原始勝率</option><option value='pick_rate'>選用率</option><option value='games'>樣本數</option></select>")
@@ -956,7 +999,7 @@ def render_research_preview(
         entries = by_tier[tier]
         if not entries:
             continue
-        page.append(f"<section class='tier-group' data-tier-group='{tier}' style='--tier-color:{TIER_COLOR[tier]}'><div class='tier-group-heading'><h2>{tier}</h2><p>{len(entries)} 隻 · 依調整後勝率</p></div><div class='hero-grid'>")
+        page.append(f"<section class='tier-group' data-tier-group='{tier}' style='--tier-color:{TIER_COLOR[tier]}'><div class='tier-group-heading'><h2>{tier}</h2><p><span data-group-count>{len(entries)}</span> 隻 · 依調整後勝率</p></div><div class='hero-grid'>")
         for hero in entries:
             search_text = html.escape(payload_heroes[heroes.index(hero)]["search"], quote=True)
             label = html.escape(f"查看 {hero['name_zh']} 詳情，調整後勝率 {hero['shrunk_wr'] * 100:.1f}%", quote=True)
@@ -979,7 +1022,7 @@ def render_research_preview(
     for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率"), ("ci_lo", "95% CI")):
         page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
-    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
+    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路取每位英雄在 LCU timeline.lane／role 中最多的分類；這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
     page.append("</main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + JS + "</script></body></html>")
     return "\n".join(page)
 
@@ -1027,7 +1070,7 @@ def main(
         f"{len(list(Path(icon_dir).glob('*.png')))} on disk -> {icon_dir}"
     )
 
-    rows = build_rows(games, wins, total, meta)
+    rows = build_rows(games, wins, total, meta, stats["hero_position_games"])
     click.echo("[classic] fetching item metadata for final-inventory association ...")
     item_meta = load_classic_item_metadata()
     observed_item_ids = set(stats["item_games"])
@@ -1048,7 +1091,16 @@ def main(
 
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render_research_preview(rows, item_rows, total, per_patch), encoding="utf-8")
+    out_path.write_text(
+        render_research_preview(
+            rows,
+            item_rows,
+            total,
+            per_patch,
+            stats["position_observations"],
+        ),
+        encoding="utf-8",
+    )
 
     size_kb = out_path.stat().st_size / 1024
     click.echo(f"[classic] wrote {out_path} ({size_kb:.0f} KB, {len(item_rows)} items)")
