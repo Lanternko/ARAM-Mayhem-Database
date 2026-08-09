@@ -101,11 +101,29 @@ ITEM_BOARD_MIN_GAMES = 50
 HERO_ITEM_MIN_GAMES = 30
 HERO_COMPLETE_ITEM_LIMIT = 6
 HERO_BOOTS_ITEM_LIMIT = 3
-HERO_COMPONENT_ITEM_LIMIT = 8
+HERO_STARTER_ITEM_LIMIT = 3
+HERO_FIRST_COMPLETE_ITEM_LIMIT = 3
 RELATION_MIN_GAMES = 100
 RELATION_PRIOR_GAMES = 100
 RELATION_LIMIT = 4
+# LCU timeline lane/role is an inferred signal.  Keep one strong secondary
+# position, but require enough observations to avoid promoting random noise.
+SECONDARY_POSITION_MIN_GAMES = 50
+SECONDARY_POSITION_MIN_SHARE = 0.15
 TRINKET_ITEM_IDS = frozenset({3340, 3341, 3342, 3363})
+BOOT_ITEM_IDS = frozenset({3172})  # Gunmetal Greaves lacks the Boots category.
+
+# Only show items that are genuinely bought as a starting choice.  The broad
+# metadata-based ``starter`` kind also contains every cheap component, which is
+# useful on the item table but misleading in a champion build summary.
+CLASSIC_STARTER_ITEM_IDS = frozenset({
+    1039,  # Hailblade
+    1054,  # Doran's Shield
+    1055,  # Doran's Blade
+    1056,  # Doran's Ring
+    2049,  # Guardian's Amulet
+    2050,  # Guardian's Shroud
+})
 
 
 def wilson_interval(wins: int, games: int, z: float = 1.96) -> tuple[float, float]:
@@ -285,7 +303,7 @@ def classify_item(meta: dict) -> str:
     categories = {str(c) for c in meta.get("categories") or []}
     if item_id in TRINKET_ITEM_IDS or "Trinket" in categories:
         return "trinket"
-    if "Boots" in categories:
+    if item_id in BOOT_ITEM_IDS or "Boots" in categories:
         return "boots"
     if bool(meta.get("upgrades")) or int(meta.get("price_total") or 0) < 1000:
         return "starter"
@@ -301,6 +319,8 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     item_wins: dict[int, int] = defaultdict(int)
     hero_item_games: dict[tuple[int, int], int] = defaultdict(int)
     hero_item_wins: dict[tuple[int, int], int] = defaultdict(int)
+    hero_first_slots_games: dict[tuple[int, int, int], int] = defaultdict(int)
+    hero_first_slots_wins: dict[tuple[int, int, int], int] = defaultdict(int)
     hero_position_games: dict[tuple[int, str], int] = defaultdict(int)
     ally_pair_games: dict[tuple[int, int], int] = defaultdict(int)
     ally_pair_wins: dict[tuple[int, int], int] = defaultdict(int)
@@ -354,6 +374,13 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
                 if int(item_id) > 0
             }
             won = (participant.get("teamId") == 100) == bool(blue_won)
+            item_slots = participant.get("itemSlots") or []
+            if len(item_slots) >= 2:
+                first_slot = base_item_id(int(item_slots[0] or 0))
+                second_slot = base_item_id(int(item_slots[1] or 0))
+                slot_key = (champion_id, first_slot, second_slot)
+                hero_first_slots_games[slot_key] += 1
+                hero_first_slots_wins[slot_key] += int(won)
             combat = hero_combat_sums[champion_id]
             combat["games"] += 1
             combat["minutes"] += duration_minutes
@@ -398,6 +425,8 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         "item_wins": item_wins,
         "hero_item_games": hero_item_games,
         "hero_item_wins": hero_item_wins,
+        "hero_first_slots_games": hero_first_slots_games,
+        "hero_first_slots_wins": hero_first_slots_wins,
         "hero_position_games": hero_position_games,
         "ally_pair_games": ally_pair_games,
         "ally_pair_wins": ally_pair_wins,
@@ -427,10 +456,21 @@ def build_rows(
             position: int(position_games.get((cid, position), 0))
             for position in POSITION_ORDER
         }
-        position, position_count = max(
-            observed_positions.items(), key=lambda pair: pair[1]
-        )
         position_total = sum(observed_positions.values())
+        ranked_positions = sorted(
+            observed_positions.items(),
+            key=lambda pair: (-pair[1], POSITION_ORDER.index(pair[0])),
+        )
+        position, position_count = ranked_positions[0]
+        positions = [position] if position_count else []
+        if position_total and len(ranked_positions) > 1:
+            secondary, secondary_count = ranked_positions[1]
+            if (
+                secondary_count >= SECONDARY_POSITION_MIN_GAMES
+                and secondary_count / position_total >= SECONDARY_POSITION_MIN_SHARE
+            ):
+                positions.append(secondary)
+        position_labels = [POSITION_LABELS[item] for item in positions]
         rows.append({
             "champion_id": cid,
             "alias": m.get("alias", f"#{cid}"),
@@ -450,7 +490,8 @@ def build_rows(
             "pick_rate": (g / (total_games * 2)) if total_games else 0.0,
             "tier": assign_tier(shrunk),
             "position": position if position_count else "",
-            "position_label": POSITION_LABELS.get(position, "未分類") if position_count else "未分類",
+            "positions": positions,
+            "position_label": "／".join(position_labels) if positions else "未分類",
             "position_games": position_count,
             "position_share": position_count / position_total if position_total else 0.0,
         })
@@ -615,9 +656,11 @@ def attach_hero_items(
     heroes: list[dict],
     hero_item_games: dict,
     hero_item_wins: dict,
+    hero_first_slots_games: dict,
+    hero_first_slots_wins: dict,
     item_meta: dict[int, dict],
 ) -> None:
-    """Attach commonly held, non-trinket final items to each hero detail."""
+    """Attach held items plus a clearly labelled slot-based first-item proxy."""
     by_champion: dict[int, list[dict]] = defaultdict(list)
     for (champion_id, item_id), games in hero_item_games.items():
         item = item_meta.get(item_id)
@@ -637,6 +680,47 @@ def attach_hero_items(
             "ci_lo": ci_lo,
             "ci_hi": ci_hi,
         })
+
+    # LCU does not preserve a purchase timeline.  The first non-boot completed
+    # item found in terminal inventory slot 0, then slot 1, is therefore only a
+    # proxy for the first completed item.  Aggregate the ordered slot pairs here
+    # after item metadata is available so we can classify candidates correctly.
+    first_complete_games: dict[tuple[int, int], int] = defaultdict(int)
+    first_complete_wins: dict[tuple[int, int], int] = defaultdict(int)
+    for (champion_id, first_slot, second_slot), games in hero_first_slots_games.items():
+        inferred_item_id = 0
+        for item_id in (first_slot, second_slot):
+            item = item_meta.get(item_id)
+            if item and classify_item(item) == "complete":
+                inferred_item_id = item_id
+                break
+        if not inferred_item_id:
+            continue
+        key = (champion_id, inferred_item_id)
+        first_complete_games[key] += games
+        first_complete_wins[key] += hero_first_slots_wins[
+            (champion_id, first_slot, second_slot)
+        ]
+
+    first_complete_by_champion: dict[int, list[dict]] = defaultdict(list)
+    for (champion_id, item_id), games in first_complete_games.items():
+        item = item_meta.get(item_id)
+        if not item or games < HERO_ITEM_MIN_GAMES:
+            continue
+        wins = first_complete_wins[(champion_id, item_id)]
+        raw_wr = wins / games
+        ci_lo, ci_hi = wilson_interval(wins, games)
+        first_complete_by_champion[champion_id].append({
+            "item_id": item_id,
+            "name_zh": item["name_zh"],
+            "name_en": item["name_en"],
+            "image": item["image"],
+            "kind": "complete",
+            "games": games,
+            "raw_wr": raw_wr,
+            "ci_lo": ci_lo,
+            "ci_hi": ci_hi,
+        })
     for hero in heroes:
         hero_items = by_champion.get(hero["champion_id"], [])
         for item in hero_items:
@@ -644,12 +728,24 @@ def attach_hero_items(
         hero_items.sort(key=lambda row: (-row["games"], -row["raw_wr"]))
         complete_items = [item for item in hero_items if item["kind"] == "complete"]
         boots_items = [item for item in hero_items if item["kind"] == "boots"]
-        component_items = [item for item in hero_items if item["kind"] == "starter"]
+        starter_items = [
+            item for item in hero_items
+            if item["item_id"] in CLASSIC_STARTER_ITEM_IDS
+        ]
+        first_complete_items = first_complete_by_champion.get(
+            hero["champion_id"], []
+        )
+        for item in first_complete_items:
+            item["lift"] = item["raw_wr"] - hero["raw_wr"]
+        first_complete_items.sort(key=lambda row: (-row["games"], -row["raw_wr"]))
         hero["items"] = (
             complete_items[:HERO_COMPLETE_ITEM_LIMIT]
             + boots_items[:HERO_BOOTS_ITEM_LIMIT]
         )
-        hero["component_items"] = component_items[:HERO_COMPONENT_ITEM_LIMIT]
+        hero["starter_items"] = starter_items[:HERO_STARTER_ITEM_LIMIT]
+        hero["first_complete_items"] = first_complete_items[
+            :HERO_FIRST_COMPLETE_ITEM_LIMIT
+        ]
         if hero["games"] < 100:
             hero["credibility"] = "探索"
         elif hero["ci_lo"] <= 0.5 <= hero["ci_hi"]:
@@ -806,7 +902,7 @@ footer code{color:var(--text-muted)}
    adds real controls, inline details, and final-inventory item evidence. */
 :root{--focus:oklch(82% .16 86);--surface-3:oklch(18% .012 255);--positive:oklch(73% .15 142);--negative:oklch(68% .18 30);--warning:oklch(73% .12 63);
 --wr-5:oklch(84% .17 145);--wr-4:oklch(78% .10 150);--wr-3:oklch(78% .025 255);--wr-2:oklch(77% .10 25);--wr-1:oklch(72% .19 25);
---pick-5:oklch(85% .14 205);--pick-4:oklch(85% .15 92);--pick-3:oklch(76% .09 80);--pick-2:oklch(76% .035 245);--pick-1:oklch(62% .025 250)}
+--pick-5:oklch(72% .22 350);--pick-4:oklch(64% .15 350);--pick-3:oklch(72% .07 345);--pick-2:oklch(82% .14 175);--pick-1:oklch(66% .02 250)}
 .skip-link{position:fixed;left:12px;top:-64px;z-index:80;padding:10px 14px;border-radius:8px;background:var(--focus);color:#14110a;font-weight:700;text-decoration:none}.skip-link:focus{top:12px}
 .site-header-inner{height:64px;gap:16px}.site-header-meta{display:flex;gap:12px;align-items:center;color:var(--text-dim);font-size:12px;white-space:nowrap}.site-header-meta span+span{border-left:1px solid var(--border);padding-left:12px}.site-header-meta b{color:var(--warning);font-weight:600}.unlisted{order:3;margin-left:auto;flex:0 0 auto}.site-header-meta{order:4}
 .research-context{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:30px 0 0;padding-top:16px;border-top:1px solid var(--border)}
@@ -817,15 +913,15 @@ footer code{color:var(--text-muted)}
 .tier-groups{display:grid;gap:20px}.tier-group{padding:0 0 12px;border-bottom:1px solid var(--border)}.tier-group:last-child{border-bottom:0}.tier-group-heading{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid color-mix(in oklab,var(--tier-color,#555) 30%,transparent)}.tier-group-heading h2{margin:0;line-height:1}.tier-group-heading p{margin:0;color:var(--text-muted);font-size:12px}.tier-group-heading p span{color:var(--text);font-weight:700}.tier-group[data-tier-group="OP"] .tier-pill{background-size:200% 200%;animation:prismShift 6s ease-in-out infinite;color:#2a1a4a;box-shadow:0 0 12px rgba(220,180,255,.55),0 0 28px rgba(170,210,255,.30),inset 0 0 0 1px rgba(255,255,255,.55);text-shadow:0 1px 0 rgba(255,255,255,.8)}.tier-group[data-tier-group="OP"] .tier-pill::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.75) 50%,transparent 65%);background-size:220% 100%;animation:shineSweep 3.2s linear infinite;z-index:1}
 .hero-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 8px}.hero-tile{display:grid;gap:5px;min-width:0;border:0;background:transparent;padding:0;cursor:pointer;color:var(--text);text-align:left}.tile-icon{position:relative;aspect-ratio:1;border:2px solid var(--tier-color,#555);border-radius:8px;background:var(--chip-bg);overflow:hidden;transition:transform .08s,box-shadow .08s,border-color .08s}.hero-tile img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}.tile-icon::after{content:"";position:absolute;inset:2px;border-radius:6px;background:rgba(10,11,13,.08);pointer-events:none}.tile-name,.tile-stat{font-variant-numeric:tabular-nums;pointer-events:none}.tile-name{padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;line-height:1.25}.tile-stat{position:absolute;z-index:1;left:0;bottom:0;padding:2px 5px;border-radius:0 6px 0 0;background:rgba(10,12,16,.92);font-size:10px;font-weight:700;line-height:1.2}.tier-group[data-tier-group="OP"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;box-shadow:0 0 8px rgba(220,180,255,.45)}.tier-group[data-tier-group="T1"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;box-shadow:0 0 6px rgba(255,90,60,.42)}.hero-tile[aria-pressed="true"] .tile-icon{filter:brightness(1.08);box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
 .rate-wr-5{color:var(--wr-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-5) 20%,transparent)}.rate-wr-4{color:var(--wr-4);font-weight:750}.rate-wr-3{color:var(--wr-3);font-weight:650}.rate-wr-2{color:var(--wr-2);font-weight:700}.rate-wr-1{color:var(--wr-1);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-1) 22%,transparent)}.rate-pick-5{color:var(--pick-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--pick-5) 20%,transparent)}.rate-pick-4{color:var(--pick-4);font-weight:750}.rate-pick-3{color:var(--pick-3);font-weight:700}.rate-pick-2{color:var(--pick-2);font-weight:650}.rate-pick-1{color:var(--pick-1);font-weight:600}
-.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:flex-start}.detail-head>img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-identity{min-width:0;flex:1}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.combat-profile{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}.combat-profile span{display:grid;gap:1px}.combat-profile b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.combat-profile small{color:var(--text-dim);font-size:10px}.detail-close{margin-left:auto;min-width:44px;min-height:44px;border:1px solid var(--border-strong);border-radius:8px;background:transparent;color:var(--text-muted);font:14px inherit;cursor:pointer}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-stat dd.positive{color:var(--positive)}.detail-stat dd.uncertain{color:var(--warning)}.detail-loadout{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-loadout h3{margin:0 0 9px;color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-loadout-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.detail-loadout-item{min-width:0;color:var(--text-muted);text-align:center}.detail-loadout-item img{display:block;width:44px;height:44px;margin:0 auto 5px;border:1px solid var(--border);border-radius:7px}.detail-loadout-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
-.detail-items{border-top:1px solid var(--border);padding-top:14px}.detail-items-head{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:9px}.detail-items h3{margin:0;font-size:14px}.detail-items p{margin:0;color:var(--text-dim);font-size:11px}.detail-item-list{display:grid;gap:8px}.detail-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.detail-item:last-child{border-bottom:0}.detail-item img{width:32px;height:32px;border-radius:5px}.detail-item strong{display:block;font-size:13px}.detail-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.detail-item .item-stat{text-align:right;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.item-stat b{color:var(--text);font-size:13px}.item-stat .lift-up{color:var(--positive)}.item-stat .lift-down{color:var(--negative)}
-.detail-item-group{margin-top:14px}.detail-item-group:first-of-type{margin-top:0}.detail-item-group h4{display:flex;align-items:baseline;gap:7px;margin:0 0 3px;color:var(--text-muted);font-size:12px;font-weight:600}.detail-item-group h4 span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.component-items{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}.component-items summary{display:flex;align-items:center;gap:7px;min-height:32px;color:var(--text-muted);font-size:12px;font-weight:600;cursor:pointer;list-style:none}.component-items summary::-webkit-details-marker{display:none}.component-items summary::before{content:"›";color:var(--text-dim);font-size:17px;line-height:1;transform:rotate(0);transition:transform .14s ease-out}.component-items[open] summary::before{transform:rotate(90deg)}.component-items summary span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.component-items .detail-item-list{margin-top:4px}
+.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:flex-start}.detail-head>img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-identity{min-width:0;flex:1}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.combat-profile{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}.combat-profile span{display:grid;gap:1px}.combat-profile b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.combat-profile small{color:var(--text-dim);font-size:10px}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-loadout{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-loadout h3{margin:0 0 9px;color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-loadout-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.detail-loadout-item{min-width:0;color:var(--text-muted);text-align:center}.detail-loadout-item img{display:block;width:44px;height:44px;margin:0 auto 5px;border:1px solid var(--border);border-radius:7px}.detail-loadout-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
+.detail-items{border-top:1px solid var(--border);padding-top:14px}.detail-items-head{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:12px}.detail-items h3{margin:0;font-size:14px}.detail-items p{margin:0;color:var(--text-dim);font-size:11px}.detail-equipment-columns{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:26px}.detail-equipment-column+ .detail-equipment-column{padding-left:26px;border-left:1px solid var(--border)}.detail-item-list{display:grid;gap:8px}.detail-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.detail-item:last-child{border-bottom:0}.detail-item img{width:32px;height:32px;border-radius:5px}.detail-item strong{display:block;font-size:13px}.detail-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.detail-item .item-stat{text-align:right;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.item-stat .item-rate{font-size:13px;font-weight:700;white-space:nowrap}.item-stat .lift-up{color:var(--positive)}.item-stat .lift-down{color:var(--negative)}
+.detail-item-group{margin-top:16px}.detail-item-group:first-child{margin-top:0}.detail-item-group h4{display:flex;align-items:baseline;gap:7px;margin:0 0 3px;color:var(--text-muted);font-size:12px;font-weight:600}.detail-item-group h4 span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.detail-item-group>p{margin:0 0 4px;color:var(--text-dim);font-size:10px;line-height:1.45}
 .detail-relationships{grid-column:1/-1;border-top:1px solid var(--border);padding-top:14px}.relationship-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.relationship-group h3{margin:0;font-size:14px}.relationship-group>p{margin:3px 0 7px;color:var(--text-dim);font-size:11px;line-height:1.45}.relationship-list{display:grid}.relationship-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.relationship-row:last-child{border-bottom:0}.relationship-row img{width:28px;height:28px;border-radius:5px}.relationship-row strong{display:block;font-size:12px}.relationship-row small{display:block;margin-top:1px;color:var(--text-dim);font-size:10px}.relationship-stat{text-align:right;font-size:11px;font-variant-numeric:tabular-nums}.relationship-stat b{display:block;color:var(--text);font-size:12px}.relationship-stat .lift-up{color:var(--positive)}.relationship-stat .lift-down{color:var(--negative)}
-.data-section-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between;margin:4px 0 12px}.data-section-head h2{margin:0;font-size:18px}.data-section-head p{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5;text-align:right}.table-scroller{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.research-table{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}.research-table th,.research-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;white-space:nowrap}.research-table th:first-child,.research-table td:first-child,.research-table th:nth-child(2),.research-table td:nth-child(2){text-align:left}.research-table th{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--text-muted);font-size:11px;letter-spacing:.03em}.research-table th button{display:inline-flex;gap:4px;align-items:center;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.research-table th button[aria-sort="descending"],.research-table th button[aria-sort="ascending"]{color:var(--focus)}.research-table tbody tr:hover{background:rgba(255,255,255,.025)}.research-table tbody tr:last-child td{border-bottom:0}.table-hero{display:flex;gap:8px;align-items:center;min-width:180px;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer;padding:0;text-align:left}.table-hero img,.table-item img{width:30px;height:30px;border-radius:5px;object-fit:cover}.table-hero small,.table-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.table-item{display:flex;gap:8px;align-items:center;min-width:180px}.rate-positive{color:var(--positive);font-weight:700}.rate-negative{color:var(--negative);font-weight:700}.rate-neutral{color:var(--warning);font-weight:700}.mono{font-variant-numeric:tabular-nums}.item-kind{display:inline-block;padding:2px 6px;border:1px solid var(--border);border-radius:99px;color:var(--text-muted);font-size:11px}.item-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;color:var(--text-muted);font-size:12px;line-height:1.6}.item-note b{color:var(--warning);font-weight:600}.empty-state{padding:28px 14px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--text-muted);text-align:center;font-size:14px}.method{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px;line-height:1.7}.method summary{color:var(--text);font-weight:600;cursor:pointer}.method p{max-width:75ch}.method code{color:var(--text-muted)}
-button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}@media (pointer:fine){.hero-tile:hover{transform:translateY(-3px) scale(1.015)}.hero-tile:hover .tile-icon{border-color:color-mix(in srgb,var(--focus) 55%,var(--tier-color,#555));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px -8px rgba(245,197,24,.35)}.classic-tab:hover,.detail-close:hover{color:var(--text)}}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+.data-section-head{display:flex;gap:12px;align-items:baseline;justify-content:space-between;margin:4px 0 12px}.data-section-head h2{margin:0;font-size:18px}.data-section-head p{margin:0;color:var(--text-muted);font-size:12px;line-height:1.5;text-align:right}.table-scroller{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface)}.research-table{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}.research-table th,.research-table td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);text-align:right;white-space:nowrap}.research-table th:first-child,.research-table td:first-child,.research-table th:nth-child(2),.research-table td:nth-child(2){text-align:left}.research-table th{position:sticky;top:0;z-index:1;background:var(--surface-2);color:var(--text-muted);font-size:11px;letter-spacing:.03em}.research-table th button{display:inline-flex;gap:4px;align-items:center;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer}.research-table th button[aria-sort="descending"],.research-table th button[aria-sort="ascending"]{color:var(--focus)}.research-table tbody tr:hover{background:rgba(255,255,255,.025)}.research-table tbody tr:last-child td{border-bottom:0}.table-hero{display:flex;gap:11px;align-items:center;min-width:180px;border:0;background:transparent;color:var(--text);font:inherit;cursor:pointer;padding:0;text-align:left}.table-hero img{width:42px;height:42px;border:1px solid var(--border-strong);border-radius:7px;object-fit:cover}.table-hero strong{display:block;font-size:15px;font-weight:700;line-height:1.2}.table-item img{width:30px;height:30px;border-radius:5px;object-fit:cover}.table-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.table-item{display:flex;gap:8px;align-items:center;min-width:180px}.rate-positive{color:var(--positive);font-weight:700}.rate-negative{color:var(--negative);font-weight:700}.rate-neutral{color:var(--warning);font-weight:700}.mono{font-variant-numeric:tabular-nums}.item-kind{display:inline-block;padding:2px 6px;border:1px solid var(--border);border-radius:99px;color:var(--text-muted);font-size:11px}.item-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;color:var(--text-muted);font-size:12px;line-height:1.6}.item-note b{color:var(--warning);font-weight:600}.empty-state{padding:28px 14px;border:1px dashed var(--border-strong);border-radius:12px;color:var(--text-muted);text-align:center;font-size:14px}.method{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px;line-height:1.7}.method summary{color:var(--text);font-weight:600;cursor:pointer}.method p{max-width:75ch}.method code{color:var(--text-muted)}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}@media (pointer:fine){.hero-tile:hover{transform:translateY(-3px) scale(1.015)}.hero-tile:hover .tile-icon{border-color:color-mix(in srgb,var(--focus) 55%,var(--tier-color,#555));box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 24px -8px rgba(245,197,24,.35)}.classic-tab:hover{color:var(--text)}}@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media (min-width:700px){.wrap{padding-top:28px}.hero-grid{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:10px}.hero-detail{grid-template-columns:minmax(220px,.72fr) minmax(320px,1fr) minmax(190px,.52fr)}.detail-head{grid-column:1;grid-row:1/span 2;align-items:flex-start}.detail-stats{grid-column:2;grid-row:1}.detail-loadout{grid-column:3;grid-row:1}.detail-items{grid-column:2/4;grid-row:2}.site-header-meta{display:flex}}
 @media (max-width:960px){.site-header-meta{display:none}}
-@media (max-width:699px){.site-header-inner{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 10px 0;gap:0 10px}.brand-title{font-size:22px}.unlisted{margin-left:auto}.site-header-meta{display:none}.classic-tabs{order:10;flex-basis:calc(100% + 20px);margin:4px -10px 0;padding:0 10px}.classic-tab{min-height:42px;padding:8px 12px 10px;font-size:15px}.research-context{margin-top:24px}.research-context strong{width:100%}.research-bar{align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}.filter-chips{width:100%;max-width:100%;flex-wrap:wrap;gap:4px}.filter-chip{min-height:34px;padding:4px 10px;font-size:11px}.filter-count{display:none}.filter-search{width:100%;min-width:0;margin-left:0}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.combat-profile{gap:10px}.detail-loadout-item img{width:40px;height:40px}.relationship-columns{grid-template-columns:1fr;gap:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.item-note{align-items:flex-start}}
+@media (max-width:699px){.site-header-inner{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 10px 0;gap:0 10px}.brand-title{font-size:22px}.unlisted{margin-left:auto}.site-header-meta{display:none}.classic-tabs{order:10;flex-basis:calc(100% + 20px);margin:4px -10px 0;padding:0 10px}.classic-tab{min-height:42px;padding:8px 12px 10px;font-size:15px}.research-context{margin-top:24px}.research-context strong{width:100%}.research-bar{align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}.filter-chips{width:100%;max-width:100%;flex-wrap:wrap;gap:4px}.filter-chip{min-height:34px;padding:4px 10px;font-size:11px}.filter-count{display:none}.filter-search{width:100%;min-width:0;margin-left:0}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.combat-profile{gap:10px}.detail-loadout-item img{width:40px;height:40px}.relationship-columns{grid-template-columns:1fr;gap:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.detail-equipment-columns{grid-template-columns:1fr;gap:18px}.detail-equipment-column+ .detail-equipment-column{padding:18px 0 0;border-top:1px solid var(--border);border-left:0}.item-note{align-items:flex-start}}
 """
 
 JS = """
@@ -855,18 +951,19 @@ JS = """
   function pickToneClass(value){var v=Number(value)||0;return v>=.18?'rate-pick-5':v>=.12?'rate-pick-4':v>=.07?'rate-pick-3':v>=.04?'rate-pick-2':'rate-pick-1';}
   function clearToneClass(element){element.className=element.className.replace(/\\brate-(?:wr|pick)-[1-5]\\b/g,'').trim();}
   function ciMarkup(row){var lo=Math.max(0,Math.min(100,(row.ci_lo-.3)/.4*100)),hi=Math.max(0,Math.min(100,(row.ci_hi-.3)/.4*100)),raw=Math.max(0,Math.min(100,(row.raw_wr-.3)/.4*100));return '<div class="ci-line"><span><b>'+pct(row.ci_lo)+'</b><b>'+pct(row.ci_hi)+'</b></span><div class="ci-track"><i style="left:'+lo.toFixed(2)+'%;width:'+Math.max(hi-lo,1).toFixed(2)+'%"></i><b style="left:'+raw.toFixed(2)+'%"></b></div></div>';}
-  function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),position=positionFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){return (!query||hero.search.indexOf(query)>=0)&&(!position||hero.position===position)&&hero.games>=minimum;});}
+  function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),position=positionFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){var positions=hero.positions||[hero.position];return (!query||hero.search.indexOf(query)>=0)&&(!position||positions.indexOf(position)>=0)&&hero.games>=minimum;});}
   function activeItems(){var query=(search.value||'').trim().toLowerCase(),kind=itemKindFilter.value,minimum=Number(minGames.value||0);return data.items.filter(function(item){return (!query||item.search.indexOf(query)>=0)&&(!kind||item.kind===kind)&&item.games>=minimum;});}
   function compare(field){return function(a,b){var av=a[field],bv=b[field],result=typeof av==='string'?String(av).localeCompare(String(bv),'zh-Hant'):Number(av)-Number(bv);return state.desc?-result:result;};}
   function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});var field=heroSort.value;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');clearToneClass(stat);if(field==='raw_wr'){stat.textContent=pct(hero.raw_wr);stat.classList.add(wrToneClass(hero.raw_wr));}else if(field==='pick_rate'){stat.textContent=pct(hero.pick_rate);stat.classList.add(pickToneClass(hero.pick_rate));}else if(field==='games')stat.textContent=num(hero.games);else{stat.textContent=pct(hero.shrunk_wr);stat.classList.add(wrToneClass(hero.shrunk_wr));}}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
-  function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'"><img src="'+esc(hero.image)+'" alt=""><span>'+esc(hero.name_zh)+' <small>'+esc(hero.name_en)+'</small></span></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</td><td class="mono '+pickToneClass(hero.pick_rate)+'">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
+  function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'" aria-label="'+esc(hero.name_zh+' '+hero.name_en)+'"><img src="'+esc(hero.image)+'" alt=""><strong>'+esc(hero.name_zh)+'</strong></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</td><td class="mono '+pickToneClass(hero.pick_rate)+'">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
   function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono '+pickToneClass(item.hold_rate)+'">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
-  function itemRows(items){return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>持有 '+num(item.games)+' 場</small></div><div class="item-stat"><b class="'+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</b><br><span class="'+liftClass+'">對英雄 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
-  function renderItemsForHero(hero){var complete=hero.items.filter(function(item){return item.kind==='complete';}),boots=hero.items.filter(function(item){return item.kind==='boots';}),components=hero.component_items||[],sections=[];if(complete.length)sections.push('<section class="detail-item-group"><h4>完整裝備 <span>'+num(complete.length)+'</span></h4>'+itemRows(complete)+'</section>');if(boots.length)sections.push('<section class="detail-item-group"><h4>鞋子 <span>'+num(boots.length)+'</span></h4>'+itemRows(boots)+'</section>');if(components.length)sections.push('<details class="component-items"><summary>常見組件 <span>'+num(components.length)+' 件</span></summary>'+itemRows(components)+'</details>');return sections.length?sections.join(''):'<p class="research-tip">沒有足夠樣本的非飾品終局裝備可呈現。</p>';}
+  function itemRows(items,sampleLabel){sampleLabel=sampleLabel||'持有';return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>'+esc(sampleLabel)+' '+num(item.games)+' 場</small></div><div class="item-stat"><span class="item-rate '+liftClass+'">'+pct(item.raw_wr)+'（'+(lift>=0?'+':'')+(lift*100).toFixed(1)+'%）</span></div></div>';}).join('')+'</div>';}
+  function itemGroup(title,items,sampleLabel,note){if(!items.length)return '';return '<section class="detail-item-group"><h4>'+esc(title)+' <span>'+num(items.length)+'</span></h4>'+(note?'<p>'+esc(note)+'</p>':'')+itemRows(items,sampleLabel)+'</section>';}
+  function renderItemsForHero(hero){var complete=(hero.items||[]).filter(function(item){return item.kind==='complete';}),boots=(hero.items||[]).filter(function(item){return item.kind==='boots';}),starters=hero.starter_items||[],firstComplete=hero.first_complete_items||[];var left=itemGroup('鞋子',boots,'持有')+itemGroup('常見出門裝',starters,'終局仍持有','只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。')+itemGroup('推定首件大裝',firstComplete,'前兩格出現','依終局背包第 1–2 格推估，並非實際購買時間線。');var right=itemGroup('常見終局完整裝備',complete,'持有');return (left||right)?'<div class="detail-equipment-columns"><div class="detail-equipment-column">'+(left||'<p class="research-tip">左欄目前沒有達到樣本門檻的資料。</p>')+'</div><div class="detail-equipment-column">'+(right||'<p class="research-tip">沒有足夠樣本的終局完整裝備。</p>')+'</div></div>':'<p class="research-tip">沒有足夠樣本的裝備資料可呈現。</p>';}
   function renderCompactLoadout(hero){var items=(hero.items||[]).filter(function(item){return item.kind==='complete';}).slice(0,3);if(!items.length)return '';return '<section class="detail-loadout"><h3>最常見完整裝備</h3><div class="detail-loadout-items">'+items.map(function(item){return '<div class="detail-loadout-item" title="'+esc(item.name_zh)+' · 持有 '+num(item.games)+' 場"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+'</span></div>';}).join('')+'</div></section>';}
   function relationshipRows(rows){if(!rows.length)return '<p class="research-tip">目前沒有達到 100 場門檻的組合。</p>';return '<div class="relationship-list">'+rows.map(function(row){var lift=Number(row.lift)||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="relationship-row"><img src="'+esc(row.image)+'" alt=""><div><strong>'+esc(row.name_zh)+'</strong><small>'+num(row.games)+' 場共同樣本</small></div><div class="relationship-stat"><b class="'+wrToneClass(row.adjusted_wr)+'">'+pct(row.adjusted_wr)+'</b><span class="'+liftClass+'">相對預期 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
   function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var adjustedWrCls=wrToneClass(hero.shrunk_wr),pickCls=pickToneClass(hero.pick_rate),ciState=hero.credibility==='高'?'positive':'uncertain',combat=hero.combat||{},combatMarkup='<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p>'+combatMarkup+'</div><button type="button" class="detail-close" id="detail-close" aria-label="收起 '+esc(hero.name_zh)+' 詳情">收起</button></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+adjustedWrCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（場次）</dt><dd>'+num(hero.games)+'</dd></div><div class="detail-stat"><dt>可信度</dt><dd class="'+ciState+'">'+esc(hero.credibility)+'</dd></div><div class="detail-stat"><dt>選用率</dt><dd class="'+pickCls+'">'+pct(hero.pick_rate)+'</dd></div></dl>'+renderCompactLoadout(hero)+'<section class="detail-items"><div class="detail-items-head"><h3>常見終局裝備</h3><p>持有者關聯，非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>'+renderRelationships(hero);var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;document.getElementById('detail-close').addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var adjustedWrCls=wrToneClass(hero.shrunk_wr),combat=hero.combat||{},combatMarkup='<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p>'+combatMarkup+'</div></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+adjustedWrCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（選用率）</dt><dd>'+num(hero.games)+'（'+pct(hero.pick_rate)+'）</dd></div></dl>'+renderCompactLoadout(hero)+'<section class="detail-items"><div class="detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估，並非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>'+renderRelationships(hero);var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
@@ -1125,7 +1222,7 @@ def render_research_preview(
             str(hero.get(key) or "").lower()
             for key in ("name_zh", "name_en", "title_zh", "alias")
         )
-        for item_key in ("items", "component_items"):
+        for item_key in ("items", "starter_items", "first_complete_items"):
             for item in payload_hero.get(item_key) or []:
                 item["kind_label"] = kind_label.get(item["kind"], item["kind"])
         payload_heroes.append(payload_hero)
@@ -1226,7 +1323,7 @@ def render_research_preview(
     for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率"), ("ci_lo", "95% CI")):
         page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
-    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路取每位英雄在 LCU timeline.lane／role 中最多的分類；這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 " + str(RELATION_MIN_GAMES) + " 場的組合，並以 " + str(RELATION_PRIOR_GAMES) + " 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮；它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線，因此本頁不顯示或推測這兩項。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
+    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路以每位英雄在 LCU timeline.lane／role 中最多的分類為主要分路；次高分類至少要有 " + str(SECONDARY_POSITION_MIN_GAMES) + " 筆、且占該英雄有效分路紀錄 " + str(round(SECONDARY_POSITION_MIN_SHARE * 100)) + "%，才列為次要分路，最多顯示兩個。這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 " + str(RELATION_MIN_GAMES) + " 場的組合，並以 " + str(RELATION_PRIOR_GAMES) + " 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮；它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線，因此本頁不顯示或推測這兩項。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
     page.append(
         "<footer class='research-context' aria-label='資料範圍'>"
         "<strong>經典模式資料研究</strong>"
@@ -1303,6 +1400,8 @@ def main(
         rows,
         stats["hero_item_games"],
         stats["hero_item_wins"],
+        stats["hero_first_slots_games"],
+        stats["hero_first_slots_wins"],
         item_meta,
     )
     if not item_rows:
