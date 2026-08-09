@@ -67,10 +67,12 @@ class ClassicResearchPageTests(unittest.TestCase):
             heroes,
             {(1, 3006): 80},
             {(1, 3006): 46},
+            {},
+            {},
             item_meta,
         )
 
-        page = classic.render_research_preview(heroes, items, 12, {"16.15.800": 12})
+        page = classic.render_research_preview(heroes, items, 12, {"16.15.800": 12}, 0)
 
         self.assertIn("id='classic-data'", page)
         self.assertIn("英雄 Tier", page)
