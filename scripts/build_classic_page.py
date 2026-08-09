@@ -92,6 +92,7 @@ ICON_URL_PREFIX = "assets/icons/classic"
 ITEM_ICON_DIR = Path("docs/assets/icons/classic-items")
 ITEM_ICON_URL_PREFIX = "assets/icons/classic-items"
 ITEM_ICON_VERSION = "16.15.1"
+MAIN_SITE_CSS_PATH = Path(__file__).with_name("templates") / "site.css"
 
 # The client reports JADE inventory ids as ``77`` + the ordinary item id, e.g.
 # 773006 = Berserker's Greaves (3006).  Metadata and Data Dragon art are keyed
@@ -924,6 +925,60 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 @media (max-width:699px){.site-header-inner{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 10px 0;gap:0 10px}.brand-title{font-size:22px}.unlisted{margin-left:auto}.site-header-meta{display:none}.classic-tabs{order:10;flex-basis:calc(100% + 20px);margin:4px -10px 0;padding:0 10px}.classic-tab{min-height:42px;padding:8px 12px 10px;font-size:15px}.research-context{margin-top:24px}.research-context strong{width:100%}.research-bar{align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}.filter-chips{width:100%;max-width:100%;flex-wrap:wrap;gap:4px}.filter-chip{min-height:34px;padding:4px 10px;font-size:11px}.filter-count{display:none}.filter-search{width:100%;min-width:0;margin-left:0}.data-section-head{align-items:flex-start;flex-direction:column}.data-section-head p{text-align:left}.table-scroller{margin-right:-2px;margin-left:-2px}.hero-detail{padding:12px}.detail-head h2{font-size:18px}.combat-profile{gap:10px}.detail-loadout-item img{width:40px;height:40px}.relationship-columns{grid-template-columns:1fr;gap:18px}.detail-items-head{align-items:flex-start;flex-direction:column}.detail-equipment-columns{grid-template-columns:1fr;gap:18px}.detail-equipment-column+ .detail-equipment-column{padding:18px 0 0;border-top:1px solid var(--border);border-left:0}.item-note{align-items:flex-start}}
 """
 
+
+# The Classic route deliberately reuses the production site's actual shell
+# stylesheet instead of maintaining a look-alike.  Keep Classic-only rules
+# below it so future main-site spacing and component changes flow through here
+# automatically while the few mode-specific differences stay explicit.
+CLASSIC_PARITY_CSS = """
+.classic-header-actions{min-width:0}
+.site-main.view-home{display:block}
+.site-main .app-shell{grid-template-columns:minmax(0,1fr)}
+.site-main .main-col{min-width:0}
+.site-main .view{display:none}
+.site-main .view.is-active{display:block}
+.filter-source{display:none!important}
+.research-tip[hidden],.view[hidden],.empty-state[hidden],.hero-detail[hidden],
+.role-chips[hidden],.hero-tile[hidden],.tier-block[hidden]{display:none!important}
+.tier-grid{row-gap:26px}
+.hero-tile.champ{appearance:none;display:block;width:100%;padding:0;margin:0 0 16px;
+color:var(--text);font:inherit;text-align:left;overflow:visible;
+content-visibility:visible;contain:none}
+.hero-tile.champ .wr{left:0;bottom:0;padding:2px 5px;border-radius:0 6px 0 0;
+font-size:10px;line-height:1.2;z-index:2}
+.hero-tile.champ .name{left:0;right:0;bottom:-17px;padding:2px 1px;background:none;
+color:var(--text);font-size:10px;font-weight:600;text-align:left;opacity:1;
+text-shadow:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hero-tile.champ[aria-pressed="true"]{transform:translateY(-2px);filter:brightness(1.08);
+box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
+.detail-host>.hero-detail{grid-column:1/-1;width:100%}
+.hero-detail.detail{display:block;margin:6px 0 4px;background:var(--panel-surface);border:1px solid var(--panel-line);
+border-radius:10px;padding:0 18px 18px;box-shadow:var(--panel-shadow)}
+.hero-detail .detail-tab-rail{background:var(--panel-surface)}
+.hero-detail .detail-head{min-height:58px}
+.hero-detail .detail-head .detail-identity{display:flex;align-items:center;gap:8px;min-width:0}
+.hero-detail .detail-head .cname{font-size:16px;font-weight:600}
+.classic-position-tags{display:flex;gap:5px;flex-wrap:wrap}
+.classic-position-tag{padding:2px 7px;border:1px solid var(--border);border-radius:999px;
+color:var(--text-muted);font-size:10px;font-weight:600}
+.classic-overview-head{display:flex;align-items:baseline;gap:9px}
+.classic-overview-head .ovr-wr{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.classic-overview-head .ovr-meta{color:var(--text-muted);font-size:12px}
+.classic-overview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.34fr);gap:24px}
+.classic-overview-grid .detail-loadout{padding-top:0;border-top:0}
+.classic-blank{min-height:180px;display:flex;align-items:center;justify-content:center;
+color:var(--text-dim);font-size:12px}
+.detail-equipment-columns{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr)}
+.research-context{margin-top:32px}
+@media(max-width:699px){
+  .site-main{padding:16px 12px 48px}
+  .tier-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:22px 5px}
+  .hero-tile.champ{margin-bottom:14px}
+  .classic-overview-grid{grid-template-columns:1fr;gap:16px}
+  .detail-equipment-columns{grid-template-columns:1fr}
+}
+"""
+
 JS = """
 (function(){
   var dataEl=document.getElementById('classic-data');
@@ -943,6 +998,7 @@ JS = """
   var shownTotal=document.getElementById('shown-total');
   var shownUnit=document.getElementById('shown-unit');
   var tabs=[].slice.call(document.querySelectorAll('[role="tab"]'));
+  var navIndicator=document.querySelector('.nav-ind');
   var views=[].slice.call(document.querySelectorAll('[data-view]'));
   function esc(value){return String(value==null?'':value).replace(/[&<>'"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c];});}
   function pct(value){return (Number(value)*100).toFixed(1)+'%';}
@@ -963,9 +1019,12 @@ JS = """
   function renderCompactLoadout(hero){var items=(hero.items||[]).filter(function(item){return item.kind==='complete';}).slice(0,3);if(!items.length)return '';return '<section class="detail-loadout"><h3>最常見完整裝備</h3><div class="detail-loadout-items">'+items.map(function(item){return '<div class="detail-loadout-item" title="'+esc(item.name_zh)+' · 持有 '+num(item.games)+' 場"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+'</span></div>';}).join('')+'</div></section>';}
   function relationshipRows(rows){if(!rows.length)return '<p class="research-tip">目前沒有達到 100 場門檻的組合。</p>';return '<div class="relationship-list">'+rows.map(function(row){var lift=Number(row.lift)||0,liftClass=lift>0?'lift-up':lift<0?'lift-down':'';return '<div class="relationship-row"><img src="'+esc(row.image)+'" alt=""><div><strong>'+esc(row.name_zh)+'</strong><small>'+num(row.games)+' 場共同樣本</small></div><div class="relationship-stat"><b class="'+wrToneClass(row.adjusted_wr)+'">'+pct(row.adjusted_wr)+'</b><span class="'+liftClass+'">相對預期 '+(lift>=0?'+':'')+(lift*100).toFixed(1)+'pp</span></div></div>';}).join('')+'</div>';}
   function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});var adjustedWrCls=wrToneClass(hero.shrunk_wr),combat=hero.combat||{},combatMarkup='<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';detail.innerHTML='<div class="detail-head"><img src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><h2>'+esc(hero.name_zh)+'</h2><p>'+esc(hero.name_en)+' · '+esc(hero.title_zh)+' · 常見分路 '+esc(hero.position_label)+'</p>'+combatMarkup+'</div></div><dl class="detail-stats"><div class="detail-stat"><dt>調整後勝率</dt><dd class="'+adjustedWrCls+'">'+pct(hero.shrunk_wr)+'</dd></div><div class="detail-stat"><dt>樣本數（選用率）</dt><dd>'+num(hero.games)+'（'+pct(hero.pick_rate)+'）</dd></div></dl>'+renderCompactLoadout(hero)+'<section class="detail-items"><div class="detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估，並非購買順序或因果推薦</p></div>'+renderItemsForHero(hero)+'</section>'+renderRelationships(hero);var group=document.querySelector('[data-tier-group="'+hero.tier+'"]');if(group)group.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function combatMarkup(hero){var combat=hero.combat||{};return '<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';}
+  function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['augments','增幅裝置'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-wr '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</span><span class="ovr-meta">調整後勝率 · '+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderRelationships(hero)+'</div><div>'+renderCompactLoadout(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',augments='<div class="detail-section classic-blank" aria-label="經典模式沒有增幅裝置資料"></div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+'</div>',panels=[overview,items,augments,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});detail.innerHTML=detailTabSet(hero);var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;var closeButton=detail.querySelector('.detail-close');if(closeButton)closeButton.addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
-  function setTab(tab,focus){state.tab=tab;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;if(selected&&focus)button.focus();});views.forEach(function(view){view.hidden=view.dataset.view!==tab;});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
+  function moveNavIndicator(button){if(!navIndicator||!button)return;navIndicator.style.setProperty('--ind-x',button.offsetLeft+'px');navIndicator.style.setProperty('--ind-w',button.offsetWidth+'px');}
+  function setTab(tab,focus){state.tab=tab;var activeButton=null;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.classList.toggle('active',selected);button.tabIndex=selected?0:-1;if(selected){activeButton=button;if(focus)button.focus();}});moveNavIndicator(activeButton);views.forEach(function(view){var selected=view.dataset.view===tab;view.hidden=!selected;view.classList.toggle('is-active',selected);});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
   function refresh(){updateTiles();renderHeroes();renderItems();updateCount();}
   tabs.forEach(function(tab,index){tab.addEventListener('click',function(){setTab(tab.dataset.tab,false);});tab.addEventListener('keydown',function(event){if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();var next=(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;setTab(tabs[next].dataset.tab,true);});});
@@ -1200,6 +1259,11 @@ def render_research_preview(
     position_observations: int,
 ) -> str:
     """Render the interactive Classic research preview as a self-contained page."""
+    if not MAIN_SITE_CSS_PATH.exists():
+        raise click.ClickException(
+            f"main-site stylesheet not found: {MAIN_SITE_CSS_PATH}"
+        )
+    main_site_css = MAIN_SITE_CSS_PATH.read_text(encoding="utf-8")
     built = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     mean_err = (
         sum((row["ci_hi"] - row["ci_lo"]) / 2 for row in heroes) / len(heroes)
@@ -1252,67 +1316,66 @@ def render_research_preview(
         "<link rel='stylesheet' href='https://fonts.googleapis.com/css2"
         "?family=Outfit:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap'>"
     )
-    page.append(f"<style>{CSS}</style></head><body>")
+    page.append(
+        f"<style>{CSS}\n{main_site_css}\n{CLASSIC_PARITY_CSS}</style></head><body>"
+    )
     page.append("<a class='skip-link' href='#main-content'>跳至主要內容</a>")
     page.append("<header class='site-header'><div class='site-header-inner'>")
-    page.append("<span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span>")
-    page.append("<div class='classic-tabs' role='tablist' aria-label='經典模式資料視圖'>")
+    page.append("<a class='brand' href='/' aria-label='返回 arammeta 主頁' title='返回 arammeta 主頁'><span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span></a>")
+    page.append("<nav class='nav-tabs' role='tablist' aria-label='經典模式資料視圖'>")
     for tab, label in (("tier", "英雄"), ("heroes", "明細"), ("items", "裝備")):
         selected = "true" if tab == "tier" else "false"
         tabindex = "0" if tab == "tier" else "-1"
+        active = " active" if tab == "tier" else ""
         page.append(
-            f"<button type='button' class='classic-tab' role='tab' data-tab='{tab}' "
+            f"<button type='button' class='nav-tab{active}' role='tab' data-tab='{tab}' "
             f"aria-selected='{selected}' aria-controls='view-{tab}' tabindex='{tabindex}'>{label}</button>"
         )
-    page.append("</div>")
-    page.append("<span class='unlisted'>經典模式 · 預覽</span>")
-    page.append(
-        "<div class='site-header-meta'><span>queue 4310</span>"
-        f"<span>更新 {built}</span><span><b>初步可用</b></span></div>"
-    )
-    page.append("</div></header><main id='main-content' class='wrap'>")
-    page.append("<section class='research-bar' aria-label='篩選與搜尋'>")
-    page.append("<div class='filter-chips' id='position-chips' aria-label='常見分路篩選'>")
-    page.append("<button type='button' class='filter-chip active' data-position-filter='' aria-pressed='true'>★ 全部</button>")
+    page.append("<span class='nav-ind' aria-hidden='true'></span></nav>")
+    page.append("<div class='header-actions classic-header-actions'><span class='unlisted'>經典模式 · 預覽</span></div>")
+    page.append("</div></header><main id='main-content' class='site-main view-home'>")
+    page.append("<div class='app-shell'><div class='main-col'>")
+    page.append("<section class='view is-active' id='view-tier' data-view='tier' role='tabpanel'>")
+    page.append("<div class='filter-bar' aria-label='篩選與搜尋'>")
+    page.append("<div class='role-chips' id='position-chips' aria-label='常見分路篩選'>")
+    page.append("<button type='button' class='chip active' data-position-filter='' aria-pressed='true'>★ 全部</button>")
     page.extend(
-        f"<button type='button' class='filter-chip' data-position-filter='{position}' aria-pressed='false'>{POSITION_LABELS[position]}</button>"
+        f"<button type='button' class='chip' data-position-filter='{position}' aria-pressed='false'>{POSITION_LABELS[position]}</button>"
         for position in POSITION_ORDER
     )
     page.append("</div>")
-    page.append("<div class='filter-chips' id='item-kind-chips' aria-label='裝備類型篩選' hidden>")
+    page.append(f"<span class='shown-count'><span id='shown-n'>{len(heroes)}</span> / <span id='shown-total'>{len(heroes)}</span> <span id='shown-unit'>隻</span></span></div>")
+    page.append("<div class='role-chips' id='item-kind-chips' aria-label='裝備類型篩選' hidden>")
     for value, label in (("", "★ All"), ("complete", "完整裝備"), ("boots", "鞋子"), ("starter", "起手／組件"), ("trinket", "飾品")):
         active = " active" if not value else ""
         pressed = "true" if not value else "false"
-        page.append(f"<button type='button' class='filter-chip{active}' data-item-kind-filter='{value}' aria-pressed='{pressed}'>{label}</button>")
+        page.append(f"<button type='button' class='chip{active}' data-item-kind-filter='{value}' aria-pressed='{pressed}'>{label}</button>")
     page.append("</div>")
-    page.append(f"<span class='filter-count'><span id='shown-n'>{len(heroes)}</span> / <span id='shown-total'>{len(heroes)}</span> <span id='shown-unit'>隻</span></span>")
-    page.append("<label class='filter-search'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'></circle><line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg><input id='research-search' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false' aria-label='搜尋英雄'></label>")
+    page.append("<div class='search-rail' data-nosnippet><label class='search-wrap'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'></circle><line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg><input class='search' id='research-search' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false' aria-label='搜尋英雄'></label></div>")
     page.append("<select class='filter-source' id='position-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option>" + "".join(f"<option value='{position}'>{POSITION_LABELS[position]}</option>" for position in POSITION_ORDER) + "</select>")
     page.append("<select class='filter-source' id='item-kind-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option><option value='complete'>完整裝備</option><option value='boots'>鞋子</option><option value='starter'>起手／組件</option><option value='trinket'>飾品</option></select>")
     page.append("<input class='filter-source' id='min-games' type='hidden' value='50'>")
     page.append("<select class='filter-source' id='hero-sort' tabindex='-1' aria-hidden='true'><option value='shrunk_wr'>調整後勝率</option><option value='raw_wr'>原始勝率</option><option value='pick_rate'>選用率</option><option value='games'>樣本數</option></select>")
-    page.append("<select class='filter-source' id='item-sort' tabindex='-1' aria-hidden='true'><option value='games'>持有場次</option><option value='raw_wr'>持有者勝率</option><option value='hold_rate'>終局持有率</option></select></section>")
+    page.append("<select class='filter-source' id='item-sort' tabindex='-1' aria-hidden='true'><option value='games'>持有場次</option><option value='raw_wr'>持有者勝率</option><option value='hold_rate'>終局持有率</option></select>")
 
-    page.append("<section class='view' id='view-tier' data-view='tier' role='tabpanel'>")
-    page.append("<div class='tier-groups'>")
     by_tier = {tier: [hero for hero in heroes if hero["tier"] == tier and hero["games"] >= TIER_BOARD_MIN_GAMES] for tier in TIER_ORDER}
     for tier in TIER_ORDER:
         entries = by_tier[tier]
         if not entries:
             continue
-        page.append(f"<section class='tier-group' data-tier-group='{tier}' style='--tier-color:{TIER_COLOR[tier]};--tier-bg:{TIER_LABEL_BG[tier]}'><div class='tier-group-heading'><h2><span class='tier-pill'><span>{tier}</span></span></h2><p><span data-group-count>{len(entries)}</span> 隻 · 依調整後勝率</p></div><div class='hero-grid'>")
+        page.append(f"<section class='tier-block' data-tier='{tier}' data-tier-group='{tier}' style='--tier-color:{TIER_COLOR[tier]};--tier-bg:{TIER_LABEL_BG[tier]}'><h2 class='tier-heading'><span class='tier-pill'><span>{tier}</span></span><span class='tier-count'><span data-group-count>{len(entries)}</span> 隻 · 依調整後勝率</span></h2><div class='tier-grid'>")
         for hero in entries:
             search_text = html.escape(payload_heroes[heroes.index(hero)]["search"], quote=True)
             label = html.escape(f"查看 {hero['name_zh']} 詳情，調整後勝率 {hero['shrunk_wr'] * 100:.1f}%", quote=True)
             page.append(
-                f"<button type='button' class='hero-tile' data-hero-id='{hero['champion_id']}' "
+                f"<button type='button' class='champ hero-tile' data-hero-id='{hero['champion_id']}' "
                 f"data-search='{search_text}' aria-pressed='false' aria-label='{label}'>"
-                f"<span class='tile-icon'><img loading='lazy' src='{html.escape(hero['image'], quote=True)}' alt=''>"
-                f"<span class='tile-stat {wr_tone_class(hero['shrunk_wr'])}'>{hero['shrunk_wr'] * 100:.1f}%</span></span>"
-                f"<span class='tile-name'>{html.escape(hero['name_zh'])}</span></button>"
+                f"<img loading='lazy' src='{html.escape(hero['image'], quote=True)}' alt=''>"
+                f"<span class='tile-stat wr {wr_tone_class(hero['shrunk_wr'])}'>{hero['shrunk_wr'] * 100:.1f}%</span>"
+                f"<span class='name'>{html.escape(hero['name_zh'])}</span></button>"
             )
-        page.append("</div></section>")
-    page.append("</div><section id='hero-detail' class='hero-detail' hidden aria-live='polite'></section><p id='tier-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
+        page.append(f"<div class='detail-host' data-tier='{tier}'></div></div></section>")
+    page.append("<section id='hero-detail' class='detail hero-detail' hidden aria-live='polite'></section><p id='tier-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
 
     page.append("<section class='view' id='view-heroes' data-view='heroes' role='tabpanel' hidden><div class='data-section-head'><h2>完整英雄明細</h2><p>Tier 固定以調整後勝率分級；欄位可排序。</p></div><div class='table-scroller'><table class='research-table'><thead><tr>")
     for field, label in (("tier", "Tier"), ("name_zh", "英雄"), ("games", "場次"), ("shrunk_wr", "調整後勝率"), ("pick_rate", "選用率")):
@@ -1331,7 +1394,7 @@ def render_research_preview(
         f"　常見分路由 {position_observations:,} 筆 LCU lane／role 紀錄推估；點英雄查看完整數據與終局裝備關聯。</p>"
         "</footer>"
     )
-    page.append("</main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + JS + "</script></body></html>")
+    page.append("</div></div></main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + JS + "</script></body></html>")
     return "\n".join(page)
 
 
