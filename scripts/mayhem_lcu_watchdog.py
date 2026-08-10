@@ -900,7 +900,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-games", type=int, default=50000)
     parser.add_argument("--max-players", type=int, default=50000)
     parser.add_argument("--history-window", type=int, default=20)
-    parser.add_argument("--games-per-player", type=int, default=12)
+    parser.add_argument(
+        "--games-per-player",
+        type=int,
+        default=0,
+        help="Target-queue games per player; 0 = adaptive 4-row probe (3+ Mayhem expands full window)",
+    )
     parser.add_argument("--claim-timeout-sec", type=int, default=300)
     parser.add_argument("--player-requeue-cooldown-sec", type=int, default=45)
     parser.add_argument("--manual-seed-pending-cap", type=int, default=40)
@@ -947,4 +952,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

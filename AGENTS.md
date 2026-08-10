@@ -66,9 +66,9 @@ python scripts/lcu_collector.py metrics          # record growth / speed / seed-
 
 # Default TW Mayhem path: OPGG/manual Riot ID seeding.  See Stall Playbook before using ladder/apex/riot-tier.
 python scripts/lcu_collector.py seed-opgg-plan --region tw --tier platinum --tier gold --pages-per-tier 2 --out data/seeds/opgg_tw.txt
-python scripts/lcu_collector.py snowball --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 500 --max-players 1000 --games-per-player 4
+python scripts/lcu_collector.py snowball --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 500 --max-players 1000 --games-per-player 0
 python scripts/lcu_collector.py seed-opgg-plan --region tw --tier diamond --tier emerald --tier platinum --tier gold --pages-per-tier 80 --topn-total 0 --out data/seeds/opgg_tw.txt
-python scripts/lcu_collector.py snowball-workers --workers 3 --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 5000 --max-players 5000 --games-per-player 4
+python scripts/lcu_collector.py snowball-workers --workers 3 --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 5000 --max-players 5000 --games-per-player 0
 python scripts/lcu_collector.py family-stats --queue 2400
 python scripts/lcu_collector.py snowball --db data/lcu/games_account_a.db --target-games 5000 --max-players 5000
 python scripts/lcu_collector.py snowball --db data/lcu/games_account_b.db --target-games 5000 --max-players 5000
@@ -85,7 +85,7 @@ LCU retains only the **last ~20 games**.  Run the collector every session or you
 `snowball` 會從 self / friends / discovered participants 擴張；**exact match dedupe 一律用 `game_id`**，不要用 10 人英雄組合作唯一鍵。
 `crawl_seen` + `crawl_queue` 讓 snowball 可中斷續跑；queue 依發現該玩家的最新對戰時間排序，越新的 match 衍生 ID priority 越高。`crawl_seen` 就是 persistent puuid set；worker 另外有 local puuid cache 減少重複 DB enqueue。
 `snowball-workers` 會開多個背景 worker 共用同一個 frontier；預設只有第一個 worker 負責 seed，其他 worker 直接消化 queue，避免重複 startup 成本。
-`--seed-riot-id-file` 可吃一行一筆的 `Name#TAG`，也接受 OPGG summoner/profile URL；crawler 會先解析成 Riot ID，再經 LCU bridge 成本地 puuid 後入 queue。
+`--games-per-player 0` 使用 adaptive history：先檢查最近 4 筆，0 場 Mayhem 不展開、1–2 場只抓近期 probe、3–4 場才抓完整 history window；正數仍是固定 cap。`--seed-riot-id-file` 可吃一行一筆的 `Name#TAG`，也接受 OPGG summoner/profile URL；crawler 會先解析成 Riot ID，再經 LCU bridge 成本地 puuid 後入 queue。
 多 client 時，每個 client 應各自寫自己的 `--db`；`merge-db` 只合併 `games` 表並以 `game_id` 去重，`crawl_seen` / `crawl_queue` frontier 不要跨 client 合併。
 `games.participants_json` 會保留 10 位玩家的 `teamId / championId / augments`；`stats` 會輸出英雄勝率、augment 勝率、英雄×augment 勝率 CSV。
 `dataset` 會直接在 terminal 印出目前資料集摘要與英雄勝率排行，英雄名稱優先從 LCU static data 解析。
@@ -129,24 +129,13 @@ Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
 
 ## Site deploy (GitHub Pages → `main` / `/docs`)
 Live: https://arammeta.com/
-```powershell
-# 1. Rebuild split site — 一定要帶 --site-url，否則 og:url / canonical 會空
-python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json --meta-pick-api-url "https://api.arammeta.com"
+Canonical deployment SOP: `.codex/skills/update-mayhem-site/SKILL.md`.
 
-# 2. Stage 只有產出檔（不要 git add -A）
-git add docs/index.html docs/api/tier-list.json
-# 若 diff 顯示本輪 build 更新了角色規格或 OG 圖，才一併 stage：
-git add docs/champion-roles.json docs/og-image.png
-
-# 3. Commit 用日期或 patch 標
-git commit -m "Refresh split tier list 2026-05-23"
-
-# 4. Push → Pages 自動 redeploy 30-60s
-git push origin main
-```
-- 預設參數：`--queue 2400 --patch-prefix 16.10 --out docs/index.html --min-games 50 --min-pair-games 15`，使用者另外要 patch / queue 時才 override
-- 正式 build 必帶 `--meta-pick-api-url "https://api.arammeta.com"`；空值會把全球排行榜建回「未設定 API」。
-- 正式 Pages deploy 採 split static 形式；HTML 約數百 KB，資料在 `docs/api/tier-list.json`。省略 `--payload-url` 會回到舊 inline HTML。
+- Data-only publishing must run in the publisher's disposable isolated worktree so development WIP cannot block or be overwritten.
+- Generated site output is an atomic allowlist owned by `DEFAULT_DOC_PATHS` in `src/aram_nn/site/static_publish.py`; do not maintain a second partial file list here.
+- UI/generator deploys may include explicitly reviewed source files, but still never use `git add .` or `git add -A`.
+- 自動資料更新使用 `python scripts/publish_static_site.py --once --patch-prefix auto`；先檢查門檻可加 `--check-only`。
+- 正式 Pages deploy 採 split static 形式；production builder 固定 canonical 與 Meta Pick API，並在完整 allowlist 內原子發布所有相依產物。
 - `data/cache/{kiwi.bin.json, lol_stringtable_zh_tw.json}` 首跑會自動下載 ~30 MB，後續 build 走本地快取
 - repo 改名 `ARAM-mayhem-collector` → `ARAM-Mayhem-Database`，舊 URL 仍 redirect，但 OG meta 走新 URL（commit `276409b`）
 

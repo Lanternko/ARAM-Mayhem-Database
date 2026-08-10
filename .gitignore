@@ -22,6 +22,10 @@ venv/
 # Build artifacts
 dist/
 build/
+tmp-*
+
+# Local image cache; production payload currently references remote splash URLs.
+docs/assets/draft-splash-hd/
 
 # Scratch & local-only artifacts (keep the public repo code-only)
 # build logs, image cache, intermediate JSON, and an embedded Chrome profile w/ creds

@@ -243,7 +243,7 @@ def _launch_worker(
         "--max-players",
         str(max_players),
         "--games-per-player",
-        "4",
+        "0",
         "--claim-timeout-sec",
         str(max(1, claim_timeout_sec)),
     ]
