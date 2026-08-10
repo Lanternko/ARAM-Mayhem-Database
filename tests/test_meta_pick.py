@@ -913,6 +913,9 @@ class RenderContractTests(unittest.TestCase):
         self.assertIn('"patch_prefix": "16.10"', html)
         self.assertIn("class='classic-mode-link'", html)
         self.assertIn("href='/classic.html'", html)
+        self.assertIn("data-href-zh-cn='/zh-CN/classic.html'", html)
+        self.assertIn("data-href-en='/en/classic.html'", html)
+        self.assertIn("data-i18n-en='Classic Mode'", html)
 
         html_empty = render_html(
             records=[],

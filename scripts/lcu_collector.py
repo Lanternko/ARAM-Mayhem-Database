@@ -1203,13 +1203,13 @@ def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
 @click.option("--db", default=DEFAULT_DB, type=click.Path(path_type=Path),
               show_default=True, help="SQLite database path")
 @click.option("--target-games", default=500, show_default=True, type=int,
-              help="Stop after saving this many new games")
+              help="Stop after saving this many new games and finishing the current player window")
 @click.option("--max-players", default=250, show_default=True, type=int,
               help="Stop after processing this many distinct player nodes")
 @click.option("--history-window", default=20, show_default=True, type=int,
               help="How many recent games to inspect per player")
-@click.option("--games-per-player", default=8, show_default=True, type=int,
-              help="Cap how many target-queue games to expand per player for wider diffusion")
+@click.option("--games-per-player", default=0, show_default=True, type=int,
+              help="Target-queue games per player; 0 = adaptive 4-row probe (3+ target games expands full window)")
 @click.option("--worker-id", default="", show_default=False,
               help="Optional logical worker id for parallel crawlers (default: pid-<process>)")
 @click.option("--claim-timeout-sec", default=300, show_default=True, type=int,
@@ -1345,13 +1345,13 @@ def snowball(
 @click.option("--seed-on-first-only/--seed-on-all", default=True, show_default=True,
               help="Only the first worker seeds self/friends/ladders; later workers consume the saved queue")
 @click.option("--target-games", default=500, show_default=True, type=int,
-              help="Per-worker stop condition: stop after saving this many new games")
+              help="Per-worker soft stop: finish the current player window after this many new games")
 @click.option("--max-players", default=250, show_default=True, type=int,
               help="Per-worker stop condition: stop after processing this many player nodes")
 @click.option("--history-window", default=20, show_default=True, type=int,
               help="How many recent games to inspect per player")
-@click.option("--games-per-player", default=8, show_default=True, type=int,
-              help="Cap how many target-queue games to expand per player for wider diffusion")
+@click.option("--games-per-player", default=0, show_default=True, type=int,
+              help="Target-queue games per player; 0 = adaptive 4-row probe (3+ target games expands full window)")
 @click.option("--claim-timeout-sec", default=300, show_default=True, type=int,
               help="Reclaim an in-progress queue item if a worker disappears for this long")
 @click.option("--player-requeue-cooldown-sec", default=45, show_default=True, type=int,
@@ -1728,7 +1728,7 @@ def export_share(
             "  python scripts/lcu_collector.py seed-opgg-plan --region tw --tier platinum --tier gold "
             "--pages-per-tier 2 --out data/seeds/opgg_tw.txt\n"
             "  python scripts/lcu_collector.py snowball --seed-riot-id-file data/seeds/opgg_tw.txt "
-            "--target-games 500 --max-players 1000 --games-per-player 4\n\n"
+            "--target-games 500 --max-players 1000 --games-per-player 0\n\n"
             "Then re-run export-share. Or, if your DB lives elsewhere, pass --db <path-to-games.db>."
         )
 
@@ -2592,7 +2592,7 @@ def _launch_snowball_workers_subprocess(
         "--max-players",
         str(max_players),
         "--games-per-player",
-        str(max(1, games_per_player)),
+        str(max(0, games_per_player)),
         "--manual-seed-pending-cap",
         str(max(0, manual_seed_pending_cap)),
     ]
@@ -2637,7 +2637,8 @@ def _launch_snowball_workers_subprocess(
               help="Max Riot IDs per refresh; 0 means no explicit cap")
 @click.option("--target-games", default=50000, show_default=True, type=int)
 @click.option("--max-players", default=50000, show_default=True, type=int)
-@click.option("--games-per-player", default=4, show_default=True, type=int)
+@click.option("--games-per-player", default=0, show_default=True, type=int,
+              help="Target-queue games per player; 0 = adaptive 4-row probe (3+ target games expands full window)")
 @click.option("--manual-seed-pending-cap", default=40, show_default=True, type=int)
 @click.option("--once", is_flag=True, default=False,
               help="Run one health check and refresh/restart if needed")

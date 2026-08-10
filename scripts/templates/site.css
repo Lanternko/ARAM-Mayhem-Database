@@ -4021,8 +4021,6 @@
         font-weight: 800;
         letter-spacing: .08em;
     }
-    html[lang="en"] .classic-mode-link,
-    html[lang="zh-Hans"] .classic-mode-link { display: none; }
     .nav-tabs {
         position: relative;
         display: flex;

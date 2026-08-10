@@ -2286,9 +2286,14 @@ def render_html(
         "</button>"
     )
     parts.append(
-        "<a class='classic-mode-link' href='/classic.html' aria-label='前往經典模式資料'>"
-        "<span class='classic-mode-link-full'>經典模式</span>"
-        "<span class='classic-mode-link-short' aria-hidden='true'>經典</span>"
+        "<a class='classic-mode-link' href='/classic.html' data-href-zh='/classic.html' "
+        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "aria-label='前往經典模式資料' data-aria-zh='前往經典模式資料' "
+        "data-aria-zh-cn='前往经典模式数据' data-aria-en='Open Classic Mode data'>"
+        "<span class='classic-mode-link-full' data-i18n-zh='經典模式' "
+        "data-i18n-zh-cn='经典模式' data-i18n-en='Classic Mode'>經典模式</span>"
+        "<span class='classic-mode-link-short' aria-hidden='true' data-i18n-zh='經典' "
+        "data-i18n-zh-cn='经典' data-i18n-en='Classic'>經典</span>"
         "<span class='classic-mode-link-new' aria-hidden='true'>NEW</span>"
         "</a>"
     )

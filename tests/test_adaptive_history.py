@@ -8,20 +8,20 @@ def _history(queues):
 
 
 class AdaptiveHistoryTests(unittest.TestCase):
-    def test_no_mayhem_skips_detail_expansion(self):
-        self.assertEqual(_adaptive_target_game_ids(_history([450, 450, 450, 450, 2400]), {2400, 450}), [])
+    def test_three_target_games_expand_full_history(self):
+        self.assertEqual(_adaptive_target_game_ids(_history([450, 450, 450, 450, 2400]), {2400, 450}), [f"g{i}" for i in range(5)])
 
-    def test_one_or_two_mayhem_only_expands_probe(self):
-        history = _history([2400, 450, 450, 450, 2400, 2400])
-        self.assertEqual(_adaptive_target_game_ids(history, {2400, 450}), ["g0", "g1", "g2", "g3"])
+    def test_one_or_two_target_games_only_expands_probe(self):
+        history = _history([2400, 420, 450, 420, 2400, 2400])
+        self.assertEqual(_adaptive_target_game_ids(history, {2400, 450}), ["g0", "g2"])
 
     def test_three_mayhem_expands_full_history_window(self):
         history = _history([2400, 450, 2400, 2400, 450, 2400])
         self.assertEqual(_adaptive_target_game_ids(history, {2400, 450}), [f"g{i}" for i in range(6)])
 
-    def test_non_mayhem_crawl_falls_back_to_probe(self):
+    def test_dense_non_mayhem_target_crawl_expands_full_window(self):
         history = _history([450, 450, 450, 450, 450])
-        self.assertEqual(_adaptive_target_game_ids(history, {450}), [f"g{i}" for i in range(4)])
+        self.assertEqual(_adaptive_target_game_ids(history, {450}), [f"g{i}" for i in range(5)])
 
 
 if __name__ == "__main__":
@@ -47,21 +47,20 @@ def _arm_puuid(arm):
     raise AssertionError(f"no puuid hashed to {arm}")
 
 
-def test_control_skips_pure_classic_player():
+def test_retired_control_arm_no_longer_skips_pure_classic_player():
     from aram_nn.lcu.snowball import _adaptive_target_game_ids
     got = _adaptive_target_game_ids(
         _classic_history(), {450, 2400, 2450, 4310}, puuid=_arm_puuid("control")
     )
-    assert got == []
+    assert len(got) == 6
 
 
-def test_probe_arm_expands_classic_only_within_probe_window():
-    # Visible but cheap: a 經典 player costs the probe window, not a full fetch.
+def test_retired_probe_arm_uses_the_shipped_full_policy():
     from aram_nn.lcu.snowball import _adaptive_target_game_ids
     got = _adaptive_target_game_ids(
         _classic_history(20), {450, 2400, 2450, 4310}, puuid=_arm_puuid("probe")
     )
-    assert len(got) == 4
+    assert len(got) == 20
 
 
 def test_full_arm_expands_classic_history_completely():
@@ -94,9 +93,9 @@ def test_mayhem_heavy_player_is_identical_across_arms():
     assert len(sizes) == 1
 
 
-def test_no_puuid_keeps_control_semantics():
+def test_no_puuid_uses_shipped_full_semantics():
     from aram_nn.lcu.snowball import _adaptive_target_game_ids
-    assert _adaptive_target_game_ids(_classic_history(), {450, 2400, 4310}) == []
+    assert len(_adaptive_target_game_ids(_classic_history(), {450, 2400, 4310})) == 6
 
 
 def test_history_and_revisit_arms_are_independent():

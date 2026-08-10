@@ -8657,6 +8657,13 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
+        document.querySelectorAll('.classic-mode-link').forEach(el => {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const href = el.getAttribute(`data-href-${suffix}`);
+            const aria = el.getAttribute(`data-aria-${suffix}`);
+            if (href) el.setAttribute('href', href);
+            if (aria) el.setAttribute('aria-label', aria);
+        });
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
             columnArticle ? renderArticle(columnArticle) : renderColumnList();
