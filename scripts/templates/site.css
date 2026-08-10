@@ -6518,6 +6518,51 @@
     }
     .aug-draft-card.is-stale { opacity: 0.48; }
     .aug-draft-card.is-stale:has(.is-best-badge) { opacity: 0.84; }
+    .aug-pick-context {
+        margin: 0 0 7px;
+        color: var(--text, oklch(0.93 0.01 260));
+        font-size: 11px;
+        font-weight: 750;
+        letter-spacing: 0.01em;
+    }
+    .aug-pick-context-prior {
+        display: block;
+        margin-top: 3px;
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 10px;
+        font-weight: 650;
+        line-height: 1.45;
+    }
+    .aug-rank-note {
+        margin: -2px 0 7px;
+        color: var(--aug-good);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+    }
+    .aug-draft-projected {
+        width: 100%;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid color-mix(in oklch, var(--aug-colour) 30%, var(--border));
+        border-radius: 10px;
+        background: color-mix(in oklch, var(--aug-colour) 8%, var(--chip-bg));
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-draft-projected-label {
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 10px;
+        font-weight: 700;
+    }
+    .aug-draft-projected-value {
+        color: var(--aug-colour);
+        font-size: 17px;
+        font-weight: 850;
+        letter-spacing: -0.02em;
+    }
     .aug-draft-card-head {
         display: flex;
         align-items: center;
@@ -6667,6 +6712,10 @@
     .aug-draft-badge.is-pick-badge {
         background: color-mix(in oklch, var(--aug-good) 18%, transparent);
         color: var(--aug-good);
+    }
+    .aug-draft-badge.is-rank-badge {
+        background: color-mix(in oklch, var(--aug-colour) 18%, var(--chip-bg));
+        color: var(--aug-colour);
     }
     .aug-draft-badge.is-best-badge {
         background: var(--aug-good);

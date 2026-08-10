@@ -1216,6 +1216,13 @@
             augGameRoundTotal: b => `共 ${b} 輪`,
             augGamePickHint: '點卡片直接選擇。不確定時，可先換一張。',
             augGameRevealHint: '本輪 6 張候選已公開，原本選項與換牌選項上下對照。',
+            augGamePickContext: n => n
+                ? `已選 ${n} 個增幅，這輪會依選擇順序與前置搭配重算。`
+                : '目前是英雄基準勝率，選了之後會把順序與搭配算進去。',
+            augGameProjectedWr: '選後預估勝率',
+            augGameRank: n => `第 ${n} 名`,
+            augGameRankSub: '按選後預估勝率排序',
+            augGamePriorLabel: '前面已選',
             augGameChoice: n => `選項 ${n}`,
             augGameSelect: '選這個',
             augGameRerollUsed: '已換過',
@@ -1545,6 +1552,13 @@
             augGameRoundTotal: b => `${b} total`,
             augGamePickHint: 'Select a card, or swap one first if you are unsure.',
             augGameRevealHint: 'All six candidates are now visible, with the original and swap options paired by column.',
+            augGamePickContext: n => n
+                ? `${n} augment${n === 1 ? '' : 's'} already picked. This round recalculates order and combo context.`
+                : 'This starts from the champion baseline. Order and combo context update after each pick.',
+            augGameProjectedWr: 'Projected win rate',
+            augGameRank: n => `Rank ${n}`,
+            augGameRankSub: 'Sorted by projected win rate',
+            augGamePriorLabel: 'Previous picks',
             augGameChoice: n => `Option ${n}`,
             augGameSelect: 'Choose this',
             augGameRerollUsed: 'Swapped',
@@ -6624,6 +6638,10 @@
     const AUG_DRAFT_ROUNDS = 4;
     const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
     const AUG_DRAFT_CHAMP_CHOICES = 3;
+    // Earlier picks carry more leverage, while later picks are increasingly
+    // conditional on the build already taking shape. These weights keep the
+    // projected rate readable instead of simply adding four independent lifts.
+    const AUG_DRAFT_POSITION_WEIGHT = [1, 0.84, 0.7, 0.58];
     // Champions below this see too few games for their per-augment lift to mean
     // anything; the draft would be scoring noise.
     const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
@@ -6757,6 +6775,74 @@
         return row ? Number(row.lift || 0) : 0;
     }
 
+    function augDraftAugFor(id) {
+        const augs = (DATA && DATA.augs) || {};
+        return augs[String(id)] || augs[id] || null;
+    }
+
+    function augDraftSetKeys(aug) {
+        if (!aug) return [];
+        const rows = Array.isArray(aug.sets) ? aug.sets : [];
+        const keys = rows.map(s => String(s && (s.slug || s.name_zh || s.name_en || s.name) || ''))
+            .filter(Boolean);
+        if (aug.setSlug) keys.push(String(aug.setSlug));
+        if (aug.set) keys.push(String(aug.set));
+        return [...new Set(keys)];
+    }
+
+    function augDraftCategoryKeys(aug) {
+        return aug && Array.isArray(aug.cats) ? aug.cats.map(String) : [];
+    }
+
+    /** Small, visible context signal: set repeats and shared archetypes matter. */
+    function augDraftPairBonus(leftId, rightId) {
+        const left = augDraftAugFor(leftId);
+        const right = augDraftAugFor(rightId);
+        if (!left || !right) return 0;
+        const rightSets = new Set(augDraftSetKeys(right));
+        const rightCats = new Set(augDraftCategoryKeys(right));
+        const sameSet = augDraftSetKeys(left).some(k => rightSets.has(k));
+        const sharedCats = augDraftCategoryKeys(left).filter(k => rightCats.has(k)).length;
+        return (sameSet ? 0.005 : 0) + Math.min(sharedCats, 2) * 0.0015;
+    }
+
+    function augDraftPairBonusTotal(ids) {
+        let total = 0;
+        for (let i = 0; i < ids.length; i += 1) {
+            for (let j = i + 1; j < ids.length; j += 1) {
+                total += augDraftPairBonus(ids[i], ids[j]);
+            }
+        }
+        return total;
+    }
+
+    function augDraftPositionWeight(round) {
+        const i = Math.max(0, Number(round) || 0);
+        return AUG_DRAFT_POSITION_WEIGHT[i] || AUG_DRAFT_POSITION_WEIGHT[AUG_DRAFT_POSITION_WEIGHT.length - 1];
+    }
+
+    function augDraftBaseWr() {
+        const champ = (DATA && DATA.champs && DATA.champs[augDraft.champId]) || {};
+        const wr = Number(champ.wr ?? champ.rawWr);
+        return Number.isFinite(wr) && wr > 0 ? wr : 0.5;
+    }
+
+    /** Project the resulting champion WR after this candidate is added. */
+    function augDraftProjectedWr(id, round, picks) {
+        const history = Array.isArray(picks) ? picks : augDraft.picks;
+        const historyIds = history.map(p => String(p.id));
+        let projected = augDraftBaseWr();
+        history.forEach((p, index) => {
+            projected += Number(p.wrLift || 0) * augDraftPositionWeight(
+                p.round == null ? index : p.round
+            );
+        });
+        projected += augDraftPairBonusTotal(historyIds);
+        projected += Number(augDraftLift(id, round) || 0) * augDraftPositionWeight(round);
+        historyIds.forEach(prevId => { projected += augDraftPairBonus(prevId, id); });
+        return Math.max(0.05, Math.min(0.95, projected));
+    }
+
     function augDraftDeal(n, soft, extraHard) {
         const ids = augDraftRarityRows(augDraftRoundCode()).map(r => r.id);
         const hard = augDraft.taken.concat(extraHard || []);
@@ -6819,14 +6905,16 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const ranks = candidates.map(x => augDraftRank(x));
-        const best = Math.max.apply(null, ranks);
-        const worst = Math.min.apply(null, ranks);
-        const mine = augDraftRank(id);
-        const bestId = candidates[ranks.indexOf(best)];
+        const projected = candidates.map(x => augDraftProjectedWr(x, augDraft.round, augDraft.picks));
+        const best = Math.max.apply(null, projected);
+        const worst = Math.min.apply(null, projected);
+        const mineIndex = candidates.map(String).indexOf(String(id));
+        const mine = projected[mineIndex];
+        const bestId = candidates[projected.indexOf(best)];
         augDraft.taken.push(String(id));
         augDraft.picks.push({
             id: String(id),
+            round: augDraft.round,
             bestId: String(bestId),
             candidates,
             pairs: augDraft.pairs.map(p => p.slice()),
@@ -6835,6 +6923,7 @@
             mine,
             best,
             worst,
+            projectedById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), projected[i]])),
             wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
@@ -6968,6 +7057,10 @@
             badges.push(`<span class="aug-draft-badge is-pick-badge">`
                 + `${escHtml(o.copy.augGameYourPick || 'Your pick')}</span>`);
         }
+        if (Number.isFinite(o.rank)) {
+            badges.push(`<span class="aug-draft-badge is-rank-badge">`
+                + `${escHtml((o.copy.augGameRank || (n => `Rank ${n}`))(o.rank))}</span>`);
+        }
         if (o.best) {
             badges.push(`<span class="aug-draft-badge is-best-badge">`
                 + `${escHtml(o.copy.augGameBestPick || 'Best')}</span>`);
@@ -6990,6 +7083,12 @@
                 + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
                 + `</span>`
             : '';
+        const projectedHtml = Number.isFinite(o.projectedWr)
+            ? `<span class="aug-draft-projected">`
+                + `<span class="aug-draft-projected-label">${escHtml(o.copy.augGameProjectedWr || 'Projected win rate')}</span>`
+                + `<b class="aug-draft-projected-value">${escHtml(pct(o.projectedWr))}</b>`
+                + `</span>`
+            : '';
         return (
             `<${tag} class="${classes}"${attrs}>`
             + (badges.length ? `<span class="aug-draft-badges">${badges.join('')}</span>` : '')
@@ -7002,6 +7101,7 @@
             + (cat ? `<span class="aug-draft-cat">${escHtml(cat)}</span>` : '')
             + `</span></span>`
             + (desc ? `<span class="aug-draft-desc">${augDraftDescHtml(desc)}</span>` : '')
+            + projectedHtml
             + liftHtml
             + (o.interactive
                 ? `<span class="aug-draft-select-hint">`
@@ -7042,6 +7142,14 @@
             // Keep every original beside its hidden replacement. The old
             // six-card matrix had no row labels, so it looked like six unrelated
             // answers instead of three decisions with one swap behind each.
+            const projectedById = last.projectedById || Object.fromEntries(
+                last.candidates.map(id => [String(id), augDraftProjectedWr(id, augDraft.round, augDraft.picks.slice(0, -1))])
+            );
+            const ranked = last.candidates.slice().sort((a, b) => {
+                const delta = Number(projectedById[String(b)] || 0) - Number(projectedById[String(a)] || 0);
+                return delta || String(a).localeCompare(String(b), undefined, { numeric: true });
+            });
+            const rankById = Object.fromEntries(ranked.map((id, i) => [String(id), i + 1]));
             cards = last.pairs.map((pair, slot) => {
                 const shownIdx = last.slotRerolled[slot] ? 1 : 0;
                 const pairCards = [0, 1].map(depth => {
@@ -7056,7 +7164,9 @@
                             code: last.code,
                             reveal: true,
                             picked: String(id) === last.id,
-                            best: String(id) === last.bestId,
+                            best: rankById[String(id)] === 1,
+                            rank: rankById[String(id)],
+                            projectedWr: Number(projectedById[String(id)]),
                             // Dim anything that was never live, but keep it visible
                             // because every hidden option still counts in the score.
                             stale: depth !== shownIdx,
@@ -7083,7 +7193,12 @@
                     `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
                     + `<span class="aug-draft-choice-label">`
                     + `${escHtml((copy.augGameChoice || (n => `Option ${n}`))(slot + 1))}</span>`
-                    + augDraftAugCardHtml(id, { copy, code, interactive: true })
+                    + augDraftAugCardHtml(id, {
+                        copy,
+                        code,
+                        interactive: true,
+                        projectedWr: augDraftProjectedWr(id, augDraft.round),
+                    })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
                     + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
                     + ` aria-label="${escHtml(buttonTitle)}">`
@@ -7109,6 +7224,13 @@
         const guidance = reveal
             ? (copy.augGameRevealHint || '')
             : (copy.augGamePickHint || 'Choose a card, or swap one first.');
+        const contextHint = copy.augGamePickContext
+            ? copy.augGamePickContext(augDraft.picks.length)
+            : '';
+        const priorNames = augDraft.picks.map(p => {
+            const aug = augDraftAugFor(p.id);
+            return aug ? augName(aug, p.id) : `#${p.id}`;
+        });
         return (
             `<div class="aug-phase aug-phase-pick">`
             + `<div class="aug-phase-head">`
@@ -7121,6 +7243,15 @@
             + escHtml(augDraftRarityLabel(code, copy)) + `</span>`
             + `</div>`
             + verdict
+            + (contextHint ? `<p class="aug-pick-context">`
+                + `<span>${escHtml(contextHint)}</span>`
+                + (priorNames.length
+                    ? `<span class="aug-pick-context-prior">${escHtml(copy.augGamePriorLabel || 'Previous picks')}: ${escHtml(priorNames.join(' · '))}</span>`
+                    : '')
+                + `</p>` : '')
+            + (reveal && copy.augGameRankSub
+                ? `<p class="aug-rank-note">${escHtml(copy.augGameRankSub)}</p>`
+                : '')
             + (guidance ? `<p class="aug-pick-hint">${escHtml(guidance)}`
                 + (!reveal ? `<span>${escHtml(copy.augGameRerollHint || '')}</span>` : '')
                 + `</p>` : '')
