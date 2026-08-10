@@ -26,7 +26,13 @@ import polars as pl
 @click.option("--queue", default=2400, type=int)
 @click.option("--out-dir", default="data/ratings", type=click.Path(path_type=Path))
 @click.option("--rebuild", is_flag=True)
-def main(db, queue, out_dir, rebuild):
+@click.option(
+    "--ordered/--unordered",
+    default=True,
+    show_default=True,
+    help="Sort by created_ms for reproducible chronology; unordered avoids a large SQLite temp sort.",
+)
+def main(db, queue, out_dir, rebuild, ordered):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     mtime = int(db.stat().st_mtime)
@@ -37,8 +43,9 @@ def main(db, queue, out_dir, rebuild):
         return
 
     con = sqlite3.connect(str(db))
+    order_sql = " ORDER BY created_ms ASC" if ordered else ""
     cur = con.execute(
-        "SELECT created_ms, blue_wins, participants_private_json FROM games WHERE queue_id=? ORDER BY created_ms ASC",
+        "SELECT created_ms, blue_wins, participants_private_json FROM games WHERE queue_id=?" + order_sql,
         [queue],
     )
     id_of: dict[str, int] = {}
