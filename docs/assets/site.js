@@ -683,7 +683,7 @@
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Fighter"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -948,6 +948,13 @@
             augGameRoundTotal: b => `共 ${b} 輪`,
             augGamePickHint: '點卡片直接選擇。不確定時，可先換一張。',
             augGameRevealHint: '本輪 6 張候選已公開，原本選項與換牌選項上下對照。',
+            augGamePickContext: n => n
+                ? `已選 ${n} 個增幅，這輪會依選擇順序與前置搭配重算。`
+                : '目前是英雄基準勝率，選了之後會把順序與搭配算進去。',
+            augGameProjectedWr: '選後預估勝率',
+            augGameRank: n => `第 ${n} 名`,
+            augGameRankSub: '按選後預估勝率排序',
+            augGamePriorLabel: '前面已選',
             augGameChoice: n => `選項 ${n}`,
             augGameSelect: '選這個',
             augGameRerollUsed: '已換過',
@@ -1277,6 +1284,13 @@
             augGameRoundTotal: b => `${b} total`,
             augGamePickHint: 'Select a card, or swap one first if you are unsure.',
             augGameRevealHint: 'All six candidates are now visible, with the original and swap options paired by column.',
+            augGamePickContext: n => n
+                ? `${n} augment${n === 1 ? '' : 's'} already picked. This round recalculates order and combo context.`
+                : 'This starts from the champion baseline. Order and combo context update after each pick.',
+            augGameProjectedWr: 'Projected win rate',
+            augGameRank: n => `Rank ${n}`,
+            augGameRankSub: 'Sorted by projected win rate',
+            augGamePriorLabel: 'Previous picks',
             augGameChoice: n => `Option ${n}`,
             augGameSelect: 'Choose this',
             augGameRerollUsed: 'Swapped',
@@ -6356,6 +6370,10 @@
     const AUG_DRAFT_ROUNDS = 4;
     const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
     const AUG_DRAFT_CHAMP_CHOICES = 3;
+    // Earlier picks carry more leverage, while later picks are increasingly
+    // conditional on the build already taking shape. These weights keep the
+    // projected rate readable instead of simply adding four independent lifts.
+    const AUG_DRAFT_POSITION_WEIGHT = [1, 0.84, 0.7, 0.58];
     // Champions below this see too few games for their per-augment lift to mean
     // anything; the draft would be scoring noise.
     const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
@@ -6489,6 +6507,74 @@
         return row ? Number(row.lift || 0) : 0;
     }
 
+    function augDraftAugFor(id) {
+        const augs = (DATA && DATA.augs) || {};
+        return augs[String(id)] || augs[id] || null;
+    }
+
+    function augDraftSetKeys(aug) {
+        if (!aug) return [];
+        const rows = Array.isArray(aug.sets) ? aug.sets : [];
+        const keys = rows.map(s => String(s && (s.slug || s.name_zh || s.name_en || s.name) || ''))
+            .filter(Boolean);
+        if (aug.setSlug) keys.push(String(aug.setSlug));
+        if (aug.set) keys.push(String(aug.set));
+        return [...new Set(keys)];
+    }
+
+    function augDraftCategoryKeys(aug) {
+        return aug && Array.isArray(aug.cats) ? aug.cats.map(String) : [];
+    }
+
+    /** Small, visible context signal: set repeats and shared archetypes matter. */
+    function augDraftPairBonus(leftId, rightId) {
+        const left = augDraftAugFor(leftId);
+        const right = augDraftAugFor(rightId);
+        if (!left || !right) return 0;
+        const rightSets = new Set(augDraftSetKeys(right));
+        const rightCats = new Set(augDraftCategoryKeys(right));
+        const sameSet = augDraftSetKeys(left).some(k => rightSets.has(k));
+        const sharedCats = augDraftCategoryKeys(left).filter(k => rightCats.has(k)).length;
+        return (sameSet ? 0.005 : 0) + Math.min(sharedCats, 2) * 0.0015;
+    }
+
+    function augDraftPairBonusTotal(ids) {
+        let total = 0;
+        for (let i = 0; i < ids.length; i += 1) {
+            for (let j = i + 1; j < ids.length; j += 1) {
+                total += augDraftPairBonus(ids[i], ids[j]);
+            }
+        }
+        return total;
+    }
+
+    function augDraftPositionWeight(round) {
+        const i = Math.max(0, Number(round) || 0);
+        return AUG_DRAFT_POSITION_WEIGHT[i] || AUG_DRAFT_POSITION_WEIGHT[AUG_DRAFT_POSITION_WEIGHT.length - 1];
+    }
+
+    function augDraftBaseWr() {
+        const champ = (DATA && DATA.champs && DATA.champs[augDraft.champId]) || {};
+        const wr = Number(champ.wr ?? champ.rawWr);
+        return Number.isFinite(wr) && wr > 0 ? wr : 0.5;
+    }
+
+    /** Project the resulting champion WR after this candidate is added. */
+    function augDraftProjectedWr(id, round, picks) {
+        const history = Array.isArray(picks) ? picks : augDraft.picks;
+        const historyIds = history.map(p => String(p.id));
+        let projected = augDraftBaseWr();
+        history.forEach((p, index) => {
+            projected += Number(p.wrLift || 0) * augDraftPositionWeight(
+                p.round == null ? index : p.round
+            );
+        });
+        projected += augDraftPairBonusTotal(historyIds);
+        projected += Number(augDraftLift(id, round) || 0) * augDraftPositionWeight(round);
+        historyIds.forEach(prevId => { projected += augDraftPairBonus(prevId, id); });
+        return Math.max(0.05, Math.min(0.95, projected));
+    }
+
     function augDraftDeal(n, soft, extraHard) {
         const ids = augDraftRarityRows(augDraftRoundCode()).map(r => r.id);
         const hard = augDraft.taken.concat(extraHard || []);
@@ -6551,14 +6637,16 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const ranks = candidates.map(x => augDraftRank(x));
-        const best = Math.max.apply(null, ranks);
-        const worst = Math.min.apply(null, ranks);
-        const mine = augDraftRank(id);
-        const bestId = candidates[ranks.indexOf(best)];
+        const projected = candidates.map(x => augDraftProjectedWr(x, augDraft.round, augDraft.picks));
+        const best = Math.max.apply(null, projected);
+        const worst = Math.min.apply(null, projected);
+        const mineIndex = candidates.map(String).indexOf(String(id));
+        const mine = projected[mineIndex];
+        const bestId = candidates[projected.indexOf(best)];
         augDraft.taken.push(String(id));
         augDraft.picks.push({
             id: String(id),
+            round: augDraft.round,
             bestId: String(bestId),
             candidates,
             pairs: augDraft.pairs.map(p => p.slice()),
@@ -6567,6 +6655,7 @@
             mine,
             best,
             worst,
+            projectedById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), projected[i]])),
             wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
@@ -6700,6 +6789,10 @@
             badges.push(`<span class="aug-draft-badge is-pick-badge">`
                 + `${escHtml(o.copy.augGameYourPick || 'Your pick')}</span>`);
         }
+        if (Number.isFinite(o.rank)) {
+            badges.push(`<span class="aug-draft-badge is-rank-badge">`
+                + `${escHtml((o.copy.augGameRank || (n => `Rank ${n}`))(o.rank))}</span>`);
+        }
         if (o.best) {
             badges.push(`<span class="aug-draft-badge is-best-badge">`
                 + `${escHtml(o.copy.augGameBestPick || 'Best')}</span>`);
@@ -6722,6 +6815,12 @@
                 + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
                 + `</span>`
             : '';
+        const projectedHtml = Number.isFinite(o.projectedWr)
+            ? `<span class="aug-draft-projected">`
+                + `<span class="aug-draft-projected-label">${escHtml(o.copy.augGameProjectedWr || 'Projected win rate')}</span>`
+                + `<b class="aug-draft-projected-value">${escHtml(pct(o.projectedWr))}</b>`
+                + `</span>`
+            : '';
         return (
             `<${tag} class="${classes}"${attrs}>`
             + (badges.length ? `<span class="aug-draft-badges">${badges.join('')}</span>` : '')
@@ -6734,6 +6833,7 @@
             + (cat ? `<span class="aug-draft-cat">${escHtml(cat)}</span>` : '')
             + `</span></span>`
             + (desc ? `<span class="aug-draft-desc">${augDraftDescHtml(desc)}</span>` : '')
+            + projectedHtml
             + liftHtml
             + (o.interactive
                 ? `<span class="aug-draft-select-hint">`
@@ -6774,6 +6874,14 @@
             // Keep every original beside its hidden replacement. The old
             // six-card matrix had no row labels, so it looked like six unrelated
             // answers instead of three decisions with one swap behind each.
+            const projectedById = last.projectedById || Object.fromEntries(
+                last.candidates.map(id => [String(id), augDraftProjectedWr(id, augDraft.round, augDraft.picks.slice(0, -1))])
+            );
+            const ranked = last.candidates.slice().sort((a, b) => {
+                const delta = Number(projectedById[String(b)] || 0) - Number(projectedById[String(a)] || 0);
+                return delta || String(a).localeCompare(String(b), undefined, { numeric: true });
+            });
+            const rankById = Object.fromEntries(ranked.map((id, i) => [String(id), i + 1]));
             cards = last.pairs.map((pair, slot) => {
                 const shownIdx = last.slotRerolled[slot] ? 1 : 0;
                 const pairCards = [0, 1].map(depth => {
@@ -6788,7 +6896,9 @@
                             code: last.code,
                             reveal: true,
                             picked: String(id) === last.id,
-                            best: String(id) === last.bestId,
+                            best: rankById[String(id)] === 1,
+                            rank: rankById[String(id)],
+                            projectedWr: Number(projectedById[String(id)]),
                             // Dim anything that was never live, but keep it visible
                             // because every hidden option still counts in the score.
                             stale: depth !== shownIdx,
@@ -6815,7 +6925,12 @@
                     `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
                     + `<span class="aug-draft-choice-label">`
                     + `${escHtml((copy.augGameChoice || (n => `Option ${n}`))(slot + 1))}</span>`
-                    + augDraftAugCardHtml(id, { copy, code, interactive: true })
+                    + augDraftAugCardHtml(id, {
+                        copy,
+                        code,
+                        interactive: true,
+                        projectedWr: augDraftProjectedWr(id, augDraft.round),
+                    })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
                     + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
                     + ` aria-label="${escHtml(buttonTitle)}">`
@@ -6841,6 +6956,13 @@
         const guidance = reveal
             ? (copy.augGameRevealHint || '')
             : (copy.augGamePickHint || 'Choose a card, or swap one first.');
+        const contextHint = copy.augGamePickContext
+            ? copy.augGamePickContext(augDraft.picks.length)
+            : '';
+        const priorNames = augDraft.picks.map(p => {
+            const aug = augDraftAugFor(p.id);
+            return aug ? augName(aug, p.id) : `#${p.id}`;
+        });
         return (
             `<div class="aug-phase aug-phase-pick">`
             + `<div class="aug-phase-head">`
@@ -6853,6 +6975,15 @@
             + escHtml(augDraftRarityLabel(code, copy)) + `</span>`
             + `</div>`
             + verdict
+            + (contextHint ? `<p class="aug-pick-context">`
+                + `<span>${escHtml(contextHint)}</span>`
+                + (priorNames.length
+                    ? `<span class="aug-pick-context-prior">${escHtml(copy.augGamePriorLabel || 'Previous picks')}: ${escHtml(priorNames.join(' · '))}</span>`
+                    : '')
+                + `</p>` : '')
+            + (reveal && copy.augGameRankSub
+                ? `<p class="aug-rank-note">${escHtml(copy.augGameRankSub)}</p>`
+                : '')
             + (guidance ? `<p class="aug-pick-hint">${escHtml(guidance)}`
                 + (!reveal ? `<span>${escHtml(copy.augGameRerollHint || '')}</span>` : '')
                 + `</p>` : '')
@@ -8388,6 +8519,13 @@
                     || t2s(el.getAttribute('data-i18n-zh') || '');
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
+        });
+        document.querySelectorAll('.classic-mode-link').forEach(el => {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const href = el.getAttribute(`data-href-${suffix}`);
+            const aria = el.getAttribute(`data-aria-${suffix}`);
+            if (href) el.setAttribute('href', href);
+            if (aria) el.setAttribute('aria-label', aria);
         });
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
