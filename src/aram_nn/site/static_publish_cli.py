@@ -28,6 +28,12 @@ from .static_publish import DEFAULT_SITE_URL, DEFAULT_STATE_PATH, publish_static
 @click.option("--force/--no-force", default=False, show_default=True)
 @click.option("--check-only/--build", default=False, show_default=True, help="Only evaluate the publish threshold; do not rebuild files.")
 @click.option("--dry-run/--publish", default=False, show_default=True)
+@click.option(
+    "--isolated-worktree/--main-worktree",
+    default=True,
+    show_default=True,
+    help="Build and commit in a disposable worktree so local WIP cannot block or be overwritten.",
+)
 @click.option("--watch/--once", default=False, show_default=True)
 @click.option("--interval-sec", type=int, default=300, show_default=True)
 def main(
@@ -43,6 +49,7 @@ def main(
     force: bool,
     check_only: bool,
     dry_run: bool,
+    isolated_worktree: bool,
     watch: bool,
     interval_sec: int,
 ) -> None:
@@ -78,19 +85,28 @@ def main(
             effective_patch = resolved
         else:
             effective_patch = patch_prefix or None
-        result = publish_static_site_once(
-            db=db,
-            state_path=state_path,
-            threshold=threshold,
-            growth_ratio=growth_ratio,
-            force=force,
-            queue_id=queue_id,
-            patch_prefix=effective_patch,
-            site_url=site_url,
-            branch=branch,
-            check_only=check_only,
-            dry_run=dry_run,
-        )
+        try:
+            result = publish_static_site_once(
+                db=db,
+                state_path=state_path,
+                threshold=threshold,
+                growth_ratio=growth_ratio,
+                force=force,
+                queue_id=queue_id,
+                patch_prefix=effective_patch,
+                site_url=site_url,
+                branch=branch,
+                check_only=check_only,
+                dry_run=dry_run,
+                isolated_worktree=isolated_worktree,
+            )
+        except Exception as exc:
+            if not watch:
+                raise
+            click.echo(f"[static-site] blocked: {exc}", err=True)
+            force = False
+            time.sleep(max(5, interval_sec))
+            continue
         if check_only:
             click.echo(
                 "[static-site] check "
