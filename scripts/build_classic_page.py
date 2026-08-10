@@ -91,6 +91,8 @@ ICON_DIR = Path("docs/assets/icons/classic")
 ICON_URL_PREFIX = "assets/icons/classic"
 ITEM_ICON_DIR = Path("docs/assets/icons/classic-items")
 ITEM_ICON_URL_PREFIX = "assets/icons/classic-items"
+SPELL_ICON_DIR = Path("docs/assets/icons/classic-spells")
+SPELL_ICON_URL_PREFIX = "assets/icons/classic-spells"
 ITEM_ICON_CACHE_TAG = "communitydragon-jade-items-v1"
 CLASSIC_PUBLIC_URL = "https://arammeta.com/classic.html"
 CLASSIC_OG_IMAGE_URL = "https://arammeta.com/og-image.png"
@@ -287,6 +289,70 @@ def jade_item_id(item_id: int) -> int:
     return int(f"{CLASSIC_ITEM_ID_PREFIX}{int(item_id)}")
 
 
+def load_classic_summoner_spell_metadata(spell_ids: set[int]) -> dict[int, dict]:
+    """Load the legacy Jade spell names and current icons used by Classic."""
+    if not spell_ids:
+        return {}
+    rows_zh = httpx.get(
+        f"{CDRAGON_BASE}/zh_tw/v1/summoner-spells.json", timeout=40
+    ).json()
+    rows_zh_cn = httpx.get(
+        f"{CDRAGON_BASE}/zh_cn/v1/summoner-spells.json", timeout=40
+    ).json()
+    rows_en = httpx.get(
+        f"{CDRAGON_BASE}/default/v1/summoner-spells.json", timeout=40
+    ).json()
+    zh_by_id = {int(row["id"]): row for row in rows_zh if row.get("id") is not None}
+    zh_cn_by_id = {
+        int(row["id"]): row for row in rows_zh_cn if row.get("id") is not None
+    }
+    en_by_id = {int(row["id"]): row for row in rows_en if row.get("id") is not None}
+    meta: dict[int, dict] = {}
+    for spell_id in sorted(spell_ids):
+        zh = zh_by_id.get(spell_id) or {}
+        zh_cn = zh_cn_by_id.get(spell_id) or zh
+        en = en_by_id.get(spell_id) or zh
+        base_id = spell_id - 700 if 700 <= spell_id < 800 else spell_id
+        meta[spell_id] = {
+            "spell_id": spell_id,
+            "base_id": base_id,
+            "name_zh": zh.get("name") or en.get("name") or f"#{spell_id}",
+            "name_zh_cn": zh_cn.get("name") or zh.get("name") or en.get("name") or f"#{spell_id}",
+            "name_en": en.get("name") or zh.get("name") or f"#{spell_id}",
+            "icon_path": zh.get("iconPath") or en.get("iconPath") or "",
+            "image": "",
+        }
+    return meta
+
+
+def download_spell_icons(spell_meta: dict[int, dict], icon_dir: Path) -> int:
+    """Self-host the small set of Jade summoner-spell icons used by the page."""
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    fetched = 0
+    with httpx.Client(timeout=40) as client:
+        for spell_id, meta in sorted(spell_meta.items()):
+            icon_path = str(meta.get("icon_path") or "")
+            if not icon_path:
+                continue
+            dest = icon_dir / f"{spell_id}.png"
+            meta["image"] = f"{SPELL_ICON_URL_PREFIX}/{spell_id}.png"
+            if dest.exists():
+                continue
+            try:
+                url = cdragon_asset_url(icon_path)
+            except ValueError:
+                continue
+            response = client.get(url)
+            if response.status_code != 200 or not response.content:
+                click.echo(
+                    f"[classic] WARNING: spell icon {spell_id} -> HTTP {response.status_code}"
+                )
+                continue
+            dest.write_bytes(response.content)
+            fetched += 1
+    return fetched
+
+
 def cdragon_asset_url(icon_path: str) -> str:
     """Translate an LCU /lol-game-data/assets path to CommunityDragon."""
     prefix = "/lol-game-data/assets/"
@@ -419,6 +485,10 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     hero_position_item_wins: dict[tuple[int, str, int], int] = defaultdict(int)
     hero_position_first_slots_games: dict[tuple[int, str, int, int], int] = defaultdict(int)
     hero_position_first_slots_wins: dict[tuple[int, str, int, int], int] = defaultdict(int)
+    hero_spell_games: dict[tuple[int, int], int] = defaultdict(int)
+    hero_spell_wins: dict[tuple[int, int], int] = defaultdict(int)
+    hero_position_spell_games: dict[tuple[int, str, int], int] = defaultdict(int)
+    hero_position_spell_wins: dict[tuple[int, str, int], int] = defaultdict(int)
     ally_pair_games: dict[tuple[int, int], int] = defaultdict(int)
     ally_pair_wins: dict[tuple[int, int], int] = defaultdict(int)
     matchup_games: dict[tuple[int, int], int] = defaultdict(int)
@@ -493,6 +563,15 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
                 for item_id in participant.get("items") or []
                 if int(item_id) > 0
             }
+            for spell_id in participant.get("spells") or []:
+                spell_id = int(spell_id)
+                if spell_id <= 0:
+                    continue
+                hero_spell_games[(champion_id, spell_id)] += 1
+                hero_spell_wins[(champion_id, spell_id)] += int(won)
+                if position:
+                    hero_position_spell_games[(champion_id, position, spell_id)] += 1
+                    hero_position_spell_wins[(champion_id, position, spell_id)] += int(won)
             item_slots = participant.get("itemSlots") or []
             if len(item_slots) >= 2:
                 first_slot = base_item_id(int(item_slots[0] or 0))
@@ -562,6 +641,10 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         "hero_position_item_wins": hero_position_item_wins,
         "hero_position_first_slots_games": hero_position_first_slots_games,
         "hero_position_first_slots_wins": hero_position_first_slots_wins,
+        "hero_spell_games": hero_spell_games,
+        "hero_spell_wins": hero_spell_wins,
+        "hero_position_spell_games": hero_position_spell_games,
+        "hero_position_spell_wins": hero_position_spell_wins,
         "ally_pair_games": ally_pair_games,
         "ally_pair_wins": ally_pair_wins,
         "matchup_games": matchup_games,
@@ -909,6 +992,9 @@ def attach_hero_position_profiles(
     position_first_slots_games: dict[tuple[int, str, int, int], int],
     position_first_slots_wins: dict[tuple[int, str, int, int], int],
     item_meta: dict[int, dict],
+    position_spell_games: dict[tuple[int, str, int], int] | None = None,
+    position_spell_wins: dict[tuple[int, str, int], int] | None = None,
+    spell_meta: dict[int, dict] | None = None,
 ) -> None:
     """Attach lane-switchable win rate and final-inventory associations.
 
@@ -917,6 +1003,9 @@ def attach_hero_position_profiles(
     noisy role guess as a stable recommendation.
     """
     hero_by_id = {int(hero["champion_id"]): hero for hero in heroes}
+    position_spell_games = position_spell_games or {}
+    position_spell_wins = position_spell_wins or {}
+    spell_meta = spell_meta or {}
     for hero in heroes:
         hero["position_stats"] = {}
 
@@ -972,14 +1061,58 @@ def attach_hero_position_profiles(
             slot_wins,
             item_meta,
         )
+        spell_games: dict[tuple[int, int], int] = {}
+        spell_wins: dict[tuple[int, int], int] = {}
+        for (champion_id, candidate, spell_id), games in position_spell_games.items():
+            if candidate == position and champion_id in valid_ids and games >= HERO_ITEM_MIN_GAMES:
+                spell_games[(champion_id, spell_id)] = games
+                spell_wins[(champion_id, spell_id)] = position_spell_wins[
+                    (champion_id, candidate, spell_id)
+                ]
+        attach_hero_spells(temporary, spell_games, spell_wins, spell_meta)
         for profile in temporary:
             hero_by_id[int(profile["champion_id"])]["position_stats"][position] = {
                 key: profile[key]
                 for key in (
                     "games", "raw_wr", "shrunk_wr", "items",
-                    "starter_items", "first_complete_items",
+                    "starter_items", "first_complete_items", "spells",
                 )
             }
+
+
+def attach_hero_spells(
+    heroes: list[dict],
+    spell_games: dict[tuple[int, int], int],
+    spell_wins: dict[tuple[int, int], int],
+    spell_meta: dict[int, dict],
+) -> None:
+    """Attach conservative champion x summoner-spell associations."""
+    by_id = {int(hero["champion_id"]): hero for hero in heroes}
+    for (champion_id, spell_id), games in spell_games.items():
+        if games < HERO_ITEM_MIN_GAMES or champion_id not in by_id:
+            continue
+        meta = spell_meta.get(spell_id) or {
+            "name_zh": f"#{spell_id}",
+            "name_zh_cn": f"#{spell_id}",
+            "name_en": f"#{spell_id}",
+            "image": "",
+        }
+        wins = spell_wins[(champion_id, spell_id)]
+        hero = by_id[champion_id]
+        rows = hero.setdefault("spells", [])
+        rows.append({
+            "spell_id": spell_id,
+            "name_zh": meta.get("name_zh", meta.get("name_en", f"#{spell_id}")),
+            "name_zh_cn": meta.get("name_zh_cn", meta.get("name_zh", f"#{spell_id}")),
+            "name_en": meta.get("name_en", f"#{spell_id}"),
+            "image": meta.get("image", ""),
+            "games": games,
+            "raw_wr": wins / games,
+            "pick_rate": games / max(hero["games"], 1),
+        })
+    for hero in heroes:
+        hero.setdefault("spells", []).sort(key=lambda row: (-row["games"], row["name_en"]))
+        hero["spells"] = hero["spells"][:4]
 
 
 CSS = """
@@ -1197,6 +1330,7 @@ color:var(--text-muted);font-size:10px;font-weight:600}
 .classic-overview-head .ovr-meta{color:var(--text-muted);font-size:12px}
 .classic-overview-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.34fr);gap:24px}
 .classic-overview-grid .detail-loadout{padding-top:0;border-top:0}
+.loadout-note{margin:-3px 0 9px;color:var(--text-dim);font-size:11px}.detail-loadout-item small{display:block;margin:0 0 4px;color:var(--text-dim);font-size:10px}.spell-list{display:grid;gap:7px}.spell-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)}.spell-row:last-child{border-bottom:0}.spell-row img{width:28px;height:28px;border-radius:6px}.spell-row strong{display:block;font-size:12px}.spell-row small{display:block;margin-top:1px;color:var(--text-dim);font-size:10px}.spell-row b{font-size:12px;font-variant-numeric:tabular-nums}
 .classic-blank{min-height:180px;display:flex;align-items:center;justify-content:center;
 color:var(--text-dim);font-size:12px}
 .detail-equipment-columns{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr)}
@@ -1262,11 +1396,12 @@ JS = """
   function itemRows(items,sampleLabel){sampleLabel=sampleLabel||'持有';return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=liftToneClass(lift);return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>'+esc(sampleLabel)+' '+num(item.games)+' 場</small></div><div class="item-stat"><span class="item-rate '+liftClass+'">'+pct(item.raw_wr)+'（'+(lift>=0?'+':'')+(lift*100).toFixed(1)+'%）</span></div></div>';}).join('')+'</div>';}
   function itemGroup(title,items,sampleLabel,note){if(!items.length)return '';return '<section class="detail-item-group"><h4>'+esc(title)+' <span>'+num(items.length)+'</span></h4>'+(note?'<p>'+esc(note)+'</p>':'')+itemRows(items,sampleLabel)+'</section>';}
   function renderItemsForHero(hero){var complete=(hero.items||[]).filter(function(item){return item.kind==='complete';}),boots=(hero.items||[]).filter(function(item){return item.kind==='boots';}),starters=hero.starter_items||[],firstComplete=hero.first_complete_items||[];var left=itemGroup('鞋子',boots,'持有')+itemGroup('常見出門裝',starters,'終局仍持有','只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。')+itemGroup('推定首件大裝',firstComplete,'前兩格出現','依終局背包第 1–2 格推估，並非實際購買時間線。');var right=itemGroup('常見終局完整裝備',complete,'持有');return (left||right)?'<div class="detail-equipment-columns"><div class="detail-equipment-column">'+(left||'<p class="research-tip">左欄目前沒有達到樣本門檻的資料。</p>')+'</div><div class="detail-equipment-column">'+(right||'<p class="research-tip">沒有足夠樣本的終局完整裝備。</p>')+'</div></div>':'<p class="research-tip">沒有足夠樣本的裝備資料可呈現。</p>';}
-  function renderCompactLoadout(hero){var items=(hero.items||[]).filter(function(item){return item.kind==='complete';}).slice(0,3);if(!items.length)return '';return '<section class="detail-loadout"><h3>最常見完整裝備</h3><div class="detail-loadout-items">'+items.map(function(item){return '<div class="detail-loadout-item" title="'+esc(item.name_zh)+' · 持有 '+num(item.games)+' 場"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+'</span></div>';}).join('')+'</div></section>';}
+  function renderCompactLoadout(hero){var boots=(hero.items||[]).filter(function(item){return item.kind==='boots';}).slice(0,1),starters=(hero.starter_items||[]).slice(0,1),core=(hero.first_complete_items||[]).slice(0,3),groups=[['鞋子',boots[0]],['出門裝',starters[0]],['核心裝',core]];if(!boots.length&&!starters.length&&!core.length)return '<section class="detail-loadout"><h3>推薦入門配置</h3><p class="research-tip">沒有足夠樣本的推薦資料。</p></section>';return '<section class="detail-loadout overview-loadout"><h3>推薦入門配置</h3><p class="loadout-note">一件鞋子、一個出門裝與三件核心裝。</p><div class="detail-loadout-items">'+groups.map(function(group){var label=group[0],value=group[1];if(Array.isArray(value))return value.map(function(item){return '<div class="detail-loadout-item" title="'+esc(item.name_zh)+' · '+num(item.games)+' 場"><small>'+label+'</small><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+'</span></div>';}).join('');if(!value)return '';return '<div class="detail-loadout-item" title="'+esc(value.name_zh)+' · '+num(value.games)+' 場"><small>'+label+'</small><img src="'+esc(value.image)+'" alt=""><span>'+esc(value.name_zh)+'</span></div>';}).join('')+'</div></section>';}
   function relationshipRows(rows){if(!rows.length)return '<p class="research-tip">目前沒有達到 100 場門檻的組合。</p>';return '<div class="relationship-list">'+rows.map(function(row){var lift=Number(row.lift)||0,liftClass=liftToneClass(lift);return '<div class="relationship-row"><img src="'+esc(row.image)+'" alt=""><div><strong>'+esc(row.name_zh)+'</strong><small>'+num(row.games)+' 場共同樣本</small></div><div class="relationship-stat '+liftClass+'"><span class="relationship-rate">'+pct(row.adjusted_wr)+'（'+(lift>=0?'+':'')+(lift*100).toFixed(1)+'%）</span></div></div>';}).join('')+'</div>';}
   function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
+  function spellMarkup(hero){var spells=hero.spells||[];if(!spells.length)return '<section class="detail-loadout"><h3>召喚師技能</h3><p class="research-tip">目前沒有達到樣本門檻的召喚師技能資料。</p></section>';return '<section class="detail-loadout spell-section"><h3>召喚師技能</h3><div class="spell-list">'+spells.map(function(spell){return '<div class="spell-row">'+(spell.image?'<img src="'+esc(spell.image)+'" alt="">':'')+'<div><strong>'+esc(spell.name_zh)+'</strong><small>'+num(spell.games)+' 場 · 選用率 '+pct(spell.pick_rate)+'</small></div><b class="'+wrToneClass(spell.raw_wr)+'">'+pct(spell.raw_wr)+'</b></div>';}).join('')+'</div></section>';}
   function combatMarkup(hero){var combat=hero.combat||{};return '<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';}
-  function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-wr '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</span><span class="ovr-meta">調整後勝率 · '+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderRelationships(hero)+'</div><div>'+renderCompactLoadout(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+'</div>',panels=[overview,items,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
+  function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-wr '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</span><span class="ovr-meta">調整後勝率 · '+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderCompactLoadout(hero)+'</div><div>'+spellMarkup(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+renderRelationships(hero)+'</div>',panels=[overview,items,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
   function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});renderHeroDetail(hero,'');var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;state.detailPosition='';detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function moveNavIndicator(button){if(!navIndicator||!button)return;navIndicator.style.setProperty('--ind-x',button.offsetLeft+'px');navIndicator.style.setProperty('--ind-w',button.offsetWidth+'px');}
@@ -1540,6 +1675,7 @@ CLASSIC_TEXT_REPLACEMENTS = {
         "持有": "持有", "常見出門裝": "常见出门装", "終局仍持有": "终局仍持有",
         "推定首件大裝": "推定首件大装", "前兩格出現": "前两格出现", "常見終局完整裝備": "常见终局完整装备",
         "最常見完整裝備": "最常见完整装备", "最佳搭檔": "最佳搭档", "棘手對手": "棘手对手",
+        "推薦入門配置": "推荐入门配置", "出門裝": "出门装", "核心裝": "核心装", "一件鞋子、一個出門裝與三件核心裝。": "一双鞋子、一个出门装与三件核心装。", "沒有足夠樣本的推薦資料。": "没有足够样本的推荐数据。", "召喚師技能": "召唤师技能", "目前沒有達到樣本門檻的召喚師技能資料。": "当前没有达到样本门槛的召唤师技能数据。",
         "英雄傷害／分": "英雄伤害／分", "金錢／分": "金币／分", "經典模式對局平均": "经典模式对局平均",
         "只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。": "只统计多兰系列、打野与守护者起手装；卖掉后无法观察。",
         "依終局背包第 1–2 格推估，並非實際購買時間線。": "按终局背包第 1–2 格推算，并非实际购买时间线。",
@@ -1576,13 +1712,14 @@ CLASSIC_TEXT_REPLACEMENTS = {
         "持有": "Held", "常見出門裝": "Common starting items", "終局仍持有": "Still held at game end",
         "推定首件大裝": "Estimated first completed item", "前兩格出現": "Appears in first two slots", "常見終局完整裝備": "Common final completed items",
         "最常見完整裝備": "Most common completed items", "最佳搭檔": "Best synergies", "棘手對手": "Difficult opponents",
+        "推薦入門配置": "Simple recommended setup", "出門裝": "Starting item", "核心裝": "Core item", "一件鞋子、一個出門裝與三件核心裝。": "One pair of boots, one starting item and three core items.", "沒有足夠樣本的推薦資料。": "Not enough sample for a simple recommendation.", "召喚師技能": "Summoner spells", "目前沒有達到樣本門檻的召喚師技能資料。": "No summoner-spell data has reached the sample threshold.",
         "平均 K / D / A": "Average K / D / A", "英雄傷害／分": "Champion damage / min", "金錢／分": "Gold / min", "經典模式對局平均": "Classic Mode averages",
         "CS／分": "CS / min",
         "只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。": "Only Doran, jungle and Guardian starting items are counted; sold items cannot be observed.",
         "依終局背包第 1–2 格推估，並非實際購買時間線。": "Inferred from final inventory slots 1–2, not an actual purchase timeline.",
         "左欄目前沒有達到樣本門檻的資料。": "No left-column data has reached the sample threshold.",
         "沒有足夠樣本的終局完整裝備。": "Not enough final completed-item data.",
-        "同隊勝率經收縮；差值已扣除兩位英雄本身強度。": "Team win rate is shrunk; the difference accounts for both champions' strength.",
+        "同隊勝率經收縮；差值已扣除兩位英雄本身強度。": "Team win rate is shrunk; the difference accounts for both champions’ strength.",
         "面對該英雄的勝率經收縮；不是單線對決或因果結論。": "Win rate against this champion is shrunk; this is not a lane matchup or causal conclusion.",
         "沒有足夠樣本的裝備資料可呈現。": "Not enough item data to display.",
         "目前沒有達到 100 場門檻的組合。": "No pair has reached the 100-game threshold.",
@@ -1609,12 +1746,20 @@ def _localized_records(rows: list[dict], locale: str) -> list[dict]:
                 item["name_zh"] = item.get(config["name_key"]) or item.get("name_zh") or item.get("name_en")
                 if str(item.get("image", "")).startswith("assets/"):
                     item["image"] = "/" + item["image"]
+        for spell in row.get("spells") or []:
+            spell["name_zh"] = spell.get(config["name_key"]) or spell.get("name_zh") or spell.get("name_en")
+            if str(spell.get("image", "")).startswith("assets/"):
+                spell["image"] = "/" + spell["image"]
         for profile in (row.get("position_stats") or {}).values():
             for item_key in ("items", "starter_items", "first_complete_items"):
                 for item in profile.get(item_key) or []:
                     item["name_zh"] = item.get(config["name_key"]) or item.get("name_zh") or item.get("name_en")
                     if str(item.get("image", "")).startswith("assets/"):
                         item["image"] = "/" + item["image"]
+            for spell in profile.get("spells") or []:
+                spell["name_zh"] = spell.get(config["name_key"]) or spell.get("name_zh") or spell.get("name_en")
+                if str(spell.get("image", "")).startswith("assets/"):
+                    spell["image"] = "/" + spell["image"]
     return localized
 
 
@@ -1822,7 +1967,7 @@ def render_research_preview(
             f"credible positions enter position statistics ({position_eligible_teams:,}/{position_total_teams:,} teams). This is a weak label, not exact teamPosition. "
             "Item data is final-inventory association without a purchase timeline, so it is not purchase order, causation or a direct recommendation.</p>"
             f"<p>Combat profiles are descriptive per-game or per-minute statistics. Synergies and difficult opponents require at least {RELATION_MIN_GAMES} shared games "
-            f"and are shrunk with {RELATION_PRIOR_GAMES} virtual games toward the expectation implied by both champions' strength. They remain associations inside full 5v5 games, "
+            f"and are shrunk with {RELATION_PRIOR_GAMES} virtual games toward the expectation implied by both champions’ strength. They remain associations inside full 5v5 games, "
             "not lane matchups, causal effects or guarantees. Rune and purchase-timeline data are unavailable.</p>"
             f"<p>Patch distribution: {html.escape(patch_str)}. Generated by <code>scripts/build_classic_page.py</code> at {built}.</p></details>"
         )
@@ -1959,6 +2104,23 @@ def main(
         stats["hero_first_slots_wins"],
         item_meta,
     )
+    observed_spell_ids = {
+        int(spell_id)
+        for (_champion_id, spell_id) in stats["hero_spell_games"]
+    }
+    click.echo("[classic] fetching summoner-spell metadata ...")
+    spell_meta = load_classic_summoner_spell_metadata(observed_spell_ids)
+    fetched_spells = download_spell_icons(spell_meta, SPELL_ICON_DIR)
+    click.echo(
+        f"[classic] spell icons: {fetched_spells} downloaded, "
+        f"{len(list(SPELL_ICON_DIR.glob('*.png')))} on disk -> {SPELL_ICON_DIR}"
+    )
+    attach_hero_spells(
+        rows,
+        stats["hero_spell_games"],
+        stats["hero_spell_wins"],
+        spell_meta,
+    )
     attach_hero_position_profiles(
         rows,
         stats["hero_position_games"],
@@ -1968,6 +2130,9 @@ def main(
         stats["hero_position_first_slots_games"],
         stats["hero_position_first_slots_wins"],
         item_meta,
+        stats["hero_position_spell_games"],
+        stats["hero_position_spell_wins"],
+        spell_meta,
     )
     if not item_rows:
         raise click.ClickException("no Classic final-inventory items could be resolved")
