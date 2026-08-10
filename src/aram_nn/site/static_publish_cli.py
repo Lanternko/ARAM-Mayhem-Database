@@ -1,12 +1,40 @@
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
+from typing import BinaryIO
 
 import click
 
 from .db import SITE_PATCH_MIN_GAMES, latest_patch_prefix
 from .static_publish import DEFAULT_SITE_URL, DEFAULT_STATE_PATH, publish_static_site_once
+
+
+def acquire_publisher_lock(state_path: Path) -> BinaryIO:
+    """Hold a process-scoped lock so manual and watchdog builds cannot overlap."""
+
+    lock_path = state_path.with_suffix(state_path.suffix + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if not lock_path.exists() or lock_path.stat().st_size == 0:
+        lock_path.write_bytes(b"0")
+    handle = lock_path.open("a+b")
+    handle.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.close()
+        raise RuntimeError(
+            f"another static publisher already holds {lock_path}"
+        ) from exc
+    return handle
 
 
 @click.command()
@@ -54,6 +82,9 @@ def main(
     interval_sec: int,
 ) -> None:
     """Rebuild, commit, and push the GitHub Pages static tier-list outputs."""
+    # Keep the handle alive for the entire one-shot/watch process. The OS releases
+    # the advisory lock even after a crash or forced termination.
+    publisher_lock = acquire_publisher_lock(state_path.resolve())
     # Re-resolve "auto" on every watch iteration, not once at launch: a long-running
     # publisher otherwise stays pinned to whatever patch was newest when it started
     # and never flips to a newer patch until the process is restarted.
@@ -132,6 +163,8 @@ def main(
             break
         force = False
         time.sleep(max(5, interval_sec))
+
+    publisher_lock.close()
 
 
 if __name__ == "__main__":
