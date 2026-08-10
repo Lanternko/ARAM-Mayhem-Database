@@ -1206,25 +1206,34 @@
             gameBoardRanks: '各回合',
             // ---- 選增幅 (augment draft) ----
             augGameTitle: '選增幅',
-            augGameSub: '從 3 隻英雄挑 1 隻，再抽 4 輪增幅。顏色機率取自真實對局；強度綜合勝率與選用率，選之前不顯示。',
-            augGameTip: '遊玩建議：同一場的顏色是全場共用的，銀色不會連兩次，彩色之後下一個彩色機率會變低。'
-                + '每張卡各有一次重骰。對答案時是從這輪的 6 個候選（3 張明牌＋3 張重骰後的）挑最佳，'
-                + '所以骰子沒用完＝你自己少看了選項，算判斷失誤。同一場不會拿到重複的增幅。',
+            augGameSub: '選定英雄後完成 4 輪增幅。每輪從 3 張中選 1 張，選完才會公開實戰強度。',
+            augGameTip: '每張增幅都能換一次。本輪評分會比較 6 張候選，包含眼前 3 張與各自背後的換牌選項；不換牌代表你可能錯過更好的選擇。'
+                + '四輪顏色依真實對局的共同分布抽出，同一局不會拿到重複增幅。',
             augGameChampTitle: '選一隻英雄',
             augGameChampSub: '這局要用誰？增幅池會跟著這隻英雄的實戰資料走。',
-            augGameLadder: '本場顏色',
-            augGameRound: (a, b) => `第 ${a}/${b} 個增幅`,
-            augGameRerollUsed: '已重骰',
-            augGameReroll: '重骰',
+            augGameLadder: '本局 4 輪',
+            augGameRound: a => `第 ${a} 輪`,
+            augGameRoundTotal: b => `共 ${b} 輪`,
+            augGamePickHint: '點卡片直接選擇。不確定時，可先換一張。',
+            augGameRevealHint: '本輪 6 張候選已公開，原本選項與換牌選項上下對照。',
+            augGameChoice: n => `選項 ${n}`,
+            augGameSelect: '選這個',
+            augGameRerollUsed: '已換過',
+            augGameReroll: '換一張',
+            augGameRerollHint: '每張可換 1 次',
             augGameYourPick: '你的選擇',
-            augGameBestPick: '最佳',
-            augGameRerolledAway: '被你重骰掉',
-            augGameNeverRolled: '你沒骰出來',
-            augGameNextRound: '下一個增幅',
+            augGameBestPick: '本輪最佳',
+            augGameRerolledAway: '已換掉',
+            augGameNeverRolled: '未查看',
+            augGameOriginal: '原本選項',
+            augGameReplacement: '換牌選項',
+            augGameNextRound: '進入下一輪',
             augGameSettleTitle: '最終結果',
             augGameSettleSub: '每輪你的選擇離「這輪 6 個候選裡最強」有多近（強度＝勝率＋選用率，同站上排行）',
-            augGameRoundHit: '選中最佳',
-            augGameRoundMiss: (v) => `這輪 ${v}`,
+            augGameRoundHit: '本輪最佳選擇',
+            augGameRoundMiss: v => `本輪判斷 ${v} 分`,
+            augGameWinRate: '勝率',
+            augGamePickRateLabel: '選用率',
             augGamePickRate: p => `選用 ${p}`,
             augGameLiftLabel: '勝率增益',
             augGameRestart: '再玩一次',
@@ -1525,27 +1534,35 @@
             gameBoardRanks: 'Rounds',
             // ---- Augment Draft ----
             augGameTitle: 'Augment Draft',
-            augGameSub: 'Pick 1 of 3 champions, then draft 4 augments. Colour odds come from real games; strength blends win rate and pick rate and stays hidden until you pick.',
-            augGameTip: 'Tips: the colour ladder is shared by the whole lobby, silver never repeats twice in a row, '
-                + 'and a prismatic makes the next prismatic less likely. Every card carries its own reroll, and you are '
-                + 'graded against all six of the round’s candidates — the three face-up plus the three behind the '
-                + 'rerolls — so leaving a reroll unused counts as a misread, not bad luck. '
-                + 'You never get the same augment twice in a run.',
+            augGameSub: 'Choose a champion, then complete 4 rounds. Pick 1 of 3 augments each round; real-game strength appears after your choice.',
+            augGameTip: 'Each augment can be swapped once. Your score compares all six candidates: the three you see and the swap behind each one. '
+                + 'Skipping a swap means you may miss a stronger option. The four colours follow the joint distribution measured in real games, '
+                + 'and an augment never repeats in the same run.',
             augGameChampTitle: 'Pick a champion',
             augGameChampSub: 'Who are you playing? The augment pool follows this champion’s real games.',
-            augGameLadder: 'This game’s colours',
-            augGameRound: (a, b) => `Augment ${a}/${b}`,
-            augGameRerollUsed: 'Reroll used',
-            augGameReroll: 'Reroll',
+            augGameLadder: '4 rounds',
+            augGameRound: a => `Round ${a}`,
+            augGameRoundTotal: b => `${b} total`,
+            augGamePickHint: 'Select a card, or swap one first if you are unsure.',
+            augGameRevealHint: 'All six candidates are now visible, with the original and swap options paired by column.',
+            augGameChoice: n => `Option ${n}`,
+            augGameSelect: 'Choose this',
+            augGameRerollUsed: 'Swapped',
+            augGameReroll: 'Swap card',
+            augGameRerollHint: 'One swap per card',
             augGameYourPick: 'Your pick',
-            augGameBestPick: 'Best',
-            augGameRerolledAway: 'Rerolled away',
-            augGameNeverRolled: 'Never rolled',
-            augGameNextRound: 'Next augment',
+            augGameBestPick: 'Round best',
+            augGameRerolledAway: 'Swapped out',
+            augGameNeverRolled: 'Not viewed',
+            augGameOriginal: 'Original',
+            augGameReplacement: 'Swap option',
+            augGameNextRound: 'Next round',
             augGameSettleTitle: 'Final result',
-            augGameSettleSub: 'How close each pick was to the strongest of the round’s six — strength blends win rate and pick rate, as on the board',
-            augGameRoundHit: 'Best pick',
-            augGameRoundMiss: (v) => `this round: ${v}`,
+            augGameSettleSub: 'How close each pick was to the strongest of the round’s six. Strength blends win rate and pick rate, as on the board.',
+            augGameRoundHit: 'Best pick this round',
+            augGameRoundMiss: v => `Round read: ${v} points`,
+            augGameWinRate: 'Win rate',
+            augGamePickRateLabel: 'Pick rate',
             augGamePickRate: p => `${p} picked`,
             augGameLiftLabel: 'WR lift',
             augGameRestart: 'Play again',
@@ -6881,7 +6898,7 @@
     }
 
     function augDraftLadderStripHtml(copy) {
-        if (!augDraft.ladder) return '';
+        if (!augDraft.ladder || augDraft.phase === 'champ') return '';
         const pips = augDraft.ladder.split('').map((code, i) => {
             const done = augDraft.phase === 'settle' || i < augDraft.round
                 || (i === augDraft.round && augDraft.phase === 'reveal');
@@ -6889,14 +6906,19 @@
                 && augDraft.phase !== 'champ';
             const cls = ['aug-ladder-pip', `is-${AUG_RARITY_CSS[code] || 'gold'}`,
                 now ? 'is-now' : '', done ? 'is-done' : ''].filter(Boolean).join(' ');
-            return `<span class="${cls}" title="${escHtml(augDraftRarityLabel(code, copy))}">`
-                + `<span class="aug-ladder-n">${i + 1}</span></span>`;
+            const rarity = augDraftRarityLabel(code, copy);
+            const short = currentLang === 'en' ? code : rarity.slice(0, 1);
+            return `<span class="${cls}" title="${escHtml(rarity)}" role="listitem"`
+                + (now ? ' aria-current="step"' : '') + `>`
+                + `<span class="aug-ladder-n">${i + 1}</span>`
+                + `<span class="aug-ladder-rarity">${escHtml(short)}</span></span>`;
         }).join('');
         return `<div class="aug-ladder">`
             + augDraftChampBadgeHtml()
-            + `<span class="aug-ladder-label">`
-            + `${escHtml(copy.augGameLadder || 'Colours')}</span>`
-            + `<div class="aug-ladder-pips">${pips}</div></div>`;
+            + `<div class="aug-ladder-progress">`
+            + `<span class="aug-ladder-label">${escHtml(copy.augGameLadder || 'Rounds')}</span>`
+            + `<div class="aug-ladder-pips" role="list">${pips}</div>`
+            + `</div></div>`;
     }
 
     /** First category of an augment, as the client's single genre chip. */
@@ -6937,36 +6959,55 @@
         // data-aug-id on every card (not just the clickable ones) so the reveal
         // grid stays inspectable.
         const attrs = ` data-aug-id="${escHtml(String(id))}"`
-            + (o.interactive ? ` type="button" data-aug-pick="${escHtml(String(id))}"` : '');
-        // Two separate channels so they can co-occur on one card: the frame
-        // turns gold for YOUR pick, the badge marks the BEST of the six.
-        const badge = o.best
-            ? (o.copy.augGameBestPick || 'Best')
-            : (o.stale ? (o.staleLabel || '') : '');
+            + (o.interactive
+                ? ` type="button" data-aug-pick="${escHtml(String(id))}"`
+                    + ` aria-label="${escHtml((o.copy.augGameSelect || 'Choose') + ': ' + name)}"`
+                : '');
+        const badges = [];
+        if (o.picked) {
+            badges.push(`<span class="aug-draft-badge is-pick-badge">`
+                + `${escHtml(o.copy.augGameYourPick || 'Your pick')}</span>`);
+        }
+        if (o.best) {
+            badges.push(`<span class="aug-draft-badge is-best-badge">`
+                + `${escHtml(o.copy.augGameBestPick || 'Best')}</span>`);
+        }
+        if (o.stale && o.staleLabel) {
+            badges.push(`<span class="aug-draft-badge is-stale-badge">`
+                + `${escHtml(o.staleLabel)}</span>`);
+        }
         // Show the two quantities the ranking is actually built from, not the
         // blended score: a bare "+1.3%" made a 114-game augment look better
         // than a 3,942-game one with no way to see why.
         const liftHtml = o.reveal
             ? `<span class="aug-draft-stats">`
-                + `<span class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
-                + `${escHtml(pct(augDraftWr(id)))}</span>`
-                + `<span class="aug-draft-pick">`
-                + `${escHtml((o.copy.augGamePickRate || (p => p))(pct(augDraftPickRate(id))))}</span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGameWinRate || 'Win rate')}</span>`
+                + `<b class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
+                + `${escHtml(pct(augDraftWr(id)))}</b></span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGamePickRateLabel || 'Pick rate')}</span>`
+                + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
                 + `</span>`
             : '';
         return (
             `<${tag} class="${classes}"${attrs}>`
-            + (badge
-                ? `<span class="aug-draft-badge${o.best ? ' is-best-badge' : ''}">`
-                    + `${escHtml(badge)}</span>`
-                : '')
+            + (badges.length ? `<span class="aug-draft-badges">${badges.join('')}</span>` : '')
+            + `<span class="aug-draft-card-head">`
             + `<span class="aug-draft-art">`
             + (icon ? `<img class="aug-draft-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '')
             + `</span>`
+            + `<span class="aug-draft-heading">`
             + `<span class="aug-draft-name">${escHtml(name)}</span>`
             + (cat ? `<span class="aug-draft-cat">${escHtml(cat)}</span>` : '')
+            + `</span></span>`
             + (desc ? `<span class="aug-draft-desc">${augDraftDescHtml(desc)}</span>` : '')
             + liftHtml
+            + (o.interactive
+                ? `<span class="aug-draft-select-hint">`
+                    + `<span>${escHtml(o.copy.augGameSelect || 'Choose this')}</span>`
+                    + `<span aria-hidden="true">→</span></span>`
+                : '')
             + `</${tag}>`
         );
     }
@@ -6998,41 +7039,56 @@
         const code = augDraftRoundCode();
         let cards;
         if (reveal) {
-            // Row-major over [face-up row, reroll row] so every column stays one
-            // slot: you can read straight down to see what your ⟳ was hiding.
-            const rows = [0, 1].map(depth => last.pairs.map((pair, slot) => {
+            // Keep every original beside its hidden replacement. The old
+            // six-card matrix had no row labels, so it looked like six unrelated
+            // answers instead of three decisions with one swap behind each.
+            cards = last.pairs.map((pair, slot) => {
                 const shownIdx = last.slotRerolled[slot] ? 1 : 0;
-                const id = pair[depth];
-                return augDraftAugCardHtml(id, {
-                    copy,
-                    code: last.code,
-                    reveal: true,
-                    picked: String(id) === last.id,
-                    best: String(id) === last.bestId,
-                    // Dim anything that was never the live card, and say which
-                    // kind of "not taken" it was.
-                    stale: depth !== shownIdx,
-                    staleLabel: depth === shownIdx
-                        ? ''
-                        : (last.slotRerolled[slot]
-                            ? (copy.augGameRerolledAway || 'Rerolled away')
-                            : (copy.augGameNeverRolled || 'Never rolled')),
-                });
-            }).map(card => `<div class="aug-draft-slot">${card}</div>`).join(''));
-            cards = rows.join('');
+                const pairCards = [0, 1].map(depth => {
+                    const id = pair[depth];
+                    const label = depth === 0
+                        ? (copy.augGameOriginal || 'Original')
+                        : (copy.augGameReplacement || 'Swap option');
+                    return `<div class="aug-draft-compare-option">`
+                        + `<span class="aug-draft-compare-label">${escHtml(label)}</span>`
+                        + augDraftAugCardHtml(id, {
+                            copy,
+                            code: last.code,
+                            reveal: true,
+                            picked: String(id) === last.id,
+                            best: String(id) === last.bestId,
+                            // Dim anything that was never live, but keep it visible
+                            // because every hidden option still counts in the score.
+                            stale: depth !== shownIdx,
+                            staleLabel: depth === shownIdx
+                                ? ''
+                                : (last.slotRerolled[slot]
+                                    ? (copy.augGameRerolledAway || 'Swapped out')
+                                    : (copy.augGameNeverRolled || 'Not viewed')),
+                        })
+                        + `</div>`;
+                }).join('');
+                return `<div class="aug-draft-compare" aria-label="${slot + 1}">`
+                    + `<span class="aug-draft-compare-n" aria-hidden="true">${slot + 1}</span>`
+                    + pairCards + `</div>`;
+            }).join('');
         } else {
             cards = augDraftOffer().map((id, slot) => {
                 const used = !!augDraft.slotRerolled[slot];
                 const label = used
                     ? (copy.augGameRerollUsed || 'Reroll used')
                     : (copy.augGameReroll || 'Reroll');
+                const buttonTitle = `${label} · ${copy.augGameRerollHint || 'One swap per card'}`;
                 return (
-                    `<div class="aug-draft-slot">`
+                    `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
+                    + `<span class="aug-draft-choice-label">`
+                    + `${escHtml((copy.augGameChoice || (n => `Option ${n}`))(slot + 1))}</span>`
                     + augDraftAugCardHtml(id, { copy, code, interactive: true })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
-                    + `${used ? ' disabled' : ''} title="${escHtml(label)}"`
-                    + ` aria-label="${escHtml(label)}">`
+                    + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
+                    + ` aria-label="${escHtml(buttonTitle)}">`
                     + AUG_REROLL_ICON
+                    + `<span>${escHtml(label)}</span>`
                     + `</button>`
                     + `</div>`
                 );
@@ -7041,28 +7097,34 @@
         let verdict = '';
         if (reveal) {
             const hit = last.id === last.bestId;
-            // best − mine is a difference in the blended score, not a win-rate
-            // delta, so printing it as "差 0.4%" would read as percentage points
-            // it is not. Show the round's normalised result instead.
-            const gap = Math.round(last.score * 100) + '%';
-            verdict = `<div class="aug-verdict ${hit ? 'is-hit' : 'is-miss'}">`
-                + escHtml(hit
+            // This is a 0–100 decision score, not a win-rate percentage.
+            const score = Math.round(last.score * 100);
+            verdict = `<div class="aug-verdict ${hit ? 'is-hit' : 'is-miss'}" aria-live="polite">`
+                + `<span class="aug-verdict-mark" aria-hidden="true">${hit ? '✓' : score}</span>`
+                + `<strong>${escHtml(hit
                     ? (copy.augGameRoundHit || 'Best pick')
-                    : (copy.augGameRoundMiss || (g => g))(gap))
+                    : (copy.augGameRoundMiss || (g => g))(score))}</strong>`
                 + `</div>`;
         }
+        const guidance = reveal
+            ? (copy.augGameRevealHint || '')
+            : (copy.augGamePickHint || 'Choose a card, or swap one first.');
         return (
             `<div class="aug-phase aug-phase-pick">`
             + `<div class="aug-phase-head">`
             + `<h3 class="aug-phase-title">`
             + escHtml((copy.augGameRound || ((a, b) => `${a}/${b}`))(
                 augDraft.round + 1, AUG_DRAFT_ROUNDS))
+            + `<span class="aug-phase-total">${escHtml((copy.augGameRoundTotal || (b => `${b}`))(AUG_DRAFT_ROUNDS))}</span>`
+            + `</h3>`
             + `<span class="aug-phase-rarity is-${AUG_RARITY_CSS[code] || 'gold'}">`
             + escHtml(augDraftRarityLabel(code, copy)) + `</span>`
-            + `</h3>`
             + `</div>`
-            + `<div class="aug-draft-row">${cards}</div>`
             + verdict
+            + (guidance ? `<p class="aug-pick-hint">${escHtml(guidance)}`
+                + (!reveal ? `<span>${escHtml(copy.augGameRerollHint || '')}</span>` : '')
+                + `</p>` : '')
+            + `<div class="aug-draft-row${reveal ? ' is-reveal' : ''}">${cards}</div>`
             + (reveal
                 ? `<div class="aug-actions"><button type="button" class="tool-btn game-cta" id="aug-next">`
                     + escHtml(augDraft.round + 1 >= AUG_DRAFT_ROUNDS
@@ -9103,7 +9165,6 @@
             renderSidePanel();
             syncHeaderHeight();  // header is 1 row on desktop, 2 on mobile
             moveTabIndicator();
-            moveSegThumb();
             if (!detailSelected) return;
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (!champ) return;

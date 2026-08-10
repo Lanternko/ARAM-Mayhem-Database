@@ -3988,6 +3988,41 @@
     }
     .brand:hover .brand-aram { color: var(--text-secondary, var(--text-muted)); }
     .brand:hover .brand-meta { color: var(--text); }
+    .classic-mode-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+        margin-left: 8px;
+        padding: 5px 9px;
+        border: 1px solid color-mix(in oklab, var(--accent) 48%, var(--border));
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--accent) 7%, var(--surface));
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1;
+        text-decoration: none;
+        white-space: nowrap;
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease),
+                    border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
+    }
+    .classic-mode-link:hover {
+        border-color: color-mix(in oklab, var(--accent) 72%, var(--border));
+        background: color-mix(in oklab, var(--accent) 12%, var(--surface));
+        color: var(--text);
+    }
+    .classic-mode-link:active { transform: scale(0.97); }
+    .classic-mode-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .classic-mode-link-short { display: none; }
+    .classic-mode-link-new {
+        color: var(--accent);
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: .08em;
+    }
+    html[lang="en"] .classic-mode-link,
+    html[lang="zh-Hans"] .classic-mode-link { display: none; }
     .nav-tabs {
         position: relative;
         display: flex;
@@ -5278,6 +5313,10 @@
             gap: 0 10px;
         }
         .brand-title { font-size: 22px; }
+        .classic-mode-link { margin-left: 0; padding: 5px 8px; }
+        .classic-mode-link-full,
+        .classic-mode-link-new { display: none; }
+        .classic-mode-link-short { display: inline; }
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }
@@ -6218,65 +6257,96 @@
     }
     .game-mode-tab:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
 
-    /* ---- 選增幅: colour ladder strip ---- */
-    .aug-ladder {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0 0 16px;
+    /* ---- 選增幅: compact, explicit decision flow ---- */
+    #aug-draft-host {
+        --aug-silver: oklch(0.79 0.024 258);
+        --aug-gold: oklch(0.82 0.16 88);
+        --aug-prismatic: oklch(0.72 0.19 305);
+        --aug-good: oklch(0.75 0.17 148);
+        --aug-bad: oklch(0.7 0.17 25);
     }
-    /* Champion you are drafting for — the pool is champion-specific, so this
-       stays pinned at the top-left while you read the cards. */
+    .aug-ladder {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        margin: 0 0 18px;
+        padding: 10px 12px;
+        border: 1px solid var(--border, oklch(0.34 0.02 260));
+        border-radius: 14px;
+        background: color-mix(in oklch, var(--surface-raised) 72%, transparent);
+    }
     .aug-champ-badge {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        margin-right: 4px;
+        gap: 8px;
+        min-width: 0;
         padding: 3px 10px 3px 3px;
         border-radius: 999px;
-        background: var(--chip-bg, #1f2530);
-        border: 1px solid var(--border, #2f3645);
+        background: var(--chip-bg, oklch(0.25 0.018 260));
+        border: 1px solid var(--border, oklch(0.34 0.02 260));
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 750;
         white-space: nowrap;
     }
     .aug-champ-badge img {
-        width: 24px;
-        height: 24px;
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
         flex: none;
     }
-    .aug-ladder-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-muted, #9aa0a6);
+    .aug-ladder-progress {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        min-width: 0;
     }
-    .aug-ladder-pips { display: flex; gap: 6px; }
+    .aug-ladder-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        white-space: nowrap;
+    }
+    .aug-ladder-pips {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(42px, 1fr));
+        gap: 5px;
+        width: min(100%, 220px);
+    }
     .aug-ladder-pip {
+        --aug-colour: var(--aug-gold);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 26px;
-        height: 26px;
+        gap: 4px;
+        min-width: 42px;
+        height: 30px;
+        padding: 0 7px;
         border-radius: 8px;
-        font-size: 11px;
-        font-weight: 700;
-        color: #0e1116;
-        /* Unplayed rounds stay dimmed: the ladder is known up front in-client,
-           but the player should still read at a glance which one is live. */
-        opacity: 0.32;
-        border: 2px solid transparent;
-        transition: opacity 0.12s, transform 0.12s;
+        border: 1px solid color-mix(in oklch, var(--aug-colour) 58%, var(--border));
+        background: color-mix(in oklch, var(--aug-colour) 16%, var(--surface-raised));
+        color: var(--text, oklch(0.93 0.01 260));
+        opacity: 0.45;
+        transition: opacity 180ms var(--ease-out), background 180ms var(--ease-out),
+                    border-color 180ms var(--ease-out);
     }
-    .aug-ladder-pip.is-done { opacity: 0.72; }
+    .aug-ladder-pip.is-silver { --aug-colour: var(--aug-silver); }
+    .aug-ladder-pip.is-gold { --aug-colour: var(--aug-gold); }
+    .aug-ladder-pip.is-prismatic { --aug-colour: var(--aug-prismatic); }
+    .aug-ladder-pip.is-done { opacity: 0.68; }
     .aug-ladder-pip.is-now {
         opacity: 1;
-        transform: scale(1.12);
-        border-color: var(--text, #e6e9ef);
+        border-color: var(--aug-colour);
+        background: color-mix(in oklch, var(--aug-colour) 27%, var(--surface-raised));
+        box-shadow: 0 0 0 2px color-mix(in oklch, var(--aug-colour) 18%, transparent);
     }
-    .aug-ladder-pip.is-silver     { background: #c7cdd6; }
-    .aug-ladder-pip.is-gold       { background: #f5c518; }
-    .aug-ladder-pip.is-prismatic  { background: linear-gradient(135deg, #a78bfa, #f0abfc, #67e8f9); }
+    .aug-ladder-n { font-size: 11px; font-weight: 800; }
+    .aug-ladder-rarity {
+        font-size: 10px;
+        font-weight: 800;
+        color: var(--aug-colour);
+    }
 
     /* ---- 選增幅: phases ---- */
     .aug-phase { max-width: 720px; margin: 0 auto; }
@@ -6285,31 +6355,61 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        margin-bottom: 12px;
+        margin-bottom: 7px;
     }
     .aug-phase-title {
         display: flex;
-        align-items: center;
+        align-items: baseline;
         gap: 8px;
         margin: 0;
-        font-size: 16px;
-        font-weight: 700;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+    }
+    .aug-phase-total {
+        font-size: 11px;
+        font-weight: 650;
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        letter-spacing: 0;
     }
     .aug-phase-sub {
         margin: 0 0 14px;
+        max-width: 58ch;
         font-size: 13px;
-        color: var(--text-muted, #9aa0a6);
+        line-height: 1.5;
+        color: var(--text-muted, oklch(0.7 0.015 260));
     }
     .aug-phase-rarity {
-        padding: 2px 8px;
+        --aug-colour: var(--aug-gold);
+        padding: 3px 9px;
+        border: 1px solid color-mix(in oklch, var(--aug-colour) 55%, var(--border));
         border-radius: 999px;
+        background: color-mix(in oklch, var(--aug-colour) 17%, transparent);
+        color: var(--aug-colour);
         font-size: 11px;
-        font-weight: 700;
-        color: #0e1116;
+        font-weight: 800;
     }
-    .aug-phase-rarity.is-silver    { background: #c7cdd6; }
-    .aug-phase-rarity.is-gold      { background: #f5c518; }
-    .aug-phase-rarity.is-prismatic { background: linear-gradient(135deg, #a78bfa, #f0abfc, #67e8f9); }
+    .aug-phase-rarity.is-silver { --aug-colour: var(--aug-silver); }
+    .aug-phase-rarity.is-gold { --aug-colour: var(--aug-gold); }
+    .aug-phase-rarity.is-prismatic { --aug-colour: var(--aug-prismatic); }
+    .aug-pick-hint {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        margin: 0 0 12px;
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 12px;
+        line-height: 1.45;
+    }
+    .aug-pick-hint > span {
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--chip-bg, oklch(0.25 0.018 260));
+        color: var(--text, oklch(0.93 0.01 260));
+        font-size: 10px;
+        font-weight: 700;
+    }
 
     .aug-champ-row {
         display: grid;
@@ -6323,188 +6423,324 @@
         gap: 6px;
         padding: 14px 8px;
         border-radius: 12px;
-        border: 1px solid var(--border, #2f3645);
-        background: var(--surface-raised, #1a1f29);
-        color: var(--text, #e6e9ef);
+        border: 1px solid var(--border, oklch(0.34 0.02 260));
+        background: var(--surface-raised, oklch(0.23 0.016 260));
+        color: var(--text, oklch(0.93 0.01 260));
         font-family: inherit;
         cursor: pointer;
-        transition: border-color 0.12s, transform 0.12s;
+        transition: border-color 180ms var(--ease-out), transform 180ms var(--ease-out),
+                    background 180ms var(--ease-out);
     }
     .aug-champ-card:hover {
-        border-color: var(--accent, #f5c518);
+        border-color: var(--accent, var(--aug-gold));
+        background: color-mix(in oklch, var(--accent) 7%, var(--surface-raised));
         transform: translateY(-2px);
     }
-    .aug-champ-card:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
-    .aug-champ-img { width: 56px; height: 56px; border-radius: 50%; }
-    .aug-champ-name { font-size: 13px; font-weight: 700; }
+    .aug-champ-card:focus-visible {
+        outline: 2px solid var(--focus-ring, oklch(0.72 0.14 250));
+        outline-offset: 2px;
+    }
+    .aug-champ-img { width: 56px; height: 56px; border-radius: 12px; }
+    .aug-champ-name { font-size: 13px; font-weight: 750; }
     .aug-champ-meta {
         font-size: 11px;
-        color: var(--text-muted, #9aa0a6);
+        color: var(--text-muted, oklch(0.7 0.015 260));
         font-variant-numeric: tabular-nums;
     }
 
     .aug-draft-row {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 10px;
+        align-items: stretch;
     }
-    /* Card art follows the in-client augment select: portrait card, rarity-lit
-       frame, art on top, name → genre chip → rules text stacked and centred. */
-    .aug-draft-slot { display: flex; flex-direction: column; gap: 8px; }
-    .aug-draft-card {
+    .aug-draft-slot {
+        min-width: 0;
+    }
+    .aug-draft-slot.is-pick-slot {
+        --aug-colour: var(--aug-gold);
         position: relative;
-        flex: 1;
+        display: flex;
+    }
+    .aug-draft-slot.is-pick-slot.is-silver { --aug-colour: var(--aug-silver); }
+    .aug-draft-slot.is-pick-slot.is-gold { --aug-colour: var(--aug-gold); }
+    .aug-draft-slot.is-pick-slot.is-prismatic { --aug-colour: var(--aug-prismatic); }
+    .aug-draft-choice-label {
+        position: absolute;
+        z-index: 2;
+        top: 19px;
+        left: 16px;
+        color: var(--text-dim, oklch(0.58 0.015 260));
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .aug-draft-card {
+        --aug-colour: var(--aug-gold);
+        position: relative;
+        width: 100%;
+        min-width: 0;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        padding: 18px 14px 16px;
-        text-align: center;
+        align-items: flex-start;
+        gap: 11px;
+        padding: 16px;
+        overflow: hidden;
+        text-align: left;
         border-radius: 14px;
-        border: 1px solid var(--aug-colour, #f5c518);
-        /* Plain fill first: a browser without color-mix() drops the whole
-           gradient declaration, and without this the card would render
-           transparent rather than merely un-lit. */
-        background: var(--surface-raised, #1a1f29);
-        background:
-            radial-gradient(120% 80% at 50% 0%,
-                color-mix(in srgb, var(--aug-colour, #f5c518) 22%, transparent) 0%,
-                transparent 62%),
-            var(--surface-raised, #1a1f29);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--aug-colour, #f5c518) 28%, transparent),
-                    0 6px 22px -12px var(--aug-colour, #f5c518);
-        color: var(--text, #e6e9ef);
+        border: 1px solid color-mix(in oklch, var(--aug-colour) 38%, var(--border));
+        background: var(--surface-raised, oklch(0.23 0.016 260));
+        box-shadow: inset 0 3px 0 color-mix(in oklch, var(--aug-colour) 74%, transparent);
+        color: var(--text, oklch(0.93 0.01 260));
         font-family: inherit;
         cursor: default;
-        transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+        transition: transform 180ms var(--ease-out), border-color 180ms var(--ease-out),
+                    background 180ms var(--ease-out), opacity 180ms var(--ease-out);
     }
-    button.aug-draft-card { cursor: pointer; }
+    .aug-draft-card.is-silver { --aug-colour: var(--aug-silver); }
+    .aug-draft-card.is-gold { --aug-colour: var(--aug-gold); }
+    .aug-draft-card.is-prismatic { --aug-colour: var(--aug-prismatic); }
+    button.aug-draft-card {
+        min-height: 250px;
+        padding-top: 52px;
+        cursor: pointer;
+    }
     button.aug-draft-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 0 0 1px var(--aug-colour, #f5c518),
-                    0 14px 30px -14px var(--aug-colour, #f5c518);
+        transform: translateY(-2px);
+        border-color: var(--aug-colour);
+        background: color-mix(in oklch, var(--aug-colour) 7%, var(--surface-raised));
     }
-    .aug-draft-card:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
-    .aug-draft-card.is-silver    { --aug-colour: #c7cdd6; }
-    .aug-draft-card.is-gold      { --aug-colour: #f5c518; }
-    .aug-draft-card.is-prismatic { --aug-colour: #c084fc; }
-    /* Your pick is signalled by the gold frame; "best of the six" is signalled
-       by the badge alone, so a card can carry both at once. */
-    .aug-draft-card.is-picked { --aug-colour: #f5c518; }
-    /* Rerolled-away options stay on screen at reveal because they still count
-       toward the score — hiding them would make the reroll look consequence-free. */
-    .aug-draft-card.is-stale { opacity: 0.45; box-shadow: none; }
-    .aug-draft-badge {
-        position: absolute;
-        top: -9px;
-        left: 50%;
-        transform: translateX(-50%);
-        white-space: nowrap;
-        padding: 1px 8px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 700;
-        background: var(--border, #2f3645);
-        color: var(--text-muted, #9aa0a6);
+    .aug-draft-card:focus-visible {
+        outline: 2px solid var(--focus-ring, oklch(0.72 0.14 250));
+        outline-offset: 2px;
     }
-    .aug-draft-badge.is-best-badge {
-        background: #4ade80;
-        color: #0e1116;
+    .aug-draft-card.is-picked {
+        border-color: var(--aug-good);
+        box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--aug-good) 52%, transparent),
+                    inset 0 3px 0 var(--aug-good);
     }
-    /* Stale cards fade, but a stale card that WAS the best must stay legible —
-       that is the whole lesson of the round. */
-    .aug-draft-card.is-stale { opacity: 0.45; }
-    .aug-draft-card.is-stale:has(.is-best-badge) { opacity: 0.8; }
+    .aug-draft-card.is-stale { opacity: 0.48; }
+    .aug-draft-card.is-stale:has(.is-best-badge) { opacity: 0.84; }
+    .aug-draft-card-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-width: 0;
+    }
     .aug-draft-art {
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 66px;
-        height: 66px;
-        border-radius: 50%;
-        background: radial-gradient(circle,
-            color-mix(in srgb, var(--aug-colour, #f5c518) 26%, transparent) 0%, transparent 70%);
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
+        border-radius: 11px;
+        background: color-mix(in oklch, var(--aug-colour) 16%, var(--chip-bg));
     }
-    .aug-draft-icon { width: 52px; height: 52px; }
+    .aug-draft-icon { width: 40px; height: 40px; }
+    .aug-draft-heading {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        min-width: 0;
+    }
     .aug-draft-name {
         font-size: 15px;
         font-weight: 800;
         line-height: 1.25;
-        letter-spacing: 0.01em;
+        letter-spacing: -0.005em;
     }
     .aug-draft-cat {
-        padding: 2px 9px;
-        border-radius: 6px;
-        background: color-mix(in srgb, var(--aug-colour, #f5c518) 18%, transparent);
-        border: 1px solid color-mix(in srgb, var(--aug-colour, #f5c518) 40%, transparent);
-        font-size: 10px;
-        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: color-mix(in oklch, var(--aug-colour) 13%, transparent);
+        color: var(--aug-colour);
+        font-size: 9px;
+        font-weight: 800;
         letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-    .aug-draft-stats {
-        display: flex;
-        align-items: baseline;
-        justify-content: center;
-        gap: 8px;
-        margin-top: auto;
-        padding-top: 6px;
-        font-variant-numeric: tabular-nums;
-    }
-    .aug-draft-wr { font-size: 14px; font-weight: 800; }
-    .aug-draft-wr.is-good { color: #4ade80; }
-    .aug-draft-wr.is-bad  { color: #f87171; }
-    /* Pick rate sits next to win rate because it is half the ranking: a high
-       win rate off 114 games is not a better augment than a slightly lower one
-       off 3,942. */
-    .aug-draft-pick {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--text-muted, #9aa0a6);
     }
     .aug-draft-desc {
+        flex: 1;
         font-size: 12px;
-        line-height: 1.5;
-        color: var(--text-muted, #9aa0a6);
+        line-height: 1.55;
+        color: var(--text-muted, oklch(0.7 0.015 260));
     }
-    .aug-draft-val { color: var(--aug-colour, #f5c518); font-weight: 700; }
-    /* Per-card reroll: the client gives every offered augment its own ⟳. */
-    .aug-slot-reroll {
+    .aug-draft-val { color: var(--aug-colour); font-weight: 750; }
+    .aug-draft-select-hint {
+        width: 100%;
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: auto;
+        padding-top: 10px;
+        border-top: 1px solid var(--border, oklch(0.34 0.02 260));
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 11px;
+        font-weight: 750;
+        transition: color 180ms var(--ease-out);
+    }
+    button.aug-draft-card:hover .aug-draft-select-hint { color: var(--aug-colour); }
+
+    /* The swap is a secondary action attached to the card it replaces. */
+    .aug-slot-reroll {
+        position: absolute;
+        z-index: 2;
+        top: 12px;
+        right: 12px;
+        min-height: 32px;
+        display: inline-flex;
+        align-items: center;
         justify-content: center;
-        width: 100%;
-        padding: 7px;
-        border-radius: 9px;
-        border: 1px solid var(--border, #2f3645);
-        background: var(--chip-bg, #1f2530);
-        color: var(--text-muted, #9aa0a6);
+        gap: 5px;
+        padding: 5px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border, oklch(0.34 0.02 260));
+        background: var(--chip-bg, oklch(0.25 0.018 260));
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-family: inherit;
+        font-size: 10px;
+        font-weight: 750;
         cursor: pointer;
-        transition: color 0.12s, border-color 0.12s, background 0.12s;
+        transition: color 180ms var(--ease-out), border-color 180ms var(--ease-out),
+                    background 180ms var(--ease-out);
     }
     .aug-slot-reroll:hover:not([disabled]) {
-        color: var(--text, #e6e9ef);
-        border-color: var(--aug-colour, #f5c518);
+        color: var(--text, oklch(0.93 0.01 260));
+        border-color: var(--aug-colour, var(--aug-gold));
+        background: color-mix(in oklch, var(--aug-colour, var(--aug-gold)) 11%, var(--chip-bg));
     }
-    .aug-slot-reroll:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
-    .aug-slot-reroll[disabled] { opacity: 0.35; cursor: not-allowed; }
-    .aug-slot-reroll .aug-reroll-icon { width: 15px; height: 15px; }
-    .aug-verdict {
-        margin: 12px 0 0;
+    .aug-slot-reroll:focus-visible {
+        outline: 2px solid var(--focus-ring, oklch(0.72 0.14 250));
+        outline-offset: 2px;
+    }
+    .aug-slot-reroll[disabled] { opacity: 0.58; cursor: not-allowed; }
+    .aug-slot-reroll .aug-reroll-icon { width: 13px; height: 13px; }
+    .aug-reroll-icon { width: 14px; height: 14px; flex: none; }
+
+    /* Reveal: three columns, each pairing one original with its swap. */
+    .aug-draft-compare {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        padding-top: 18px;
+    }
+    .aug-draft-compare-n {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        color: var(--text-dim, oklch(0.58 0.015 260));
+        font-size: 10px;
+        font-weight: 800;
+    }
+    .aug-draft-compare-option {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+    }
+    .aug-draft-compare-label {
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 10px;
+        font-weight: 750;
         text-align: center;
-        font-size: 13px;
-        font-weight: 700;
+    }
+    .aug-draft-compare .aug-draft-card { min-height: 215px; }
+    .aug-draft-badges {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-height: 20px;
+    }
+    .aug-draft-badge {
+        white-space: nowrap;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: var(--chip-bg, oklch(0.25 0.018 260));
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 9px;
+        font-weight: 800;
+    }
+    .aug-draft-badge.is-pick-badge {
+        background: color-mix(in oklch, var(--aug-good) 18%, transparent);
+        color: var(--aug-good);
+    }
+    .aug-draft-badge.is-best-badge {
+        background: var(--aug-good);
+        color: oklch(0.2 0.025 150);
+    }
+    .aug-draft-badge.is-stale-badge { opacity: 0.82; }
+    .aug-draft-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
+        margin-top: auto;
+        padding: 8px;
+        border-radius: 10px;
+        background: var(--chip-bg, oklch(0.25 0.018 260));
         font-variant-numeric: tabular-nums;
     }
-    .aug-verdict.is-hit  { color: #4ade80; }
-    .aug-verdict.is-miss { color: var(--text-muted, #9aa0a6); }
+    .aug-draft-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .aug-draft-stat-label {
+        color: var(--text-dim, oklch(0.58 0.015 260));
+        font-size: 9px;
+        font-weight: 650;
+    }
+    .aug-draft-wr,
+    .aug-draft-pick { font-size: 12px; font-weight: 800; }
+    .aug-draft-wr.is-good { color: var(--aug-good); }
+    .aug-draft-wr.is-bad { color: var(--aug-bad); }
+    .aug-draft-pick { color: var(--text, oklch(0.93 0.01 260)); }
+    .aug-verdict {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 0 8px;
+        padding: 9px 11px;
+        border: 1px solid var(--border, oklch(0.34 0.02 260));
+        border-radius: 10px;
+        background: var(--surface-raised, oklch(0.23 0.016 260));
+        color: var(--text, oklch(0.93 0.01 260));
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-verdict-mark {
+        min-width: 25px;
+        height: 25px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--chip-bg, oklch(0.25 0.018 260));
+        color: var(--text-muted, oklch(0.7 0.015 260));
+        font-size: 10px;
+        font-weight: 850;
+    }
+    .aug-verdict.is-hit {
+        border-color: color-mix(in oklch, var(--aug-good) 46%, var(--border));
+        background: color-mix(in oklch, var(--aug-good) 7%, var(--surface-raised));
+    }
+    .aug-verdict.is-hit .aug-verdict-mark {
+        background: var(--aug-good);
+        color: oklch(0.2 0.025 150);
+    }
     .aug-actions {
         display: flex;
         justify-content: center;
         gap: 8px;
         margin-top: 14px;
     }
-    .aug-reroll-icon { width: 14px; height: 14px; flex: none; }
 
     .aug-settle-champ {
         display: flex;
@@ -6543,12 +6779,25 @@
         font-variant-numeric: tabular-nums;
     }
     @media (max-width: 560px) {
-        /* Three portrait cards will not hold readable rules text at 375px, so
-           they stack; the reroll stays attached to its own card. */
+        .aug-ladder {
+            grid-template-columns: 1fr;
+            gap: 8px;
+            padding: 9px;
+        }
+        .aug-ladder-progress { justify-content: space-between; }
+        .aug-ladder-pips { width: min(100%, 230px); }
         .aug-draft-row { grid-template-columns: 1fr; }
+        button.aug-draft-card { min-height: 0; }
         .aug-draft-card { padding: 14px 12px 12px; }
-        .aug-draft-art { width: 54px; height: 54px; }
-        .aug-draft-icon { width: 42px; height: 42px; }
+        .aug-draft-card-head { padding-right: 76px; }
+        .aug-draft-art { width: 44px; height: 44px; flex-basis: 44px; }
+        .aug-draft-icon { width: 36px; height: 36px; }
+        .aug-draft-compare {
+            padding: 23px 0 12px;
+            border-bottom: 1px solid var(--border, oklch(0.34 0.02 260));
+        }
+        .aug-draft-compare:last-child { border-bottom: 0; }
+        .aug-draft-compare .aug-draft-card { min-height: 0; }
         .aug-champ-row { gap: 6px; }
         .aug-champ-img { width: 46px; height: 46px; }
     }
