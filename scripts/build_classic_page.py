@@ -1977,8 +1977,8 @@ def render_research_preview(
     if locale == "en":
         method_copy = (
             f"<details class='method'><summary>Data and limitations</summary><p>Champion tiers use a Beta-shrunk win rate "
-            f"(50% prior, strength {PRIOR_GAMES} games) so small samples do not dominate. Positions are inferred jointly for each team from "
-            "legacy lane/role hints, Smite, jungle/support items and neutral CS. Only HIGH/MEDIUM assignments from teams with at least four "
+            f"(50% prior, strength {PRIOR_GAMES} games) so small samples do not dominate. Champion positions are inferred jointly for each five-player team from "
+            "items, CS (minion counts) and summoner spells, with legacy lane/role hints also used as a signal. Only HIGH/MEDIUM assignments from teams with at least four "
             f"credible positions enter position statistics ({position_eligible_teams:,}/{position_total_teams:,} teams). This is a weak label, not exact teamPosition. "
             "Item data is final-inventory association without a purchase timeline, so it is not purchase order, causation or a direct recommendation.</p>"
             f"<p>Combat profiles are descriptive per-game or per-minute statistics. Synergies and difficult opponents require at least {RELATION_MIN_GAMES} shared games "
@@ -1989,8 +1989,8 @@ def render_research_preview(
     elif locale == "zh-Hans":
         method_copy = (
             f"<details class='method'><summary>数据与限制</summary><p>英雄 Tier 使用 Beta 收缩后的胜率（先验 50%、强度 {PRIOR_GAMES} 场），避免小样本被偶然高胜率放大。"
-            f"常见分路以每位英雄在 LCU timeline.lane／role 中最多的分类为主要分路；次高分类至少需要 {SECONDARY_POSITION_MIN_GAMES} 条记录，且占有效分路记录 "
-            f"{round(SECONDARY_POSITION_MIN_SHARE * 100)}%，才列为次要分路，最多显示两个。这是旧版客户端的推算信号，不是精确的 teamPosition。"
+            "英雄分路依据装备、补刀数量（CS）与召唤师技能推定，并参考旧版 lane／role 信号；同队五名玩家共同配对推定。"
+            f"只有至少四位达到可信门槛的队伍才纳入分路统计。这是推算信号，不是精确的 teamPosition。"
             "装备数据是终局背包中的持有关联，没有购买时间线，因此不应解读为出装顺序、因果效果或直接推荐。</p>"
             f"<p>战斗轮廓是每场或每分钟的描述统计。最佳搭档与棘手对手只纳入至少 {RELATION_MIN_GAMES} 场的组合，并用 {RELATION_PRIOR_GAMES} 场虚拟样本向双方英雄强度推得的预期胜率收缩。"
             "它仍是完整 5v5 对局中的关联，不是单线对决、因果效果或胜率保证。当前没有符文与装备购买时间线数据。</p>"
@@ -1999,8 +1999,8 @@ def render_research_preview(
     else:
         method_copy = (
             f"<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 {PRIOR_GAMES} 場），避免小樣本被偶然高勝率放大。"
-            f"常見分路以每位英雄在 LCU timeline.lane／role 中最多的分類為主要分路；次高分類至少要有 {SECONDARY_POSITION_MIN_GAMES} 筆、且占該英雄有效分路紀錄 "
-            f"{round(SECONDARY_POSITION_MIN_SHARE * 100)}%，才列為次要分路，最多顯示兩個。這是舊版客戶端推估訊號，不是精確的 teamPosition。"
+            "英雄分路由裝備、吃兵數量（CS）與召喚師技能推定，並參考舊版 lane／role 訊號；同隊五名玩家共同配對推定。"
+            "只有至少四位達可信門檻的隊伍才納入分路統計。這是推估訊號，不是精確的 teamPosition。"
             "裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p>"
             f"<p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 {RELATION_MIN_GAMES} 場的組合，並以 {RELATION_PRIOR_GAMES} 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮。"
             "它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線。</p>"
@@ -2012,15 +2012,18 @@ def render_research_preview(
     )
     inference_notes = {
         "zh-Hant": (
-            f"分路由同隊五人共同推定；只有至少四位達可信門檻的隊伍納入分路統計。"
+            f"英雄分路由裝備、吃兵數量（CS）與召喚師技能推定（並參考舊版 lane／role 訊號）；同隊五人共同推定；"
+            f"只有至少四位達可信門檻的隊伍納入分路統計。"
             f"目前覆蓋 {position_eligible_teams:,}/{position_total_teams:,} 隊（{coverage_pct:.1f}%）。"
         ),
         "zh-Hans": (
-            f"分路由同队五人共同推定；只有至少四位达到可信门槛的队伍纳入分路统计。"
+            f"英雄分路依据装备、补刀数量（CS）与召唤师技能推定（并参考旧版 lane／role 信号）；同队五人共同推定；"
+            f"只有至少四位达到可信门槛的队伍纳入分路统计。"
             f"当前覆盖 {position_eligible_teams:,}/{position_total_teams:,} 队（{coverage_pct:.1f}%）。"
         ),
         "en": (
-            f"Positions are inferred jointly for each five-player team. Only teams with at least four credible assignments enter position statistics: "
+            f"Champion positions are inferred from items, CS (minion counts) and summoner spells, with legacy lane/role hints also used as a signal; "
+            f"the five players on each team are inferred jointly. Only teams with at least four credible assignments enter position statistics: "
             f"{position_eligible_teams:,}/{position_total_teams:,} teams ({coverage_pct:.1f}%)."
         ),
     }
