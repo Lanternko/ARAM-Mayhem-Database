@@ -31,6 +31,7 @@ from .client import (
     get_current_summoner,
     get_friends,
     get_game_detail,
+    get_game_version,
     get_league_ladders,
     get_match_history,
     get_summoner_by_id,
@@ -788,6 +789,27 @@ def _extract_target_game_ids(history: list[dict], target_queues: set[int]) -> li
     return game_ids
 
 
+def _major_minor_patch(version: object) -> str | None:
+    """Normalize an LCU build string to a major.minor gameplay patch."""
+    match = re.match(r"^(\d+)\.(\d+)(?:\.|$)", str(version or "").strip())
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
+def _is_current_patch_game(game: dict, current_patch: str | None) -> bool:
+    if current_patch is None:
+        return True
+    return _major_minor_patch(game.get("gameVersion")) == current_patch
+
+
+def _extract_current_patch_target_game_ids(
+    history: list[dict], target_queues: set[int], current_patch: str | None
+) -> list[str]:
+    return _extract_target_game_ids(
+        [game for game in history if _is_current_patch_game(game, current_patch)],
+        target_queues,
+    )
+
+
 def _adaptive_target_game_ids(
     history: list[dict],
     target_queues: set[int],
@@ -795,6 +817,7 @@ def _adaptive_target_game_ids(
     probe_size: int = 4,
     full_history_min_mayhem: int = 3,
     puuid: str | None = None,
+    current_patch: str | None = None,
 ) -> list[str]:
     """Choose a cheap or full expansion based on recent target-queue density.
 
@@ -802,17 +825,26 @@ def _adaptive_target_game_ids(
     metadata rows. One or two target rows fetch only the probe; three or more
     fetch the full recent window. A completed A/B test showed that counting all
     target queues increased Classic capture by 52.5% for about 13% more detail
-    work, so Classic is no longer allowed to ride only on Mayhem discovery.
+    work, so Classic and Jade no longer ride only on Mayhem discovery. When the
+    current patch is known, old-patch rows neither make a player active nor get
+    expanded; the crawler's scarce detail bandwidth stays on current data.
     """
-    all_target = _extract_target_game_ids(history, target_queues)
+    normalized_patch = _major_minor_patch(current_patch)
+    all_target = _extract_current_patch_target_game_ids(
+        history, target_queues, normalized_patch
+    )
     probe = history[: max(0, int(probe_size))]
     target_count = sum(
-        _queue_id_from_meta(game) in target_queues for game in probe
+        _queue_id_from_meta(game) in target_queues
+        and _is_current_patch_game(game, normalized_patch)
+        for game in probe
     )
     if target_count >= max(1, int(full_history_min_mayhem)):
         return all_target
     if target_count >= 1:
-        return _extract_target_game_ids(probe, target_queues)
+        return _extract_current_patch_target_game_ids(
+            probe, target_queues, normalized_patch
+        )
     return []
 
 
@@ -2690,6 +2722,9 @@ def run_snowball(
         )
 
     with LCUClient(creds) as lcu:
+        current_patch = _major_minor_patch(get_game_version(lcu))
+        if games_per_player == 0 and current_patch is None:
+            raise RuntimeError("Could not determine current League patch from LCU")
         me = _get_current_summoner_with_retry(lcu)
         my_puuid = str(me["puuid"]) if me and me.get("puuid") else ""
         my_name = (me or {}).get("gameName") or (me or {}).get("displayName") or "?"
@@ -2966,7 +3001,10 @@ def run_snowball(
             game_ids = _extract_target_game_ids(history, target_queues)
             if games_per_player == 0:
                 game_ids = _adaptive_target_game_ids(
-                    history, target_queues, puuid=puuid
+                    history,
+                    target_queues,
+                    puuid=puuid,
+                    current_patch=current_patch,
                 )
             elif games_per_player is not None and games_per_player > 0:
                 game_ids = game_ids[:games_per_player]

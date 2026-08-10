@@ -178,6 +178,12 @@ def get_match_history(client: LCUClient, puuid: str, begin: int = 0, end: int = 
     return []
 
 
+def get_game_version(client: LCUClient) -> str | None:
+    """Return the currently installed League game build from the LCU."""
+    value = client.get("/lol-patch/v1/game-version")
+    return str(value) if value else None
+
+
 def get_gameflow_session(client: LCUClient) -> dict | None:
     """Return the full gameflow session dict.  Contains gameData.gameId during InProgress."""
     return client.get("/lol-gameflow/v1/session")
