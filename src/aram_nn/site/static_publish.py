@@ -89,7 +89,6 @@ DEFAULT_DOC_PATHS = (
     Path("docs/changes"),
     Path("docs/draft"),
     Path("docs/game"),
-    Path("docs/column"),
     Path("docs/en"),
     Path("docs/zh-CN"),
     # Social share thumbnail (og:image / twitter:image).  Re-rendered every build
