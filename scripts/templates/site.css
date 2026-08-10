@@ -3633,6 +3633,18 @@
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
         }
         .detail-close { display: inline-flex; }
+        /* The desktop rule reserves a min(280px, 32vw) lane on the right so the
+           × clears the floating search chip.  On mobile .search-rail is
+           display:none, so that lane reserved nothing and parked the × ~138px
+           in from the edge — floating in the middle of the name row, right up
+           against the role tags.  Pin it back to the sheet corner. */
+        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
+            top: 8px;
+            right: 4px;
+        }
+        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
+            padding-right: 42px;
+        }
         .rec-fab { display: none; }
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
@@ -4003,11 +4015,14 @@
         gap: 6px;
         flex: none;
         margin-left: 8px;
-        padding: 5px 9px;
-        border: 1px solid color-mix(in oklab, var(--accent) 48%, var(--border));
+        padding: 5px 10px;
+        border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--border));
         border-radius: 999px;
-        background: color-mix(in oklab, var(--accent) 7%, var(--surface));
-        color: var(--text-muted);
+        background: color-mix(in oklab, var(--accent) 9%, var(--surface));
+        /* Accent frame around --text-muted grey read as unfinished — the label
+           has to carry the accent too, so the chip is one object rather than a
+           coloured box drawn around unrelated text. */
+        color: color-mix(in oklab, var(--accent) 62%, var(--text));
         font-size: 12px;
         font-weight: 650;
         line-height: 1;
@@ -4017,18 +4032,36 @@
                     border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
     }
     .classic-mode-link:hover {
-        border-color: color-mix(in oklab, var(--accent) 72%, var(--border));
-        background: color-mix(in oklab, var(--accent) 12%, var(--surface));
-        color: var(--text);
+        border-color: color-mix(in oklab, var(--accent) 78%, var(--border));
+        background: color-mix(in oklab, var(--accent) 15%, var(--surface));
+        color: var(--accent);
+    }
+    /* Light theme mixes toward --text, not away from it: the same 62%/accent
+       ratio that reads as warm cream on the dark chip becomes a pale gold on a
+       near-white chip (~2:1).  Keep the accent tint, let the text carry the
+       contrast. */
+    :root[data-theme="light"] .classic-mode-link {
+        color: color-mix(in oklab, var(--accent) 30%, var(--text));
+    }
+    :root[data-theme="light"] .classic-mode-link:hover {
+        color: color-mix(in oklab, var(--accent) 42%, var(--text));
     }
     .classic-mode-link:active { transform: scale(0.97); }
     .classic-mode-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .classic-mode-link-short { display: none; }
+    /* Bare 8px amber lettering next to a 12px label was two type sizes and two
+       colours fighting inside a 23px pill.  A filled badge keeps the word but
+       reads as one deliberate mark. */
     .classic-mode-link-new {
-        color: var(--accent);
+        flex: none;
+        padding: 2px 4px 1px;
+        border-radius: 4px;
+        background: var(--accent);
+        color: #12151a;
         font-size: 8px;
         font-weight: 800;
-        letter-spacing: .08em;
+        letter-spacing: .06em;
+        line-height: 1;
     }
     .nav-tabs {
         position: relative;

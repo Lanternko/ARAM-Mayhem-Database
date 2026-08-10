@@ -3747,6 +3747,10 @@
             const rows = (payload && payload.top) || [];
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
+            // Boots are one slot, so only the leader is highlighted.  Mayhem
+            // carries *two* summoner spells, so the rail highlights the top two
+            // (rows are lift-ranked, so those are the recommended pair).
+            const railTopCount = opts.topCount || 1;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
@@ -3774,7 +3778,7 @@
                     games: entry.g || 0,
                 });
                 return `
-                    <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
+                    <div class="boot-rail-row has-item-tip${idx < railTopCount ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
                         ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
@@ -3862,6 +3866,7 @@
                     ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
+                        topCount: 2,
                         extraClass: 'spell-rail-section',
                     })}
                 </div>
