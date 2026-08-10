@@ -121,7 +121,6 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/changes",
                 "docs/draft",
                 "docs/game",
-                "docs/column",
                 "docs/en",
                 "docs/zh-CN",
                 "docs/og-image.png",
