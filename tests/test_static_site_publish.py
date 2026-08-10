@@ -12,6 +12,7 @@ from aram_nn.site.static_publish import (
     publish_static_site_once,
     push_with_upstream_merge,
 )
+from aram_nn.site.static_publish_cli import acquire_publisher_lock
 
 
 def game_row(game_id: str, *, created_ms: int = 1) -> dict:
@@ -33,6 +34,16 @@ def game_row(game_id: str, *, created_ms: int = 1) -> dict:
 
 
 class StaticSitePublishTests(unittest.TestCase):
+    def test_publisher_lock_rejects_concurrent_process(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "state.json"
+            first = acquire_publisher_lock(state)
+            try:
+                with self.assertRaisesRegex(RuntimeError, "another static publisher"):
+                    acquire_publisher_lock(state)
+            finally:
+                first.close()
+
     def test_publish_decision_waits_for_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "games.db"
