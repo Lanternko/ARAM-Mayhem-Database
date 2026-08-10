@@ -168,6 +168,32 @@ CREATE TABLE IF NOT EXISTS crawl_runtime_state (
 );
 """
 
+_CREATE_CRAWL_VISIT_EVENTS_SQL = """
+CREATE TABLE IF NOT EXISTS crawl_visit_events (
+    visit_id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    puuid                     TEXT NOT NULL,
+    revisit_arm               TEXT NOT NULL,
+    is_revisit                INTEGER NOT NULL,
+    visited_at                TEXT NOT NULL,
+    previous_crawled_at       TEXT,
+    revisit_interval_ms       INTEGER,
+    process_number            INTEGER NOT NULL,
+    source                    TEXT NOT NULL,
+    seed_family               TEXT NOT NULL,
+    worker_id                 TEXT,
+    current_patch             TEXT,
+    history_game_count        INTEGER NOT NULL,
+    target_game_count         INTEGER NOT NULL,
+    new_games_found           INTEGER NOT NULL,
+    new_games_by_queue_json   TEXT
+);
+"""
+
+_CREATE_CRAWL_VISIT_EVENTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_visit_events_revisit_interval
+ON crawl_visit_events(is_revisit, revisit_arm, revisit_interval_ms, visited_at);
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_crawl_game_claims_status
 ON crawl_game_claims(status, claimed_at_ms, updated_at, game_id);
@@ -313,6 +339,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_SQL)
     con.execute(_CREATE_RIOT_ID_BRIDGE_SQL)
     con.execute(_CREATE_CRAWL_RUNTIME_STATE_SQL)
+    con.execute(_CREATE_CRAWL_VISIT_EVENTS_SQL)
 
     _ensure_column(
         con,
@@ -399,6 +426,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
 
     con.execute(_CREATE_CRAWL_QUEUE_INDEX_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL)
+    con.execute(_CREATE_CRAWL_VISIT_EVENTS_INDEX_SQL)
     con.execute(_CREATE_SOURCE_PRIORITY_INDEX_SQL)
     con.execute(_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL)
 
@@ -1269,7 +1297,8 @@ def _enqueue_player(
         """
         SELECT source, priority, min_depth, discovered_from_game_id,
                latest_seen_match_created_ms, last_crawled_match_created_ms,
-               processed, seed_family
+               processed, seed_family, process_count, new_games_found,
+               first_seen_at
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1320,6 +1349,9 @@ def _enqueue_player(
         last_crawled_match_ms,
         processed,
         old_seed_family,
+        process_count,
+        new_games_found,
+        first_seen_at,
     ) = row
     best_source, best_priority, best_depth = _pick_best_metadata(
         str(old_source),
@@ -1358,6 +1390,21 @@ def _enqueue_player(
         int(discovered_match_created_ms) > int(last_crawled_match_ms)
         or (source == "manual_riot_id" and int(last_crawled_match_ms) == 0)
     )
+    eligible_at_ms = 0
+    if should_requeue:
+        if revisit_arm(puuid) == "treatment":
+            effective_cooldown_ms = _treatment_cooldown_ms(
+                int(new_games_found or 0), first_seen_at, time.time()
+            )
+        else:
+            effective_cooldown_ms = _requeue_cooldown_for(
+                int(new_games_found or 0),
+                int(process_count or 0),
+                max(0, int(requeue_cooldown_ms)),
+            )
+        eligible_at_ms = _now_ms() + max(
+            int(effective_cooldown_ms), int(initial_delay_ms)
+        )
     became_pending = _upsert_queue_row(
         con,
         puuid,
@@ -1367,7 +1414,7 @@ def _enqueue_player(
         best_game_id,
         latest_match_ms,
         requeue=should_requeue,
-        eligible_at_ms=_now_ms() + max(requeue_cooldown_ms, initial_delay_ms) if should_requeue else 0,
+        eligible_at_ms=eligible_at_ms,
         seed_family=effective_family,
     )
     if should_requeue and became_pending:
@@ -1585,7 +1632,7 @@ _YIELD_BACKOFF_DEAD = 240       # base 45s -> 3h
 # returns ~1.5 games instead of anything near the 20 the LCU could hold.
 _REVISIT_AB_ENABLED = True
 _REVISIT_TREATMENT_TARGET_GAMES = 15.0   # under 20 so nothing rolls off unseen
-_REVISIT_TREATMENT_MIN_MS = 6 * 3600_000
+_REVISIT_TREATMENT_MIN_MS = 24 * 3600_000
 _REVISIT_TREATMENT_MAX_MS = 21 * 24 * 3600_000
 
 
@@ -1709,6 +1756,13 @@ def _mark_player_done(
     observed_match_created_ms: int,
     requeue_cooldown_ms: int,
     new_games_by_queue: dict[int, int] | None = None,
+    *,
+    source: str = "unknown",
+    seed_family: str = _UNKNOWN_FAMILY,
+    worker_id: str | None = None,
+    current_patch: str | None = None,
+    history_game_count: int = 0,
+    target_game_count: int = 0,
 ) -> bool:
     """Finalize a claimed player.
 
@@ -1720,7 +1774,7 @@ def _mark_player_done(
         """
         SELECT latest_seen_match_created_ms, last_crawled_match_created_ms,
                process_count, new_games_found, first_seen_at,
-               new_games_by_queue_json
+               new_games_by_queue_json, last_crawled_at
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1734,6 +1788,51 @@ def _mark_player_done(
     prior_process_count = int(row[2] or 0) if row else 0
     prior_new_games = int(row[3] or 0) if row else 0
     prior_first_seen_at = row[4] if row else None
+    previous_crawled_at = str(row[6]) if row and row[6] else None
+    revisit_interval_ms: int | None = None
+    if previous_crawled_at:
+        try:
+            previous_dt = datetime.fromisoformat(previous_crawled_at)
+            revisit_interval_ms = max(
+                0,
+                int(
+                    (datetime.fromisoformat(now) - previous_dt).total_seconds()
+                    * 1000
+                ),
+            )
+        except ValueError:
+            revisit_interval_ms = None
+    con.execute(
+        """
+        INSERT INTO crawl_visit_events (
+            puuid, revisit_arm, is_revisit, visited_at, previous_crawled_at,
+            revisit_interval_ms, process_number, source, seed_family,
+            worker_id, current_patch, history_game_count, target_game_count,
+            new_games_found, new_games_by_queue_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            puuid,
+            revisit_arm(puuid),
+            int(prior_process_count > 0 and previous_crawled_at is not None),
+            now,
+            previous_crawled_at,
+            revisit_interval_ms,
+            prior_process_count + 1,
+            source,
+            seed_family,
+            worker_id,
+            current_patch,
+            max(0, int(history_game_count)),
+            max(0, int(target_game_count)),
+            max(0, int(new_games_found)),
+            json.dumps(
+                {str(k): int(v) for k, v in (new_games_by_queue or {}).items()},
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        ),
+    )
     crawled_match_ms = max(
         last_crawled_match_ms,
         int(claimed_match_created_ms),
@@ -3109,6 +3208,12 @@ def run_snowball(
                 observed_match_created_ms=observed_match_created_ms,
                 requeue_cooldown_ms=player_requeue_cooldown_ms,
                 new_games_by_queue=new_games_by_queue,
+                source=source,
+                seed_family=claimed_seed_family,
+                worker_id=worker_id,
+                current_patch=current_patch,
+                history_game_count=len(history),
+                target_game_count=len(game_ids),
             )
             if requeued_on_finish:
                 stats.requeued_players += 1
