@@ -1,11 +1,9 @@
 """Build the 經典 (queue 4310, gameMode JADE) champion win-rate page.
 
-A deliberately standalone, *unlisted* preview page — it is not linked from the
-main site nav and carries `noindex`, because 4310 has only a few thousand games
-and every number on it is still noise-dominated.  Written as its own script (no
-import from build_tier_list / tierlist_engine, per CLAUDE.md) so the production
-tier-list pipeline cannot be broken by anything here; the only shared code is
-`aram_nn.gamedata`.
+This is a standalone public data surface linked from the main site.  It keeps
+its own builder (no import from build_tier_list / tierlist_engine) so the
+production Mayhem tier-list pipeline cannot be broken by anything here; the
+only shared code is `aram_nn.gamedata`.
 
 Why it is not just "the tier list with queue_id=4310":
   * 經典 ships every champion as a separate ``Jade_*`` id (60000 + base), so all
@@ -91,12 +89,14 @@ ICON_DIR = Path("docs/assets/icons/classic")
 ICON_URL_PREFIX = "assets/icons/classic"
 ITEM_ICON_DIR = Path("docs/assets/icons/classic-items")
 ITEM_ICON_URL_PREFIX = "assets/icons/classic-items"
-ITEM_ICON_VERSION = "16.15.1"
+ITEM_ICON_CACHE_TAG = "communitydragon-jade-items-v1"
+CLASSIC_PUBLIC_URL = "https://arammeta.com/classic.html"
+CLASSIC_OG_IMAGE_URL = "https://arammeta.com/og-image.png"
 MAIN_SITE_CSS_PATH = Path(__file__).with_name("templates") / "site.css"
 
 # The client reports JADE inventory ids as ``77`` + the ordinary item id, e.g.
-# 773006 = Berserker's Greaves (3006).  Metadata and Data Dragon art are keyed
-# by the ordinary id, so convert only this documented Classic namespace.
+# 773006 = Berserker's Greaves (3006).  Statistics stay keyed by the ordinary
+# id, but names and art must come from the distinct 77-prefixed Jade entries.
 CLASSIC_ITEM_ID_PREFIX = "77"
 ITEM_BOARD_MIN_GAMES = 50
 HERO_ITEM_MIN_GAMES = 30
@@ -242,16 +242,35 @@ def base_item_id(item_id: int) -> int:
     return int(item_id)
 
 
-def load_classic_item_metadata() -> dict[int, dict]:
-    """Load translated standard-item metadata for JADE's prefixed item ids.
+def jade_item_id(item_id: int) -> int:
+    """Return the 77-prefixed catalogue id used by the Classic/Jade mode."""
+    return int(f"{CLASSIC_ITEM_ID_PREFIX}{int(item_id)}")
 
-    The mode's client inventory uses a namespace prefix, but its items share
-    normal names and art.  Keep the result local to this standalone builder;
-    importing the main tier-list engine here would couple the two pipelines.
+
+def cdragon_asset_url(icon_path: str) -> str:
+    """Translate an LCU /lol-game-data/assets path to CommunityDragon."""
+    prefix = "/lol-game-data/assets/"
+    if not icon_path.startswith(prefix):
+        raise ValueError(f"unsupported CommunityDragon item icon path: {icon_path}")
+    relative = icon_path[len(prefix):].lower()
+    return f"{CDRAGON_BASE}/default/{relative}"
+
+
+def load_classic_item_metadata() -> dict[int, dict]:
+    """Load item metadata keyed by base id, preferring Jade-specific records.
+
+    The mode's inventory uses 77-prefixed ids with distinct legacy art.  Keep
+    aggregation on the base id while sourcing presentation metadata from the
+    matching Jade entry whenever it exists.
     """
     rows_en = httpx.get(f"{CDRAGON_BASE}/default/v1/items.json", timeout=40).json()
     response_zh = httpx.get(f"{CDRAGON_BASE}/zh_tw/v1/items.json", timeout=40)
     rows_zh = response_zh.json() if response_zh.status_code == 200 else []
+    en_by_id = {
+        int(row["id"]): row
+        for row in rows_en
+        if isinstance(row, dict) and row.get("id") is not None
+    }
     zh_by_id = {
         int(row["id"]): row
         for row in rows_zh
@@ -262,39 +281,62 @@ def load_classic_item_metadata() -> dict[int, dict]:
         if not isinstance(row, dict) or row.get("id") is None:
             continue
         item_id = int(row["id"])
-        zh = zh_by_id.get(item_id, {})
-        price = row.get("priceTotal")
+        if str(item_id).startswith(CLASSIC_ITEM_ID_PREFIX):
+            continue
+        jade_id = jade_item_id(item_id)
+        jade = en_by_id.get(jade_id, row)
+        zh = zh_by_id.get(jade_id) or zh_by_id.get(item_id, {})
+        price = jade.get("priceTotal", row.get("priceTotal"))
         price_total = int(price.get("amount") or 0) if isinstance(price, dict) else int(price or 0)
+        icon_path = str(jade.get("iconPath") or row.get("iconPath") or "")
         meta[item_id] = {
             "item_id": item_id,
-            "name_zh": zh.get("name") or row.get("name") or f"#{item_id}",
-            "name_en": row.get("name") or zh.get("name") or f"#{item_id}",
-            "categories": list(row.get("categories") or zh.get("categories") or []),
+            "source_item_id": int(jade.get("id") or item_id),
+            "name_zh": zh.get("name") or jade.get("name") or row.get("name") or f"#{item_id}",
+            "name_en": jade.get("name") or row.get("name") or zh.get("name") or f"#{item_id}",
+            "categories": list(jade.get("categories") or row.get("categories") or zh.get("categories") or []),
             "price_total": price_total,
-            "upgrades": bool(row.get("to")),
+            "upgrades": bool(jade.get("to") or row.get("to")),
+            "icon_path": icon_path,
             "image": f"{ITEM_ICON_URL_PREFIX}/{item_id}.png",
         }
     return meta
 
 
 def download_item_icons(meta: dict[int, dict], item_ids: set[int], icon_dir: Path) -> int:
-    """Self-host observed item icons so the preview has no hotlink dependency."""
+    """Self-host observed Jade icons and invalidate the former standard-art cache."""
     icon_dir.mkdir(parents=True, exist_ok=True)
+    marker = icon_dir / ".source"
+    cache_is_jade = marker.exists() and marker.read_text(encoding="utf-8").strip() == ITEM_ICON_CACHE_TAG
     fetched = 0
+    failed = 0
     with httpx.Client(timeout=40) as client:
         for item_id in sorted(item_ids):
             if item_id not in meta:
                 continue
             dest = icon_dir / f"{item_id}.png"
-            if dest.exists():
+            if cache_is_jade and dest.exists():
                 continue
-            url = f"https://ddragon.leagueoflegends.com/cdn/{ITEM_ICON_VERSION}/img/item/{item_id}.png"
+            icon_path = str(meta[item_id].get("icon_path") or "")
+            if not icon_path:
+                click.echo(f"[classic] WARNING: item icon {item_id} has no CommunityDragon path")
+                failed += 1
+                continue
+            try:
+                url = cdragon_asset_url(icon_path)
+            except ValueError as exc:
+                click.echo(f"[classic] WARNING: {exc}")
+                failed += 1
+                continue
             response = client.get(url)
             if response.status_code != 200 or not response.content:
                 click.echo(f"[classic] WARNING: item icon {item_id} -> HTTP {response.status_code}")
+                failed += 1
                 continue
             dest.write_bytes(response.content)
             fetched += 1
+    if failed == 0:
+        marker.write_text(ITEM_ICON_CACHE_TAG + "\n", encoding="utf-8")
     return fetched
 
 
@@ -914,7 +956,7 @@ footer code{color:var(--text-muted)}
 .tier-groups{display:grid;gap:20px}.tier-group{padding:0 0 12px;border-bottom:1px solid var(--border)}.tier-group:last-child{border-bottom:0}.tier-group-heading{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid color-mix(in oklab,var(--tier-color,#555) 30%,transparent)}.tier-group-heading h2{margin:0;line-height:1}.tier-group-heading p{margin:0;color:var(--text-muted);font-size:12px}.tier-group-heading p span{color:var(--text);font-weight:700}.tier-group[data-tier-group="OP"] .tier-pill{background-size:200% 200%;animation:prismShift 6s ease-in-out infinite;color:#2a1a4a;box-shadow:0 0 12px rgba(220,180,255,.55),0 0 28px rgba(170,210,255,.30),inset 0 0 0 1px rgba(255,255,255,.55);text-shadow:0 1px 0 rgba(255,255,255,.8)}.tier-group[data-tier-group="OP"] .tier-pill::before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.75) 50%,transparent 65%);background-size:220% 100%;animation:shineSweep 3.2s linear infinite;z-index:1}
 .hero-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px 8px}.hero-tile{display:grid;gap:5px;min-width:0;border:0;background:transparent;padding:0;cursor:pointer;color:var(--text);text-align:left}.tile-icon{position:relative;aspect-ratio:1;border:2px solid var(--tier-color,#555);border-radius:8px;background:var(--chip-bg);overflow:hidden;transition:transform .08s,box-shadow .08s,border-color .08s}.hero-tile img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px}.tile-icon::after{content:"";position:absolute;inset:2px;border-radius:6px;background:rgba(10,11,13,.08);pointer-events:none}.tile-name,.tile-stat{font-variant-numeric:tabular-nums;pointer-events:none}.tile-name{padding:0 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;line-height:1.25}.tile-stat{position:absolute;z-index:1;left:0;bottom:0;padding:2px 5px;border-radius:0 6px 0 0;background:rgba(10,12,16,.92);font-size:10px;font-weight:700;line-height:1.2}.tier-group[data-tier-group="OP"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;box-shadow:0 0 8px rgba(220,180,255,.45)}.tier-group[data-tier-group="T1"] .tile-icon{border-color:transparent;background:linear-gradient(#1f2530,#1f2530) padding-box,linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;box-shadow:0 0 6px rgba(255,90,60,.42)}.hero-tile[aria-pressed="true"] .tile-icon{filter:brightness(1.08);box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
 .rate-wr-5{color:var(--wr-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-5) 20%,transparent)}.rate-wr-4{color:var(--wr-4);font-weight:750}.rate-wr-3{color:var(--wr-3);font-weight:650}.rate-wr-2{color:var(--wr-2);font-weight:700}.rate-wr-1{color:var(--wr-1);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--wr-1) 22%,transparent)}.rate-pick-5{color:var(--pick-5);font-weight:800;text-shadow:0 0 10px color-mix(in oklab,var(--pick-5) 20%,transparent)}.rate-pick-4{color:var(--pick-4);font-weight:750}.rate-pick-3{color:var(--pick-3);font-weight:700}.rate-pick-2{color:var(--pick-2);font-weight:650}.rate-pick-1{color:var(--pick-1);font-weight:600}
-.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:flex-start}.detail-head>img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-identity{min-width:0;flex:1}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.combat-profile{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}.combat-profile span{display:grid;gap:1px}.combat-profile b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.combat-profile small{color:var(--text-dim);font-size:10px}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-loadout{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-loadout h3{margin:0 0 9px;color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-loadout-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.detail-loadout-item{min-width:0;color:var(--text-muted);text-align:center}.detail-loadout-item img{display:block;width:44px;height:44px;margin:0 auto 5px;border:1px solid var(--border);border-radius:7px}.detail-loadout-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.ci-line{display:grid;gap:5px}.ci-line span{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.ci-track{position:relative;height:12px;background:var(--surface-3);border-radius:99px}.ci-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--border-strong)}.ci-track i{position:absolute;top:4px;height:4px;border-radius:99px;background:var(--focus)}.ci-track b{position:absolute;top:1px;width:2px;height:10px;background:var(--text)}
+.hero-detail{display:grid;gap:16px;margin:12px 0 4px;padding:16px;border:1px solid var(--focus);border-radius:12px;background:var(--surface-2)}.detail-head{display:flex;gap:12px;align-items:flex-start}.detail-head>img{width:56px;height:56px;border-radius:8px;border:1px solid var(--border)}.detail-identity{min-width:0;flex:1}.detail-head h2{margin:0;font-size:20px}.detail-head p{margin:3px 0 0;color:var(--text-muted);font-size:13px}.combat-profile{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}.combat-profile span{display:grid;gap:1px}.combat-profile b{color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}.combat-profile small{color:var(--text-dim);font-size:10px}.detail-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.detail-stat{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-stat dt{color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-stat dd{margin:4px 0 0;color:var(--text);font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}.detail-loadout{min-width:0;padding-top:10px;border-top:1px solid var(--border)}.detail-loadout h3{margin:0 0 9px;color:var(--text-dim);font-size:11px;font-weight:600;letter-spacing:.04em}.detail-loadout-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.detail-loadout-item{min-width:0;color:var(--text-muted);text-align:center}.detail-loadout-item img{display:block;width:44px;height:44px;margin:0 auto 5px;border:1px solid var(--border);border-radius:7px}.detail-loadout-item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}
 .detail-items{border-top:1px solid var(--border);padding-top:14px}.detail-items-head{display:flex;gap:8px;justify-content:space-between;align-items:baseline;margin-bottom:12px}.detail-items h3{margin:0;font-size:14px}.detail-items p{margin:0;color:var(--text-dim);font-size:11px}.detail-equipment-columns{display:grid;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:26px}.detail-equipment-column+ .detail-equipment-column{padding-left:26px;border-left:1px solid var(--border)}.detail-item-list{display:grid;gap:8px}.detail-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.detail-item:last-child{border-bottom:0}.detail-item img{width:32px;height:32px;border-radius:5px}.detail-item strong{display:block;font-size:13px}.detail-item small{display:block;margin-top:2px;color:var(--text-dim);font-size:11px}.detail-item .item-stat{text-align:right;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}.item-stat .item-rate{font-size:13px;font-weight:700;white-space:nowrap}.item-stat .lift-up{color:var(--positive)}.item-stat .lift-down{color:var(--negative)}
 .detail-item-group{margin-top:16px}.detail-item-group:first-child{margin-top:0}.detail-item-group h4{display:flex;align-items:baseline;gap:7px;margin:0 0 3px;color:var(--text-muted);font-size:12px;font-weight:600}.detail-item-group h4 span{color:var(--text-dim);font-size:11px;font-variant-numeric:tabular-nums}.detail-item-group>p{margin:0 0 4px;color:var(--text-dim);font-size:10px;line-height:1.45}
 .detail-relationships{grid-column:1/-1;border-top:1px solid var(--border);padding-top:14px}.relationship-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.relationship-group h3{margin:0;font-size:14px}.relationship-group>p{margin:3px 0 7px;color:var(--text-dim);font-size:11px;line-height:1.45}.relationship-list{display:grid}.relationship-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)}.relationship-row:last-child{border-bottom:0}.relationship-row img{width:28px;height:28px;border-radius:5px}.relationship-row strong{display:block;font-size:12px}.relationship-row small{display:block;margin-top:1px;color:var(--text-dim);font-size:10px}.relationship-stat{text-align:right;font-size:11px;font-variant-numeric:tabular-nums}.relationship-stat b{display:block;color:var(--text);font-size:12px}.relationship-stat .lift-up{color:var(--positive)}.relationship-stat .lift-down{color:var(--negative)}
@@ -932,6 +974,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 # automatically while the few mode-specific differences stay explicit.
 CLASSIC_PARITY_CSS = """
 .classic-header-actions{min-width:0}
+.classic-mode-label{display:inline-flex;align-items:center;margin-left:auto;padding:4px 9px;
+border:1px solid var(--border);border-radius:999px;background:var(--surface-2);
+color:var(--text-muted);font-size:11px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
 .site-main.view-home{display:block}
 .site-main .app-shell{grid-template-columns:minmax(0,1fr)}
 .site-main .main-col{min-width:0}
@@ -1015,13 +1060,12 @@ JS = """
   function liftToneClass(value){var v=Number(value)||0;return v>=.02?'tone-pos-2':v>=.005?'tone-pos-1':v>-.005?'tone-zero':v>-.02?'tone-neg-1':'tone-neg-2';}
   function pickToneClass(value){var v=Number(value)||0;return v>=.18?'rate-pick-5':v>=.12?'rate-pick-4':v>=.07?'rate-pick-3':v>=.04?'rate-pick-2':'rate-pick-1';}
   function clearToneClass(element){element.className=element.className.replace(/\\brate-(?:wr|pick)-[1-5]\\b/g,'').trim();}
-  function ciMarkup(row){var lo=Math.max(0,Math.min(100,(row.ci_lo-.3)/.4*100)),hi=Math.max(0,Math.min(100,(row.ci_hi-.3)/.4*100)),raw=Math.max(0,Math.min(100,(row.raw_wr-.3)/.4*100));return '<div class="ci-line"><span><b>'+pct(row.ci_lo)+'</b><b>'+pct(row.ci_hi)+'</b></span><div class="ci-track"><i style="left:'+lo.toFixed(2)+'%;width:'+Math.max(hi-lo,1).toFixed(2)+'%"></i><b style="left:'+raw.toFixed(2)+'%"></b></div></div>';}
   function activeHeroes(){var query=(search.value||'').trim().toLowerCase(),position=positionFilter.value,minimum=Number(minGames.value||0);return data.heroes.filter(function(hero){var positions=hero.positions||[hero.position];return (!query||hero.search.indexOf(query)>=0)&&(!position||positions.indexOf(position)>=0)&&hero.games>=minimum;});}
   function activeItems(){var query=(search.value||'').trim().toLowerCase(),kind=itemKindFilter.value,minimum=Number(minGames.value||0);return data.items.filter(function(item){return (!query||item.search.indexOf(query)>=0)&&(!kind||item.kind===kind)&&item.games>=minimum;});}
   function compare(field){return function(a,b){var av=a[field],bv=b[field],result=typeof av==='string'?String(av).localeCompare(String(bv),'zh-Hant'):Number(av)-Number(bv);return state.desc?-result:result;};}
   function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');clearToneClass(stat);stat.textContent=pct(hero.shrunk_wr);stat.classList.add(wrToneClass(hero.shrunk_wr));}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
   function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'" aria-label="'+esc(hero.name_zh+' '+hero.name_en)+'"><img src="'+esc(hero.image)+'" alt=""><strong>'+esc(hero.name_zh)+'</strong></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</td><td class="mono '+pickToneClass(hero.pick_rate)+'">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
-  function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono '+pickToneClass(item.hold_rate)+'">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</td><td>'+ciMarkup(item)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
+  function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono '+pickToneClass(item.hold_rate)+'">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
   function itemRows(items,sampleLabel){sampleLabel=sampleLabel||'持有';return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=liftToneClass(lift);return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>'+esc(sampleLabel)+' '+num(item.games)+' 場</small></div><div class="item-stat"><span class="item-rate '+liftClass+'">'+pct(item.raw_wr)+'（'+(lift>=0?'+':'')+(lift*100).toFixed(1)+'%）</span></div></div>';}).join('')+'</div>';}
   function itemGroup(title,items,sampleLabel,note){if(!items.length)return '';return '<section class="detail-item-group"><h4>'+esc(title)+' <span>'+num(items.length)+'</span></h4>'+(note?'<p>'+esc(note)+'</p>':'')+itemRows(items,sampleLabel)+'</section>';}
   function renderItemsForHero(hero){var complete=(hero.items||[]).filter(function(item){return item.kind==='complete';}),boots=(hero.items||[]).filter(function(item){return item.kind==='boots';}),starters=hero.starter_items||[],firstComplete=hero.first_complete_items||[];var left=itemGroup('鞋子',boots,'持有')+itemGroup('常見出門裝',starters,'終局仍持有','只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。')+itemGroup('推定首件大裝',firstComplete,'前兩格出現','依終局背包第 1–2 格推估，並非實際購買時間線。');var right=itemGroup('常見終局完整裝備',complete,'持有');return (left||right)?'<div class="detail-equipment-columns"><div class="detail-equipment-column">'+(left||'<p class="research-tip">左欄目前沒有達到樣本門檻的資料。</p>')+'</div><div class="detail-equipment-column">'+(right||'<p class="research-tip">沒有足夠樣本的終局完整裝備。</p>')+'</div></div>':'<p class="research-tip">沒有足夠樣本的裝備資料可呈現。</p>';}
@@ -1274,10 +1318,6 @@ def render_research_preview(
         )
     main_site_css = MAIN_SITE_CSS_PATH.read_text(encoding="utf-8")
     built = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
-    mean_err = (
-        sum((row["ci_hi"] - row["ci_lo"]) / 2 for row in heroes) / len(heroes)
-        if heroes else 0.0
-    )
     patch_str = "、".join(
         f"{patch} ({count:,})"
         for patch, count in sorted(per_patch.items(), key=lambda pair: -pair[1])
@@ -1317,8 +1357,21 @@ def render_research_preview(
     page: list[str] = []
     page.append("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>")
     page.append("<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
-    page.append("<meta name='robots' content='noindex,nofollow'>")
-    page.append("<title>經典模式資料研究（預覽）· classicmeta</title>")
+    page.append("<meta name='robots' content='index,follow,max-image-preview:large'>")
+    page.append("<title>經典模式英雄勝率、出裝與搭檔資料 · classicmeta</title>")
+    page.append("<meta name='description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
+    page.append(f"<link rel='canonical' href='{CLASSIC_PUBLIC_URL}'>")
+    page.append("<meta property='og:type' content='website'>")
+    page.append("<meta property='og:locale' content='zh_TW'>")
+    page.append("<meta property='og:site_name' content='arammeta'>")
+    page.append("<meta property='og:title' content='經典模式英雄勝率、出裝與搭檔資料 · classicmeta'>")
+    page.append("<meta property='og:description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
+    page.append(f"<meta property='og:url' content='{CLASSIC_PUBLIC_URL}'>")
+    page.append(f"<meta property='og:image' content='{CLASSIC_OG_IMAGE_URL}'>")
+    page.append("<meta name='twitter:card' content='summary_large_image'>")
+    page.append("<meta name='twitter:title' content='經典模式英雄勝率、出裝與搭檔資料 · classicmeta'>")
+    page.append("<meta name='twitter:description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
+    page.append(f"<meta name='twitter:image' content='{CLASSIC_OG_IMAGE_URL}'>")
     page.append(
         "<link rel='preconnect' href='https://fonts.googleapis.com'>"
         "<link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>"
@@ -1341,7 +1394,7 @@ def render_research_preview(
             f"aria-selected='{selected}' aria-controls='view-{tab}' tabindex='{tabindex}'>{label}</button>"
         )
     page.append("<span class='nav-ind' aria-hidden='true'></span></nav>")
-    page.append("<div class='header-actions classic-header-actions'><span class='unlisted'>經典模式 · 預覽</span></div>")
+    page.append("<div class='header-actions classic-header-actions'><span class='classic-mode-label'>經典模式</span></div>")
     page.append("</div></header><main id='main-content' class='site-main view-home'>")
     page.append("<div class='app-shell'><div class='main-col'>")
     page.append("<section class='view is-active' id='view-tier' data-view='tier' role='tabpanel'>")
@@ -1391,15 +1444,16 @@ def render_research_preview(
         page.append(f"<th><button type='button' data-sort-target='hero' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='hero-tbody'></tbody></table></div><p id='heroes-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
 
-    page.append("<section class='view' id='view-items' data-view='items' role='tabpanel' hidden><div class='data-section-head'><h2>裝備表現</h2><p>依終局背包計算，不代表購買順序或造成勝利。</p></div><p class='item-note'><b>終局持有者勝率</b><span>只描述在對局結束時持有該裝備的玩家勝率。請搭配樣本、95% CI 與英雄本身強度閱讀。</span></p><div class='table-scroller'><table class='research-table'><thead><tr>")
-    for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率"), ("ci_lo", "95% CI")):
+    page.append("<section class='view' id='view-items' data-view='items' role='tabpanel' hidden><div class='data-section-head'><h2>裝備表現</h2><p>依終局背包計算，不代表購買順序或造成勝利。</p></div><p class='item-note'><b>終局持有者勝率</b><span>只描述在對局結束時持有該裝備的玩家勝率。請搭配樣本與英雄本身強度閱讀。</span></p><div class='table-scroller'><table class='research-table'><thead><tr>")
+    for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率")):
         page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
     page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路以每位英雄在 LCU timeline.lane／role 中最多的分類為主要分路；次高分類至少要有 " + str(SECONDARY_POSITION_MIN_GAMES) + " 筆、且占該英雄有效分路紀錄 " + str(round(SECONDARY_POSITION_MIN_SHARE * 100)) + "%，才列為次要分路，最多顯示兩個。這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 " + str(RELATION_MIN_GAMES) + " 場的組合，並以 " + str(RELATION_PRIOR_GAMES) + " 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮；它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線，因此本頁不顯示或推測這兩項。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
+    page[-1] = page[-1].replace("95% CI 使用 Wilson 區間。", "")
     page.append(
         "<footer class='research-context' aria-label='資料範圍'>"
         "<strong>經典模式資料研究</strong>"
-        f"<p><span class='data-note'>{total_games:,} 場 · 平均 95% CI 半寬 ±{mean_err * 100:.1f}pp</span>"
+        f"<p><span class='data-note'>{total_games:,} 場</span>"
         f"　常見分路由 {position_observations:,} 筆 LCU lane／role 紀錄推估；點英雄查看完整數據與終局裝備關聯。</p>"
         "</footer>"
     )

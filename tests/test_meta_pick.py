@@ -911,6 +911,8 @@ class RenderContractTests(unittest.TestCase):
         self.assertIn('"patch_prefix": "16.10"', html.replace("'", '"') if False else html)
         # json.dumps uses double quotes
         self.assertIn('"patch_prefix": "16.10"', html)
+        self.assertIn("class='classic-mode-link'", html)
+        self.assertIn("href='/classic.html'", html)
 
         html_empty = render_html(
             records=[],
