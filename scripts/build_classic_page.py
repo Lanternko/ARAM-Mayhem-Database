@@ -22,6 +22,7 @@ from __future__ import annotations
 import html
 import json
 import math
+import copy
 from collections import defaultdict
 from datetime import datetime, timezone
 from itertools import combinations
@@ -31,6 +32,7 @@ import click
 import httpx
 
 from aram_nn.gamedata import base_champion_id, iter_games
+from aram_nn.classic_positions import infer_team_positions
 
 CLASSIC_QUEUE_ID = 4310
 
@@ -92,6 +94,32 @@ ITEM_ICON_URL_PREFIX = "assets/icons/classic-items"
 ITEM_ICON_CACHE_TAG = "communitydragon-jade-items-v1"
 CLASSIC_PUBLIC_URL = "https://arammeta.com/classic.html"
 CLASSIC_OG_IMAGE_URL = "https://arammeta.com/og-image.png"
+CLASSIC_LOCALES = {
+    "zh-Hant": {
+        "path": "docs/classic.html",
+        "url": "https://arammeta.com/classic.html",
+        "og_locale": "zh_TW",
+        "number_locale": "zh-TW",
+        "name_key": "name_zh",
+        "title_key": "title_zh",
+    },
+    "zh-Hans": {
+        "path": "docs/zh-CN/classic.html",
+        "url": "https://arammeta.com/zh-CN/classic.html",
+        "og_locale": "zh_CN",
+        "number_locale": "zh-CN",
+        "name_key": "name_zh_cn",
+        "title_key": "title_zh_cn",
+    },
+    "en": {
+        "path": "docs/en/classic.html",
+        "url": "https://arammeta.com/en/classic.html",
+        "og_locale": "en_US",
+        "number_locale": "en-US",
+        "name_key": "name_en",
+        "title_key": "title_en",
+    },
+}
 MAIN_SITE_CSS_PATH = Path(__file__).with_name("templates") / "site.css"
 
 # The client reports JADE inventory ids as ``77`` + the ordinary item id, e.g.
@@ -104,6 +132,9 @@ HERO_COMPLETE_ITEM_LIMIT = 6
 HERO_BOOTS_ITEM_LIMIT = 3
 HERO_STARTER_ITEM_LIMIT = 3
 HERO_FIRST_COMPLETE_ITEM_LIMIT = 3
+HERO_POSITION_MIN_GAMES = 100
+HERO_POSITION_ITEM_MIN_GAMES = 25
+HERO_POSITION_PRIOR_GAMES = 100
 RELATION_MIN_GAMES = 100
 RELATION_PRIOR_GAMES = 100
 RELATION_LIMIT = 4
@@ -186,10 +217,16 @@ def load_classic_champion_metadata() -> dict[int, dict]:
     r_en = httpx.get(f"{CDRAGON_BASE}/default{CHAMPION_SUMMARY}", timeout=40)
     r_en.raise_for_status()
     r_zh = httpx.get(f"{CDRAGON_BASE}/zh_tw{CHAMPION_SUMMARY}", timeout=40)
+    r_zh_cn = httpx.get(f"{CDRAGON_BASE}/zh_cn{CHAMPION_SUMMARY}", timeout=40)
 
     zh_by_id: dict[int, dict] = {}
     if r_zh.status_code == 200:
         zh_by_id = {int(c["id"]): c for c in r_zh.json() if int(c.get("id", 0)) >= 60000}
+    zh_cn_by_id: dict[int, dict] = {}
+    if r_zh_cn.status_code == 200:
+        zh_cn_by_id = {
+            int(c["id"]): c for c in r_zh_cn.json() if int(c.get("id", 0)) >= 60000
+        }
 
     by_id: dict[int, dict] = {}
     for c in r_en.json():
@@ -198,11 +235,14 @@ def load_classic_champion_metadata() -> dict[int, dict]:
             continue
         base = base_champion_id(jade_id)
         zh = zh_by_id.get(jade_id, {})
+        zh_cn = zh_cn_by_id.get(jade_id, {})
         by_id[base] = {
             "jade_id": jade_id,
             "alias": c.get("alias", f"Jade_{base}"),
             "name_zh": zh.get("name") or c.get("name") or str(base),
             "title_zh": zh.get("description") or "",
+            "name_zh_cn": zh_cn.get("name") or zh.get("name") or c.get("name") or str(base),
+            "title_zh_cn": zh_cn.get("description") or zh.get("description") or "",
             "name_en": c.get("name") or str(base),
             "title_en": c.get("description") or "",
             "image": f"{ICON_URL_PREFIX}/{jade_id}.png",
@@ -266,6 +306,8 @@ def load_classic_item_metadata() -> dict[int, dict]:
     rows_en = httpx.get(f"{CDRAGON_BASE}/default/v1/items.json", timeout=40).json()
     response_zh = httpx.get(f"{CDRAGON_BASE}/zh_tw/v1/items.json", timeout=40)
     rows_zh = response_zh.json() if response_zh.status_code == 200 else []
+    response_zh_cn = httpx.get(f"{CDRAGON_BASE}/zh_cn/v1/items.json", timeout=40)
+    rows_zh_cn = response_zh_cn.json() if response_zh_cn.status_code == 200 else []
     en_by_id = {
         int(row["id"]): row
         for row in rows_en
@@ -274,6 +316,11 @@ def load_classic_item_metadata() -> dict[int, dict]:
     zh_by_id = {
         int(row["id"]): row
         for row in rows_zh
+        if isinstance(row, dict) and row.get("id") is not None
+    }
+    zh_cn_by_id = {
+        int(row["id"]): row
+        for row in rows_zh_cn
         if isinstance(row, dict) and row.get("id") is not None
     }
     meta: dict[int, dict] = {}
@@ -286,6 +333,7 @@ def load_classic_item_metadata() -> dict[int, dict]:
         jade_id = jade_item_id(item_id)
         jade = en_by_id.get(jade_id, row)
         zh = zh_by_id.get(jade_id) or zh_by_id.get(item_id, {})
+        zh_cn = zh_cn_by_id.get(jade_id) or zh_cn_by_id.get(item_id, {})
         price = jade.get("priceTotal", row.get("priceTotal"))
         price_total = int(price.get("amount") or 0) if isinstance(price, dict) else int(price or 0)
         icon_path = str(jade.get("iconPath") or row.get("iconPath") or "")
@@ -293,6 +341,7 @@ def load_classic_item_metadata() -> dict[int, dict]:
             "item_id": item_id,
             "source_item_id": int(jade.get("id") or item_id),
             "name_zh": zh.get("name") or jade.get("name") or row.get("name") or f"#{item_id}",
+            "name_zh_cn": zh_cn.get("name") or zh.get("name") or jade.get("name") or f"#{item_id}",
             "name_en": jade.get("name") or row.get("name") or zh.get("name") or f"#{item_id}",
             "categories": list(jade.get("categories") or row.get("categories") or zh.get("categories") or []),
             "price_total": price_total,
@@ -365,6 +414,11 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     hero_first_slots_games: dict[tuple[int, int, int], int] = defaultdict(int)
     hero_first_slots_wins: dict[tuple[int, int, int], int] = defaultdict(int)
     hero_position_games: dict[tuple[int, str], int] = defaultdict(int)
+    hero_position_wins: dict[tuple[int, str], int] = defaultdict(int)
+    hero_position_item_games: dict[tuple[int, str, int], int] = defaultdict(int)
+    hero_position_item_wins: dict[tuple[int, str, int], int] = defaultdict(int)
+    hero_position_first_slots_games: dict[tuple[int, str, int, int], int] = defaultdict(int)
+    hero_position_first_slots_wins: dict[tuple[int, str, int, int], int] = defaultdict(int)
     ally_pair_games: dict[tuple[int, int], int] = defaultdict(int)
     ally_pair_wins: dict[tuple[int, int], int] = defaultdict(int)
     matchup_games: dict[tuple[int, int], int] = defaultdict(int)
@@ -373,6 +427,9 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         lambda: defaultdict(float)
     )
     position_observations = 0
+    position_candidate_observations = 0
+    position_eligible_teams = 0
+    position_total_teams = 0
     total = 0
     for g in iter_games(
         db,
@@ -385,6 +442,28 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         blue_won = int(g["blue_wins"])
         duration_minutes = max(float(g.get("duration_sec") or 0) / 60, 1.0)
         team_champions: dict[int, list[int]] = {100: [], 200: []}
+        participant_positions: dict[int, str] = {}
+        participant_candidates: dict[int, str] = {}
+        indexed_teams: dict[int, list[tuple[int, dict]]] = defaultdict(list)
+        for participant_index, participant in enumerate(g["participants"]):
+            indexed_teams[int(participant.get("teamId") or 0)].append(
+                (participant_index, participant)
+            )
+        for indexed_team in indexed_teams.values():
+            if len(indexed_team) != 5:
+                continue
+            position_total_teams += 1
+            inferred = infer_team_positions([participant for _, participant in indexed_team])
+            for result in inferred:
+                original_index = indexed_team[result.participant_index][0]
+                participant_candidates[original_index] = result.position
+            eligible = [result for result in inferred if result.stat_eligible]
+            if len(eligible) < 4:
+                continue
+            position_eligible_teams += 1
+            for result in eligible:
+                original_index = indexed_team[result.participant_index][0]
+                participant_positions[original_index] = result.position
         for cid in g["blue_champs"]:
             base = base_champion_id(int(cid))
             games[base] += 1
@@ -393,7 +472,7 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
             base = base_champion_id(int(cid))
             games[base] += 1
             wins[base] += 1 - blue_won
-        for participant in g["participants"]:
+        for participant_index, participant in enumerate(g["participants"]):
             champion_id = participant.get("championId")
             if champion_id is None:
                 continue
@@ -401,22 +480,19 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
             team_id = int(participant.get("teamId") or 0)
             if team_id in team_champions:
                 team_champions[team_id].append(champion_id)
-            lane = str(participant.get("lane") or "").upper()
-            role = str(participant.get("role") or "").upper()
-            position = ""
-            if lane in {"TOP", "JUNGLE", "MIDDLE"}:
-                position = lane
-            elif lane == "BOTTOM":
-                position = "SUPPORT" if role == "SUPPORT" else "BOTTOM"
+            position = participant_positions.get(participant_index, "")
+            if participant_index in participant_candidates:
+                position_candidate_observations += 1
+            won = (participant.get("teamId") == 100) == bool(blue_won)
             if position:
                 hero_position_games[(champion_id, position)] += 1
+                hero_position_wins[(champion_id, position)] += int(won)
                 position_observations += 1
             held_items = {
                 base_item_id(int(item_id))
                 for item_id in participant.get("items") or []
                 if int(item_id) > 0
             }
-            won = (participant.get("teamId") == 100) == bool(blue_won)
             item_slots = participant.get("itemSlots") or []
             if len(item_slots) >= 2:
                 first_slot = base_item_id(int(item_slots[0] or 0))
@@ -424,6 +500,12 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
                 slot_key = (champion_id, first_slot, second_slot)
                 hero_first_slots_games[slot_key] += 1
                 hero_first_slots_wins[slot_key] += int(won)
+                if position:
+                    position_slot_key = (
+                        champion_id, position, first_slot, second_slot
+                    )
+                    hero_position_first_slots_games[position_slot_key] += 1
+                    hero_position_first_slots_wins[position_slot_key] += int(won)
             combat = hero_combat_sums[champion_id]
             combat["games"] += 1
             combat["minutes"] += duration_minutes
@@ -443,6 +525,10 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
                 item_wins[item_id] += int(won)
                 hero_item_games[(champion_id, item_id)] += 1
                 hero_item_wins[(champion_id, item_id)] += int(won)
+                if position:
+                    position_item_key = (champion_id, position, item_id)
+                    hero_position_item_games[position_item_key] += 1
+                    hero_position_item_wins[position_item_key] += int(won)
         for team_id, champion_ids in team_champions.items():
             team_won = int((team_id == 100) == bool(blue_won))
             for first, second in combinations(sorted(set(champion_ids)), 2):
@@ -471,12 +557,20 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
         "hero_first_slots_games": hero_first_slots_games,
         "hero_first_slots_wins": hero_first_slots_wins,
         "hero_position_games": hero_position_games,
+        "hero_position_wins": hero_position_wins,
+        "hero_position_item_games": hero_position_item_games,
+        "hero_position_item_wins": hero_position_item_wins,
+        "hero_position_first_slots_games": hero_position_first_slots_games,
+        "hero_position_first_slots_wins": hero_position_first_slots_wins,
         "ally_pair_games": ally_pair_games,
         "ally_pair_wins": ally_pair_wins,
         "matchup_games": matchup_games,
         "matchup_wins": matchup_wins,
         "hero_combat_sums": hero_combat_sums,
         "position_observations": position_observations,
+        "position_candidate_observations": position_candidate_observations,
+        "position_eligible_teams": position_eligible_teams,
+        "position_total_teams": position_total_teams,
     }
 
 
@@ -520,6 +614,9 @@ def build_rows(
             "name_zh": m.get("name_zh", f"#{cid}"),
             "name_en": m.get("name_en", f"#{cid}"),
             "title_zh": m.get("title_zh", ""),
+            "name_zh_cn": m.get("name_zh_cn", m.get("name_zh", f"#{cid}")),
+            "title_zh_cn": m.get("title_zh_cn", m.get("title_zh", "")),
+            "title_en": m.get("title_en", ""),
             "image": m.get("image", ""),
             "games": g,
             "wins": w,
@@ -612,6 +709,7 @@ def attach_relationships(
             teammates[champion_id].append({
                 "champion_id": other_id,
                 "name_zh": other["name_zh"],
+                "name_zh_cn": other.get("name_zh_cn", other["name_zh"]),
                 "name_en": other["name_en"],
                 "image": other["image"],
                 "games": games,
@@ -648,6 +746,7 @@ def attach_relationships(
         opponents[champion_id].append({
             "champion_id": opponent_id,
             "name_zh": opponent["name_zh"],
+            "name_zh_cn": opponent.get("name_zh_cn", opponent["name_zh"]),
             "name_en": opponent["name_en"],
             "image": opponent["image"],
             "games": games,
@@ -715,6 +814,7 @@ def attach_hero_items(
         by_champion[champion_id].append({
             "item_id": item_id,
             "name_zh": item["name_zh"],
+            "name_zh_cn": item.get("name_zh_cn", item["name_zh"]),
             "name_en": item["name_en"],
             "image": item["image"],
             "kind": classify_item(item),
@@ -756,6 +856,7 @@ def attach_hero_items(
         first_complete_by_champion[champion_id].append({
             "item_id": item_id,
             "name_zh": item["name_zh"],
+            "name_zh_cn": item.get("name_zh_cn", item["name_zh"]),
             "name_en": item["name_en"],
             "image": item["image"],
             "kind": "complete",
@@ -797,6 +898,88 @@ def attach_hero_items(
             hero["credibility"] = "中"
         else:
             hero["credibility"] = "高"
+
+
+def attach_hero_position_profiles(
+    heroes: list[dict],
+    position_games: dict[tuple[int, str], int],
+    position_wins: dict[tuple[int, str], int],
+    position_item_games: dict[tuple[int, str, int], int],
+    position_item_wins: dict[tuple[int, str, int], int],
+    position_first_slots_games: dict[tuple[int, str, int, int], int],
+    position_first_slots_wins: dict[tuple[int, str, int, int], int],
+    item_meta: dict[int, dict],
+) -> None:
+    """Attach lane-switchable win rate and final-inventory associations.
+
+    Only teams with at least four HIGH/MEDIUM assignments reach these maps.
+    Cells below ``HERO_POSITION_MIN_GAMES`` stay hidden instead of presenting a
+    noisy role guess as a stable recommendation.
+    """
+    hero_by_id = {int(hero["champion_id"]): hero for hero in heroes}
+    for hero in heroes:
+        hero["position_stats"] = {}
+
+    for position in POSITION_ORDER:
+        temporary: list[dict] = []
+        item_games: dict[tuple[int, int], int] = {}
+        item_wins: dict[tuple[int, int], int] = {}
+        slot_games: dict[tuple[int, int, int], int] = {}
+        slot_wins: dict[tuple[int, int, int], int] = {}
+        for (champion_id, candidate), games in position_games.items():
+            if candidate != position or games < HERO_POSITION_MIN_GAMES:
+                continue
+            wins = int(position_wins[(champion_id, position)])
+            parent = hero_by_id.get(int(champion_id))
+            if not parent:
+                continue
+            raw_wr = wins / games
+            lo, hi = wilson_interval(wins, games)
+            temporary.append({
+                "champion_id": champion_id,
+                "games": games,
+                "raw_wr": raw_wr,
+                "shrunk_wr": (
+                    wins + parent["raw_wr"] * HERO_POSITION_PRIOR_GAMES
+                ) / (games + HERO_POSITION_PRIOR_GAMES),
+                "ci_lo": lo,
+                "ci_hi": hi,
+            })
+        if not temporary:
+            continue
+        valid_ids = {int(row["champion_id"]) for row in temporary}
+        for (champion_id, candidate, item_id), games in position_item_games.items():
+            if (
+                candidate == position
+                and champion_id in valid_ids
+                and games >= HERO_POSITION_ITEM_MIN_GAMES
+            ):
+                item_games[(champion_id, item_id)] = games
+                item_wins[(champion_id, item_id)] = position_item_wins[
+                    (champion_id, candidate, item_id)
+                ]
+        for (champion_id, candidate, first, second), games in position_first_slots_games.items():
+            if candidate == position and champion_id in valid_ids:
+                slot_games[(champion_id, first, second)] = games
+                slot_wins[(champion_id, first, second)] = position_first_slots_wins[
+                    (champion_id, candidate, first, second)
+                ]
+        attach_hero_items(
+            temporary,
+            item_games,
+            item_wins,
+            slot_games,
+            slot_wins,
+            item_meta,
+        )
+        for profile in temporary:
+            hero_by_id[int(profile["champion_id"])]["position_stats"][position] = {
+                key: profile[key]
+                for key in (
+                    "games", "raw_wr", "shrunk_wr", "items",
+                    "starter_items", "first_complete_items",
+                )
+            }
 
 
 CSS = """
@@ -1006,6 +1189,9 @@ border-radius:10px;padding:0 18px 18px;box-shadow:var(--panel-shadow)}
 .classic-position-tags{display:flex;gap:5px;flex-wrap:wrap}
 .classic-position-tag{padding:2px 7px;border:1px solid var(--border);border-radius:999px;
 color:var(--text-muted);font-size:10px;font-weight:600}
+.detail-position-filter{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px;padding:10px 0;border-top:1px solid var(--border)}
+.detail-position-filter button{padding:4px 9px;border:1px solid var(--border);border-radius:999px;background:var(--chip-bg);color:var(--text-muted);font:600 11px inherit;cursor:pointer}
+.detail-position-filter button.active{border-color:var(--focus);background:var(--focus);color:#0e1116}
 .classic-overview-head{display:flex;align-items:baseline;gap:9px}
 .classic-overview-head .ovr-wr{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
 .classic-overview-head .ovr-meta{color:var(--text-muted);font-size:12px}
@@ -1030,6 +1216,10 @@ color:var(--text-dim);font-size:12px}
   .classic-overview-grid{grid-template-columns:1fr;gap:16px}
   .detail-equipment-columns{grid-template-columns:1fr}
 }
+.classic-language-links{display:inline-flex;align-items:center;gap:2px;margin-left:6px}
+.classic-language-links a{padding:4px 6px;border-radius:6px;color:var(--text-dim);font-size:11px;
+text-decoration:none}.classic-language-links a:hover{color:var(--text)}
+.classic-language-links a[aria-current="page"]{background:var(--surface-2);color:var(--text)}
 """
 
 JS = """
@@ -1037,7 +1227,7 @@ JS = """
   var dataEl=document.getElementById('classic-data');
   if(!dataEl) return;
   var data=JSON.parse(dataEl.textContent);
-  var state={tab:'tier',heroSort:'shrunk_wr',itemSort:'games',desc:true,heroId:null};
+  var state={tab:'tier',heroSort:'shrunk_wr',itemSort:'games',desc:true,heroId:null,detailPosition:''};
   var search=document.getElementById('research-search');
   var positionFilter=document.getElementById('position-filter');
   var itemKindFilter=document.getElementById('item-kind-filter');
@@ -1066,6 +1256,9 @@ JS = """
   function updateTiles(){var allowed={};activeHeroes().forEach(function(hero){allowed[hero.champion_id]=hero;});[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){var hero=allowed[tile.dataset.heroId];tile.hidden=!hero;if(hero){var stat=tile.querySelector('.tile-stat');clearToneClass(stat);stat.textContent=pct(hero.shrunk_wr);stat.classList.add(wrToneClass(hero.shrunk_wr));}});[ ].slice.call(document.querySelectorAll('[data-tier-group]')).forEach(function(group){var visible=group.querySelectorAll('.hero-tile:not([hidden])').length;group.hidden=!visible;var count=group.querySelector('[data-group-count]');if(count)count.textContent=num(visible);});document.getElementById('tier-empty').hidden=Object.keys(allowed).length>0;if(state.heroId&&!allowed[state.heroId]) closeDetail();}
   function renderHeroes(){var heroes=activeHeroes().sort(compare(heroSort.value));document.getElementById('hero-tbody').innerHTML=heroes.map(function(hero){return '<tr><td><span class="item-kind">'+esc(hero.tier)+'</span></td><td><button type="button" class="table-hero" data-open-hero="'+hero.champion_id+'" aria-label="'+esc(hero.name_zh+' '+hero.name_en)+'"><img src="'+esc(hero.image)+'" alt=""><strong>'+esc(hero.name_zh)+'</strong></button></td><td class="mono">'+num(hero.games)+'</td><td class="mono '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</td><td class="mono '+pickToneClass(hero.pick_rate)+'">'+pct(hero.pick_rate)+'</td></tr>';}).join('');document.getElementById('heroes-empty').hidden=heroes.length>0;}
   function renderItems(){var items=activeItems().sort(compare(itemSort.value));document.getElementById('item-tbody').innerHTML=items.map(function(item){return '<tr><td><span class="item-kind">'+esc(item.kind_label)+'</span></td><td><span class="table-item"><img src="'+esc(item.image)+'" alt=""><span>'+esc(item.name_zh)+' <small>'+esc(item.name_en)+'</small></span></span></td><td class="mono '+pickToneClass(item.hold_rate)+'">'+pct(item.hold_rate)+'</td><td class="mono">'+num(item.games)+'</td><td class="mono '+wrToneClass(item.raw_wr)+'">'+pct(item.raw_wr)+'</td></tr>';}).join('');document.getElementById('items-empty').hidden=items.length>0;}
+  function positionView(hero,position){if(!position)return hero;var profile=(hero.position_stats||{})[position];return profile?Object.assign({},hero,profile):hero;}
+  function positionFilterMarkup(hero,selected){var labels=data.position_labels||{ALL:'全部',TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'},available=hero.position_stats||{};var buttons=[''].concat(Object.keys(available));return '<div class="detail-position-filter" aria-label="'+esc(data.position_filter_label||'依分路切換')+'">'+buttons.map(function(position){var active=position===selected,label=position?labels[position]:labels.ALL;return '<button type="button" data-detail-position="'+esc(position)+'" class="'+(active?'active':'')+'" aria-pressed="'+String(active)+'">'+esc(label)+' <span>'+num(position?(available[position]||{}).games:hero.games)+'</span></button>';}).join('')+'</div>';}
+  function renderHeroDetail(hero,position){state.detailPosition=position||'';var view=positionView(hero,state.detailPosition);detail.innerHTML=detailTabSet(view);var panels=detail.querySelector('.detail-tab-panels');if(panels)panels.insertAdjacentHTML('beforebegin',positionFilterMarkup(hero,state.detailPosition));var closeButton=detail.querySelector('.detail-close');if(closeButton)closeButton.addEventListener('click',closeDetail);detail.querySelectorAll('[data-detail-position]').forEach(function(button){button.addEventListener('click',function(){renderHeroDetail(hero,button.dataset.detailPosition||'');});});}
   function itemRows(items,sampleLabel){sampleLabel=sampleLabel||'持有';return '<div class="detail-item-list">'+items.map(function(item){var lift=item.lift||0,liftClass=liftToneClass(lift);return '<div class="detail-item"><img src="'+esc(item.image)+'" alt=""><div><strong>'+esc(item.name_zh)+'</strong><small>'+esc(sampleLabel)+' '+num(item.games)+' 場</small></div><div class="item-stat"><span class="item-rate '+liftClass+'">'+pct(item.raw_wr)+'（'+(lift>=0?'+':'')+(lift*100).toFixed(1)+'%）</span></div></div>';}).join('')+'</div>';}
   function itemGroup(title,items,sampleLabel,note){if(!items.length)return '';return '<section class="detail-item-group"><h4>'+esc(title)+' <span>'+num(items.length)+'</span></h4>'+(note?'<p>'+esc(note)+'</p>':'')+itemRows(items,sampleLabel)+'</section>';}
   function renderItemsForHero(hero){var complete=(hero.items||[]).filter(function(item){return item.kind==='complete';}),boots=(hero.items||[]).filter(function(item){return item.kind==='boots';}),starters=hero.starter_items||[],firstComplete=hero.first_complete_items||[];var left=itemGroup('鞋子',boots,'持有')+itemGroup('常見出門裝',starters,'終局仍持有','只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。')+itemGroup('推定首件大裝',firstComplete,'前兩格出現','依終局背包第 1–2 格推估，並非實際購買時間線。');var right=itemGroup('常見終局完整裝備',complete,'持有');return (left||right)?'<div class="detail-equipment-columns"><div class="detail-equipment-column">'+(left||'<p class="research-tip">左欄目前沒有達到樣本門檻的資料。</p>')+'</div><div class="detail-equipment-column">'+(right||'<p class="research-tip">沒有足夠樣本的終局完整裝備。</p>')+'</div></div>':'<p class="research-tip">沒有足夠樣本的裝備資料可呈現。</p>';}
@@ -1074,8 +1267,8 @@ JS = """
   function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
   function combatMarkup(hero){var combat=hero.combat||{};return '<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';}
   function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-wr '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</span><span class="ovr-meta">調整後勝率 · '+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderRelationships(hero)+'</div><div>'+renderCompactLoadout(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+'</div>',panels=[overview,items,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});detail.innerHTML=detailTabSet(hero);var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;var closeButton=detail.querySelector('.detail-close');if(closeButton)closeButton.addEventListener('click',closeDetail);if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
-  function closeDetail(){state.heroId=null;detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});renderHeroDetail(hero,'');var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function closeDetail(){state.heroId=null;state.detailPosition='';detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function moveNavIndicator(button){if(!navIndicator||!button)return;navIndicator.style.setProperty('--ind-x',button.offsetLeft+'px');navIndicator.style.setProperty('--ind-w',button.offsetWidth+'px');}
   function setTab(tab,focus){state.tab=tab;var activeButton=null;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.classList.toggle('active',selected);button.tabIndex=selected?0:-1;if(selected){activeButton=button;if(focus)button.focus();}});moveNavIndicator(activeButton);views.forEach(function(view){var selected=view.dataset.view===tab;view.hidden=!selected;view.classList.toggle('is-active',selected);});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
@@ -1304,14 +1497,152 @@ def render(rows: list[dict], total_games: int, per_patch: dict) -> str:
     return "\n".join(p)
 
 
+CLASSIC_COPY = {
+    "zh-Hant": {
+        "title": "經典模式英雄勝率、出裝與搭檔資料 · classicmeta",
+        "description": "經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。",
+        "main_href": "/",
+    },
+    "zh-Hans": {
+        "title": "经典模式英雄胜率、出装与搭档数据 · classicmeta",
+        "description": "经典模式 60 位英雄的胜率、Tier、常见分路、装备、搭档与棘手对手数据。",
+        "main_href": "/zh-CN",
+    },
+    "en": {
+        "title": "Classic Mode champion win rates, builds and synergies · classicmeta",
+        "description": "Win rates, tiers, common roles, items, synergies and difficult matchups for all 60 Classic Mode champions.",
+        "main_href": "/en",
+    },
+}
+
+CLASSIC_TEXT_REPLACEMENTS = {
+    "zh-Hans": {
+        "跳至主要內容": "跳至主要内容", "返回 arammeta 主頁": "返回 arammeta 主页",
+        "經典模式資料視圖": "经典模式数据视图", "經典模式": "经典模式",
+        "英雄明細": "英雄明细", "明細": "明细", "裝備": "装备", "英雄": "英雄",
+        "常見分路篩選": "常见分路筛选", "上路": "上路", "打野": "打野",
+        "中路": "中路", "下路": "下路", "輔助": "辅助", "全部": "全部",
+        "隻": "位", "件": "件", "裝備類型篩選": "装备类型筛选",
+        "完整裝備": "完整装备", "鞋子": "鞋子", "起手／組件": "起手／组件", "飾品": "饰品",
+        "搜尋英雄（中 / 英）": "搜索英雄（中 / 英）", "搜尋裝備（中 / 英）": "搜索装备（中 / 英）",
+        "搜尋英雄": "搜索英雄", "搜尋裝備": "搜索装备", "調整後勝率": "调整后胜率",
+        "原始勝率": "原始胜率", "選用率": "选用率", "樣本數": "样本数",
+        "持有場次": "持有场次", "持有者勝率": "持有者胜率", "終局持有率": "终局持有率",
+        "場次": "场次", "類型": "类型",
+        "查看": "查看", "詳情": "详情", "場": "场", "沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。": "没有符合这组筛选的英雄。请降低最低样本或清除搜索。",
+        "沒有符合這組篩選的裝備。請降低最低樣本或改變類型。": "没有符合这组筛选的装备。请降低最低样本或改变类型。",
+        "完整英雄明細": "完整英雄明细", "Tier 固定以調整後勝率分級；欄位可排序。": "Tier 固定按调整后胜率分级；字段可排序。",
+        "裝備表現": "装备表现", "依終局背包計算，不代表購買順序或造成勝利。": "按终局背包计算，不代表购买顺序或导致胜利。",
+        "終局持有者勝率": "终局持有者胜率", "只描述在對局結束時持有該裝備的玩家勝率。請搭配樣本與英雄本身強度閱讀。": "仅描述对局结束时持有该装备的玩家胜率。请结合样本与英雄自身强度阅读。",
+        "資料與限制": "数据与限制", "經典模式資料研究": "经典模式数据研究",
+        "概覽": "概览", "出裝": "出装", "英雄能力": "英雄能力", "收起": "收起",
+        "裝備習慣": "装备习惯", "終局持有資料；首件僅依背包前兩格推估": "终局持有数据；首件仅按背包前两格推算",
+        "持有": "持有", "常見出門裝": "常见出门装", "終局仍持有": "终局仍持有",
+        "推定首件大裝": "推定首件大装", "前兩格出現": "前两格出现", "常見終局完整裝備": "常见终局完整装备",
+        "最常見完整裝備": "最常见完整装备", "最佳搭檔": "最佳搭档", "棘手對手": "棘手对手",
+        "英雄傷害／分": "英雄伤害／分", "金錢／分": "金币／分", "經典模式對局平均": "经典模式对局平均",
+        "只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。": "只统计多兰系列、打野与守护者起手装；卖掉后无法观察。",
+        "依終局背包第 1–2 格推估，並非實際購買時間線。": "按终局背包第 1–2 格推算，并非实际购买时间线。",
+        "左欄目前沒有達到樣本門檻的資料。": "左栏当前没有达到样本门槛的数据。",
+        "沒有足夠樣本的終局完整裝備。": "没有足够样本的终局完整装备。",
+        "沒有足夠樣本的裝備資料可呈現。": "没有足够样本的装备数据可显示。",
+        "目前沒有達到 100 場門檻的組合。": "当前没有达到 100 场门槛的组合。",
+        "同隊勝率經收縮；差值已扣除兩位英雄本身強度。": "同队胜率已收缩；差值已扣除两位英雄本身强度。",
+        "面對該英雄的勝率經收縮；不是單線對決或因果結論。": "面对该英雄的胜率已收缩；不是单线对决或因果结论。",
+        "場共同樣本": " 场共同样本", "CS／分": "CS／分",
+    },
+    "en": {
+        "跳至主要內容": "Skip to main content", "返回 arammeta 主頁": "Back to arammeta",
+        "經典模式資料視圖": "Classic Mode data views", "經典模式": "Classic Mode",
+        "英雄明細": "Champion details", "明細": "Details", "裝備": "Items", "英雄": "Champions",
+        "常見分路篩選": "Common role filter", "上路": "Top", "打野": "Jungle",
+        "中路": "Mid", "下路": "Bot", "輔助": "Support", "全部": "All",
+        "隻": "champions", "件": "items", "裝備類型篩選": "Item type filter",
+        "完整裝備": "Completed items", "鞋子": "Boots", "起手／組件": "Starting / components", "飾品": "Trinkets",
+        "搜尋英雄（中 / 英）": "Search champions", "搜尋裝備（中 / 英）": "Search items",
+        "搜尋英雄": "Search champions", "搜尋裝備": "Search items", "調整後勝率": "Adjusted win rate",
+        "原始勝率": "Raw win rate", "選用率": "Pick rate", "樣本數": "Games",
+        "持有場次": "Games held", "持有者勝率": "Holder win rate", "終局持有率": "Final hold rate",
+        "場次": "Games", "類型": "Type",
+        "場共同樣本": " shared games", "場": " games", "查看": "View ", "詳情": " details",
+        "沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。": "No champions match these filters. Lower the minimum sample or clear the search.",
+        "沒有符合這組篩選的裝備。請降低最低樣本或改變類型。": "No items match these filters. Lower the minimum sample or change the item type.",
+        "完整英雄明細": "Full champion details", "Tier 固定以調整後勝率分級；欄位可排序。": "Tiers use adjusted win rate; columns are sortable.",
+        "裝備表現": "Item performance", "依終局背包計算，不代表購買順序或造成勝利。": "Calculated from final inventories; this does not imply purchase order or causation.",
+        "終局持有者勝率": "Final holder win rate", "只描述在對局結束時持有該裝備的玩家勝率。請搭配樣本與英雄本身強度閱讀。": "Describes players holding the item at game end. Read it alongside sample size and champion strength.",
+        "資料與限制": "Data and limitations", "經典模式資料研究": "Classic Mode data research",
+        "概覽": "Overview", "出裝": "Builds", "英雄能力": "Champion profile", "收起": "Close",
+        "裝備習慣": "Item patterns", "終局持有資料；首件僅依背包前兩格推估": "Final inventory data; first item is inferred only from the first two slots",
+        "持有": "Held", "常見出門裝": "Common starting items", "終局仍持有": "Still held at game end",
+        "推定首件大裝": "Estimated first completed item", "前兩格出現": "Appears in first two slots", "常見終局完整裝備": "Common final completed items",
+        "最常見完整裝備": "Most common completed items", "最佳搭檔": "Best synergies", "棘手對手": "Difficult opponents",
+        "平均 K / D / A": "Average K / D / A", "英雄傷害／分": "Champion damage / min", "金錢／分": "Gold / min", "經典模式對局平均": "Classic Mode averages",
+        "CS／分": "CS / min",
+        "只統計多蘭系列、打野與守護者起手裝；賣掉後無法觀察。": "Only Doran, jungle and Guardian starting items are counted; sold items cannot be observed.",
+        "依終局背包第 1–2 格推估，並非實際購買時間線。": "Inferred from final inventory slots 1–2, not an actual purchase timeline.",
+        "左欄目前沒有達到樣本門檻的資料。": "No left-column data has reached the sample threshold.",
+        "沒有足夠樣本的終局完整裝備。": "Not enough final completed-item data.",
+        "同隊勝率經收縮；差值已扣除兩位英雄本身強度。": "Team win rate is shrunk; the difference accounts for both champions' strength.",
+        "面對該英雄的勝率經收縮；不是單線對決或因果結論。": "Win rate against this champion is shrunk; this is not a lane matchup or causal conclusion.",
+        "沒有足夠樣本的裝備資料可呈現。": "Not enough item data to display.",
+        "目前沒有達到 100 場門檻的組合。": "No pair has reached the 100-game threshold.",
+    },
+}
+
+
+def _localized_records(rows: list[dict], locale: str) -> list[dict]:
+    """Clone display records and project locale-specific names into UI fields."""
+    config = CLASSIC_LOCALES[locale]
+    localized = copy.deepcopy(rows)
+    for row in localized:
+        row["name_zh"] = row.get(config["name_key"]) or row.get("name_zh") or row.get("name_en")
+        row["title_zh"] = row.get(config["title_key"]) or row.get("title_zh") or ""
+        if str(row.get("image", "")).startswith("assets/"):
+            row["image"] = "/" + row["image"]
+        for relation_key in ("teammates", "tough_matchups"):
+            for relation in row.get(relation_key) or []:
+                relation["name_zh"] = relation.get(config["name_key"]) or relation.get("name_zh") or relation.get("name_en")
+                if str(relation.get("image", "")).startswith("assets/"):
+                    relation["image"] = "/" + relation["image"]
+        for item_key in ("items", "starter_items", "first_complete_items"):
+            for item in row.get(item_key) or []:
+                item["name_zh"] = item.get(config["name_key"]) or item.get("name_zh") or item.get("name_en")
+                if str(item.get("image", "")).startswith("assets/"):
+                    item["image"] = "/" + item["image"]
+        for profile in (row.get("position_stats") or {}).values():
+            for item_key in ("items", "starter_items", "first_complete_items"):
+                for item in profile.get(item_key) or []:
+                    item["name_zh"] = item.get(config["name_key"]) or item.get("name_zh") or item.get("name_en")
+                    if str(item.get("image", "")).startswith("assets/"):
+                        item["image"] = "/" + item["image"]
+    return localized
+
+
+def _translate_classic_page(page: str, locale: str) -> str:
+    for source, target in sorted(
+        CLASSIC_TEXT_REPLACEMENTS.get(locale, {}).items(), key=lambda pair: -len(pair[0])
+    ):
+        page = page.replace(source, target)
+    return page
+
+
 def render_research_preview(
     heroes: list[dict],
     items: list[dict],
     total_games: int,
     per_patch: dict,
     position_observations: int,
+    position_eligible_teams: int = 0,
+    position_total_teams: int = 0,
+    locale: str = "zh-Hant",
 ) -> str:
     """Render the interactive Classic research preview as a self-contained page."""
+    if locale not in CLASSIC_LOCALES:
+        raise ValueError(f"unsupported Classic locale: {locale}")
+    locale_config = CLASSIC_LOCALES[locale]
+    copy_text = CLASSIC_COPY[locale]
+    heroes = _localized_records(heroes, locale)
+    items = _localized_records(items, locale)
     if not MAIN_SITE_CSS_PATH.exists():
         raise click.ClickException(
             f"main-site stylesheet not found: {MAIN_SITE_CSS_PATH}"
@@ -1322,22 +1653,35 @@ def render_research_preview(
         f"{patch} ({count:,})"
         for patch, count in sorted(per_patch.items(), key=lambda pair: -pair[1])
     )
-    kind_label = {
+    kind_labels = {
+        "zh-Hant": {
         "complete": "完整裝備",
         "boots": "鞋子",
         "starter": "起手／組件",
         "trinket": "飾品",
+        },
+        "zh-Hans": {
+            "complete": "完整装备", "boots": "鞋子", "starter": "起手／组件", "trinket": "饰品",
+        },
+        "en": {
+            "complete": "Completed item", "boots": "Boots", "starter": "Starting / component", "trinket": "Trinket",
+        },
     }
+    kind_label = kind_labels[locale]
     payload_heroes = []
     for hero in heroes:
         payload_hero = dict(hero)
         payload_hero["search"] = " ".join(
             str(hero.get(key) or "").lower()
-            for key in ("name_zh", "name_en", "title_zh", "alias")
+            for key in ("name_zh", "name_zh_cn", "name_en", "title_zh", "title_zh_cn", "title_en", "alias")
         )
         for item_key in ("items", "starter_items", "first_complete_items"):
             for item in payload_hero.get(item_key) or []:
                 item["kind_label"] = kind_label.get(item["kind"], item["kind"])
+        for profile in (payload_hero.get("position_stats") or {}).values():
+            for item_key in ("items", "starter_items", "first_complete_items"):
+                for item in profile.get(item_key) or []:
+                    item["kind_label"] = kind_label.get(item["kind"], item["kind"])
         payload_heroes.append(payload_hero)
     payload_items = []
     for item in items:
@@ -1345,32 +1689,50 @@ def render_research_preview(
         payload_item["kind_label"] = kind_label.get(item["kind"], item["kind"])
         payload_item["search"] = " ".join(
             str(item.get(key) or "").lower()
-            for key in ("name_zh", "name_en", "kind")
+            for key in ("name_zh", "name_zh_cn", "name_en", "kind")
         )
         payload_items.append(payload_item)
+    position_copy = {
+        "zh-Hant": {"ALL": "全部", "TOP": "上路", "JUNGLE": "打野", "MIDDLE": "中路", "BOTTOM": "下路", "SUPPORT": "輔助"},
+        "zh-Hans": {"ALL": "全部", "TOP": "上路", "JUNGLE": "打野", "MIDDLE": "中路", "BOTTOM": "下路", "SUPPORT": "辅助"},
+        "en": {"ALL": "All", "TOP": "Top", "JUNGLE": "Jungle", "MIDDLE": "Mid", "BOTTOM": "Bot", "SUPPORT": "Support"},
+    }
     payload = json.dumps(
-        {"heroes": payload_heroes, "items": payload_items},
+        {
+            "heroes": payload_heroes,
+            "items": payload_items,
+            "position_labels": position_copy[locale],
+            "position_filter_label": {
+                "zh-Hant": "依分路切換勝率與裝備",
+                "zh-Hans": "按分路切换胜率与装备",
+                "en": "Switch win rate and items by position",
+            }[locale],
+        },
         ensure_ascii=False,
         separators=(",", ":"),
     ).replace("</", "<\\/")
 
     page: list[str] = []
-    page.append("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>")
+    page.append(f"<!doctype html><html lang='{locale}'><head><meta charset='utf-8'>")
     page.append("<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
     page.append("<meta name='robots' content='index,follow,max-image-preview:large'>")
-    page.append("<title>經典模式英雄勝率、出裝與搭檔資料 · classicmeta</title>")
-    page.append("<meta name='description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
-    page.append(f"<link rel='canonical' href='{CLASSIC_PUBLIC_URL}'>")
+    page.append(f"<title>{html.escape(copy_text['title'])}</title>")
+    page.append(f"<meta name='description' content='{html.escape(copy_text['description'], quote=True)}'>")
+    page.append(f"<link rel='canonical' href='{locale_config['url']}'>")
+    for alternate_locale, alternate in CLASSIC_LOCALES.items():
+        hreflang = {"zh-Hant": "zh-Hant", "zh-Hans": "zh-Hans", "en": "en"}[alternate_locale]
+        page.append(f"<link rel='alternate' hreflang='{hreflang}' href='{alternate['url']}'>")
+    page.append(f"<link rel='alternate' hreflang='x-default' href='{CLASSIC_LOCALES['zh-Hant']['url']}'>")
     page.append("<meta property='og:type' content='website'>")
-    page.append("<meta property='og:locale' content='zh_TW'>")
+    page.append(f"<meta property='og:locale' content='{locale_config['og_locale']}'>")
     page.append("<meta property='og:site_name' content='arammeta'>")
-    page.append("<meta property='og:title' content='經典模式英雄勝率、出裝與搭檔資料 · classicmeta'>")
-    page.append("<meta property='og:description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
-    page.append(f"<meta property='og:url' content='{CLASSIC_PUBLIC_URL}'>")
+    page.append(f"<meta property='og:title' content='{html.escape(copy_text['title'], quote=True)}'>")
+    page.append(f"<meta property='og:description' content='{html.escape(copy_text['description'], quote=True)}'>")
+    page.append(f"<meta property='og:url' content='{locale_config['url']}'>")
     page.append(f"<meta property='og:image' content='{CLASSIC_OG_IMAGE_URL}'>")
     page.append("<meta name='twitter:card' content='summary_large_image'>")
-    page.append("<meta name='twitter:title' content='經典模式英雄勝率、出裝與搭檔資料 · classicmeta'>")
-    page.append("<meta name='twitter:description' content='經典模式 60 隻英雄的勝率、Tier、常見分路、裝備、搭檔與棘手對手資料。'>")
+    page.append(f"<meta name='twitter:title' content='{html.escape(copy_text['title'], quote=True)}'>")
+    page.append(f"<meta name='twitter:description' content='{html.escape(copy_text['description'], quote=True)}'>")
     page.append(f"<meta name='twitter:image' content='{CLASSIC_OG_IMAGE_URL}'>")
     page.append(
         "<link rel='preconnect' href='https://fonts.googleapis.com'>"
@@ -1383,7 +1745,7 @@ def render_research_preview(
     )
     page.append("<a class='skip-link' href='#main-content'>跳至主要內容</a>")
     page.append("<header class='site-header'><div class='site-header-inner'>")
-    page.append("<a class='brand' href='/' aria-label='返回 arammeta 主頁' title='返回 arammeta 主頁'><span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span></a>")
+    page.append(f"<a class='brand' href='{copy_text['main_href']}' aria-label='返回 arammeta 主頁' title='返回 arammeta 主頁'><span class='brand-title'><span class='brand-aram'>classic</span><span class='brand-meta'>meta</span></span></a>")
     page.append("<nav class='nav-tabs' role='tablist' aria-label='經典模式資料視圖'>")
     for tab, label in (("tier", "英雄"), ("heroes", "明細"), ("items", "裝備")):
         selected = "true" if tab == "tier" else "false"
@@ -1394,7 +1756,11 @@ def render_research_preview(
             f"aria-selected='{selected}' aria-controls='view-{tab}' tabindex='{tabindex}'>{label}</button>"
         )
     page.append("<span class='nav-ind' aria-hidden='true'></span></nav>")
-    page.append("<div class='header-actions classic-header-actions'><span class='classic-mode-label'>經典模式</span></div>")
+    page.append("<div class='header-actions classic-header-actions'><span class='classic-mode-label'>經典模式</span><nav class='classic-language-links' aria-label='Language'>")
+    for language_locale, language_label in (("zh-Hant", "繁中"), ("zh-Hans", "简中"), ("en", "EN")):
+        current = " aria-current='page'" if language_locale == locale else ""
+        page.append(f"<a href='{CLASSIC_LOCALES[language_locale]['url'].replace('https://arammeta.com', '')}'{current}>{language_label}</a>")
+    page.append("</nav></div>")
     page.append("</div></header><main id='main-content' class='site-main view-home'>")
     page.append("<div class='app-shell'><div class='main-col'>")
     page.append("<section class='view is-active' id='view-tier' data-view='tier' role='tabpanel'>")
@@ -1448,17 +1814,80 @@ def render_research_preview(
     for field, label in (("kind", "類型"), ("name_zh", "裝備"), ("hold_rate", "終局持有率"), ("games", "持有場次"), ("raw_wr", "持有者勝率")):
         page.append(f"<th><button type='button' data-sort-target='item' data-sort='{field}' aria-sort='none'>{label}</button></th>")
     page.append("</tr></thead><tbody id='item-tbody'></tbody></table></div><p id='items-empty' class='empty-state' hidden>沒有符合這組篩選的裝備。請降低最低樣本或改變類型。</p></section>")
-    page.append("<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 " + str(PRIOR_GAMES) + " 場），避免小樣本被偶然高勝率放大。95% CI 使用 Wilson 區間。常見分路以每位英雄在 LCU timeline.lane／role 中最多的分類為主要分路；次高分類至少要有 " + str(SECONDARY_POSITION_MIN_GAMES) + " 筆、且占該英雄有效分路紀錄 " + str(round(SECONDARY_POSITION_MIN_SHARE * 100)) + "%，才列為次要分路，最多顯示兩個。這是舊版客戶端推估訊號，不是精確的 teamPosition，適合做整體篩選，不應當成單場位置真值。裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p><p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 " + str(RELATION_MIN_GAMES) + " 場的組合，並以 " + str(RELATION_PRIOR_GAMES) + " 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮；它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線，因此本頁不顯示或推測這兩項。</p><p>版本分佈：" + html.escape(patch_str) + "。由 <code>scripts/build_classic_page.py</code> 產生於 " + built + "。</p></details>")
-    page[-1] = page[-1].replace("95% CI 使用 Wilson 區間。", "")
-    page.append(
-        "<footer class='research-context' aria-label='資料範圍'>"
-        "<strong>經典模式資料研究</strong>"
-        f"<p><span class='data-note'>{total_games:,} 場</span>"
-        f"　常見分路由 {position_observations:,} 筆 LCU lane／role 紀錄推估；點英雄查看完整數據與終局裝備關聯。</p>"
-        "</footer>"
+    if locale == "en":
+        method_copy = (
+            f"<details class='method'><summary>Data and limitations</summary><p>Champion tiers use a Beta-shrunk win rate "
+            f"(50% prior, strength {PRIOR_GAMES} games) so small samples do not dominate. Positions are inferred jointly for each team from "
+            "legacy lane/role hints, Smite, jungle/support items and neutral CS. Only HIGH/MEDIUM assignments from teams with at least four "
+            f"credible positions enter position statistics ({position_eligible_teams:,}/{position_total_teams:,} teams). This is a weak label, not exact teamPosition. "
+            "Item data is final-inventory association without a purchase timeline, so it is not purchase order, causation or a direct recommendation.</p>"
+            f"<p>Combat profiles are descriptive per-game or per-minute statistics. Synergies and difficult opponents require at least {RELATION_MIN_GAMES} shared games "
+            f"and are shrunk with {RELATION_PRIOR_GAMES} virtual games toward the expectation implied by both champions' strength. They remain associations inside full 5v5 games, "
+            "not lane matchups, causal effects or guarantees. Rune and purchase-timeline data are unavailable.</p>"
+            f"<p>Patch distribution: {html.escape(patch_str)}. Generated by <code>scripts/build_classic_page.py</code> at {built}.</p></details>"
+        )
+    elif locale == "zh-Hans":
+        method_copy = (
+            f"<details class='method'><summary>数据与限制</summary><p>英雄 Tier 使用 Beta 收缩后的胜率（先验 50%、强度 {PRIOR_GAMES} 场），避免小样本被偶然高胜率放大。"
+            f"常见分路以每位英雄在 LCU timeline.lane／role 中最多的分类为主要分路；次高分类至少需要 {SECONDARY_POSITION_MIN_GAMES} 条记录，且占有效分路记录 "
+            f"{round(SECONDARY_POSITION_MIN_SHARE * 100)}%，才列为次要分路，最多显示两个。这是旧版客户端的推算信号，不是精确的 teamPosition。"
+            "装备数据是终局背包中的持有关联，没有购买时间线，因此不应解读为出装顺序、因果效果或直接推荐。</p>"
+            f"<p>战斗轮廓是每场或每分钟的描述统计。最佳搭档与棘手对手只纳入至少 {RELATION_MIN_GAMES} 场的组合，并用 {RELATION_PRIOR_GAMES} 场虚拟样本向双方英雄强度推得的预期胜率收缩。"
+            "它仍是完整 5v5 对局中的关联，不是单线对决、因果效果或胜率保证。当前没有符文与装备购买时间线数据。</p>"
+            f"<p>版本分布：{html.escape(patch_str)}。由 <code>scripts/build_classic_page.py</code> 生成于 {built}。</p></details>"
+        )
+    else:
+        method_copy = (
+            f"<details class='method'><summary>資料與限制</summary><p>英雄 Tier 使用 Beta 收縮後的勝率（先驗 50%、強度 {PRIOR_GAMES} 場），避免小樣本被偶然高勝率放大。"
+            f"常見分路以每位英雄在 LCU timeline.lane／role 中最多的分類為主要分路；次高分類至少要有 {SECONDARY_POSITION_MIN_GAMES} 筆、且占該英雄有效分路紀錄 "
+            f"{round(SECONDARY_POSITION_MIN_SHARE * 100)}%，才列為次要分路，最多顯示兩個。這是舊版客戶端推估訊號，不是精確的 teamPosition。"
+            "裝備資料是終局背包中的持有關聯，沒有購買時間線，因此不應解讀為出裝順序、因果效果或直接推薦。</p>"
+            f"<p>戰鬥輪廓是每場或每分鐘的描述統計。最佳搭檔與棘手對手只納入至少 {RELATION_MIN_GAMES} 場的組合，並以 {RELATION_PRIOR_GAMES} 場虛擬樣本向雙方英雄強度所推得的預期勝率收縮。"
+            "它仍是完整 5v5 對局中的關聯，不是單線對決、因果效果或勝率保證。現有資料沒有符文與裝備購買時間線。</p>"
+            f"<p>版本分佈：{html.escape(patch_str)}。由 <code>scripts/build_classic_page.py</code> 產生於 {built}。</p></details>"
+        )
+    coverage_pct = (
+        position_eligible_teams / position_total_teams * 100
+        if position_total_teams else 0
     )
-    page.append("</div></div></main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + JS + "</script></body></html>")
-    return "\n".join(page)
+    inference_notes = {
+        "zh-Hant": (
+            f"分路由同隊五人共同推定；只有至少四位達可信門檻的隊伍納入分路統計。"
+            f"目前覆蓋 {position_eligible_teams:,}/{position_total_teams:,} 隊（{coverage_pct:.1f}%）。"
+        ),
+        "zh-Hans": (
+            f"分路由同队五人共同推定；只有至少四位达到可信门槛的队伍纳入分路统计。"
+            f"当前覆盖 {position_eligible_teams:,}/{position_total_teams:,} 队（{coverage_pct:.1f}%）。"
+        ),
+        "en": (
+            f"Positions are inferred jointly for each five-player team. Only teams with at least four credible assignments enter position statistics: "
+            f"{position_eligible_teams:,}/{position_total_teams:,} teams ({coverage_pct:.1f}%)."
+        ),
+    }
+    page.append(f"<p class='item-note'><b>{html.escape(inference_notes[locale])}</b></p>")
+    page.append(method_copy)
+    if locale == "en":
+        footer_copy = (
+            "<footer class='research-context' aria-label='Data scope'><strong>Classic Mode data research</strong>"
+            f"<p><span class='data-note'>{total_games:,} games</span>　Common roles are inferred from "
+            f"{position_observations:,} LCU lane/role records; select a champion for full statistics and final-inventory associations.</p></footer>"
+        )
+    elif locale == "zh-Hans":
+        footer_copy = (
+            "<footer class='research-context' aria-label='数据范围'><strong>经典模式数据研究</strong>"
+            f"<p><span class='data-note'>{total_games:,} 场</span>　常见分路由 {position_observations:,} 条 LCU lane／role 记录推算；"
+            "点击英雄查看完整数据与终局装备关联。</p></footer>"
+        )
+    else:
+        footer_copy = (
+            "<footer class='research-context' aria-label='資料範圍'><strong>經典模式資料研究</strong>"
+            f"<p><span class='data-note'>{total_games:,} 場</span>　常見分路由 {position_observations:,} 筆 LCU lane／role 紀錄推估；"
+            "點英雄查看完整數據與終局裝備關聯。</p></footer>"
+        )
+    page.append(footer_copy)
+    localized_js = JS.replace("toLocaleString('zh-TW')", f"toLocaleString('{locale_config['number_locale']}')")
+    page.append("</div></div></main><script id='classic-data' type='application/json'>" + payload + "</script><script>" + localized_js + "</script></body></html>")
+    return _translate_classic_page("\n".join(page), locale)
 
 
 @click.command()
@@ -1530,24 +1959,42 @@ def main(
         stats["hero_first_slots_wins"],
         item_meta,
     )
+    attach_hero_position_profiles(
+        rows,
+        stats["hero_position_games"],
+        stats["hero_position_wins"],
+        stats["hero_position_item_games"],
+        stats["hero_position_item_wins"],
+        stats["hero_position_first_slots_games"],
+        stats["hero_position_first_slots_wins"],
+        item_meta,
+    )
     if not item_rows:
         raise click.ClickException("no Classic final-inventory items could be resolved")
 
     out_path = Path(out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(
-        render_research_preview(
-            rows,
-            item_rows,
-            total,
-            per_patch,
-            stats["position_observations"],
-        ),
-        encoding="utf-8",
-    )
-
-    size_kb = out_path.stat().st_size / 1024
-    click.echo(f"[classic] wrote {out_path} ({size_kb:.0f} KB, {len(item_rows)} items)")
+    locale_paths = {
+        "zh-Hant": out_path,
+        "zh-Hans": out_path.parent / "zh-CN" / out_path.name,
+        "en": out_path.parent / "en" / out_path.name,
+    }
+    for locale, locale_path in locale_paths.items():
+        locale_path.parent.mkdir(parents=True, exist_ok=True)
+        locale_path.write_text(
+            render_research_preview(
+                rows,
+                item_rows,
+                total,
+                per_patch,
+                stats["position_observations"],
+                stats["position_eligible_teams"],
+                stats["position_total_teams"],
+                locale=locale,
+            ),
+            encoding="utf-8",
+        )
+        size_kb = locale_path.stat().st_size / 1024
+        click.echo(f"[classic] wrote {locale_path} ({size_kb:.0f} KB, {len(item_rows)} items)")
     top = rows[0]
     click.echo(
         f"[classic] top: {top['name_zh']} {top['shrunk_wr'] * 100:.1f}% "

@@ -45,8 +45,11 @@ class ClassicResearchPageTests(unittest.TestCase):
                 1: {
                     "alias": "Jade_Annie",
                     "name_zh": "安妮",
+                    "name_zh_cn": "安妮",
                     "name_en": "Annie",
                     "title_zh": "黑暗之女",
+                    "title_zh_cn": "黑暗之女",
+                    "title_en": "the Dark Child",
                     "image": "assets/icons/classic/60001.png",
                 }
             },
@@ -55,6 +58,7 @@ class ClassicResearchPageTests(unittest.TestCase):
             3006: {
                 "item_id": 3006,
                 "name_zh": "狂戰士護脛",
+                "name_zh_cn": "狂战士胫甲",
                 "name_en": "Berserker's Greaves",
                 "categories": ["Boots"],
                 "price_total": 1100,
@@ -71,12 +75,24 @@ class ClassicResearchPageTests(unittest.TestCase):
             {},
             item_meta,
         )
+        classic.attach_hero_position_profiles(
+            heroes,
+            {(1, "MIDDLE"): 120},
+            {(1, "MIDDLE"): 72},
+            {(1, "MIDDLE", 3006): 80},
+            {(1, "MIDDLE", 3006): 48},
+            {},
+            {},
+            item_meta,
+        )
 
         page = classic.render_research_preview(heroes, items, 12, {"16.15.800": 12}, 0)
 
         self.assertIn("id='classic-data'", page)
         self.assertIn("英雄 Tier", page)
         self.assertIn("id='hero-detail'", page)
+        self.assertIn("data-detail-position", page)
+        self.assertIn('"MIDDLE"', page)
         self.assertIn("終局持有者勝率", page)
         self.assertIn("index,follow,max-image-preview:large", page)
         self.assertIn("rel='canonical' href='https://arammeta.com/classic.html'", page)
@@ -84,6 +100,27 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertNotIn("noindex,nofollow", page)
         self.assertNotIn("經典模式 · 預覽", page)
         self.assertNotIn("95% CI", page)
+
+        simplified = classic.render_research_preview(
+            heroes, items, 12, {"16.15.800": 12}, 0, locale="zh-Hans"
+        )
+        self.assertIn("<html lang='zh-Hans'>", simplified)
+        self.assertIn("rel='canonical' href='https://arammeta.com/zh-CN/classic.html'", simplified)
+        self.assertIn("经典模式英雄胜率", simplified)
+        self.assertIn("狂战士胫甲", simplified)
+        self.assertIn("hreflang='en' href='https://arammeta.com/en/classic.html'", simplified)
+
+        english = classic.render_research_preview(
+            heroes, items, 12, {"16.15.800": 12}, 0, locale="en"
+        )
+        self.assertIn("<html lang='en'>", english)
+        self.assertIn("rel='canonical' href='https://arammeta.com/en/classic.html'", english)
+        self.assertIn("Classic Mode champion win rates", english)
+        self.assertIn("Berserker's Greaves", english)
+        self.assertIn("Data and limitations", english)
+        self.assertNotIn("資料與限制", english)
+        self.assertIn("toLocaleString('en-US')", english)
+        self.assertIn("Switch win rate and items by position", english)
 
 
 if __name__ == "__main__":

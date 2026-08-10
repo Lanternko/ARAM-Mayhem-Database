@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS crawl_seen (
     last_crawled_at               TEXT,
     process_count                 INTEGER NOT NULL DEFAULT 0,
     new_games_found               INTEGER NOT NULL DEFAULT 0,
+    new_games_by_queue_json       TEXT,
     latest_seen_match_created_ms  INTEGER NOT NULL DEFAULT 0,
     last_crawled_match_created_ms INTEGER NOT NULL DEFAULT 0,
     processed                     INTEGER NOT NULL DEFAULT 0
@@ -325,6 +326,15 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         "participants_private_json TEXT",
     )
 
+    # Per-queue yield attribution. `new_games_found` alone cannot answer whether a
+    # classifier change bought us 經典 or merely more Mayhem, which is the whole
+    # question the history A/B exists to settle.
+    _ensure_column(
+        con,
+        "crawl_seen",
+        "new_games_by_queue_json",
+        "new_games_by_queue_json TEXT",
+    )
     _ensure_column(
         con,
         "crawl_seen",
@@ -786,45 +796,22 @@ def _adaptive_target_game_ids(
     full_history_min_mayhem: int = 3,
     puuid: str | None = None,
 ) -> list[str]:
-    """Choose a cheap or full history expansion based on recent Mayhem density.
+    """Choose a cheap or full expansion based on recent target-queue density.
 
     LCU exposes a recent mixed-queue window.  We always inspect the first four
-    metadata rows, but only fetch details when they contain Mayhem.  One or two
-    Mayhem rows means expand the recent probe; three or more means the player is
-    likely an ARAM regular, so expand every target-queue row returned by LCU.
-    Queue 2400 is deliberately the classifier; other target queues are still
-    included in the selected detail IDs.
+    metadata rows. One or two target rows fetch only the probe; three or more
+    fetch the full recent window. A completed A/B test showed that counting all
+    target queues increased Classic capture by 52.5% for about 13% more detail
+    work, so Classic is no longer allowed to ride only on Mayhem discovery.
     """
     all_target = _extract_target_game_ids(history, target_queues)
-    if 2400 not in target_queues:
-        return all_target[:probe_size]
-
     probe = history[: max(0, int(probe_size))]
-    # Control counts Mayhem only; treatment counts any target queue.  Under
-    # control a player whose first four rows are all 經典 scores zero and returns
-    # [], so the whole player is skipped, the visit records zero yield, and the
-    # backoff then defers them -- a pure 經典 player is effectively invisible.
-    # That is why 4310 volume tracks the Mayhem curve at a flat 2-4% instead of
-    # tracking its own popularity: it only ever arrives as a passenger on players
-    # we visited for Mayhem.
-    arm = history_arm(puuid) if puuid is not None else "control"
-    mayhem_count = sum(_queue_id_from_meta(game) == 2400 for game in probe)
-    other_count = 0
-    if arm != "control":
-        other_count = sum(
-            _queue_id_from_meta(game) in target_queues
-            and _queue_id_from_meta(game) != 2400
-            for game in probe
-        )
-
-    # Full expansion is gated on Mayhem density under control and probe; only the
-    # 'full' arm lets a non-Mayhem queue earn the 20-game fetch.
-    full_trigger = mayhem_count
-    if arm == "full":
-        full_trigger = mayhem_count + other_count
-    if full_trigger >= max(1, int(full_history_min_mayhem)):
+    target_count = sum(
+        _queue_id_from_meta(game) in target_queues for game in probe
+    )
+    if target_count >= max(1, int(full_history_min_mayhem)):
         return all_target
-    if mayhem_count + other_count >= 1:
+    if target_count >= 1:
         return _extract_target_game_ids(probe, target_queues)
     return []
 
@@ -1576,7 +1563,7 @@ _HISTORY_AB_ENABLED = True
 
 
 def history_arm(puuid: str) -> str:
-    """Stable three-way split for the history-expansion classifier.
+    """Legacy A/B label retained for historical metrics.
 
     control  Mayhem-only classifier. A player with no Mayhem in the probe window
              is skipped entirely -- the behaviour that made 經典 invisible.
@@ -1596,7 +1583,7 @@ def history_arm(puuid: str) -> str:
     impossible to attribute separately.
     """
     if not _HISTORY_AB_ENABLED:
-        return "control"
+        return "full"
     digest = hashlib.sha1(b"history-ab|" + str(puuid).encode("utf-8", "replace")).digest()
     return ("control", "probe", "full")[digest[0] % 3]
 
@@ -1660,6 +1647,28 @@ def _requeue_cooldown_for(
     return base_cooldown_ms * _YIELD_BACKOFF_DEAD
 
 
+def _merge_queue_counts(stored_json: str | None, added: dict[int, int] | None) -> str | None:
+    """Fold this visit's per-queue saves into the player's cumulative counter.
+
+    Merged in Python rather than SQL because the row is already read here; a
+    corrupt or missing blob restarts from the current visit instead of throwing,
+    since losing one player's attribution history must never stall a crawl.
+    """
+    if not added:
+        return stored_json
+    totals: dict[str, int] = {}
+    if stored_json:
+        try:
+            parsed = json.loads(stored_json)
+            if isinstance(parsed, dict):
+                totals = {str(k): int(v) for k, v in parsed.items()}
+        except (ValueError, TypeError):
+            totals = {}
+    for queue_id, count in added.items():
+        totals[str(queue_id)] = totals.get(str(queue_id), 0) + int(count)
+    return json.dumps(totals, sort_keys=True, separators=(",", ":"))
+
+
 def _mark_player_done(
     con: sqlite3.Connection,
     puuid: str,
@@ -1667,6 +1676,7 @@ def _mark_player_done(
     claimed_match_created_ms: int,
     observed_match_created_ms: int,
     requeue_cooldown_ms: int,
+    new_games_by_queue: dict[int, int] | None = None,
 ) -> bool:
     """Finalize a claimed player.
 
@@ -1677,12 +1687,14 @@ def _mark_player_done(
     row = con.execute(
         """
         SELECT latest_seen_match_created_ms, last_crawled_match_created_ms,
-               process_count, new_games_found, first_seen_at
+               process_count, new_games_found, first_seen_at,
+               new_games_by_queue_json
         FROM crawl_seen
         WHERE puuid = ?
         """,
         (puuid,),
     ).fetchone()
+    queue_counts_json = _merge_queue_counts(row[5] if row else None, new_games_by_queue)
     latest_seen_match_ms = int(row[0]) if row else 0
     last_crawled_match_ms = int(row[1]) if row else 0
     # Counts BEFORE this visit is folded in; add the current result so the
@@ -1717,10 +1729,11 @@ def _mark_player_done(
                 last_crawled_at = ?,
                 process_count = process_count + 1,
                 new_games_found = new_games_found + ?,
+                new_games_by_queue_json = ?,
                 last_crawled_match_created_ms = ?
             WHERE puuid = ?
             """,
-            (now, new_games_found, crawled_match_ms, puuid),
+            (now, new_games_found, queue_counts_json, crawled_match_ms, puuid),
         )
         con.execute(
             """
@@ -1744,10 +1757,11 @@ def _mark_player_done(
             last_crawled_at = ?,
             process_count = process_count + 1,
             new_games_found = new_games_found + ?,
+            new_games_by_queue_json = ?,
             last_crawled_match_created_ms = ?
         WHERE puuid = ?
         """,
-        (now, new_games_found, crawled_match_ms, puuid),
+        (now, new_games_found, queue_counts_json, crawled_match_ms, puuid),
     )
     con.execute(
         """
@@ -2964,6 +2978,7 @@ def run_snowball(
             )
 
             new_games_for_player = 0
+            new_games_by_queue: dict[int, int] = {}
             for game_id in game_ids:
                 # Finish the claimed player's history window before honoring the
                 # worker target.  Stopping mid-player strands the remaining recent
@@ -3000,6 +3015,8 @@ def run_snowball(
                         _mark_game_done(con, record["game_id"])
                         stats.saved_games += 1
                         new_games_for_player += 1
+                        queue_id = int(record["queue_id"])
+                        new_games_by_queue[queue_id] = new_games_by_queue.get(queue_id, 0) + 1
                         # Was "Mayhem" or else "ARAM", which printed every 經典
                         # (4310) and 大混戰經典風 (2450) save as ARAM and made the
                         # log actively misleading when diagnosing queue coverage.
@@ -3053,6 +3070,7 @@ def run_snowball(
                 claimed_match_created_ms=claimed_match_created_ms,
                 observed_match_created_ms=observed_match_created_ms,
                 requeue_cooldown_ms=player_requeue_cooldown_ms,
+                new_games_by_queue=new_games_by_queue,
             )
             if requeued_on_finish:
                 stats.requeued_players += 1
