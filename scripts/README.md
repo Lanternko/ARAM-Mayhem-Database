@@ -9,7 +9,7 @@
 - `settle_patch.py` — 把「已結束的版本」凍結成 `data/patch_snapshots/q<queue>-<patch>.json`（`--status` 看現況）；build 會自動結算，這支只用在改版當天想立刻凍或要 `--force` 重算
 - `templates/site.css` + `templates/site.js` — 站台 CSS/JS 模板，`tierlist_render.py` 讀檔注入
 - `champion_roles.py` — 英雄職業（role）對照表，Mayhem 專用
-- `publish_static_site.py` — 靜態站台自動發布 CLI（wraps `static_publish_cli`，`--patch-prefix auto` 每 cycle 重解析）
+- `publish_static_site.py` — 靜態站台自動發布 CLI；預設在 disposable git worktree 隔離建置，`--patch-prefix auto` 每 cycle 重解析。完整 SOP 見 `.codex/skills/update-mayhem-site/SKILL.md`
 - `site_api.py` — FastAPI backend 入口
 - `sync_site_backend.py` — 本機對局同步到 backend API CLI（`--watch` 每 +10k games 推一次）
 - `tier_list.py` — 舊版 LR-solo 權重抽英雄 tier list（CSV 輸出，非現行站台管線）
@@ -22,6 +22,8 @@
 - `watchdog_keepalive_hidden.vbs` — 無視窗版 keepalive，呼叫 `watchdog_keepalive.ps1`
 - `crawler_mac.py` — macOS 版 LCU crawler watchdog（wraps `lcu_collector`）
 - `watchdog_mac.py` — macOS crawl watchdog 入口（wraps `crawler_mac`）
+- `ab_arm_report.py` — crawler A/B：`snapshot` 拍 per-player baseline、`report --split history|revisit` 算每訪產出 + cluster bootstrap CI + per-queue 歸因
+- `revisit_ab_report.py` — 舊版 revisit A/B 報表（只吃 arm 總計 baseline，無 CI；2026-08-07 那輪的原始基準）
 - `lcu_backfill.py` — 補抓近期 LCU 對局回填 games.db
 - `lcu_dump.py` — 印出 LCU 原始對局資料供診斷
 - `lcu_probe_endpoints.py` — 探測 LCU API 找 10 人陣容欄位（推測）
