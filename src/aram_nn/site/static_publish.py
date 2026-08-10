@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import os
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +16,7 @@ from .db import count_games
 
 
 DEFAULT_SITE_URL = "https://arammeta.com/"
+DEFAULT_META_PICK_API_URL = "https://api.arammeta.com"
 # Cloudflare Web Analytics beacon token for arammeta.com.  PUBLIC by design -- it
 # ships in the client HTML (visible in view-source), so it lives in source, not a
 # secret.  build_tier_list injects the beacon <script> when given this token; the
@@ -344,8 +347,23 @@ def merge_upstream(runner: CommandRunner, branch: str) -> str | None:
     return f"merged {behind} upstream commit(s) from origin/{branch}"
 
 
-def push_with_upstream_merge(runner: CommandRunner, branch: str) -> str | None:
+def push_with_upstream_merge(
+    runner: CommandRunner, branch: str, *, detached: bool = False
+) -> str | None:
     """Push, absorbing upstream commits first and once more if we lose a race."""
+    if detached:
+        _run_checked(runner, ["git", "fetch", "origin"])
+        behind = git_output(
+            runner, ["git", "rev-list", "--count", f"HEAD..origin/{branch}"]
+        )
+        if behind not in {"", "0"}:
+            raise RuntimeError(
+                f"origin/{branch} advanced by {behind} commit(s) during isolated build; "
+                "discarding this build so the next cycle rebuilds from the new source"
+            )
+        _run_checked(runner, ["git", "push", "origin", f"HEAD:{branch}"])
+        return None
+
     merged = merge_upstream(runner, branch)
     result = runner(["git", "push", "origin", branch])
     if result.returncode == 0:
@@ -355,6 +373,70 @@ def push_with_upstream_merge(runner: CommandRunner, branch: str) -> str | None:
     merged = merge_upstream(runner, branch) or merged
     _run_checked(runner, ["git", "push", "origin", branch])
     return merged
+
+
+def runner_in(cwd: Path) -> CommandRunner:
+    """Return a no-window command runner rooted in an isolated worktree."""
+
+    def run(command: Sequence[str]) -> CommandResult:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+
+    return run
+
+
+def link_local_build_inputs(source_root: Path, worktree: Path) -> None:
+    """Expose ignored read-mostly data to a clean worktree without copying it.
+
+    The generator source and every tracked asset come from ``origin/main`` in the
+    worktree. Large local DB/cache/model directories stay in the primary checkout
+    and are linked in only as build inputs.
+    """
+
+    for name in ("data", "models"):
+        source = source_root / name
+        target = worktree / name
+        if not source.exists() or target.exists():
+            continue
+        try:
+            os.symlink(source, target, target_is_directory=True)
+        except OSError:
+            if os.name != "nt":
+                raise
+            completed = subprocess.run(
+                ["cmd", "/c", "mklink", "/J", str(target), str(source)],
+                text=True,
+                capture_output=True,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            if completed.returncode != 0:
+                detail = completed.stderr.strip() or completed.stdout.strip()
+                raise RuntimeError(f"cannot link local build input {name}: {detail}")
+
+
+def unlink_local_build_inputs(worktree: Path) -> None:
+    """Remove only the input links created above, never their target contents."""
+
+    for name in ("data", "models"):
+        target = worktree / name
+        if not target.exists():
+            continue
+        if not target.is_symlink() and os.name != "nt":
+            raise RuntimeError(f"refusing to remove non-link build input: {target}")
+        # Path.unlink handles POSIX directory symlinks. Windows junctions need
+        # RemoveDirectory semantics, which Directory.Delete(target, false) maps to.
+        if os.name == "nt":
+            os.rmdir(target)
+        else:
+            target.unlink()
 
 
 def dirty_paths(runner: CommandRunner, paths: Sequence[Path]) -> list[str]:
@@ -395,10 +477,13 @@ def build_split_site(
     site_url: str = DEFAULT_SITE_URL,
     queue_id: int = 2400,
     patch_prefix: str | None = None,
+    db: Path = Path("data/lcu/games.db"),
 ) -> None:
     command = [
         sys.executable,
         "scripts/build_tier_list.py",
+        "--db",
+        str(db),
         "--site-url",
         site_url,
         "--payload-out",
@@ -407,6 +492,8 @@ def build_split_site(
         "api/tier-list.json",
         "--queue",
         str(queue_id),
+        "--meta-pick-api-url",
+        DEFAULT_META_PICK_API_URL,
     ]
     if patch_prefix is not None:
         command.extend(["--patch-prefix", patch_prefix])
@@ -539,6 +626,8 @@ def publish_static_site_once(
     check_only: bool = False,
     dry_run: bool = False,
     comp_fit_parquet: Path | None = None,
+    isolated_worktree: bool = False,
+    _detached_target_branch: str | None = None,
     runner: CommandRunner = _default_runner,
 ) -> dict[str, Any]:
     state = load_state(state_path)
@@ -572,15 +661,67 @@ def publish_static_site_once(
             "growth_ratio": decision.growth_ratio,
         }
 
+    if isolated_worktree:
+        source_root = Path.cwd().resolve()
+        branch_name = current_branch(runner)
+        if branch_name != branch:
+            raise RuntimeError(
+                f"refusing to publish from branch {branch_name!r}; expected {branch!r}"
+            )
+        _run_checked(runner, ["git", "fetch", "origin"])
+        db = db.resolve()
+        state_path = state_path.resolve()
+        resolved_parquet = resolve_comp_fit_parquet(comp_fit_parquet)
+        if resolved_parquet is not None:
+            resolved_parquet = resolved_parquet.resolve()
+        with tempfile.TemporaryDirectory(prefix="arammeta-publish-") as tmp:
+            worktree = Path(tmp) / "repo"
+            _run_checked(
+                runner,
+                ["git", "worktree", "add", "--detach", str(worktree), f"origin/{branch}"],
+            )
+            try:
+                link_local_build_inputs(source_root, worktree)
+                result = publish_static_site_once(
+                    db=db,
+                    state_path=state_path,
+                    threshold=threshold,
+                    growth_ratio=growth_ratio,
+                    force=force,
+                    queue_id=queue_id,
+                    patch_prefix=patch_prefix,
+                    site_url=site_url,
+                    branch=branch,
+                    check_only=False,
+                    dry_run=dry_run,
+                    comp_fit_parquet=resolved_parquet,
+                    isolated_worktree=False,
+                    _detached_target_branch=branch,
+                    runner=runner_in(worktree),
+                )
+                result["isolated_worktree"] = True
+                return result
+            finally:
+                unlink_local_build_inputs(worktree)
+                runner(["git", "worktree", "remove", "--force", str(worktree)])
+                runner(["git", "worktree", "prune"])
+
     branch_name = current_branch(runner)
-    if branch_name != branch:
+    expected_branch = "HEAD" if _detached_target_branch else branch
+    if branch_name != expected_branch:
         raise RuntimeError(f"refusing to publish from branch {branch_name!r}; expected {branch!r}")
 
     preexisting = dirty_paths(runner, DEFAULT_DOC_PATHS)
     if preexisting:
         raise RuntimeError("refusing to overwrite dirty site output files: " + "; ".join(preexisting))
 
-    build_split_site(runner=runner, site_url=site_url, queue_id=queue_id, patch_prefix=patch_prefix)
+    build_split_site(
+        runner=runner,
+        site_url=site_url,
+        queue_id=queue_id,
+        patch_prefix=patch_prefix,
+        db=db,
+    )
     # Regenerate the empirical comp-fit radar from the just-rebuilt tier-list.json
     # so it ships in the SAME commit as the tier list it depends on.  Non-fatal:
     # a comp-fit failure must never block the tier-list publish.
@@ -639,7 +780,9 @@ def publish_static_site_once(
 
     _run_checked(runner, ["git", "add", *(str(path) for path in DEFAULT_DOC_PATHS)])
     _run_checked(runner, ["git", "commit", "-m", message])
-    merged = push_with_upstream_merge(runner, branch)
+    merged = push_with_upstream_merge(
+        runner, branch, detached=_detached_target_branch is not None
+    )
     commit = git_output(runner, ["git", "rev-parse", "--short", "HEAD"])
 
     _record_patch_state(

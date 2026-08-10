@@ -227,6 +227,29 @@ class StaticSitePublishTests(unittest.TestCase):
         self.assertIsNone(push_with_upstream_merge(runner, "main"))
         self.assertFalse(any(cmd[:2] == ["git", "merge"] for cmd in commands))
 
+    def test_detached_worktree_push_targets_main(self) -> None:
+        commands: list[list[str]] = []
+
+        def runner(command: Sequence[str]) -> CommandResult:
+            cmd = list(command)
+            commands.append(cmd)
+            if cmd[:3] == ["git", "rev-list", "--count"]:
+                return CommandResult(0, "0\n")
+            return CommandResult(0, "")
+
+        push_with_upstream_merge(runner, "main", detached=True)
+        self.assertEqual(commands[-1], ["git", "push", "origin", "HEAD:main"])
+
+    def test_detached_worktree_refuses_stale_build(self) -> None:
+        def runner(command: Sequence[str]) -> CommandResult:
+            cmd = list(command)
+            if cmd[:3] == ["git", "rev-list", "--count"]:
+                return CommandResult(0, "1\n")
+            return CommandResult(0, "")
+
+        with self.assertRaisesRegex(RuntimeError, "advanced by 1 commit"):
+            push_with_upstream_merge(runner, "main", detached=True)
+
     def test_merge_conflict_surfaces_instead_of_publishing(self) -> None:
         """A genuine conflict is a human's call -- abort and raise so the alert
         fires, rather than pushing a half-merged tree to the live site."""
