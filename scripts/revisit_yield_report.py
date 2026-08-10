@@ -82,7 +82,18 @@ def report(db: Path, since_hours: float) -> int:
         print("尚未建立 crawl_visit_events；請先重啟新版 crawler worker。")
         return 1
 
-    cutoff = (datetime.now(timezone.utc) - timedelta(hours=since_hours)).isoformat()
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+    rollout = con.execute(
+        "SELECT state_value FROM crawl_runtime_state "
+        "WHERE state_key = 'revisit_ab_v2_started_at'"
+    ).fetchone()
+    if rollout:
+        try:
+            rollout_dt = datetime.fromisoformat(str(rollout[0]))
+            cutoff_dt = max(cutoff_dt, rollout_dt)
+        except ValueError:
+            pass
+    cutoff = cutoff_dt.isoformat()
     rows = con.execute(
         """
         SELECT revisit_arm, revisit_interval_ms, new_games_found,
@@ -96,7 +107,9 @@ def report(db: Path, since_hours: float) -> int:
     ).fetchall()
     con.close()
 
-    print(f"逐次 revisit 產出（最近 {since_hours:g} 小時，共 {len(rows):,} 次）")
+    print(
+        f"逐次 revisit 產出（有效起點 {cutoff_dt.isoformat()}，共 {len(rows):,} 次）"
+    )
     print("產出＝這次造訪實際加入資料庫的全域唯一新場次。")
     print(
         f"{'arm / 實際間隔':<18}{'次數':>9}{'平均新增':>10}{'中位數':>9}"
