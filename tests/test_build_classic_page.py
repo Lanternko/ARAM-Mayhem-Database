@@ -36,7 +36,7 @@ class ClassicResearchPageTests(unittest.TestCase):
             "trinket",
         )
 
-    def test_preview_contains_interactive_hero_and_item_research_surfaces(self) -> None:
+    def test_public_page_contains_interactive_research_surfaces_and_metadata(self) -> None:
         heroes = classic.build_rows(
             {1: 120},
             {1: 70},
@@ -78,7 +78,12 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("英雄 Tier", page)
         self.assertIn("id='hero-detail'", page)
         self.assertIn("終局持有者勝率", page)
-        self.assertIn("noindex,nofollow", page)
+        self.assertIn("index,follow,max-image-preview:large", page)
+        self.assertIn("rel='canonical' href='https://arammeta.com/classic.html'", page)
+        self.assertIn("name='description'", page)
+        self.assertNotIn("noindex,nofollow", page)
+        self.assertNotIn("經典模式 · 預覽", page)
+        self.assertNotIn("95% CI", page)
 
 
 if __name__ == "__main__":

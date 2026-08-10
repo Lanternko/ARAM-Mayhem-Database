@@ -2285,6 +2285,13 @@ def render_html(
         "</span>"
         "</button>"
     )
+    parts.append(
+        "<a class='classic-mode-link' href='/classic.html' aria-label='前往經典模式資料'>"
+        "<span class='classic-mode-link-full'>經典模式</span>"
+        "<span class='classic-mode-link-short' aria-hidden='true'>經典</span>"
+        "<span class='classic-mode-link-new' aria-hidden='true'>NEW</span>"
+        "</a>"
+    )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
     for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
         # Home (= 英雄) is active on first paint; brand and this tab both land there.
