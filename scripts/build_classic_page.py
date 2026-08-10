@@ -1299,6 +1299,7 @@ color:var(--text-muted);font-size:11px;font-weight:700;letter-spacing:.02em;whit
 .site-main .view{display:none}
 .site-main .view.is-active{display:block}
 .filter-source{display:none!important}
+.item-filter-bar{padding:0;margin:0 0 14px;min-height:40px}.item-filter-bar[hidden]{display:none!important}
 .research-tip[hidden],.view[hidden],.empty-state[hidden],.hero-detail[hidden],
 .role-chips[hidden],.hero-tile[hidden],.tier-block[hidden]{display:none!important}
 .tier-grid{row-gap:18px}
@@ -1371,6 +1372,7 @@ JS = """
   var detail=document.getElementById('hero-detail');
   var positionChips=document.getElementById('position-chips');
   var itemKindChips=document.getElementById('item-kind-chips');
+  var itemFilterBar=document.getElementById('item-filter-bar');
   var shownN=document.getElementById('shown-n');
   var shownTotal=document.getElementById('shown-total');
   var shownUnit=document.getElementById('shown-unit');
@@ -1405,7 +1407,7 @@ JS = """
   function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});renderHeroDetail(hero,'');var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
   function closeDetail(){state.heroId=null;state.detailPosition='';detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function moveNavIndicator(button){if(!navIndicator||!button)return;navIndicator.style.setProperty('--ind-x',button.offsetLeft+'px');navIndicator.style.setProperty('--ind-w',button.offsetWidth+'px');}
-  function setTab(tab,focus){state.tab=tab;var activeButton=null;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.classList.toggle('active',selected);button.tabIndex=selected?0:-1;if(selected){activeButton=button;if(focus)button.focus();}});moveNavIndicator(activeButton);views.forEach(function(view){var selected=view.dataset.view===tab;view.hidden=!selected;view.classList.toggle('is-active',selected);});var isItems=tab==='items';positionChips.hidden=isItems;itemKindChips.hidden=!isItems;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
+  function setTab(tab,focus){state.tab=tab;var activeButton=null;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.classList.toggle('active',selected);button.tabIndex=selected?0:-1;if(selected){activeButton=button;if(focus)button.focus();}});moveNavIndicator(activeButton);views.forEach(function(view){var selected=view.dataset.view===tab;view.hidden=!selected;view.classList.toggle('is-active',selected);});var isItems=tab==='items';positionChips.hidden=isItems;itemFilterBar.hidden=!isItems;itemKindChips.hidden=false;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
   function refresh(){updateTiles();renderHeroes();renderItems();updateCount();}
   tabs.forEach(function(tab,index){tab.addEventListener('click',function(){setTab(tab.dataset.tab,false);});tab.addEventListener('keydown',function(event){if(event.key!=='ArrowLeft'&&event.key!=='ArrowRight')return;event.preventDefault();var next=(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length;setTab(tabs[next].dataset.tab,true);});});
@@ -1908,6 +1910,13 @@ def render_research_preview(
     page.append("</nav></div>")
     page.append("</div></header><main id='main-content' class='site-main view-home'>")
     page.append("<div class='app-shell'><div class='main-col'>")
+    page.append("<div class='filter-bar item-filter-bar' id='item-filter-bar' aria-label='裝備類型篩選' hidden>")
+    page.append("<div class='role-chips' id='item-kind-chips' aria-label='裝備類型篩選'>")
+    for value, label in (("", "★ All"), ("complete", "完整裝備"), ("boots", "鞋子"), ("starter", "起手／組件"), ("trinket", "飾品")):
+        active = " active" if not value else ""
+        pressed = "true" if not value else "false"
+        page.append(f"<button type='button' class='chip{active}' data-item-kind-filter='{value}' aria-pressed='{pressed}'>{label}</button>")
+    page.append("</div></div>")
     page.append("<section class='view is-active' id='view-tier' data-view='tier' role='tabpanel'>")
     page.append("<div class='filter-bar' aria-label='篩選與搜尋'>")
     page.append("<div class='role-chips' id='position-chips' aria-label='常見分路篩選'>")
@@ -1918,12 +1927,6 @@ def render_research_preview(
     )
     page.append("</div>")
     page.append(f"<span class='shown-count'><span id='shown-n'>{len(heroes)}</span> / <span id='shown-total'>{len(heroes)}</span> <span id='shown-unit'>隻</span></span></div>")
-    page.append("<div class='role-chips' id='item-kind-chips' aria-label='裝備類型篩選' hidden>")
-    for value, label in (("", "★ All"), ("complete", "完整裝備"), ("boots", "鞋子"), ("starter", "起手／組件"), ("trinket", "飾品")):
-        active = " active" if not value else ""
-        pressed = "true" if not value else "false"
-        page.append(f"<button type='button' class='chip{active}' data-item-kind-filter='{value}' aria-pressed='{pressed}'>{label}</button>")
-    page.append("</div>")
     page.append("<div class='search-rail' data-nosnippet><label class='search-wrap'><svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'></circle><line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg><input class='search' id='research-search' type='search' placeholder='搜尋英雄（中 / 英）' autocomplete='off' spellcheck='false' aria-label='搜尋英雄'></label></div>")
     page.append("<select class='filter-source' id='position-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option>" + "".join(f"<option value='{position}'>{POSITION_LABELS[position]}</option>" for position in POSITION_ORDER) + "</select>")
     page.append("<select class='filter-source' id='item-kind-filter' tabindex='-1' aria-hidden='true'><option value=''>全部</option><option value='complete'>完整裝備</option><option value='boots'>鞋子</option><option value='starter'>起手／組件</option><option value='trinket'>飾品</option></select>")
