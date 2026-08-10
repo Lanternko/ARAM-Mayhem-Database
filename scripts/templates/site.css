@@ -1456,8 +1456,17 @@
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .champ img {
-        width: 100%;
-        height: 100%;
+        /* Overlap the padding box by half a pixel on every side.
+           The grid produces fractional tile widths (52.3px on a 375px viewport),
+           so a 2px border computes to 1.869px and the image edge lands a
+           sub-pixel short of it.  The tile's own background then shows through
+           as a thin dark seam between the tier-coloured frame and the portrait
+           -- most visible on OP, whose padding-box layer is a solid #1f2530
+           behind the prismatic border.  Growing the image past the seam removes
+           the whole class of rounding artefact without touching the frame width. */
+        width: calc(100% + 1px);
+        height: calc(100% + 1px);
+        margin: -0.5px;
         object-fit: cover;
         display: block;
         border-radius: 6px;
