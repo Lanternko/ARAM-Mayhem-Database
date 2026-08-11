@@ -1,155 +1,112 @@
-<!-- lines: 155 -->
-# aram-winrate-nn — ARAM 英雄組合勝率預測 NN，Python / PyTorch
+<!-- lines: 116 -->
+# aram-winrate-nn — Mayhem 資料、勝率推估、推薦與公開產品，Python / PyTorch
 
 ## Why
-輸入一場 League of Legends Mayhem (queueId=2400) 或 ARAM (450) 的雙方英雄組合 (5v5)，輸出藍方獲勝機率。
-目標是驗證「提供英雄組合資訊後，模型準確率能否超過藍方 base rate (~51%)」；目前產品焦點是 Mayhem tier list / 推薦資料庫。
+這個專案起點是驗證「只知道雙方英雄組合，能否比藍方 base rate 更可靠地預測勝負」；現在已演化成 Mayhem（queue 2400）的資料收集、統計、Draft 推薦與公開網站系統。
 
-## Architecture
-- **Python 3.13**, PyTorch 2.11, polars, scikit-learn, httpx, psutil, click
-- `src/aram_nn/ingest/` — Riot API 爬蟲：`riot_client.py` / `snowball.py` / `extract.py`
-- `src/aram_nn/lcu/` — 本機 LCU collector / graph snowball：`process.py` / `client.py` / `poller.py` / `snowball.py`
-- `src/aram_nn/models/` — `logreg.py` / `deepsets.py`
-- `src/aram_nn/train.py` / `eval.py` / `data.py` — 訓練 pipeline（完成）
-- `data/raw/` — parquet 原始資料；`data/lcu/games.db` — LCU SQLite 資料庫（`games` + `crawl_seen` set + `crawl_queue` priority frontier）
-- `scripts/` — `probe_user.py`, `probe_queues.py`, `lcu_collector.py`, `build_tier_list.py`
-- `docs/index.html` + `docs/api/tier-list.json` — 公開 tier-list 網站（GitHub Pages, `main` branch `/docs` folder）→ https://arammeta.com/
-- `src/aram_nn/site/` — 前後端分離層：公開 `games` DB schema、FastAPI backend、10% growth watermark sync、tier-list JSON payload API
-- `data/cache/` — `kiwi.bin.json` + `lol_stringtable_zh_tw.json` (CommunityDragon mirror, ~30 MB) 用來解析 Mayhem augment 中文敘述
-- 深度技術決策見 `PLAN.md`（v3，已經 Codex review）；部署流程見「Site deploy」節
+核心問題不是預言單場輸贏，而是隔離玩家在開局前真正看得見、也能控制的變量：英雄與隊伍組合。產品應輸出可信的期望勝率、相對強弱與可解釋的改善方向，幫使用者比較選項；不可把高變異的競技遊戲包裝成確定答案。
 
-## Commands
-```bash
-# 安裝（editable，每次加新 entry point 後要重跑）
-python -m pip install -e .
+Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目前只隨 LCU history 低成本收集。任何分析都必須明示 queue、patch、region、時間範圍與資料來源，不可因 schema 相同就混在一起。
 
-# 資料抓取：從指定 Riot ID snowball，不過濾 patch = 全收
-python -m aram_nn.ingest.snowball \
-    --region tw \
-    --seed-riot-id "Name#TAG" \
-    --target-matches 500 \
-    --out data/raw/tw_aram_all_patch.parquet
+## Architecture (What)
+系統有四個平面，資料只能沿著可追蹤的方向往下游流動：
 
-# 資料抓取：過濾特定 patch
-python -m aram_nn.ingest.snowball \
-    --region tw \
-    --seed-riot-id "Name#TAG" \
-    --target-matches 2000 \
-    --patch 16.9 \
-    --out data/raw/tw_aram_16_9.parquet
+1. **Capture plane** — `src/aram_nn/lcu/`、`scripts/lcu_collector.py` 與 OPGG/manual seed graph 收本機 LCU 對局；Mayhem 不存在於 Riot 公開 API。
+2. **Data plane** — `data/lcu/games.db` 是 private source of truth；所有 queue 共用 `games` 表，`crawl_seen`／`crawl_queue`／`riot_id_bridge` 管 persistent frontier。`src/aram_nn/gamedata.py` 是新分析的 canonical read-only loader。
+3. **Evidence plane** — `src/aram_nn/models/` 與訓練 pipeline 做時間切分 benchmark；`scripts/tierlist_engine.py` 做勝率、Bayesian shrinkage、pair／augment／item 統計；已結束 patch 的 raw counters 才能進 snapshot。
+4. **Product plane** — `scripts/tierlist_render.py`＋`scripts/templates/` 生成網站，`src/aram_nn/site/` 管 public schema、同步與 isolated publisher；recommender 與 Draft UI 消費同一套經驗證資料，而不是另造口徑。
 
-# 診斷：查某 Riot ID 最近打了哪些 queue
-python scripts/probe_user.py --region tw --riot-id "Name#TAG" --count 100
+`scripts/mayhem_lcu_watchdog.py` 是本機 runtime harness 的 parent，管理 crawler workers、static publisher 與 model refresh；這台機器的 production profile 與 task 拓撲以 `OPERATIONS.md` 為準。
 
-# Tier list 網站 split build（見「Site deploy」節）：HTML fetch external JSON
-python scripts/build_tier_list.py --site-url "https://arammeta.com/" --payload-out docs/api/tier-list.json --payload-url api/tier-list.json --meta-pick-api-url "https://api.arammeta.com"
+## Decision Doctrine
+- 先寫清楚**要做的決策**，再選指標。研究問題、資料刷新、模型選擇、UI 改版的成功條件不同，不可都用「數字變大」代替判斷。
+- 把**可控因素**與**不可控噪音**分開。Composition 是 draft lever；玩家技術、熟練度、道具、增幅、配合與臨場事件是未觀測變量。模型估的是對這些噪音平均後的條件期望。
+- 把產品視為**比較器，不是算命器**。優先判斷「A 相對 B 是否穩定更好、改善多少、在什麼 regime 有效」，而非追求每場猜中。
+- 依證據層級做決策：held-out／walk-forward 結果高於 training fit；paired comparison 高於兩個獨立 headline；跨 patch／多 seed 穩定性高於單次最佳 run；可重現 artifact 高於 terminal 截圖。
+- 區分相關與因果。網站勝率描述歷史關聯；只有明確 treatment、control 與干擾控制的實驗，才能使用因果語言。
+- 新 default 必須回答三件事：相較哪個 baseline、在哪個資料範圍改善、代價或退化在哪裡。沒有這三項就維持現狀或標成探索性結果。
+- 優先修正資料定義與評估設計，再增加模型複雜度。這個領域最危險的錯誤通常是 leakage、patch 混淆、樣本偏差或錯誤 baseline，不是網路不夠深。
+- 決策必須可撤回：保留原始 counters、資料 lineage、舊 baseline 與 migration path；不要只保存經平滑或渲染後的成品。
 
-# 舊 inline build 仍可用於臨時單檔測試；正式 deploy 不用這個模式
-python scripts/build_tier_list.py --site-url "https://arammeta.com/"
+## Data Quality Doctrine
+高品質資料不是單純「場數多」，而是每筆資料的身份、範圍、來源與轉換都能回答：
 
-# VM/backend API + local 10% growth watermark upload
-python scripts/site_api.py
-python scripts/sync_site_backend.py --api-url http://127.0.0.1:8000 --watch
-```
+- **Identity** — 一場真實對局只由 Riot `game_id` 識別與去重；英雄組合相同不代表同一場。
+- **Structural validity** — 只接受 10 位參與者、雙方各 5 人、team/win flag 完整的 record；`extract_row` 只驗結構，queue filtering 留給 caller。
+- **Scope** — dataset／報告／公開 payload 一律帶 queue、patch、region、time cutoff、row count 與主要 exclusion；跨 patch 不直接當同一環境。
+- **Provenance** — 記錄資料來自 public API、LCU poller、snowball、匯入檔或 snapshot；不要以 `latest` 檔名取代可重現的 dataset identity。
+- **Stable semantics** — 英雄集合按 `championId` 升序；4310 Jade ID 先正規化；稀疏 participant stat 缺鍵視 schema 定義處理，不用分表或任意補值改變意義。
+- **Freshness and completeness** — LCU 只留最近約 20 場，漏收無法完整回補；新 patch 的低樣本、seed-family selection bias 與 late-arriving tail 都要在解讀中揭露。
+- **Privacy** — PUUID、Riot ID、summoner name 與 private frontier 永不進 public payload；網站只發布去識別化聚合統計。
+- **Statistical reliability** — 小樣本不可直接按 raw win rate 排名。公開數字使用 sample floor、Bayesian/empirical-Bayes shrinkage、confidence-aware ordering，並同時呈現樣本數與版本。
 
-## LCU Collector (Mayhem data, local client only)
+細部 dataset contract、實驗 manifest 與驗收流程見 `notes/agents/experiments-and-data.md`。
 
-Riot blocks queueId=2400 in the public API.  The League client's own local APIs work.
+## Experiment Doctrine
+- 每次實驗先固定：decision、hypothesis、experimental unit、treatment、control、資料範圍、split、primary metric、guardrail 與 promotion rule；結果出來後不可改題目配答案。
+- 一次只改一個主要變量。若資料、特徵、split、模型與超參同時變動，結果只能算探索，不能歸因；需要多變量時做明確 factorial／ablation。
+- 同一比較使用相同 rows、相同 chronological split、相同 preprocessing 與相同 label definition。能做 paired delta 就不要只比兩個各自的平均。
+- Test set 只做最後稽核，不拿來選 feature、threshold、seed 或文案。調參用 train／val；需要反覆決策時使用 expanding-window 或新的時間 holdout。
+- Baseline ladder 不可跳級：constant blue-base-rate → champion-identity LR → composition LR → DeepSets／更複雜模型。複雜模型必須證明超過它實際新增資訊的最近 baseline。
+- Win-rate 產品以 log loss、Brier／ECE、calibration bucket 與 decision uplift 為主；accuracy 是輔助 sanity check。`>65%` 先停下查 leakage，不視為突破。
+- 報告 effect size、樣本數、uncertainty 與 failure regime，不只報最佳值。NN 要報多 seed variance；相同 matches 上的模型差異優先用 paired bootstrap／paired test。
+- 結果 promotion 前必須通過資料不變量、相關單元測試、out-of-sample evidence、產品 guardrail 與可重現 artifact；負結果也保存，避免之後重跑已證偽方向。
 
-```powershell
-# Run BEFORE launching League — leave open in a separate terminal
-python scripts/lcu_collector.py collect          # captures both ARAM (450) + Mayhem (2400)
-python scripts/lcu_collector.py collect --queue 2400  # Mayhem only
+## Product and Web Design Doctrine
+- 網站是**可信的資料工具**，不是炫技 landing page。視覺方向是 engineered calm：近黑冷灰底、低彩度 surface、克制金色 accent、細邊線與少量高光，讓數字與決策優先。
+- 資訊層級固定為：**先給答案／建議 → 再給比較依據 → 最後給樣本、版本與限制**。重要勝率、lift 與選項要能掃讀；metadata 應安靜但不可被藏掉。
+- 保持高資訊密度，但避免 card-in-card。大型面板偏好單一平面＋hairline section；留白用來分組，不用更多陰影、漸層與彩色框製造層級。
+- 色彩必須有語義且節制：金色代表品牌／主要互動，正負勝率色只標關鍵差異，角色／tier／rarity 色限定在對應 encoding；不可把每列做成 traffic light。
+- Typography 以 `Noto Sans TC`／系統 sans 支撐密集繁中 UI，數字使用 tabular figures；serif 只在少數 editorial／metadata caption 使用，不當主要介面字體。
+- Dark／light theme 必須走 token，而不是元件散落硬編色；新元件兩個 theme 同時完成。動效只解釋狀態與空間關係，遵守 duration/easing scale 與 `prefers-reduced-motion`。
+- Desktop、mobile、鍵盤與 touch 是同一產品，不是縮小版補丁。互動元件必須有語義 HTML、focus state、ARIA 狀態與可達的 mobile layout。
+- 效能屬於設計品質：首屏 payload 保持精簡，champion detail 按需 shard，shared JS 可 cache 並以 content hash bust；UI-only 改動不可強迫重跑昂貴統計。
+- 繁中是 canonical product voice，簡中與英文必須保持相同資訊拓撲與決策含義，不可只翻表面 label。
+- UI source of truth 是 `scripts/templates/site.css`、`site.js` 與 renderer；`docs/` 是生成產物。完整品牌字標、頁面架構、CSS 美學、token 與驗證規範見根目錄 `DESIGN.md`。
 
-python scripts/lcu_collector.py status           # see how many games captured
-python scripts/lcu_collector.py metrics          # record growth / speed / seed-efficiency snapshots
+## Operations and Change Control
+- 先辨識 canonical source、資料 owner 與正在跑的 process，再修改；生成檔、live SQLite、ignored local service assets 與使用者 WIP 有不同風險邊界。
+- 一個 task 使用一個 `codex/<task>` worktree；mutation 前先查 status 與現有 worktrees，因為 primary checkout 是 live harness anchor，dirty／stale worktree 不可被自動重用或清理。
+- 研究輸出進 `outputs/<category>/`，長期報告進 `documents/reports/`，共用程式進 `src/aram_nn/`；不要讓 scratch script 變成隱性 production dependency。
+- Site publish 分 routine data、frontend shell、generator／schema 三條 lane；明確的 deploy／publish／ship／上線要求已授權相符的 build、commit、push，不再二次確認。GitHub Pages 是靜態發布，不會重啟 crawler、backend 或其他 runtime。
+- 變更驗證按風險分層：純文件做連結／結構檢查；資料與模型做 invariant＋held-out evidence；UI 做 code test＋雙 theme／多 viewport visual QA；live harness 變更再核對 task argv、state 與 recovery log。
+- Runtime tuning 以 wrapper 的 production argv 為準，不以 Python generic defaults 或舊文件猜測。任何自動 recovery 都要留下 action、threshold、LCU status 與當時 memory，才能讓下一次決策基於證據。
 
-# Default TW Mayhem path: OPGG/manual Riot ID seeding.  See Stall Playbook before using ladder/apex/riot-tier.
-python scripts/lcu_collector.py seed-opgg-plan --region tw --tier platinum --tier gold --pages-per-tier 2 --out data/seeds/opgg_tw.txt
-python scripts/lcu_collector.py snowball --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 500 --max-players 1000 --games-per-player 0
-python scripts/lcu_collector.py seed-opgg-plan --region tw --tier diamond --tier emerald --tier platinum --tier gold --pages-per-tier 80 --topn-total 0 --out data/seeds/opgg_tw.txt
-python scripts/lcu_collector.py snowball-workers --workers 3 --seed-riot-id-file data/seeds/opgg_tw.txt --target-games 5000 --max-players 5000 --games-per-player 0
-python scripts/lcu_collector.py family-stats --queue 2400
-python scripts/lcu_collector.py snowball --db data/lcu/games_account_a.db --target-games 5000 --max-players 5000
-python scripts/lcu_collector.py snowball --db data/lcu/games_account_b.db --target-games 5000 --max-players 5000
-python scripts/lcu_collector.py merge-db --out-db data/lcu/games_merged.db data/lcu/games_account_a.db data/lcu/games_account_b.db
-python scripts/lcu_collector.py dataset --queue 2400 --patch-prefix 16.9 --topn 20 --min-games 30
-python scripts/lcu_collector.py stats --queue 2400 --patch-prefix 16.9 --out-dir data/stats/mayhem_16_9
-python scripts/lcu_collector.py export --out data/raw/lcu_games.parquet
-python scripts/lcu_collector.py export --queue 2400 --out data/raw/mayhem_games.parquet
-```
+## Commands (How)
+根文件刻意不保存會過時的長指令。執行時依任務進第二層 source of truth：
 
-OPGG path（`seed-opgg-plan` → `--seed-riot-id-file`）是 TW Mayhem 目前預設 seed strategy。`--seed-ladder` / `--seed-apex` / `--seed-riot-tier` 只用來在換 region 或大版本後重驗 ROI；平常不要放進 quick-start。
-
-LCU retains only the **last ~20 games**.  Run the collector every session or you'll miss games.
-`snowball` 會從 self / friends / discovered participants 擴張；**exact match dedupe 一律用 `game_id`**，不要用 10 人英雄組合作唯一鍵。
-`crawl_seen` + `crawl_queue` 讓 snowball 可中斷續跑；queue 依發現該玩家的最新對戰時間排序，越新的 match 衍生 ID priority 越高。`crawl_seen` 就是 persistent puuid set；worker 另外有 local puuid cache 減少重複 DB enqueue。
-`snowball-workers` 會開多個背景 worker 共用同一個 frontier；預設只有第一個 worker 負責 seed，其他 worker 直接消化 queue，避免重複 startup 成本。
-`--games-per-player 0` 使用 adaptive history：先檢查最近 4 筆，0 場 Mayhem 不展開、1–2 場只抓近期 probe、3–4 場才抓完整 history window；正數仍是固定 cap。`--seed-riot-id-file` 可吃一行一筆的 `Name#TAG`，也接受 OPGG summoner/profile URL；crawler 會先解析成 Riot ID，再經 LCU bridge 成本地 puuid 後入 queue。
-多 client 時，每個 client 應各自寫自己的 `--db`；`merge-db` 只合併 `games` 表並以 `game_id` 去重，`crawl_seen` / `crawl_queue` frontier 不要跨 client 合併。
-`games.participants_json` 會保留 10 位玩家的 `teamId / championId / augments`；`stats` 會輸出英雄勝率、augment 勝率、英雄×augment 勝率 CSV。
-`dataset` 會直接在 terminal 印出目前資料集摘要與英雄勝率排行，英雄名稱優先從 LCU static data 解析。
-Database: `data/lcu/games.db` (SQLite) — safe to interrupt and resume.
-
-## Backend / Frontend Split
-
-- GitHub Pages 目前是 static split：`docs/index.html` 是小型前端殼，載入 `docs/api/tier-list.json`；不是 live backend API。
-- 本機 collector DB 仍是 private source of truth；`crawl_seen` / `crawl_queue` / `riot_id_bridge` 不離開本機。
-- Website backend 用 `src/aram_nn/site/db.py` 的公開 `games` schema，`POST /games/bulk` 以 `game_id` idempotent upsert，會拒絕含 `puuid` / `summonerName` / `riotId` 或 UUID-like PUUID 的 `participants_json`。
-- `scripts/sync_site_backend.py --watch` 預設每比上次成功上傳多 10% filtered local games 才推一次；可用 `--force` 首次灌資料，或用 `--threshold N` 加上絕對成長下限。
-- `scripts/build_tier_list.py --payload-out ... --payload-url ...` 會把前端資料切到 JSON；省略 `--payload-url` 就保留舊版 inline HTML。
-
-## Stall Playbook
-
-- `metrics` 若出現 `Mayhem +0`、`current_patch +0`，但 `done_delta` 持續增加，代表 crawler 活著但目前 seed family 已低產值，不要只看 worker 是否存在。
-- Unattended recovery uses `python scripts/mayhem_lcu_watchdog.py --check-interval-sec 60`: keep the configured worker target, restart League only when safe, wait for LCU 200, and relaunch workers only while client memory is below the configured start cap.
-- Current throughput run is 2 workers: `python scripts/mayhem_lcu_watchdog.py --check-interval-sec 60 --workers 2 --degrade-client-mb 5200 --degraded-workers 1 --client-restart-mb 5800 --worker-start-max-client-mb 3500`; it tolerates higher LeagueClient memory, drops to 1 worker at 5.2GB, and restarts League in safe phases at 5.8GB or immediately on LCU failure.
-- Watchdog JSONL recovery actions must include `league_main_mb_at_action` plus thresholds and LCU status so future runs can infer the highest stable LeagueClient memory instead of guessing.
-- Do not launch `LeagueClient.exe` directly; Riot returns `Access is denied`. Correct restart path is Riot Client Electron `--app-port` + `--remoting-auth-token`, then HTTPS POST `/product-launcher/v1/products/league_of_legends/patchlines/live` with basic auth `riot:<token>`.
-- `recent-active reseed` 若能短暫把 queue 打開、但 log 幾乎整排都是 `source=match` + `target_games=0`，代表目前 active subgraph 已吃乾，應換 seed family 而不是重複 recent-active。
-- `seed-opgg-plan --resume` 只有在 `data/seeds/opgg_tw_state.json` 與 `data/seeds/opgg_tw_history.jsonl` 都前進時，才算成功 refresh；若 `manual_riot_id seed progress` 反覆出現 `resolved=0 / enqueued=0`，視為目前 OPGG page window 已耗盡。
-- `apex` / `ladder` / `riot_tier` 是 TW Mayhem 上**已驗證的 dead seed family**（2026-05-15 量測：合計 2,890 done puuids、0 transitive captures）；`snowball` 別再花 LCU bandwidth 跑這幾個 root，除非換 region 或大版本後再重驗。用 `python scripts/lcu_collector.py family-stats --queue 2400` 隨時看當前 per-family ROI。
-- `manual_riot_id`（OPGG）**是** productive seed family — 同一次量測 199 captures / 2,385 puuids、blue_wr=0.528。**舊** log 看到的「manual yield=0」其實是 attribution bug（transitive captures 被歸到 immediate `match` source 而非 root family），已於 `crawl_seen.seed_family` 修；別根據舊結論判 OPGG seed 沒用。
-- `suggested players` 是下一個高價值 seed family，但只在 `gameflow phase=Lobby` 時存在；若 phase=`None` 且 `suggested_players=0`，下一個最有價值的 move 是使用者先進 lobby。
-- LCU 所謂「憑證過期」通常不是 cert 真過期，而是 League 重啟後 `port/token` 換掉或 `/lol-*` 尚未 ready；先重抓 credentials 與 `current_summoner`，不要先怪 cert。
+- 安裝、測試、訓練、分析與腳本分類：`scripts/README.md`、`pyproject.toml`、目標 CLI 的 `--help`。
+- 本機排程、process、state、log、觀測與重建：`OPERATIONS.md`。
+- Crawler stall／LCU recovery：`runbooks/crawler-stall.md`。
+- OPGG seed refresh：`runbooks/opgg-seed-refresh.md`。
+- GitHub Pages routine data／frontend shell／generator-schema publish：`runbooks/site-deploy.md`。
+- Git／worktree 建立、更新、整合、push 與清理：`runbooks/git-workflow.md`。
+- 外部資料貢獻與 share 驗證：`CONTRIBUTING.md`。
+- 實驗執行與 dataset manifest：`notes/agents/experiments-and-data.md`。
+- UI preview、CSS 修改與 visual QA：`DESIGN.md`。
 
 ## NEVER
+- Never use random train／val／test split or tune on test；時間與 meta leakage 會讓所有 model comparison 失效。
+- Never train cross-patch without patch feature or per-patch evaluation；不同平衡環境不能當 IID 樣本。
+- Never use post-game outcome proxies as pre-game features；產品只能使用決策當下可取得的資訊。
+- Never dedupe exact matches by champion composition；exact identity 一律是 `game_id`。
+- Never sort champions by slot／position；隊內順序在 ARAM／Mayhem 無意義，會製造 spurious feature。
+- Never split `games.db` by queue or move its DB／WAL／SHM while collector runs；全 repo 與 live SQLite 都依賴單表、單一三件套。
+- Never publish player identifiers or private frontier；公開資料只允許去識別聚合。
+- Never rank low-sample cells by raw win rate without uncertainty control；這會把 sampling noise 包裝成推薦。
+- Never settle the current patch or freeze derived win rates；只保存已結束 patch 的 raw counters，讓方法可重算。
+- Never edit generated `docs/` as source or publish a partial generated set；改 template／renderer，deploy 使用 atomic allowlist。
+- Never put new shared logic in another script；共用 code 進 `src/aram_nn/`，避免 script-to-script dependency 擴散。
+- Never pull／rebase／merge／switch／remove a dirty worktree automatically；先盤點 tracked、staged 與 untracked ownership，避免覆蓋使用者 WIP。
+- Never use `git add .`／`git add -A` or force-push；只 stage 已 review 的明確 path，已發布 history 以 merge 保留，因為工作樹常含 unrelated WIP。
 
-- **Never filter queue inside `extract_row`** — 它只驗結構（10 人、雙方各 5 人、有 win flag）；queue 過濾由 caller (snowball.py) 負責。違反此原則曾導致全部場次被誤判為 parse error。
-- **Never sort champions by position / slot index** — 隊內位置在 ARAM 無意義；`blue_champions` / `red_champions` 永遠以 `championId` 升序排列，否則 model 會學到 position spurious feature。
-- **Never use random train/val/test split** — 用時間切分（`game_creation_ms`）；隨機切會讓同 meta 的場洩漏進 val/test。
-- **Never add label smoothing** — calibration 用 post-hoc temperature scaling on val set；pre-hoc smoothing 讓 ECE 難以解讀。
-- **Never train on cross-patch data without patch feature** — 不同 patch 的英雄平衡差異大；若跨 patch 訓練，至少要加 `patch` embedding 或 per-patch evaluation。
-- **Never call `match_ids_by_puuid` without `queue=450`** during snowball — 不 filter queue 只用在 diagnostic scripts，大量 ingest 一定要加 queue filter 避免收 SR / Arena 場。
-- **Never dedupe matches by champion-composition hash alone** — 不同真實對局可能剛好出現同一組 10 隻英雄；crawl / dataset exact dedupe 必須用 `game_id`，composition hash 只能當分析輔助欄位。
-- **Never hardcode routing host** — TW 的 match-v5 走 `sea.api.riotgames.com`，account-v1 走 `asia.api.riotgames.com`，platform (league-exp) 走 `tw2.api.riotgames.com`；三個不同，搞混會 404。
-- **Never pass `--patch ""`** in PowerShell to CLI — PowerShell 5.1 會把空字串吃掉導致 Click argument shift；省略 `--patch` 即為全收（預設值已是空字串）。
-- **Never publish the tier-list site from `/site`** — GitHub Pages 「Deploy from a branch」只接受 `/(root)` 或 `/docs`；用 `/site` Save 不會生效。永遠輸出到 `docs/index.html`（`build_tier_list.py` 預設）。
-- **Never `git add -A` / `git add .` when deploying the site** — 工作樹常有未追蹤的 WIP scripts；只 stage `docs/index.html`、`docs/api/tier-list.json`，以及本輪生成且確認需要的 `docs/champion-roles.json` / `docs/og-image.png`。不要 stage `scripts/build_tier_list.py`，除非 generator change 本身也要發布。
-
-## Site deploy (GitHub Pages → `main` / `/docs`)
-Live: https://arammeta.com/
-Canonical deployment SOP: `.codex/skills/update-mayhem-site/SKILL.md`.
-
-- Data-only publishing must run in the publisher's disposable isolated worktree so development WIP cannot block or be overwritten.
-- Generated site output is an atomic allowlist owned by `DEFAULT_DOC_PATHS` in `src/aram_nn/site/static_publish.py`; do not maintain a second partial file list here.
-- UI/generator deploys may include explicitly reviewed source files, but still never use `git add .` or `git add -A`.
-- 自動資料更新使用 `python scripts/publish_static_site.py --once --patch-prefix auto`；先檢查門檻可加 `--check-only`。
-- 正式 Pages deploy 採 split static 形式；production builder 固定 canonical 與 Meta Pick API，並在完整 allowlist 內原子發布所有相依產物。
-- `data/cache/{kiwi.bin.json, lol_stringtable_zh_tw.json}` 首跑會自動下載 ~30 MB，後續 build 走本地快取
-- repo 改名 `ARAM-mayhem-collector` → `ARAM-Mayhem-Database`，舊 URL 仍 redirect，但 OG meta 走新 URL（commit `276409b`）
-
-## Riot API 注意事項
-- Dev Key 每 24 小時過期，Python 端 401 / 403 都視為 key expired → 提示 regenerate
-- Rate limit: 20 req/sec, 100 req/2min（binding constraint）；`riot_client.py` 已內建 bucket throttle
-- Mayhem (queueId=2400) 被 Riot **在 API 層級整場移除**，公開 dev key 完全拿不到，不要嘗試
-- Mayhem 資料唯一合法管道：本機 LCU (`127.0.0.1:{port}`) + Live Client Data (`127.0.0.1:2999`)；見 LCU Collector 節
-
-## Model 設計原則（快速參照，詳見 PLAN.md）
-- Tier 0 (LR baseline) 必跑才能判斷 NN 是否有效
-- Tier 1 輸入 `[diff=(sum_blue−sum_red), total=(sum_blue+sum_red)]`，不是只有 diff — 純 diff 會丟掉兩隊共有的上下文
-- Logit 必須對 swap-teams 反對稱：`logit(blue, red) = −logit(red, blue)`
-- acc > 65% = data leak，立刻檢查 split
+## Scoped Rules
+- `notes/agents/experiments-and-data.md` — dataset contract、變因控制、統計與 promotion checklist。
+- `MODEL.md` — 現行研究問題、資料 contract、baseline ladder、模型不變量與 promotion gate。
+- `DESIGN.md` — 品牌字標、product hierarchy、頁數、顯示模式、CSS token、美學、responsive、a11y、performance 與 visual QA。
+- `OPERATIONS.md` — live harness 拓撲、production profile、狀態、log 與 recovery routing。
+- `PLAN.md`、`notes/archive/` — 歷史決策與實驗快照；不可覆蓋 current owner。
+- `scripts/README.md` — command／script index；`runbooks/` — agent-neutral 高風險操作 SOP。
 
 ## How to edit this file
 - Keep the whole file under 300 lines. If a new rule pushes past that, remove a stale one.

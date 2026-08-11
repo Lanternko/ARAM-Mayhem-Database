@@ -1,6 +1,29 @@
 # scripts/ 索引
 
-99 個腳本平鋪、不分子目錄 —— import 耦合（尤其 ablation_*/train_* 之間 `sys.path.insert` 互相 import）讓實體搬移風險 > 收益，所以用這份索引取代資料夾分類。**凍結腳本（見 CLAUDE.md）不要拆分、不要搬、不要互相 import 新程式碼**；新的共用邏輯一律進 `src/aram_nn/`。
+腳本平鋪、不分子目錄 —— import 耦合（尤其 ablation_*/train_* 之間 `sys.path.insert` 互相 import）讓實體搬移風險 > 收益，所以用這份索引取代資料夾分類。**既有凍結腳本不要拆分、不要搬、不要互相 import 新程式碼**；新的共用邏輯一律進 `src/aram_nn/`。
+
+## 0. 常用 command 入口
+
+從 repo root 執行。這裡只保存跨任務的穩定入口；各 script 的完整參數以 `--help` 為準，live harness 看 `OPERATIONS.md`，網站正式發布看 `runbooks/site-deploy.md`。
+
+```powershell
+# 安裝（含 pytest）與全套測試
+python -m pip install -e ".[dev]"
+python -m pytest -q
+
+# 查 package／collector／builder 的最新 CLI contract
+python -m aram_nn.train --help
+python scripts/lcu_collector.py --help
+python scripts/build_tier_list.py --help
+
+# Read-only crawler 狀態
+python scripts/lcu_collector.py status
+
+# Production UI/CSS/文案 shell 重建；沿用現有 payload，不重算勝率資料
+python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/"
+```
+
+實驗的 dataset manifest、變因控制與 promotion gate 見 `notes/agents/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
 
 ## 1. 站台 build（tier-list 網站生成/發布）
 - `build_tier_list.py` — Tier-list 網站 build CLI 入口（re-export tierlist_engine + tierlist_render）
@@ -9,9 +32,9 @@
 - `settle_patch.py` — 把「已結束的版本」凍結成 `data/patch_snapshots/q<queue>-<patch>.json`（`--status` 看現況）；build 會自動結算，這支只用在改版當天想立刻凍或要 `--force` 重算
 - `templates/site.css` + `templates/site.js` — 站台 CSS/JS 模板，`tierlist_render.py` 讀檔注入
 - `champion_roles.py` — 英雄職業（role）對照表，Mayhem 專用
-- `publish_static_site.py` — 靜態站台自動發布 CLI；預設在 disposable git worktree 隔離建置，`--patch-prefix auto` 每 cycle 重解析。完整 SOP 見 `.codex/skills/update-mayhem-site/SKILL.md`
+- `publish_static_site.py` — 靜態站台自動發布 CLI；預設在 disposable git worktree 隔離建置，`--patch-prefix auto` 每 cycle 重解析。完整 SOP 見 `runbooks/site-deploy.md`
 - `site_api.py` — FastAPI backend 入口
-- `sync_site_backend.py` — 本機對局同步到 backend API CLI（`--watch` 每 +10k games 推一次）
+- `sync_site_backend.py` — 本機對局同步到 backend API CLI（`--watch` 依上次成功 upload 的 growth watermark 推送）
 - `tier_list.py` — 舊版 LR-solo 權重抽英雄 tier list（CSV 輸出，非現行站台管線）
 - `build_augment_category_editor.py` — 產生 `augment-category-editor.html`（手動修正 augment 分類 → `scripts/augment_category_overrides.json`）
 

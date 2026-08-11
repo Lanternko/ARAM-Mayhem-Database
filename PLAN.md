@@ -1,4 +1,6 @@
-# ARAM Win-Rate Prediction — NN 規劃 (v3, pivoted from Mayhem to standard ARAM)
+# Historical Plan — ARAM Win-Rate Prediction NN (v3, 2026-05-12)
+
+> **Historical / superseded:** 本檔保存從 Mayhem pivot 到 standard ARAM（queue 450）時的研究設計與 Codex review，不能代表現行產品 scope。Current Mayhem modeling、data contract 與 experiment policy 只看 `MODEL.md`；歷史數字必須連同本檔日期與 dataset 解讀。
 
 > **目標**:輸入一場 ARAM (queueId=450) 對局的雙方英雄組合 (5v5),輸出藍方獲勝機率。
 >
