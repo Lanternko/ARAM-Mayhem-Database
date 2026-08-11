@@ -862,6 +862,268 @@ CHAMPION_DETAIL_FIELDS = (
 # Matchup formula (recommend_gui.predict_matchup_prob):
 #   P(ally wins) = sigmoid(logit_ally − logit_enemy + intercept)
 DRAFT_COMPOSITION_LR_DIR = Path("models/composition_lr_pooled_recency_7d")
+DRAFT_PUBLIC_COMP_FIELDS = (
+    "phys", "magic", "true", "front", "damage", "engage", "wave", "poke",
+    "sustain", "cc",
+)
+DRAFT_PUBLIC_RADAR_AXES = ("front", "damage", "engage", "wave", "sustain", "cc")
+DRAFT_MODEL_SIGNAL_EPSILON = 1e-10
+_DRAFT_MODEL_ERROR = "Draft prediction model failed public validation."
+_DRAFT_SCHEMA_ERROR = "Draft prediction model has an unsupported feature schema."
+_DRAFT_FALLBACK_REASON = "Composition signal unavailable; using champion-only model."
+
+
+class _DraftNumericSignalError(ValueError):
+    """A model is structurally understood but has no safe numeric signal."""
+
+
+def _draft_finite_float(value: object) -> float:
+    value = float(value)
+    if not math.isfinite(value):
+        raise _DraftNumericSignalError
+    return value
+
+
+def _draft_vocab_in_index_order(champ_to_idx: dict) -> list[int]:
+    """Return a canonical numeric champion vocab without reflecting bad input."""
+    try:
+        pairs = [(int(cid), int(idx)) for cid, idx in champ_to_idx.items()]
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR) from exc
+    if any(cid <= 0 or str(cid) != str(raw_cid) for (raw_cid, _), (cid, _) in zip(champ_to_idx.items(), pairs)):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+    pairs.sort(key=lambda item: item[1])
+    if [idx for _, idx in pairs] != list(range(len(pairs))):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+    return [cid for cid, _ in pairs]
+
+
+def _draft_composition_feature_names(
+    champ_to_idx: dict,
+    *,
+    score_columns: tuple[str, ...] | list[str],
+    role_columns: tuple[str, ...] | list[str],
+    ad_bins: tuple[str, ...] | list[str],
+    front_groups: tuple[str, ...] | list[str],
+    wave_groups: tuple[str, ...] | list[str],
+    engage_groups: tuple[str, ...] | list[str],
+    poke_groups: tuple[str, ...] | list[str],
+) -> list[str]:
+    """Build the complete code-owned feature allowlist used by recommend.py."""
+    champion_names = [f"champion:{cid}" for cid in _draft_vocab_in_index_order(champ_to_idx)]
+    linear = [
+        "ad_share", "ad_ap_balance", "true_share", "front_count", "front_sum",
+        "core_lacks_count", "all_lacks_count",
+    ]
+    linear.extend(f"sum_{name}" for name in score_columns)
+    linear.extend(f"lack_{name}" for name in score_columns)
+    linear.extend(f"role_{str(role).lower()}" for role in role_columns)
+    interactions = [
+        f"ad_front:{front}:{ad_bin}"
+        for front in front_groups for ad_bin in ad_bins
+    ]
+    interactions.extend(
+        f"wave_engage:{wave}:{engage}"
+        for wave in wave_groups for engage in engage_groups
+    )
+    interactions.extend(
+        f"poke_front:{front}:{poke}"
+        for front in front_groups for poke in poke_groups
+    )
+    interactions.extend(
+        f"role_ad:{ad_bin}:{str(role).lower()}"
+        for ad_bin in ad_bins for role in role_columns
+    )
+    return champion_names + linear + interactions
+
+
+def _validate_draft_feature_schema(
+    feature_names: list[str],
+    expected_names: list[str],
+) -> None:
+    """Fail closed on any unknown, duplicate, missing, or non-string feature."""
+    if (
+        not isinstance(feature_names, list)
+        or any(not isinstance(name, str) for name in feature_names)
+        or len(feature_names) != len(expected_names)
+        or len(set(feature_names)) != len(feature_names)
+        or set(feature_names) != set(expected_names)
+    ):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+
+
+def _draft_export_profiles(model, score_columns, role_columns) -> dict[str, dict]:
+    profiles: dict[str, dict] = {}
+    try:
+        for cid, profile in model.profiles.items():
+            scores = {
+                name: round(_draft_finite_float(profile.scores[name]), 6)
+                for name in score_columns
+            }
+            roles = {
+                role: round(_draft_finite_float(profile.roles[role]), 6)
+                for role in role_columns
+            }
+            profiles[str(int(cid))] = {
+                "scores": scores,
+                "roles": roles,
+                "physical_dpm": round(_draft_finite_float(profile.physical_dpm), 4),
+                "magic_dpm": round(_draft_finite_float(profile.magic_dpm), 4),
+                "true_dpm": round(_draft_finite_float(profile.true_dpm), 4),
+            }
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise _DraftNumericSignalError from exc
+    return profiles
+
+
+def _draft_validate_coefficients(coef: list[object], feature_names: list[str]) -> list[float]:
+    if not isinstance(coef, list) or len(coef) != len(feature_names) or not coef:
+        raise _DraftNumericSignalError
+    try:
+        values = [_draft_finite_float(value) for value in coef]
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise _DraftNumericSignalError from exc
+    if max(abs(value) for value in values) <= DRAFT_MODEL_SIGNAL_EPSILON:
+        raise _DraftNumericSignalError
+    return values
+
+
+def _load_draft_champion_lr_fallback(model_dir: Path, profiles: dict[str, dict]) -> dict:
+    """Load the code-owned champion-only fallback in canonical vocab order."""
+    try:
+        weights = json.loads((model_dir / "lr_weights.json").read_text(encoding="utf-8"))
+        vocab = json.loads((model_dir / "champ_to_idx.json").read_text(encoding="utf-8"))
+        ordered_ids = _draft_vocab_in_index_order(vocab)
+        feature_names = [f"champion:{cid}" for cid in ordered_ids]
+        _validate_draft_feature_schema(feature_names, feature_names)
+        coef = _draft_validate_coefficients(list(weights.get("coef") or []), feature_names)
+        intercept = _draft_finite_float(weights.get("intercept"))
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+    return {
+        "kind": "champion_lr",
+        "source_model": model_dir.name,
+        "trained_through_patch": None,
+        "intercept": round(intercept, 8),
+        "coef": [round(value, 8) for value in coef],
+        "feature_names": feature_names,
+        "champ_to_idx": {str(cid): idx for idx, cid in enumerate(ordered_ids)},
+        "profiles": profiles,
+        "fallback_reason": _DRAFT_FALLBACK_REASON,
+    }
+
+
+def validate_draft_model_payload(model: dict) -> None:
+    """Validate a browser model without accepting model-owned feature names."""
+    if not isinstance(model, dict) or model.get("kind") not in {"composition_lr", "champion_lr"}:
+        raise click.ClickException(_DRAFT_MODEL_ERROR)
+    try:
+        champ_to_idx = model["champ_to_idx"]
+        ordered_ids = _draft_vocab_in_index_order(champ_to_idx)
+        feature_names = model["feature_names"]
+        if model["kind"] == "champion_lr":
+            expected = [f"champion:{cid}" for cid in ordered_ids]
+        else:
+            from aram_nn.recommend import (
+                AD_BINS as CANONICAL_AD_BINS,
+                CORE_COLUMNS as CANONICAL_CORE_COLUMNS,
+                ENGAGE_GROUPS as CANONICAL_ENGAGE_GROUPS,
+                FRONT_GROUPS as CANONICAL_FRONT_GROUPS,
+                LACK_THRESHOLDS as CANONICAL_LACK_THRESHOLDS,
+                POKE_GROUPS as CANONICAL_POKE_GROUPS,
+                ROLE_COLUMNS as CANONICAL_ROLE_COLUMNS,
+                SCORE_COLUMNS as CANONICAL_SCORE_COLUMNS,
+                WAVE_GROUPS as CANONICAL_WAVE_GROUPS,
+            )
+            meta = model["meta"]
+            canonical_meta = {
+                "score_columns": list(CANONICAL_SCORE_COLUMNS),
+                "core_columns": list(CANONICAL_CORE_COLUMNS),
+                "role_columns": list(CANONICAL_ROLE_COLUMNS),
+                "lack_thresholds": {
+                    key: float(value) for key, value in CANONICAL_LACK_THRESHOLDS.items()
+                },
+                "ad_bins": list(CANONICAL_AD_BINS),
+                "front_groups": list(CANONICAL_FRONT_GROUPS),
+                "wave_groups": list(CANONICAL_WAVE_GROUPS),
+                "engage_groups": list(CANONICAL_ENGAGE_GROUPS),
+                "poke_groups": list(CANONICAL_POKE_GROUPS),
+            }
+            if any(meta.get(key) != value for key, value in canonical_meta.items()):
+                raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+            expected = _draft_composition_feature_names(
+                champ_to_idx,
+                score_columns=CANONICAL_SCORE_COLUMNS,
+                role_columns=CANONICAL_ROLE_COLUMNS,
+                ad_bins=CANONICAL_AD_BINS,
+                front_groups=CANONICAL_FRONT_GROUPS,
+                wave_groups=CANONICAL_WAVE_GROUPS,
+                engage_groups=CANONICAL_ENGAGE_GROUPS,
+                poke_groups=CANONICAL_POKE_GROUPS,
+            )
+        _validate_draft_feature_schema(feature_names, expected)
+        _draft_validate_coefficients(model["coef"], feature_names)
+        _draft_finite_float(model["intercept"])
+    except click.ClickException:
+        raise
+    except _DraftNumericSignalError as exc:
+        raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+    except Exception as exc:
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR) from exc
+
+
+def hydrate_draft_champion_profiles(payload: dict, model: dict) -> None:
+    """Overwrite public composition aggregates from the validated model bundle."""
+    profiles = model.get("profiles") or {}
+    score_map = {
+        "front": "frontline_score",
+        "damage": "damage_score",
+        "engage": "engage_score",
+        "wave": "wave_clear_score",
+        "poke": "poke_score",
+        "sustain": "sustain_score",
+        "cc": "cc_score",
+    }
+    for cid, champ in (payload.get("champs") or {}).items():
+        profile = profiles.get(str(cid))
+        if not isinstance(profile, dict):
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
+        try:
+            scores = profile["scores"]
+            comp = {
+                "phys": round(_draft_finite_float(profile["physical_dpm"]), 3),
+                "magic": round(_draft_finite_float(profile["magic_dpm"]), 3),
+                "true": round(_draft_finite_float(profile["true_dpm"]), 3),
+            }
+            comp.update({
+                public: round(_draft_finite_float(scores[source]), 3)
+                for public, source in score_map.items()
+            })
+        except Exception as exc:
+            raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+        champ["comp"] = comp
+
+
+def validate_draft_public_payload(payload: dict) -> None:
+    """Reject payloads that would publish a dead model or all-centre radar."""
+    champs = payload.get("champs") or {}
+    if not champs:
+        return
+    model = payload.get("draftModel")
+    validate_draft_model_payload(model)
+    for key in DRAFT_PUBLIC_COMP_FIELDS:
+        try:
+            values = [_draft_finite_float(champ["comp"][key]) for champ in champs.values()]
+        except Exception as exc:
+            raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+        if key in DRAFT_PUBLIC_RADAR_AXES and (
+            not values or max(values) - min(values) <= DRAFT_MODEL_SIGNAL_EPSILON
+        ):
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
 
 
 def load_draft_composition_lr_payload(
@@ -900,27 +1162,35 @@ def load_draft_composition_lr_payload(
             except Exception:
                 trained_through = None
 
-        profiles: dict[str, dict] = {}
-        for cid, profile in model.profiles.items():
-            profiles[str(int(cid))] = {
-                "scores": {
-                    name: round(float(profile.scores[name]), 6) for name in SCORE_COLUMNS
-                },
-                "roles": {
-                    role: round(float(profile.roles[role]), 6) for role in ROLE_COLUMNS
-                },
-                "physical_dpm": round(float(profile.physical_dpm), 4),
-                "magic_dpm": round(float(profile.magic_dpm), 4),
-                "true_dpm": round(float(profile.true_dpm), 4),
-            }
+        profiles = _draft_export_profiles(model, SCORE_COLUMNS, ROLE_COLUMNS)
+        expected_features = _draft_composition_feature_names(
+            model.champ_to_idx,
+            score_columns=SCORE_COLUMNS,
+            role_columns=ROLE_COLUMNS,
+            ad_bins=AD_BINS,
+            front_groups=FRONT_GROUPS,
+            wave_groups=WAVE_GROUPS,
+            engage_groups=ENGAGE_GROUPS,
+            poke_groups=POKE_GROUPS,
+        )
+        feature_names = list(model.feature_names)
+        _validate_draft_feature_schema(feature_names, expected_features)
+        try:
+            coef = _draft_validate_coefficients(model.coef.tolist(), feature_names)
+            intercept = _draft_finite_float(model.intercept)
+        except _DraftNumericSignalError:
+            fallback = _load_draft_champion_lr_fallback(model_dir, profiles)
+            fallback["trained_through_patch"] = trained_through
+            validate_draft_model_payload(fallback)
+            return fallback
 
-        return {
+        payload = {
             "kind": "composition_lr",
             "source_model": model_dir.name,
             "trained_through_patch": trained_through,
-            "intercept": round(float(model.intercept), 8),
-            "coef": [round(float(v), 8) for v in model.coef.tolist()],
-            "feature_names": list(model.feature_names),
+            "intercept": round(intercept, 8),
+            "coef": [round(value, 8) for value in coef],
+            "feature_names": feature_names,
             "champ_to_idx": {str(int(k)): int(v) for k, v in model.champ_to_idx.items()},
             "profiles": profiles,
             "meta": {
@@ -935,8 +1205,12 @@ def load_draft_composition_lr_payload(
                 "poke_groups": list(POKE_GROUPS),
             },
         }
+        validate_draft_model_payload(payload)
+        return payload
+    except click.ClickException:
+        raise
     except Exception as exc:
-        click.echo(f"[tierlist] WARN: unable to export Draft Composition LR: {exc}")
+        click.echo("[tierlist] WARN: unable to export Draft prediction model")
         return None
 
 
@@ -2148,6 +2422,7 @@ def render_html(
         if key in trained_composition:
             recommendation_composition[key] = trained_composition[key]
 
+    draft_model = load_draft_composition_lr_payload()
     payload = {
         "champs": js_champs,
         "augs": js_augs,
@@ -2171,8 +2446,13 @@ def render_html(
         "patchChanges": patch_changes or {},
         "recommendation_composition": recommendation_composition,
         "team_score": _team_score_for_payload(team_score_bundle),
-        "draftModel": load_draft_composition_lr_payload(),
+        "draftModel": draft_model,
     }
+    if js_champs:
+        if draft_model is None:
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
+        hydrate_draft_champion_profiles(payload, draft_model)
+        validate_draft_public_payload(payload)
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
     _dedupe_item_objects(payload)
@@ -2984,6 +3264,10 @@ def _run_shell_only(
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
+    if draft_model is None:
+        raise click.ClickException(_DRAFT_MODEL_ERROR)
+    hydrate_draft_champion_profiles(payload, draft_model)
+    validate_draft_public_payload(payload)
 
     # Slim oversized payloads left over from older full builds (full ranked
     # aug/item lists).  Rewrite in place so the next fetch is smaller without a

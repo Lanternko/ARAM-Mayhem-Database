@@ -352,16 +352,16 @@
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => axes.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
         const grid = [0.25, 0.5, 0.75, 1].map(f =>
-            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--radar-grid)" stroke-width="1"/>`).join('');
         const spokes = axes.map((_, i) => {
             const [x, y] = at(i, R);
-            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--radar-grid)" stroke-width="1"/>`;
         }).join('');
         const frac = a => signed
             ? Math.max(0.02, Math.min(1, 0.5 + Math.max(-1, Math.min(1, (a.delta || 0) / scale)) * 0.5))
             : Math.max(0, Math.min(1, a.pct || 0));
         const baseline = signed
-            ? `<polygon points="${ringPts(0.5)}" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="1" stroke-dasharray="3 3"/>`
+            ? `<polygon points="${ringPts(0.5)}" fill="none" stroke="var(--radar-baseline)" stroke-width="1" stroke-dasharray="3 3"/>`
             : '';
         const dataPts = axes.map((a, i) => at(i, R * frac(a)));
         const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
@@ -391,7 +391,7 @@
                 ? `${body}${val}`
                 : radarLabelTspans(lines.slice(0, -1), lx, fontSize)
                     + `<tspan x="${lx.toFixed(1)}" dy="${(fontSize * 1.15).toFixed(1)}">${escHtml(lines[lines.length - 1])}</tspan>${val}`;
-            return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#c2c7ce">${bodyWithVal}</text>`;
+            return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--radar-label)">${bodyWithVal}</text>`;
         }).join('');
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
@@ -412,10 +412,10 @@
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => first.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
         const grid = [0.25, 0.5, 0.75, 1].map(f =>
-            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--radar-grid)" stroke-width="1"/>`).join('');
         const spokes = first.map((_, i) => {
             const [x, y] = at(i, R);
-            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--radar-grid)" stroke-width="1"/>`;
         }).join('');
         const polys = (series || []).map(s => {
             const axes = s.axes || [];
@@ -448,7 +448,7 @@
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
             const y0 = ly + 4 - ((lines.length - 1) * fontSize * 1.15) / 2;
             return (
-                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#d4d8de">`
+                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--radar-label)">`
                 + radarLabelTspans(lines, lx, fontSize)
                 + `</text>`
             );
@@ -1107,7 +1107,7 @@
             draftLegendEnemy: '對手',
             draftChampStrength: '英雄強度',
             draftMetricFinal: '最終勝率',
-            draftMetricFinalNote: 'AI推估勝率：綜合參考 1. 英雄強度 2. 搭配 3. 對戰組合。備註：勝率主要受英雄強度影響',
+            draftMetricFinalNote: '最終勝率只比較雙方 10 隻英雄的歷史強度；不包含玩家熟練度、增幅、道具或臨場表現。',
             draftMetricPartial: '完成我方與對方各 5 隻英雄後計算',
             draftMetricUnavailable: '預測模型尚未載入或含未知英雄',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
@@ -1444,7 +1444,7 @@
             draftLegendEnemy: 'Enemy',
             draftChampStrength: 'Champ strength',
             draftMetricFinal: 'Final win rate',
-            draftMetricFinalNote: 'AI win-rate estimate from 1) champion strength 2) synergy 3) matchup. Note: win rate is driven mainly by champion strength',
+            draftMetricFinalNote: 'Final WR compares only the historical strength of the 10 champions; it does not include player skill, augments, items, or in-game play.',
             draftMetricPartial: 'Complete both 5-champion rosters to calculate',
             draftMetricUnavailable: 'Model not loaded or contains unknown champions',
             draftOnOtherSide: 'Already on the other team.',
@@ -4730,6 +4730,16 @@
             if (fIdx === undefined) return null;
             x[fIdx] = 1;
         }
+        if (model.kind === 'champion_lr') {
+            let championTotal = 0;
+            for (let i = 0; i < coef.length; i += 1) {
+                const weight = Number(coef[i]);
+                if (!Number.isFinite(weight)) return null;
+                championTotal += x[i] * weight;
+            }
+            return championTotal;
+        }
+        if (model.kind !== 'composition_lr') return null;
         const team = draftTeamProfile(teamIds, model);
         if (!team) return null;
         const scoreCols = (model.meta && model.meta.score_columns) || [];
@@ -4779,7 +4789,7 @@
     /** Full 5v5 Composition LR: sigmoid(ally_logit − enemy_logit + intercept). */
     function draftCompositionLrWinrate(allyIds, enemyIds) {
         const model = DATA && DATA.draftModel;
-        if (!model || model.kind !== 'composition_lr') return null;
+        if (!model || (model.kind !== 'composition_lr' && model.kind !== 'champion_lr')) return null;
         if (!Array.isArray(allyIds) || !Array.isArray(enemyIds) || allyIds.length !== 5 || enemyIds.length !== 5) {
             return null;
         }
@@ -5118,12 +5128,23 @@
         if (pickNotice) {
             parts.push(`<div class="pick-note">${escHtml(pickNotice)}</div>`);
         }
-        // Both sides have ≥1 pick → overlaid radar + dual bars (partial rosters OK).
-        // Only final LR WR still requires full 5v5 (see buildDraftMetricsHtml).
+        // Both sides have ≥1 pick → shared Meta Pick analysis presentation.
+        // Enemy is the gray comparison; ally is the gold primary team. Partial
+        // rosters keep the analysis but never fabricate a final 5v5 win rate.
         if (mu.ally && mu.enemy) {
-            parts.push(buildMatchupCompareHtml(
-                mu.ally, mu.enemy, teamPicks.length, enemyPicks.length,
-            ));
+            const fullDraft = teamPicks.length === MAX_TEAM_PICKS
+                && enemyPicks.length === MAX_TEAM_PICKS;
+            parts.push(metaPickAnalysisHtml(enemyPicks, teamPicks, copy, {
+                draft: true,
+                title: copy.draftCompareTitle,
+                compareLabel: copy.draftLegendEnemy,
+                primaryLabel: copy.draftLegendAlly,
+                wrLabel: copy.draftMetricFinal,
+                finalWr: mu.finalWr,
+                showFinalWr: fullDraft && mu.finalWr != null,
+                note: !fullDraft ? copy.draftMetricPartial
+                    : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote),
+            }));
         } else if (mu.ally) {
             parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
         } else if (mu.enemy) {
@@ -5185,7 +5206,7 @@
         document.querySelectorAll('.draft-side').forEach(el => {
             el.classList.toggle('is-targeting', el.getAttribute('data-draft-side') === draftSide);
         });
-        if (metricsEl) metricsEl.innerHTML = buildDraftMetricsHtml();
+        if (metricsEl) metricsEl.innerHTML = '';
         if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
 
         const searchEl = document.getElementById('draft-search');
@@ -6461,10 +6482,12 @@
     /**
      * Dual 6-axis radar (黃=你的 / 灰=最佳) + best-team letter grades on the right.
      */
-    function metaPickAnalysisHtml(yourIds, bestIds, copy) {
+    function metaPickAnalysisHtml(yourIds, bestIds, copy, options) {
+        const opts = options || {};
         const yours = metaPickSixAxes(yourIds, copy);
         const best = metaPickSixAxes(bestIds, copy);
         const cap = best.cap;
+        const analysisTitle = opts.title || copy.gameAnalysisTitle || copy.teamDimsTitle || '';
         // 英雄強度：原始 5 人平均 solo WR（如 52.3%），不是 PR
         const strengthTxt = pct(best.strength.meanWr);
         // Re-sum damage dims from champ ids (more reliable than teamComposition.sums alone).
@@ -6479,9 +6502,9 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: yours.axes,
-                stroke: 'rgba(196,200,208,0.90)',
-                fill: 'rgba(160,166,176,0.14)',
-                dot: 'rgba(210,214,220,0.95)',
+                stroke: 'var(--radar-compare-stroke)',
+                fill: 'var(--radar-compare-fill)',
+                dot: 'var(--radar-compare-dot)',
             },
             {
                 axes: best.axes,
@@ -6489,7 +6512,7 @@
                 fill: 'color-mix(in srgb, var(--accent, #f5c518) 22%, transparent)',
                 dot: 'var(--accent, #f5c518)',
             },
-        ], copy.gameAnalysisTitle || copy.teamDimsTitle || '');
+        ], analysisTitle);
 
         const grades = [
             {
@@ -6542,7 +6565,10 @@
             );
         }).join('');
 
-        const bestEstWr = Number(best.ev.estWr);
+        const bestEstWr = opts.finalWr === undefined ? Number(best.ev.estWr) : Number(opts.finalWr);
+        const showFinalWr = opts.showFinalWr === undefined
+            ? Number.isFinite(bestEstWr)
+            : (!!opts.showFinalWr && Number.isFinite(bestEstWr));
         const bestWrTone = metaPickWrToneClass(bestEstWr);
         // flex-basis % 填滿 bar；圖例永遠三段。
         // Class names: is-phys / is-magic / is-true — NEVER is-ad (adblockers hide .is-ad).
@@ -6573,36 +6599,45 @@
         );
 
         const legend = (
-            `<div class="game-an-legend" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            `<div class="game-an-legend" aria-label="${escHtml(analysisTitle)}">`
             + `<span class="game-an-legend-item is-yours">`
-            + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
+            + `<span class="game-an-swatch is-yours"></span>${escHtml(opts.compareLabel || copy.gameAnalysisYours || '你的選擇')}`
             + `</span>`
             + `<span class="game-an-legend-item is-best">`
-            + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
+            + `<span class="game-an-swatch is-best"></span>${escHtml(opts.primaryLabel || copy.gameAnalysisBest || '最佳 5 人')}`
             + `</span>`
             + `</div>`
         );
 
+        const wrHero = showFinalWr
+            ? (`<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(opts.wrLabel || copy.gameBestEstWr || '')}">`
+                + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
+                + `<span class="game-an-wr-label">${escHtml(opts.wrLabel || copy.gameBestEstWr || copy.gameOptimalWr || '')}</span>`
+                + `</div>`)
+            : '';
+        const wrNote = opts.note
+            ? `<p class="game-an-wr-note">${escHtml(opts.note)}</p>`
+            : '';
+        const analysisClass = opts.draft ? 'game-analysis is-draft-analysis' : 'game-analysis';
+
         return (
-            `<div class="game-analysis">`
+            `<div class="${analysisClass}">`
             + `<div class="game-an-head">`
             + `<div class="game-an-head-left">`
             + `<div class="game-an-head-row">`
-            + `<span class="game-an-head-title">${escHtml(copy.gameAnalysisTitle || '最強隊伍評價')}</span>`
+            + `<span class="game-an-head-title">${escHtml(analysisTitle)}</span>`
             + `</div>`
             + mixBar
             + `</div>`
-            + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(copy.gameBestEstWr || '最佳陣容勝率')}">`
-            + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
-            + `<span class="game-an-wr-label">${escHtml(copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率')}</span>`
+            + wrHero
             + `</div>`
-            + `</div>`
+            + wrNote
             + `<div class="game-an-dims-split is-best-only">`
             + `<div class="game-an-radar-col">`
             + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
             + legend
             + `</div>`
-            + `<div class="game-an-grades" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            + `<div class="game-an-grades" aria-label="${escHtml(analysisTitle)}">`
             + gradeRows
             + `</div>`
             + `</div>`

@@ -44,6 +44,12 @@
         --wr-2: oklch(0.802 0.086 11.8);
         --wr-1: oklch(0.676 0.213 19.8);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(255, 255, 255, 0.10);
+        --radar-baseline: rgba(255, 255, 255, 0.32);
+        --radar-label: #d4d8de;
+        --radar-compare-stroke: rgba(196, 200, 208, 0.90);
+        --radar-compare-fill: rgba(160, 166, 176, 0.14);
+        --radar-compare-dot: rgba(210, 214, 220, 0.95);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -91,6 +97,12 @@
         --wr-2: oklch(0.530 0.126 10.2);
         --wr-1: oklch(0.530 0.199 21.6);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(26, 30, 38, 0.14);
+        --radar-baseline: rgba(26, 30, 38, 0.32);
+        --radar-label: #46505e;
+        --radar-compare-stroke: rgba(91, 100, 114, 0.86);
+        --radar-compare-fill: rgba(91, 100, 114, 0.12);
+        --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -4432,6 +4444,7 @@
         background: var(--border);
         border: 1px solid var(--border);
     }
+    .draft-metrics:empty { display: none; }
     .draft-metric {
         min-width: 0;
         min-height: 136px;
@@ -5192,10 +5205,10 @@
     }
     @media (max-width: 900px) {
         .view-draft.is-active {
-            width: 100vw;
-            max-width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
+            width: calc(100% + 32px);
+            max-width: none;
+            margin-left: -16px;
+            margin-right: -16px;
             margin-top: -16px;
             margin-bottom: -48px;
             padding: 0;
@@ -5263,6 +5276,13 @@
         }
         .draft-analysis-intro p { max-width: none; text-align: left; }
         .draft-metrics { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 700px) {
+        .view-draft.is-active {
+            width: calc(100% + 24px);
+            margin-left: -12px;
+            margin-right: -12px;
+        }
     }
     @media (max-width: 520px) {
         .draft-mode-tabs { gap: 16px; }
@@ -7564,6 +7584,10 @@
     .game-metric-sub.is-grade-f { color: #f87171; }
     [data-theme="light"] .game-metric-grade.is-grade-a,
     [data-theme="light"] .game-metric-sub.is-grade-a { color: #15803d; }
+    [data-theme="light"] .game-metric-grade.is-grade-b,
+    [data-theme="light"] .game-metric-sub.is-grade-b { color: #0369a1; }
+    [data-theme="light"] .game-metric-grade.is-grade-c,
+    [data-theme="light"] .game-metric-sub.is-grade-c { color: #4b5563; }
     [data-theme="light"] .game-metric-grade.is-grade-d,
     [data-theme="light"] .game-metric-grade.is-grade-f,
     [data-theme="light"] .game-metric-sub.is-grade-d,
@@ -7720,6 +7744,15 @@
         flex-direction: column;
         gap: 6px;
     }
+    .draft-result .game-analysis.is-draft-analysis {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--surface);
+    }
     .game-an-head {
         display: flex;
         flex-wrap: wrap;
@@ -7803,6 +7836,12 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         color: var(--text-dim);
+    }
+    .game-an-wr-note {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1.5;
     }
     /* 手機：標題放大、勝率放大、bar 再縮短 */
     @media (max-width: 560px) {
@@ -8005,6 +8044,10 @@
     .game-an-grade.is-grade-f .game-an-grade-val { color: #f87171; }
     [data-theme="light"] .game-an-grade.is-grade-a .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-ap .game-an-grade-val { color: #15803d; }
+    [data-theme="light"] .game-an-grade.is-grade-b .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-bp .game-an-grade-val { color: #0369a1; }
+    [data-theme="light"] .game-an-grade.is-grade-c .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-cp .game-an-grade-val { color: #4b5563; }
     [data-theme="light"] .game-an-grade.is-grade-d .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-f .game-an-grade-val { color: #c62828; }
     /* 手機也維持 2 欄；列更緊湊以免擠 */
