@@ -3745,6 +3745,7 @@
             const rows = (payload && payload.top) || [];
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
+            const railIconCount = opts.iconCount || 1;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
@@ -3754,7 +3755,11 @@
             const items = rows.slice(0, railLimit).map((entry, idx) => {
                 const name = itemRowDisplayName(entry);
                 const pairItems = Array.isArray(entry.items) ? entry.items : [];
-                const icon = pairItems[0] && pairItems[0].icon;
+                const icons = pairItems.slice(0, railIconCount).map(item => (
+                    item.icon
+                        ? `<img class="boot-rail-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
+                        : '<span class="boot-rail-icon"></span>'
+                )).join('');
                 const wr = Number(entry.wr || 0);
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrTone = `wr-${wrToneTier(entry)}`;
@@ -3763,7 +3768,7 @@
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
-                    items: pairItems.slice(0, 1),
+                    items: pairItems.slice(0, railIconCount),
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
@@ -3773,7 +3778,7 @@
                 });
                 return `
                     <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
-                        ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
+                        <span class="boot-rail-icons">${icons}</span>
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrTone}">${pct(wr)}</span>
                         <span class="boot-rail-pick ${pickHeat}">${pct(pickVal)}</span>
@@ -3837,9 +3842,7 @@
             : { overview: zhUi('概覽'), items: zhUi('出裝'), augments: zhUi('增幅裝置'), compfit: zhUi('英雄能力') };
         const bootItemTitle = pickLang('推薦鞋子', 'Recommended Boots');
         const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
-        const spellRailTitle = pickLang('召喚師技能', 'Summoner Spells');
-        // Mayhem players carry two spells, so pick rates sum to ~200% — that
-        // domain fact stays in code comments / tips, not the rail chrome.
+        const spellRailTitle = pickLang('召喚師技能組合', 'Summoner Spell Pairs');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
@@ -3860,6 +3863,7 @@
                     ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
+                        iconCount: 2,
                         extraClass: 'spell-rail-section',
                     })}
                 </div>

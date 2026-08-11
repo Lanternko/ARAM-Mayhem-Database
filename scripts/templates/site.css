@@ -2590,6 +2590,7 @@
     }
     .boot-rail-row.is-top { border-color: rgba(107, 209, 107, 0.32); background: #11151d; }
     .boot-rail-row:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); }
+    .boot-rail-icons { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
     .boot-rail-icon { width: 32px; height: 32px; border-radius: 6px; background: #2a3142; object-fit: contain; flex: 0 0 auto; }
     .boot-rail-name { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #e6e8eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .boot-rail-wr { flex: 0 0 auto; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -8606,6 +8607,18 @@
         color: var(--text-muted);
         border: 1px solid var(--panel-line);
     }
+
+    /* The leading rail row is a recommendation, not an active selection.
+       Use neutral elevation and type weight instead of a full accent outline. */
+    .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    [data-theme="light"] .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    .boot-rail-row.is-top .boot-rail-name { font-weight: 650; }
 
     /* Reduced-motion override.  Disables prismShift / shineSweep /
        slideDown so vestibular-sensitive users don't get hue drift and

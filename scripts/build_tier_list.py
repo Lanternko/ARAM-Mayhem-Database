@@ -474,7 +474,7 @@ def main(
         min_games=SPELL_MIN_GAMES,
     )
     click.echo(
-        f"[tierlist] {len(spell_affinity)} champions have >= 1 summoner-spell row "
+        f"[tierlist] {len(spell_affinity)} champions have >= 1 two-spell loadout row "
         f"(games >= {SPELL_MIN_GAMES}, top_lift >= {SPELL_TOP_MIN_LIFT:.1%})"
     )
     item_build_clusters = compute_champ_item_build_clusters(

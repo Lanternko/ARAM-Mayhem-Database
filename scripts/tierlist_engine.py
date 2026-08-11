@@ -3372,14 +3372,13 @@ def compute_champ_spell_affinities(
     *,
     min_games: int = SPELL_MIN_GAMES,
 ) -> dict[int, dict]:
-    """Champion-level win/pick rate per summoner spell.
+    """Champion-level win/pick rate per two-spell loadout.
 
     Mirrors the boot/item affinity pipeline (same empirical-Bayes shrinkage so
-    small cells lean on the global per-spell baseline) but reads each
-    participant's ``spells`` list instead of items.  Mayhem players freely pick
-    *two* spells (Flash is near-universal; Mark/Dash, Ghost, Heal … are the real
-    second-slot choices), so every spell is counted and pick rates sum to ~200%
-    across the two slots.
+    small cells lean on the global per-loadout baseline) but reads each
+    participant's ``spells`` list instead of items. A player chooses two spells,
+    so the recommendation and its pick rate must describe the pair as one
+    decision. Incomplete captures are excluded from rows and denominators.
     """
     baseline_by_champ = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
@@ -3420,37 +3419,45 @@ def compute_champ_spell_affinities(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                chosen = [int(s) for s in (participant.get("spells") or []) if int(s) > 0]
-                if not chosen:
+                raw_chosen = participant.get("spells")
+                if not isinstance(raw_chosen, (list, tuple)) or len(raw_chosen) != 2:
+                    continue
+                try:
+                    chosen = sorted(int(spell_id) for spell_id in raw_chosen)
+                except (TypeError, ValueError):
+                    continue
+                if chosen[0] <= 0 or chosen[0] == chosen[1]:
                     continue
                 champ_total_games[cid] += 1
                 baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                for spell_id in chosen:
-                    slug = str(spell_id)
-                    key = (cid, slug)
-                    cs_games[key] += 1
-                    cs_wins[key] += player_won
-                    cs_baseline_games[key] += baseline
-                    category_games[slug] += 1
-                    category_wins[slug] += player_won
-                    category_baseline_games[slug] += baseline
-                    if slug not in category_names:
+                slug = "+".join(str(spell_id) for spell_id in chosen)
+                key = (cid, slug)
+                cs_games[key] += 1
+                cs_wins[key] += player_won
+                cs_baseline_games[key] += baseline
+                category_games[slug] += 1
+                category_wins[slug] += player_won
+                category_baseline_games[slug] += baseline
+                if slug not in category_names:
+                    spells: list[dict[str, object]] = []
+                    for spell_id in chosen:
                         meta = spell_meta.get(spell_id) or {}
                         name_zh = str(meta.get("name_zh") or meta.get("name") or f"#{spell_id}")
                         name_en = str(meta.get("name_en") or name_zh)
-                        category_names[slug] = {
+                        spells.append({
+                            "id": spell_id,
                             "name": name_zh,
                             "name_zh": name_zh,
                             "name_en": name_en,
-                            "items": [{
-                                "id": spell_id,
-                                "name": name_zh,
-                                "name_zh": name_zh,
-                                "name_en": name_en,
-                                "icon": str(meta.get("icon") or ""),
-                            }],
-                        }
+                            "icon": str(meta.get("icon") or ""),
+                        })
+                    category_names[slug] = {
+                        "name": _item_pair_name(spells, "name_zh"),
+                        "name_zh": _item_pair_name(spells, "name_zh"),
+                        "name_en": _item_pair_name(spells, "name_en"),
+                        "items": spells,
+                    }
     finally:
         con.close()
 
