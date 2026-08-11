@@ -3477,6 +3477,7 @@
             const rows = (payload && payload.top) || [];
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
+            const railIconCount = opts.iconCount || 1;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
@@ -3486,7 +3487,11 @@
             const items = rows.slice(0, railLimit).map((entry, idx) => {
                 const name = itemRowDisplayName(entry);
                 const pairItems = Array.isArray(entry.items) ? entry.items : [];
-                const icon = pairItems[0] && pairItems[0].icon;
+                const icons = pairItems.slice(0, railIconCount).map(item => (
+                    item.icon
+                        ? `<img class="boot-rail-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
+                        : '<span class="boot-rail-icon"></span>'
+                )).join('');
                 const wr = Number(entry.wr || 0);
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
                 const wrTone = `wr-${wrToneTier(entry)}`;
@@ -3495,7 +3500,7 @@
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
-                    items: pairItems.slice(0, 1),
+                    items: pairItems.slice(0, railIconCount),
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
@@ -3505,7 +3510,7 @@
                 });
                 return `
                     <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
-                        ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
+                        <span class="boot-rail-icons">${icons}</span>
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrTone}">${pct(wr)}</span>
                         <span class="boot-rail-pick ${pickHeat}">${pct(pickVal)}</span>
@@ -3569,9 +3574,7 @@
             : { overview: zhUi('概覽'), items: zhUi('出裝'), augments: zhUi('增幅裝置'), compfit: zhUi('英雄能力') };
         const bootItemTitle = pickLang('推薦鞋子', 'Recommended Boots');
         const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
-        const spellRailTitle = pickLang('召喚師技能', 'Summoner Spells');
-        // Mayhem players carry two spells, so pick rates sum to ~200% — that
-        // domain fact stays in code comments / tips, not the rail chrome.
+        const spellRailTitle = pickLang('召喚師技能組合', 'Summoner Spell Pairs');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
@@ -3592,6 +3595,7 @@
                     ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
+                        iconCount: 2,
                         extraClass: 'spell-rail-section',
                     })}
                 </div>
@@ -8517,13 +8521,17 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.classic-mode-link').forEach(el => {
+        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
-            const aria = el.getAttribute(`data-aria-${suffix}`);
             if (href) el.setAttribute('href', href);
-            if (aria) el.setAttribute('aria-label', aria);
         });
+        const modeSummary = document.querySelector('#mode-menu > summary');
+        if (modeSummary) {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const aria = modeSummary.getAttribute(`data-aria-${suffix}`);
+            if (aria) modeSummary.setAttribute('aria-label', aria);
+        }
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
             columnArticle ? renderArticle(columnArticle) : renderColumnList();
@@ -8749,6 +8757,12 @@
     });
 
     document.addEventListener('click', (ev) => {
+        const modeMenu = document.getElementById('mode-menu');
+        if (modeMenu && !modeMenu.contains(ev.target)) modeMenu.open = false;
+        const modePick = ev.target.closest('.mode-options [data-mode-target]');
+        if (modePick) {
+            trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
+        }
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
@@ -9365,6 +9379,13 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            const modeMenu = document.getElementById('mode-menu');
+            if (modeMenu && modeMenu.open) {
+                modeMenu.open = false;
+                const summary = modeMenu.querySelector('summary');
+                if (summary) summary.focus();
+                return;
+            }
             if (augChampsId != null) {
                 closeAugChamps();
                 return;
