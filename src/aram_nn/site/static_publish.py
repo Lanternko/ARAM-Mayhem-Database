@@ -220,8 +220,10 @@ def decide_static_publish(
     threshold: int,
     force: bool,
     growth_ratio: float = 0.0,
+    max_age_hours: float = 0.0,
     queue_id: int = 2400,
     patch_prefix: str | None = None,
+    now_unix: float | None = None,
 ) -> StaticPublishDecision:
     local_total = count_games(db, queue_id=queue_id, patch_prefix=patch_prefix)
     last_published_total, baseline_source = _last_total_for_scope(
@@ -229,6 +231,16 @@ def decide_static_publish(
         patch_prefix=patch_prefix,
         total_key="last_published_total",
     )
+    last_publish_at_unix, _ = _last_total_for_scope(
+        state,
+        patch_prefix=patch_prefix,
+        total_key="last_publish_at_unix",
+    )
+    effective_max_age_hours = max(0.0, float(max_age_hours or 0.0))
+    publish_age_hours: float | None = None
+    if last_publish_at_unix > 0:
+        current_unix = time.time() if now_unix is None else float(now_unix)
+        publish_age_hours = max(0.0, current_unix - last_publish_at_unix) / 3600.0
     effective_threshold = _effective_threshold(
         last_total=last_published_total,
         threshold=threshold,
@@ -270,21 +282,51 @@ def decide_static_publish(
                 passed=True,
             ),
         )
+    if (
+        effective_max_age_hours > 0
+        and publish_age_hours is not None
+        and publish_age_hours >= effective_max_age_hours
+    ):
+        return StaticPublishDecision(
+            True,
+            local_total,
+            last_published_total,
+            effective_threshold,
+            growth_ratio,
+            f"age {publish_age_hours:.1f}h >= max {effective_max_age_hours:g}h; "
+            + _decision_reason(
+                delta=delta,
+                threshold=effective_threshold,
+                absolute_threshold=threshold,
+                growth_ratio=growth_ratio,
+                baseline_source=baseline_source,
+                patch_prefix=patch_prefix,
+                passed=False,
+            ),
+        )
+    reason = _decision_reason(
+        delta=delta,
+        threshold=effective_threshold,
+        absolute_threshold=threshold,
+        growth_ratio=growth_ratio,
+        baseline_source=baseline_source,
+        patch_prefix=patch_prefix,
+        passed=False,
+    )
+    if effective_max_age_hours > 0:
+        if publish_age_hours is None:
+            reason += f"; max age {effective_max_age_hours:g}h awaiting publish timestamp"
+        else:
+            reason += (
+                f"; age {publish_age_hours:.1f}h < max {effective_max_age_hours:g}h"
+            )
     return StaticPublishDecision(
         False,
         local_total,
         last_published_total,
         effective_threshold,
         growth_ratio,
-        _decision_reason(
-            delta=delta,
-            threshold=effective_threshold,
-            absolute_threshold=threshold,
-            growth_ratio=growth_ratio,
-            baseline_source=baseline_source,
-            patch_prefix=patch_prefix,
-            passed=False,
-        ),
+        reason,
     )
 
 
@@ -617,6 +659,7 @@ def publish_static_site_once(
     state_path: Path = DEFAULT_STATE_PATH,
     threshold: int = 0,
     growth_ratio: float = 0.10,
+    max_age_hours: float = 0.0,
     force: bool = False,
     queue_id: int = 2400,
     patch_prefix: str | None = None,
@@ -635,6 +678,7 @@ def publish_static_site_once(
         state=state,
         threshold=threshold,
         growth_ratio=growth_ratio,
+        max_age_hours=max_age_hours,
         force=force,
         queue_id=queue_id,
         patch_prefix=patch_prefix,
@@ -648,6 +692,7 @@ def publish_static_site_once(
             "last_published_total": decision.last_published_total,
             "threshold": decision.threshold,
             "growth_ratio": decision.growth_ratio,
+            "max_age_hours": max_age_hours,
         }
     if check_only:
         return {
@@ -658,6 +703,7 @@ def publish_static_site_once(
             "last_published_total": decision.last_published_total,
             "threshold": decision.threshold,
             "growth_ratio": decision.growth_ratio,
+            "max_age_hours": max_age_hours,
         }
 
     if isolated_worktree:
@@ -686,6 +732,7 @@ def publish_static_site_once(
                     state_path=state_path,
                     threshold=threshold,
                     growth_ratio=growth_ratio,
+                    max_age_hours=max_age_hours,
                     force=force,
                     queue_id=queue_id,
                     patch_prefix=patch_prefix,
@@ -743,6 +790,7 @@ def publish_static_site_once(
                 "last_patch_prefix": patch_prefix,
                 "last_threshold": decision.threshold,
                 "last_growth_ratio": decision.growth_ratio,
+                "last_max_age_hours": max_age_hours,
             },
         )
         if not dry_run:
@@ -755,6 +803,7 @@ def publish_static_site_once(
             "last_published_total": decision.last_published_total,
             "threshold": decision.threshold,
             "growth_ratio": decision.growth_ratio,
+            "max_age_hours": max_age_hours,
             "comp_fit": comp_fit,
             "empirical_axes": empirical_axes,
         }
@@ -771,6 +820,7 @@ def publish_static_site_once(
             "last_published_total": decision.last_published_total,
             "threshold": decision.threshold,
             "growth_ratio": decision.growth_ratio,
+            "max_age_hours": max_age_hours,
             "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
             "commit_message": message,
             "comp_fit": comp_fit,
@@ -796,6 +846,7 @@ def publish_static_site_once(
             "last_result": "published",
             "last_threshold": decision.threshold,
             "last_growth_ratio": decision.growth_ratio,
+            "last_max_age_hours": max_age_hours,
         },
     )
     save_state(state_path, state)
@@ -808,6 +859,7 @@ def publish_static_site_once(
         "last_published_total": decision.last_published_total,
         "threshold": decision.threshold,
         "growth_ratio": decision.growth_ratio,
+        "max_age_hours": max_age_hours,
         "commit": commit,
         "merged_upstream": merged,
         "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
