@@ -47,6 +47,7 @@ $argsList = @(
     "--games-per-player", "0",
     "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),
     "--static-publish-growth-ratio", "0.10",
+    "--static-publish-max-age-hours", "12",
     "--static-publish-threshold", "0",
     # Keep the current mature patch until a newer patch has enough data; then the normal
     # site build retrains empirical profiles and team-score calibration before publishing.
