@@ -1747,12 +1747,12 @@ CLASSIC_COPY = {
     "zh-Hans": {
         "title": "经典模式英雄胜率、出装与搭档数据 · classicmeta",
         "description": "经典模式 60 位英雄的胜率、Tier、常见分路、装备、搭档与棘手对手数据。",
-        "main_href": "/zh-CN",
+        "main_href": "/zh-CN/",
     },
     "en": {
         "title": "Classic Mode champion win rates, builds and synergies · classicmeta",
         "description": "Win rates, tiers, common roles, items, synergies and difficult matchups for all 60 Classic Mode champions.",
-        "main_href": "/en",
+        "main_href": "/en/",
     },
 }
 

@@ -742,8 +742,8 @@
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
     const SHORT_PATCH_ZH = "26.15";
-    const DATE_STR_ZH = "更新於 2026-08-11";
-    const BUILD_DATE = "2026-08-11";
+    const DATE_STR_ZH = "更新於 2026-08-12";
+    const BUILD_DATE = "2026-08-12";
     const PATCH_LABEL = "patch 26.15";
     const TOTAL_GAMES = "659,021";
     const LANG_KEY = 'aram-mayhem-site-lang';
@@ -8292,8 +8292,8 @@
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
-        if (!view || view === 'home') return prefix || '/';
-        return prefix + '/' + view;
+        if (!view || view === 'home') return prefix ? prefix + '/' : '/';
+        return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
         let path = pathname || '/';
@@ -8341,8 +8341,7 @@
         // historyMode: 'push' | 'replace' | 'none'
         if (historyMode === 'none') return;
         const wantPath = pathForRoute(view, sub);
-        const curNorm = normalizePathname(location.pathname);
-        const needPath = curNorm !== wantPath;
+        const needPath = location.pathname !== wantPath;
         const needClearHash = Boolean(location.hash);
         if (!needPath && !needClearHash) return;
         const url = wantPath + (location.search || '');
@@ -9194,7 +9193,7 @@
                 if ((p === '/' || p === '') && (saved === 'en' || saved === 'zh-CN')) {
                     currentLang = normalizeLang(saved);
                     try {
-                        history.replaceState(null, '', (langMeta(currentLang).prefix || '/') + (location.search || ''));
+                        history.replaceState(null, '', pathForRoute('home') + (location.search || ''));
                     } catch {}
                 }
             } catch {}

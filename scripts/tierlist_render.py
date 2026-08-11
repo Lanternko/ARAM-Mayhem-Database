@@ -1034,6 +1034,8 @@ def _localize_full_shell_html(
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
     path = canonical_path if canonical_path.startswith("/") else f"/{canonical_path}"
+    if path != "/" and not path.endswith("/"):
+        path += "/"
     canonical = (origin + path) if origin.startswith("http") else path
     out = html_src
     out = re.sub(r"(<html\s+lang=)['\"][^'\"]*['\"]", rf"\1'{html_lang}'", out, count=1, flags=re.I)
@@ -1082,7 +1084,53 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
-    return out
+    return _inject_locale_alternates(out, site_url=site_url, canonical_path=path)
+
+
+_LOCALE_ALTERNATES_RE = re.compile(
+    r"<!-- arammeta:locale-alternates -->.*?<!-- /arammeta:locale-alternates -->",
+    flags=re.S,
+)
+
+
+def _inject_locale_alternates(
+    html_src: str,
+    *,
+    site_url: str,
+    canonical_path: str,
+) -> str:
+    """Add route-equivalent zh-Hant / zh-Hans / en hreflang links."""
+    origin = (_site_base_href(site_url) or "").rstrip("/")
+    if not origin.startswith("http"):
+        return html_src
+
+    path = canonical_path if canonical_path.startswith("/") else f"/{canonical_path}"
+    if path != "/" and not path.endswith("/"):
+        path += "/"
+    if path == "/en/" or path.startswith("/en/"):
+        suffix = path[len("/en") :]
+    elif path == "/zh-CN/" or path.startswith("/zh-CN/"):
+        suffix = path[len("/zh-CN") :]
+    else:
+        suffix = path
+
+    locale_paths = (
+        ("zh-Hant", suffix),
+        ("zh-Hans", "/zh-CN" + suffix),
+        ("en", "/en" + suffix),
+        ("x-default", suffix),
+    )
+    links = "".join(
+        f"<link rel='alternate' hreflang='{lang}' href='{origin}{route}'>"
+        for lang, route in locale_paths
+    )
+    block = (
+        "<!-- arammeta:locale-alternates -->"
+        + links
+        + "<!-- /arammeta:locale-alternates -->"
+    )
+    out = _LOCALE_ALTERNATES_RE.sub("", html_src)
+    return out.replace("</head>", block + "</head>", 1)
 
 
 def _spa_deep_link_stub(
@@ -1165,7 +1213,12 @@ def write_spa_path_shells(
     if not index_path.is_file():
         return []
     root = index_path.parent
-    full_shell = index_path.read_text(encoding="utf-8")
+    full_shell = _inject_locale_alternates(
+        index_path.read_text(encoding="utf-8"),
+        site_url=site_url,
+        canonical_path="/",
+    )
+    index_path.write_text(full_shell, encoding="utf-8")
 
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
