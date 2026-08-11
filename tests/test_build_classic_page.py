@@ -104,8 +104,22 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertLess(page.index("aram-mayhem-site-theme"), page.index("<style>"))
         self.assertIn("data-theme-dark-aria='切換成深色主題'", page)
         self.assertIn("id='classic-mode-menu'", page)
-        self.assertIn("href='/'>Mayhem</a>", page)
-        self.assertIn("aria-current='page'>Classic</a>", page)
+        self.assertIn("href='/'>大亂鬥</a>", page)
+        self.assertIn("<span>經典模式</span>", page)
+        self.assertIn("aria-current='page'>經典模式</a>", page)
+        self.assertIn("class='lang-menu classic-lang-menu'", page)
+        self.assertIn("id='classic-lang-menu'", page)
+        self.assertIn("id='classic-lang-toggle'", page)
+        self.assertIn("Language / 語言: 繁體中文", page)
+        self.assertIn("<circle cx='12' cy='12' r='10'></circle>", page)
+        self.assertIn(
+            "data-lang='zh' href='/classic.html' class='is-active' aria-current='page'>繁體中文</a>",
+            page,
+        )
+        self.assertIn("data-lang='zh-CN' href='/zh-CN/classic.html'>简体中文</a>", page)
+        self.assertIn("data-lang='en' href='/en/classic.html'>English</a>", page)
+        self.assertIn("var langMenu=document.getElementById('classic-lang-menu')", page)
+        self.assertNotIn("classic-language-links", page)
         self.assertIn("border:4px solid transparent", page)
         self.assertIn("data-experimental-tier-detail", page)
         self.assertIn("detail-head-rate", page)
@@ -124,7 +138,14 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("狂战士胫甲", simplified)
         self.assertIn("data-theme-light-aria='切换成浅色主题'", simplified)
         self.assertIn("aria-label='切换游戏模式'", simplified)
-        self.assertIn("href='/zh-CN/'>Mayhem</a>", simplified)
+        self.assertIn("href='/zh-CN/'>大乱斗</a>", simplified)
+        self.assertIn("<span>经典模式</span>", simplified)
+        self.assertIn("aria-current='page'>经典模式</a>", simplified)
+        self.assertIn("Language / 语言: 简体中文", simplified)
+        self.assertIn(
+            "data-lang='zh-CN' href='/zh-CN/classic.html' class='is-active' aria-current='page'>简体中文</a>",
+            simplified,
+        )
         self.assertIn("hreflang='en' href='https://arammeta.com/en/classic.html'", simplified)
 
         english = classic.render_research_preview(
@@ -138,6 +159,13 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("data-theme-dark-aria='Switch to dark theme'", english)
         self.assertIn("aria-label='Switch game mode'", english)
         self.assertIn("href='/en/'>Mayhem</a>", english)
+        self.assertIn("<span>Classic</span>", english)
+        self.assertIn("aria-current='page'>Classic</a>", english)
+        self.assertIn("aria-label='Language: English'", english)
+        self.assertIn(
+            "data-lang='en' href='/en/classic.html' class='is-active' aria-current='page'>English</a>",
+            english,
+        )
         self.assertNotIn("資料與限制", english)
         self.assertIn("toLocaleString('en-US')", english)
         self.assertIn("Switch win rate and items by position", english)

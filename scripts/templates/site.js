@@ -8789,13 +8789,17 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.classic-mode-link').forEach(el => {
+        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
-            const aria = el.getAttribute(`data-aria-${suffix}`);
             if (href) el.setAttribute('href', href);
-            if (aria) el.setAttribute('aria-label', aria);
         });
+        const modeSummary = document.querySelector('#mode-menu > summary');
+        if (modeSummary) {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const aria = modeSummary.getAttribute(`data-aria-${suffix}`);
+            if (aria) modeSummary.setAttribute('aria-label', aria);
+        }
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
             columnArticle ? renderArticle(columnArticle) : renderColumnList();
@@ -9021,6 +9025,12 @@
     });
 
     document.addEventListener('click', (ev) => {
+        const modeMenu = document.getElementById('mode-menu');
+        if (modeMenu && !modeMenu.contains(ev.target)) modeMenu.open = false;
+        const modePick = ev.target.closest('.mode-options [data-mode-target]');
+        if (modePick) {
+            trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
+        }
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
@@ -9637,6 +9647,13 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            const modeMenu = document.getElementById('mode-menu');
+            if (modeMenu && modeMenu.open) {
+                modeMenu.open = false;
+                const summary = modeMenu.querySelector('summary');
+                if (summary) summary.focus();
+                return;
+            }
             if (augChampsId != null) {
                 closeAugChamps();
                 return;
