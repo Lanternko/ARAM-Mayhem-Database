@@ -44,10 +44,10 @@ The publisher fetches `origin/main`, creates a detached temporary worktree, read
 The crawler watchdog starts:
 
 ```powershell
-python scripts/publish_static_site.py --watch --growth-ratio 0.10 --threshold 0 --interval-sec 300 --patch-prefix auto
+python scripts/publish_static_site.py --watch --growth-ratio 0.10 --max-age-hours 12 --threshold 0 --interval-sec 300 --patch-prefix auto
 ```
 
-Watch mode uses the isolated worktree by default. A failed cycle logs the error, waits, and retries instead of terminating. Use `--no-site-publisher` on the watchdog only when publishing is intentionally disabled.
+Watch mode publishes when growth reaches 10% or the previous successful publish is 12 hours old, whichever happens first. It uses the isolated worktree by default. A failed cycle logs the error, waits, and retries instead of terminating. Use `--no-site-publisher` on the watchdog only when publishing is intentionally disabled.
 
 ## Guardrails
 

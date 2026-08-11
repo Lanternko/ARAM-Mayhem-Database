@@ -65,6 +65,40 @@ class StaticSitePublishTests(unittest.TestCase):
             self.assertFalse(wait.should_publish)
             self.assertTrue(publish.should_publish)
 
+    def test_publish_decision_uses_max_age_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "games.db"
+            insert_public_games(db, [game_row(f"TW_{idx}") for idx in range(6)])
+            last_publish = 1_000_000
+            state = {
+                "last_published_total": 5,
+                "last_publish_at_unix": last_publish,
+            }
+
+            fresh = decide_static_publish(
+                db=db,
+                state=state,
+                threshold=10,
+                growth_ratio=0.10,
+                max_age_hours=12,
+                force=False,
+                now_unix=last_publish + 11.5 * 3600,
+            )
+            stale = decide_static_publish(
+                db=db,
+                state=state,
+                threshold=10,
+                growth_ratio=0.10,
+                max_age_hours=12,
+                force=False,
+                now_unix=last_publish + 12 * 3600,
+            )
+
+            self.assertFalse(fresh.should_publish)
+            self.assertIn("age 11.5h < max 12h", fresh.reason)
+            self.assertTrue(stale.should_publish)
+            self.assertIn("age 12.0h >= max 12h", stale.reason)
+
     def test_dry_run_prepares_only_static_site_outputs(self) -> None:
         commands: list[list[str]] = []
 

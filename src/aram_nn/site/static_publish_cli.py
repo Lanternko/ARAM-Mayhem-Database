@@ -42,6 +42,13 @@ def acquire_publisher_lock(state_path: Path) -> BinaryIO:
 @click.option("--state", "state_path", type=click.Path(path_type=Path), default=DEFAULT_STATE_PATH, show_default=True)
 @click.option("--threshold", type=int, default=0, show_default=True, help="Minimum absolute growth before publishing. 0 = ratio-only.")
 @click.option("--growth-ratio", type=float, default=0.10, show_default=True, help="Publish after this fractional growth since the previous publish.")
+@click.option(
+    "--max-age-hours",
+    type=float,
+    default=0.0,
+    show_default=True,
+    help="Publish after this many hours even below the growth threshold. 0 disables the age fallback.",
+)
 @click.option("--queue", "queue_id", type=int, default=2400, show_default=True)
 @click.option("--patch-prefix", default="auto", show_default=True, help='"auto" detects the latest patch from the DB.')
 @click.option(
@@ -69,6 +76,7 @@ def main(
     state_path: Path,
     threshold: int,
     growth_ratio: float,
+    max_age_hours: float,
     queue_id: int,
     patch_prefix: str,
     auto_patch_min_games: int,
@@ -122,6 +130,7 @@ def main(
                 state_path=state_path,
                 threshold=threshold,
                 growth_ratio=growth_ratio,
+                max_age_hours=max_age_hours,
                 force=force,
                 queue_id=queue_id,
                 patch_prefix=effective_patch,

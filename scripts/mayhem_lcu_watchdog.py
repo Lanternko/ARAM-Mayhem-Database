@@ -540,6 +540,8 @@ def ensure_static_site_publisher(args: argparse.Namespace) -> dict[str, Any] | N
         str(args.static_publish_threshold),
         "--growth-ratio",
         str(args.static_publish_growth_ratio),
+        "--max-age-hours",
+        str(args.static_publish_max_age_hours),
         "--interval-sec",
         str(args.static_publish_interval_sec),
         "--db",
@@ -913,6 +915,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--site-publisher", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--static-publish-threshold", type=int, default=0)
     parser.add_argument("--static-publish-growth-ratio", type=float, default=0.10)
+    parser.add_argument("--static-publish-max-age-hours", type=float, default=12.0)
     parser.add_argument("--static-publish-interval-sec", type=int, default=300)
     parser.add_argument("--static-publish-patch-prefix", default="auto")
     # 10,000: gated by teammate-synergy coverage, not by win-rate accuracy.  See the
