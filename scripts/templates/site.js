@@ -8560,8 +8560,8 @@
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
-        if (!view || view === 'home') return prefix || '/';
-        return prefix + '/' + view;
+        if (!view || view === 'home') return prefix ? prefix + '/' : '/';
+        return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
         let path = pathname || '/';
@@ -8609,8 +8609,7 @@
         // historyMode: 'push' | 'replace' | 'none'
         if (historyMode === 'none') return;
         const wantPath = pathForRoute(view, sub);
-        const curNorm = normalizePathname(location.pathname);
-        const needPath = curNorm !== wantPath;
+        const needPath = location.pathname !== wantPath;
         const needClearHash = Boolean(location.hash);
         if (!needPath && !needClearHash) return;
         const url = wantPath + (location.search || '');
@@ -9462,7 +9461,7 @@
                 if ((p === '/' || p === '') && (saved === 'en' || saved === 'zh-CN')) {
                     currentLang = normalizeLang(saved);
                     try {
-                        history.replaceState(null, '', (langMeta(currentLang).prefix || '/') + (location.search || ''));
+                        history.replaceState(null, '', pathForRoute('home') + (location.search || ''));
                     } catch {}
                 }
             } catch {}

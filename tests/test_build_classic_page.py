@@ -124,7 +124,7 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("狂战士胫甲", simplified)
         self.assertIn("data-theme-light-aria='切换成浅色主题'", simplified)
         self.assertIn("aria-label='切换游戏模式'", simplified)
-        self.assertIn("href='/zh-CN'>Mayhem</a>", simplified)
+        self.assertIn("href='/zh-CN/'>Mayhem</a>", simplified)
         self.assertIn("hreflang='en' href='https://arammeta.com/en/classic.html'", simplified)
 
         english = classic.render_research_preview(
@@ -137,7 +137,7 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("Data and limitations", english)
         self.assertIn("data-theme-dark-aria='Switch to dark theme'", english)
         self.assertIn("aria-label='Switch game mode'", english)
-        self.assertIn("href='/en'>Mayhem</a>", english)
+        self.assertIn("href='/en/'>Mayhem</a>", english)
         self.assertNotIn("資料與限制", english)
         self.assertIn("toLocaleString('en-US')", english)
         self.assertIn("Switch win rate and items by position", english)
