@@ -1062,8 +1062,10 @@
             augChampsGames: games => `${games} 場`,
             augChampsEmpty: '樣本不足',
             augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場`,
-            overviewWrLabel: '綜合勝率',
-            overviewGames: games => `${games} 場`,
+            overviewWrLabel: '勝率',
+            overviewPickLabel: '選取率',
+            overviewGamesLabel: '場次',
+            overviewRank: (rank, total) => `#${rank} / ${total}`,
             compFitTitle: '英雄能力',
             compFitMeta: '左：六軸能力百分位；右：操作係數與對局節奏',
             compFitAvoid: '避免',
@@ -1397,8 +1399,10 @@
             augChampsGames: games => `${games} games`,
             augChampsEmpty: 'Not enough data',
             augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games`,
-            overviewWrLabel: 'Overall WR',
-            overviewGames: games => `${games} games`,
+            overviewWrLabel: 'Win rate',
+            overviewPickLabel: 'Pick rate',
+            overviewGamesLabel: 'Games',
+            overviewRank: (rank, total) => `#${rank} / ${total}`,
             compFitTitle: 'Abilities',
             compFitMeta: 'left: 6-axis ability percentiles; right: skill-scaling & tempo',
             compFitAvoid: 'Avoid',
@@ -2902,6 +2906,33 @@
         `;
     }
 
+    let championOverviewRankCache = null;
+    function championOverviewStats(cid, info) {
+        if (!championOverviewRankCache) {
+            const peers = Object.entries(DATA.champs || {}).filter(([, row]) => (
+                row && Number.isFinite(Number(row.wr)) && Number.isFinite(Number(row.g))
+            ));
+            const rankMap = (valueOf) => new Map(
+                [...peers]
+                    .sort((a, b) => valueOf(b[1]) - valueOf(a[1]) || Number(a[0]) - Number(b[0]))
+                    .map(([id], index) => [String(id), index + 1])
+            );
+            championOverviewRankCache = {
+                rankTotal: peers.length,
+                wr: rankMap(row => Number(row.wr || 0)),
+                pick: rankMap(row => Number(row.g || 0)),
+            };
+        }
+        const totalMatches = Number(String(TOTAL_GAMES || '').replace(/[^\d]/g, '')) || 0;
+        const key = String(cid);
+        return {
+            wrRank: championOverviewRankCache.wr.get(key) || 0,
+            pickRank: championOverviewRankCache.pick.get(key) || 0,
+            rankTotal: championOverviewRankCache.rankTotal,
+            pickRate: totalMatches > 0 ? Number(info.g || 0) / totalMatches : 0,
+        };
+    }
+
     function renderDetail(cid) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
@@ -2912,6 +2943,7 @@
             return `<div class="empty">${tr().detailEmpty}</div>`;
         }
         const copy = tr();
+        const overview = championOverviewStats(cid, info);
         const top = info.top || {};
         const setInfo = info.sets || {};
         const setTop = setInfo.top || [];
@@ -3578,10 +3610,33 @@
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
+        const overviewRank = (rank) => (
+            Number(rank) > 0 && Number(overview.rankTotal) > 0
+                ? `<span class="ovr-rank">${escHtml(copy.overviewRank(Number(rank), Number(overview.rankTotal)))}</span>`
+                : ''
+        );
         const overviewTabContent = `
             <div class="detail-section detail-overview-head">
-                <span class="ovr-wr">${pct(info.wr)}</span>
-                <span class="ovr-meta">${copy.overviewWrLabel} \u00b7 ${copy.overviewGames(info.g)}</span>
+                <div class="ovr-stat ovr-stat-primary">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value ovr-wr">${pct(info.wr)}</span>
+                        ${overviewRank(overview.wrRank)}
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewWrLabel)}</span>
+                </div>
+                <div class="ovr-stat">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value">${pct(overview.pickRate)}</span>
+                        ${overviewRank(overview.pickRank)}
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewPickLabel)}</span>
+                </div>
+                <div class="ovr-stat ovr-stat-games">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value">${fmtInt(info.g)}</span>
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewGamesLabel)}</span>
+                </div>
             </div>
             <div class="overview-split">
                 <div class="overview-split-main">
