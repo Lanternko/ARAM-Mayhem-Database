@@ -2338,18 +2338,6 @@ def render_html(
         "</span>"
         "</button>"
     )
-    parts.append(
-        "<a class='classic-mode-link' href='/classic.html' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
-        "aria-label='前往經典模式資料' data-aria-zh='前往經典模式資料' "
-        "data-aria-zh-cn='前往经典模式数据' data-aria-en='Open Classic Mode data'>"
-        "<span class='classic-mode-link-full' data-i18n-zh='經典模式' "
-        "data-i18n-zh-cn='经典模式' data-i18n-en='Classic Mode'>經典模式</span>"
-        "<span class='classic-mode-link-short' aria-hidden='true' data-i18n-zh='經典' "
-        "data-i18n-zh-cn='经典' data-i18n-en='Classic'>經典</span>"
-        "<span class='classic-mode-link-new' aria-hidden='true'>NEW</span>"
-        "</a>"
-    )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
     for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
         # Home (= 英雄) is active on first paint; brand and this tab both land there.
@@ -2367,6 +2355,30 @@ def render_html(
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
+    parts.append(
+        "<details class='mode-menu' id='mode-menu'>"
+        "<summary class='mode-select' aria-label='切換遊戲模式' "
+        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
+        "data-aria-en='Switch game mode'>"
+        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</span>"
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='m4 6 4 4 4-4'></path></svg>"
+        "</summary>"
+        "<div class='mode-options' role='menu'>"
+        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
+        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
+        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</a>"
+        "<a class='mode-option' role='menuitem' href='/classic.html' "
+        "data-mode-target='classic' data-href-zh='/classic.html' "
+        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
+        "data-i18n-en='Classic'>經典模式</a>"
+        "</div></details>"
+    )
     parts.append(
         "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
         "type='button' title='切換淺色' aria-label='切換主題'>"

@@ -911,11 +911,22 @@ class RenderContractTests(unittest.TestCase):
         self.assertIn('"patch_prefix": "16.10"', html.replace("'", '"') if False else html)
         # json.dumps uses double quotes
         self.assertIn('"patch_prefix": "16.10"', html)
-        self.assertIn("class='classic-mode-link'", html)
-        self.assertIn("href='/classic.html'", html)
+        self.assertIn("id='mode-menu'", html)
+        self.assertIn("class='mode-select'", html)
+        self.assertIn("aria-current='page'", html)
+        self.assertIn("data-mode-target='mayhem'", html)
+        self.assertIn("data-mode-target='classic'", html)
         self.assertIn("data-href-zh-cn='/zh-CN/classic.html'", html)
         self.assertIn("data-href-en='/en/classic.html'", html)
-        self.assertIn("data-i18n-en='Classic Mode'", html)
+        self.assertIn("data-aria-en='Switch game mode'", html)
+        self.assertIn("data-i18n-zh='大亂鬥'", html)
+        self.assertIn("data-i18n-zh-cn='大乱斗'", html)
+        self.assertIn("data-i18n-zh='經典模式'", html)
+        self.assertIn("data-i18n-zh-cn='经典模式'", html)
+        self.assertIn("data-i18n-en='Mayhem'", html)
+        self.assertIn("data-i18n-en='Classic'", html)
+        self.assertLess(html.index("id='mode-menu'"), html.index("id='theme-toggle'"))
+        self.assertNotIn("classic-mode-link", html)
 
         html_empty = render_html(
             records=[],

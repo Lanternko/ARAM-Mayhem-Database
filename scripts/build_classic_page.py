@@ -149,6 +149,25 @@ MODE_MENU_LABELS = {
     "zh-Hans": "切换游戏模式",
     "en": "Switch game mode",
 }
+MODE_NAMES = {
+    "zh-Hant": {"mayhem": "大亂鬥", "classic": "經典模式"},
+    "zh-Hans": {"mayhem": "大乱斗", "classic": "经典模式"},
+    "en": {"mayhem": "Mayhem", "classic": "Classic"},
+}
+LANGUAGE_MENU_LABELS = {
+    "zh-Hant": {
+        "current": "繁體中文",
+        "aria": "Language / 語言: 繁體中文",
+    },
+    "zh-Hans": {
+        "current": "简体中文",
+        "aria": "Language / 语言: 简体中文",
+    },
+    "en": {
+        "current": "English",
+        "aria": "Language: English",
+    },
+}
 THEME_BOOTSTRAP_JS = (
     "(function(){var theme='dark';try{theme=localStorage.getItem('"
     + THEME_STORAGE_KEY
@@ -167,6 +186,16 @@ THEME_TOGGLE_ICONS = (
     "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
     "stroke-linejoin='round' aria-hidden='true'>"
     "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
+    "</svg>"
+)
+LANGUAGE_MENU_GLOBE_ICON = (
+    "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+    "stroke-linejoin='round' aria-hidden='true'>"
+    "<circle cx='12' cy='12' r='10'></circle>"
+    "<path d='M2 12h20'></path>"
+    "<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 "
+    "15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path>"
     "</svg>"
 )
 
@@ -1437,10 +1466,7 @@ color:var(--text-dim);font-size:12px}
   .classic-overview-grid{grid-template-columns:1fr;gap:16px}
   .detail-equipment-columns{grid-template-columns:1fr}
 }
-.classic-language-links{display:inline-flex;align-items:center;gap:2px;margin-left:6px}
-.classic-language-links a{padding:4px 6px;border-radius:6px;color:var(--text-dim);font-size:11px;
-text-decoration:none}.classic-language-links a:hover{color:var(--text)}
-.classic-language-links a[aria-current="page"]{background:var(--surface-2);color:var(--text)}
+.site-header .classic-lang-menu .lang-menu-list a{display:block;text-decoration:none}
 :root[data-theme="light"] .detail-item,
 :root[data-theme="light"] .relationship-row,
 :root[data-theme="light"] .spell-row,
@@ -1457,6 +1483,7 @@ text-decoration:none}.classic-language-links a:hover{color:var(--text)}
 JS = """
 (function(){
   var modeMenu=document.getElementById('classic-mode-menu');
+  var langMenu=document.getElementById('classic-lang-menu');
   var themeKey='aram-mayhem-site-theme';
   var themeToggle=document.querySelector('[data-theme-toggle]');
   function syncThemeToggle(){if(!themeToggle)return;var isLight=document.documentElement.getAttribute('data-theme')==='light';themeToggle.title=isLight?themeToggle.dataset.themeDarkTitle:themeToggle.dataset.themeLightTitle;themeToggle.setAttribute('aria-label',isLight?themeToggle.dataset.themeDarkAria:themeToggle.dataset.themeLightAria);}
@@ -1517,8 +1544,8 @@ JS = """
   [ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(button){button.addEventListener('click',function(){positionFilter.value=button.dataset.positionFilter;[ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
   [ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(button){button.addEventListener('click',function(){itemKindFilter.value=button.dataset.itemKindFilter;[ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
   [search,positionFilter,itemKindFilter,minGames,heroSort,itemSort].forEach(function(control){control.addEventListener(control===search?'input':'change',refresh);});
-  document.addEventListener('click',function(event){if(modeMenu&&!modeMenu.contains(event.target))modeMenu.removeAttribute('open');var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){if(Number(state.heroId)===Number(tile.dataset.heroId)&&!detail.hidden)closeDetail();else openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
-  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&modeMenu&&modeMenu.open){modeMenu.removeAttribute('open');var summary=modeMenu.querySelector('summary');if(summary)summary.focus();}});
+  document.addEventListener('click',function(event){if(modeMenu&&!modeMenu.contains(event.target))modeMenu.removeAttribute('open');if(langMenu&&!langMenu.contains(event.target))langMenu.removeAttribute('open');var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){if(Number(state.heroId)===Number(tile.dataset.heroId)&&!detail.hidden)closeDetail();else openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
+  document.addEventListener('keydown',function(event){if(event.key!=='Escape')return;var openMenu=langMenu&&langMenu.open?langMenu:modeMenu&&modeMenu.open?modeMenu:null;if(openMenu){openMenu.removeAttribute('open');var summary=openMenu.querySelector('summary');if(summary)summary.focus();}});
   setTab('tier',false);
 })();
 """
@@ -1894,6 +1921,8 @@ def render_research_preview(
     copy_text = CLASSIC_COPY[locale]
     theme_labels = THEME_LABELS[locale]
     mode_menu_label = MODE_MENU_LABELS[locale]
+    mode_names = MODE_NAMES[locale]
+    language_menu_labels = LANGUAGE_MENU_LABELS[locale]
     heroes = _localized_records(heroes, locale)
     items = _localized_records(items, locale)
     if not MAIN_SITE_CSS_PATH.exists():
@@ -2015,12 +2044,12 @@ def render_research_preview(
     page.append(
         "<details class='classic-mode-menu' id='classic-mode-menu'>"
         f"<summary class='classic-mode-select' aria-label='{html.escape(mode_menu_label, quote=True)}'>"
-        "<span>Classic</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        f"<span>{mode_names['classic']}</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
         "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
         "<path d='m4 6 4 4 4-4'></path></svg></summary>"
         "<div class='classic-mode-options' role='menu'>"
-        f"<a role='menuitem' href='{copy_text['main_href']}'>Mayhem</a>"
-        f"<a role='menuitem' href='{classic_href}' aria-current='page'>Classic</a>"
+        f"<a role='menuitem' href='{copy_text['main_href']}'>{mode_names['mayhem']}</a>"
+        f"<a role='menuitem' href='{classic_href}' aria-current='page'>{mode_names['classic']}</a>"
         "</div></details>"
     )
     page.append(
@@ -2034,11 +2063,29 @@ def render_research_preview(
         f"data-theme-dark-aria='{html.escape(theme_labels['to_dark_aria'], quote=True)}'>"
         f"{THEME_TOGGLE_ICONS}</button>"
     )
-    page.append("<nav class='classic-language-links' aria-label='Language'>")
-    for language_locale, language_label in (("zh-Hant", "繁中"), ("zh-Hans", "简中"), ("en", "EN")):
-        current = " aria-current='page'" if language_locale == locale else ""
-        page.append(f"<a href='{CLASSIC_LOCALES[language_locale]['url'].replace('https://arammeta.com', '')}'{current}>{language_label}</a>")
-    page.append("</nav></div>")
+    page.append(
+        "<details class='lang-menu classic-lang-menu' id='classic-lang-menu'>"
+        "<summary class='icon-btn lang-toggle' id='classic-lang-toggle' "
+        f"title='{html.escape(language_menu_labels['current'], quote=True)}' "
+        f"aria-label='{html.escape(language_menu_labels['aria'], quote=True)}'>"
+        f"{LANGUAGE_MENU_GLOBE_ICON}"
+        f"<span id='classic-lang-toggle-label'>{language_menu_labels['current']}</span>"
+        "</summary><div class='lang-menu-list' role='menu'>"
+    )
+    for language_locale, language_label, language_code in (
+        ("zh-Hant", "繁體中文", "zh"),
+        ("zh-Hans", "简体中文", "zh-CN"),
+        ("en", "English", "en"),
+    ):
+        active = " class='is-active' aria-current='page'" if language_locale == locale else ""
+        language_href = CLASSIC_LOCALES[language_locale]["url"].replace(
+            "https://arammeta.com", ""
+        )
+        page.append(
+            f"<a role='menuitem' data-lang='{language_code}' href='{language_href}'{active}>"
+            f"{language_label}</a>"
+        )
+    page.append("</div></details></div>")
     page.append("</div></header><main id='main-content' class='site-main view-home'>")
     page.append("<div class='app-shell'><div class='main-col'>")
     page.append("<div class='filter-bar item-filter-bar' id='item-filter-bar' aria-label='裝備類型篩選' hidden>")
