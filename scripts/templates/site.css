@@ -38,6 +38,11 @@
         --wr-positive: oklch(0.78 0.055 155);
         --wr-negative: oklch(0.79 0.05 18);
         --wr-neutral: var(--text-muted);
+        --wr-5: oklch(0.723 0.192 149.6);
+        --wr-4: oklch(0.871 0.136 154.4);
+        --wr-3: var(--text-muted);
+        --wr-2: oklch(0.802 0.086 11.8);
+        --wr-1: oklch(0.676 0.213 19.8);
         --pick-quiet: var(--text-muted);
         --header-h: 56px;
         --container: 1320px;
@@ -80,6 +85,11 @@
         --wr-positive: oklch(0.53 0.09 155);
         --wr-negative: oklch(0.56 0.09 18);
         --wr-neutral: var(--text-muted);
+        --wr-5: oklch(0.500 0.137 150.1);
+        --wr-4: oklch(0.490 0.092 155.3);
+        --wr-3: var(--text-muted);
+        --wr-2: oklch(0.530 0.126 10.2);
+        --wr-1: oklch(0.530 0.199 21.6);
         --pick-quiet: var(--text-muted);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
@@ -3190,11 +3200,11 @@
        Bad side stays pure red (not orange — orange is reserved for pick heat).
        wr-2 is desaturated pink-red; wr-1 is brighter saturated red so the step
        is obvious on dark chrome without looking brown/muddy. */
-    .aug .awr.wr-5 { color: #22c55e; } /* 正綠 */
-    .aug .awr.wr-4 { color: #86efac; } /* 淺綠 */
-    .aug .awr.wr-3 { color: var(--text-secondary); font-weight: 600; } /* 無色 */
-    .aug .awr.wr-2 { color: #f0a8b0; } /* 淺紅：粉紅偏淡 */
-    .aug .awr.wr-1 { color: #ff4d5e; } /* 正紅：飽和、明顯比 wr-2 重 */
+    .aug .awr.wr-5 { color: var(--wr-5); } /* 正綠 */
+    .aug .awr.wr-4 { color: var(--wr-4); } /* 淺綠 */
+    .aug .awr.wr-3 { color: var(--wr-3); font-weight: 600; } /* 無色 */
+    .aug .awr.wr-2 { color: var(--wr-2); } /* 淺紅：粉紅偏淡 */
+    .aug .awr.wr-1 { color: var(--wr-1); } /* 正紅：飽和、明顯比 wr-2 重 */
     .aug .alift {
         flex: 0 0 var(--aug-stat-h);
         display: flex;
@@ -5509,11 +5519,11 @@
     [data-theme="light"] .rlabel-sort.is-active {
         background: rgba(0, 0, 0, 0.16);
     }
-    [data-theme="light"] .aug .awr.wr-5 { color: #15803d; } /* 正綠 */
-    [data-theme="light"] .aug .awr.wr-4 { color: #3d9b5f; } /* 淺綠 */
-    [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
-    [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
-    [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
+    [data-theme="light"] .aug .awr.wr-5 { color: var(--wr-5); } /* 正綠 */
+    [data-theme="light"] .aug .awr.wr-4 { color: var(--wr-4); } /* 淺綠 */
+    [data-theme="light"] .aug .awr.wr-3 { color: var(--wr-3); }
+    [data-theme="light"] .aug .awr.wr-2 { color: var(--wr-2); } /* 淺紅 */
+    [data-theme="light"] .aug .awr.wr-1 { color: var(--wr-1); } /* 正紅 */
     /* Light: solar ladder deepened for paper contrast (same order). */
     [data-theme="light"] .aug .alift.pick-1 { color: #94a3b8; font-weight: 500; }
     [data-theme="light"] .aug .alift.pick-2 { color: #374151; font-weight: 600; }
@@ -8501,33 +8511,39 @@
         border-color: var(--panel-line);
     }
 
-    /* WR carries meaning; it no longer competes with pick-rate decoration. */
+    /* WR carries meaning; item and augment values use the shared five-step
+       champion-relative lift scale instead of collapsing to three tones. */
     .team-eval-wr.is-good .team-wr-num,
     .item-build-wr.is-good,
     .cg-core-wr.is-good,
     .cg-option-wr.is-good,
-    .boot-rail-wr.is-good,
-    .aug .awr.wr-5,
-    .aug .awr.wr-4 {
+    .boot-rail-wr.is-good {
         color: var(--wr-positive);
     }
     .team-eval-wr.is-bad .team-wr-num,
     .item-build-wr.is-bad,
     .cg-core-wr.is-bad,
     .cg-option-wr.is-bad,
-    .boot-rail-wr.is-bad,
-    .aug .awr.wr-1,
-    .aug .awr.wr-2 {
+    .boot-rail-wr.is-bad {
         color: var(--wr-negative);
     }
     .team-eval-wr.is-even .team-wr-num,
     .item-build-wr.is-even,
     .cg-core-wr.is-even,
     .cg-option-wr.is-even,
-    .boot-rail-wr.is-even,
-    .aug .awr.wr-3 {
+    .boot-rail-wr.is-even {
         color: var(--wr-neutral);
     }
+    .item-build-wr.wr-5, .cg-core-wr.wr-5, .cg-option-wr.wr-5,
+    .boot-rail-wr.wr-5, .aug .awr.wr-5 { color: var(--wr-5); }
+    .item-build-wr.wr-4, .cg-core-wr.wr-4, .cg-option-wr.wr-4,
+    .boot-rail-wr.wr-4, .aug .awr.wr-4 { color: var(--wr-4); }
+    .item-build-wr.wr-3, .cg-core-wr.wr-3, .cg-option-wr.wr-3,
+    .boot-rail-wr.wr-3, .aug .awr.wr-3 { color: var(--wr-3); }
+    .item-build-wr.wr-2, .cg-core-wr.wr-2, .cg-option-wr.wr-2,
+    .boot-rail-wr.wr-2, .aug .awr.wr-2 { color: var(--wr-2); }
+    .item-build-wr.wr-1, .cg-core-wr.wr-1, .cg-option-wr.wr-1,
+    .boot-rail-wr.wr-1, .aug .awr.wr-1 { color: var(--wr-1); }
     .team-delta.tone-pos-2,
     .team-delta.tone-pos-1,
     .team-delta.tone-neg-1,
