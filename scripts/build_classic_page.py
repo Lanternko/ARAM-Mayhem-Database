@@ -123,6 +123,52 @@ CLASSIC_LOCALES = {
     },
 }
 MAIN_SITE_CSS_PATH = Path(__file__).with_name("templates") / "site.css"
+THEME_STORAGE_KEY = "aram-mayhem-site-theme"
+THEME_LABELS = {
+    "zh-Hant": {
+        "to_light_title": "切換淺色",
+        "to_light_aria": "切換成淺色主題",
+        "to_dark_title": "切換深色",
+        "to_dark_aria": "切換成深色主題",
+    },
+    "zh-Hans": {
+        "to_light_title": "切换浅色",
+        "to_light_aria": "切换成浅色主题",
+        "to_dark_title": "切换深色",
+        "to_dark_aria": "切换成深色主题",
+    },
+    "en": {
+        "to_light_title": "Switch to light",
+        "to_light_aria": "Switch to light theme",
+        "to_dark_title": "Switch to dark",
+        "to_dark_aria": "Switch to dark theme",
+    },
+}
+MODE_MENU_LABELS = {
+    "zh-Hant": "切換遊戲模式",
+    "zh-Hans": "切换游戏模式",
+    "en": "Switch game mode",
+}
+THEME_BOOTSTRAP_JS = (
+    "(function(){var theme='dark';try{theme=localStorage.getItem('"
+    + THEME_STORAGE_KEY
+    + "')==='light'?'light':'dark';}catch(error){}"
+    "document.documentElement.setAttribute('data-theme',theme);})();"
+)
+THEME_TOGGLE_ICONS = (
+    "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+    "stroke-linejoin='round' aria-hidden='true'>"
+    "<circle cx='12' cy='12' r='4'></circle>"
+    "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
+    "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
+    "</svg>"
+    "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+    "stroke-linejoin='round' aria-hidden='true'>"
+    "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
+    "</svg>"
+)
 
 # The client reports JADE inventory ids as ``77`` + the ordinary item id, e.g.
 # 773006 = Berserker's Greaves (3006).  Statistics stay keyed by the ordinary
@@ -1290,9 +1336,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 # automatically while the few mode-specific differences stay explicit.
 CLASSIC_PARITY_CSS = """
 .classic-header-actions{min-width:0}
-.classic-mode-label{display:inline-flex;align-items:center;margin-left:auto;padding:4px 9px;
-border:1px solid var(--border);border-radius:999px;background:var(--surface-2);
-color:var(--text-muted);font-size:11px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+.classic-mode-menu{position:relative;display:inline-flex;margin-left:auto}
+.classic-mode-menu>summary{list-style:none}.classic-mode-menu>summary::-webkit-details-marker{display:none}
+.classic-mode-select{display:inline-flex;min-height:30px;align-items:center;gap:7px;padding:5px 11px 5px 13px;
+border:1px solid color-mix(in oklab,var(--accent) 68%,var(--border));border-radius:999px;
+background:var(--accent);color:var(--accent-on,#17130a);font-size:11px;font-weight:800;
+letter-spacing:.02em;line-height:1;cursor:pointer;user-select:none;
+box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 28%,transparent),0 2px 8px color-mix(in srgb,var(--accent) 18%,transparent)}
+.classic-mode-select svg{transition:transform .16s cubic-bezier(.22,1,.36,1)}
+.classic-mode-menu[open] .classic-mode-select svg{transform:rotate(180deg)}
+.classic-mode-select:hover{background:color-mix(in oklab,var(--accent) 90%,var(--text));border-color:var(--accent)}
+.classic-mode-select:focus-visible{outline:2px solid color-mix(in oklab,var(--accent) 58%,var(--text));outline-offset:2px}
+.classic-mode-options{position:absolute;top:calc(100% + 7px);right:0;z-index:80;display:grid;min-width:144px;
+padding:5px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);
+box-shadow:var(--shadow-lg,0 14px 34px rgba(0,0,0,.34))}
+.classic-mode-options a{display:flex;align-items:center;justify-content:space-between;min-height:34px;padding:7px 10px;
+border-radius:7px;color:var(--text-muted);font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap}
+.classic-mode-options a:hover{background:var(--surface-2);color:var(--text)}
+.classic-mode-options a[aria-current="page"]{background:color-mix(in oklab,var(--accent) 14%,var(--surface));color:var(--text)}
+.classic-mode-options a[aria-current="page"]::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .site-main.view-home{display:block}
 .site-main .app-shell{grid-template-columns:minmax(0,1fr)}
 .site-main .main-col{min-width:0}
@@ -1305,33 +1367,45 @@ color:var(--text-muted);font-size:11px;font-weight:700;letter-spacing:.02em;whit
 .tier-grid{row-gap:18px}
 .hero-tile.champ{appearance:none;display:block;width:100%;padding:0;margin:0 0 26px;
 color:var(--text);font:inherit;text-align:left;overflow:visible;
-content-visibility:visible;contain:none;isolation:isolate}
-.hero-tile.champ::after{content:"";position:absolute;inset:-2px;z-index:3;
-border:2px solid var(--tier-color,#555);border-radius:8px;pointer-events:none}
-.tier-block[data-tier-group="OP"] .hero-tile.champ::after{border-color:transparent;
-background:linear-gradient(135deg,#ffffff 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#ffffff 100%);
--webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
--webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
-mask-composite:exclude;background-size:220% 220%;animation:prismShift 6s ease-in-out infinite}
-.tier-block[data-tier-group="T1"] .hero-tile.champ::after{border-color:transparent;
-background:linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%);
--webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
--webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
-mask-composite:exclude;background-size:220% 220%;animation:prismShift 9s ease-in-out infinite}
-.hero-tile.champ .wr{left:0;bottom:0;padding:2px 5px;border-radius:0 6px 0 0;
+content-visibility:visible;contain:none;isolation:isolate;border:4px solid transparent;border-radius:10px;
+background:linear-gradient(var(--surface),var(--surface)) padding-box,
+linear-gradient(145deg,color-mix(in oklab,var(--tier-color,#68707d) 72%,var(--text)),
+var(--tier-color,#68707d) 48%,color-mix(in oklab,var(--tier-color,#68707d) 74%,var(--bg))) border-box;
+box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 10%,transparent),
+0 3px 10px color-mix(in srgb,var(--tier-color,#68707d) 18%,transparent)}
+.hero-tile.champ::after{content:"";position:absolute;inset:4px;z-index:3;
+border:1px solid color-mix(in srgb,var(--text) 18%,transparent);border-radius:6px;pointer-events:none}
+.tier-block[data-tier-group="OP"] .hero-tile.champ{background:
+linear-gradient(var(--surface),var(--surface)) padding-box,
+linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;
+background-size:auto,220% 220%;animation:prismShift 6s ease-in-out infinite}
+.tier-block[data-tier-group="T1"] .hero-tile.champ{background:
+linear-gradient(var(--surface),var(--surface)) padding-box,
+linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;
+background-size:auto,220% 220%;animation:prismShift 9s ease-in-out infinite}
+.hero-tile.champ>img{border-radius:6px}
+.hero-tile.champ .wr{left:4px;bottom:4px;padding:2px 5px;border-radius:0 6px 0 0;
 font-size:10px;line-height:1.2;z-index:2}
 .hero-tile.champ .name{left:0;right:0;bottom:-26px;padding:6px 1px 2px;background:none;
 color:var(--text);font-size:10px;font-weight:600;text-align:left;opacity:1;
 line-height:1.2;text-shadow:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hero-tile.champ[aria-pressed="true"]{transform:translateY(-2px);filter:brightness(1.08);
-box-shadow:0 0 0 1px #f7f7fb,0 6px 16px rgba(0,0,0,.6)}
+box-shadow:0 0 0 2px color-mix(in oklab,var(--tier-color,#68707d) 65%,var(--text)),
+0 8px 18px color-mix(in srgb,var(--tier-color,#68707d) 28%,transparent)}
 .detail-host>.hero-detail{grid-column:1/-1;width:100%}
-.hero-detail.detail{display:block;margin:6px 0 4px;background:var(--panel-surface);border:1px solid var(--panel-line);
-border-radius:10px;padding:0 18px 18px;box-shadow:var(--panel-shadow)}
-.hero-detail .detail-tab-rail{background:var(--panel-surface)}
+.tier-block.has-open-detail{padding-bottom:14px;background:color-mix(in oklab,var(--tier-color,#68707d) 5%,transparent);
+box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tier-color,#68707d) 18%,transparent)}
+.hero-detail.detail{display:block;margin:8px 0 2px;background:var(--panel-surface);
+border:1px solid color-mix(in srgb,var(--tier-color,#68707d) 38%,var(--panel-line));
+border-radius:14px;padding:0 18px 18px;box-shadow:0 14px 34px rgba(0,0,0,.22);overflow:hidden}
+.hero-detail .detail-tab-rail{margin:0 -18px;padding:12px 18px 0;background:var(--panel-surface);
+border-bottom:1px solid color-mix(in srgb,var(--tier-color,#68707d) 20%,var(--panel-line))}
 .hero-detail .detail-head{min-height:58px}
 .hero-detail .detail-head .detail-identity{display:flex;align-items:center;gap:8px;min-width:0}
 .hero-detail .detail-head .cname{font-size:16px;font-weight:600}
+.detail-head-rate{display:grid;justify-items:end;gap:1px;margin-left:auto;padding-right:4px;line-height:1}
+.detail-head-rate strong{font-size:18px;font-weight:780;font-variant-numeric:tabular-nums}
+.detail-head-rate small{color:var(--text-dim);font-size:9px;font-weight:600;letter-spacing:.03em}
 .classic-position-tags{display:flex;gap:5px;flex-wrap:wrap}
 .classic-position-tag{padding:2px 7px;border:1px solid var(--border);border-radius:999px;
 color:var(--text-muted);font-size:10px;font-weight:600}
@@ -1367,10 +1441,27 @@ color:var(--text-dim);font-size:12px}
 .classic-language-links a{padding:4px 6px;border-radius:6px;color:var(--text-dim);font-size:11px;
 text-decoration:none}.classic-language-links a:hover{color:var(--text)}
 .classic-language-links a[aria-current="page"]{background:var(--surface-2);color:var(--text)}
+:root[data-theme="light"] .detail-item,
+:root[data-theme="light"] .relationship-row,
+:root[data-theme="light"] .spell-row,
+:root[data-theme="light"] .research-table th,
+:root[data-theme="light"] .research-table td{border-bottom-color:color-mix(in srgb,var(--text) 8%,transparent)}
+:root[data-theme="light"] .research-table tbody tr:hover{background:color-mix(in srgb,var(--text) 3%,transparent)}
+:root[data-theme="light"] .hero-tile.champ{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 12%,transparent),
+0 3px 9px color-mix(in srgb,var(--tier-color,#68707d) 16%,transparent)}
+:root[data-theme="light"] .hero-tile.champ::after{border-color:color-mix(in srgb,var(--text) 20%,transparent)}
+:root[data-theme="light"] .hero-tile.champ[aria-pressed="true"]{box-shadow:0 0 0 2px color-mix(in oklab,var(--tier-color,#68707d) 72%,var(--text)),0 7px 16px rgba(31,41,55,.18)}
+:root[data-theme="light"] .classic-mode-select{color:#17130a}
 """
 
 JS = """
 (function(){
+  var modeMenu=document.getElementById('classic-mode-menu');
+  var themeKey='aram-mayhem-site-theme';
+  var themeToggle=document.querySelector('[data-theme-toggle]');
+  function syncThemeToggle(){if(!themeToggle)return;var isLight=document.documentElement.getAttribute('data-theme')==='light';themeToggle.title=isLight?themeToggle.dataset.themeDarkTitle:themeToggle.dataset.themeLightTitle;themeToggle.setAttribute('aria-label',isLight?themeToggle.dataset.themeDarkAria:themeToggle.dataset.themeLightAria);}
+  function applyTheme(theme){var next=theme==='light'?'light':'dark',root=document.documentElement;root.classList.add('no-theme-transition');root.setAttribute('data-theme',next);window.setTimeout(function(){root.classList.remove('no-theme-transition');},60);syncThemeToggle();try{localStorage.setItem(themeKey,next);}catch(error){}}
+  if(themeToggle){syncThemeToggle();themeToggle.addEventListener('click',function(){applyTheme(document.documentElement.getAttribute('data-theme')==='light'?'dark':'light');});}
   var dataEl=document.getElementById('classic-data');
   if(!dataEl) return;
   var data=JSON.parse(dataEl.textContent);
@@ -1415,9 +1506,9 @@ JS = """
   function renderRelationships(hero){return '<section class="detail-relationships"><div class="relationship-columns"><section class="relationship-group"><h3>最佳搭檔</h3><p>同隊勝率經收縮；差值已扣除兩位英雄本身強度。</p>'+relationshipRows(hero.teammates||[])+'</section><section class="relationship-group"><h3>棘手對手</h3><p>面對該英雄的勝率經收縮；不是單線對決或因果結論。</p>'+relationshipRows(hero.tough_matchups||[])+'</section></div></section>';}
   function spellMarkup(hero){var spells=hero.spells||[];if(!spells.length)return '<section class="detail-loadout"><h3>召喚師技能</h3><p class="research-tip">目前沒有達到樣本門檻的召喚師技能資料。</p></section>';return '<section class="detail-loadout spell-section"><h3>召喚師技能</h3><div class="spell-list">'+spells.map(function(spell){return '<div class="spell-row">'+(spell.image?'<img src="'+esc(spell.image)+'" alt="">':'')+'<div><strong>'+esc(spell.name_zh)+'</strong><small>'+num(spell.games)+' 場 · 選用率 '+pct(spell.pick_rate)+'</small></div><b class="'+wrToneClass(spell.raw_wr)+'">'+pct(spell.raw_wr)+'</b></div>';}).join('')+'</div></section>';}
   function combatMarkup(hero){var combat=hero.combat||{};return '<div class="combat-profile"><span><b>'+Number(combat.kills_per_game||0).toFixed(1)+' / '+Number(combat.deaths_per_game||0).toFixed(1)+' / '+Number(combat.assists_per_game||0).toFixed(1)+'</b><small>平均 K / D / A</small></span><span><b>'+num(Math.round(combat.damage_per_minute||0))+'</b><small>英雄傷害／分</small></span><span><b>'+num(Math.round(combat.gold_per_minute||0))+'</b><small>金錢／分</small></span><span><b>'+Number(combat.cs_per_minute||0).toFixed(1)+'</b><small>CS／分</small></span></div>';}
-  function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-wr '+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</span><span class="ovr-meta">調整後勝率 · '+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderCompactLoadout(hero)+'</div><div>'+spellMarkup(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+renderRelationships(hero)+'</div>',panels=[overview,items,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
-  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});renderHeroDetail(hero,'');var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
-  function closeDetail(){state.heroId=null;state.detailPosition='';detail.hidden=true;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
+  function detailTabSet(hero){var key='classic-detail-'+hero.champion_id,labels=[['overview','概覽'],['items','出裝'],['abilities','英雄能力']],inputs=labels.map(function(tab,index){return '<input class="detail-tab-input" type="radio" id="'+key+'-'+tab[0]+'" name="'+key+'" '+(index===0?'checked':'')+' aria-label="'+tab[1]+'">';}).join(''),tabLabels=labels.map(function(tab){return '<label class="detail-tab-label" id="'+key+'-'+tab[0]+'-label" role="tab" for="'+key+'-'+tab[0]+'">'+tab[1]+'</label>';}).join(''),positionTags=(hero.positions||[]).map(function(position){var labels={TOP:'上路',JUNGLE:'打野',MIDDLE:'中路',BOTTOM:'下路',SUPPORT:'輔助'};return '<span class="classic-position-tag">'+esc(labels[position]||position)+'</span>';}).join(''),overview='<div class="detail-section detail-overview-head classic-overview-head"><span class="ovr-meta">'+num(hero.games)+' 場 · 選用率 '+pct(hero.pick_rate)+'</span></div><div class="classic-overview-grid"><div>'+renderCompactLoadout(hero)+'</div><div>'+spellMarkup(hero)+'</div></div>',items='<div class="detail-section detail-items"><div class="detail-section-head detail-items-head"><h3>裝備習慣</h3><p>終局持有資料；首件僅依背包前兩格推估</p></div>'+renderItemsForHero(hero)+'</div>',abilities='<div class="detail-section"><div class="detail-section-head"><h3>英雄能力</h3><span class="section-meta">經典模式對局平均</span></div>'+combatMarkup(hero)+renderRelationships(hero)+'</div>',panels=[overview,items,abilities].map(function(content,index){return '<section class="detail-tab-panel" role="tabpanel" aria-labelledby="'+key+'-'+labels[index][0]+'-label">'+content+'</section>';}).join('');return '<div class="detail-tabset detail-main-tabs">'+inputs+'<div class="detail-tab-rail"><button class="detail-close" type="button" title="收起" aria-label="收起 '+esc(hero.name_zh)+' 詳情">&times;</button><div class="detail-head"><img class="detail-avatar" src="'+esc(hero.image)+'" alt=""><div class="detail-identity"><span class="cname">'+esc(hero.name_zh)+'</span><span class="classic-position-tags">'+positionTags+'</span></div><span class="detail-head-rate"><strong class="'+wrToneClass(hero.shrunk_wr)+'">'+pct(hero.shrunk_wr)+'</strong><small>調整後勝率</small></span></div><div class="detail-tab-list" role="tablist">'+tabLabels+'</div></div><div class="detail-tab-panels">'+panels+'</div></div>';}
+  function openHero(heroId,shouldScroll){var hero=data.heroes.find(function(row){return Number(row.champion_id)===Number(heroId);});if(!hero)return;state.heroId=hero.champion_id;[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed',String(Number(tile.dataset.heroId)===hero.champion_id));});document.querySelectorAll('.tier-block').forEach(function(block){block.classList.toggle('has-open-detail',block.dataset.tierGroup===hero.tier);});renderHeroDetail(hero,'');var host=document.querySelector('.detail-host[data-tier="'+hero.tier+'"]');if(host)host.appendChild(detail);detail.hidden=false;if(shouldScroll)detail.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});}
+  function closeDetail(){state.heroId=null;state.detailPosition='';detail.hidden=true;document.querySelectorAll('.tier-block').forEach(function(block){block.classList.remove('has-open-detail');});[ ].slice.call(document.querySelectorAll('.hero-tile')).forEach(function(tile){tile.setAttribute('aria-pressed','false');});}
   function moveNavIndicator(button){if(!navIndicator||!button)return;navIndicator.style.setProperty('--ind-x',button.offsetLeft+'px');navIndicator.style.setProperty('--ind-w',button.offsetWidth+'px');}
   function setTab(tab,focus){state.tab=tab;var activeButton=null;tabs.forEach(function(button){var selected=button.dataset.tab===tab;button.setAttribute('aria-selected',String(selected));button.classList.toggle('active',selected);button.tabIndex=selected?0:-1;if(selected){activeButton=button;if(focus)button.focus();}});moveNavIndicator(activeButton);views.forEach(function(view){var selected=view.dataset.view===tab;view.hidden=!selected;view.classList.toggle('is-active',selected);});var isItems=tab==='items';positionChips.hidden=isItems;itemFilterBar.hidden=!isItems;itemKindChips.hidden=false;search.placeholder=isItems?'搜尋裝備（中 / 英）':'搜尋英雄（中 / 英）';search.setAttribute('aria-label',isItems?'搜尋裝備':'搜尋英雄');if(isItems)closeDetail();refresh();}
   function updateCount(){var isItems=state.tab==='items',rows=isItems?activeItems():activeHeroes(),total=isItems?data.items.length:data.heroes.length;shownN.textContent=num(rows.length);shownTotal.textContent=num(total);shownUnit.textContent=isItems?'件':'隻';}
@@ -1426,7 +1517,8 @@ JS = """
   [ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(button){button.addEventListener('click',function(){positionFilter.value=button.dataset.positionFilter;[ ].slice.call(document.querySelectorAll('[data-position-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
   [ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(button){button.addEventListener('click',function(){itemKindFilter.value=button.dataset.itemKindFilter;[ ].slice.call(document.querySelectorAll('[data-item-kind-filter]')).forEach(function(chip){var active=chip===button;chip.classList.toggle('active',active);chip.setAttribute('aria-pressed',String(active));});refresh();});});
   [search,positionFilter,itemKindFilter,minGames,heroSort,itemSort].forEach(function(control){control.addEventListener(control===search?'input':'change',refresh);});
-  document.addEventListener('click',function(event){var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){if(Number(state.heroId)===Number(tile.dataset.heroId)&&!detail.hidden)closeDetail();else openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
+  document.addEventListener('click',function(event){if(modeMenu&&!modeMenu.contains(event.target))modeMenu.removeAttribute('open');var opener=event.target.closest('[data-open-hero]');if(opener){setTab('tier',false);openHero(opener.dataset.openHero,true);return;}var tile=event.target.closest('.hero-tile');if(tile){if(Number(state.heroId)===Number(tile.dataset.heroId)&&!detail.hidden)closeDetail();else openHero(tile.dataset.heroId,false);return;}var sorter=event.target.closest('[data-sort]');if(sorter){var target=sorter.dataset.sortTarget;var field=sorter.dataset.sort;if(target==='hero'){state.desc=heroSort.value===field?!state.desc:true;heroSort.value=field;}else{state.desc=itemSort.value===field?!state.desc:true;itemSort.value=field;}document.querySelectorAll('[data-sort-target="'+target+'"]').forEach(function(button){button.setAttribute('aria-sort',button===sorter?(state.desc?'descending':'ascending'):'none');});refresh();}});
+  document.addEventListener('keydown',function(event){if(event.key==='Escape'&&modeMenu&&modeMenu.open){modeMenu.removeAttribute('open');var summary=modeMenu.querySelector('summary');if(summary)summary.focus();}});
   setTab('tier',false);
 })();
 """
@@ -1800,6 +1892,8 @@ def render_research_preview(
         raise ValueError(f"unsupported Classic locale: {locale}")
     locale_config = CLASSIC_LOCALES[locale]
     copy_text = CLASSIC_COPY[locale]
+    theme_labels = THEME_LABELS[locale]
+    mode_menu_label = MODE_MENU_LABELS[locale]
     heroes = _localized_records(heroes, locale)
     items = _localized_records(items, locale)
     if not MAIN_SITE_CSS_PATH.exists():
@@ -1874,6 +1968,7 @@ def render_research_preview(
     page: list[str] = []
     page.append(f"<!doctype html><html lang='{locale}'><head><meta charset='utf-8'>")
     page.append("<meta name='viewport' content='width=device-width,initial-scale=1,viewport-fit=cover'>")
+    page.append(f"<script>{THEME_BOOTSTRAP_JS}</script>")
     page.append("<meta name='robots' content='index,follow,max-image-preview:large'>")
     page.append(f"<title>{html.escape(copy_text['title'])}</title>")
     page.append(f"<meta name='description' content='{html.escape(copy_text['description'], quote=True)}'>")
@@ -1915,7 +2010,31 @@ def render_research_preview(
             f"aria-selected='{selected}' aria-controls='view-{tab}' tabindex='{tabindex}'>{label}</button>"
         )
     page.append("<span class='nav-ind' aria-hidden='true'></span></nav>")
-    page.append("<div class='header-actions classic-header-actions'><span class='classic-mode-label'>經典模式</span><nav class='classic-language-links' aria-label='Language'>")
+    classic_href = locale_config["url"].replace("https://arammeta.com", "")
+    page.append("<div class='header-actions classic-header-actions'>")
+    page.append(
+        "<details class='classic-mode-menu' id='classic-mode-menu'>"
+        f"<summary class='classic-mode-select' aria-label='{html.escape(mode_menu_label, quote=True)}'>"
+        "<span>Classic</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='m4 6 4 4 4-4'></path></svg></summary>"
+        "<div class='classic-mode-options' role='menu'>"
+        f"<a role='menuitem' href='{copy_text['main_href']}'>Mayhem</a>"
+        f"<a role='menuitem' href='{classic_href}' aria-current='page'>Classic</a>"
+        "</div></details>"
+    )
+    page.append(
+        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
+        "type='button' "
+        f"title='{html.escape(theme_labels['to_light_title'], quote=True)}' "
+        f"aria-label='{html.escape(theme_labels['to_light_aria'], quote=True)}' "
+        f"data-theme-light-title='{html.escape(theme_labels['to_light_title'], quote=True)}' "
+        f"data-theme-light-aria='{html.escape(theme_labels['to_light_aria'], quote=True)}' "
+        f"data-theme-dark-title='{html.escape(theme_labels['to_dark_title'], quote=True)}' "
+        f"data-theme-dark-aria='{html.escape(theme_labels['to_dark_aria'], quote=True)}'>"
+        f"{THEME_TOGGLE_ICONS}</button>"
+    )
+    page.append("<nav class='classic-language-links' aria-label='Language'>")
     for language_locale, language_label in (("zh-Hant", "繁中"), ("zh-Hans", "简中"), ("en", "EN")):
         current = " aria-current='page'" if language_locale == locale else ""
         page.append(f"<a href='{CLASSIC_LOCALES[language_locale]['url'].replace('https://arammeta.com', '')}'{current}>{language_label}</a>")
@@ -1963,7 +2082,7 @@ def render_research_preview(
                 f"<span class='name'>{html.escape(hero['name_zh'])}</span></button>"
             )
         page.append(f"<div class='detail-host' data-tier='{tier}'></div></div></section>")
-    page.append("<section id='hero-detail' class='detail hero-detail' hidden aria-live='polite'></section><p id='tier-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
+    page.append("<section id='hero-detail' class='detail hero-detail' data-experimental-tier-detail hidden aria-live='polite'></section><p id='tier-empty' class='empty-state' hidden>沒有符合這組篩選的英雄。請降低最低樣本或清除搜尋。</p></section>")
 
     page.append("<section class='view' id='view-heroes' data-view='heroes' role='tabpanel' hidden><div class='data-section-head'><h2>完整英雄明細</h2><p>Tier 固定以調整後勝率分級；欄位可排序。</p></div><div class='table-scroller'><table class='research-table'><thead><tr>")
     for field, label in (("tier", "Tier"), ("name_zh", "英雄"), ("games", "場次"), ("shrunk_wr", "調整後勝率"), ("pick_rate", "選用率")):
