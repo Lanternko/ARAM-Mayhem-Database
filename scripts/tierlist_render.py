@@ -2,6 +2,7 @@
 HTML shell, --shell-only fast preview, OG/favicon images, icon localization."""
 from __future__ import annotations
 import os as _os, sys as _sys
+import math
 import time
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import tierlist_engine as _eng  # noqa: E402,F401
@@ -12,6 +13,70 @@ ADSENSE_SITE_ORIGIN = "https://arammeta.com"
 ADSENSE_CLIENT_ID = "ca-pub-8593280194977470"
 ADSENSE_PUBLISHER_ID = "pub-8593280194977470"
 ADSENSE_CERTIFICATION_AUTHORITY_ID = "f08c47fec0942fa0"
+SKILL_SCALING_SNAPSHOT = (
+    Path(__file__).resolve().parent / "site_data" / "champ_skill_scaling.json"
+)
+MIN_SKILL_SCALING_CHAMPIONS = 150
+
+
+def load_skill_scaling_snapshot(
+    *,
+    queue_id: int,
+    path: Path | None = None,
+) -> dict[int, dict]:
+    """Load and validate the versioned per-champion skill-scaling snapshot."""
+    snapshot_path = path or SKILL_SCALING_SNAPSHOT
+    try:
+        raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot unavailable: {snapshot_path}: {exc}"
+        ) from exc
+
+    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
+        raise click.ClickException(
+            f"unsupported skill-scaling schema in {snapshot_path}: "
+            f"{raw.get('schema_version') if isinstance(raw, dict) else type(raw).__name__!r}"
+        )
+    try:
+        artifact_queue = int(raw["queue_id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot has no valid queue_id: {snapshot_path}"
+        ) from exc
+    if artifact_queue != queue_id:
+        click.echo(
+            f"[tierlist] skill-scaling snapshot is queue {artifact_queue}; "
+            f"omitting it from queue {queue_id}"
+        )
+        return {}
+
+    champs = raw.get("champs")
+    if not isinstance(champs, dict) or len(champs) < MIN_SKILL_SCALING_CHAMPIONS:
+        count = len(champs) if isinstance(champs, dict) else 0
+        raise click.ClickException(
+            f"skill-scaling snapshot is incomplete: {count} champions in {snapshot_path}; "
+            f"expected at least {MIN_SKILL_SCALING_CHAMPIONS}"
+        )
+
+    loaded: dict[int, dict] = {}
+    try:
+        for champion_id, value in champs.items():
+            cid = int(champion_id)
+            pp = float(value["pp"])
+            z_score = float(value["z"])
+            games = int(value["g"])
+            if not math.isfinite(pp) or not math.isfinite(z_score) or games <= 0:
+                raise ValueError(f"invalid metrics for champion {cid}")
+            loaded[cid] = {"pp": pp, "z": z_score, "g": games}
+        if len(loaded) != len(champs):
+            raise ValueError("duplicate normalized champion ids")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot contains an invalid champion row: {snapshot_path}"
+        ) from exc
+    click.echo(f"[tierlist] loaded skill-scaling for {len(loaded)} champions")
+    return loaded
 
 
 def render_adsense_verification_tag(*, site_url: str = "") -> str:
@@ -1701,17 +1766,9 @@ def render_html(
     js_champs: dict[str, dict] = {}
 
     # Per-champion skill-scaling ("operation coefficient"): WR(high-skill lobbies) - WR(low-skill).
-    # Decoupled build-time artifact from build_skill_scaling_rating.py; absent -> field omitted.
-    skill_scaling_by_cid: dict[int, dict] = {}
-    _ss_path = Path("data/cache/champ_skill_scaling.json")
-    if _ss_path.exists():
-        try:
-            _ss_raw = json.loads(_ss_path.read_text(encoding="utf-8"))
-            for _k, _v in (_ss_raw.get("champs") or {}).items():
-                skill_scaling_by_cid[int(_k)] = _v
-            click.echo(f"[tierlist] loaded skill-scaling for {len(skill_scaling_by_cid)} champions")
-        except (ValueError, OSError):
-            skill_scaling_by_cid = {}
+    # This is a versioned public snapshot, not a local cache: resolving it from
+    # this module keeps local and isolated-worktree builds identical.
+    skill_scaling_by_cid = load_skill_scaling_snapshot(queue_id=queue_id)
 
     def _pack(r: dict) -> dict:
         # Display rule: show a number the raw sample can support.  We clamp the
