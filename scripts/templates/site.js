@@ -1628,7 +1628,7 @@
             itemClusterGames: (games) => `${games}g`,
             coreBuildShare: (pick) => `${pick} pick`,
             coreBuildWr: (wr) => `${wr} WR`,
-            coreBuildThird: 'Other items',
+            coreBuildThird: 'following items',
             coreBuildTail: 'Also common',
             coreBuildTailTip: 'Built with this core but below the pick-rate / win-rate bar of the items above',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
