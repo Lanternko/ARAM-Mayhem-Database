@@ -3036,7 +3036,7 @@
                 const games = Number(entry.g || 0);
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
-                const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+                const wrTone = `wr-${wrToneTier(entry)}`;
                 const pickHeat = pickHeatClass(pickVal);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
@@ -3072,7 +3072,7 @@
                         <div class="item-cluster-top">${laneBadge}<span class="cluster-games">${escHtml(gamesText)}</span></div>
                         <div class="item-build-icons">${icons}</div>
                         <div class="item-cluster-stats">
-                            <span class="item-build-wr ${wrSign}">${pct(entry.wr || 0)}</span>
+                            <span class="item-build-wr ${wrTone}">${pct(entry.wr || 0)}</span>
                             <span class="cluster-pick ${pickHeat}">${escHtml(pickText)}</span>
                         </div>
                         <div class="item-build-name"><span>${escHtml(name)}</span></div>
@@ -3115,9 +3115,7 @@
             const cardClass = options.singleItem ? 'item-build-card single-item-card' : 'item-build-card';
             // Color WR vs champion baseline (lift), not absolute WR — a "top" pair
             // can still sit under the champ's overall WR (e.g. popular traps).
-            const wrSign = liftValue > 0.005 ? 'is-good'
-                : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-            const wrClass = `item-build-wr ${wrSign}`;
+            const wrClass = `item-build-wr wr-${wrToneTier(entry)}`;
             // Filter attrs only on the strength carousel (not 常見但不推薦 traps).
             let filterAttrs = '';
             if (options.singleItem && options.singleItemFilterable) {
@@ -3374,7 +3372,7 @@
                 }).join('<span class="cg-arrow">▸</span>');
                 const options = (Array.isArray(grp.options) ? grp.options : []).map(o => {
                     const lift = Number(o.lift || 0);
-                    const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
+                    const wrTone = `wr-${wrToneTier(o)}`;
                     const pickVal = Number(o.pick || 0);
                     const pickHeat = pickHeatClass(pickVal);
                     const laneInfo = laneLabels[o.lane];
@@ -3398,7 +3396,7 @@
                     return `
                         <div class="cg-option has-item-tip" tabindex="0" aria-label="${escHtml(tip)}">
                             ${iconImg(o, 'cg-option-icon')}
-                            <span class="cg-option-wr ${wrSign}">${pct(o.wr || 0)}</span>
+                            <span class="cg-option-wr ${wrTone}">${pct(o.wr || 0)}</span>
                             <span class="cg-option-pick ${pickHeat}">${pct(pickVal)}</span>
                             ${badge}
                             ${itemTipSource(tipHtml)}
@@ -3418,9 +3416,9 @@
                     : '';
                 const share = copy.coreBuildShare ? copy.coreBuildShare(pct(grp.pick || 0)) : pct(grp.pick || 0);
                 const coreLift = Number(grp.lift || 0);
-                const coreWrSign = coreLift > 0.005 ? 'is-good' : (coreLift < -0.005 ? 'is-bad' : 'is-even');
+                const coreWrTone = `wr-${wrToneTier({ lift: coreLift, wr: grp.wr })}`;
                 const wrText = copy.coreBuildWr ? copy.coreBuildWr(pct(grp.wr || 0)) : pct(grp.wr || 0);
-                const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrSign}">${escHtml(wrText)}</span>` : '';
+                const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrTone}">${escHtml(wrText)}</span>` : '';
                 const coreGroupName = (() => {
                     if (currentLang === 'en') return grp.name_en || grp.name || grp.name_zh || '';
                     if (currentLang === 'zh-CN') {
@@ -3491,7 +3489,7 @@
                 const icon = pairItems[0] && pairItems[0].icon;
                 const wr = Number(entry.wr || 0);
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
-                const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+                const wrTone = `wr-${wrToneTier(entry)}`;
                 const pickVal = Number(entry.pick || 0);
                 const pickHeat = pickHeatClass(pickVal);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
@@ -3509,7 +3507,7 @@
                     <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
                         ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
                         <span class="boot-rail-name">${escHtml(name)}</span>
-                        <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
+                        <span class="boot-rail-wr ${wrTone}">${pct(wr)}</span>
                         <span class="boot-rail-pick ${pickHeat}">${pct(pickVal)}</span>
                         ${itemTipSource(tipHtml)}
                     </div>`;
