@@ -1,5 +1,7 @@
 # ARAM Mayhem Database — PRODUCT context
 
+> **Archived / superseded:** 這是早期產品敘事快照。現行 purpose、使用者與產品決策只看根目錄 `../../PRODUCT.md`。
+
 ## Product Purpose
 
 一個給台灣英雄聯盟玩家的 **ARAM Mayhem** (queueId 2400) 中文 tier list 網站。

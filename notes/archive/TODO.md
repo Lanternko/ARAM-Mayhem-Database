@@ -1,5 +1,7 @@
 # TODO — aram-winrate-nn
 
+> **Archived / superseded:** 這是 2026-05 的 dataset 與 experiment backlog 快照，不是現行工作清單。現行 modeling policy 見 `../../MODEL.md`。
+
 Status as of 2026-05-15, dataset = 27k Mayhem (16.9: 8,334 + 16.10: 18,373).
 
 ## Current best (apples-to-apples on 16.10 last-30% test, 2,757 matches)

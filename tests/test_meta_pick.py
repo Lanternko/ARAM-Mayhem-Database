@@ -984,6 +984,27 @@ class RenderContractTests(unittest.TestCase):
 
         self.assertEqual(resolve_meta_pick_api_url("", ""), "")
 
+    def test_production_shell_defaults_to_split_payload_and_analytics(self) -> None:
+        import sys
+
+        root = Path(__file__).resolve().parents[1]
+        scripts = root / "scripts"
+        if str(scripts) not in sys.path:
+            sys.path.insert(0, str(scripts))
+        from build_tier_list import (
+            PRODUCTION_CF_ANALYTICS_TOKEN,
+            resolve_production_shell_settings,
+        )
+
+        self.assertEqual(
+            resolve_production_shell_settings("https://arammeta.com/", "", ""),
+            ("api/tier-list.json", PRODUCTION_CF_ANALYTICS_TOKEN),
+        )
+        self.assertEqual(
+            resolve_production_shell_settings("http://127.0.0.1:8000", "", ""),
+            ("", ""),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,10 +19,10 @@ DEFAULT_SITE_URL = "https://arammeta.com/"
 DEFAULT_META_PICK_API_URL = "https://api.arammeta.com"
 # Cloudflare Web Analytics beacon token for arammeta.com.  PUBLIC by design -- it
 # ships in the client HTML (visible in view-source), so it lives in source, not a
-# secret.  build_tier_list injects the beacon <script> when given this token; the
-# watchdog publisher is the only path that reaches the live site, so wiring it here
-# covers production.  Like DEFAULT_SITE_URL this is imported in-process, so a change
-# needs a publisher restart (or a one-shot `publish_static_site.py --once --force`).
+# secret.  build_tier_list injects the beacon <script> when given this token.  Both
+# the isolated data publisher and the production shell-only build import this
+# canonical value, so neither deploy lane has to duplicate it on the command line.
+# A long-running publisher must be restarted to observe a changed constant.
 DEFAULT_CF_ANALYTICS_TOKEN = "483cb89af9ee4d1da31ce69cee310b49"
 DEFAULT_STATE_PATH = Path("data/site/static_publish_state.json")
 
