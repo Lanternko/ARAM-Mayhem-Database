@@ -98,7 +98,7 @@ python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/
 - `build_wave_review_html.py` — wave-clear score 分桶校準用的可拖曳 HTML review board
 - `build_semantic_score_review_page.py` — 語意 engage/wave 排名的靜態 review 頁（可在瀏覽器手動調序）
 - `build_team_archetype_review.py` — Q2 team-archetype 分群結果 render 成 review HTML
-- `build_skill_scaling_rating.py` — 每英雄「skill-scaling」評分（高技術 lobby 勝率 − 低技術 lobby 勝率）
+- `build_skill_scaling_rating.py` — 每英雄「skill-scaling」評分（高技術 lobby 勝率 − 低技術 lobby 勝率）；分析 CSV 寫入 `outputs/`，網站使用的版本化 snapshot 寫入 `scripts/site_data/champ_skill_scaling.json`
 - `build_wr_display_demo.py` — 勝率顯示 demo（raw WR / empirical-Bayes 估計 / Wilson lower bound 信心分數）
 - `build_wr_site_preview.py` — 上述 WR 顯示方案的站台風格預覽
 
