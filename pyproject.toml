@@ -16,6 +16,7 @@ dependencies = [
     "psutil>=5.9",
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
+    "cryptography>=49,<50",
 ]
 
 [project.optional-dependencies]
