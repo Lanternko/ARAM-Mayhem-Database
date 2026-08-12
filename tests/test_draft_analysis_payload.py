@@ -162,6 +162,27 @@ class DraftProfileHydrationTests(unittest.TestCase):
         )
         render.validate_draft_public_payload(payload)
 
+    def test_invalid_model_damage_keeps_existing_public_mix_as_a_trio(self) -> None:
+        payload = self._payload()
+        payload["champs"]["1"]["comp"] = {
+            "phys": 0.5,
+            "magic": 0.4,
+            "true": 0.1,
+        }
+        payload["draftModel"]["profiles"]["1"].update({
+            "physical_dpm": -56_306_504.119,
+            "magic_dpm": 1_234.0,
+            "true_dpm": 81_612.002,
+        })
+
+        render.hydrate_draft_champion_profiles(payload, payload["draftModel"])
+
+        self.assertEqual(
+            {key: payload["champs"]["1"]["comp"][key] for key in ("phys", "magic", "true")},
+            {"phys": 0.5, "magic": 0.4, "true": 0.1},
+        )
+        self.assertEqual(payload["champs"]["1"]["comp"]["front"], 1.0)
+
     def test_all_center_payload_is_rejected(self) -> None:
         payload = self._payload()
         payload["draftModel"]["profiles"]["2"] = copy.deepcopy(
@@ -180,11 +201,18 @@ class DraftProfileHydrationTests(unittest.TestCase):
         self.assertIn(model["kind"], {"composition_lr", "champion_lr"})
         self.assertGreaterEqual(len(model["profiles"]), 150)
         payload = {
-            "champs": {cid: {"comp": {}} for cid in model["profiles"]},
+            "champs": {
+                cid: {"comp": {"phys": 0.5, "magic": 0.5, "true": 0.0}}
+                for cid in model["profiles"]
+            },
             "draftModel": model,
         }
         render.hydrate_draft_champion_profiles(payload, model)
         render.validate_draft_public_payload(payload)
+        for champ in payload["champs"].values():
+            self.assertGreaterEqual(champ["comp"]["phys"], 0.0)
+            self.assertGreaterEqual(champ["comp"]["magic"], 0.0)
+            self.assertGreaterEqual(champ["comp"]["true"], 0.0)
 
         ally = [67, 157, 136, 63, 245]
         enemy = [904, 134, 18, 15, 166]

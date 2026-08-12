@@ -884,6 +884,13 @@ def _draft_finite_float(value: object) -> float:
     return value
 
 
+def _draft_nonnegative_float(value: object) -> float:
+    value = _draft_finite_float(value)
+    if value < 0:
+        raise _DraftNumericSignalError
+    return value
+
+
 def _draft_vocab_in_index_order(champ_to_idx: dict) -> list[int]:
     """Return a canonical numeric champion vocab without reflecting bad input."""
     try:
@@ -1094,11 +1101,22 @@ def hydrate_draft_champion_profiles(payload: dict, model: dict) -> None:
             raise click.ClickException(_DRAFT_MODEL_ERROR)
         try:
             scores = profile["scores"]
-            comp = {
-                "phys": round(_draft_finite_float(profile["physical_dpm"]), 3),
-                "magic": round(_draft_finite_float(profile["magic_dpm"]), 3),
-                "true": round(_draft_finite_float(profile["true_dpm"]), 3),
-            }
+            try:
+                damage = {
+                    "phys": round(_draft_nonnegative_float(profile["physical_dpm"]), 3),
+                    "magic": round(_draft_nonnegative_float(profile["magic_dpm"]), 3),
+                    "true": round(_draft_nonnegative_float(profile["true_dpm"]), 3),
+                }
+            except (KeyError, TypeError, ValueError, OverflowError, _DraftNumericSignalError):
+                # Some legacy model profiles contain signed/corrupt DPM values.
+                # Keep the already validated public damage mix as one coherent
+                # trio instead of publishing a partly model-derived ratio.
+                current = champ.get("comp") or {}
+                damage = {
+                    key: round(_draft_nonnegative_float(current[key]), 3)
+                    for key in ("phys", "magic", "true")
+                }
+            comp = damage
             comp.update({
                 public: round(_draft_finite_float(scores[source]), 3)
                 for public, source in score_map.items()
