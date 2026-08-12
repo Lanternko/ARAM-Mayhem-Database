@@ -1,6 +1,7 @@
 """Tier-list site rendering (split from build_tier_list.py): payload assembly,
 HTML shell, --shell-only fast preview, OG/favicon images, icon localization."""
 from __future__ import annotations
+import hashlib
 import os as _os, sys as _sys
 import math
 import time
@@ -1376,6 +1377,25 @@ def versioned_payload_url(payload_url: str, version: str) -> str:
         return url
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}v={ver}"
+
+
+def payload_content_version(payload: dict) -> str:
+    """Return a stable cache key for the payload's user-visible contents.
+
+    ``detailVersion`` is excluded because it stores this key in the published
+    payload.  Excluding it avoids a circular hash while still invalidating the
+    URL whenever Draft model weights, hydrated profiles, or other payload data
+    changes during a shell-only publish.
+    """
+    version_basis = dict(payload)
+    version_basis.pop("detailVersion", None)
+    canonical = json.dumps(
+        version_basis,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()[:16]
 
 
 def _localize_full_shell_html(
@@ -3294,15 +3314,10 @@ def _run_shell_only(
     slim_stats = slim_site_payload(payload)
     if not build_date:
         build_date = _dt.date.today().isoformat()
-    # A shell-only rebuild must not mint a new data version: it is reusing the
-    # published snapshot, and only the HTML/CSS/JS shell is changing.
-    payload_ver = str(payload.get("detailVersion") or "").strip()
-    if not payload_ver:
-        payload_ver = build_date.replace("-", "")
-        try:
-            payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
-        except OSError:
-            pass
+    # Shell-only can still replace Draft model weights and hydrated profiles.
+    # Derive the fetch version from the resulting payload so same-day publishes
+    # cannot keep serving a cached pre-update model.
+    payload_ver = payload_content_version(payload)
     resolved_payload_url = versioned_payload_url(
         payload_url or "api/tier-list.json",
         payload_ver,

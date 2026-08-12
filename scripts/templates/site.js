@@ -95,7 +95,8 @@
         }
         // Default HTTP cache: tier-list.json is multi-MB; `no-cache` forced a
         // revalidation on every visit and dominated /zh-CN bounce load time.
-        // Build stamps the URL with ?v=YYYYMMDD so publishes still bust cache.
+        // Build stamps the URL with a payload-content version so every changed
+        // model/data publish busts cache, including multiple publishes per day.
         const response = await fetch(resolved);
         if (!response.ok) {
             throw new Error(`payload ${response.status}: ${resolved}`);

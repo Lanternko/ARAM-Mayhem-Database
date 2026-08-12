@@ -15,6 +15,7 @@ from tierlist_render import (  # noqa: E402
     _site_base_href,
     _spa_deep_link_stub,
     champion_detail_base_url,
+    payload_content_version,
     render_adsense_verification_tag,
     slim_site_payload,
     split_champion_detail_payloads,
@@ -181,6 +182,30 @@ class SpaPathShellTests(unittest.TestCase):
             versioned_payload_url("api/tier-list.json?v=1", "20260712"),
             "api/tier-list.json?v=1",
         )
+
+    def test_payload_content_version_is_stable_and_tracks_model_data(self) -> None:
+        payload = {
+            "detailVersion": "old-build",
+            "draftModel": {"kind": "champion_lr", "coef": [0.1, -0.2]},
+            "champs": {"1": {"wr": 0.51, "draftProfile": {"front": 0.4}}},
+        }
+        version = payload_content_version(payload)
+        self.assertRegex(version, r"^[0-9a-f]{16}$")
+
+        same_contents = dict(payload, detailVersion="another-old-build")
+        self.assertEqual(payload_content_version(same_contents), version)
+
+        changed_model = {
+            **payload,
+            "draftModel": {"kind": "champion_lr", "coef": [0.1, -0.3]},
+        }
+        self.assertNotEqual(payload_content_version(changed_model), version)
+
+        changed_profile = {
+            **payload,
+            "champs": {"1": {"wr": 0.51, "draftProfile": {"front": 0.5}}},
+        }
+        self.assertNotEqual(payload_content_version(changed_profile), version)
 
     def test_champion_detail_base_url_tracks_payload_location(self) -> None:
         self.assertEqual(
