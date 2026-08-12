@@ -1396,23 +1396,25 @@ border-radius:7px;color:var(--text-muted);font-size:12px;font-weight:650;text-de
 .tier-grid{row-gap:18px}
 .hero-tile.champ{appearance:none;display:block;width:100%;padding:0;margin:0 0 26px;
 color:var(--text);font:inherit;text-align:left;overflow:visible;
-content-visibility:visible;contain:none;isolation:isolate;border:4px solid transparent;border-radius:10px;
-background:linear-gradient(var(--surface),var(--surface)) padding-box,
-linear-gradient(145deg,color-mix(in oklab,var(--tier-color,#68707d) 72%,var(--text)),
-var(--tier-color,#68707d) 48%,color-mix(in oklab,var(--tier-color,#68707d) 74%,var(--bg))) border-box;
+content-visibility:visible;contain:none;isolation:isolate;border:0;border-radius:10px;
+background:var(--surface);
 box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 10%,transparent),
 0 3px 10px color-mix(in srgb,var(--tier-color,#68707d) 18%,transparent)}
-.hero-tile.champ::after{content:"";position:absolute;inset:4px;z-index:3;
-border:1px solid color-mix(in srgb,var(--text) 18%,transparent);border-radius:6px;pointer-events:none}
-.tier-block[data-tier-group="OP"] .hero-tile.champ{background:
-linear-gradient(var(--surface),var(--surface)) padding-box,
-linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%) border-box;
-background-size:auto,220% 220%;animation:prismShift 6s ease-in-out infinite}
-.tier-block[data-tier-group="T1"] .hero-tile.champ{background:
-linear-gradient(var(--surface),var(--surface)) padding-box,
-linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%) border-box;
-background-size:auto,220% 220%;animation:prismShift 9s ease-in-out infinite}
-.hero-tile.champ>img{border-radius:6px}
+.hero-tile.champ::after{content:"";position:absolute;inset:0;z-index:3;
+border:4px solid var(--tier-color,#68707d);border-radius:10px;pointer-events:none}
+.tier-block[data-tier-group="OP"] .hero-tile.champ,
+.tier-block[data-tier-group="T1"] .hero-tile.champ{background:var(--surface);animation:none}
+.tier-block[data-tier-group="OP"] .hero-tile.champ::after{border-color:transparent;
+background:linear-gradient(135deg,#f7f7fb 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#f7f7fb 100%);
+-webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
+-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
+mask-composite:exclude;background-size:220% 220%;animation:prismShift 6s ease-in-out infinite}
+.tier-block[data-tier-group="T1"] .hero-tile.champ::after{border-color:transparent;
+background:linear-gradient(135deg,#ffb380 0%,#ff5a3c 32%,#c8262c 62%,#ff8050 100%);
+-webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
+-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);
+mask-composite:exclude;background-size:220% 220%;animation:prismShift 9s ease-in-out infinite}
+.hero-tile.champ>img{width:100%;height:100%;margin:0;border-radius:10px}
 .hero-tile.champ .wr{left:4px;bottom:4px;padding:2px 5px;border-radius:0 6px 0 0;
 font-size:10px;line-height:1.2;z-index:2}
 .hero-tile.champ .name{left:0;right:0;bottom:-26px;padding:6px 1px 2px;background:none;
@@ -1475,7 +1477,6 @@ color:var(--text-dim);font-size:12px}
 :root[data-theme="light"] .research-table tbody tr:hover{background:color-mix(in srgb,var(--text) 3%,transparent)}
 :root[data-theme="light"] .hero-tile.champ{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 12%,transparent),
 0 3px 9px color-mix(in srgb,var(--tier-color,#68707d) 16%,transparent)}
-:root[data-theme="light"] .hero-tile.champ::after{border-color:color-mix(in srgb,var(--text) 20%,transparent)}
 :root[data-theme="light"] .hero-tile.champ[aria-pressed="true"]{box-shadow:0 0 0 2px color-mix(in oklab,var(--tier-color,#68707d) 72%,var(--text)),0 7px 16px rgba(31,41,55,.18)}
 :root[data-theme="light"] .classic-mode-select{color:#17130a}
 """
