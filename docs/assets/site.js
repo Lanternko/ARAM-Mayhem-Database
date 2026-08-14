@@ -103,7 +103,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260814-1786709513");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260815-1786730481");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -743,14 +743,74 @@
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
     const SHORT_PATCH_ZH = "26.16";
-    const DATE_STR_ZH = "更新於 2026-08-14";
-    const BUILD_DATE = "2026-08-14";
+    const DATE_STR_ZH = "更新於 2026-08-15";
+    const BUILD_DATE = "2026-08-15";
     const PATCH_LABEL = "patch 26.16";
-    const TOTAL_GAMES = "56,125";
+    const TOTAL_GAMES = "62,539";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
     const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
+    // Player-history copy is kept separate from the legacy game copy table so
+    // the optional panel can fail closed without affecting other views. The
+    // zh-CN shell follows the existing Traditional-to-Simplified proxy.
+    const PLAYER_HISTORY_COPY = {
+        zh: {
+            idle: '輸入 Name#TAG 後查詢近期對局。',
+            disabled: '玩家歷史查詢目前未啟用。',
+            loading: '正在查詢玩家歷史…',
+            notFound: '找不到符合的玩家歷史。',
+            invalid: '查詢格式無效，請檢查 Name#TAG。',
+            blocked: '此查詢目前無法處理。',
+            rate: '查詢太頻繁，請稍後再試。',
+            unavailable: '玩家歷史服務暫時無法使用。',
+            network: '網路連線失敗，請稍後再試。',
+            ready: n => `已觀測 ${n} 場對局`,
+            lowSample: '樣本較少，僅代表已捕獲的子集。',
+            noRows: '目前沒有可顯示的對局。',
+            observed: '觀測場數',
+            columns: { ordinal: '#', patch: '版本', champion: '英雄', outcome: '結果', duration: '對局時長' },
+            win: '勝',
+            loss: '負',
+            duration: {
+                lt_15m: '低於 15 分鐘',
+                '15_20m': '15–20 分鐘',
+                '20_25m': '20–25 分鐘',
+                ge_25m: '25 分鐘以上',
+            },
+            snapshot: (dataset, patches, date) => `資料集 ${dataset} · ${patches} · ${date}`,
+        },
+        en: {
+            idle: 'Enter a Name#TAG to check recent matches.',
+            disabled: 'Player history lookup is not enabled.',
+            loading: 'Checking player history…',
+            notFound: 'No matching player history was found.',
+            invalid: 'Invalid query format. Check the Name#TAG.',
+            blocked: 'This query cannot be processed right now.',
+            rate: 'Too many requests. Try again shortly.',
+            unavailable: 'Player history is temporarily unavailable.',
+            network: 'Network error. Try again shortly.',
+            ready: n => `${n} observed matches`,
+            lowSample: 'Small sample, limited to matches captured here.',
+            noRows: 'There are no matches to display yet.',
+            observed: 'Observed matches',
+            columns: { ordinal: '#', patch: 'Patch', champion: 'Champion', outcome: 'Result', duration: 'Duration' },
+            win: 'Win',
+            loss: 'Loss',
+            duration: {
+                lt_15m: 'Under 15 min',
+                '15_20m': '15–20 min',
+                '20_25m': '20–25 min',
+                ge_25m: '25+ min',
+            },
+            snapshot: (dataset, patches, date) => `Dataset ${dataset} · ${patches} · ${date}`,
+        },
+    };
+    function playerHistoryCopy() {
+        if (currentLang === 'en') return PLAYER_HISTORY_COPY.en;
+        if (currentLang === 'zh-CN') return localizeZhCN(PLAYER_HISTORY_COPY.zh);
+        return PLAYER_HISTORY_COPY.zh;
+    }
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [];
@@ -4960,6 +5020,352 @@
     const META_PICK_MIN_GAMES = 50;
     // Build-time inject; empty string = remote board/submit unavailable.
     const META_PICK_API_BASE = "https://api.arammeta.com";
+    // The player-history UI is deliberately available only on the generated
+    // unlisted route.  The route marker and API base live on that shell's
+    // <html> element, so the ordinary Home shell carries no endpoint config.
+    const PLAYER_HISTORY_ROUTE = document.documentElement.dataset.route === 'player-history';
+    const PLAYER_HISTORY_API_BASE = PLAYER_HISTORY_ROUTE
+        ? String(document.documentElement.getAttribute('data-player-history-api-base') || '').trim().replace(/\/$/, '')
+        : '';
+    const playerHistoryUi = {
+        status: 'disabled',
+        result: null,
+        retryAfter: null,
+        activeRequest: null,
+        abortController: null,
+    };
+
+    function playerHistoryElements() {
+        return {
+            form: document.getElementById('player-history-form'),
+            input: document.getElementById('player-history-input'),
+            submit: document.getElementById('player-history-submit'),
+            status: document.getElementById('player-history-status'),
+            result: document.getElementById('player-history-result'),
+        };
+    }
+
+    function playerHistorySetStatus(state, message) {
+        const { status } = playerHistoryElements();
+        if (!status) return;
+        status.dataset.state = state;
+        status.textContent = message;
+    }
+
+    function playerHistoryOwnKeys(value, expected) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        const actual = Object.keys(value).sort();
+        return actual.length === expected.length
+            && expected.every(key => Object.prototype.hasOwnProperty.call(value, key))
+            && actual.join('|') === expected.slice().sort().join('|');
+    }
+
+    function validatePlayerHistoryPayload(payload) {
+        const topKeys = ['status', 'snapshot', 'observed_matches', 'low_sample', 'histories'];
+        if (!playerHistoryOwnKeys(payload, topKeys)) return null;
+        if (payload.status === 'not_found') {
+            return payload.snapshot === null
+                && payload.observed_matches === null
+                && payload.low_sample === null
+                && Array.isArray(payload.histories)
+                && payload.histories.length === 0
+                ? payload
+                : null;
+        }
+        if (payload.status !== 'ready') return null;
+        const snapshotKeys = ['dataset_id', 'patches', 'generated_date'];
+        if (!playerHistoryOwnKeys(payload.snapshot, snapshotKeys)) return null;
+        if (typeof payload.snapshot.dataset_id !== 'string' || !payload.snapshot.dataset_id) return null;
+        if (!Array.isArray(payload.snapshot.patches)
+                || payload.snapshot.patches.some(patch => typeof patch !== 'string')) return null;
+        if (typeof payload.snapshot.generated_date !== 'string' || !payload.snapshot.generated_date) return null;
+        if (!Number.isInteger(payload.observed_matches)
+                || payload.observed_matches < 0 || payload.observed_matches > 1000
+                || typeof payload.low_sample !== 'boolean'
+                || !Array.isArray(payload.histories)
+                || payload.histories.length > 1000
+                || payload.histories.length !== payload.observed_matches) return null;
+        const rowKeys = ['ordinal', 'patch', 'champion_id', 'outcome', 'duration_bucket'];
+        const outcomes = new Set(['win', 'loss']);
+        const durations = new Set(['lt_15m', '15_20m', '20_25m', 'ge_25m']);
+        for (const [index, row] of payload.histories.entries()) {
+            if (!playerHistoryOwnKeys(row, rowKeys)
+                    || !Number.isInteger(row.ordinal) || row.ordinal !== index + 1
+                    || typeof row.patch !== 'string' || !row.patch
+                    || !Number.isInteger(row.champion_id)
+                    || !outcomes.has(row.outcome)
+                    || !durations.has(row.duration_bucket)) return null;
+        }
+        return payload;
+    }
+
+    function playerHistoryClearResult() {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        result.replaceChildren();
+        result.hidden = true;
+    }
+
+    function playerHistoryAppendCell(tag, text, className) {
+        const cell = document.createElement(tag);
+        if (className) cell.className = className;
+        cell.textContent = text;
+        return cell;
+    }
+
+    function renderPlayerHistoryReady(payload) {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        const copy = playerHistoryCopy();
+        result.replaceChildren();
+        result.hidden = false;
+
+        const summary = document.createElement('div');
+        summary.className = 'player-history-summary';
+        const count = document.createElement('strong');
+        count.textContent = copy.ready(payload.observed_matches);
+        summary.appendChild(count);
+        const observed = document.createElement('span');
+        observed.textContent = `${copy.observed}: ${payload.observed_matches}`;
+        summary.appendChild(observed);
+        result.appendChild(summary);
+
+        if (payload.low_sample) {
+            const note = document.createElement('p');
+            note.className = 'player-history-note';
+            note.textContent = copy.lowSample;
+            result.appendChild(note);
+        }
+        if (payload.histories.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'player-history-note';
+            empty.textContent = copy.noRows;
+            result.appendChild(empty);
+        } else {
+            const wrap = document.createElement('div');
+            wrap.className = 'player-history-table-wrap';
+            const table = document.createElement('table');
+            table.className = 'player-history-table';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            for (const key of ['ordinal', 'patch', 'champion', 'outcome', 'duration']) {
+                headRow.appendChild(playerHistoryAppendCell('th', copy.columns[key]));
+            }
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            for (const row of payload.histories.slice(0, 1000)) {
+                const tr = document.createElement('tr');
+                tr.appendChild(playerHistoryAppendCell('td', String(row.ordinal)));
+                tr.appendChild(playerHistoryAppendCell('td', row.patch));
+                const champCell = document.createElement('td');
+                const champ = document.createElement('span');
+                champ.className = 'player-history-champion';
+                const info = (DATA && DATA.champs && DATA.champs[String(row.champion_id)]) || null;
+                const name = info ? champName(info, row.champion_id) : `#${row.champion_id}`;
+                if (info && typeof info.image === 'string' && /^https?:\/\//i.test(info.image)) {
+                    const image = document.createElement('img');
+                    image.src = info.image;
+                    image.alt = '';
+                    image.loading = 'lazy';
+                    champ.appendChild(image);
+                }
+                const nameNode = document.createElement('span');
+                nameNode.textContent = name || `#${row.champion_id}`;
+                champ.appendChild(nameNode);
+                champCell.appendChild(champ);
+                tr.appendChild(champCell);
+                const outcome = playerHistoryAppendCell('td', row.outcome === 'win' ? copy.win : copy.loss, 'player-history-outcome');
+                outcome.classList.add(row.outcome === 'win' ? 'is-win' : 'is-loss');
+                tr.appendChild(outcome);
+                tr.appendChild(playerHistoryAppendCell('td', copy.duration[row.duration_bucket]));
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            result.appendChild(wrap);
+        }
+
+        const snapshot = document.createElement('div');
+        snapshot.className = 'player-history-snapshot';
+        snapshot.textContent = copy.snapshot(
+            payload.snapshot.dataset_id,
+            payload.snapshot.patches.join(', '),
+            payload.snapshot.generated_date,
+        );
+        result.appendChild(snapshot);
+    }
+
+    function renderPlayerHistorySkeleton() {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        result.replaceChildren();
+        result.hidden = false;
+        const skeleton = document.createElement('div');
+        skeleton.className = 'player-history-skeleton';
+        for (let i = 0; i < 3; i += 1) skeleton.appendChild(document.createElement('span'));
+        result.appendChild(skeleton);
+    }
+
+    function renderPlayerHistoryState() {
+        const copy = playerHistoryCopy();
+        const state = playerHistoryUi.status;
+        const messages = {
+            disabled: copy.disabled,
+            idle: copy.idle,
+            loading: copy.loading,
+            not_found: copy.notFound,
+            invalid: copy.invalid,
+            blocked: copy.blocked,
+            rate: copy.rate,
+            unavailable: copy.unavailable,
+            network: copy.network,
+        };
+        if (state === 'rate' && Number.isInteger(playerHistoryUi.retryAfter)) {
+            messages.rate = currentLang === 'en'
+                ? `${copy.rate} (${playerHistoryUi.retryAfter}s)`
+                : `${copy.rate}${t2s(`（${playerHistoryUi.retryAfter} 秒後再試）`)}`;
+        }
+        if (state === 'ready' && playerHistoryUi.result) {
+            playerHistorySetStatus('ready', copy.ready(playerHistoryUi.result.observed_matches));
+            renderPlayerHistoryReady(playerHistoryUi.result);
+            return;
+        }
+        playerHistorySetStatus(
+            state === 'loading' ? 'loading' : (['invalid', 'blocked', 'rate', 'unavailable', 'network'].includes(state) ? 'error' : state),
+            messages[state] || copy.unavailable,
+        );
+        if (state === 'loading') renderPlayerHistorySkeleton();
+        else playerHistoryClearResult();
+        if (state === 'not_found') {
+            const { result } = playerHistoryElements();
+            if (result) {
+                result.hidden = false;
+                const note = document.createElement('p');
+                note.className = 'player-history-note';
+                note.textContent = copy.notFound;
+                result.appendChild(note);
+            }
+        }
+    }
+
+    function playerHistorySetInteractive(enabled) {
+        const { input, submit } = playerHistoryElements();
+        if (input) input.disabled = !enabled;
+        if (submit) {
+            submit.disabled = !enabled;
+            submit.setAttribute('aria-busy', playerHistoryUi.status === 'loading' ? 'true' : 'false');
+        }
+    }
+
+    async function submitPlayerHistoryQuery() {
+        const { input, submit } = playerHistoryElements();
+        if (!input || !submit || !String(PLAYER_HISTORY_API_BASE || '').trim()) {
+            playerHistoryUi.status = 'disabled';
+            playerHistoryUi.result = null;
+            playerHistoryUi.retryAfter = null;
+            renderPlayerHistoryState();
+            return;
+        }
+        if (playerHistoryUi.abortController) playerHistoryUi.abortController.abort();
+        const riotId = String(input.value || '').trim();
+        if (!riotId) {
+            input.value = '';
+            playerHistoryUi.status = 'invalid';
+            playerHistoryUi.result = null;
+            playerHistoryUi.retryAfter = null;
+            renderPlayerHistoryState();
+            return;
+        }
+        const controller = new AbortController();
+        const request = { controller };
+        playerHistoryUi.activeRequest = request;
+        playerHistoryUi.abortController = controller;
+        playerHistoryUi.status = 'loading';
+        playerHistoryUi.result = null;
+        playerHistoryUi.retryAfter = null;
+        playerHistorySetInteractive(false);
+        renderPlayerHistoryState();
+        const endpoint = `${String(PLAYER_HISTORY_API_BASE).replace(/\/$/, '')}/api/player-history/query`;
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ riot_id: riotId }),
+                signal: controller.signal,
+            });
+            if (playerHistoryUi.activeRequest !== request) return;
+            if (response.status === 200) {
+                let payload;
+                try {
+                    payload = validatePlayerHistoryPayload(await response.json());
+                } catch {
+                    payload = null;
+                }
+                if (!payload) {
+                    playerHistoryUi.status = 'unavailable';
+                    playerHistoryUi.result = null;
+                } else if (payload.status === 'ready') {
+                    playerHistoryUi.status = 'ready';
+                    playerHistoryUi.result = payload;
+                } else {
+                    playerHistoryUi.status = 'not_found';
+                    playerHistoryUi.result = null;
+                }
+            } else if (response.status === 400) {
+                playerHistoryUi.status = 'invalid';
+                playerHistoryUi.result = null;
+            } else if (response.status === 403) {
+                playerHistoryUi.status = 'blocked';
+                playerHistoryUi.result = null;
+            } else if (response.status === 429) {
+                playerHistoryUi.status = 'rate';
+                playerHistoryUi.result = null;
+                const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '', 10);
+                playerHistoryUi.retryAfter = Number.isFinite(retryAfter)
+                    ? Math.max(1, Math.min(3600, retryAfter))
+                    : null;
+            } else if (response.status === 503) {
+                playerHistoryUi.status = 'unavailable';
+                playerHistoryUi.result = null;
+            } else {
+                playerHistoryUi.status = 'unavailable';
+                playerHistoryUi.result = null;
+            }
+            renderPlayerHistoryState();
+        } catch (error) {
+            if (playerHistoryUi.activeRequest !== request) return;
+            if (error && error.name === 'AbortError') return;
+            playerHistoryUi.status = 'network';
+            playerHistoryUi.result = null;
+            renderPlayerHistoryState();
+        } finally {
+            if (playerHistoryUi.activeRequest !== request) return;
+            input.value = '';
+            playerHistoryUi.activeRequest = null;
+            playerHistoryUi.abortController = null;
+            playerHistorySetInteractive(true);
+        }
+    }
+
+    function initPlayerHistory() {
+        if (!PLAYER_HISTORY_ROUTE) return;
+        const { form } = playerHistoryElements();
+        const enabled = String(PLAYER_HISTORY_API_BASE || '').trim() !== '';
+        playerHistorySetInteractive(enabled);
+        playerHistoryUi.status = enabled ? 'idle' : 'disabled';
+        playerHistoryUi.result = null;
+        playerHistoryUi.retryAfter = null;
+        if (form && !form.dataset.bound) {
+            form.dataset.bound = 'true';
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                void submitPlayerHistoryQuery();
+            });
+        }
+        renderPlayerHistoryState();
+    }
+
     const metaPick = {
         phase: 'idle', // idle | picking | miss_offer | reveal
         poolIds: [],
@@ -8396,6 +8802,13 @@
     function parseRoute() {
         let path = normalizePathname(location.pathname);
 
+        // The dedicated shell reuses Home's five-tab view but keeps its own
+        // address. Route marker presence is authoritative because this page
+        // is never emitted through the public SPA route table.
+        if (PLAYER_HISTORY_ROUTE) {
+            return { view: 'home', sub: '', urlLang: null, legacyHash: false, playerHistory: true };
+        }
+
         // Legacy hash deep-links (bookmarks / old shares).
         const rawHash = (location.hash || '').replace(/^#/, '');
         if (rawHash) {
@@ -8432,7 +8845,10 @@
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
-        if (historyMode === 'none') return;
+        // The unlisted player-history shell is one stable URL. Its language
+        // menu changes copy in place and must never rewrite the hidden route to
+        // the public Home path.
+        if (historyMode === 'none' || PLAYER_HISTORY_ROUTE) return;
         const wantPath = pathForRoute(view, sub);
         const needPath = location.pathname !== wantPath;
         const needClearHash = Boolean(location.hash);
@@ -8647,6 +9063,7 @@
         renderUpdatesPanel();
         setRecommendMode(recommendMode);
         renderSidePanel();
+        renderPlayerHistoryState();
         if (detailSelected) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (champ) openDetailForChamp(champ, true);
@@ -9308,6 +9725,7 @@
     // here finishes data-bound copy (cards, panels).  historyMode 'none': the
     // following routeFromLocation will write the locale prefix if needed.
     setRecommendMode(false);
+    initPlayerHistory();
     syncPickDecorations();
     renderSidePanel();
     if (currentLang !== 'zh') {
