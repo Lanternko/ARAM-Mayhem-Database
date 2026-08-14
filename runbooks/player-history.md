@@ -10,9 +10,11 @@
   symlink, or copy with adjacent `-wal`/`-shm` files.
 - Keep snapshot, RSA public PEM, quarantine DB, limiter DB, live `games.db`, and
   public site DB on distinct resolved paths. Do not hardlink or symlink them.
-- The runtime needs three distinct 32-byte secrets. Provision them outside the
-  repo and inject lowercase hex through the service manager. The application
-  never generates, rotates, prints, or writes credentials.
+- The public runtime needs three distinct 32-byte secrets (lookup, candidate,
+  and rate); the snapshot builder additionally needs a distinct event secret.
+  Provision all four outside the repo and inject lowercase hex through the
+  service manager/build environment. The application never generates,
+  rotates, prints, or writes credentials.
 - Only the RSA public key is present on the public host. Decryption and any
   candidate review happen in a separate offline trust domain. Quarantine rows
   are untrusted hints, never crawl authorization.
@@ -63,8 +65,23 @@ must be used for every snapshot; do not edit a published snapshot in place.
 
 ## Start the isolated service
 
-Set every required `ARAM_PLAYER_HISTORY_*` variable documented in
-`docs/backend-frontend.md`, then run:
+Set the required environment variables, then run:
+
+- `ARAM_PLAYER_HISTORY_SNAPSHOT`
+- `ARAM_PLAYER_HISTORY_LOOKUP_SECRET_HEX`
+- `ARAM_PLAYER_HISTORY_CANDIDATE_SECRET_HEX`
+- `ARAM_PLAYER_HISTORY_RATE_SECRET_HEX`
+- `ARAM_PLAYER_HISTORY_RSA_PUBLIC_PEM`
+- `ARAM_PLAYER_HISTORY_QUARANTINE_DB`
+- `ARAM_PLAYER_HISTORY_RATE_DB`
+- `ARAM_PLAYER_HISTORY_ALLOWED_ORIGINS`
+
+The isolated trial also sets `ARAM_PLAYER_HISTORY_HOST=127.0.0.1` and
+`ARAM_PLAYER_HISTORY_PORT=8766`. Set
+`ARAM_PLAYER_HISTORY_TRUSTED_PROXY_PEERS` only to exact immediate proxy
+addresses; leave it empty when the service is not directly proxy-aware.
+
+Then run:
 
 ```powershell
 aram-player-history-public
