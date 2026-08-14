@@ -417,6 +417,15 @@ def _read_site_template(name: str) -> str:
     return (Path(__file__).resolve().parent / "templates" / name).read_text(encoding="utf-8")
 
 
+def _retire_player_history_css(css: str) -> str:
+    """Remove the hidden-route-only CSS block from ordinary shells."""
+    marker = "/* ===== Player history lookup ====="
+    head, sep, _tail = css.partition(marker)
+    if not sep:
+        raise ValueError("site.css player-history block not found")
+    return head.rstrip() + "\n"
+
+
 def _site_base_href(site_url: str) -> str:
     """Absolute site root ending in / for <base href>, or '' if unusable."""
     raw = (site_url or "").strip()
@@ -1621,6 +1630,8 @@ def render_html(
     aug_global: dict[int, dict] | None = None,
     script_assets_dir: Path | None = None,
     meta_pick_api_url: str = "",
+    player_history_api_url: str = "",
+    player_history_route: bool = False,
     team_score_bundle: dict[str, object] | None = None,
 ) -> str:
     # Group champions by tier
@@ -2016,6 +2027,8 @@ def render_html(
         })
 
     css = _read_site_template("site.css")
+    if not player_history_route:
+        css = _retire_player_history_css(css)
 
     trained_composition = dict((team_score_bundle or {}).get("composition") or {})
     recommendation_composition = {
@@ -2125,14 +2138,24 @@ def render_html(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
     )
     meta_lines.append(f"<meta name='description' content=\"{seo_desc}\">")
+    # Ordinary Home shells are canonical at the site root. The unlisted
+    # player-history shell gets its own canonical URL so it never leaks the
+    # hidden page as a duplicate of Home in metadata.
+    canonical_url = site_url
+    if player_history_route and site_url:
+        canonical_url = site_url.rstrip("/") + "/p/player-history/"
     if site_url:
         # <base> keeps relative assets (api/, assets/, favicons) resolving from the
         # site root when History API deep paths like /column/<id> are active.
         base_href = _site_base_href(site_url)
         if base_href:
             meta_lines.append(f"<base href='{html.escape(base_href, quote=True)}'>")
-        meta_lines.append(f"<link rel='canonical' href='{site_url}'>")
-        meta_lines.append(f"<meta property='og:url' content='{site_url}'>")
+        meta_lines.append(f"<link rel='canonical' href='{html.escape(canonical_url, quote=True)}'>")
+        meta_lines.append(f"<meta property='og:url' content='{html.escape(canonical_url, quote=True)}'>")
+    if player_history_route:
+        # This page is intentionally unlisted: it is a product utility for
+        # direct sharing, not a public indexable route.
+        meta_lines.append('<meta name="robots" content="noindex,nofollow">')
     meta_lines.append("<meta property='og:type' content='website'>")
     meta_lines.append(f"<meta property='og:title' content=\"{og_title}\">")
     meta_lines.append(f"<meta property='og:description' content=\"{og_desc}\">")
@@ -2154,7 +2177,7 @@ def render_html(
             "@type": "WebSite",
             "name": header_title,
             "alternateName": seo_alternate,
-            "url": site_url,
+            "url": canonical_url,
             "description": seo_desc,
             "inLanguage": "zh-Hant",
         }
@@ -2165,7 +2188,17 @@ def render_html(
         )
 
     parts: list[str] = []
-    parts.append("<!doctype html><html lang='zh-Hant'><head>")
+    route_attrs = ""
+    if player_history_route:
+        api_base_attr = html.escape(
+            (player_history_api_url or "").strip().rstrip("/"),
+            quote=True,
+        )
+        route_attrs = (
+            " data-route='player-history' data-page='player-history'"
+            f" data-player-history-api-base='{api_base_attr}'"
+        )
+    parts.append(f"<!doctype html><html lang='zh-Hant'{route_attrs}><head>")
     parts.extend(meta_lines)
     parts.extend(
         render_analytics_tags(
@@ -2388,6 +2421,75 @@ def render_html(
         "</label>"
     )
     parts.append("</div>")  # /search-rail
+
+    # Optional player-history lookup. This markup is emitted only for the
+    # dedicated hidden shell; the ordinary Home/locale shells stay completely
+    # free of the panel while preserving the five primary tabs.
+    player_history_disabled = " disabled" if not (player_history_api_url or "").strip() else ""
+    player_history_initial_state = "disabled" if player_history_disabled else "idle"
+    player_history_initial_status = (
+        "玩家歷史查詢目前未啟用。"
+        if player_history_disabled
+        else "輸入 Name#TAG 後查詢近期對局。"
+    )
+    player_history_initial_status_cn = (
+        "玩家历史查询目前未启用。"
+        if player_history_disabled
+        else "输入 Name#TAG 后查询近期对局。"
+    )
+    player_history_initial_status_en = (
+        "Player history lookup is not enabled."
+        if player_history_disabled
+        else "Enter a Name#TAG to check recent matches."
+    )
+    parts.append(
+        "<section class='player-history-panel' id='player-history-panel' "
+        "aria-labelledby='player-history-title'>"
+        "<header class='player-history-head'>"
+        "<div class='player-history-heading'>"
+        "<h2 id='player-history-title' data-i18n-zh='玩家歷史' "
+        "data-i18n-zh-cn='玩家历史' data-i18n-en='Player history'>玩家歷史</h2>"
+        "<p class='player-history-sub' data-i18n-zh='用 Riot ID 查看這個網站捕獲到的近期對局。' "
+        "data-i18n-zh-cn='用 Riot ID 查看本網站捕获到的近期对局。' "
+        "data-i18n-en='See recent matches captured by this site for a Riot ID.'>"
+        "用 Riot ID 查看這個網站捕獲到的近期對局。</p>"
+        "</div>"
+        "<span class='player-history-region' data-i18n-zh='TW · Mayhem' "
+        "data-i18n-zh-cn='TW · Mayhem' data-i18n-en='TW · Mayhem' "
+        "aria-label='TW region'>TW · Mayhem</span>"
+        "</header>"
+        "<form class='player-history-form' id='player-history-form' autocomplete='off' novalidate>"
+        "<div class='player-history-field'>"
+        "<label for='player-history-input' data-i18n-zh='Name#TAG' "
+        "data-i18n-zh-cn='Name#TAG' data-i18n-en='Name#TAG'>Name#TAG</label>"
+        f"<input id='player-history-input' name='riot-id' type='text' maxlength='128' "
+        "autocomplete='off' spellcheck='false' inputmode='text' "
+        "placeholder='Name#TAG' aria-describedby='player-history-help player-history-status' "
+        f"{player_history_disabled}>"
+        "</div>"
+        f"<button class='player-history-submit' id='player-history-submit' type='submit' "
+        "aria-busy='false' "
+        "data-i18n-zh='查詢' data-i18n-zh-cn='查询' data-i18n-en='Check history' "
+        f"{player_history_disabled}>查詢</button>"
+        "</form>"
+        "<p class='player-history-help' id='player-history-help' "
+        "data-i18n-zh='只查 TW 區域。資料是本網站已捕獲的子集，不代表完整對局紀錄。' "
+        "data-i18n-zh-cn='仅查询 TW 区域。资料是本网站已捕获的子集，不代表完整对局记录。' "
+        "data-i18n-en='TW region only. This is a captured subset, not a complete match history.'>"
+        "只查 TW 區域。資料是本網站已捕獲的子集，不代表完整對局紀錄。</p>"
+        f"<p class='player-history-status' id='player-history-status' role='status' aria-live='polite' "
+        f"data-state='{player_history_initial_state}' data-i18n-zh='{player_history_initial_status}' "
+        f"data-i18n-zh-cn='{player_history_initial_status_cn}' "
+        f"data-i18n-en='{player_history_initial_status_en}'>"
+        f"{player_history_initial_status}</p>"
+        "<div class='player-history-result' id='player-history-result' role='region' "
+        "aria-live='polite' aria-label='Player history result' hidden></div>"
+        "</section>"
+    )
+    # Keep the player-history markup exclusive to the generated unlisted shell;
+    # ordinary Home/locale shells must not expose the panel at all.
+    if not player_history_route:
+        parts.pop()
 
     # Thin-patch disclosure.  Champion win rates are shrunk toward the previous
     for tier in TIER_ORDER:
@@ -2820,6 +2922,7 @@ def _run_shell_only(
     build_date: str, cloudflare_analytics_token: str, ga_measurement_id: str,
     min_pair_games: int, min_synergy_games: int,
     meta_pick_api_url: str = "",
+    player_history_api_url: str = "",
 ) -> None:
     """Regenerate index.html from the existing payload, skipping all data compute.
 
@@ -2953,9 +3056,36 @@ def _run_shell_only(
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url="",
+        player_history_route=False,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+
+    hidden_path = out_path.parent / "p" / "player-history" / "index.html"
+    hidden_html = render_html(
+        records, champ_meta,
+        champ_profiles={}, champ_picks={}, champ_sets={}, champ_item_builds={},
+        champ_single_items={}, champ_boot_items={}, champ_spell_items={},
+        champ_item_clusters={}, champ_augment_types={}, champ_synergy={},
+        aug_meta=aug_meta, patch_changes=payload.get("patchChanges") or {},
+        new_aug_ids=frozenset(), queue_id=queue_id, patch_prefix=patch_prefix,
+        ddragon_version="", total_games=total_games, min_games_per_pair=min_pair_games,
+        min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
+        build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
+        ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
+        script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url=player_history_api_url,
+        player_history_route=True,
+    )
+    hidden_path.parent.mkdir(parents=True, exist_ok=True)
+    hidden_path.write_text(hidden_html, encoding="utf-8")
+    click.echo(
+        f"[shell-only] wrote hidden player-history shell {hidden_path} "
+        f"({hidden_path.stat().st_size:,} bytes)"
+    )
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     info_pages = write_site_info_pages(
         out_path,

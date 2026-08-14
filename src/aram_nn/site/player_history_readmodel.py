@@ -28,6 +28,10 @@ __all__ = (
     "PlayerHistoryGraphValidationError",
     "PlayerHistoryGraphV1",
     "canonicalize_player_history_graph_v1",
+    "PlayerHistorySnapshotWriteError",
+    "write_player_history_graph_v1",
+    "PlayerHistorySnapshotAuditError",
+    "audit_player_history_snapshot_v1",
 )
 
 
@@ -136,6 +140,53 @@ class PlayerHistoryGraphValidationError(ValueError):
     def __init__(self, _ignored: object = None) -> None:
         self.code = "inconsistent_snapshot"
         super().__init__("inconsistent_snapshot")
+
+
+_SNAPSHOT_WRITE_ERROR_CODES = frozenset(
+    {
+        "invalid_connection",
+        "transaction_active",
+        "schema_invalid",
+        "snapshot_not_empty",
+        "inconsistent_snapshot",
+        "database_error",
+    }
+)
+
+
+class PlayerHistorySnapshotWriteError(ValueError):
+    """Stable, non-sensitive failure raised by the snapshot writer."""
+
+    def __init__(self, code: object = None, _ignored: object = None) -> None:
+        safe_code = (
+            code if type(code) is str and code in _SNAPSHOT_WRITE_ERROR_CODES
+            else "inconsistent_snapshot"
+        )
+        self.code = safe_code
+        super().__init__(safe_code)
+
+
+_SNAPSHOT_AUDIT_ERROR_CODES = frozenset(
+    {
+        "invalid_connection",
+        "transaction_active",
+        "schema_invalid",
+        "snapshot_invalid",
+        "database_error",
+    }
+)
+
+
+class PlayerHistorySnapshotAuditError(ValueError):
+    """Stable, non-sensitive failure raised by the snapshot audit API."""
+
+    def __init__(self, code: object = None, _ignored: object = None) -> None:
+        safe_code = (
+            code if type(code) is str and code in _SNAPSHOT_AUDIT_ERROR_CODES
+            else "snapshot_invalid"
+        )
+        self.code = safe_code
+        super().__init__(safe_code)
 
 
 @dataclass(frozen=True)
@@ -613,6 +664,10 @@ class _SchemaInvalid(Exception):
     pass
 
 
+class _SnapshotInconsistent(Exception):
+    pass
+
+
 def _raise(code: str) -> None:
     raise PlayerHistoryReadModelSchemaError(code)
 
@@ -967,10 +1022,10 @@ def _audit_in_transaction(connection: sqlite3.Connection) -> None:
     if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
         raise _SchemaInvalid
     _audit_manifest(connection)
-    _audit_constraints(connection)
     for table_name in ("snapshot_meta", "player_lookup", "player_history"):
         if connection.execute(f"SELECT count(*) FROM {table_name}").fetchone() != (0,):
             raise _SchemaInvalid
+    _audit_constraints(connection)
 
 
 def _rollback_owned(connection: sqlite3.Connection) -> None:
@@ -1022,3 +1077,704 @@ def audit_player_history_schema(connection: sqlite3.Connection) -> None:
         _raise("database_error")
     else:
         _rollback_owned(connection)
+
+
+def _raise_snapshot_write(code: str) -> None:
+    raise PlayerHistorySnapshotWriteError(code)
+
+
+def _require_snapshot_write_connection(connection: sqlite3.Connection) -> None:
+    if type(connection) is not sqlite3.Connection:
+        _raise_snapshot_write("invalid_connection")
+    try:
+        connection.execute("SELECT 1").fetchone()
+    except sqlite3.Error:
+        _raise_snapshot_write("invalid_connection")
+    if connection.in_transaction:
+        _raise_snapshot_write("transaction_active")
+
+
+def _rollback_snapshot_write(connection: sqlite3.Connection) -> bool:
+    """Rollback writer-owned work, containing an authorizer that denies rollback.
+
+    The caller-supplied authorizer is preserved unless it blocks rollback. A hostile
+    rollback denial causes the authorizer to be removed before one defensive retry.
+    """
+
+    if not connection.in_transaction:
+        return True
+    try:
+        connection.rollback()
+    except sqlite3.Error:
+        try:
+            connection.set_authorizer(None)
+            if connection.in_transaction:
+                connection.rollback()
+        except sqlite3.Error:
+            return not connection.in_transaction
+    return not connection.in_transaction
+
+
+_SNAPSHOT_TABLES = ("snapshot_meta", "player_lookup", "player_history")
+
+
+def _snapshot_table_counts(connection: sqlite3.Connection) -> tuple[int, int, int]:
+    return tuple(
+        connection.execute(f"SELECT count(*) FROM {table_name}").fetchone()[0]
+        for table_name in _SNAPSHOT_TABLES
+    )
+
+
+def _require_snapshot_structure(connection: sqlite3.Connection) -> None:
+    if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
+        raise _SchemaInvalid
+    _audit_manifest(connection)
+
+
+_SQL_PUNCTUATION = frozenset("(),;.+-*/%~=<>|&^")
+_SQL_MULTI_CHARACTER_OPERATORS = (
+    "->>",
+    "||",
+    "->",
+    "<<",
+    ">>",
+    "<=",
+    ">=",
+    "==",
+    "!=",
+    "<>",
+)
+
+
+def _normalize_create_table_sql(sql: object) -> tuple[str, ...]:
+    """Tokenize CREATE TABLE SQL while ignoring formatting whitespace only."""
+
+    if type(sql) is not str:
+        raise _SchemaInvalid
+    tokens: list[str] = []
+    position = 0
+    while position < len(sql):
+        character = sql[position]
+        if character.isspace():
+            position += 1
+            continue
+
+        if character in ("'", '"', "`", "["):
+            closing = "]" if character == "[" else character
+            start = position
+            position += 1
+            while position < len(sql):
+                if sql[position] != closing:
+                    position += 1
+                    continue
+                if (
+                    closing != "]"
+                    and position + 1 < len(sql)
+                    and sql[position + 1] == closing
+                ):
+                    position += 2
+                    continue
+                position += 1
+                tokens.append(sql[start:position])
+                break
+            else:
+                raise _SchemaInvalid
+            continue
+
+        operator = next(
+            (
+                candidate
+                for candidate in _SQL_MULTI_CHARACTER_OPERATORS
+                if sql.startswith(candidate, position)
+            ),
+            None,
+        )
+        if operator is not None:
+            tokens.append(operator)
+            position += len(operator)
+            continue
+        if character in _SQL_PUNCTUATION:
+            tokens.append(character)
+            position += 1
+            continue
+
+        start = position
+        while (
+            position < len(sql)
+            and not sql[position].isspace()
+            and sql[position] not in "'\"`["
+            and sql[position] not in _SQL_PUNCTUATION
+        ):
+            position += 1
+        if start == position:
+            raise _SchemaInvalid
+        tokens.append(sql[start:position].casefold())
+
+    while tokens and tokens[-1] == ";":
+        tokens.pop()
+    if not tokens:
+        raise _SchemaInvalid
+    return tuple(tokens)
+
+
+def _audit_snapshot_table_sql(connection: sqlite3.Connection) -> None:
+    table_names = ("snapshot_meta", "player_lookup", "player_history")
+    canonical_sql = {
+        table_name: _normalize_create_table_sql(statement)
+        for table_name, statement in zip(table_names, _DDL, strict=True)
+    }
+    actual_rows = tuple(
+        connection.execute(
+            "SELECT name,sql FROM main.sqlite_schema "
+            "WHERE type='table' AND name IN (?,?,?) ORDER BY name",
+            table_names,
+        )
+    )
+    if len(actual_rows) != len(table_names):
+        raise _SchemaInvalid
+    actual_sql = {
+        table_name: _normalize_create_table_sql(statement)
+        for table_name, statement in actual_rows
+    }
+    if actual_sql != canonical_sql:
+        raise _SchemaInvalid
+
+
+def _verify_written_snapshot(
+    connection: sqlite3.Connection,
+    graph: PlayerHistoryGraphV1,
+) -> None:
+    expected_meta = (
+        1,
+        1,
+        graph.meta.dataset_id,
+        "TW",
+        2400,
+        graph.meta.patches_json,
+        graph.meta.generated_date,
+        "lcu-captured-offline-snapshot",
+        "captured-subset",
+        20,
+        graph.row_count,
+        graph.meta.exclusions_json,
+    )
+    expected_lookups = tuple(
+        (
+            record.lookup_key,
+            record.status,
+            record.observed_matches,
+            record.low_sample,
+        )
+        for record in graph.lookups
+    )
+    expected_histories = tuple(
+        (
+            record.lookup_key,
+            record.lookup_status,
+            record.event_key,
+            record.ordinal,
+            record.patch,
+            record.champion_id,
+            record.outcome,
+            record.duration_bucket,
+        )
+        for record in graph.histories
+    )
+
+    if tuple(connection.execute("PRAGMA foreign_key_check")) != ():
+        raise _SnapshotInconsistent
+    actual_meta = tuple(
+        connection.execute(
+            "SELECT singleton,schema_version,dataset_id,region,queue_id,"
+            "patches_json,generated_date,source,coverage,low_sample_floor,"
+            "row_count,exclusions_json FROM snapshot_meta ORDER BY singleton"
+        )
+    )
+    actual_lookups = tuple(
+        connection.execute(
+            "SELECT lookup_key,status,observed_matches,low_sample "
+            "FROM player_lookup ORDER BY lookup_key"
+        )
+    )
+    actual_histories = tuple(
+        connection.execute(
+            "SELECT lookup_key,lookup_status,event_key,ordinal,patch,champion_id,"
+            "outcome,duration_bucket FROM player_history "
+            "ORDER BY lookup_key,ordinal,event_key"
+        )
+    )
+    if actual_meta != (expected_meta,):
+        raise _SnapshotInconsistent
+    if actual_lookups != expected_lookups or actual_histories != expected_histories:
+        raise _SnapshotInconsistent
+
+    meta_types = tuple(
+        connection.execute(
+            "SELECT typeof(singleton),typeof(schema_version),typeof(dataset_id),"
+            "typeof(region),typeof(queue_id),typeof(patches_json),"
+            "typeof(generated_date),typeof(source),typeof(coverage),"
+            "typeof(low_sample_floor),typeof(row_count),typeof(exclusions_json) "
+            "FROM snapshot_meta ORDER BY singleton"
+        )
+    )
+    if meta_types != (
+        (
+            "integer",
+            "integer",
+            "text",
+            "text",
+            "integer",
+            "text",
+            "text",
+            "text",
+            "text",
+            "integer",
+            "integer",
+            "text",
+        ),
+    ):
+        raise _SnapshotInconsistent
+
+    lookup_types = tuple(
+        connection.execute(
+            "SELECT typeof(lookup_key),typeof(status),typeof(observed_matches),"
+            "typeof(low_sample) FROM player_lookup ORDER BY lookup_key"
+        )
+    )
+    expected_lookup_types = tuple(
+        (
+            "blob",
+            "text",
+            "null" if record.observed_matches is None else "integer",
+            "null" if record.low_sample is None else "integer",
+        )
+        for record in graph.lookups
+    )
+    if lookup_types != expected_lookup_types:
+        raise _SnapshotInconsistent
+
+    history_types = tuple(
+        connection.execute(
+            "SELECT typeof(lookup_key),typeof(lookup_status),typeof(event_key),"
+            "typeof(ordinal),typeof(patch),typeof(champion_id),typeof(outcome),"
+            "typeof(duration_bucket) FROM player_history "
+            "ORDER BY lookup_key,ordinal,event_key"
+        )
+    )
+    expected_history_types = tuple(
+        ("blob", "text", "blob", "integer", "text", "integer", "text", "text")
+        for _ in graph.histories
+    )
+    if history_types != expected_history_types:
+        raise _SnapshotInconsistent
+
+    if _snapshot_table_counts(connection) != (
+        1,
+        len(graph.lookups),
+        graph.row_count,
+    ):
+        raise _SnapshotInconsistent
+    status_counts = dict(
+        connection.execute(
+            "SELECT status,count(*) FROM player_lookup GROUP BY status ORDER BY status"
+        )
+    )
+    if status_counts.get("ready", 0) != graph.ready_lookup_count:
+        raise _SnapshotInconsistent
+    if status_counts.get("ambiguous", 0) != graph.ambiguous_lookup_count:
+        raise _SnapshotInconsistent
+    if set(status_counts) - {"ready", "ambiguous"}:
+        raise _SnapshotInconsistent
+
+
+def write_player_history_graph_v1(
+    connection: sqlite3.Connection,
+    graph: PlayerHistoryGraphV1,
+) -> None:
+    """Write one canonical graph atomically into an exact empty schema."""
+
+    try:
+        if type(graph) is not PlayerHistoryGraphV1:
+            raise ValueError
+        canonical_graph = canonicalize_player_history_graph_v1(
+            meta=graph.meta,
+            lookups=graph.lookups,
+            histories=graph.histories,
+        )
+        if canonical_graph != graph:
+            raise ValueError
+    except Exception:
+        _raise_snapshot_write("inconsistent_snapshot")
+
+    _require_snapshot_write_connection(connection)
+    try:
+        _require_snapshot_structure(connection)
+        if _snapshot_table_counts(connection) != (0, 0, 0):
+            _raise_snapshot_write("snapshot_not_empty")
+        try:
+            audit_player_history_schema(connection)
+        except PlayerHistoryReadModelSchemaError as exc:
+            if exc.code == "schema_invalid":
+                _raise_snapshot_write("schema_invalid")
+            _raise_snapshot_write("database_error")
+
+        connection.execute("BEGIN IMMEDIATE")
+        _require_snapshot_structure(connection)
+        if _snapshot_table_counts(connection) != (0, 0, 0):
+            _raise_snapshot_write("snapshot_not_empty")
+
+        connection.execute(
+            "INSERT INTO main.snapshot_meta "
+            "(singleton,schema_version,dataset_id,region,queue_id,patches_json,"
+            "generated_date,source,coverage,low_sample_floor,row_count,exclusions_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                1,
+                1,
+                graph.meta.dataset_id,
+                "TW",
+                2400,
+                graph.meta.patches_json,
+                graph.meta.generated_date,
+                "lcu-captured-offline-snapshot",
+                "captured-subset",
+                20,
+                graph.row_count,
+                graph.meta.exclusions_json,
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO main.player_lookup "
+            "(lookup_key,status,observed_matches,low_sample) VALUES (?,?,?,?)",
+            (
+                (
+                    record.lookup_key,
+                    record.status,
+                    record.observed_matches,
+                    record.low_sample,
+                )
+                for record in graph.lookups
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO main.player_history "
+            "(lookup_key,lookup_status,event_key,ordinal,patch,champion_id,outcome,"
+            "duration_bucket) VALUES (?,?,?,?,?,?,?,?)",
+            (
+                (
+                    record.lookup_key,
+                    record.lookup_status,
+                    record.event_key,
+                    record.ordinal,
+                    record.patch,
+                    record.champion_id,
+                    record.outcome,
+                    record.duration_bucket,
+                )
+                for record in graph.histories
+            ),
+        )
+        _verify_written_snapshot(connection, graph)
+        connection.commit()
+    except PlayerHistorySnapshotWriteError:
+        if not _rollback_snapshot_write(connection):
+            _raise_snapshot_write("database_error")
+        raise
+    except _SchemaInvalid:
+        if not _rollback_snapshot_write(connection):
+            _raise_snapshot_write("database_error")
+        _raise_snapshot_write("schema_invalid")
+    except _SnapshotInconsistent:
+        if not _rollback_snapshot_write(connection):
+            _raise_snapshot_write("database_error")
+        _raise_snapshot_write("inconsistent_snapshot")
+    except sqlite3.Error:
+        if not _rollback_snapshot_write(connection):
+            _raise_snapshot_write("database_error")
+        _raise_snapshot_write("database_error")
+
+
+def _raise_snapshot_audit(code: str) -> None:
+    raise PlayerHistorySnapshotAuditError(code)
+
+
+def _require_snapshot_audit_connection(connection: sqlite3.Connection) -> None:
+    if type(connection) is not sqlite3.Connection:
+        _raise_snapshot_audit("invalid_connection")
+    try:
+        probe = connection.cursor()
+        probe.close()
+        active = connection.in_transaction
+    except sqlite3.Error:
+        _raise_snapshot_audit("invalid_connection")
+    if active:
+        _raise_snapshot_audit("transaction_active")
+
+
+def _rollback_snapshot_audit(connection: sqlite3.Connection) -> tuple[bool, bool]:
+    """Return ``(inactive, containment_used)`` after an audit-owned rollback."""
+
+    if not connection.in_transaction:
+        return True, False
+    try:
+        connection.rollback()
+    except sqlite3.Error:
+        try:
+            connection.set_authorizer(None)
+            if connection.in_transaction:
+                connection.rollback()
+        except sqlite3.Error:
+            return not connection.in_transaction, True
+        return not connection.in_transaction, True
+    return not connection.in_transaction, False
+
+
+def _read_snapshot_rows(
+    connection: sqlite3.Connection,
+) -> tuple[list[tuple[Any, ...]], list[tuple[Any, ...]], list[tuple[Any, ...]]]:
+    cursor = connection.cursor()
+    cursor.row_factory = None
+    try:
+        meta_rows = cursor.execute(
+            "SELECT singleton,schema_version,dataset_id,region,queue_id,"
+            "patches_json,generated_date,source,coverage,low_sample_floor,"
+            "row_count,exclusions_json,typeof(singleton),typeof(schema_version),"
+            "typeof(dataset_id),typeof(region),typeof(queue_id),"
+            "typeof(patches_json),typeof(generated_date),typeof(source),"
+            "typeof(coverage),typeof(low_sample_floor),typeof(row_count),"
+            "typeof(exclusions_json) FROM main.snapshot_meta"
+        ).fetchall()
+        lookup_rows = cursor.execute(
+            "SELECT lookup_key,status,observed_matches,low_sample,"
+            "typeof(lookup_key),typeof(status),typeof(observed_matches),"
+            "typeof(low_sample) FROM main.player_lookup"
+        ).fetchall()
+        history_rows = cursor.execute(
+            "SELECT lookup_key,lookup_status,event_key,ordinal,patch,champion_id,"
+            "outcome,duration_bucket,typeof(lookup_key),typeof(lookup_status),"
+            "typeof(event_key),typeof(ordinal),typeof(patch),typeof(champion_id),"
+            "typeof(outcome),typeof(duration_bucket) FROM main.player_history"
+        ).fetchall()
+    finally:
+        cursor.close()
+    return meta_rows, lookup_rows, history_rows
+
+
+def _canonical_graph_from_snapshot_rows(
+    meta_rows: Sequence[tuple[Any, ...]],
+    lookup_rows: Sequence[tuple[Any, ...]],
+    history_rows: Sequence[tuple[Any, ...]],
+) -> PlayerHistoryGraphV1:
+    try:
+        if len(meta_rows) != 1:
+            raise ValueError
+        meta_row = meta_rows[0]
+        if len(meta_row) != 24:
+            raise ValueError
+        meta_values = meta_row[:12]
+        if tuple(meta_row[12:]) != (
+            "integer",
+            "integer",
+            "text",
+            "text",
+            "integer",
+            "text",
+            "text",
+            "text",
+            "text",
+            "integer",
+            "integer",
+            "text",
+        ):
+            raise ValueError
+        (
+            singleton,
+            schema_version,
+            dataset_id,
+            region,
+            queue_id,
+            patches_json,
+            generated_date,
+            source,
+            coverage,
+            low_sample_floor,
+            stored_row_count,
+            exclusions_json,
+        ) = meta_values
+        if (
+            type(singleton) is not int
+            or singleton != 1
+            or type(schema_version) is not int
+            or schema_version != 1
+            or type(dataset_id) is not str
+            or type(region) is not str
+            or region != "TW"
+            or type(queue_id) is not int
+            or queue_id != 2400
+            or type(patches_json) is not str
+            or type(generated_date) is not str
+            or type(source) is not str
+            or source != "lcu-captured-offline-snapshot"
+            or type(coverage) is not str
+            or coverage != "captured-subset"
+            or type(low_sample_floor) is not int
+            or low_sample_floor != 20
+            or type(stored_row_count) is not int
+            or stored_row_count < 0
+            or type(exclusions_json) is not str
+        ):
+            raise ValueError
+
+        decoded_patches = json.loads(patches_json)
+        decoded_exclusions = json.loads(exclusions_json)
+        if type(decoded_patches) is not list or type(decoded_exclusions) is not dict:
+            raise ValueError
+        meta = SnapshotMetaRecordV1(
+            dataset_id=dataset_id,
+            patches_json=patches_json,
+            generated_date=generated_date,
+            exclusions_json=exclusions_json,
+        )
+        canonical_meta = canonicalize_snapshot_meta_v1(
+            SnapshotMetaV1(
+                dataset_id=dataset_id,
+                patches=tuple(decoded_patches),
+                generated_date=generated_date,
+                exclusions=decoded_exclusions,
+            )
+        )
+        if canonical_meta != meta:
+            raise ValueError
+
+        lookups: list[PlayerLookupRecordV1] = []
+        for row in lookup_rows:
+            if len(row) != 8:
+                raise ValueError
+            lookup_key, status, observed_matches, low_sample = row[:4]
+            observed_type = "null" if observed_matches is None else "integer"
+            low_sample_type = "null" if low_sample is None else "integer"
+            if (
+                tuple(row[4:])
+                != ("blob", "text", observed_type, low_sample_type)
+                or type(lookup_key) is not bytes
+                or type(status) is not str
+                or (
+                    observed_matches is not None
+                    and type(observed_matches) is not int
+                )
+                or (low_sample is not None and type(low_sample) is not int)
+            ):
+                raise ValueError
+            lookups.append(
+                PlayerLookupRecordV1(
+                    lookup_key=lookup_key,
+                    status=status,
+                    observed_matches=observed_matches,
+                    low_sample=low_sample,
+                )
+            )
+
+        histories: list[PlayerHistoryRecordV1] = []
+        expected_history_types = (
+            "blob",
+            "text",
+            "blob",
+            "integer",
+            "text",
+            "integer",
+            "text",
+            "text",
+        )
+        for row in history_rows:
+            if len(row) != 16 or tuple(row[8:]) != expected_history_types:
+                raise ValueError
+            (
+                lookup_key,
+                lookup_status,
+                event_key,
+                ordinal,
+                patch,
+                champion_id,
+                outcome,
+                duration_bucket,
+            ) = row[:8]
+            if (
+                type(lookup_key) is not bytes
+                or type(lookup_status) is not str
+                or type(event_key) is not bytes
+                or type(ordinal) is not int
+                or type(patch) is not str
+                or type(champion_id) is not int
+                or type(outcome) is not str
+                or type(duration_bucket) is not str
+            ):
+                raise ValueError
+            histories.append(
+                PlayerHistoryRecordV1(
+                    lookup_key=lookup_key,
+                    lookup_status=lookup_status,
+                    event_key=event_key,
+                    ordinal=ordinal,
+                    patch=patch,
+                    champion_id=champion_id,
+                    outcome=outcome,
+                    duration_bucket=duration_bucket,
+                )
+            )
+
+        graph = canonicalize_player_history_graph_v1(
+            meta=meta,
+            lookups=lookups,
+            histories=histories,
+        )
+        if graph.row_count != stored_row_count:
+            raise ValueError
+        return graph
+    except Exception:
+        raise _SnapshotInconsistent from None
+
+
+def audit_player_history_snapshot_v1(
+    connection: sqlite3.Connection,
+) -> PlayerHistoryGraphV1:
+    """Audit and return one populated canonical player-history snapshot."""
+
+    _require_snapshot_audit_connection(connection)
+    graph: PlayerHistoryGraphV1 | None = None
+    failure_code: str | None = None
+    owned_transaction = False
+    try:
+        if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
+            raise _SchemaInvalid
+        connection.execute("BEGIN")
+        owned_transaction = True
+        _require_snapshot_structure(connection)
+        _audit_snapshot_table_sql(connection)
+        meta_rows, lookup_rows, history_rows = _read_snapshot_rows(connection)
+        graph = _canonical_graph_from_snapshot_rows(
+            meta_rows,
+            lookup_rows,
+            history_rows,
+        )
+        if tuple(connection.execute("PRAGMA main.foreign_key_check")) != ():
+            raise _SnapshotInconsistent
+    except PlayerHistorySnapshotAuditError as exc:
+        failure_code = exc.code
+    except _SchemaInvalid:
+        failure_code = "schema_invalid"
+    except _SnapshotInconsistent:
+        failure_code = "snapshot_invalid"
+    except sqlite3.Error:
+        failure_code = "database_error"
+    finally:
+        if owned_transaction:
+            inactive, containment_used = _rollback_snapshot_audit(connection)
+            if not inactive or containment_used:
+                graph = None
+                failure_code = "database_error"
+
+    if failure_code is not None:
+        _raise_snapshot_audit(failure_code)
+    if graph is None:
+        _raise_snapshot_audit("database_error")
+    return graph

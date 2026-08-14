@@ -8647,3 +8647,244 @@
             animation: none !important;
         }
     }
+
+    /* ===== Player history lookup =====
+       One quiet secondary panel on Home. It uses the shared theme tokens and
+       hairline section rules, with no nested cards or decorative gradients. */
+    .player-history-panel {
+        margin: 24px 0 30px;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--panel-surface);
+        color: var(--text);
+    }
+    .player-history-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--panel-line);
+    }
+    .player-history-heading { min-width: 0; }
+    .player-history-heading h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+    }
+    .player-history-sub {
+        margin: 5px 0 0;
+        max-width: 65ch;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .player-history-region {
+        flex: 0 0 auto;
+        padding: 5px 9px;
+        border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--border));
+        border-radius: 999px;
+        color: color-mix(in oklab, var(--accent) 70%, var(--text));
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 12px;
+        padding: 16px 0 10px;
+    }
+    .player-history-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+    }
+    .player-history-field label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.25;
+    }
+    .player-history-field input {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-sm);
+        background: var(--panel-inner);
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+    }
+    .player-history-field input::placeholder { color: var(--text-dim); }
+    .player-history-field input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-color: var(--accent);
+    }
+    .player-history-submit {
+        min-width: 112px;
+        height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--accent);
+        border-radius: var(--r-sm);
+        background: var(--accent);
+        color: var(--accent-on);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease),
+                    color var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+    }
+    .player-history-submit:hover:not(:disabled) {
+        background: var(--accent-soft);
+        border-color: var(--accent-soft);
+    }
+    .player-history-submit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .player-history-submit:disabled,
+    .player-history-field input:disabled {
+        cursor: not-allowed;
+        opacity: 0.54;
+    }
+    .player-history-help,
+    .player-history-status {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-help { padding-bottom: 12px; }
+    .player-history-status {
+        min-height: 1.5em;
+        padding-top: 12px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-status[data-state="error"] { color: var(--wr-negative); }
+    .player-history-status[data-state="ready"] { color: var(--text); }
+    .player-history-status[data-state="loading"] { color: var(--accent-soft); }
+    .player-history-result {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-result[hidden] { display: none; }
+    .player-history-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 5px 14px;
+        margin-bottom: 12px;
+    }
+    .player-history-summary strong {
+        font-size: 16px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-summary span {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-note {
+        margin: 0 0 12px;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-sm);
+    }
+    .player-history-table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .player-history-table th,
+    .player-history-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--panel-line);
+        text-align: left;
+        vertical-align: middle;
+    }
+    .player-history-table th {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-table tbody tr:last-child td { border-bottom: 0; }
+    .player-history-table td:first-child,
+    .player-history-table th:first-child,
+    .player-history-table td:nth-child(2),
+    .player-history-table td:nth-child(4) {
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-champion {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 120px;
+        color: var(--text);
+        font-weight: 600;
+    }
+    .player-history-champion img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--panel-inner);
+    }
+    .player-history-outcome.is-win { color: var(--wr-positive); font-weight: 700; }
+    .player-history-outcome.is-loss { color: var(--wr-negative); font-weight: 700; }
+    .player-history-snapshot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin-top: 10px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.45;
+    }
+    .player-history-skeleton {
+        display: grid;
+        gap: 8px;
+    }
+    .player-history-skeleton span {
+        display: block;
+        height: 32px;
+        border-radius: 5px;
+        background: var(--panel-inner);
+        border: 1px solid var(--panel-line);
+    }
+    @media (max-width: 700px) {
+        .player-history-panel { margin: 20px 0 24px; padding: 14px; }
+        .player-history-head { gap: 10px; padding-bottom: 12px; }
+        .player-history-heading h2 { font-size: 17px; }
+        .player-history-sub { font-size: 12px; }
+        .player-history-region { padding: 4px 7px; font-size: 10px; }
+        .player-history-form { grid-template-columns: 1fr; gap: 10px; padding: 14px 0 9px; }
+        .player-history-submit { width: 100%; }
+        .player-history-table { min-width: 500px; }
+        .player-history-table th,
+        .player-history-table td { padding: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .player-history-submit { transition: none; }
+    }

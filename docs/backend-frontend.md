@@ -153,3 +153,53 @@ The backend database is intentionally narrower than the collector DB. It stores 
 - public participant stats needed for augments/items
 
 Bulk ingest rejects `participants_json` if it contains PUUID-like UUIDs or private field names such as `puuid`, `summonerName`, or `riotId`.
+
+## Isolated public player-history service
+
+Player history is deliberately not mounted in the shared site API.  It runs as
+its own FastAPI/uvicorn process, with OpenAPI/docs and access logging disabled,
+and exposes only `POST /api/player-history/query`.  The immutable snapshot is
+fully audited once at process construction; requests then verify the pinned
+file identity and use indexed, read-only SQLite lookups.
+
+Snapshot construction supports two mutually exclusive inputs. `--live-source`
+reads only `data/lcu/games.db` from Git's common primary checkout; linked
+worktrees resolve it through strict, non-reparse `.git` metadata. It takes no
+path, opens SQLite read-only without `immutable`, validates the exact collector
+schema in a consistent transaction, filters queue 2400 plus the configured
+patches, and never selects `seed_family`. The live read is bounded to 20 minutes
+and 512 MiB of WAL growth, pins the database/WAL/SHM identities, and closes
+before the new snapshot is published. It never writes, indexes, checkpoints,
+moves, or copies the collector files. `--source <backup>` remains available for
+an explicit, stopped offline backup as documented in
+`runbooks/player-history.md`.
+
+The public response is a fixed allowlist: `status`, public `snapshot` metadata,
+`observed_matches`, `low_sample`, and bounded `histories`.  Unknown and
+ambiguous aliases are indistinguishable.  A known alias exposes only games in
+which that exact alias appeared; the service never joins renamed aliases by
+PUUID.  Eligible unknown/low-sample aliases may be encrypted under the offline
+RSA public key and placed in a bounded, lossy quarantine.  That quarantine is
+untrusted downstream input and must never be connected directly to a crawler
+or live database.
+
+The process requires explicit environment configuration and never creates a
+secret or key:
+
+| Variable | Purpose |
+| --- | --- |
+| `ARAM_PLAYER_HISTORY_SNAPSHOT` | Audited immutable snapshot path. |
+| `ARAM_PLAYER_HISTORY_LOOKUP_SECRET_HEX` | Exactly 32 bytes, lowercase hex. |
+| `ARAM_PLAYER_HISTORY_CANDIDATE_SECRET_HEX` | Separate dataset-scoped candidate HMAC secret. |
+| `ARAM_PLAYER_HISTORY_RATE_SECRET_HEX` | Separate client limiter HMAC secret. |
+| `ARAM_PLAYER_HISTORY_RSA_PUBLIC_PEM` | RSA public key PEM, at least 3072 bits; never a private key. |
+| `ARAM_PLAYER_HISTORY_QUARANTINE_DB` | Dedicated quarantine SQLite path. |
+| `ARAM_PLAYER_HISTORY_RATE_DB` | Dedicated persistent limiter SQLite path. |
+| `ARAM_PLAYER_HISTORY_ALLOWED_ORIGINS` | Comma-separated exact origins. Empty means requests without `Origin` only. |
+| `ARAM_PLAYER_HISTORY_TRUSTED_PROXY_PEERS` | Comma-separated canonical immediate proxy IPs allowed to supply one canonical `X-Forwarded-For`. |
+| `ARAM_PLAYER_HISTORY_RATE_LIMIT_PER_HOUR` | Fixed-window limit; default `20`. |
+| `ARAM_PLAYER_HISTORY_HOST` / `ARAM_PLAYER_HISTORY_PORT` | Bind address and port; defaults `127.0.0.1:8766`. |
+
+No real values belong in documentation, shell history, repository files, or
+service logs.  Operational build/start/rotation guidance is in
+`runbooks/player-history.md`.

@@ -15,6 +15,8 @@ from aram_nn.site.player_history_readmodel import (
     PlayerHistoryRecordV1,
     PlayerHistoryReadModelError,
     PlayerHistoryReadModelSchemaError,
+    PlayerHistorySnapshotAuditError,
+    PlayerHistorySnapshotWriteError,
     PlayerHistoryV1,
     PlayerHistoryValidationError,
     PlayerLookupRecordV1,
@@ -22,12 +24,14 @@ from aram_nn.site.player_history_readmodel import (
     PlayerLookupValidationError,
     SnapshotMetaRecordV1,
     SnapshotMetaV1,
+    audit_player_history_snapshot_v1,
     audit_player_history_schema,
     canonicalize_player_history_graph_v1,
     canonicalize_player_history_v1,
     canonicalize_player_lookup_v1,
     canonicalize_snapshot_meta_v1,
     create_player_history_schema,
+    write_player_history_graph_v1,
 )
 import aram_nn.site.player_history_readmodel as readmodel
 
@@ -207,6 +211,32 @@ def user_schema(connection):
     )
 
 
+def empty_graph():
+    return canonicalize_player_history_graph_v1(
+        meta=snapshot_meta_record(),
+        lookups=(),
+        histories=(),
+    )
+
+
+def multi_graph():
+    lookups = (
+        lookup_record(3, status="ambiguous"),
+        lookup_record(2, observed_matches=2),
+        lookup_record(1),
+    )
+    histories = (
+        history_record(2, 2, event_number=82),
+        history_record(1, 1, event_number=71),
+        history_record(2, 1, event_number=81),
+    )
+    return canonicalize_player_history_graph_v1(
+        meta=snapshot_meta_record(),
+        lookups=lookups,
+        histories=histories,
+    )
+
+
 class PlayerHistoryReadModelSchemaTests(unittest.TestCase):
     def assert_schema_error(self, code, function, *args):
         with self.assertRaises(PlayerHistoryReadModelSchemaError) as caught:
@@ -260,6 +290,10 @@ class PlayerHistoryReadModelSchemaTests(unittest.TestCase):
                 "PlayerHistoryGraphValidationError",
                 "PlayerHistoryGraphV1",
                 "canonicalize_player_history_graph_v1",
+                "PlayerHistorySnapshotWriteError",
+                "write_player_history_graph_v1",
+                "PlayerHistorySnapshotAuditError",
+                "audit_player_history_snapshot_v1",
             ),
         )
         for function in (create_player_history_schema, audit_player_history_schema):
@@ -270,6 +304,25 @@ class PlayerHistoryReadModelSchemaTests(unittest.TestCase):
                 sqlite3.Connection,
             )
             self.assertIs(signature.return_annotation, None)
+        writer_signature = inspect.signature(write_player_history_graph_v1)
+        self.assertEqual(tuple(writer_signature.parameters), ("connection", "graph"))
+        self.assertIs(
+            writer_signature.parameters["connection"].annotation,
+            sqlite3.Connection,
+        )
+        self.assertIs(
+            writer_signature.parameters["graph"].annotation,
+            PlayerHistoryGraphV1,
+        )
+        self.assertEqual(
+            writer_signature.parameters["connection"].kind,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        self.assertEqual(
+            writer_signature.parameters["graph"].kind,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        self.assertIs(writer_signature.return_annotation, None)
         allowed = {
             "invalid_connection",
             "transaction_active",
@@ -1517,6 +1570,896 @@ class PlayerHistoryReadModelSchemaTests(unittest.TestCase):
             self.assertEqual(output.getvalue(), "")
         finally:
             connection.close()
+
+
+class PlayerHistorySnapshotWriterTests(unittest.TestCase):
+    tables = ("snapshot_meta", "player_lookup", "player_history")
+
+    def make_created(self):
+        connection = sqlite3.connect(":memory:")
+        create_player_history_schema(connection)
+        return connection
+
+    def assert_write_error(self, code, connection, graph):
+        with self.assertRaises(PlayerHistorySnapshotWriteError) as caught:
+            write_player_history_graph_v1(connection, graph)
+        self.assertEqual(caught.exception.code, code)
+        self.assertEqual(str(caught.exception), code)
+
+    def rows(self, connection):
+        return (
+            tuple(
+                connection.execute(
+                    "SELECT singleton,schema_version,dataset_id,region,queue_id,"
+                    "patches_json,generated_date,source,coverage,low_sample_floor,"
+                    "row_count,exclusions_json FROM snapshot_meta ORDER BY singleton"
+                )
+            ),
+            tuple(
+                connection.execute(
+                    "SELECT lookup_key,status,observed_matches,low_sample "
+                    "FROM player_lookup ORDER BY lookup_key"
+                )
+            ),
+            tuple(
+                connection.execute(
+                    "SELECT lookup_key,lookup_status,event_key,ordinal,patch,"
+                    "champion_id,outcome,duration_bucket FROM player_history "
+                    "ORDER BY lookup_key,ordinal,event_key"
+                )
+            ),
+        )
+
+    def assert_empty_open_inactive(self, connection):
+        self.assertFalse(connection.in_transaction)
+        self.assertEqual(
+            tuple(
+                connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                for table in self.tables
+            ),
+            (0, 0, 0),
+        )
+        self.assertEqual(connection.execute("SELECT 1").fetchone(), (1,))
+
+    def test_error_inventory_inheritance_and_non_echo(self):
+        self.assertTrue(issubclass(PlayerHistorySnapshotWriteError, ValueError))
+        sensitive = "PrivateName#TW1/C:/Users/private/puuid-123"
+        allowed = {
+            "invalid_connection",
+            "transaction_active",
+            "schema_invalid",
+            "snapshot_not_empty",
+            "inconsistent_snapshot",
+            "database_error",
+        }
+        for code in allowed:
+            error = PlayerHistorySnapshotWriteError(code, sensitive)
+            self.assertEqual((error.code, str(error), error.args), (code, code, (code,)))
+            self.assertNotIn(sensitive, str(error))
+        fallback = PlayerHistorySnapshotWriteError(sensitive)
+        self.assertEqual(
+            (fallback.code, str(fallback)),
+            ("inconsistent_snapshot", "inconsistent_snapshot"),
+        )
+
+    def test_empty_graph_writes_one_fixed_metadata_row(self):
+        graph = empty_graph()
+        connection = self.make_created()
+        try:
+            write_player_history_graph_v1(connection, graph)
+            self.assertFalse(connection.in_transaction)
+            self.assertEqual(
+                self.rows(connection),
+                (
+                    (
+                        (
+                            1,
+                            1,
+                            graph.meta.dataset_id,
+                            "TW",
+                            2400,
+                            graph.meta.patches_json,
+                            graph.meta.generated_date,
+                            "lcu-captured-offline-snapshot",
+                            "captured-subset",
+                            20,
+                            0,
+                            graph.meta.exclusions_json,
+                        ),
+                    ),
+                    (),
+                    (),
+                ),
+            )
+            self.assertEqual(tuple(connection.execute("PRAGMA foreign_key_check")), ())
+        finally:
+            connection.close()
+
+    def test_multi_graph_exact_rows_types_counts_and_determinism(self):
+        graph = multi_graph()
+        connections = [self.make_created(), self.make_created()]
+        try:
+            for connection in connections:
+                write_player_history_graph_v1(connection, graph)
+            first_rows = self.rows(connections[0])
+            self.assertEqual(self.rows(connections[1]), first_rows)
+            self.assertEqual(
+                first_rows[1],
+                tuple(
+                    (row.lookup_key, row.status, row.observed_matches, row.low_sample)
+                    for row in graph.lookups
+                ),
+            )
+            self.assertEqual(
+                first_rows[2],
+                tuple(
+                    (
+                        row.lookup_key,
+                        row.lookup_status,
+                        row.event_key,
+                        row.ordinal,
+                        row.patch,
+                        row.champion_id,
+                        row.outcome,
+                        row.duration_bucket,
+                    )
+                    for row in graph.histories
+                ),
+            )
+            self.assertEqual(
+                tuple(
+                    connections[0].execute(
+                        "SELECT typeof(lookup_key),typeof(status),"
+                        "typeof(observed_matches),typeof(low_sample) "
+                        "FROM player_lookup ORDER BY lookup_key"
+                    )
+                ),
+                (
+                    ("blob", "text", "integer", "integer"),
+                    ("blob", "text", "integer", "integer"),
+                    ("blob", "text", "null", "null"),
+                ),
+            )
+            self.assertEqual(
+                tuple(
+                    connections[0].execute(
+                        "SELECT typeof(lookup_key),typeof(lookup_status),"
+                        "typeof(event_key),typeof(ordinal),typeof(patch),"
+                        "typeof(champion_id),typeof(outcome),typeof(duration_bucket) "
+                        "FROM player_history ORDER BY lookup_key,ordinal,event_key"
+                    )
+                ),
+                (("blob", "text", "blob", "integer", "text", "integer", "text", "text"),) * 3,
+            )
+            self.assertEqual(
+                connections[0].execute(
+                    "SELECT typeof(singleton),typeof(schema_version),"
+                    "typeof(dataset_id),typeof(region),typeof(queue_id),"
+                    "typeof(patches_json),typeof(generated_date),typeof(source),"
+                    "typeof(coverage),typeof(low_sample_floor),typeof(row_count),"
+                    "typeof(exclusions_json) FROM snapshot_meta"
+                ).fetchone(),
+                (
+                    "integer",
+                    "integer",
+                    "text",
+                    "text",
+                    "integer",
+                    "text",
+                    "text",
+                    "text",
+                    "text",
+                    "integer",
+                    "integer",
+                    "text",
+                ),
+            )
+            self.assertEqual(
+                dict(
+                    connections[0].execute(
+                        "SELECT status,count(*) FROM player_lookup GROUP BY status"
+                    )
+                ),
+                {"ready": 2, "ambiguous": 1},
+            )
+            self.assertEqual(tuple(connections[0].execute("PRAGMA foreign_key_check")), ())
+        finally:
+            for connection in connections:
+                connection.close()
+
+    def test_wrong_closed_and_active_connections_are_preserved(self):
+        graph = empty_graph()
+        self.assert_write_error("invalid_connection", object(), graph)
+
+        closed = sqlite3.connect(":memory:")
+        closed.close()
+        self.assert_write_error("invalid_connection", closed, graph)
+
+        active = self.make_created()
+        try:
+            active.execute("BEGIN")
+            self.assert_write_error("transaction_active", active, graph)
+            self.assertTrue(active.in_transaction)
+            self.assertEqual(
+                tuple(
+                    active.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+                    for table in self.tables
+                ),
+                (0, 0, 0),
+            )
+            active.rollback()
+        finally:
+            active.close()
+
+    def test_foreign_keys_off_is_schema_invalid_without_toggle(self):
+        connection = self.make_created()
+        try:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            self.assert_write_error("schema_invalid", connection, empty_graph())
+            self.assertEqual(connection.execute("PRAGMA foreign_keys").fetchone(), (0,))
+            self.assert_empty_open_inactive(connection)
+        finally:
+            connection.close()
+
+    def test_missing_extra_and_tampered_schema_are_invalid(self):
+        cases = []
+        missing = sqlite3.connect(":memory:")
+        missing.execute("PRAGMA foreign_keys = ON")
+        cases.append(missing)
+        extra = self.make_created()
+        extra.execute("CREATE TABLE extra_public_value (value INTEGER)")
+        cases.append(extra)
+        tampered = sqlite3.connect(":memory:")
+        tampered.execute("PRAGMA foreign_keys = ON")
+        for statement in (
+            DDL[0].replace("queue_id = 2400", "queue_id = 450"),
+            DDL[1],
+            DDL[2],
+        ):
+            tampered.execute(statement)
+        cases.append(tampered)
+        try:
+            for connection in cases:
+                with self.subTest(schema=user_schema(connection)):
+                    before = user_schema(connection)
+                    self.assert_write_error("schema_invalid", connection, empty_graph())
+                    self.assertEqual(user_schema(connection), before)
+                    self.assertFalse(connection.in_transaction)
+                    self.assertEqual(connection.execute("SELECT 1").fetchone(), (1,))
+        finally:
+            for connection in cases:
+                connection.close()
+
+    def test_each_prepopulated_table_is_snapshot_not_empty_and_unchanged(self):
+        graph = empty_graph()
+        cases = []
+
+        meta_connection = self.make_created()
+        meta_connection.execute(
+            "INSERT INTO snapshot_meta VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                1,
+                1,
+                "existing",
+                "TW",
+                2400,
+                "[]",
+                "2026-08-12",
+                "lcu-captured-offline-snapshot",
+                "captured-subset",
+                20,
+                0,
+                "{}",
+            ),
+        )
+        meta_connection.commit()
+        cases.append(meta_connection)
+
+        lookup_connection = self.make_created()
+        lookup_connection.execute(
+            "INSERT INTO player_lookup VALUES (?,?,?,?)",
+            (key(8), "ambiguous", None, None),
+        )
+        lookup_connection.commit()
+        cases.append(lookup_connection)
+
+        history_connection = self.make_created()
+        history_connection.execute(
+            "INSERT INTO player_lookup VALUES (?,?,?,?)",
+            (key(8), "ready", 1, 1),
+        )
+        history_connection.execute(
+            "INSERT INTO player_history "
+            "(lookup_key,event_key,ordinal,patch,champion_id,outcome,duration_bucket) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (key(8), key(9), 1, "26.16", 10, "win", "lt_15m"),
+        )
+        history_connection.commit()
+        cases.append(history_connection)
+
+        try:
+            for connection in cases:
+                before = self.rows(connection)
+                self.assert_write_error("snapshot_not_empty", connection, graph)
+                self.assertEqual(self.rows(connection), before)
+                self.assertFalse(connection.in_transaction)
+        finally:
+            for connection in cases:
+                connection.close()
+
+    def test_subclass_tampered_and_noncanonical_graphs_are_rejected_prewrite(self):
+        graph = multi_graph()
+
+        class GraphSubclass(PlayerHistoryGraphV1):
+            pass
+
+        candidates = (
+            GraphSubclass(**graph.__dict__),
+            replace(graph, row_count=graph.row_count + 1),
+            replace(graph, lookups=tuple(reversed(graph.lookups))),
+        )
+        for candidate in candidates:
+            connection = self.make_created()
+            try:
+                self.assert_write_error("inconsistent_snapshot", connection, candidate)
+                self.assert_empty_open_inactive(connection)
+            finally:
+                connection.close()
+
+    def test_insert_denials_rollback_every_table_and_keep_connection_open(self):
+        graph = multi_graph()
+        for denied_table in self.tables:
+            connection = self.make_created()
+            state = {"begins": 0}
+
+            def authorizer(action, arg1, _arg2, _database, _trigger):
+                if action == sqlite3.SQLITE_TRANSACTION and arg1 == "BEGIN":
+                    state["begins"] += 1
+                if (
+                    state["begins"] >= 2
+                    and action == sqlite3.SQLITE_INSERT
+                    and arg1 == denied_table
+                ):
+                    return sqlite3.SQLITE_DENY
+                return sqlite3.SQLITE_OK
+
+            connection.set_authorizer(authorizer)
+            try:
+                with self.subTest(table=denied_table):
+                    self.assert_write_error("database_error", connection, graph)
+                    connection.set_authorizer(None)
+                    self.assert_empty_open_inactive(connection)
+            finally:
+                connection.set_authorizer(None)
+                connection.close()
+
+    def test_hostile_rollback_denial_is_contained_and_fully_rolled_back(self):
+        connection = self.make_created()
+        graph = multi_graph()
+        state = {"begins": 0, "insert_denied": False, "rollback_denied": False}
+
+        def authorizer(action, arg1, _arg2, _database, _trigger):
+            if action == sqlite3.SQLITE_TRANSACTION and arg1 == "BEGIN":
+                state["begins"] += 1
+            if (
+                state["begins"] >= 2
+                and action == sqlite3.SQLITE_INSERT
+                and arg1 == "player_history"
+            ):
+                state["insert_denied"] = True
+                return sqlite3.SQLITE_DENY
+            if (
+                state["begins"] >= 2
+                and action == sqlite3.SQLITE_TRANSACTION
+                and arg1 == "ROLLBACK"
+            ):
+                state["rollback_denied"] = True
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        connection.set_authorizer(authorizer)
+        try:
+            self.assert_write_error("database_error", connection, graph)
+            self.assertTrue(state["insert_denied"])
+            self.assertTrue(state["rollback_denied"])
+            self.assert_empty_open_inactive(connection)
+
+            connection.execute("BEGIN")
+            connection.rollback()
+            self.assertFalse(connection.in_transaction)
+        finally:
+            connection.set_authorizer(None)
+            connection.close()
+
+    def test_readback_denial_rolls_back_and_keeps_connection_open(self):
+        connection = self.make_created()
+        graph = multi_graph()
+        state = {"begins": 0, "history_insert": False, "denied": False}
+
+        def authorizer(action, arg1, arg2, _database, _trigger):
+            if action == sqlite3.SQLITE_TRANSACTION and arg1 == "BEGIN":
+                state["begins"] += 1
+            if (
+                state["begins"] >= 2
+                and action == sqlite3.SQLITE_INSERT
+                and arg1 == "player_history"
+            ):
+                state["history_insert"] = True
+            if (
+                state["history_insert"]
+                and not state["denied"]
+                and action == sqlite3.SQLITE_READ
+                and arg1 == "snapshot_meta"
+                and arg2 == "singleton"
+            ):
+                state["denied"] = True
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        connection.set_authorizer(authorizer)
+        try:
+            self.assert_write_error("database_error", connection, graph)
+            self.assertTrue(state["denied"])
+            connection.set_authorizer(None)
+            self.assert_empty_open_inactive(connection)
+        finally:
+            connection.set_authorizer(None)
+            connection.close()
+
+    def test_failures_are_silent_and_source_has_no_path_api(self):
+        sensitive = "PrivateName#TW1/C:/Users/private/puuid-123/game-456"
+        graph = replace(
+            empty_graph(),
+            meta=replace(empty_graph().meta, dataset_id=sensitive),
+        )
+        connection = self.make_created()
+        output = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                self.assert_write_error("inconsistent_snapshot", connection, graph)
+            self.assertEqual(output.getvalue(), "")
+            self.assertNotIn(sensitive, output.getvalue())
+            self.assert_empty_open_inactive(connection)
+        finally:
+            connection.close()
+
+        source = inspect.getsource(write_player_history_graph_v1)
+        for forbidden in ("open(", "Path(", "pathlib", "os.", "print("):
+            self.assertNotIn(forbidden, source)
+
+
+class PlayerHistorySnapshotAuditTests(unittest.TestCase):
+    tables = ("snapshot_meta", "player_lookup", "player_history")
+
+    def make_created(self):
+        connection = sqlite3.connect(":memory:")
+        create_player_history_schema(connection)
+        return connection
+
+    def assert_audit_error(self, code, connection):
+        with self.assertRaises(PlayerHistorySnapshotAuditError) as caught:
+            audit_player_history_snapshot_v1(connection)
+        self.assertEqual(
+            (caught.exception.code, str(caught.exception), caught.exception.args),
+            (code, code, (code,)),
+        )
+
+    def rows(self, connection):
+        return (
+            tuple(
+                connection.execute(
+                    "SELECT singleton,schema_version,dataset_id,region,queue_id,"
+                    "patches_json,generated_date,source,coverage,low_sample_floor,"
+                    "row_count,exclusions_json FROM snapshot_meta ORDER BY singleton"
+                )
+            ),
+            tuple(
+                connection.execute(
+                    "SELECT lookup_key,status,observed_matches,low_sample "
+                    "FROM player_lookup ORDER BY lookup_key"
+                )
+            ),
+            tuple(
+                connection.execute(
+                    "SELECT lookup_key,lookup_status,event_key,ordinal,patch,"
+                    "champion_id,outcome,duration_bucket FROM player_history "
+                    "ORDER BY lookup_key,ordinal,event_key"
+                )
+            ),
+        )
+
+    def insert_meta(self, connection, graph, **changes):
+        values = {
+            "singleton": 1,
+            "schema_version": 1,
+            "dataset_id": graph.meta.dataset_id,
+            "region": "TW",
+            "queue_id": 2400,
+            "patches_json": graph.meta.patches_json,
+            "generated_date": graph.meta.generated_date,
+            "source": "lcu-captured-offline-snapshot",
+            "coverage": "captured-subset",
+            "low_sample_floor": 20,
+            "row_count": graph.row_count,
+            "exclusions_json": graph.meta.exclusions_json,
+        }
+        values.update(changes)
+        connection.execute(
+            "INSERT INTO snapshot_meta VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            tuple(values.values()),
+        )
+
+    def insert_graph_rows(self, connection, graph, *, reverse=False):
+        lookups = reversed(graph.lookups) if reverse else graph.lookups
+        histories = reversed(graph.histories) if reverse else graph.histories
+        connection.executemany(
+            "INSERT INTO player_lookup VALUES (?,?,?,?)",
+            (
+                (row.lookup_key, row.status, row.observed_matches, row.low_sample)
+                for row in lookups
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO player_history VALUES (?,?,?,?,?,?,?,?)",
+            (
+                (
+                    row.lookup_key,
+                    row.lookup_status,
+                    row.event_key,
+                    row.ordinal,
+                    row.patch,
+                    row.champion_id,
+                    row.outcome,
+                    row.duration_bucket,
+                )
+                for row in histories
+            ),
+        )
+
+    def test_public_api_error_inventory_non_echo_and_signature(self):
+        self.assertEqual(len(readmodel.__all__), 22)
+        self.assertTrue(issubclass(PlayerHistorySnapshotAuditError, ValueError))
+        sensitive = "PrivateName#TW1/C:/Users/private/puuid-123"
+        allowed = {
+            "invalid_connection",
+            "transaction_active",
+            "schema_invalid",
+            "snapshot_invalid",
+            "database_error",
+        }
+        for code in allowed:
+            error = PlayerHistorySnapshotAuditError(code, sensitive)
+            self.assertEqual((error.code, str(error), error.args), (code, code, (code,)))
+            self.assertNotIn(sensitive, str(error))
+        fallback = PlayerHistorySnapshotAuditError(sensitive)
+        self.assertEqual(
+            (fallback.code, str(fallback), fallback.args),
+            ("snapshot_invalid", "snapshot_invalid", ("snapshot_invalid",)),
+        )
+        signature = inspect.signature(audit_player_history_snapshot_v1)
+        self.assertEqual(tuple(signature.parameters), ("connection",))
+        self.assertIs(
+            signature.parameters["connection"].annotation,
+            sqlite3.Connection,
+        )
+        self.assertEqual(
+            signature.parameters["connection"].kind,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        self.assertIs(signature.return_annotation, PlayerHistoryGraphV1)
+
+    def test_writer_created_empty_and_multi_round_trip_without_mutation(self):
+        for graph in (empty_graph(), multi_graph()):
+            connection = self.make_created()
+            try:
+                write_player_history_graph_v1(connection, graph)
+                before = self.rows(connection)
+                self.assertEqual(audit_player_history_snapshot_v1(connection), graph)
+                self.assertEqual(self.rows(connection), before)
+                self.assertFalse(connection.in_transaction)
+                self.assertEqual(connection.execute("SELECT 1").fetchone(), (1,))
+            finally:
+                connection.close()
+
+    def test_manual_reverse_inserts_return_canonical_order(self):
+        graph = multi_graph()
+        connection = self.make_created()
+        try:
+            self.insert_meta(connection, graph)
+            self.insert_graph_rows(connection, graph, reverse=True)
+            connection.commit()
+            before = self.rows(connection)
+            self.assertEqual(audit_player_history_snapshot_v1(connection), graph)
+            self.assertEqual(self.rows(connection), before)
+            self.assertFalse(connection.in_transaction)
+        finally:
+            connection.close()
+
+    def test_wrong_closed_active_and_foreign_keys_off_are_preserved(self):
+        self.assert_audit_error("invalid_connection", object())
+        closed = sqlite3.connect(":memory:")
+        closed.close()
+        self.assert_audit_error("invalid_connection", closed)
+
+        active = self.make_created()
+        try:
+            active.execute("BEGIN")
+            self.assert_audit_error("transaction_active", active)
+            self.assertTrue(active.in_transaction)
+            active.rollback()
+        finally:
+            active.close()
+
+        foreign_keys_off = self.make_created()
+        try:
+            foreign_keys_off.execute("PRAGMA foreign_keys = OFF")
+            self.assert_audit_error("schema_invalid", foreign_keys_off)
+            self.assertEqual(foreign_keys_off.execute("PRAGMA foreign_keys").fetchone(), (0,))
+            self.assertFalse(foreign_keys_off.in_transaction)
+        finally:
+            foreign_keys_off.close()
+
+    def test_missing_meta_is_snapshot_invalid_but_schema_drift_is_schema_invalid(self):
+        missing_meta = self.make_created()
+        try:
+            self.assert_audit_error("snapshot_invalid", missing_meta)
+            self.assertFalse(missing_meta.in_transaction)
+        finally:
+            missing_meta.close()
+
+        cases = []
+        missing_schema = sqlite3.connect(":memory:")
+        missing_schema.execute("PRAGMA foreign_keys = ON")
+        cases.append(missing_schema)
+        extra = self.make_created()
+        extra.execute("CREATE TABLE extra_public_value (value INTEGER)")
+        cases.append(extra)
+        tampered = sqlite3.connect(":memory:")
+        tampered.execute("PRAGMA foreign_keys = ON")
+        for statement in (
+            DDL[0],
+            DDL[1],
+            DDL[2].replace("champion_id INTEGER", "champion_id TEXT"),
+        ):
+            tampered.execute(statement)
+        cases.append(tampered)
+        try:
+            for connection in cases:
+                with self.subTest(schema=user_schema(connection)):
+                    before = user_schema(connection)
+                    self.assert_audit_error("schema_invalid", connection)
+                    self.assertEqual(user_schema(connection), before)
+                    self.assertFalse(connection.in_transaction)
+        finally:
+            for connection in cases:
+                connection.close()
+
+    def test_weakened_check_sql_is_schema_invalid_with_valid_empty_snapshot(self):
+        graph = empty_graph()
+        replacements = (
+            (
+                "CHECK (region = 'TW')",
+                "CHECK (region = 'TW' OR 1=1)",
+            ),
+            (
+                "CHECK (champion_id > 0)",
+                "CHECK (champion_id > 0 OR 1=1)",
+            ),
+        )
+        for target, weakened in replacements:
+            connection = sqlite3.connect(":memory:")
+            connection.execute("PRAGMA foreign_keys = ON")
+            try:
+                statements = tuple(
+                    statement.replace(target, weakened)
+                    for statement in readmodel._DDL
+                )
+                self.assertNotEqual(statements, readmodel._DDL)
+                for statement in statements:
+                    connection.execute(statement)
+                self.insert_meta(connection, graph)
+                connection.commit()
+                before = self.rows(connection)
+                self.assert_audit_error("schema_invalid", connection)
+                self.assertEqual(self.rows(connection), before)
+                self.assertFalse(connection.in_transaction)
+            finally:
+                connection.close()
+
+    def test_invalid_fixed_meta_json_canonicality_and_row_count(self):
+        graph = empty_graph()
+        cases = (
+            {"region": "NA1"},
+            {"schema_version": 2},
+            {"patches_json": "{"},
+            {"patches_json": '[ "26.16" ]'},
+            {"exclusions_json": json.dumps(exclusions(), indent=1)},
+            {"row_count": 1},
+        )
+        for changes in cases:
+            connection = self.make_created()
+            try:
+                connection.execute("PRAGMA ignore_check_constraints = ON")
+                self.insert_meta(connection, graph, **changes)
+                connection.commit()
+                before = self.rows(connection)
+                self.assert_audit_error("snapshot_invalid", connection)
+                self.assertEqual(self.rows(connection), before)
+                self.assertFalse(connection.in_transaction)
+            finally:
+                connection.close()
+
+    def test_lookup_key_status_and_exact_types_are_rejected(self):
+        graph = empty_graph()
+        corruptions = (
+            (key(1)[:-1], "ambiguous", None, None),
+            (key(1), "unknown", None, None),
+            (key(1), "ready", 1, 0),
+        )
+        for lookup in corruptions:
+            connection = self.make_created()
+            try:
+                connection.execute("PRAGMA ignore_check_constraints = ON")
+                self.insert_meta(connection, graph)
+                connection.execute("INSERT INTO player_lookup VALUES (?,?,?,?)", lookup)
+                connection.commit()
+                self.assert_audit_error("snapshot_invalid", connection)
+                self.assertFalse(connection.in_transaction)
+            finally:
+                connection.close()
+
+        type_drift = sqlite3.connect(":memory:")
+        type_drift.execute("PRAGMA foreign_keys = ON")
+        try:
+            for statement in (
+                DDL[0],
+                DDL[1].replace("status TEXT", "status BLOB"),
+                DDL[2],
+            ):
+                type_drift.execute(statement)
+            self.assert_audit_error("schema_invalid", type_drift)
+        finally:
+            type_drift.close()
+
+    def test_history_enum_count_gap_patch_and_parent_are_snapshot_invalid(self):
+        graph = empty_graph()
+        cases = (
+            ((key(1), "ready", 1, 1), (key(1), "ready", key(2), 1, "26.16", 10, "draw", "lt_15m")),
+            ((key(1), "ready", 2, 1), (key(1), "ready", key(2), 1, "26.16", 10, "win", "lt_15m")),
+            ((key(1), "ready", 1, 1), (key(1), "ready", key(2), 2, "26.16", 10, "win", "lt_15m")),
+            ((key(1), "ready", 1, 1), (key(1), "ready", key(2), 1, "26.15", 10, "win", "lt_15m")),
+        )
+        for lookup, history_row in cases:
+            connection = self.make_created()
+            try:
+                connection.execute("PRAGMA ignore_check_constraints = ON")
+                self.insert_meta(connection, graph, row_count=1)
+                connection.execute("INSERT INTO player_lookup VALUES (?,?,?,?)", lookup)
+                connection.execute("INSERT INTO player_history VALUES (?,?,?,?,?,?,?,?)", history_row)
+                connection.commit()
+                self.assert_audit_error("snapshot_invalid", connection)
+                self.assertFalse(connection.in_transaction)
+            finally:
+                connection.close()
+
+        missing_parent = self.make_created()
+        try:
+            missing_parent.execute("PRAGMA foreign_keys = OFF")
+            self.insert_meta(missing_parent, graph, row_count=1)
+            missing_parent.execute(
+                "INSERT INTO player_history VALUES (?,?,?,?,?,?,?,?)",
+                (key(1), "ready", key(2), 1, "26.16", 10, "win", "lt_15m"),
+            )
+            missing_parent.commit()
+            missing_parent.execute("PRAGMA foreign_keys = ON")
+            self.assert_audit_error("snapshot_invalid", missing_parent)
+            self.assertFalse(missing_parent.in_transaction)
+        finally:
+            missing_parent.close()
+
+    def test_duplicate_constraints_cannot_be_weakened_without_schema_invalid(self):
+        connection = sqlite3.connect(":memory:")
+        connection.execute("PRAGMA foreign_keys = ON")
+        try:
+            weakened_lookup = DDL[1].replace("UNIQUE (lookup_key, status),", "")
+            weakened_history = DDL[2].replace("UNIQUE (lookup_key, ordinal),", "")
+            for statement in (DDL[0], weakened_lookup, weakened_history):
+                connection.execute(statement)
+            self.assert_audit_error("schema_invalid", connection)
+            self.assertFalse(connection.in_transaction)
+        finally:
+            connection.close()
+
+    def test_select_denial_is_database_error_with_full_rollback(self):
+        graph = multi_graph()
+        connection = self.make_created()
+        write_player_history_graph_v1(connection, graph)
+        before = self.rows(connection)
+        state = {"begun": False, "denied": False}
+
+        def authorizer(action, arg1, _arg2, _database, _trigger):
+            if action == sqlite3.SQLITE_TRANSACTION and arg1 == "BEGIN":
+                state["begun"] = True
+            if state["begun"] and action == sqlite3.SQLITE_SELECT:
+                state["denied"] = True
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        connection.set_authorizer(authorizer)
+        try:
+            self.assert_audit_error("database_error", connection)
+            self.assertTrue(state["denied"])
+            connection.set_authorizer(None)
+            self.assertEqual(self.rows(connection), before)
+            self.assertFalse(connection.in_transaction)
+        finally:
+            connection.set_authorizer(None)
+            connection.close()
+
+    def test_normal_authorizer_is_preserved_and_hostile_rollback_is_contained(self):
+        graph = empty_graph()
+        normal = self.make_created()
+        write_player_history_graph_v1(normal, graph)
+        state = {"deny_later": False}
+
+        def preserved_authorizer(action, _arg1, _arg2, _database, _trigger):
+            if state["deny_later"] and action == sqlite3.SQLITE_SELECT:
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        normal.set_authorizer(preserved_authorizer)
+        try:
+            self.assertEqual(audit_player_history_snapshot_v1(normal), graph)
+            state["deny_later"] = True
+            with self.assertRaises(sqlite3.DatabaseError):
+                normal.execute("SELECT 987654321")
+            self.assertFalse(normal.in_transaction)
+        finally:
+            normal.set_authorizer(None)
+            normal.close()
+
+        hostile = self.make_created()
+        write_player_history_graph_v1(hostile, graph)
+        before = self.rows(hostile)
+        rollback_state = {"denied": False}
+
+        def rollback_authorizer(action, arg1, _arg2, _database, _trigger):
+            if action == sqlite3.SQLITE_TRANSACTION and arg1 == "ROLLBACK":
+                rollback_state["denied"] = True
+                return sqlite3.SQLITE_DENY
+            return sqlite3.SQLITE_OK
+
+        hostile.set_authorizer(rollback_authorizer)
+        try:
+            self.assert_audit_error("database_error", hostile)
+            self.assertTrue(rollback_state["denied"])
+            self.assertEqual(self.rows(hostile), before)
+            self.assertFalse(hostile.in_transaction)
+            hostile.execute("BEGIN")
+            hostile.rollback()
+            self.assertFalse(hostile.in_transaction)
+        finally:
+            hostile.set_authorizer(None)
+            hostile.close()
+
+    def test_failures_are_silent_non_echoing_and_source_has_no_path_api(self):
+        sensitive = "PrivateName#TW1/C:/Users/private/puuid-123/game-456"
+        connection = self.make_created()
+        output = io.StringIO()
+        try:
+            self.insert_meta(connection, empty_graph(), dataset_id=sensitive)
+            connection.commit()
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                self.assert_audit_error("snapshot_invalid", connection)
+            self.assertEqual(output.getvalue(), "")
+            self.assertNotIn(sensitive, output.getvalue())
+            self.assertFalse(connection.in_transaction)
+        finally:
+            connection.close()
+
+        source = inspect.getsource(readmodel)
+        for forbidden in ("open(", "Path(", "pathlib", "os.", "print("):
+            self.assertNotIn(forbidden, source)
 
 
 if __name__ == "__main__":
