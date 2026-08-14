@@ -11,7 +11,10 @@ from urllib.parse import quote
 
 import click
 
-from .player_history_readmodel import audit_player_history_snapshot_v1
+from .player_history_readmodel import (
+    MAX_STORED_HISTORY_V1,
+    audit_player_history_snapshot_streaming_v1,
+)
 from .player_history_security import (
     NORMALIZER_ID,
     derive_lookup_key,
@@ -70,17 +73,17 @@ class PlayerHistorySnapshotHandle:
                 raise ValueError
             before = _identity(path)
             connection = _readonly_connection(path)
-            graph = audit_player_history_snapshot_v1(connection)
+            summary = audit_player_history_snapshot_streaming_v1(connection)
             after = _identity(path)
             if after != before:
                 raise ValueError
-            patches = json.loads(graph.meta.patches_json)
+            patches = json.loads(summary.meta.patches_json)
             if type(patches) is not list or any(type(item) is not str for item in patches):
                 raise ValueError
             snapshot = {
-                "dataset_id": graph.meta.dataset_id,
+                "dataset_id": summary.meta.dataset_id,
                 "patches": patches,
-                "generated_date": graph.meta.generated_date,
+                "generated_date": summary.meta.generated_date,
             }
             return cls(path=path, file_identity=before, snapshot=snapshot)
         except PlayerHistoryQueryError:
@@ -135,14 +138,14 @@ class PlayerHistorySnapshotHandle:
                     "histories": [],
                 }
             observed_matches = row[1]
-            if type(observed_matches) is not int or not 1 <= observed_matches <= 1000:
+            if type(observed_matches) is not int or observed_matches < 1:
                 raise PlayerHistoryQueryError("snapshot_invalid")
             histories = connection.execute(
                 "SELECT ordinal,patch,champion_id,outcome,duration_bucket "
-                "FROM player_history WHERE lookup_key=? ORDER BY ordinal LIMIT 1001",
-                (lookup_key,),
+                "FROM player_history WHERE lookup_key=? ORDER BY ordinal LIMIT ?",
+                (lookup_key, MAX_STORED_HISTORY_V1 + 1),
             ).fetchall()
-            if len(histories) != observed_matches or len(histories) > 1000:
+            if len(histories) != min(observed_matches, MAX_STORED_HISTORY_V1):
                 raise PlayerHistoryQueryError("snapshot_invalid")
             return {
                 "status": "ready",

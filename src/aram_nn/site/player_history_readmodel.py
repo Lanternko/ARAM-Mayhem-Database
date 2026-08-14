@@ -35,6 +35,9 @@ __all__ = (
 )
 
 
+MAX_STORED_HISTORY_V1 = 300
+
+
 _ERROR_CODES = frozenset(
     {
         "invalid_connection",
@@ -194,6 +197,16 @@ class PlayerHistoryGraphV1:
     meta: SnapshotMetaRecordV1
     lookups: tuple[PlayerLookupRecordV1, ...]
     histories: tuple[PlayerHistoryRecordV1, ...]
+    row_count: int
+    ready_lookup_count: int
+    ambiguous_lookup_count: int
+
+
+@dataclass(frozen=True)
+class PlayerHistorySnapshotSummaryV1:
+    """Bounded-memory result of auditing one populated snapshot."""
+
+    meta: SnapshotMetaRecordV1
     row_count: int
     ready_lookup_count: int
     ambiguous_lookup_count: int
@@ -522,7 +535,9 @@ def canonicalize_player_history_graph_v1(
             if lookup.status == "ready":
                 ready_lookup_count += 1
                 lookup_histories = histories_by_lookup.get(lookup.lookup_key, [])
-                if len(lookup_histories) != lookup.observed_matches:
+                if len(lookup_histories) != min(
+                    lookup.observed_matches, MAX_STORED_HISTORY_V1
+                ):
                     raise ValueError
                 expected_ordinal = 1
                 for history in lookup_histories:
@@ -1778,3 +1793,188 @@ def audit_player_history_snapshot_v1(
     if graph is None:
         _raise_snapshot_audit("database_error")
     return graph
+
+
+def _streaming_snapshot_summary_in_transaction(
+    connection: sqlite3.Connection,
+) -> PlayerHistorySnapshotSummaryV1:
+    """Validate snapshot content with scalar/aggregate SQL, never full fetches."""
+
+    _require_snapshot_structure(connection)
+    _audit_snapshot_table_sql(connection)
+    meta_rows = connection.execute(
+        "SELECT singleton,schema_version,dataset_id,region,queue_id,patches_json,"
+        "generated_date,source,coverage,low_sample_floor,row_count,exclusions_json,"
+        "typeof(singleton),typeof(schema_version),typeof(dataset_id),typeof(region),"
+        "typeof(queue_id),typeof(patches_json),typeof(generated_date),typeof(source),"
+        "typeof(coverage),typeof(low_sample_floor),typeof(row_count),"
+        "typeof(exclusions_json) FROM main.snapshot_meta LIMIT 2"
+    ).fetchall()
+    if len(meta_rows) != 1:
+        raise _SnapshotInconsistent
+    row = meta_rows[0]
+    if len(row) != 24 or tuple(row[12:]) != (
+        "integer",
+        "integer",
+        "text",
+        "text",
+        "integer",
+        "text",
+        "text",
+        "text",
+        "text",
+        "integer",
+        "integer",
+        "text",
+    ):
+        raise _SnapshotInconsistent
+    (
+        singleton,
+        schema_version,
+        dataset_id,
+        region,
+        queue_id,
+        patches_json,
+        generated_date,
+        source,
+        coverage,
+        low_sample_floor,
+        stored_row_count,
+        exclusions_json,
+    ) = row[:12]
+    try:
+        if (
+            singleton != 1
+            or schema_version != 1
+            or region != "TW"
+            or queue_id != 2400
+            or source != "lcu-captured-offline-snapshot"
+            or coverage != "captured-subset"
+            or low_sample_floor != 20
+            or type(stored_row_count) is not int
+            or stored_row_count < 0
+        ):
+            raise ValueError
+        decoded_patches = json.loads(patches_json)
+        decoded_exclusions = json.loads(exclusions_json)
+        meta = SnapshotMetaRecordV1(
+            dataset_id=dataset_id,
+            patches_json=patches_json,
+            generated_date=generated_date,
+            exclusions_json=exclusions_json,
+        )
+        if canonicalize_snapshot_meta_v1(
+            SnapshotMetaV1(
+                dataset_id=dataset_id,
+                patches=tuple(decoded_patches),
+                generated_date=generated_date,
+                exclusions=decoded_exclusions,
+            )
+        ) != meta:
+            raise ValueError
+    except Exception:
+        raise _SnapshotInconsistent from None
+
+    invalid_lookup = connection.execute(
+        "SELECT EXISTS(SELECT 1 FROM main.player_lookup WHERE "
+        "typeof(lookup_key)!='blob' OR length(lookup_key)!=32 OR "
+        "typeof(status)!='text' OR status NOT IN ('ready','ambiguous') OR "
+        "(status='ready' AND (typeof(observed_matches)!='integer' OR "
+        "observed_matches<1 OR typeof(low_sample)!='integer' OR "
+        "low_sample NOT IN (0,1) OR low_sample!=(observed_matches<20))) OR "
+        "(status='ambiguous' AND (observed_matches IS NOT NULL OR low_sample IS NOT NULL)))"
+    ).fetchone()
+    placeholders = ",".join("?" for _ in decoded_patches)
+    invalid_history = connection.execute(
+        "SELECT EXISTS(SELECT 1 FROM main.player_history WHERE "
+        "typeof(lookup_key)!='blob' OR length(lookup_key)!=32 OR "
+        "typeof(lookup_status)!='text' OR lookup_status!='ready' OR "
+        "typeof(event_key)!='blob' OR length(event_key)!=32 OR "
+        "typeof(ordinal)!='integer' OR ordinal<1 OR typeof(patch)!='text' OR "
+        f"patch NOT IN ({placeholders}) OR typeof(champion_id)!='integer' OR champion_id<1 OR "
+        "typeof(outcome)!='text' OR outcome NOT IN ('win','loss') OR "
+        "typeof(duration_bucket)!='text' OR duration_bucket NOT IN "
+        "('lt_15m','15_20m','20_25m','ge_25m'))",
+        tuple(decoded_patches),
+    ).fetchone()
+    if invalid_lookup != (0,) or invalid_history != (0,):
+        raise _SnapshotInconsistent
+
+    lookup_counts = dict(
+        connection.execute(
+            "SELECT status,count(*) FROM main.player_lookup GROUP BY status"
+        )
+    )
+    ready_count = lookup_counts.get("ready", 0)
+    ambiguous_count = lookup_counts.get("ambiguous", 0)
+    if set(lookup_counts) - {"ready", "ambiguous"}:
+        raise _SnapshotInconsistent
+    history_count = connection.execute(
+        "SELECT count(*) FROM main.player_history"
+    ).fetchone()[0]
+    if history_count != stored_row_count:
+        raise _SnapshotInconsistent
+
+    inconsistent_ready = connection.execute(
+        "WITH counts AS ("
+        " SELECT lookup_key,count(*) AS n,min(ordinal) AS lo,max(ordinal) AS hi"
+        " FROM main.player_history GROUP BY lookup_key"
+        ") SELECT EXISTS("
+        " SELECT 1 FROM main.player_lookup AS l LEFT JOIN counts AS c USING(lookup_key)"
+        " WHERE l.status='ready' AND ("
+        "   coalesce(c.n,0) != min(l.observed_matches,?) OR"
+        "   coalesce(c.lo,0) != 1 OR"
+        "   coalesce(c.hi,0) != min(l.observed_matches,?)"
+        " ))",
+        (MAX_STORED_HISTORY_V1, MAX_STORED_HISTORY_V1),
+    ).fetchone()
+    ambiguous_history = connection.execute(
+        "SELECT EXISTS(SELECT 1 FROM main.player_history AS h JOIN main.player_lookup AS l "
+        "USING(lookup_key) WHERE l.status!='ready')"
+    ).fetchone()
+    if inconsistent_ready != (0,) or ambiguous_history != (0,):
+        raise _SnapshotInconsistent
+    if connection.execute("PRAGMA main.foreign_key_check").fetchone() is not None:
+        raise _SnapshotInconsistent
+    return PlayerHistorySnapshotSummaryV1(
+        meta=meta,
+        row_count=history_count,
+        ready_lookup_count=ready_count,
+        ambiguous_lookup_count=ambiguous_count,
+    )
+
+
+def audit_player_history_snapshot_streaming_v1(
+    connection: sqlite3.Connection,
+) -> PlayerHistorySnapshotSummaryV1:
+    """Audit a large snapshot in bounded memory and return public metadata only."""
+
+    _require_snapshot_audit_connection(connection)
+    summary: PlayerHistorySnapshotSummaryV1 | None = None
+    failure_code: str | None = None
+    owned_transaction = False
+    try:
+        if connection.execute("PRAGMA foreign_keys").fetchone() != (1,):
+            raise _SchemaInvalid
+        connection.execute("BEGIN")
+        owned_transaction = True
+        summary = _streaming_snapshot_summary_in_transaction(connection)
+    except PlayerHistorySnapshotAuditError as exc:
+        failure_code = exc.code
+    except _SchemaInvalid:
+        failure_code = "schema_invalid"
+    except _SnapshotInconsistent:
+        failure_code = "snapshot_invalid"
+    except sqlite3.Error:
+        failure_code = "database_error"
+    finally:
+        if owned_transaction:
+            inactive, containment_used = _rollback_snapshot_audit(connection)
+            if not inactive or containment_used:
+                summary = None
+                failure_code = "database_error"
+    if failure_code is not None:
+        _raise_snapshot_audit(failure_code)
+    if summary is None:
+        _raise_snapshot_audit("database_error")
+    return summary

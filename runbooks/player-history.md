@@ -25,7 +25,8 @@ Run the live mode while the collector remains active:
 
 ```powershell
 aram-player-history-build --live-source --destination <new-path> `
-  --dataset-id <id> --patch <patch> --generated-date <YYYY-MM-DD>
+  --manifest <new-private-manifest-path> --dataset-id <id> `
+  --patch <patch> --generated-date <YYYY-MM-DD>
 ```
 
 The builder opens exactly the Git-common primary checkout's
@@ -52,16 +53,21 @@ database or its sidecars.
 2. Put the completed backup outside the live `data/lcu/` layout.
 3. Confirm the backup has no adjacent `-wal` or `-shm`, then mark/handle it as
    read-only for the build window.
-4. Alternatively, run `aram-player-history-build --source <backup> --destination <new-path>
+4. Alternatively, run `aram-player-history-build --source <backup>
+   --destination <new-path> --manifest <new-private-manifest-path>
    --dataset-id <id> --patch <patch> --generated-date <YYYY-MM-DD>` with lookup
-   and event secrets injected. Destination publication is audited, atomic, and
-   no-clobber.
+   and event secrets injected. The SQLite source is filtered by queue/patch
+   before participant parsing, then transformed through disk-backed staging.
+   Manifest-first/snapshot-last publication is audited, atomic, and no-clobber.
 5. Remove the private backup through the operator's approved retention process;
    the builder does not delete it.
 
 The builder records source file device/inode/size/mtime before reading and
 after full iterator exhaustion. Any change fails the build. A new destination
 must be used for every snapshot; do not edit a published snapshot in place.
+The public snapshot stores at most the newest 300 captured matches per ready
+Riot ID; `observed_matches` and the low-sample decision still use the full
+captured count across the selected patches.
 
 ## Start the isolated service
 

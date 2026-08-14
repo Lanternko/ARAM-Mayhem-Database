@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import json
 import hashlib
+import hmac
 import os
 import sqlite3
 import stat
 import tempfile
 import time
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,10 +20,13 @@ from urllib.parse import quote
 import click
 
 from .player_history_readmodel import (
+    MAX_STORED_HISTORY_V1,
     PlayerHistoryV1,
     PlayerLookupV1,
+    SnapshotMetaRecordV1,
     SnapshotMetaV1,
     audit_player_history_snapshot_v1,
+    audit_player_history_snapshot_streaming_v1,
     canonicalize_player_history_graph_v1,
     canonicalize_player_history_v1,
     canonicalize_player_lookup_v1,
@@ -102,6 +106,36 @@ class PlayerHistorySnapshotConfigV1:
     generated_date: str
     lookup_secret: bytes = dataclass_field(repr=False)
     event_secret: bytes = dataclass_field(repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerHistorySnapshotBuildResultV1:
+    """Small build result; never retains lookup or history rows in memory."""
+
+    meta: SnapshotMetaRecordV1
+    row_count: int
+    ready_lookup_count: int
+    ambiguous_lookup_count: int
+    selected_source_rows: int
+    max_created_ms: int | None
+
+
+@dataclass(slots=True)
+class _OfflineSourceEvidenceV1:
+    before: tuple[int, int, int, int] | None = None
+    after: tuple[int, int, int, int] | None = None
+
+    def manifest_identity(self) -> dict[str, int]:
+        if self.before is None or self.after is None:
+            raise PlayerHistorySnapshotError("invalid_source")
+        return {
+            "device": self.before[0],
+            "inode": self.before[1],
+            "start_size": self.before[2],
+            "end_size": self.after[2],
+            "start_mtime_ns": self.before[3],
+            "end_mtime_ns": self.after[3],
+        }
 
 
 def _validated_config(config: PlayerHistorySnapshotConfigV1) -> PlayerHistorySnapshotConfigV1:
@@ -220,7 +254,9 @@ def build_player_history_graph_v1(
                 )
             )
         )
-        for ordinal, (event, participant) in enumerate(ordered_events, 1):
+        for ordinal, (event, participant) in enumerate(
+            ordered_events[:MAX_STORED_HISTORY_V1], 1
+        ):
             blue_player = participant.team_id == 100
             won = blue_player == bool(event.blue_wins)
             histories.append(
@@ -254,6 +290,287 @@ def build_player_history_graph_v1(
     return canonicalize_player_history_graph_v1(
         meta=meta, lookups=lookups, histories=histories
     )
+
+
+def _stage_local_key_v1(secret: bytes, player_local_id: str) -> bytes:
+    """Deidentify the transient ambiguity key before it reaches staging disk."""
+
+    return hmac.digest(
+        secret,
+        b"player-history-stage-local-v1\x00" + player_local_id.encode("utf-8", "strict"),
+        "sha256",
+    )
+
+
+def _insert_snapshot_meta_v1(
+    connection: sqlite3.Connection, *, meta, row_count: int
+) -> None:
+    connection.execute(
+        "INSERT INTO main.snapshot_meta "
+        "(singleton,schema_version,dataset_id,region,queue_id,patches_json,"
+        "generated_date,source,coverage,low_sample_floor,row_count,exclusions_json) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            1,
+            1,
+            meta.dataset_id,
+            "TW",
+            2400,
+            meta.patches_json,
+            meta.generated_date,
+            "lcu-captured-offline-snapshot",
+            "captured-subset",
+            20,
+            row_count,
+            meta.exclusions_json,
+        ),
+    )
+
+
+def _build_streaming_snapshot_temp_v1(
+    rows: Iterable[dict[str, object]],
+    *,
+    destination: Path,
+    config: PlayerHistorySnapshotConfigV1,
+    stats: _LiveSelectionStatsV1 | None = None,
+    source_finished: Callable[[], None] | None = None,
+) -> tuple[Path, PlayerHistorySnapshotBuildResultV1]:
+    """Build through a disk-backed staging DB without materializing the graph.
+
+    SQLite sources require ``games.game_id`` to be the primary key. Therefore
+    each selected source row is one unique event and duplicate reconciliation is
+    unnecessary on this production path; the legacy iterable graph builder keeps
+    its duplicate policy for small/test callers.
+    """
+
+    config = _validated_config(config)
+    destination = Path(destination)
+    exclusions = {key: 0 for key in (*EXCLUSION_CODES_V1, "duplicate_event")}
+    meta = canonicalize_snapshot_meta_v1(
+        SnapshotMetaV1(
+            dataset_id=config.dataset_id,
+            patches=config.patches,
+            generated_date=config.generated_date,
+            exclusions=exclusions,
+        )
+    )
+    stage_path: Path | None = None
+    snapshot_path: Path | None = None
+    stage: sqlite3.Connection | None = None
+    output: sqlite3.Connection | None = None
+    succeeded = False
+    selected = 0
+    max_created_ms: int | None = None
+    try:
+        stage_fd, stage_raw = tempfile.mkstemp(
+            prefix=f".{destination.name}.stage.", suffix=".tmp", dir=destination.parent
+        )
+        os.close(stage_fd)
+        stage_path = Path(stage_raw)
+        snapshot_fd, snapshot_raw = tempfile.mkstemp(
+            prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+        )
+        os.close(snapshot_fd)
+        snapshot_path = Path(snapshot_raw)
+
+        stage = sqlite3.connect(str(stage_path))
+        stage.execute("PRAGMA journal_mode=DELETE")
+        stage.execute("PRAGMA synchronous=FULL")
+        stage.executescript(
+            """
+            CREATE TABLE alias_player (
+                lookup_key BLOB NOT NULL,
+                local_key BLOB NOT NULL,
+                PRIMARY KEY (lookup_key, local_key)
+            ) STRICT, WITHOUT ROWID;
+            CREATE TABLE staged_event (
+                lookup_key BLOB NOT NULL,
+                event_key BLOB NOT NULL,
+                created_ms INTEGER NOT NULL,
+                game_id INTEGER NOT NULL,
+                patch TEXT NOT NULL,
+                champion_id INTEGER NOT NULL,
+                outcome TEXT NOT NULL,
+                duration_bucket TEXT NOT NULL,
+                PRIMARY KEY (lookup_key, event_key)
+            ) STRICT, WITHOUT ROWID;
+            CREATE INDEX staged_event_order
+                ON staged_event(lookup_key, created_ms DESC, game_id DESC, event_key);
+            """
+        )
+        stage.execute("BEGIN IMMEDIATE")
+        iterator = iter(rows)
+        try:
+            for row in iterator:
+                selected += 1
+                raw_created_ms = row.get("created_ms") if type(row) is dict else None
+                if type(raw_created_ms) is int and raw_created_ms >= 0:
+                    if max_created_ms is None or raw_created_ms > max_created_ms:
+                        max_created_ms = raw_created_ms
+                projection, exclusion = _project_player_history_source_row_v1(
+                    row,
+                    queue_id=_LIVE_QUEUE_ID_V1,
+                    patches=config.patches,
+                    expected_normalizer_id=NORMALIZER_ID,
+                )
+                if projection is None:
+                    exclusions[exclusion or "invalid_source_schema"] += 1
+                    continue
+                alias_rows: list[tuple[bytes, bytes]] = []
+                event_rows: list[tuple[object, ...]] = []
+                for participant in projection.participants:
+                    lookup_key = derive_lookup_key(
+                        config.lookup_secret,
+                        expected_normalizer_id=NORMALIZER_ID,
+                        normalized_riot_id=participant.normalized_riot_id,
+                    )
+                    local_key = _stage_local_key_v1(
+                        config.event_secret, participant.player_local_id
+                    )
+                    event_key = derive_event_key(
+                        config.event_secret,
+                        expected_normalizer_id=NORMALIZER_ID,
+                        player_local_id=participant.player_local_id,
+                        game_id=projection.game_id,
+                    )
+                    blue_player = participant.team_id == 100
+                    won = blue_player == bool(projection.blue_wins)
+                    alias_rows.append((lookup_key, local_key))
+                    event_rows.append(
+                        (
+                            lookup_key,
+                            event_key,
+                            projection.created_ms,
+                            projection.game_id,
+                            projection.patch,
+                            participant.champion_id,
+                            "win" if won else "loss",
+                            _duration_bucket(projection.duration_sec),
+                        )
+                    )
+                stage.executemany(
+                    "INSERT OR IGNORE INTO alias_player(lookup_key,local_key) VALUES (?,?)",
+                    alias_rows,
+                )
+                stage.executemany(
+                    "INSERT INTO staged_event "
+                    "(lookup_key,event_key,created_ms,game_id,patch,champion_id,outcome,"
+                    "duration_bucket) VALUES (?,?,?,?,?,?,?,?)",
+                    event_rows,
+                )
+            stage.commit()
+        except Exception:
+            stage.rollback()
+            raise
+        finally:
+            close_iterator = getattr(iterator, "close", None)
+            if callable(close_iterator):
+                close_iterator()
+        if source_finished is not None:
+            source_finished()
+
+        meta = canonicalize_snapshot_meta_v1(
+            SnapshotMetaV1(
+                dataset_id=config.dataset_id,
+                patches=config.patches,
+                generated_date=config.generated_date,
+                exclusions=exclusions,
+            )
+        )
+        stage.execute(
+            "CREATE TABLE lookup_rollup ("
+            "lookup_key BLOB PRIMARY KEY,status TEXT NOT NULL,observed_matches INTEGER"
+            ") STRICT, WITHOUT ROWID"
+        )
+        stage.execute(
+            "INSERT INTO lookup_rollup "
+            "WITH aliases AS (SELECT lookup_key,count(*) AS players FROM alias_player "
+            "GROUP BY lookup_key), events AS (SELECT lookup_key,count(*) AS observed "
+            "FROM staged_event GROUP BY lookup_key) "
+            "SELECT a.lookup_key,CASE WHEN a.players=1 THEN 'ready' ELSE 'ambiguous' END,"
+            "CASE WHEN a.players=1 THEN e.observed ELSE NULL END "
+            "FROM aliases a JOIN events e USING(lookup_key)"
+        )
+        stage.commit()
+        stage.close()
+        stage = None
+
+        output = sqlite3.connect(str(snapshot_path))
+        output.execute("PRAGMA temp_store=FILE")
+        if output.execute("PRAGMA temp_store").fetchone() != (1,):
+            raise PlayerHistorySnapshotError("snapshot_failed")
+        create_player_history_schema(output)
+        output.execute("PRAGMA foreign_keys=ON")
+        output.execute("ATTACH DATABASE ? AS stage", (str(stage_path),))
+        output.execute("BEGIN IMMEDIATE")
+        output.execute(
+            "INSERT INTO main.player_lookup(lookup_key,status,observed_matches,low_sample) "
+            "SELECT lookup_key,status,observed_matches,"
+            "CASE WHEN status='ready' THEN observed_matches<20 ELSE NULL END "
+            "FROM stage.lookup_rollup ORDER BY lookup_key"
+        )
+        output.execute(
+            "INSERT INTO main.player_history "
+            "(lookup_key,lookup_status,event_key,ordinal,patch,champion_id,outcome,duration_bucket) "
+            "SELECT lookup_key,'ready',event_key,ordinal,patch,champion_id,outcome,duration_bucket "
+            "FROM (SELECT e.*,row_number() OVER (PARTITION BY e.lookup_key "
+            "ORDER BY e.created_ms DESC,e.game_id DESC,e.event_key) AS ordinal "
+            "FROM stage.staged_event e JOIN stage.lookup_rollup l USING(lookup_key) "
+            "WHERE l.status='ready') WHERE ordinal<=? ORDER BY lookup_key,ordinal",
+            (MAX_STORED_HISTORY_V1,),
+        )
+        row_count = output.execute(
+            "SELECT count(*) FROM main.player_history"
+        ).fetchone()[0]
+        _insert_snapshot_meta_v1(output, meta=meta, row_count=row_count)
+        output.commit()
+        output.execute("DETACH DATABASE stage")
+        summary = audit_player_history_snapshot_streaming_v1(output)
+        if summary.meta != meta or summary.row_count != row_count:
+            raise PlayerHistorySnapshotError("snapshot_failed")
+        output.close()
+        output = None
+        with snapshot_path.open("r+b") as snapshot_file:
+            snapshot_file.flush()
+            os.fsync(snapshot_file.fileno())
+        if stats is not None and (
+            stats.selected_source_rows != selected or stats.max_created_ms != max_created_ms
+        ):
+            raise PlayerHistorySnapshotError("snapshot_failed")
+        succeeded = True
+        return snapshot_path, PlayerHistorySnapshotBuildResultV1(
+            meta=summary.meta,
+            row_count=summary.row_count,
+            ready_lookup_count=summary.ready_lookup_count,
+            ambiguous_lookup_count=summary.ambiguous_lookup_count,
+            selected_source_rows=selected,
+            max_created_ms=max_created_ms,
+        )
+    except PlayerHistorySnapshotError:
+        raise
+    except Exception:
+        raise PlayerHistorySnapshotError("snapshot_failed") from None
+    finally:
+        if output is not None:
+            try:
+                output.close()
+            except sqlite3.Error:
+                pass
+        if stage is not None:
+            try:
+                stage.close()
+            except sqlite3.Error:
+                pass
+        if stage_path is not None:
+            try:
+                stage_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        if snapshot_path is not None and not succeeded:
+            try:
+                snapshot_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def publish_player_history_snapshot_v1(destination: Path, graph) -> None:
@@ -393,6 +710,14 @@ def _write_manifest_temp_v1(destination: Path, manifest: dict[str, object]) -> P
         raise PlayerHistorySnapshotError("snapshot_failed") from None
 
 
+def _sha256_file_v1(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while chunk := source.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _unlink_own_publication_v1(destination: Path, temp_path: Path) -> None:
     try:
         published = os.stat(destination, follow_symlinks=False)
@@ -454,6 +779,52 @@ def _publish_live_pair_v1(
                     pass
 
 
+def _publish_prebuilt_pair_v1(
+    *,
+    destination: Path,
+    manifest_destination: Path,
+    snapshot_temp: Path,
+    manifest: dict[str, object],
+) -> None:
+    manifest_temp: Path | None = None
+    manifest_published = False
+    try:
+        if destination == manifest_destination:
+            raise PlayerHistorySnapshotError("publish_failed")
+        if os.path.lexists(destination) or os.path.lexists(manifest_destination):
+            raise PlayerHistorySnapshotError("destination_exists")
+        if not destination.parent.is_dir() or not manifest_destination.parent.is_dir():
+            raise PlayerHistorySnapshotError("publish_failed")
+        manifest_temp = _write_manifest_temp_v1(
+            manifest_destination,
+            {**manifest, "snapshot_sha256": _sha256_file_v1(snapshot_temp)},
+        )
+        try:
+            os.link(manifest_temp, manifest_destination)
+            manifest_published = True
+            os.link(snapshot_temp, destination)
+        except FileExistsError:
+            if manifest_published:
+                _unlink_own_publication_v1(manifest_destination, manifest_temp)
+            raise PlayerHistorySnapshotError("destination_exists") from None
+        except OSError:
+            if manifest_published:
+                _unlink_own_publication_v1(manifest_destination, manifest_temp)
+            raise PlayerHistorySnapshotError("publish_failed") from None
+    except PlayerHistorySnapshotError:
+        raise
+    except Exception:
+        if manifest_published and manifest_temp is not None:
+            _unlink_own_publication_v1(manifest_destination, manifest_temp)
+        raise PlayerHistorySnapshotError("snapshot_failed") from None
+    finally:
+        if manifest_temp is not None:
+            try:
+                manifest_temp.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
 def _canonical_live_database_paths() -> frozenset[Path]:
     repository = Path(__file__).resolve().parents[3]
     live = (repository / "data" / "lcu" / "games.db").resolve()
@@ -477,8 +848,13 @@ def _aliases_canonical_live_database(path: Path) -> bool:
     return False
 
 
-def read_player_history_source_sqlite_v1(source_path: Path) -> Iterator[dict[str, object]]:
-    """Read only the approved projection from an explicit immutable SQLite copy."""
+def _read_player_history_source_sqlite_filtered_v1(
+    source_path: Path,
+    *,
+    patches: tuple[str, ...] | None,
+    evidence: _OfflineSourceEvidenceV1 | None = None,
+) -> Iterator[dict[str, object]]:
+    """Read the approved projection, optionally filtering in SQL before JSON parse."""
 
     try:
         supplied = Path(source_path)
@@ -503,6 +879,8 @@ def read_player_history_source_sqlite_v1(source_path: Path) -> Iterator[dict[str
             before.st_size,
             before.st_mtime_ns,
         )
+        if evidence is not None:
+            evidence.before = source_identity
         uri = f"file:{quote(path.as_posix(), safe='/:')}?mode=ro&immutable=1"
         connection = sqlite3.connect(uri, uri=True)
         connection.execute("PRAGMA query_only=ON")
@@ -535,10 +913,16 @@ def read_player_history_source_sqlite_v1(source_path: Path) -> Iterator[dict[str
             for name, descriptor in expected_descriptors.items()
         ):
             raise PlayerHistorySnapshotError("source_schema_invalid")
-        cursor = connection.execute(
+        sql = (
             "SELECT game_id,queue_id,patch,blue_wins,duration_sec,created_ms,"
             "participants_json,participants_private_json FROM main.games"
         )
+        parameters: tuple[object, ...] = ()
+        if patches is not None:
+            predicates = " OR ".join("patch LIKE ?" for _ in patches)
+            sql += f" WHERE queue_id=? AND ({predicates})"
+            parameters = (_LIVE_QUEUE_ID_V1, *(f"{patch}.%" for patch in patches))
+        cursor = connection.execute(sql, parameters)
         for values in cursor:
             yield dict(zip(SOURCE_COLUMNS_V1, values, strict=True))
         after = path.stat()
@@ -553,12 +937,27 @@ def read_player_history_source_sqlite_v1(source_path: Path) -> Iterator[dict[str
             ) != source_identity
         ):
             raise PlayerHistorySnapshotError("invalid_source")
+        if evidence is not None:
+            evidence.after = (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+            )
     except PlayerHistorySnapshotError:
         raise
     except (sqlite3.Error, OSError, ValueError):
         raise PlayerHistorySnapshotError("invalid_source") from None
     finally:
         connection.close()
+
+
+def read_player_history_source_sqlite_v1(source_path: Path) -> Iterator[dict[str, object]]:
+    """Compatibility adapter returning the approved unfiltered projection."""
+
+    yield from _read_player_history_source_sqlite_filtered_v1(
+        source_path, patches=None
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,14 +978,6 @@ class _LiveSelectionStatsV1:
         self.selected_source_rows += 1
         if self.max_created_ms is None or created_ms > self.max_created_ms:
             self.max_created_ms = created_ms
-
-
-@dataclass(frozen=True, slots=True)
-class _LiveBuildEvidenceV1:
-    graph: object
-    selected_source_rows: int
-    max_created_ms: int | None
-    source_files: dict[str, dict[str, int | None]]
 
 
 def _module_repository_root_v1() -> Path:
@@ -871,15 +1262,25 @@ def _iter_live_source_rows_v1(
     guard.check()
 
 
-def _build_player_history_graph_from_live_v1(
-    *, config: PlayerHistorySnapshotConfigV1
-) -> _LiveBuildEvidenceV1:
-    """Materialize the live projection while the bounded read transaction is open."""
+def build_and_publish_player_history_snapshot_from_live_v1(
+    *, destination: Path, manifest: Path, config: PlayerHistorySnapshotConfigV1
+):
+    """Stream the trusted live DB into one audited snapshot/manifest pair."""
 
+    validated_config = _validated_config(config)
+    destination = Path(destination)
+    manifest = Path(manifest)
+    if destination == manifest or os.path.lexists(destination) or os.path.lexists(manifest):
+        raise PlayerHistorySnapshotError("destination_exists")
+    if not destination.parent.is_dir() or not manifest.parent.is_dir():
+        raise PlayerHistorySnapshotError("publish_failed")
+    build_started_utc = _build_started_utc_v1()
     database_path = _trusted_live_database_path_v1()
     guard = _new_live_read_guard_v1(database_path)
     stats = _LiveSelectionStatsV1()
     connection: sqlite3.Connection | None = None
+    snapshot_temp: Path | None = None
+    source_files: dict[str, dict[str, int | None]] | None = None
     cleanup_failed = False
     try:
         uri = f"file:{quote(database_path.as_posix(), safe='/:')}?mode=ro"
@@ -888,24 +1289,59 @@ def _build_player_history_graph_from_live_v1(
         connection.set_progress_handler(guard.progress, _LIVE_PROGRESS_OPCODES_V1)
         guard.check()
         connection.execute("BEGIN")
-        guard.check()
         _require_live_source_schema_v1(connection)
-        graph = build_player_history_graph_v1(
+
+        def finish_source() -> None:
+            nonlocal connection, source_files
+            assert connection is not None
+            guard.check()
+            source_files = _live_source_file_evidence_v1(guard)
+            connection.set_progress_handler(None, 0)
+            connection.rollback()
+            connection.close()
+            connection = None
+
+        snapshot_temp, result = _build_streaming_snapshot_temp_v1(
             _iter_live_source_rows_v1(
                 connection,
-                patches=config.patches,
+                patches=validated_config.patches,
                 guard=guard,
                 stats=stats,
             ),
-            config=config,
+            destination=destination,
+            config=validated_config,
+            stats=stats,
+            source_finished=finish_source,
         )
-        source_files = _live_source_file_evidence_v1(guard)
-        return _LiveBuildEvidenceV1(
-            graph=graph,
-            selected_source_rows=stats.selected_source_rows,
-            max_created_ms=stats.max_created_ms,
-            source_files=source_files,
+        if source_files is None:
+            raise PlayerHistorySnapshotError("invalid_source")
+        patches = json.loads(result.meta.patches_json)
+        exclusions = json.loads(result.meta.exclusions_json)
+        private_manifest: dict[str, object] = {
+            "schema_version": 1,
+            "dataset_id": result.meta.dataset_id,
+            "region": "TW",
+            "queue_id": _LIVE_QUEUE_ID_V1,
+            "patches": patches,
+            "coverage": "captured-subset",
+            "generated_date": result.meta.generated_date,
+            "build_started_utc": build_started_utc,
+            "source_class": "git-common-primary/data/lcu/games.db",
+            "source_identities": source_files,
+            "selected_source_rows": result.selected_source_rows,
+            "max_created_ms": result.max_created_ms,
+            "exclusions": exclusions,
+            "snapshot_row_count": result.row_count,
+            "audit_status": "ok",
+            "public_identifiers_emitted": False,
+        }
+        _publish_prebuilt_pair_v1(
+            destination=destination,
+            manifest_destination=manifest,
+            snapshot_temp=snapshot_temp,
+            manifest=private_manifest,
         )
+        return result
     except PlayerHistorySnapshotError:
         raise
     except (OSError, sqlite3.Error, ValueError):
@@ -922,52 +1358,77 @@ def _build_player_history_graph_from_live_v1(
                 connection.close()
             except sqlite3.Error:
                 cleanup_failed = True
+        if snapshot_temp is not None:
+            try:
+                snapshot_temp.unlink(missing_ok=True)
+            except OSError:
+                pass
         if cleanup_failed:
             raise PlayerHistorySnapshotError("invalid_source") from None
 
 
-def build_and_publish_player_history_snapshot_from_live_v1(
-    *, destination: Path, manifest: Path, config: PlayerHistorySnapshotConfigV1
-):
-    """Build from the trusted live DB and publish one audited snapshot/manifest pair."""
+def build_and_publish_player_history_snapshot_from_sqlite_v1(
+    *,
+    source: Path,
+    destination: Path,
+    manifest: Path,
+    config: PlayerHistorySnapshotConfigV1,
+) -> PlayerHistorySnapshotBuildResultV1:
+    """Stream an immutable backup and publish a private lineage pair."""
 
     validated_config = _validated_config(config)
+    destination = Path(destination)
+    manifest = Path(manifest)
+    if destination == manifest:
+        raise PlayerHistorySnapshotError("publish_failed")
+    if os.path.lexists(destination) or os.path.lexists(manifest):
+        raise PlayerHistorySnapshotError("destination_exists")
+    if not destination.parent.is_dir() or not manifest.parent.is_dir():
+        raise PlayerHistorySnapshotError("publish_failed")
+    snapshot_temp: Path | None = None
+    evidence = _OfflineSourceEvidenceV1()
     build_started_utc = _build_started_utc_v1()
-    evidence = _build_player_history_graph_from_live_v1(config=validated_config)
-    graph = evidence.graph
-    patches = json.loads(graph.meta.patches_json)
-    exclusions = json.loads(graph.meta.exclusions_json)
-    if (
-        graph.meta.dataset_id != validated_config.dataset_id
-        or patches != list(validated_config.patches)
-        or graph.meta.generated_date != validated_config.generated_date
-    ):
-        raise PlayerHistorySnapshotError("snapshot_failed")
-    private_manifest: dict[str, object] = {
-        "schema_version": 1,
-        "dataset_id": graph.meta.dataset_id,
-        "region": "TW",
-        "queue_id": _LIVE_QUEUE_ID_V1,
-        "patches": patches,
-        "coverage": "captured-subset",
-        "generated_date": graph.meta.generated_date,
-        "build_started_utc": build_started_utc,
-        "source_class": "git-common-primary/data/lcu/games.db",
-        "source_identities": evidence.source_files,
-        "selected_source_rows": evidence.selected_source_rows,
-        "max_created_ms": evidence.max_created_ms,
-        "exclusions": exclusions,
-        "snapshot_row_count": graph.row_count,
-        "audit_status": "ok",
-        "public_identifiers_emitted": False,
-    }
-    _publish_live_pair_v1(
-        destination=destination,
-        manifest_destination=manifest,
-        graph=graph,
-        manifest=private_manifest,
-    )
-    return graph
+    try:
+        snapshot_temp, result = _build_streaming_snapshot_temp_v1(
+            _read_player_history_source_sqlite_filtered_v1(
+                source,
+                patches=validated_config.patches,
+                evidence=evidence,
+            ),
+            destination=destination,
+            config=validated_config,
+        )
+        private_manifest: dict[str, object] = {
+            "schema_version": 1,
+            "dataset_id": result.meta.dataset_id,
+            "region": "TW",
+            "queue_id": _LIVE_QUEUE_ID_V1,
+            "patches": json.loads(result.meta.patches_json),
+            "coverage": "captured-subset",
+            "generated_date": result.meta.generated_date,
+            "build_started_utc": build_started_utc,
+            "source_class": "operator-sqlite-backup",
+            "source_identity": evidence.manifest_identity(),
+            "selected_source_rows": result.selected_source_rows,
+            "max_created_ms": result.max_created_ms,
+            "exclusions": json.loads(result.meta.exclusions_json),
+            "snapshot_row_count": result.row_count,
+            "audit_status": "ok",
+            "public_identifiers_emitted": False,
+        }
+        _publish_prebuilt_pair_v1(
+            destination=destination,
+            manifest_destination=manifest,
+            snapshot_temp=snapshot_temp,
+            manifest=private_manifest,
+        )
+        return result
+    finally:
+        if snapshot_temp is not None:
+            try:
+                snapshot_temp.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _secret_from_env(name: str) -> bytes:
@@ -984,7 +1445,11 @@ def _secret_from_env(name: str) -> bytes:
 @click.command("player-history-build")
 @click.option("--source", type=click.Path(path_type=Path, exists=True, dir_okay=False))
 @click.option("--live-source", is_flag=True, default=False)
-@click.option("--manifest", type=click.Path(path_type=Path, dir_okay=False))
+@click.option(
+    "--manifest",
+    type=click.Path(path_type=Path, dir_okay=False),
+    required=True,
+)
 @click.option("--destination", type=click.Path(path_type=Path, dir_okay=False), required=True)
 @click.option("--dataset-id", required=True)
 @click.option("--patch", "patches", multiple=True, required=True)
@@ -992,7 +1457,7 @@ def _secret_from_env(name: str) -> bytes:
 def main(
     source: Path | None,
     live_source: bool,
-    manifest: Path | None,
+    manifest: Path,
     destination: Path,
     dataset_id: str,
     patches: tuple[str, ...],
@@ -1013,19 +1478,16 @@ def main(
         if (source is None) == (not live_source):
             raise PlayerHistorySnapshotError("invalid_source")
         if live_source:
-            if manifest is None:
-                raise PlayerHistorySnapshotError("invalid_configuration")
             graph = build_and_publish_player_history_snapshot_from_live_v1(
                 destination=destination,
                 manifest=manifest,
                 config=validated_config,
             )
         else:
-            if manifest is not None:
-                raise PlayerHistorySnapshotError("invalid_configuration")
             assert source is not None
-            graph = build_and_publish_player_history_snapshot_v1(
-                read_player_history_source_sqlite_v1(source),
+            graph = build_and_publish_player_history_snapshot_from_sqlite_v1(
+                source=source,
+                manifest=manifest,
                 destination=destination,
                 config=validated_config,
             )

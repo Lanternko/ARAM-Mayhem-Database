@@ -5,6 +5,9 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+from aram_nn.site.player_history_readmodel import MAX_STORED_HISTORY_V1
 
 from aram_nn.site.player_history_query import (
     PlayerHistoryQueryError,
@@ -24,6 +27,28 @@ class PlayerHistoryQueryTests(unittest.TestCase):
         graph = build_player_history_graph_v1(rows, config=config())
         publish_player_history_snapshot_v1(destination, graph)
         return destination
+
+    def test_query_returns_exact_cap_with_full_observed_count(self) -> None:
+        rows = [
+            source_row(game_id, created_ms=game_id)
+            for game_id in range(1, MAX_STORED_HISTORY_V1 + 4)
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = self._snapshot(directory, rows)
+            with mock.patch(
+                "aram_nn.site.player_history_readmodel.audit_player_history_snapshot_v1",
+                side_effect=AssertionError("full graph audit forbidden"),
+            ):
+                handle = PlayerHistorySnapshotHandle.open(snapshot)
+            result = handle.query(
+                riot_id="Player1#TW01", lookup_secret=LOOKUP_SECRET
+            )
+        self.assertEqual(result["observed_matches"], MAX_STORED_HISTORY_V1 + 3)
+        self.assertEqual(len(result["histories"]), MAX_STORED_HISTORY_V1)
+        self.assertEqual(
+            [row["ordinal"] for row in result["histories"]],
+            list(range(1, MAX_STORED_HISTORY_V1 + 1)),
+        )
 
     def test_happy_query_exact_allowlist_and_no_sensitive_echo(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -99,8 +124,8 @@ class PlayerHistoryQueryTests(unittest.TestCase):
             snapshot = self._snapshot(directory, [source_row()])
             with mock.patch.object(
                 query_module,
-                "audit_player_history_snapshot_v1",
-                wraps=query_module.audit_player_history_snapshot_v1,
+                "audit_player_history_snapshot_streaming_v1",
+                wraps=query_module.audit_player_history_snapshot_streaming_v1,
             ) as audit:
                 handle = PlayerHistorySnapshotHandle.open(snapshot)
                 for _ in range(3):

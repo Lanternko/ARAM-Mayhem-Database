@@ -7,19 +7,23 @@ import sqlite3
 import tempfile
 import unittest
 from copy import deepcopy
-from itertools import chain
 from pathlib import Path
 from unittest import mock
 
 from click.testing import CliRunner
 
 from aram_nn.site import player_history_snapshot as snapshot_module
-from aram_nn.site.player_history_readmodel import audit_player_history_snapshot_v1
+from aram_nn.site.player_history_readmodel import (
+    MAX_STORED_HISTORY_V1,
+    audit_player_history_snapshot_streaming_v1,
+    audit_player_history_snapshot_v1,
+)
 from aram_nn.site.player_history_security import NORMALIZER_ID, derive_lookup_key, normalize_riot_id_v1
 from aram_nn.site.player_history_snapshot import (
     PlayerHistorySnapshotConfigV1,
     PlayerHistorySnapshotError,
     build_and_publish_player_history_snapshot_from_live_v1,
+    build_and_publish_player_history_snapshot_from_sqlite_v1,
     build_player_history_graph_v1,
     main,
     publish_player_history_snapshot_v1,
@@ -144,7 +148,257 @@ def _observed_matches(graph, alias: str = "Player1#TW01") -> int:
     return next(row.observed_matches for row in graph.lookups if row.lookup_key == lookup_key)
 
 
+def _snapshot_player(path: Path, alias: str = "Player1#TW01") -> tuple[int, list[tuple]]:
+    lookup_key = derive_lookup_key(
+        LOOKUP_SECRET,
+        expected_normalizer_id=NORMALIZER_ID,
+        normalized_riot_id=normalize_riot_id_v1(alias),
+    )
+    connection = sqlite3.connect(path)
+    try:
+        observed = connection.execute(
+            "SELECT observed_matches FROM player_lookup WHERE lookup_key=?",
+            (lookup_key,),
+        ).fetchone()[0]
+        histories = connection.execute(
+            "SELECT ordinal,patch FROM player_history WHERE lookup_key=? ORDER BY ordinal",
+            (lookup_key,),
+        ).fetchall()
+        return observed, histories
+    finally:
+        connection.close()
+
+
 class PlayerHistorySnapshotTests(unittest.TestCase):
+    def test_streaming_build_caps_history_but_preserves_full_observed_count(self) -> None:
+        rows = [
+            source_row(game_id, created_ms=game_id)
+            for game_id in range(1, MAX_STORED_HISTORY_V1 + 6)
+        ]
+        rows.extend(
+            (
+                source_row(1001, first_name="SharedName"),
+                source_row(
+                    1002,
+                    first_name="SharedName",
+                    first_puuid="10000000-0000-0000-0000-000000000001",
+                ),
+            )
+        )
+        malformed = source_row(1003)
+        malformed["participants_private_json"] = "not-json"
+        rows.append(malformed)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "games.db"
+            destination = root / "snapshot.sqlite"
+            writer = _open_live_database(source, rows)
+            try:
+                with (
+                    mock.patch.object(
+                        snapshot_module,
+                        "_trusted_live_database_path_v1",
+                        return_value=source,
+                    ),
+                    mock.patch.object(
+                        snapshot_module,
+                        "build_player_history_graph_v1",
+                        side_effect=AssertionError("full graph path forbidden"),
+                    ),
+                ):
+                    result = build_and_publish_player_history_snapshot_from_live_v1(
+                        destination=destination,
+                        manifest=root / "snapshot.manifest.json",
+                        config=config(),
+                    )
+                observed, histories = _snapshot_player(destination)
+                self.assertEqual(observed, MAX_STORED_HISTORY_V1 + 5)
+                self.assertEqual(len(histories), MAX_STORED_HISTORY_V1)
+                self.assertEqual(
+                    [row[0] for row in histories],
+                    list(range(1, MAX_STORED_HISTORY_V1 + 1)),
+                )
+                self.assertEqual(
+                    [row[1] for row in histories[:3]],
+                    ["16.10", "16.10", "16.10"],
+                )
+                shared_key = derive_lookup_key(
+                    LOOKUP_SECRET,
+                    expected_normalizer_id=NORMALIZER_ID,
+                    normalized_riot_id=normalize_riot_id_v1("SharedName#TW01"),
+                )
+                connection = sqlite3.connect(destination)
+                try:
+                    connection.execute("PRAGMA foreign_keys=ON")
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT status,observed_matches,low_sample FROM player_lookup "
+                            "WHERE lookup_key=?",
+                            (shared_key,),
+                        ).fetchone(),
+                        ("ambiguous", None, None),
+                    )
+                    self.assertEqual(
+                        connection.execute(
+                            "SELECT count(*) FROM player_history WHERE lookup_key=?",
+                            (shared_key,),
+                        ).fetchone(),
+                        (0,),
+                    )
+                    summary = audit_player_history_snapshot_streaming_v1(connection)
+                finally:
+                    connection.close()
+                exclusions = json.loads(summary.meta.exclusions_json)
+                self.assertEqual(exclusions["invalid_private_json"], 1)
+                self.assertEqual(result.row_count, summary.row_count)
+                raw = destination.read_bytes()
+                for canary in (
+                    b"Player1",
+                    b"SharedName",
+                    b"TW01",
+                    b"00000000-0000",
+                    b"NEVER-PUBLISH-THIS",
+                    LOOKUP_SECRET,
+                    EVENT_SECRET,
+                ):
+                    self.assertNotIn(canary, raw)
+                self.assertEqual(list(root.glob("*.stage.*.tmp")), [])
+            finally:
+                writer.close()
+
+    def test_offline_streaming_sql_filters_before_projection_and_no_clobber(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "copy.sqlite"
+            connection = sqlite3.connect(source)
+            connection.execute(
+                "CREATE TABLE games (game_id TEXT PRIMARY KEY,queue_id INTEGER NOT NULL,"
+                "patch TEXT NOT NULL,blue_wins INTEGER NOT NULL,duration_sec INTEGER NOT NULL,"
+                "created_ms INTEGER NOT NULL,participants_json TEXT,participants_private_json TEXT)"
+            )
+            valid = source_row(1)
+            excluded = source_row(2, queue_id=450, patch="16.8.1")
+            excluded["participants_json"] = "not-json"
+            excluded["participants_private_json"] = "not-json"
+            for row in (valid, excluded):
+                connection.execute(
+                    "INSERT INTO games VALUES (?,?,?,?,?,?,?,?)",
+                    tuple(row[column] for column in snapshot_module.SOURCE_COLUMNS_V1),
+                )
+            connection.commit()
+            connection.close()
+            destination = root / "snapshot.sqlite"
+            manifest_path = root / "snapshot.manifest.json"
+            original_project = snapshot_module._project_player_history_source_row_v1
+            with mock.patch.object(
+                snapshot_module,
+                "_project_player_history_source_row_v1",
+                wraps=original_project,
+            ) as project:
+                result = build_and_publish_player_history_snapshot_from_sqlite_v1(
+                    source=source,
+                    destination=destination,
+                    manifest=manifest_path,
+                    config=config(),
+                )
+            self.assertEqual(project.call_count, 1)
+            self.assertEqual(result.selected_source_rows, 1)
+            self.assertEqual(_snapshot_player(destination)[0], 1)
+            manifest = json.loads(manifest_path.read_text(encoding="ascii"))
+            self.assertEqual(manifest["source_class"], "operator-sqlite-backup")
+            self.assertEqual(manifest["selected_source_rows"], 1)
+            self.assertEqual(manifest["max_created_ms"], 1000)
+            self.assertEqual(manifest["snapshot_row_count"], result.row_count)
+            self.assertEqual(
+                manifest["snapshot_sha256"],
+                hashlib.sha256(destination.read_bytes()).hexdigest(),
+            )
+            self.assertEqual(
+                set(manifest["source_identity"]),
+                {
+                    "device",
+                    "inode",
+                    "start_size",
+                    "end_size",
+                    "start_mtime_ns",
+                    "end_mtime_ns",
+                },
+            )
+            self.assertEqual(
+                manifest["source_identity"]["start_size"],
+                manifest["source_identity"]["end_size"],
+            )
+            self.assertEqual(
+                manifest["source_identity"]["start_mtime_ns"],
+                manifest["source_identity"]["end_mtime_ns"],
+            )
+            manifest_bytes = manifest_path.read_bytes()
+            for canary in (
+                b"Player1",
+                b"TW01",
+                b"00000000-0000",
+                str(source).encode(),
+                LOOKUP_SECRET,
+                EVENT_SECRET,
+            ):
+                self.assertNotIn(canary, manifest_bytes)
+
+            owner = root / "owner.sqlite"
+            owner.write_bytes(b"owner")
+            owner_manifest = root / "owner.manifest.json"
+            with self.assertRaisesRegex(
+                PlayerHistorySnapshotError, "^destination_exists$"
+            ):
+                build_and_publish_player_history_snapshot_from_sqlite_v1(
+                    source=source,
+                    destination=owner,
+                    manifest=owner_manifest,
+                    config=config(),
+                )
+            self.assertEqual(owner.read_bytes(), b"owner")
+            self.assertFalse(owner_manifest.exists())
+
+            manifest_owner = root / "manifest-owner.json"
+            manifest_owner.write_bytes(b"manifest-owner")
+            blocked_snapshot = root / "blocked.sqlite"
+            with self.assertRaisesRegex(
+                PlayerHistorySnapshotError, "^destination_exists$"
+            ):
+                build_and_publish_player_history_snapshot_from_sqlite_v1(
+                    source=source,
+                    destination=blocked_snapshot,
+                    manifest=manifest_owner,
+                    config=config(),
+                )
+            self.assertFalse(blocked_snapshot.exists())
+            self.assertEqual(manifest_owner.read_bytes(), b"manifest-owner")
+
+            race_snapshot = root / "race.sqlite"
+            race_manifest = root / "race.manifest.json"
+            real_link = os.link
+
+            def race_snapshot_commit(source_path, target_path):
+                if Path(target_path) == race_snapshot:
+                    race_snapshot.write_bytes(b"racer")
+                    raise FileExistsError
+                return real_link(source_path, target_path)
+
+            with mock.patch.object(
+                snapshot_module.os, "link", side_effect=race_snapshot_commit
+            ):
+                with self.assertRaisesRegex(
+                    PlayerHistorySnapshotError, "^destination_exists$"
+                ):
+                    build_and_publish_player_history_snapshot_from_sqlite_v1(
+                        source=source,
+                        destination=race_snapshot,
+                        manifest=race_manifest,
+                        config=config(),
+                    )
+            self.assertEqual(race_snapshot.read_bytes(), b"racer")
+            self.assertFalse(race_manifest.exists())
+            self.assertEqual(list(root.glob("*.tmp")), [])
+
     def test_trusted_primary_root_supports_normal_and_linked_checkouts(self) -> None:
         with tempfile.TemporaryDirectory(dir=Path.cwd()) as directory:
             root = Path(directory)
@@ -450,8 +704,9 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                         manifest=root / "snapshot.manifest.json",
                         config=config(),
                     )
-                self.assertEqual(_observed_matches(graph), 2)
-                self.assertEqual({row.patch for row in graph.histories}, {"16.10", "16.9"})
+                observed, histories = _snapshot_player(destination)
+                self.assertEqual(observed, 2)
+                self.assertEqual({row[1] for row in histories}, {"16.10", "16.9"})
                 self.assertEqual(writer.execute("SELECT count(*) FROM games").fetchone(), (4,))
                 manifest_path = root / "snapshot.manifest.json"
                 manifest = json.loads(manifest_path.read_text(encoding="ascii"))
@@ -516,7 +771,9 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                 audit = sqlite3.connect(destination)
                 try:
                     audit.execute("PRAGMA foreign_keys=ON")
-                    self.assertEqual(audit_player_history_snapshot_v1(audit), graph)
+                    summary = audit_player_history_snapshot_streaming_v1(audit)
+                    self.assertEqual(summary.meta, graph.meta)
+                    self.assertEqual(summary.row_count, graph.row_count)
                 finally:
                     audit.close()
             finally:
@@ -530,14 +787,17 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                 source,
                 [source_row(1, created_ms=1), source_row(2, created_ms=2)],
             )
-            original_builder = snapshot_module.build_player_history_graph_v1
+            original_project = snapshot_module._project_player_history_source_row_v1
+            appended = False
 
-            def build_while_appending(rows, *, config):
-                iterator = iter(rows)
-                first = next(iterator)
-                _insert_live_row(writer, source_row(3, created_ms=3))
-                writer.commit()
-                return original_builder(chain((first,), iterator), config=config)
+            def project_while_appending(*args, **kwargs):
+                nonlocal appended
+                result = original_project(*args, **kwargs)
+                if not appended:
+                    appended = True
+                    _insert_live_row(writer, source_row(3, created_ms=3))
+                    writer.commit()
+                return result
 
             try:
                 with (
@@ -548,8 +808,8 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                     ),
                     mock.patch.object(
                         snapshot_module,
-                        "build_player_history_graph_v1",
-                        side_effect=build_while_appending,
+                        "_project_player_history_source_row_v1",
+                        side_effect=project_while_appending,
                     ),
                 ):
                     first_graph = build_and_publish_player_history_snapshot_from_live_v1(
@@ -557,7 +817,7 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                         manifest=root / "first.manifest.json",
                         config=config(),
                     )
-                self.assertEqual(_observed_matches(first_graph), 2)
+                self.assertEqual(_snapshot_player(root / "first.sqlite")[0], 2)
                 first_manifest = json.loads(
                     (root / "first.manifest.json").read_text(encoding="ascii")
                 )
@@ -575,7 +835,7 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                         manifest=root / "second.manifest.json",
                         config=config(),
                     )
-                self.assertEqual(_observed_matches(second_graph), 3)
+                self.assertEqual(_snapshot_player(root / "second.sqlite")[0], 3)
                 second_manifest = json.loads(
                     (root / "second.manifest.json").read_text(encoding="ascii")
                 )
@@ -849,7 +1109,7 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
             root = Path(directory)
             source = root / "source.sqlite"
             source.touch()
-            base = [
+            base_without_manifest = [
                 "--destination",
                 str(root / "snapshot.sqlite"),
                 "--dataset-id",
@@ -858,6 +1118,11 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                 "16.10",
                 "--generated-date",
                 "2026-08-13",
+            ]
+            base = [
+                "--manifest",
+                str(root / "private.json"),
+                *base_without_manifest,
             ]
             environment = {
                 "ARAM_PLAYER_HISTORY_LOOKUP_SECRET_HEX": LOOKUP_SECRET.hex(),
@@ -868,24 +1133,18 @@ class PlayerHistorySnapshotTests(unittest.TestCase):
                     result = runner.invoke(main, [*selectors, *base], env=environment)
                     self.assertNotEqual(result.exit_code, 0)
                     self.assertIn("invalid_source", result.output)
-            live_without_manifest = runner.invoke(
-                main, ["--live-source", *base], env=environment
+            for selector in (["--live-source"], ["--source", str(source)]):
+                with self.subTest(missing_manifest=selector):
+                    missing = runner.invoke(
+                        main, [*selector, *base_without_manifest], env=environment
+                    )
+                    self.assertNotEqual(missing.exit_code, 0)
+                    self.assertIn("Missing option '--manifest'", missing.output)
+            offline = runner.invoke(
+                main, ["--source", str(source), *base], env=environment
             )
-            self.assertNotEqual(live_without_manifest.exit_code, 0)
-            self.assertIn("invalid_configuration", live_without_manifest.output)
-            offline_with_manifest = runner.invoke(
-                main,
-                [
-                    "--source",
-                    str(source),
-                    "--manifest",
-                    str(root / "private.json"),
-                    *base,
-                ],
-                env=environment,
-            )
-            self.assertNotEqual(offline_with_manifest.exit_code, 0)
-            self.assertIn("invalid_configuration", offline_with_manifest.output)
+            self.assertNotEqual(offline.exit_code, 0)
+            self.assertIn("source_schema_invalid", offline.output)
             self.assertFalse((root / "snapshot.sqlite").exists())
 
 
