@@ -30,6 +30,9 @@ aram-eval = "aram_nn.eval:main"
 aram-site-api = "aram_nn.site.api_cli:main"
 aram-site-sync = "aram_nn.site.sync_cli:main"
 aram-site-static-publish = "aram_nn.site.static_publish_cli:main"
+aram-player-history-build = "aram_nn.site.player_history_snapshot:main"
+aram-player-history = "aram_nn.site.player_history_query:main"
+aram-player-history-public = "aram_nn.site.player_history_public:main"
 
 [build-system]
 requires = ["setuptools>=68"]

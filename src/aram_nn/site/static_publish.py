@@ -17,6 +17,10 @@ from .db import count_games
 
 DEFAULT_SITE_URL = "https://arammeta.com/"
 DEFAULT_META_PICK_API_URL = "https://api.arammeta.com"
+# The player-history UI is generated only at the unlisted route
+# ``/p/player-history/``. Keep its API base explicit in the publisher command;
+# ordinary Home/locale shells receive no player-history endpoint config.
+DEFAULT_PLAYER_HISTORY_API_URL = "https://api.arammeta.com"
 # Cloudflare Web Analytics beacon token for arammeta.com.  PUBLIC by design -- it
 # ships in the client HTML (visible in view-source), so it lives in source, not a
 # secret.  build_tier_list injects the beacon <script> when given this token.  Both
@@ -95,6 +99,10 @@ DEFAULT_DOC_PATHS = (
     Path("docs/game"),
     Path("docs/en"),
     Path("docs/zh-CN"),
+    # Dedicated noindex player-history utility shell. Keep this exact path in
+    # the atomic allowlist rather than broad ``docs/p`` so unrelated files can
+    # never be staged by the publisher.
+    Path("docs/p/player-history"),
     # Social share thumbnail (og:image / twitter:image).  Re-rendered every build
     # with the live champion data + game count; referenced by every shell above
     # via a content-hash cache-bust.  Must ship with them or the share preview is stale.
@@ -539,6 +547,8 @@ def build_split_site(
         str(queue_id),
         "--meta-pick-api-url",
         DEFAULT_META_PICK_API_URL,
+        "--player-history-api-url",
+        DEFAULT_PLAYER_HISTORY_API_URL,
     ]
     if patch_prefix is not None:
         command.extend(["--patch-prefix", patch_prefix])

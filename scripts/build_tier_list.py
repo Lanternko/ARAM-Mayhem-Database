@@ -146,6 +146,17 @@ def resolve_production_shell_settings(
     )
 
 
+def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -> str:
+    """Resolve the optional player-history API base without sharing Meta Pick.
+
+    There is deliberately no production default here. The player-history
+    service is independently deployable, so an empty value keeps the panel
+    disabled and a caller must explicitly provide its base URL.
+    """
+    del site_url  # Kept parallel to resolve_meta_pick_api_url for CLI symmetry.
+    return (player_history_api_url or "").strip().rstrip("/")
+
+
 
 
 @click.command()
@@ -203,6 +214,13 @@ def resolve_production_shell_settings(
     help="Base URL for Meta Pick leaderboard API (e.g. https://api.example.com). "
          "Empty disables remote submit/board. Injected into site.js as __META_PICK_API_BASE__.",
 )
+@click.option(
+    "--player-history-api-url",
+    envvar="ARAM_PLAYER_HISTORY_API_URL",
+    default="",
+    help="Base URL for the optional player-history query API. "
+         "Injected only into the hidden /p/player-history/ shell; empty disables its controls.",
+)
 def main(
     db: Path,
     queue_id: int,
@@ -225,8 +243,10 @@ def main(
     reuse_model_artifacts: bool,
     skip_patch_comparison: bool,
     meta_pick_api_url: str,
+    player_history_api_url: str,
 ) -> None:
     meta_pick_api_url = resolve_meta_pick_api_url(site_url, meta_pick_api_url)
+    player_history_api_url = resolve_player_history_api_url(site_url, player_history_api_url)
     if site_url.strip().rstrip("/") == PRODUCTION_SITE_URL:
         click.echo(f"[tierlist] production Meta Pick API: {meta_pick_api_url}")
 
@@ -262,6 +282,7 @@ def main(
             ga_measurement_id=ga_measurement_id, min_pair_games=min_pair_games,
             min_synergy_games=min_synergy_games,
             meta_pick_api_url=meta_pick_api_url,
+            player_history_api_url=player_history_api_url,
         )
         return
 
@@ -646,6 +667,10 @@ def main(
         aug_global=aug_global,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
+        # Player history is rendered only into the dedicated unlisted shell
+        # below. Ordinary Home/locale output gets no panel or API URL.
+        player_history_api_url="",
+        player_history_route=False,
         team_score_bundle=team_score_bundle,
     )
     if payload_out is not None:
@@ -654,6 +679,54 @@ def main(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     click.echo(f"[tierlist] wrote {out_path}  ({out_path.stat().st_size:,} bytes)")
+
+    # One full shell for the hidden player-history utility. It deliberately
+    # reuses the same data payload and shared JS asset as Home, while carrying
+    # its route marker, noindex metadata, panel markup and API base only here.
+    player_history_path = out_path.parent / "p" / "player-history" / "index.html"
+    player_history_html = render_html(
+        champ_records,
+        champ_meta,
+        champ_profiles,
+        picks,
+        set_affinity,
+        item_pair_affinity,
+        single_item_affinity,
+        boot_item_affinity,
+        spell_affinity,
+        item_build_clusters,
+        augment_type_affinity,
+        synergy,
+        aug_meta,
+        patch_changes,
+        new_aug_ids=new_aug_ids,
+        queue_id=queue_id,
+        patch_prefix=patch_prefix,
+        ddragon_version=version,
+        total_games=total_games,
+        min_games_per_pair=min_pair_games,
+        min_synergy_games=min_synergy_games,
+        site_url=site_url,
+        og_image=og_image,
+        build_date=build_date,
+        cloudflare_analytics_token=cloudflare_analytics_token,
+        ga_measurement_id=ga_measurement_id,
+        payload_out_path=None,
+        payload_url=payload_url,
+        icon_assets_dir=out_path.parent / "assets" / "icons",
+        aug_global=aug_global,
+        script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url=player_history_api_url,
+        player_history_route=True,
+        team_score_bundle=team_score_bundle,
+    )
+    player_history_path.parent.mkdir(parents=True, exist_ok=True)
+    player_history_path.write_text(player_history_html, encoding="utf-8")
+    click.echo(
+        f"[tierlist] wrote hidden player-history shell {player_history_path} "
+        f"({player_history_path.stat().st_size:,} bytes)"
+    )
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")

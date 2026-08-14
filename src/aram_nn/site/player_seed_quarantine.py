@@ -11,11 +11,17 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Final, TypeVar
 
+from cryptography.hazmat.primitives.asymmetric import rsa
+
 from aram_nn.site.player_history_security import (
+    MAX_RSA_KEY_BITS,
     PlayerHistorySecurityError,
+    derive_candidate_key,
+    encrypt_candidate,
     parse_candidate_envelope,
     validate_dataset_id,
     validate_expected_normalizer_id,
@@ -360,3 +366,137 @@ def abandon_stale(
         return cursor.rowcount == 1
 
     return _run_owned_transaction(connection, operation)
+
+
+_PENDING_TTL_MS: Final[int] = 30 * 24 * 60 * 60 * 1000
+_TERMINAL_TTL_MS: Final[int] = 90 * 24 * 60 * 60 * 1000
+_MAX_QUARANTINE_ROWS: Final[int] = 10_000
+_MAX_QUARANTINE_BYTES: Final[int] = 64 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateQuarantineStore:
+    """Short-timeout, bounded admission surface for untrusted candidates."""
+
+    path: Path
+    candidate_secret: bytes = field(repr=False)
+    public_key: rsa.RSAPublicKey = field(repr=False)
+    dataset_id: str
+    normalizer_id: str
+    timeout_ms: int = 50
+    capacity: int = _MAX_QUARANTINE_ROWS
+
+    def __post_init__(self) -> None:
+        try:
+            path = Path(self.path).resolve(strict=False)
+            if path.name.endswith(("-wal", "-shm")) or path.exists() and not path.is_file():
+                raise ValueError
+            path.parent.mkdir(parents=True, exist_ok=True)
+            validate_sqlite_key(self.candidate_secret)
+            validate_dataset_id(self.dataset_id)
+            validate_expected_normalizer_id(self.normalizer_id)
+            if (
+                not isinstance(self.public_key, rsa.RSAPublicKey)
+                or not 3072 <= self.public_key.key_size <= MAX_RSA_KEY_BITS
+            ):
+                raise ValueError
+            if (
+                type(self.timeout_ms) is not int
+                or not 1 <= self.timeout_ms <= 50
+                or type(self.capacity) is not int
+                or not 1 <= self.capacity <= _MAX_QUARANTINE_ROWS
+            ):
+                raise ValueError
+            object.__setattr__(self, "path", path)
+            connection = self._connect()
+            try:
+                ensure_quarantine_schema(connection)
+            finally:
+                connection.close()
+        except Exception:
+            raise QuarantineInvariantError("quarantine_invalid") from None
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self.path, timeout=self.timeout_ms / 1000)
+        connection.execute(f"PRAGMA busy_timeout={self.timeout_ms}")
+        return connection
+
+    def admit(self, normalized_riot_id: bytes, *, now_ms: int) -> bool:
+        """Encrypt and admit one candidate; every failure is a silent drop."""
+
+        connection: sqlite3.Connection | None = None
+        try:
+            now = validate_timestamp_ms(now_ms)
+            if self.path.exists() and self.path.stat().st_size >= _MAX_QUARANTINE_BYTES:
+                return False
+            candidate_key = derive_candidate_key(
+                self.candidate_secret,
+                expected_normalizer_id=self.normalizer_id,
+                dataset_id=self.dataset_id,
+                normalized_riot_id=normalized_riot_id,
+            )
+            envelope = encrypt_candidate(
+                self.public_key,
+                expected_normalizer_id=self.normalizer_id,
+                dataset_id=self.dataset_id,
+                normalized_riot_id=normalized_riot_id,
+            )
+            parsed = parse_candidate_envelope(envelope)
+            connection = self._connect()
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "UPDATE player_seed_quarantine SET state='abandoned',ciphertext=NULL,"
+                "updated_ms=?,terminal_ms=?,terminal_reason='stale_claim' "
+                "WHERE state='taken' AND taken_ms < ?",
+                (now, now, max(0, now - _PENDING_TTL_MS)),
+            )
+            connection.execute(
+                "DELETE FROM player_seed_quarantine "
+                "WHERE (state='pending' AND created_ms <= ?) "
+                "OR (state IN ('promoted','rejected','dead','abandoned') AND terminal_ms <= ?)",
+                (max(0, now - _PENDING_TTL_MS), max(0, now - _TERMINAL_TTL_MS)),
+            )
+            existing = connection.execute(
+                "SELECT 1 FROM player_seed_quarantine "
+                "WHERE candidate_key=? AND dataset_id=?",
+                (candidate_key, self.dataset_id),
+            ).fetchone()
+            if existing is not None:
+                connection.commit()
+                return False
+            count = connection.execute(
+                "SELECT count(*) FROM player_seed_quarantine"
+            ).fetchone()[0]
+            if type(count) is not int or count >= self.capacity:
+                connection.rollback()
+                return False
+            connection.execute(
+                "INSERT INTO player_seed_quarantine "
+                "(candidate_key,dataset_id,normalizer_id,key_id,ciphertext,state,"
+                "created_ms,updated_ms,attempts,terminal_reason) "
+                "VALUES (?,?,?,?,?,'pending',?,?,0,NULL)",
+                (
+                    candidate_key,
+                    self.dataset_id,
+                    self.normalizer_id,
+                    parsed.key_id,
+                    envelope,
+                    now,
+                    now,
+                ),
+            )
+            connection.commit()
+            return True
+        except Exception:
+            if connection is not None:
+                try:
+                    connection.rollback()
+                except sqlite3.Error:
+                    pass
+            return False
+        finally:
+            if connection is not None:
+                try:
+                    connection.close()
+                except sqlite3.Error:
+                    pass
