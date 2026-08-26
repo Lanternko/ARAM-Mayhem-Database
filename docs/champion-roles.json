@@ -1247,8 +1247,8 @@
       ]
     }
   },
-  "data_dragon_version": "16.16.1",
-  "generated_at": "2026-08-20T11:51:07Z",
+  "data_dragon_version": "16.17.1",
+  "generated_at": "2026-08-26T09:41:18Z",
   "patch_prefix": "16.16",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",
