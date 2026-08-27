@@ -119,6 +119,29 @@ def static_site_publishers() -> list[dict[str, Any]]:
     return rows
 
 
+def model_refresh_health(state_path: Path) -> dict[str, Any]:
+    """Summarise the refresher's own state file.
+
+    A live PID says nothing about whether the refresh actually works: the
+    refresher crash-looped 436 times (2026-08-12..26) while looking perfectly
+    healthy here.  Surface the failure streak so the watchdog record shows it.
+    """
+    try:
+        state = json.loads(Path(state_path).read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False}
+    if not isinstance(state, dict):
+        return {"available": False}
+    return {
+        "available": True,
+        "consecutive_failures": int(state.get("consecutive_failures") or 0),
+        "last_result": state.get("last_result"),
+        "last_error": state.get("last_error"),
+        "last_error_at_unix": state.get("last_error_at_unix"),
+        "last_refresh_at_unix": state.get("last_refresh_at_unix"),
+    }
+
+
 def is_model_refresher(proc: psutil.Process) -> bool:
     try:
         name = (proc.info.get("name") or "").lower()
@@ -577,6 +600,11 @@ def ensure_model_refresher(args: argparse.Namespace) -> dict[str, Any] | None:
     err_path = args.model_refresh_log_dir / "model_refresh.err.log"
     cmd = [
         background_python_executable(),
+        # -u: stdout redirected to a file is block-buffered, which would let the
+        # skip/BLOCKED lines sit in an 8KB buffer for hours.  An operator log
+        # nobody can read in time is the failure mode this whole path exists to
+        # prevent.
+        "-u",
         str(ROOT / "scripts" / "refresh_recommender_models.py"),
         "--watch",
         "--threshold",
@@ -714,6 +742,18 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
     refresher_action = ensure_model_refresher(args)
     if refresher_action:
         actions.append(refresher_action)
+    refresh_health = model_refresh_health(args.model_refresh_state)
+    if refresh_health.get("consecutive_failures"):
+        # Report only -- the refresher keeps its own retry loop and the fix is
+        # always an operator restoring an input, never a process restart.
+        actions.append(
+            {
+                "action": "model_refresh_failing",
+                "consecutive_failures": refresh_health["consecutive_failures"],
+                "last_result": refresh_health.get("last_result"),
+                "last_error": refresh_health.get("last_error"),
+            }
+        )
 
     if workers and not health["ok"]:
         stopped = stop_snowball_workers()
@@ -868,6 +908,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         "workers": snowball_workers(),
         "static_site_publishers": static_site_publishers(),
         "model_refreshers": model_refreshers(),
+        "model_refresh_health": refresh_health,
         "latest_capture_age_min": latest_age,
         "actions": actions,
     }
