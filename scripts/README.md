@@ -24,6 +24,7 @@
 - `watchdog_mac.py` — macOS crawl watchdog 入口（wraps `crawler_mac`）
 - `ab_arm_report.py` — crawler A/B：`snapshot` 拍 per-player baseline、`report --split history|revisit` 算每訪產出 + cluster bootstrap CI + per-queue 歸因
 - `revisit_ab_report.py` — 舊版 revisit A/B 報表（只吃 arm 總計 baseline，無 CI；2026-08-07 那輪的原始基準）
+- `classic_lane_report.py` — 經典車道排序 A/B（score vs due）：直接讀 crawl_visit_events，不需要 baseline snapshot，只比保留配額的 slot
 - `lcu_backfill.py` — 補抓近期 LCU 對局回填 games.db
 - `lcu_dump.py` — 印出 LCU 原始對局資料供診斷
 - `lcu_probe_endpoints.py` — 探測 LCU API 找 10 人陣容欄位（推測）

@@ -31,8 +31,11 @@ from __future__ import annotations
 
 import json
 import math
+import contextlib
+import multiprocessing
 import os
 import re
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -75,6 +78,208 @@ class _LazyPolars:
 
 
 pl = _LazyPolars()
+
+
+def _snowball_rpc_worker(
+    writer_client,
+    kwargs: dict,
+    stdout_path: str,
+    stderr_path: str,
+) -> None:
+    """Spawn-safe producer entry point; it never receives a database handle."""
+    from aram_nn.lcu.snowball import run_snowball
+
+    with open(stdout_path, "a", encoding="utf-8", buffering=1) as stdout_file, open(
+        stderr_path, "a", encoding="utf-8", buffering=1
+    ) as stderr_file, contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
+        run_snowball(writer_client=writer_client, **kwargs)
+
+
+def _run_snowball_fleet(
+    *,
+    db: Path,
+    workers: int,
+    log_dir: Path,
+    worker_prefix: str,
+    stagger_sec: float,
+    seed_on_first_only: bool,
+    run_kwargs: dict,
+    control_file: Path | None = None,
+) -> None:
+    """Run one writer plus N RPC-only producers as one foreground fleet."""
+    from aram_nn.lcu.writer_supervisor import WriterSupervisor
+
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    db.parent.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    context = multiprocessing.get_context("spawn")
+    control_file = control_file or db.parent / f".{db.name}.snowball.stop"
+    control_file.parent.mkdir(parents=True, exist_ok=True)
+    control_file.unlink(missing_ok=True)
+    supervisor = WriterSupervisor(db, workers, context=context)
+    clients = supervisor.start()
+    processes: list[multiprocessing.Process] = []
+    stopping = False
+
+    def request_stop(_signum=None, _frame=None) -> None:
+        nonlocal stopping
+        stopping = True
+
+    previous_handlers: dict[int, object] = {}
+    for sig in (signal.SIGINT, signal.SIGTERM, getattr(signal, "SIGBREAK", None)):
+        if sig is None:
+            continue
+        try:
+            previous_handlers[int(sig)] = signal.signal(sig, request_stop)
+        except (OSError, ValueError):
+            pass
+
+    try:
+        for idx, client in enumerate(clients):
+            worker_id = f"{worker_prefix}{idx + 1:02d}"
+            should_seed = idx == 0 or not seed_on_first_only
+            kwargs = dict(run_kwargs)
+            kwargs.update(
+                worker_id=worker_id,
+                include_self=bool(run_kwargs["include_self"] and should_seed),
+                include_friends=bool(run_kwargs["include_friends"] and should_seed),
+                include_ladder=bool(run_kwargs["include_ladder"] and should_seed),
+                include_apex=bool(run_kwargs["include_apex"] and should_seed),
+                include_riot_tier=bool(run_kwargs["include_riot_tier"] and should_seed),
+                seed_riot_ids=run_kwargs["seed_riot_ids"] if should_seed else (),
+                seed_riot_id_files=run_kwargs["seed_riot_id_files"] if should_seed else (),
+            )
+            stdout_path = log_dir / f"snowball_{worker_id}.log"
+            stderr_path = log_dir / f"snowball_{worker_id}.err"
+            process = context.Process(
+                target=_snowball_rpc_worker,
+                name=f"aram-snowball-producer-{worker_id}",
+                args=(client, kwargs, str(stdout_path), str(stderr_path)),
+            )
+            process.start()
+            processes.append(process)
+            click.echo(f"  {worker_id}: producer_pid={process.pid} mode={'seed' if should_seed else 'consume'}")
+            if stagger_sec > 0 and idx + 1 < workers:
+                time.sleep(stagger_sec)
+
+        click.echo(
+            f"[fleet] supervisor_pid={os.getpid()} writer_pid={getattr(supervisor._process, 'pid', None)} "
+            f"producers={len(processes)} db={db}"
+        )
+        while any(process.is_alive() for process in processes):
+            if control_file.exists():
+                stopping = True
+            if stopping:
+                break
+            if not supervisor.is_alive:
+                raise RuntimeError("single DB writer exited; stopping all producers")
+            failed = [process for process in processes if process.exitcode not in (None, 0)]
+            if failed:
+                raise RuntimeError(f"producer failed: pid={failed[0].pid} exitcode={failed[0].exitcode}")
+            time.sleep(0.25)
+
+        if stopping:
+            supervisor.stop_claims(timeout=10.0)
+            deadline = time.monotonic() + 10.0
+            for process in processes:
+                process.join(max(0.0, deadline - time.monotonic()))
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+            for process in processes:
+                process.join(5.0)
+        else:
+            for process in processes:
+                process.join()
+        supervisor.shutdown(timeout=32.0)
+    except BaseException:
+        try:
+            supervisor.stop_claims(timeout=2.0)
+        except Exception:
+            pass
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+        for process in processes:
+            process.join(5.0)
+        supervisor.abort()
+        raise
+    finally:
+        control_file.unlink(missing_ok=True)
+        for sig_value, handler in previous_handlers.items():
+            try:
+                signal.signal(sig_value, handler)
+            except (OSError, ValueError):
+                pass
+
+
+def _snowball_run_kwargs(
+    *,
+    db: Path,
+    target_games: int,
+    max_players: int,
+    history_window: int,
+    games_per_player: int,
+    claim_timeout_sec: int,
+    player_requeue_cooldown_sec: int,
+    queue: tuple[int, ...],
+    seed_self: bool,
+    seed_friends: bool,
+    seed_ladder: bool,
+    ladder_cap: int,
+    seed_apex: bool,
+    apex_queue: tuple[str, ...],
+    apex_tier: tuple[str, ...],
+    apex_cap: int,
+    seed_riot_tier: bool,
+    riot_region: str,
+    riot_queue: tuple[str, ...],
+    riot_tier: tuple[str, ...],
+    riot_division: tuple[str, ...],
+    riot_page_limit: int,
+    riot_cap: int,
+    seed_riot_ids: tuple[str, ...],
+    seed_riot_id_files: tuple[Path, ...],
+    manual_seed_pending_cap: int,
+    max_depth: int,
+    classic_claim_percent: int,
+    classic_revisit_min_hours: float,
+    classic_revisit_max_hours: float,
+) -> dict:
+    """Map Click option names onto ``run_snowball`` parameters."""
+    return {
+        "db_path": db,
+        "target_games": target_games,
+        "max_players": max_players,
+        "history_window": history_window,
+        "games_per_player": games_per_player,
+        "claim_timeout_sec": claim_timeout_sec,
+        "player_requeue_cooldown_sec": player_requeue_cooldown_sec,
+        "target_queues": set(queue),
+        "include_self": seed_self,
+        "include_friends": seed_friends,
+        "include_ladder": seed_ladder,
+        "ladder_cap": ladder_cap,
+        "include_apex": seed_apex,
+        "apex_queues": apex_queue,
+        "apex_tiers": apex_tier,
+        "apex_cap": apex_cap,
+        "include_riot_tier": seed_riot_tier,
+        "riot_region": riot_region,
+        "riot_queues": riot_queue,
+        "riot_tiers": riot_tier,
+        "riot_divisions": riot_division,
+        "riot_page_limit": riot_page_limit,
+        "riot_cap": riot_cap,
+        "seed_riot_ids": seed_riot_ids,
+        "seed_riot_id_files": seed_riot_id_files,
+        "manual_seed_pending_cap": manual_seed_pending_cap,
+        "max_depth": max_depth,
+        "classic_claim_percent": classic_claim_percent,
+        "classic_revisit_min_hours": classic_revisit_min_hours,
+        "classic_revisit_max_hours": classic_revisit_max_hours,
+    }
 
 
 DEFAULT_DB = Path("data/lcu/games.db")
@@ -537,13 +742,19 @@ def _find_active_snowball_workers() -> list[dict]:
                         continue
                     joined = " ".join(cmdline)
                     lower = joined.lower()
-                    if "lcu_collector.py" not in lower or "snowball" not in lower:
+                    if "lcu_collector.py" not in lower or "snowball-workers" not in lower:
                         continue
                     workers.append(
                         {
                             "pid": int(proc.info["pid"]),
                             "create_time": float(proc.info.get("create_time") or 0.0),
                             "cmdline": joined,
+                            "control_file": (
+                                cmdline[cmdline.index("--control-file") + 1]
+                                if "--control-file" in cmdline
+                                and cmdline.index("--control-file") + 1 < len(cmdline)
+                                else ""
+                            ),
                         }
                     )
                 except (
@@ -558,7 +769,7 @@ def _find_active_snowball_workers() -> list[dict]:
     else:
         probe = """
 $rows = Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq 'python.exe' -and $_.CommandLine -like '*lcu_collector.py*' -and $_.CommandLine -like '*snowball*'
+    $_.Name -eq 'python.exe' -and $_.CommandLine -like '*lcu_collector.py*' -and $_.CommandLine -like '*snowball-workers*'
 } | Select-Object ProcessId, CommandLine, CreationDate
 $rows | ConvertTo-Json -Compress
 """
@@ -600,10 +811,16 @@ def _stop_active_snowball_workers(timeout_sec: float = 10.0) -> int:
     stopped = 0
     if psutil is not None:
         procs = []
-        for pid in pids:
+        for worker in workers:
+            pid = int(worker.get("pid") or 0)
             try:
                 proc = psutil.Process(pid)
-                proc.terminate()
+                control_file = str(worker.get("control_file") or "")
+                if not control_file:
+                    raise RuntimeError(f"fleet pid={pid} has no control file")
+                marker = Path(control_file)
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.write_text("stop\n", encoding="utf-8")
                 procs.append(proc)
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
@@ -618,20 +835,8 @@ def _stop_active_snowball_workers(timeout_sec: float = 10.0) -> int:
         return stopped
 
     if pids:
-        pid_list = ",".join(str(pid) for pid in pids)
-        subprocess.run(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                f"{pid_list}.Split(',') | ForEach-Object {{ Stop-Process -Id ([int]$_) -Force }}",
-            ],
-            check=False,
-            timeout=max(5.0, timeout_sec),
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-        stopped = len(pids)
-    return stopped
+        raise RuntimeError("cannot safely stop snowball fleet without psutil")
+    return 0
 
 
 def _collect_status_snapshot(
@@ -1109,6 +1314,9 @@ def _build_snowball_subprocess_args(
     seed_riot_id_files: tuple[Path, ...],
     manual_seed_pending_cap: int,
     max_depth: int,
+    classic_claim_percent: int,
+    classic_revisit_min_hours: float,
+    classic_revisit_max_hours: float,
 ) -> list[str]:
     args = [
         sys.executable,
@@ -1145,6 +1353,12 @@ def _build_snowball_subprocess_args(
         str(manual_seed_pending_cap),
         "--max-depth",
         str(max_depth),
+        "--classic-claim-percent",
+        str(classic_claim_percent),
+        "--classic-revisit-min-hours",
+        str(classic_revisit_min_hours),
+        "--classic-revisit-max-hours",
+        str(classic_revisit_max_hours),
     ]
 
     for qid in queue:
@@ -1191,10 +1405,18 @@ def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
     """
     try:
         from aram_nn.lcu.poller import run_collector
+        from aram_nn.lcu.writer_supervisor import WriterSupervisor
     except ImportError as exc:
         click.echo(f"[error] import failed: {exc}\n  Run: pip install -e .", err=True)
         sys.exit(1)
-    run_collector(db, poll_interval=interval, target_queues=set(queue))
+    supervisor = WriterSupervisor(db, 1)
+    client = supervisor.start()[0]
+    try:
+        run_collector(poll_interval=interval, target_queues=set(queue), writer_client=client)
+        supervisor.shutdown(timeout=32.0)
+    except BaseException:
+        supervisor.abort()
+        raise
 
 
 # ---------------------------------------------------------------- snowball --
@@ -1258,6 +1480,15 @@ def collect(db: Path, interval: int, queue: tuple[int, ...]) -> None:
               help="Maximum pending/in-progress manual_riot_id queue items to keep open at once (0 = unlimited)")
 @click.option("--max-depth", default=3, show_default=True, type=int,
               help="Maximum BFS depth for discovered participant puuids")
+@click.option("--classic-claim-percent", default=10, show_default=True,
+              type=click.IntRange(0, 100),
+              help="Reserved claim share for due Classic-tagged players; unused slots return to general")
+@click.option("--classic-revisit-min-hours", default=10.0, show_default=True,
+              type=click.FloatRange(min=10.0),
+              help="Hard minimum between Classic player revisits")
+@click.option("--classic-revisit-max-hours", default=168.0, show_default=True,
+              type=click.FloatRange(min=10.0),
+              help="Maximum formula-based Classic revisit interval")
 def snowball(
     db: Path,
     target_games: int,
@@ -1287,46 +1518,53 @@ def snowball(
     seed_riot_id_files: tuple[Path, ...],
     manual_seed_pending_cap: int,
     max_depth: int,
+    classic_claim_percent: int,
+    classic_revisit_min_hours: float,
+    classic_revisit_max_hours: float,
 ) -> None:
-    """Expand recent LCU-visible match history through discovered player IDs."""
+    """Run one RPC producer with the same sole-writer topology as a fleet."""
     try:
-        from aram_nn.lcu.snowball import run_snowball
-    except ImportError as exc:
-        click.echo(f"[error] import failed: {exc}\n  Run: pip install -e .", err=True)
-        sys.exit(1)
-
-    try:
-        run_snowball(
-            db_path=db,
-            target_games=target_games,
-            max_players=max_players,
-            history_window=history_window,
-            games_per_player=games_per_player,
-            worker_id=(worker_id or None),
-            claim_timeout_sec=claim_timeout_sec,
-            player_requeue_cooldown_sec=player_requeue_cooldown_sec,
-            target_queues=set(queue),
-            include_self=seed_self,
-            include_friends=seed_friends,
-            include_ladder=seed_ladder,
-            ladder_cap=ladder_cap,
-            include_apex=seed_apex,
-            apex_queues=apex_queue,
-            apex_tiers=apex_tier,
-            apex_cap=apex_cap,
-            include_riot_tier=seed_riot_tier,
-            riot_region=riot_region,
-            riot_queues=riot_queue,
-            riot_tiers=riot_tier,
-            riot_divisions=riot_division,
-            riot_page_limit=riot_page_limit,
-            riot_cap=riot_cap,
-            seed_riot_ids=seed_riot_ids,
-            seed_riot_id_files=seed_riot_id_files,
-            manual_seed_pending_cap=manual_seed_pending_cap,
-            max_depth=max_depth,
+        _run_snowball_fleet(
+            db=db,
+            workers=1,
+            log_dir=Path(".codex/logs"),
+            worker_prefix=(worker_id or "W"),
+            stagger_sec=0.0,
+            seed_on_first_only=True,
+            run_kwargs=_snowball_run_kwargs(
+                db=db,
+                target_games=target_games,
+                max_players=max_players,
+                history_window=history_window,
+                games_per_player=games_per_player,
+                claim_timeout_sec=claim_timeout_sec,
+                player_requeue_cooldown_sec=player_requeue_cooldown_sec,
+                queue=queue,
+                seed_self=seed_self,
+                seed_friends=seed_friends,
+                seed_ladder=seed_ladder,
+                ladder_cap=ladder_cap,
+                seed_apex=seed_apex,
+                apex_queue=apex_queue,
+                apex_tier=apex_tier,
+                apex_cap=apex_cap,
+                seed_riot_tier=seed_riot_tier,
+                riot_region=riot_region,
+                riot_queue=riot_queue,
+                riot_tier=riot_tier,
+                riot_division=riot_division,
+                riot_page_limit=riot_page_limit,
+                riot_cap=riot_cap,
+                seed_riot_ids=seed_riot_ids,
+                seed_riot_id_files=seed_riot_id_files,
+                manual_seed_pending_cap=manual_seed_pending_cap,
+                max_depth=max_depth,
+                classic_claim_percent=classic_claim_percent,
+                classic_revisit_min_hours=classic_revisit_min_hours,
+                classic_revisit_max_hours=classic_revisit_max_hours,
+            ),
         )
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         click.echo(f"[error] {exc}", err=True)
         sys.exit(1)
 
@@ -1340,6 +1578,8 @@ def snowball(
               show_default=True, help="Directory for per-worker stdout/stderr logs")
 @click.option("--worker-prefix", default="W", show_default=True,
               help="Worker id prefix; workers become W01 / W02 / ...")
+@click.option("--control-file", default=None, type=click.Path(path_type=Path),
+              help="Local stop sentinel watched by the foreground fleet supervisor")
 @click.option("--stagger-sec", default=0.75, show_default=True, type=float,
               help="Delay between worker launches to reduce startup contention")
 @click.option("--seed-on-first-only/--seed-on-all", default=True, show_default=True,
@@ -1398,11 +1638,21 @@ def snowball(
               help="Maximum pending/in-progress manual_riot_id queue items to keep open at once (0 = unlimited)")
 @click.option("--max-depth", default=3, show_default=True, type=int,
               help="Maximum BFS depth for discovered participant puuids")
+@click.option("--classic-claim-percent", default=10, show_default=True,
+              type=click.IntRange(0, 100),
+              help="Reserved claim share for due Classic-tagged players; unused slots return to general")
+@click.option("--classic-revisit-min-hours", default=10.0, show_default=True,
+              type=click.FloatRange(min=10.0),
+              help="Hard minimum between Classic player revisits")
+@click.option("--classic-revisit-max-hours", default=168.0, show_default=True,
+              type=click.FloatRange(min=10.0),
+              help="Maximum formula-based Classic revisit interval")
 def snowball_workers(
     db: Path,
     workers: int,
     log_dir: Path,
     worker_prefix: str,
+    control_file: Path | None,
     stagger_sec: float,
     seed_on_first_only: bool,
     target_games: int,
@@ -1431,78 +1681,60 @@ def snowball_workers(
     seed_riot_id_files: tuple[Path, ...],
     manual_seed_pending_cap: int,
     max_depth: int,
+    classic_claim_percent: int,
+    classic_revisit_min_hours: float,
+    classic_revisit_max_hours: float,
 ) -> None:
-    """Launch multiple background snowball workers against the same SQLite frontier."""
+    """Run one foreground writer supervisor with multiple RPC-only producers."""
     if workers < 1:
         click.echo("[error] --workers must be >= 1", err=True)
         sys.exit(1)
 
-    db.parent.mkdir(parents=True, exist_ok=True)
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    launched: list[tuple[str, int, Path, Path, bool]] = []
-
-    for idx in range(workers):
-        worker_id = f"{worker_prefix}{idx + 1:02d}"
-        should_seed = (idx == 0) or (not seed_on_first_only)
-        cmd = _build_snowball_subprocess_args(
+    try:
+        _run_snowball_fleet(
             db=db,
-            target_games=target_games,
-            max_players=max_players,
-            history_window=history_window,
-            games_per_player=games_per_player,
-            worker_id=worker_id,
-            claim_timeout_sec=claim_timeout_sec,
-            player_requeue_cooldown_sec=player_requeue_cooldown_sec,
-            queue=queue,
-            seed_self=(seed_self and should_seed),
-            seed_friends=(seed_friends and should_seed),
-            seed_ladder=(seed_ladder and should_seed),
-            ladder_cap=ladder_cap,
-            seed_apex=(seed_apex and should_seed),
-            apex_queue=apex_queue,
-            apex_tier=apex_tier,
-            apex_cap=apex_cap,
-            seed_riot_tier=(seed_riot_tier and should_seed),
-            riot_region=riot_region,
-            riot_queue=riot_queue,
-            riot_tier=riot_tier,
-            riot_division=riot_division,
-            riot_page_limit=riot_page_limit,
-            riot_cap=riot_cap,
-            seed_riot_ids=(seed_riot_ids if should_seed else ()),
-            seed_riot_id_files=(seed_riot_id_files if should_seed else ()),
-            manual_seed_pending_cap=manual_seed_pending_cap,
-            max_depth=max_depth,
+            workers=workers,
+            log_dir=log_dir,
+            worker_prefix=worker_prefix,
+            control_file=control_file,
+            stagger_sec=stagger_sec,
+            seed_on_first_only=seed_on_first_only,
+            run_kwargs=_snowball_run_kwargs(
+                db=db,
+                target_games=target_games,
+                max_players=max_players,
+                history_window=history_window,
+                games_per_player=games_per_player,
+                claim_timeout_sec=claim_timeout_sec,
+                player_requeue_cooldown_sec=player_requeue_cooldown_sec,
+                queue=queue,
+                seed_self=seed_self,
+                seed_friends=seed_friends,
+                seed_ladder=seed_ladder,
+                ladder_cap=ladder_cap,
+                seed_apex=seed_apex,
+                apex_queue=apex_queue,
+                apex_tier=apex_tier,
+                apex_cap=apex_cap,
+                seed_riot_tier=seed_riot_tier,
+                riot_region=riot_region,
+                riot_queue=riot_queue,
+                riot_tier=riot_tier,
+                riot_division=riot_division,
+                riot_page_limit=riot_page_limit,
+                riot_cap=riot_cap,
+                seed_riot_ids=seed_riot_ids,
+                seed_riot_id_files=seed_riot_id_files,
+                manual_seed_pending_cap=manual_seed_pending_cap,
+                max_depth=max_depth,
+                classic_claim_percent=classic_claim_percent,
+                classic_revisit_min_hours=classic_revisit_min_hours,
+                classic_revisit_max_hours=classic_revisit_max_hours,
+            ),
         )
-
-        stdout_path = log_dir / f"snowball_{worker_id}.log"
-        stderr_path = log_dir / f"snowball_{worker_id}.err"
-        with stdout_path.open("ab") as stdout_file, stderr_path.open("ab") as stderr_file:
-            proc = subprocess.Popen(
-                cmd,
-                cwd=str(Path.cwd()),
-                stdout=stdout_file,
-                stderr=stderr_file,
-                creationflags=creationflags,
-            )
-        launched.append((worker_id, proc.pid, stdout_path, stderr_path, should_seed))
-        if stagger_sec > 0 and idx + 1 < workers:
-            time.sleep(stagger_sec)
-
-    click.echo(
-        f"[workers] launched {len(launched)} snowball workers against {db}  "
-        f"pid={os.getpid()}"
-    )
-    for worker_id, pid, stdout_path, stderr_path, should_seed in launched:
-        seed_mode = "seed" if should_seed else "consume"
-        click.echo(
-            f"  {worker_id}: child_pid={pid}  mode={seed_mode}  "
-            f"log={stdout_path}  err={stderr_path}"
-        )
-    click.echo("  monitor: python scripts/lcu_collector.py status")
-    click.echo("  stop:    Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' -and $_.CommandLine -like '*lcu_collector.py*snowball*' } | ForEach-Object { Stop-Process -Id $_.ProcessId }")
+    except (RuntimeError, ValueError) as exc:
+        click.echo(f"[error] {exc}", err=True)
+        raise click.ClickException(str(exc)) from exc
 
 
 # ------------------------------------------------------------------ export ---
@@ -2585,6 +2817,8 @@ def _launch_snowball_workers_subprocess(
         str(db),
         "--workers",
         str(max(1, workers)),
+        "--control-file",
+        str(db.parent / f".{db.name}.snowball.stop"),
         "--seed-riot-id-file",
         str(seed_file),
         "--target-games",
@@ -2596,14 +2830,19 @@ def _launch_snowball_workers_subprocess(
         "--manual-seed-pending-cap",
         str(max(0, manual_seed_pending_cap)),
     ]
-    result = subprocess.run(
+    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+    subprocess.Popen(
         cmd,
         cwd=str(Path.cwd()),
-        text=True,
-        check=False,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        creationflags=creationflags,
+        startupinfo=startupinfo,
     )
-    return int(result.returncode)
+    return 0
 
 
 @cli.command("opgg-autorefresh")

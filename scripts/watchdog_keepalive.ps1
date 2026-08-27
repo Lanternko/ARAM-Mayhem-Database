@@ -28,8 +28,13 @@ if ($watchdog) {
 
 $argsList = @(
     "scripts/mayhem_lcu_watchdog.py",
-    "--workers", "2",
-    "--degraded-workers", "1",
+    # 4 producers, raised from 2. Two was a write-lock ceiling, not an LCU one:
+    # both workers opened games.db directly and contended on the write lock
+    # (414 "database is locked" hits across the old worker logs). Under the
+    # single-writer fleet the producers never open the DB, so the ceiling is
+    # now the LCU client instead.
+    "--workers", "4",
+    "--degraded-workers", "2",
     "--degrade-client-mb", "5200",
     "--client-restart-mb", "5800",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
@@ -45,6 +50,9 @@ $argsList = @(
     "--check-interval-sec", "60",
     "--client-ready-timeout-sec", "600",
     "--games-per-player", "0",
+    "--classic-claim-percent", "10",
+    "--classic-revisit-min-hours", "10",
+    "--classic-revisit-max-hours", "168",
     "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),
     "--static-publish-growth-ratio", "0.10",
     "--static-publish-max-age-hours", "12",

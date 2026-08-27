@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from queue import Empty, SimpleQueue
+from collections.abc import Mapping
+from typing import Any, Protocol
 
 from .client import (
     LCUClient,
@@ -34,6 +36,7 @@ from .client import (
 )
 from .events import LCUApiEvent, LCUEventListener
 from .process import get_credentials
+from .db_state import ensure_runtime_state_schema, update_capture_watermark
 
 DEFAULT_QUEUES = {450, 2400}
 
@@ -160,6 +163,136 @@ _SPARSE_ZERO_STAT_KEYS = frozenset({
     "vision_wards_bought", "sight_wards_bought",
     "neutral_minions_enemy_jungle", "neutral_minions_team_jungle",
 })
+
+
+class WriterClientLike(Protocol):
+    """Small producer-side surface required by RPC collection mode.
+
+    ``WriterClient`` implements this protocol, while tests and embedding
+    callers can inject a deterministic fake without importing the transport.
+    The poller deliberately knows nothing about SQLite in this mode.
+    """
+
+    def submit(self, message: Mapping[str, Any]) -> dict[str, Any]:
+        ...
+
+
+class _RPCWriterError(RuntimeError):
+    """A writer boundary failure; callers must not fall back to direct writes."""
+
+
+@dataclass(frozen=True)
+class _GameClaim:
+    game_id: str
+    token: str
+    generation: int
+
+
+@dataclass(frozen=True)
+class _GameClaimResult:
+    """Result of one atomic writer claim attempt.
+
+    ``claim`` is populated only for ``CLAIMED``.  ``DONE`` is distinct from
+    ``BUSY`` so the producer can suppress detail fetches for already durable
+    games while still retrying a live claim held by another producer later.
+    """
+
+    status: str
+    claim: _GameClaim | None = None
+
+
+class _RPCGameWriter:
+    """Game claim/commit/release adapter for the single SQLite writer.
+
+    This class is intentionally a pure RPC producer.  It never opens a
+    database, keeps a database connection, or implements a local save fallback.
+    Every accepted claim carries the writer-issued token and generation through
+    the corresponding commit/release request.
+    """
+
+    def __init__(self, client: WriterClientLike, *, lease_ms: int = 60_000) -> None:
+        if not isinstance(lease_ms, int) or isinstance(lease_ms, bool) or lease_ms <= 0:
+            raise ValueError("lease_ms must be a positive integer")
+        self._client = client
+        self._lease_ms = lease_ms
+        self._request_counter = 0
+
+    def _request_id(self, operation: str, game_id: str) -> str:
+        self._request_counter += 1
+        return f"lcu-poller-{operation}-{self._request_counter}-{game_id}"
+
+    def _submit(self, message: Mapping[str, Any]) -> dict[str, Any]:
+        try:
+            response = self._client.submit(dict(message))
+        except Exception as exc:  # transport implementations expose varied errors
+            raise _RPCWriterError(f"writer {message.get('command')} failed") from exc
+        if not isinstance(response, dict):
+            raise _RPCWriterError("writer returned an invalid response")
+        if response.get("ok") is not True:
+            status = str(response.get("status") or "WRITER_REJECTED")
+            raise _RPCWriterError(f"writer rejected {message.get('command')}: {status}")
+        return response
+
+    def claim(self, game_id: str) -> _GameClaimResult:
+        game_id = str(game_id)
+        response = self._submit(
+            {
+                "version": 1,
+                "command": "game_claim",
+                "request_id": self._request_id("claim", game_id),
+                "game_id": game_id,
+                "lease_ms": self._lease_ms,
+            }
+        )
+        status = str(response.get("status") or "")
+        if status in {"DONE", "BUSY"}:
+            return _GameClaimResult(status=status)
+        if status != "CLAIMED":
+            raise _RPCWriterError(f"writer returned unexpected game_claim status: {status or 'empty'}")
+        token = response.get("token")
+        generation = response.get("generation")
+        if not isinstance(token, str) or not token:
+            raise _RPCWriterError("writer CLAIMED response omitted token")
+        if not isinstance(generation, int) or isinstance(generation, bool) or generation < 1:
+            raise _RPCWriterError("writer CLAIMED response omitted generation")
+        return _GameClaimResult(
+            status=status,
+            claim=_GameClaim(game_id=game_id, token=token, generation=generation),
+        )
+
+    def commit(self, claim: _GameClaim, record: Mapping[str, Any]) -> dict[str, Any]:
+        response = self._submit(
+            {
+                "version": 1,
+                "command": "commit_game",
+                "request_id": self._request_id("commit", claim.game_id),
+                "game_id": claim.game_id,
+                "token": claim.token,
+                "generation": claim.generation,
+                "record": dict(record),
+            }
+        )
+        status = str(response.get("status") or "")
+        if status not in {"COMMITTED", "DUPLICATE"}:
+            raise _RPCWriterError(f"writer returned unexpected commit_game status: {status or 'empty'}")
+        return response
+
+    def release(self, claim: _GameClaim) -> dict[str, Any]:
+        response = self._submit(
+            {
+                "version": 1,
+                "command": "release_game",
+                "request_id": self._request_id("release", claim.game_id),
+                "game_id": claim.game_id,
+                "token": claim.token,
+                "generation": claim.generation,
+            }
+        )
+        if str(response.get("status") or "") != "RELEASED":
+            raise _RPCWriterError(
+                f"writer returned unexpected release_game status: {response.get('status') or 'empty'}"
+            )
+        return response
 
 
 @dataclass
@@ -425,6 +558,7 @@ def _build_private_participant_payload(game: dict) -> list[dict]:
 
 def _ensure_games_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_SQL)
+    ensure_runtime_state_schema(con)
     columns = {str(row[1]) for row in con.execute("PRAGMA table_info(games)").fetchall()}
     if "participants_json" not in columns:
         con.execute("ALTER TABLE games ADD COLUMN participants_json TEXT")
@@ -625,7 +759,7 @@ def _get_patch(lcu: LCUClient, puuid: str, game_id: str) -> str:
 def _save(con: sqlite3.Connection, record: dict, seen_ids: set[str]) -> bool:
     """INSERT record into DB. Returns True on success. Only updates seen_ids on success."""
     try:
-        con.execute(
+        cursor = con.execute(
             """
             INSERT OR IGNORE INTO games (
                 game_id, queue_id, patch, blue_champs, red_champs,
@@ -642,6 +776,12 @@ def _save(con: sqlite3.Connection, record: dict, seen_ids: set[str]) -> bool:
                 json.dumps(record.get("participants_private", []), ensure_ascii=False, separators=(",", ":")),
             ),
         )
+        if cursor.rowcount > 0:
+            update_capture_watermark(
+                con,
+                queue_id=int(record["queue_id"]),
+                captured_at=str(record["captured_at"]),
+            )
         con.commit()
         seen_ids.add(record["game_id"])
         return True
@@ -653,21 +793,38 @@ def _save(con: sqlite3.Connection, record: dict, seen_ids: set[str]) -> bool:
 # ---------- Main loop ----------
 
 def run_collector(
-    db_path: Path,
+    db_path: Path | None = None,
     poll_interval: int = 30,
     target_queues: set[int] | None = None,
+    *,
+    writer_client: WriterClientLike | None = None,
 ) -> None:
+    """Run the LCU collector in direct-maintenance or single-writer RPC mode.
+
+    With ``writer_client`` supplied, ``db_path`` is ignored and the poller is a
+    pure producer: it claims each candidate through ``game_claim``, fetches and
+    parses detail, then commits via ``commit_game``.  No SQLite connection,
+    schema setup, local save, or startup ``game_id`` scan is performed.  The
+    legacy direct mode remains available when no client is injected.
+    """
     if target_queues is None:
         target_queues = DEFAULT_QUEUES
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(str(db_path))
-    _ensure_games_schema(con)
-
-    seen_ids: set[str] = {
-        row[0] for row in con.execute("SELECT game_id FROM games").fetchall()
-    }
-    print(f"[lcu] db={db_path}  already_saved={len(seen_ids)}  queues={sorted(target_queues)}")
+    rpc_writer = _RPCGameWriter(writer_client) if writer_client is not None else None
+    con: sqlite3.Connection | None = None
+    # Direct mode preloads the legacy local cache.  RPC mode intentionally
+    # starts empty and learns only from writer claim responses during runtime.
+    seen_ids: set[str] = set()
+    if rpc_writer is None:
+        if db_path is None:
+            raise ValueError("db_path is required when writer_client is not supplied")
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = sqlite3.connect(str(db_path))
+        _ensure_games_schema(con)
+        seen_ids = {row[0] for row in con.execute("SELECT game_id FROM games").fetchall()}
+        print(f"[lcu] db={db_path}  already_saved={len(seen_ids)}  queues={sorted(target_queues)}")
+    else:
+        print(f"[lcu] writer=rpc  queues={sorted(target_queues)}")
     print("[lcu] waiting for League client …  (Ctrl-C to stop)")
     print("[lcu] TIP: keep this running — it captures at the post-game screen")
 
@@ -711,6 +868,48 @@ def run_collector(
         wake_event.wait(max(0.0, seconds))
         wake_event.clear()
 
+    def _claim_game(game_id: str) -> _GameClaimResult:
+        """Claim one candidate before any RPC-mode detail fetch."""
+        if rpc_writer is None:
+            return _GameClaimResult(status="DIRECT")
+        if game_id in seen_ids:
+            return _GameClaimResult(status="SEEN")
+        result = rpc_writer.claim(game_id)
+        if result.status == "DONE":
+            # This is a runtime cache only; unlike direct mode it is never
+            # preloaded from SQLite and therefore cannot become a second source
+            # of truth.
+            seen_ids.add(game_id)
+        return result
+
+    def _release_claim(claim: _GameClaim, *, mark_seen: bool = False) -> None:
+        if rpc_writer is None:
+            return
+        rpc_writer.release(claim)
+        if mark_seen:
+            seen_ids.add(claim.game_id)
+
+    def _commit_game(claim: _GameClaim | None, record: dict) -> dict[str, Any] | bool:
+        if rpc_writer is None:
+            if con is None:
+                raise RuntimeError("direct collector connection is unavailable")
+            return _save(con, record, seen_ids)
+        if claim is None:
+            raise RuntimeError("RPC commit requires a game claim")
+        try:
+            response = rpc_writer.commit(claim, record)
+        except _RPCWriterError:
+            # The writer may have accepted the commit before transport failure;
+            # a best-effort release is safe but never replaces fail-closed
+            # behavior when the writer is unavailable.
+            try:
+                rpc_writer.release(claim)
+            except _RPCWriterError:
+                pass
+            raise
+        seen_ids.add(claim.game_id)
+        return response
+
     try:
         while True:
             creds = get_credentials()
@@ -732,8 +931,7 @@ def run_collector(
                         if summoner:
                             puuid = summoner.get("puuid")
                             summoner_fail_streak = 0
-                            name = summoner.get("gameName") or summoner.get("displayName", "?")
-                            print(f"[lcu] connected as {name}  puuid {(puuid or '')[:12]}…")
+                            print("[lcu] connected; summoner identity redacted")
                         else:
                             summoner_fail_streak += 1
                             if summoner_fail_streak >= 3:
@@ -758,21 +956,37 @@ def run_collector(
                     if eog:
                         game_id = str(eog.get("gameId", ""))
                         if game_id and game_id not in seen_ids:
-                            patch = _get_patch(lcu, puuid, game_id)
-                            record = _parse_eog_block(eog, target_queues, patch)
-                            if record:
-                                if _save(con, record, seen_ids):
-                                    total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
-                                    q_tag = "Mayhem" if record["queue_id"] == 2400 else "ARAM"
-                                    print(
-                                        f"[lcu] SAVED {q_tag}  game_id={game_id}  "
-                                        f"patch={patch}  blue_wins={bool(record['blue_wins'])}  "
-                                        f"total={total}"
-                                    )
-                                    pending_game_id = None  # EoG succeeded
+                            claim_result = _claim_game(game_id)
+                            claim = claim_result.claim
+                            if claim_result.status in {"DONE", "SEEN", "BUSY"}:
+                                if claim_result.status == "DONE":
+                                    pending_game_id = None
                             else:
-                                # Wrong queue or too short — mark seen to avoid re-checking
-                                seen_ids.add(game_id)
+                                try:
+                                    patch = _get_patch(lcu, puuid, game_id)
+                                    record = _parse_eog_block(eog, target_queues, patch)
+                                    if record:
+                                        if _commit_game(claim, record):
+                                            total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0] if con is not None else "writer"
+                                            q_tag = "Mayhem" if record["queue_id"] == 2400 else "ARAM"
+                                            print(
+                                                f"[lcu] SAVED {q_tag}  game_id={game_id}  "
+                                                f"patch={patch}  blue_wins={bool(record['blue_wins'])}  "
+                                                f"total={total}"
+                                            )
+                                            pending_game_id = None
+                                    else:
+                                        if claim is not None:
+                                            _release_claim(claim, mark_seen=True)
+                                        else:
+                                            seen_ids.add(game_id)
+                                except Exception:
+                                    if claim is not None:
+                                        try:
+                                            _release_claim(claim)
+                                        except _RPCWriterError:
+                                            pass
+                                    raise
                         _sleep(5)
                         continue
 
@@ -794,19 +1008,43 @@ def run_collector(
 
                     # ── Fallback: fetch full detail after game ends ───────────
                     if pending_game_id and pending_game_id not in seen_ids:
-                        detail = get_game_detail(lcu, pending_game_id)
-                        if detail:
-                            record = _parse_game_detail(detail, target_queues)
-                            if record:
-                                if _save(con, record, seen_ids):
-                                    total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0]
-                                    q_tag = "Mayhem" if record["queue_id"] == 2400 else "ARAM"
-                                    print(f"[lcu] SAVED (fallback)  {q_tag}  "
-                                          f"game_id={pending_game_id}  total={total}")
-                            else:
-                                seen_ids.add(pending_game_id)
+                        game_id = pending_game_id
+                        claim_result = _claim_game(game_id)
+                        claim = claim_result.claim
+                        if claim_result.status in {"DONE", "SEEN"}:
                             pending_game_id = None
+                        elif claim_result.status != "BUSY":
+                            try:
+                                detail = get_game_detail(lcu, game_id)
+                                if detail:
+                                    record = _parse_game_detail(detail, target_queues)
+                                    if record:
+                                        if _commit_game(claim, record):
+                                            total = con.execute("SELECT COUNT(*) FROM games").fetchone()[0] if con is not None else "writer"
+                                            q_tag = "Mayhem" if record["queue_id"] == 2400 else "ARAM"
+                                            print(f"[lcu] SAVED (fallback)  {q_tag}  "
+                                                  f"game_id={game_id}  total={total}")
+                                    else:
+                                        if claim is not None:
+                                            _release_claim(claim, mark_seen=True)
+                                        else:
+                                            seen_ids.add(game_id)
+                                    pending_game_id = None
+                                elif claim is not None:
+                                    _release_claim(claim)
+                            except Exception:
+                                if claim is not None:
+                                    try:
+                                        _release_claim(claim)
+                                    except _RPCWriterError:
+                                        pass
+                                raise
 
+            except _RPCWriterError:
+                # A producer cannot establish whether an acknowledgement was
+                # committed after the writer/pipe fails.  Stop immediately;
+                # never retry through SQLite or spin on a dead channel.
+                raise
             except Exception as exc:
                 print(f"[lcu] error: {exc}")
                 puuid = None
@@ -819,4 +1057,5 @@ def run_collector(
         print("\n[lcu] stopped by user")
     finally:
         _stop_event_listener()
-        con.close()
+        if con is not None:
+            con.close()

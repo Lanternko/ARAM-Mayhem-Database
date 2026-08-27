@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import os
 import re
+import signal
 import ssl
 import subprocess
 import sys
@@ -82,7 +83,7 @@ def is_snowball_worker(proc: psutil.Process) -> bool:
         return False
     normalized = [str(part).replace("/", "\\") for part in cmdline]
     joined = " ".join(normalized)
-    return r"scripts\lcu_collector.py" in joined and "snowball" in normalized
+    return r"scripts\lcu_collector.py" in joined and "snowball-workers" in normalized
 
 
 def is_static_site_publisher(proc: psutil.Process) -> bool:
@@ -206,12 +207,25 @@ def worker_number_from_cmdline(cmdline: Sequence[Any]) -> int | None:
     return None
 
 
-def stop_snowball_workers(grace_sec: int = 5) -> list[int]:
+def fleet_control_file_from_cmdline(cmdline: Sequence[Any]) -> Path | None:
+    parts = [str(part) for part in cmdline]
+    try:
+        value = parts[parts.index("--control-file") + 1]
+    except (ValueError, IndexError):
+        return None
+    return Path(value) if value else None
+
+
+def stop_snowball_workers(grace_sec: int = 45) -> list[int]:
     stopped: list[int] = []
     procs = [proc for proc in iter_processes() if is_snowball_worker(proc)]
     for proc in procs:
         try:
-            proc.terminate()
+            control_file = fleet_control_file_from_cmdline(proc.info.get("cmdline") or [])
+            if control_file is None:
+                raise RuntimeError(f"fleet pid={proc.pid} has no control file")
+            control_file.parent.mkdir(parents=True, exist_ok=True)
+            control_file.write_text("stop\n", encoding="utf-8")
             stopped.append(proc.pid)
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
@@ -328,8 +342,8 @@ def lcu_health() -> dict[str, Any]:
         "current_summoner_status": summoner_status,
         "gameflow_status": phase_status,
         "phase": phase,
-        "summoner_body_prefix": summoner_body[:120],
-        "phase_body_prefix": phase_body[:120],
+        "summoner_body_bytes": len(summoner_body.encode("utf-8", "replace")),
+        "phase_body_bytes": len(phase_body.encode("utf-8", "replace")),
     }
 
 
@@ -429,13 +443,17 @@ def start_league_client() -> dict[str, Any]:
     if status == 200:
         return {"started": True, "method": "riot_remoting", "response": "<redacted>"}
 
-    # A Riot Client process without remoting args is a zombie: fresh launches
-    # just forward their app-command to it and exit, so remoting never comes up
-    # and every restart attempt fails. Clear zombies before launching. Match both
-    # "RiotClientServices.exe" and the space-form "Riot Client.exe" (the UX host);
-    # stray copies of the latter wedge a fresh boot pre-LCU.
+    # A Riot Client process with stale remoting args is also a zombie: the
+    # advertised port can refuse connections while fresh launches keep forwarding
+    # their app-command to that dead instance. A transport failure proves the
+    # existing remoting endpoint is unusable. HTTP 424 means remoting is
+    # reachable but the product launcher cannot launch League; forwarding
+    # --launch-product to that same instance does not recover. Recycle every
+    # Riot Client process before cold-starting in both cases. Match both
+    # "RiotClientServices.exe" and the space-form "Riot Client.exe" (the UX
+    # host); stray copies wedge a fresh boot pre-LCU.
     killed_zombie_pids: list[int] = []
-    if riot_remoting() is None:
+    if status in ("ERR", 424):
         zombies = []
         for proc in iter_processes():
             try:
@@ -471,27 +489,61 @@ def start_league_client() -> dict[str, Any]:
         "--launch-patchline=live",
     ]
     subprocess.Popen(args, cwd=str(riot.parent), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # After a recycle, the cold-start CLI intent can arrive before Riot's
+    # product launcher is ready and be dropped even though the UX later becomes
+    # healthy. Once remoting appears, repeat the authoritative POST; 424 and
+    # transport errors are transient only during that fresh startup, so retry
+    # them briefly. Do not treat a pre-recycle 424 as transient.
+    remoting_launch_status: int | str = "ERR"
+    remoting_launch_body = "Riot remoting did not become ready after cold start"
+    remoting_launch_attempts = 0
+    if wait_for_riot_remoting(timeout_sec=60):
+        for remoting_launch_attempts in range(1, 6):
+            remoting_launch_status, remoting_launch_body = remoting_request(
+                "/product-launcher/v1/products/league_of_legends/patchlines/live",
+                method="POST",
+                data=b"{}",
+            )
+            if remoting_launch_status == 200:
+                break
+            if remoting_launch_status not in ("ERR", 424):
+                break
+            time.sleep(2)
     return {
-        "started": True,
-        "method": "direct_launch_product",
+        "started": remoting_launch_status == 200,
+        "method": "direct_launch_product_then_riot_remoting",
+        "initial_launch_requested": True,
         "exe": str(riot),
         "killed_zombie_pids": killed_zombie_pids,
+        "remoting_status_before_launch": status,
+        "remoting_error_before_launch": body,
+        "remoting_launch_status": remoting_launch_status,
+        "remoting_launch_attempts": remoting_launch_attempts,
+        "remoting_launch_error": (
+            None if remoting_launch_status == 200 else remoting_launch_body
+        ),
     }
 
 
-def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[str, Any]:
+def start_snowball_fleet(args: argparse.Namespace, worker_count: int) -> dict[str, Any]:
     args.log_dir.mkdir(parents=True, exist_ok=True)
     stamp = utc_now().strftime("%Y%m%d_%H%M%S")
-    worker_id = f"W{worker_number:02d}"
-    out_path = args.log_dir / f"snowball_{worker_id}_{stamp}.out.log"
-    err_path = args.log_dir / f"snowball_{worker_id}_{stamp}.err.log"
+    out_path = args.log_dir / f"snowball_fleet_{stamp}.out.log"
+    err_path = args.log_dir / f"snowball_fleet_{stamp}.err.log"
     cmd = [
-        background_python_executable(),
+        sys.executable,
         "-u",
         str(ROOT / "scripts" / "lcu_collector.py"),
-        "snowball",
+        "snowball-workers",
         "--db",
         str(args.db),
+        "--workers",
+        str(max(1, int(worker_count))),
+        "--control-file",
+        str(args.db.parent / f".{args.db.name}.snowball.stop"),
+        "--log-dir",
+        str(args.log_dir),
         "--target-games",
         str(args.target_games),
         "--max-players",
@@ -500,8 +552,6 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
         str(args.history_window),
         "--games-per-player",
         str(args.games_per_player),
-        "--worker-id",
-        worker_id,
         "--claim-timeout-sec",
         str(args.claim_timeout_sec),
         "--player-requeue-cooldown-sec",
@@ -510,6 +560,12 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
         str(args.manual_seed_pending_cap),
         "--max-depth",
         str(args.max_depth),
+        "--classic-claim-percent",
+        str(args.classic_claim_percent),
+        "--classic-revisit-min-hours",
+        str(args.classic_revisit_min_hours),
+        "--classic-revisit-max-hours",
+        str(args.classic_revisit_max_hours),
         "--queue",
         "450",
         "--queue",
@@ -533,12 +589,24 @@ def start_snowball_worker(args: argparse.Namespace, worker_number: int) -> dict[
         "--no-seed-apex",
         "--no-seed-riot-tier",
     ]
-    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
     with out_path.open("ab") as out, err_path.open("ab") as err:
-        proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err, creationflags=creationflags)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(ROOT),
+            stdout=out,
+            stderr=err,
+            creationflags=creationflags,
+            startupinfo=startupinfo,
+        )
     return {
         "pid": proc.pid,
-        "worker_id": worker_id,
+        "workers": max(1, int(worker_count)),
         "cmd": cmd,
         "stdout": str(out_path),
         "stderr": str(err_path),
@@ -633,23 +701,49 @@ def ensure_model_refresher(args: argparse.Namespace) -> dict[str, Any] | None:
 
 
 def latest_capture_age_min(db: Path) -> float | None:
-    try:
-        import sqlite3
-
-        con = sqlite3.connect(db)
-        row = con.execute("select max(captured_at) from games where queue_id=2400").fetchone()
-        con.close()
-    except Exception:
-        return None
-    if not row or not row[0]:
+    captured_at = latest_capture_at(db)
+    if not captured_at:
         return None
     try:
-        ts = dt.datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+        ts = dt.datetime.fromisoformat(str(captured_at).replace("Z", "+00:00"))
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=dt.timezone.utc)
         return round((utc_now() - ts).total_seconds() / 60, 2)
     except ValueError:
         return None
+
+
+def latest_capture_at(db: Path, queue_id: int = 2400) -> str | None:
+    """Return the latest successful capture without scanning the wide games table."""
+    if not db.exists():
+        return None
+    try:
+        import sqlite3
+
+        con = sqlite3.connect(db.resolve().as_uri() + "?mode=ro", uri=True, timeout=5.0)
+        try:
+            row = con.execute(
+                "SELECT updated_at FROM crawl_runtime_state WHERE state_key = ?",
+                (f"latest_capture:{int(queue_id)}",),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        if not row:
+            # games is append-only and captured_at is assigned at insert time. Force
+            # a reverse rowid walk so SQLite stops at the first matching recent row;
+            # otherwise its low-cardinality queue index scans nearly every Mayhem
+            # entry and touches the table's ~25 KB participant payloads.
+            row = con.execute(
+                "SELECT captured_at FROM games NOT INDEXED "
+                "WHERE queue_id = ? ORDER BY rowid DESC LIMIT 1",
+                (int(queue_id),),
+            ).fetchone()
+        con.close()
+    except Exception:
+        return None
+    if not row or not row[0]:
+        return None
+    return str(row[0])
 
 
 def min_worker_uptime_min(workers: list[dict[str, Any]]) -> float:
@@ -732,6 +826,7 @@ def wait_for_lcu_ready(args: argparse.Namespace) -> dict[str, Any]:
 
 def check_once(args: argparse.Namespace) -> dict[str, Any]:
     workers = snowball_workers()
+    target_workers = max(1, int(args.workers))
     main_mb = league_main_mb()
     health = lcu_health()
     latest_age = latest_capture_age_min(args.db)
@@ -766,12 +861,14 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
     elif (
-        len(workers) > args.degraded_workers
+        workers
+        and target_workers > args.degraded_workers
         and main_mb >= args.degrade_client_mb
         and main_mb < args.client_restart_mb
         and health["ok"]
     ):
-        stopped = stop_extra_snowball_workers(args.degraded_workers)
+        target_workers = max(1, int(args.degraded_workers))
+        stopped = stop_snowball_workers(grace_sec=10)
         workers = snowball_workers()
         actions.append(
             {
@@ -863,25 +960,13 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         actions.append({"action": "wait_for_lcu_ready", **ready})
 
     workers = snowball_workers()
-    worker_numbers = {
-        number
-        for worker in workers
-        if (number := worker_number_from_cmdline(worker.get("cmdline") or [])) is not None
-    }
-    missing_worker_numbers = [
-        idx for idx in range(1, args.workers + 1) if idx not in worker_numbers
-    ]
     if (
-        len(workers) < args.workers
-        and missing_worker_numbers
+        not workers
         and health["ok"]
         and 0 < main_mb <= args.worker_start_max_client_mb
     ):
-        for offset, idx in enumerate(missing_worker_numbers[: args.workers - len(workers)]):
-            started_worker = start_snowball_worker(args, idx)
-            actions.append({"action": "start_worker", **started_worker})
-            if offset + 1 < min(len(missing_worker_numbers), args.workers - len(workers)):
-                time.sleep(5)
+        started_fleet = start_snowball_fleet(args, target_workers)
+        actions.append({"action": "start_fleet", **started_fleet})
         workers = snowball_workers()
     elif not workers and health["ok"] and main_mb > args.worker_start_max_client_mb:
         actions.append(
@@ -891,13 +976,13 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                 **action_context(args, health, main_mb),
             }
         )
-    elif len(workers) > args.workers:
-        stopped = stop_extra_snowball_workers(args.workers)
+    elif len(workers) > 1:
+        stopped = stop_snowball_workers(grace_sec=10)
         actions.append(
             {
-                "action": "stop_workers_too_many",
+                "action": "stop_duplicate_fleets",
                 "pids": stopped,
-                "reason": f"active workers {len(workers)} > target {args.workers}",
+                "reason": f"active fleet supervisors {len(workers)} > 1",
             }
         )
 
@@ -953,6 +1038,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--player-requeue-cooldown-sec", type=int, default=45)
     parser.add_argument("--manual-seed-pending-cap", type=int, default=40)
     parser.add_argument("--max-depth", type=int, default=3)
+    parser.add_argument("--classic-claim-percent", type=int, default=10)
+    parser.add_argument("--classic-revisit-min-hours", type=float, default=10.0)
+    parser.add_argument("--classic-revisit-max-hours", type=float, default=168.0)
     parser.add_argument("--site-publisher", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--static-publish-threshold", type=int, default=0)
     parser.add_argument("--static-publish-growth-ratio", type=float, default=0.10)
