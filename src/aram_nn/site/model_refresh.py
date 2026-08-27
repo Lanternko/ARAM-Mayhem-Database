@@ -33,6 +33,7 @@ from .static_publish import (
     _last_total_for_scope,
     _record_patch_state,
     _run_checked,
+    _state_int,
     load_state,
     save_state,
 )
@@ -40,6 +41,7 @@ from .static_publish import (
 DEFAULT_STATE_PATH = Path("data/site/model_refresh_state.json")
 DEFAULT_OUT_DIR = Path("models/composition_lr_pooled_recency_7d")
 DEFAULT_PARQUET = Path("data/raw/mayhem_pooled_auto.parquet")
+DEFAULT_SCORE_CSV = Path("data/cache/champion_semantic_scores.csv")
 DEFAULT_HALF_LIFE_DAYS = 7.0
 DEFAULT_POOL_PATCHES = 3
 # A full retrain is much heavier than a tier-list rebuild, so the recommender
@@ -51,6 +53,29 @@ DEFAULT_GROWTH_RATIO = 0.25
 DEFAULT_MIN_CURRENT_GAMES = 15000
 
 _TOTAL_KEY = "last_refreshed_total"
+
+# Inputs the pipeline reads but never regenerates.  `data/` is gitignored, so a
+# deleted cache file is unrecoverable from git and every tick dies instantly
+# inside click's `exists=True` -- which is exactly how this refresher
+# crash-looped 436 times unnoticed (2026-08-12..26).  Preflight turns that into
+# one actionable line instead of a stack trace.
+_REGEN_HINTS: dict[str, str] = {
+    "db": "collector DB missing; run: python scripts/lcu_collector.py collect --queue 2400",
+    "score_csv": (
+        "semantic score cache missing; rebuild: "
+        "python scripts/fetch_champion_abilities.py && "
+        "python scripts/build_semantic_ability_scores.py"
+    ),
+}
+
+
+def missing_pipeline_inputs(*, db: Path, score_csv: Path) -> list[str]:
+    """Return actionable messages for every required input that is absent."""
+    missing: list[str] = []
+    for key, path in (("db", Path(db)), ("score_csv", Path(score_csv))):
+        if not path.exists():
+            missing.append(f"{path}: {_REGEN_HINTS[key]}")
+    return missing
 
 
 @dataclass(frozen=True)
@@ -171,16 +196,20 @@ def pipeline_commands(
     prev: str,
     current: str,
     half_life_days: float,
+    score_csv: Path = DEFAULT_SCORE_CSV,
 ) -> list[list[str]]:
     py = sys.executable
     patches_csv = ",".join(pool)
     hl = str(half_life_days)
+    # --score-csv / --scores-csv are passed explicitly (not left to the scripts'
+    # own defaults) so preflight checks the same path the pipeline will open.
     return [
         [py, "scripts/export_pooled_parquet.py",
          "--db", str(db), "--out", str(parquet), "--patches", patches_csv],
         [py, "scripts/train_composition_lr_pooled.py",
          "--data", str(parquet), "--current-patch", current, "--prev-patch", prev,
-         "--baseline-patch", baseline, "--half-life-days", hl, "--out", str(out_dir)],
+         "--baseline-patch", baseline, "--half-life-days", hl, "--out", str(out_dir),
+         "--score-csv", str(score_csv)],
         [py, "scripts/build_pooled_champ_lr.py",
          "--data", str(parquet), "--current-patch", current,
          "--half-life-days", hl, "--out-dir", str(out_dir)],
@@ -188,8 +217,50 @@ def pipeline_commands(
          "--data", str(parquet), "--model-dir", str(out_dir), "--half-life-days", hl],
         [py, "scripts/build_role_synergy.py",
          "--data", str(parquet), "--patches", patches_csv,
-         "--out", str(out_dir / "role_synergy.json")],
+         "--out", str(out_dir / "role_synergy.json"),
+         "--scores-csv", str(score_csv)],
     ]
+
+
+def _consecutive_failures(state: dict[str, Any], *, patch_prefix: str | None) -> int:
+    patches = state.get("patches")
+    if patch_prefix and isinstance(patches, dict):
+        patch_state = patches.get(patch_prefix)
+        if isinstance(patch_state, dict) and "consecutive_failures" in patch_state:
+            return _state_int(patch_state.get("consecutive_failures"))
+    return _state_int(state.get("consecutive_failures"))
+
+
+def _record_attempt_failure(
+    state_path: Path,
+    state: dict[str, Any],
+    *,
+    patch_prefix: str | None,
+    error: str,
+    result: str,
+) -> int:
+    """Persist a failed attempt so the failure is inspectable in the state file.
+
+    Returns the new consecutive-failure count.  Writing state here never touches
+    ``last_refreshed_total``, so the growth gate is unaffected: a failed attempt
+    must not count as a refresh.
+    """
+    streak = _consecutive_failures(state, patch_prefix=patch_prefix) + 1
+    _record_patch_state(
+        state,
+        patch_prefix=patch_prefix,
+        payload={
+            "last_result": result,
+            "last_error": error,
+            "last_error_at_unix": time.time(),
+            "consecutive_failures": streak,
+        },
+    )
+    try:
+        save_state(state_path, state)
+    except Exception:  # never let bookkeeping mask the real failure
+        pass
+    return streak
 
 
 def refresh_models_once(
@@ -198,6 +269,7 @@ def refresh_models_once(
     state_path: Path = DEFAULT_STATE_PATH,
     out_dir: Path = DEFAULT_OUT_DIR,
     parquet: Path = DEFAULT_PARQUET,
+    score_csv: Path = DEFAULT_SCORE_CSV,
     threshold: int = 0,
     growth_ratio: float = DEFAULT_GROWTH_RATIO,
     force: bool = False,
@@ -211,16 +283,76 @@ def refresh_models_once(
     dry_run: bool = False,
     runner: CommandRunner = _default_runner,
 ) -> dict[str, Any]:
+    """Run one gated refresh, recording any failed attempt into the state file.
+
+    Every failure -- an unresolvable patch pool, a missing input, a pipeline
+    command exiting non-zero -- lands in *state_path* before propagating, so a
+    crash-looping refresher is inspectable instead of invisible.
+    """
+    state_path = Path(state_path)
+    # Filled in as soon as they are known, so the failure recorder below can
+    # attribute a crash to the right patch even if it happened early.
+    progress: dict[str, Any] = {"patch": None, "state": None}
+    try:
+        return _refresh_models_once(
+            db=db, state_path=state_path, out_dir=out_dir, parquet=parquet,
+            score_csv=score_csv, threshold=threshold, growth_ratio=growth_ratio,
+            force=force, queue_id=queue_id, patches=patches,
+            current_patch=current_patch, pool_patches=pool_patches,
+            half_life_days=half_life_days, min_current_games=min_current_games,
+            check_only=check_only, dry_run=dry_run, runner=runner,
+            progress=progress,
+        )
+    except Exception as exc:
+        # State used to be written only on success, so a permanently failing
+        # pipeline left last_refreshed_total frozen with no failure marker.
+        state = progress["state"]
+        if not isinstance(state, dict):
+            state = load_state(state_path)
+        _record_attempt_failure(
+            state_path,
+            state,
+            patch_prefix=progress["patch"],
+            error=f"{type(exc).__name__}: {exc}",
+            result="failed",
+        )
+        raise
+
+
+def _refresh_models_once(
+    *,
+    db: Path,
+    state_path: Path,
+    out_dir: Path,
+    parquet: Path,
+    score_csv: Path,
+    threshold: int,
+    growth_ratio: float,
+    force: bool,
+    queue_id: int,
+    patches: str,
+    current_patch: str,
+    pool_patches: int,
+    half_life_days: float,
+    min_current_games: int,
+    check_only: bool,
+    dry_run: bool,
+    runner: CommandRunner,
+    progress: dict[str, Any],
+) -> dict[str, Any]:
     pool, baseline, prev, current = resolve_pool(
         db, queue_id=queue_id, patches=patches,
         current_patch=current_patch, pool_patches=pool_patches,
     )
+    progress["patch"] = current
     state = load_state(state_path)
+    progress["state"] = state
     decision = decide_model_refresh(
         db=db, state=state, threshold=threshold, growth_ratio=growth_ratio,
         force=force, queue_id=queue_id, current_patch=current,
         min_current_games=min_current_games,
     )
+    missing = missing_pipeline_inputs(db=db, score_csv=score_csv)
     base_info = {
         "refreshed": False,
         "would_refresh": decision.should_refresh,
@@ -231,9 +363,29 @@ def refresh_models_once(
         "growth_ratio": decision.growth_ratio,
         "current_patch": current,
         "pool": pool,
+        "missing_inputs": missing,
     }
     if not decision.should_refresh:
+        # The growth gate is untouched by preflight: a closed gate still reports
+        # its own reason, with any missing input carried alongside as a warning.
         return base_info
+    # Preflight runs only once the gate has already voted to refresh, so it can
+    # never widen or narrow the gating decision itself.
+    if missing and not (check_only or dry_run):
+        reason = "blocked: missing required input(s) -> " + "; ".join(missing)
+        streak = _record_attempt_failure(
+            state_path,
+            state,
+            patch_prefix=current,
+            error=reason,
+            result="blocked",
+        )
+        return {
+            **base_info,
+            "blocked": True,
+            "reason": reason,
+            "consecutive_failures": streak,
+        }
     if check_only:
         return {**base_info, "reason": "check only: " + decision.reason}
     if dry_run:
@@ -245,7 +397,7 @@ def refresh_models_once(
                 for cmd in pipeline_commands(
                     db=db, parquet=parquet, out_dir=out_dir, pool=pool,
                     baseline=baseline, prev=prev, current=current,
-                    half_life_days=half_life_days,
+                    half_life_days=half_life_days, score_csv=score_csv,
                 )
             ],
         }
@@ -256,6 +408,7 @@ def refresh_models_once(
     for cmd in pipeline_commands(
         db=db, parquet=parquet, out_dir=out_dir, pool=pool, baseline=baseline,
         prev=prev, current=current, half_life_days=half_life_days,
+        score_csv=score_csv,
     ):
         _run_checked(runner, cmd)
     elapsed = round(time.time() - started, 1)
@@ -272,6 +425,9 @@ def refresh_models_once(
             "last_out_dir": str(out_dir),
             "last_elapsed_sec": elapsed,
             "last_result": "refreshed",
+            "last_error": None,
+            "last_error_at_unix": None,
+            "consecutive_failures": 0,
         },
     )
     save_state(state_path, state)
