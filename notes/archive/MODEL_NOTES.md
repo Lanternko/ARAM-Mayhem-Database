@@ -2,9 +2,9 @@
 
 Updated: 2026-05-18
 
-This is the canonical note for the current modeling direction.  Older planning
-notes in `PLAN.md` and `TODO.md` still contain useful historical context, but
-this file reflects the latest Mayhem/LCU feature work and empirical experiments.
+> **Archived / superseded:** This file preserves the 2026-05 Mayhem/LCU modeling
+> snapshot. The current modeling, data, and experiment policy lives in
+> `../../MODEL.md`; `PLAN.md` and `TODO.md` are historical context as well.
 
 ## Core Problem
 

@@ -10,6 +10,18 @@ data/
 logs/
 models/
 
+# Portable project skill adapters; all other .codex state/worktrees stay local.
+!.codex/
+.codex/*
+!.codex/skills/
+.codex/skills/*
+!.codex/skills/crawler-stall-response/
+!.codex/skills/crawler-stall-response/SKILL.md
+!.codex/skills/opgg-seed-refresh/
+!.codex/skills/opgg-seed-refresh/SKILL.md
+!.codex/skills/update-mayhem-site/
+!.codex/skills/update-mayhem-site/SKILL.md
+
 # Python
 __pycache__/
 *.pyc
@@ -30,8 +42,15 @@ docs/assets/draft-splash-hd/
 # Scratch & local-only artifacts (keep the public repo code-only)
 # build logs, image cache, intermediate JSON, and an embedded Chrome profile w/ creds
 outputs/
-# research reports, slide sub-projects, pptx/png exports (~271MB, local)
-documents/
+# Portable Markdown reports/architecture are tracked; slide workspaces and exports stay local.
+documents/*
+!documents/README.md
+!documents/personal-data-audit.md
+!documents/architecture/
+!documents/architecture/*.md
+!documents/reports/
+documents/reports/*
+!documents/reports/*.md
 # native Overwolf app (built / distributed separately)
 overwolf/
 # hand-authored score-override CSV inputs

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Crawler Stall Response"
+  short_description: "Diagnose live Mayhem crawler stalls and choose the next seed family"
+  default_prompt: "Use $crawler-stall-response to diagnose why the Mayhem crawler stopped growing and pick the next recovery path."
