@@ -13,7 +13,7 @@ def test_summoner_spells_are_ranked_as_two_spell_loadouts(tmp_path) -> None:
         "CREATE TABLE games (queue_id INTEGER, patch TEXT, blue_wins INTEGER, participants_json TEXT)"
     )
 
-    def add_games(spells: list[int], count: int) -> None:
+    def add_games(spells: list[object], count: int) -> None:
         for game_idx in range(count):
             participants = [{
                 "championId": 1,
@@ -28,6 +28,10 @@ def test_summoner_spells_are_ranked_as_two_spell_loadouts(tmp_path) -> None:
     add_games([6, 4], 40)
     add_games([32, 4], 30)
     add_games([4], 10)  # An incomplete capture is not a valid loadout.
+    add_games([6, 4, 4], 10)  # Extra duplicate slots do not become a valid pair.
+    add_games([4, 6, 0], 10)  # Extra empty slots do not become a valid pair.
+    add_games([4, 4], 10)  # Both slots must be distinct spells.
+    add_games(["bad", 4], 10)  # Malformed captures are ignored, not fatal.
     con.commit()
     con.close()
 
@@ -50,5 +54,6 @@ def test_summoner_spells_are_ranked_as_two_spell_loadouts(tmp_path) -> None:
     assert sum(row["pick_rate"] for row in rows) == pytest.approx(1.0)
 
     flash_ghost = next(row for row in rows if row["slug"] == "4+6")
+    assert flash_ghost["games"] == 40
     assert flash_ghost["name_en"] == "Flash + Ghost"
     assert [spell["id"] for spell in flash_ghost["items"]] == [4, 6]

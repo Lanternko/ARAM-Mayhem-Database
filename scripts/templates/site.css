@@ -44,6 +44,12 @@
         --wr-2: oklch(0.802 0.086 11.8);
         --wr-1: oklch(0.676 0.213 19.8);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(255, 255, 255, 0.10);
+        --radar-baseline: rgba(255, 255, 255, 0.32);
+        --radar-label: #d4d8de;
+        --radar-compare-stroke: rgba(196, 200, 208, 0.90);
+        --radar-compare-fill: rgba(160, 166, 176, 0.14);
+        --radar-compare-dot: rgba(210, 214, 220, 0.95);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -91,6 +97,12 @@
         --wr-2: oklch(0.530 0.126 10.2);
         --wr-1: oklch(0.530 0.199 21.6);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(26, 30, 38, 0.14);
+        --radar-baseline: rgba(26, 30, 38, 0.32);
+        --radar-label: #46505e;
+        --radar-compare-stroke: rgba(91, 100, 114, 0.86);
+        --radar-compare-fill: rgba(91, 100, 114, 0.12);
+        --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -1466,17 +1478,8 @@
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .champ img {
-        /* Overlap the padding box by half a pixel on every side.
-           The grid produces fractional tile widths (52.3px on a 375px viewport),
-           so a 2px border computes to 1.869px and the image edge lands a
-           sub-pixel short of it.  The tile's own background then shows through
-           as a thin dark seam between the tier-coloured frame and the portrait
-           -- most visible on OP, whose padding-box layer is a solid #1f2530
-           behind the prismatic border.  Growing the image past the seam removes
-           the whole class of rounding artefact without touching the frame width. */
-        width: calc(100% + 1px);
-        height: calc(100% + 1px);
-        margin: -0.5px;
+        width: 100%;
+        height: 100%;
         object-fit: cover;
         display: block;
         border-radius: 6px;
@@ -3696,18 +3699,6 @@
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
         }
         .detail-close { display: inline-flex; }
-        /* The desktop rule reserves a min(280px, 32vw) lane on the right so the
-           × clears the floating search chip.  On mobile .search-rail is
-           display:none, so that lane reserved nothing and parked the × ~138px
-           in from the edge — floating in the middle of the name row, right up
-           against the role tags.  Pin it back to the sheet corner. */
-        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
-            top: 8px;
-            right: 4px;
-        }
-        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
-            padding-right: 42px;
-        }
         .rec-fab { display: none; }
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
@@ -4072,16 +4063,14 @@
     }
     .brand:hover .brand-aram { color: var(--text-secondary, var(--text-muted)); }
     .brand:hover .brand-meta { color: var(--text); }
-    /* Game-mode switcher.  It intentionally matches the Classic page so the
+    /* Game-mode switcher. It intentionally matches the Classic page so the
        control keeps one learned location, shape and state vocabulary. */
     .site-header .mode-menu {
         position: relative;
         display: inline-flex;
         flex: none;
     }
-    .site-header .mode-menu > summary {
-        list-style: none;
-    }
+    .site-header .mode-menu > summary { list-style: none; }
     .site-header .mode-menu > summary::-webkit-details-marker { display: none; }
     .site-header .mode-menu > summary::marker { content: ''; }
     .site-header .mode-select {
@@ -5216,12 +5205,10 @@
     }
     @media (max-width: 900px) {
         .view-draft.is-active {
-            /* Keep the full-bleed rails without 100vw swallowing the vertical
-               scrollbar gutter and creating an 8-15px horizontal drift. */
-            width: calc(100% + 48px);
-            max-width: calc(100% + 48px);
-            margin-left: -24px;
-            margin-right: -24px;
+            width: calc(100% + 32px);
+            max-width: none;
+            margin-left: -16px;
+            margin-right: -16px;
             margin-top: -16px;
             margin-bottom: -48px;
             padding: 0;
@@ -5293,7 +5280,6 @@
     @media (max-width: 700px) {
         .view-draft.is-active {
             width: calc(100% + 24px);
-            max-width: calc(100% + 24px);
             margin-left: -12px;
             margin-right: -12px;
         }
@@ -5773,7 +5759,6 @@
         border-top-color: var(--border);
     }
     [data-theme="light"] .section-meta,
-    [data-theme="light"] .ovr-meta,
     [data-theme="light"] .cg-options-label,
     [data-theme="light"] .cg-tail-label,
     [data-theme="light"] .cg-core-share,
@@ -7603,6 +7588,10 @@
     .game-metric-sub.is-grade-f { color: #f87171; }
     [data-theme="light"] .game-metric-grade.is-grade-a,
     [data-theme="light"] .game-metric-sub.is-grade-a { color: #15803d; }
+    [data-theme="light"] .game-metric-grade.is-grade-b,
+    [data-theme="light"] .game-metric-sub.is-grade-b { color: #0369a1; }
+    [data-theme="light"] .game-metric-grade.is-grade-c,
+    [data-theme="light"] .game-metric-sub.is-grade-c { color: #4b5563; }
     [data-theme="light"] .game-metric-grade.is-grade-d,
     [data-theme="light"] .game-metric-grade.is-grade-f,
     [data-theme="light"] .game-metric-sub.is-grade-d,
@@ -7759,6 +7748,15 @@
         flex-direction: column;
         gap: 6px;
     }
+    .draft-result .game-analysis.is-draft-analysis {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--surface);
+    }
     .game-an-head {
         display: flex;
         flex-wrap: wrap;
@@ -7845,13 +7843,10 @@
         color: var(--text-dim);
     }
     .game-an-wr-note {
-        max-width: 38ch;
-        margin-top: 3px;
-        color: var(--text-dim);
-        font-size: 10px;
-        font-weight: 500;
-        line-height: 1.35;
-        text-align: right;
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1.5;
     }
     .draft-result .game-analysis.is-draft-analysis {
         width: 100%;
@@ -8061,7 +8056,7 @@
     [data-theme="light"] .game-an-grade.is-grade-b .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-bp .game-an-grade-val { color: #0369a1; }
     [data-theme="light"] .game-an-grade.is-grade-c .game-an-grade-val,
-    [data-theme="light"] .game-an-grade.is-grade-cp .game-an-grade-val { color: #475569; }
+    [data-theme="light"] .game-an-grade.is-grade-cp .game-an-grade-val { color: #4b5563; }
     [data-theme="light"] .game-an-grade.is-grade-d .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-f .game-an-grade-val { color: #c62828; }
     /* 手機也維持 2 欄；列更緊湊以免擠 */
@@ -8781,6 +8776,18 @@
         border: 1px solid var(--panel-line);
     }
 
+    /* The leading rail row is a recommendation, not an active selection.
+       Use neutral elevation and type weight instead of a full accent outline. */
+    .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    [data-theme="light"] .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    .boot-rail-row.is-top .boot-rail-name { font-weight: 650; }
+
     /* Reduced-motion override.  Disables prismShift / shineSweep /
        slideDown so vestibular-sensitive users don't get hue drift and
        sweep effects across the page. */
@@ -8794,4 +8801,245 @@
         ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
             animation: none !important;
         }
+    }
+
+    /* ===== Player history lookup =====
+       One quiet secondary panel on Home. It uses the shared theme tokens and
+       hairline section rules, with no nested cards or decorative gradients. */
+    .player-history-panel {
+        margin: 24px 0 30px;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--panel-surface);
+        color: var(--text);
+    }
+    .player-history-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--panel-line);
+    }
+    .player-history-heading { min-width: 0; }
+    .player-history-heading h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+    }
+    .player-history-sub {
+        margin: 5px 0 0;
+        max-width: 65ch;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .player-history-region {
+        flex: 0 0 auto;
+        padding: 5px 9px;
+        border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--border));
+        border-radius: 999px;
+        color: color-mix(in oklab, var(--accent) 70%, var(--text));
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 12px;
+        padding: 16px 0 10px;
+    }
+    .player-history-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+    }
+    .player-history-field label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.25;
+    }
+    .player-history-field input {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-sm);
+        background: var(--panel-inner);
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+    }
+    .player-history-field input::placeholder { color: var(--text-dim); }
+    .player-history-field input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-color: var(--accent);
+    }
+    .player-history-submit {
+        min-width: 112px;
+        height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--accent);
+        border-radius: var(--r-sm);
+        background: var(--accent);
+        color: var(--accent-on);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease),
+                    color var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+    }
+    .player-history-submit:hover:not(:disabled) {
+        background: var(--accent-soft);
+        border-color: var(--accent-soft);
+    }
+    .player-history-submit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .player-history-submit:disabled,
+    .player-history-field input:disabled {
+        cursor: not-allowed;
+        opacity: 0.54;
+    }
+    .player-history-help,
+    .player-history-status {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-help { padding-bottom: 12px; }
+    .player-history-status {
+        min-height: 1.5em;
+        padding-top: 12px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-status[data-state="error"] { color: var(--wr-negative); }
+    .player-history-status[data-state="ready"] { color: var(--text); }
+    .player-history-status[data-state="loading"] { color: var(--accent-soft); }
+    .player-history-result {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-result[hidden] { display: none; }
+    .player-history-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 5px 14px;
+        margin-bottom: 12px;
+    }
+    .player-history-summary strong {
+        font-size: 16px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-summary span {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-note {
+        margin: 0 0 12px;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-sm);
+    }
+    .player-history-table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .player-history-table th,
+    .player-history-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--panel-line);
+        text-align: left;
+        vertical-align: middle;
+    }
+    .player-history-table th {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-table tbody tr:last-child td { border-bottom: 0; }
+    .player-history-table td:first-child,
+    .player-history-table th:first-child,
+    .player-history-table td:nth-child(2),
+    .player-history-table td:nth-child(4) {
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-champion {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 120px;
+        color: var(--text);
+        font-weight: 600;
+    }
+    .player-history-champion img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--panel-inner);
+    }
+    .player-history-outcome.is-win { color: var(--wr-positive); font-weight: 700; }
+    .player-history-outcome.is-loss { color: var(--wr-negative); font-weight: 700; }
+    .player-history-snapshot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin-top: 10px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.45;
+    }
+    .player-history-skeleton {
+        display: grid;
+        gap: 8px;
+    }
+    .player-history-skeleton span {
+        display: block;
+        height: 32px;
+        border-radius: 5px;
+        background: var(--panel-inner);
+        border: 1px solid var(--panel-line);
+    }
+    @media (max-width: 700px) {
+        .player-history-panel { margin: 20px 0 24px; padding: 14px; }
+        .player-history-head { gap: 10px; padding-bottom: 12px; }
+        .player-history-heading h2 { font-size: 17px; }
+        .player-history-sub { font-size: 12px; }
+        .player-history-region { padding: 4px 7px; font-size: 10px; }
+        .player-history-form { grid-template-columns: 1fr; gap: 10px; padding: 14px 0 9px; }
+        .player-history-submit { width: 100%; }
+        .player-history-table { min-width: 500px; }
+        .player-history-table th,
+        .player-history-table td { padding: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .player-history-submit { transition: none; }
     }

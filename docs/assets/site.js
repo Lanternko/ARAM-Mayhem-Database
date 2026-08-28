@@ -95,14 +95,15 @@
         }
         // Default HTTP cache: tier-list.json is multi-MB; `no-cache` forced a
         // revalidation on every visit and dominated /zh-CN bounce load time.
-        // Build stamps the URL with ?v=YYYYMMDD so publishes still bust cache.
+        // Build stamps the URL with a payload-content version so every changed
+        // model/data publish busts cache, including multiple publishes per day.
         const response = await fetch(resolved);
         if (!response.ok) {
             throw new Error(`payload ${response.status}: ${resolved}`);
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260811-1786424261");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260827-1787840112");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -352,16 +353,16 @@
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => axes.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
         const grid = [0.25, 0.5, 0.75, 1].map(f =>
-            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--radar-grid)" stroke-width="1"/>`).join('');
         const spokes = axes.map((_, i) => {
             const [x, y] = at(i, R);
-            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--radar-grid)" stroke-width="1"/>`;
         }).join('');
         const frac = a => signed
             ? Math.max(0.02, Math.min(1, 0.5 + Math.max(-1, Math.min(1, (a.delta || 0) / scale)) * 0.5))
             : Math.max(0, Math.min(1, a.pct || 0));
         const baseline = signed
-            ? `<polygon points="${ringPts(0.5)}" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="1" stroke-dasharray="3 3"/>`
+            ? `<polygon points="${ringPts(0.5)}" fill="none" stroke="var(--radar-baseline)" stroke-width="1" stroke-dasharray="3 3"/>`
             : '';
         const dataPts = axes.map((a, i) => at(i, R * frac(a)));
         const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
@@ -391,7 +392,7 @@
                 ? `${body}${val}`
                 : radarLabelTspans(lines.slice(0, -1), lx, fontSize)
                     + `<tspan x="${lx.toFixed(1)}" dy="${(fontSize * 1.15).toFixed(1)}">${escHtml(lines[lines.length - 1])}</tspan>${val}`;
-            return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#c2c7ce">${bodyWithVal}</text>`;
+            return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--radar-label)">${bodyWithVal}</text>`;
         }).join('');
         const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
         const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
@@ -412,10 +413,10 @@
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => first.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
         const grid = [0.25, 0.5, 0.75, 1].map(f =>
-            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--border)" stroke-width="1"/>`).join('');
+            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--radar-grid)" stroke-width="1"/>`).join('');
         const spokes = first.map((_, i) => {
             const [x, y] = at(i, R);
-            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--radar-grid)" stroke-width="1"/>`;
         }).join('');
         const polys = (series || []).map(s => {
             const axes = s.axes || [];
@@ -448,7 +449,7 @@
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
             const y0 = ly + 4 - ((lines.length - 1) * fontSize * 1.15) / 2;
             return (
-                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--text-muted)">`
+                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--radar-label)">`
                 + radarLabelTspans(lines, lx, fontSize)
                 + `</text>`
             );
@@ -741,15 +742,75 @@
     const BASE_TITLE = document.title;
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
-    const SHORT_PATCH_ZH = "26.15";
-    const DATE_STR_ZH = "更新於 2026-08-12";
-    const BUILD_DATE = "2026-08-12";
-    const PATCH_LABEL = "patch 26.15";
-    const TOTAL_GAMES = "653,406";
+    const SHORT_PATCH_ZH = "26.17";
+    const DATE_STR_ZH = "更新於 2026-08-27";
+    const BUILD_DATE = "2026-08-27";
+    const PATCH_LABEL = "patch 26.17";
+    const TOTAL_GAMES = "44,531";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
     const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
+    // Player-history copy is kept separate from the legacy game copy table so
+    // the optional panel can fail closed without affecting other views. The
+    // zh-CN shell follows the existing Traditional-to-Simplified proxy.
+    const PLAYER_HISTORY_COPY = {
+        zh: {
+            idle: '輸入 Name#TAG 後查詢近期對局。',
+            disabled: '玩家歷史查詢目前未啟用。',
+            loading: '正在查詢玩家歷史…',
+            notFound: '找不到符合的玩家歷史。',
+            invalid: '查詢格式無效，請檢查 Name#TAG。',
+            blocked: '此查詢目前無法處理。',
+            rate: '查詢太頻繁，請稍後再試。',
+            unavailable: '玩家歷史服務暫時無法使用。',
+            network: '網路連線失敗，請稍後再試。',
+            ready: n => `已觀測 ${n} 場對局`,
+            lowSample: '樣本較少，僅代表已捕獲的子集。',
+            noRows: '目前沒有可顯示的對局。',
+            observed: '觀測場數',
+            columns: { ordinal: '#', patch: '版本', champion: '英雄', outcome: '結果', duration: '對局時長' },
+            win: '勝',
+            loss: '負',
+            duration: {
+                lt_15m: '低於 15 分鐘',
+                '15_20m': '15–20 分鐘',
+                '20_25m': '20–25 分鐘',
+                ge_25m: '25 分鐘以上',
+            },
+            snapshot: (dataset, patches, date) => `資料集 ${dataset} · ${patches} · ${date}`,
+        },
+        en: {
+            idle: 'Enter a Name#TAG to check recent matches.',
+            disabled: 'Player history lookup is not enabled.',
+            loading: 'Checking player history…',
+            notFound: 'No matching player history was found.',
+            invalid: 'Invalid query format. Check the Name#TAG.',
+            blocked: 'This query cannot be processed right now.',
+            rate: 'Too many requests. Try again shortly.',
+            unavailable: 'Player history is temporarily unavailable.',
+            network: 'Network error. Try again shortly.',
+            ready: n => `${n} observed matches`,
+            lowSample: 'Small sample, limited to matches captured here.',
+            noRows: 'There are no matches to display yet.',
+            observed: 'Observed matches',
+            columns: { ordinal: '#', patch: 'Patch', champion: 'Champion', outcome: 'Result', duration: 'Duration' },
+            win: 'Win',
+            loss: 'Loss',
+            duration: {
+                lt_15m: 'Under 15 min',
+                '15_20m': '15–20 min',
+                '20_25m': '20–25 min',
+                ge_25m: '25+ min',
+            },
+            snapshot: (dataset, patches, date) => `Dataset ${dataset} · ${patches} · ${date}`,
+        },
+    };
+    function playerHistoryCopy() {
+        if (currentLang === 'en') return PLAYER_HISTORY_COPY.en;
+        if (currentLang === 'zh-CN') return localizeZhCN(PLAYER_HISTORY_COPY.zh);
+        return PLAYER_HISTORY_COPY.zh;
+    }
     // Column articles.  Bilingual; `body_*` is trusted HTML, everything else is
     // escaped at render time.  Add new entries here — newest first.
     const ARTICLES = [];
@@ -764,7 +825,7 @@
         zh: {
             htmlLang: 'zh-Hant',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Ctrl+F',
+            searchPlaceholderDesktop: '搜尋英雄（中 / 英）   Ctrl+F',
             searchPlaceholderMobile: '搜尋英雄（中 / 英）',
             searchAria: '搜尋英雄',
             shownUnit: '隻',
@@ -839,8 +900,7 @@
             draftLegendEnemy: '對手',
             draftChampStrength: '英雄強度',
             draftMetricFinal: '最終勝率',
-            draftMetricFinalNote: '依雙方英雄與陣容特徵估計，不含玩家熟練度與臨場因素。',
-            draftMetricChampionNote: '依雙方英雄近期強度估計，不含玩家熟練度與臨場因素。',
+            draftMetricFinalNote: '最終勝率只比較雙方 10 隻英雄的歷史強度；不包含玩家熟練度、增幅、道具或臨場表現。',
             draftMetricPartial: '完成我方與對方各 5 隻英雄後計算',
             draftMetricUnavailable: '預測模型尚未載入或含未知英雄',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
@@ -1102,7 +1162,7 @@
         en: {
             htmlLang: 'en',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Ctrl+F',
+            searchPlaceholderDesktop: 'Search champions (ZH / EN)   Ctrl+F',
             searchPlaceholderMobile: 'Search champions (ZH / EN)',
             searchAria: 'Search champions',
             shownUnit: 'shown',
@@ -1177,8 +1237,7 @@
             draftLegendEnemy: 'Enemy',
             draftChampStrength: 'Champ strength',
             draftMetricFinal: 'Final win rate',
-            draftMetricFinalNote: 'Estimated from both teams’ champions and composition traits; player skill and in-game events are not included.',
-            draftMetricChampionNote: 'Estimated from both teams’ recent champion strength; player skill and in-game events are not included.',
+            draftMetricFinalNote: 'Final WR compares only the historical strength of the 10 champions; it does not include player skill, augments, items, or in-game play.',
             draftMetricPartial: 'Complete both 5-champion rosters to calculate',
             draftMetricUnavailable: 'Model not loaded or contains unknown champions',
             draftOnOtherSide: 'Already on the other team.',
@@ -1362,7 +1421,7 @@
             itemClusterGames: (games) => `${games}g`,
             coreBuildShare: (pick) => `${pick} pick`,
             coreBuildWr: (wr) => `${wr} WR`,
-            coreBuildThird: 'Other items',
+            coreBuildThird: 'following items',
             coreBuildTail: 'Also common',
             coreBuildTailTip: 'Built with this core but below the pick-rate / win-rate bar of the items above',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
@@ -3511,7 +3570,6 @@
             const rows = (payload && payload.top) || [];
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
-            const railTopCount = opts.topCount || 1;
             const railIconCount = opts.iconCount || 1;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
@@ -3544,7 +3602,7 @@
                     games: entry.g || 0,
                 });
                 return `
-                    <div class="boot-rail-row has-item-tip${idx < railTopCount ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
+                    <div class="boot-rail-row has-item-tip${idx === 0 ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
                         <span class="boot-rail-icons">${icons}</span>
                         <span class="boot-rail-name">${escHtml(name)}</span>
                         <span class="boot-rail-wr ${wrTone}">${pct(wr)}</span>
@@ -4465,6 +4523,16 @@
             if (fIdx === undefined) return null;
             x[fIdx] = 1;
         }
+        if (model.kind === 'champion_lr') {
+            let championTotal = 0;
+            for (let i = 0; i < coef.length; i += 1) {
+                const weight = Number(coef[i]);
+                if (!Number.isFinite(weight)) return null;
+                championTotal += x[i] * weight;
+            }
+            return championTotal;
+        }
+        if (model.kind !== 'composition_lr') return null;
         const team = draftTeamProfile(teamIds, model);
         if (!team) return null;
         const scoreCols = (model.meta && model.meta.score_columns) || [];
@@ -4511,10 +4579,10 @@
         return total;
     }
 
-    /** Full 5v5 LR: composition model when healthy, champion-only fallback otherwise. */
+    /** Full 5v5 Composition LR: sigmoid(ally_logit − enemy_logit + intercept). */
     function draftCompositionLrWinrate(allyIds, enemyIds) {
         const model = DATA && DATA.draftModel;
-        if (!model || !['composition_lr', 'champion_lr'].includes(model.kind)) return null;
+        if (!model || (model.kind !== 'composition_lr' && model.kind !== 'champion_lr')) return null;
         if (!Array.isArray(allyIds) || !Array.isArray(enemyIds) || allyIds.length !== 5 || enemyIds.length !== 5) {
             return null;
         }
@@ -4523,15 +4591,6 @@
         if (myLogit == null || enemyLogit == null) return null;
         const logit = myLogit - enemyLogit + Number(model.intercept || 0);
         return 1 / (1 + Math.exp(-logit));
-    }
-
-    function draftModelNote(finalWr, fullDraft) {
-        const copy = tr();
-        if (!fullDraft) return copy.draftMetricPartial;
-        if (finalWr == null) return copy.draftMetricUnavailable;
-        return DATA && DATA.draftModel && DATA.draftModel.kind === 'champion_lr'
-            ? copy.draftMetricChampionNote
-            : copy.draftMetricFinalNote;
     }
 
     /** Ally vs optional enemy: team details remain contextual; final WR is Composition LR. */
@@ -4827,28 +4886,14 @@
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
         const fullDraft = teamPicks.length === MAX_TEAM_PICKS && enemyPicks.length === MAX_TEAM_PICKS;
-        const note = draftModelNote(mu.finalWr, fullDraft);
+        const note = !fullDraft ? copy.draftMetricPartial
+            : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote);
         return `
             <div class="draft-metric final ${draftMetricTone(mu.finalWr)}">
                 <span class="draft-metric-label">${escHtml(copy.draftMetricFinal)}</span>
                 <strong class="draft-metric-value">${draftMetricValue(fullDraft ? mu.finalWr : null)}</strong>
                 <span class="draft-metric-note">${escHtml(note || '')}</span>
             </div>`;
-    }
-
-    function buildDraftMatchupAnalysisHtml(mu) {
-        const copy = tr();
-        const fullDraft = teamPicks.length === MAX_TEAM_PICKS
-            && enemyPicks.length === MAX_TEAM_PICKS;
-        return metaPickAnalysisHtml(enemyPicks, teamPicks, copy, {
-            className: 'is-draft-analysis',
-            title: copy.draftCompareTitle,
-            comparisonLegend: copy.draftLegendEnemy,
-            primaryLegend: copy.draftLegendAlly,
-            winRate: fullDraft ? mu.finalWr : null,
-            winRateLabel: copy.draftMetricFinal,
-            note: draftModelNote(mu.finalWr, fullDraft),
-        });
     }
 
     function renderDraftView() {
@@ -4876,10 +4921,23 @@
         if (pickNotice) {
             parts.push(`<div class="pick-note">${escHtml(pickNotice)}</div>`);
         }
-        // Both sides have ≥1 pick → overlaid radar + dual bars (partial rosters OK).
-        // Only final LR WR still requires full 5v5 (see buildDraftMetricsHtml).
+        // Both sides have ≥1 pick → shared Meta Pick analysis presentation.
+        // Enemy is the gray comparison; ally is the gold primary team. Partial
+        // rosters keep the analysis but never fabricate a final 5v5 win rate.
         if (mu.ally && mu.enemy) {
-            parts.push(buildDraftMatchupAnalysisHtml(mu));
+            const fullDraft = teamPicks.length === MAX_TEAM_PICKS
+                && enemyPicks.length === MAX_TEAM_PICKS;
+            parts.push(metaPickAnalysisHtml(enemyPicks, teamPicks, copy, {
+                draft: true,
+                title: copy.draftCompareTitle,
+                compareLabel: copy.draftLegendEnemy,
+                primaryLabel: copy.draftLegendAlly,
+                wrLabel: copy.draftMetricFinal,
+                finalWr: mu.finalWr,
+                showFinalWr: fullDraft && mu.finalWr != null,
+                note: !fullDraft ? copy.draftMetricPartial
+                    : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote),
+            }));
         } else if (mu.ally) {
             parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
         } else if (mu.enemy) {
@@ -4941,8 +4999,6 @@
         document.querySelectorAll('.draft-side').forEach(el => {
             el.classList.toggle('is-targeting', el.getAttribute('data-draft-side') === draftSide);
         });
-        // The chosen Meta Pick analysis design owns the headline result, so the
-        // legacy standalone metric panel stays empty instead of repeating it.
         if (metricsEl) metricsEl.innerHTML = '';
         if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
 
@@ -4964,6 +5020,352 @@
     const META_PICK_MIN_GAMES = 50;
     // Build-time inject; empty string = remote board/submit unavailable.
     const META_PICK_API_BASE = "https://api.arammeta.com";
+    // The player-history UI is deliberately available only on the generated
+    // unlisted route.  The route marker and API base live on that shell's
+    // <html> element, so the ordinary Home shell carries no endpoint config.
+    const PLAYER_HISTORY_ROUTE = document.documentElement.dataset.route === 'player-history';
+    const PLAYER_HISTORY_API_BASE = PLAYER_HISTORY_ROUTE
+        ? String(document.documentElement.getAttribute('data-player-history-api-base') || '').trim().replace(/\/$/, '')
+        : '';
+    const playerHistoryUi = {
+        status: 'disabled',
+        result: null,
+        retryAfter: null,
+        activeRequest: null,
+        abortController: null,
+    };
+
+    function playerHistoryElements() {
+        return {
+            form: document.getElementById('player-history-form'),
+            input: document.getElementById('player-history-input'),
+            submit: document.getElementById('player-history-submit'),
+            status: document.getElementById('player-history-status'),
+            result: document.getElementById('player-history-result'),
+        };
+    }
+
+    function playerHistorySetStatus(state, message) {
+        const { status } = playerHistoryElements();
+        if (!status) return;
+        status.dataset.state = state;
+        status.textContent = message;
+    }
+
+    function playerHistoryOwnKeys(value, expected) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        const actual = Object.keys(value).sort();
+        return actual.length === expected.length
+            && expected.every(key => Object.prototype.hasOwnProperty.call(value, key))
+            && actual.join('|') === expected.slice().sort().join('|');
+    }
+
+    function validatePlayerHistoryPayload(payload) {
+        const topKeys = ['status', 'snapshot', 'observed_matches', 'low_sample', 'histories'];
+        if (!playerHistoryOwnKeys(payload, topKeys)) return null;
+        if (payload.status === 'not_found') {
+            return payload.snapshot === null
+                && payload.observed_matches === null
+                && payload.low_sample === null
+                && Array.isArray(payload.histories)
+                && payload.histories.length === 0
+                ? payload
+                : null;
+        }
+        if (payload.status !== 'ready') return null;
+        const snapshotKeys = ['dataset_id', 'patches', 'generated_date'];
+        if (!playerHistoryOwnKeys(payload.snapshot, snapshotKeys)) return null;
+        if (typeof payload.snapshot.dataset_id !== 'string' || !payload.snapshot.dataset_id) return null;
+        if (!Array.isArray(payload.snapshot.patches)
+                || payload.snapshot.patches.some(patch => typeof patch !== 'string')) return null;
+        if (typeof payload.snapshot.generated_date !== 'string' || !payload.snapshot.generated_date) return null;
+        if (!Number.isInteger(payload.observed_matches)
+                || payload.observed_matches < 0 || payload.observed_matches > 1000
+                || typeof payload.low_sample !== 'boolean'
+                || !Array.isArray(payload.histories)
+                || payload.histories.length > 1000
+                || payload.histories.length !== payload.observed_matches) return null;
+        const rowKeys = ['ordinal', 'patch', 'champion_id', 'outcome', 'duration_bucket'];
+        const outcomes = new Set(['win', 'loss']);
+        const durations = new Set(['lt_15m', '15_20m', '20_25m', 'ge_25m']);
+        for (const [index, row] of payload.histories.entries()) {
+            if (!playerHistoryOwnKeys(row, rowKeys)
+                    || !Number.isInteger(row.ordinal) || row.ordinal !== index + 1
+                    || typeof row.patch !== 'string' || !row.patch
+                    || !Number.isInteger(row.champion_id)
+                    || !outcomes.has(row.outcome)
+                    || !durations.has(row.duration_bucket)) return null;
+        }
+        return payload;
+    }
+
+    function playerHistoryClearResult() {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        result.replaceChildren();
+        result.hidden = true;
+    }
+
+    function playerHistoryAppendCell(tag, text, className) {
+        const cell = document.createElement(tag);
+        if (className) cell.className = className;
+        cell.textContent = text;
+        return cell;
+    }
+
+    function renderPlayerHistoryReady(payload) {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        const copy = playerHistoryCopy();
+        result.replaceChildren();
+        result.hidden = false;
+
+        const summary = document.createElement('div');
+        summary.className = 'player-history-summary';
+        const count = document.createElement('strong');
+        count.textContent = copy.ready(payload.observed_matches);
+        summary.appendChild(count);
+        const observed = document.createElement('span');
+        observed.textContent = `${copy.observed}: ${payload.observed_matches}`;
+        summary.appendChild(observed);
+        result.appendChild(summary);
+
+        if (payload.low_sample) {
+            const note = document.createElement('p');
+            note.className = 'player-history-note';
+            note.textContent = copy.lowSample;
+            result.appendChild(note);
+        }
+        if (payload.histories.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'player-history-note';
+            empty.textContent = copy.noRows;
+            result.appendChild(empty);
+        } else {
+            const wrap = document.createElement('div');
+            wrap.className = 'player-history-table-wrap';
+            const table = document.createElement('table');
+            table.className = 'player-history-table';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            for (const key of ['ordinal', 'patch', 'champion', 'outcome', 'duration']) {
+                headRow.appendChild(playerHistoryAppendCell('th', copy.columns[key]));
+            }
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            for (const row of payload.histories.slice(0, 1000)) {
+                const tr = document.createElement('tr');
+                tr.appendChild(playerHistoryAppendCell('td', String(row.ordinal)));
+                tr.appendChild(playerHistoryAppendCell('td', row.patch));
+                const champCell = document.createElement('td');
+                const champ = document.createElement('span');
+                champ.className = 'player-history-champion';
+                const info = (DATA && DATA.champs && DATA.champs[String(row.champion_id)]) || null;
+                const name = info ? champName(info, row.champion_id) : `#${row.champion_id}`;
+                if (info && typeof info.image === 'string' && /^https?:\/\//i.test(info.image)) {
+                    const image = document.createElement('img');
+                    image.src = info.image;
+                    image.alt = '';
+                    image.loading = 'lazy';
+                    champ.appendChild(image);
+                }
+                const nameNode = document.createElement('span');
+                nameNode.textContent = name || `#${row.champion_id}`;
+                champ.appendChild(nameNode);
+                champCell.appendChild(champ);
+                tr.appendChild(champCell);
+                const outcome = playerHistoryAppendCell('td', row.outcome === 'win' ? copy.win : copy.loss, 'player-history-outcome');
+                outcome.classList.add(row.outcome === 'win' ? 'is-win' : 'is-loss');
+                tr.appendChild(outcome);
+                tr.appendChild(playerHistoryAppendCell('td', copy.duration[row.duration_bucket]));
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            result.appendChild(wrap);
+        }
+
+        const snapshot = document.createElement('div');
+        snapshot.className = 'player-history-snapshot';
+        snapshot.textContent = copy.snapshot(
+            payload.snapshot.dataset_id,
+            payload.snapshot.patches.join(', '),
+            payload.snapshot.generated_date,
+        );
+        result.appendChild(snapshot);
+    }
+
+    function renderPlayerHistorySkeleton() {
+        const { result } = playerHistoryElements();
+        if (!result) return;
+        result.replaceChildren();
+        result.hidden = false;
+        const skeleton = document.createElement('div');
+        skeleton.className = 'player-history-skeleton';
+        for (let i = 0; i < 3; i += 1) skeleton.appendChild(document.createElement('span'));
+        result.appendChild(skeleton);
+    }
+
+    function renderPlayerHistoryState() {
+        const copy = playerHistoryCopy();
+        const state = playerHistoryUi.status;
+        const messages = {
+            disabled: copy.disabled,
+            idle: copy.idle,
+            loading: copy.loading,
+            not_found: copy.notFound,
+            invalid: copy.invalid,
+            blocked: copy.blocked,
+            rate: copy.rate,
+            unavailable: copy.unavailable,
+            network: copy.network,
+        };
+        if (state === 'rate' && Number.isInteger(playerHistoryUi.retryAfter)) {
+            messages.rate = currentLang === 'en'
+                ? `${copy.rate} (${playerHistoryUi.retryAfter}s)`
+                : `${copy.rate}${t2s(`（${playerHistoryUi.retryAfter} 秒後再試）`)}`;
+        }
+        if (state === 'ready' && playerHistoryUi.result) {
+            playerHistorySetStatus('ready', copy.ready(playerHistoryUi.result.observed_matches));
+            renderPlayerHistoryReady(playerHistoryUi.result);
+            return;
+        }
+        playerHistorySetStatus(
+            state === 'loading' ? 'loading' : (['invalid', 'blocked', 'rate', 'unavailable', 'network'].includes(state) ? 'error' : state),
+            messages[state] || copy.unavailable,
+        );
+        if (state === 'loading') renderPlayerHistorySkeleton();
+        else playerHistoryClearResult();
+        if (state === 'not_found') {
+            const { result } = playerHistoryElements();
+            if (result) {
+                result.hidden = false;
+                const note = document.createElement('p');
+                note.className = 'player-history-note';
+                note.textContent = copy.notFound;
+                result.appendChild(note);
+            }
+        }
+    }
+
+    function playerHistorySetInteractive(enabled) {
+        const { input, submit } = playerHistoryElements();
+        if (input) input.disabled = !enabled;
+        if (submit) {
+            submit.disabled = !enabled;
+            submit.setAttribute('aria-busy', playerHistoryUi.status === 'loading' ? 'true' : 'false');
+        }
+    }
+
+    async function submitPlayerHistoryQuery() {
+        const { input, submit } = playerHistoryElements();
+        if (!input || !submit || !String(PLAYER_HISTORY_API_BASE || '').trim()) {
+            playerHistoryUi.status = 'disabled';
+            playerHistoryUi.result = null;
+            playerHistoryUi.retryAfter = null;
+            renderPlayerHistoryState();
+            return;
+        }
+        if (playerHistoryUi.abortController) playerHistoryUi.abortController.abort();
+        const riotId = String(input.value || '').trim();
+        if (!riotId) {
+            input.value = '';
+            playerHistoryUi.status = 'invalid';
+            playerHistoryUi.result = null;
+            playerHistoryUi.retryAfter = null;
+            renderPlayerHistoryState();
+            return;
+        }
+        const controller = new AbortController();
+        const request = { controller };
+        playerHistoryUi.activeRequest = request;
+        playerHistoryUi.abortController = controller;
+        playerHistoryUi.status = 'loading';
+        playerHistoryUi.result = null;
+        playerHistoryUi.retryAfter = null;
+        playerHistorySetInteractive(false);
+        renderPlayerHistoryState();
+        const endpoint = `${String(PLAYER_HISTORY_API_BASE).replace(/\/$/, '')}/api/player-history/query`;
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                body: JSON.stringify({ riot_id: riotId }),
+                signal: controller.signal,
+            });
+            if (playerHistoryUi.activeRequest !== request) return;
+            if (response.status === 200) {
+                let payload;
+                try {
+                    payload = validatePlayerHistoryPayload(await response.json());
+                } catch {
+                    payload = null;
+                }
+                if (!payload) {
+                    playerHistoryUi.status = 'unavailable';
+                    playerHistoryUi.result = null;
+                } else if (payload.status === 'ready') {
+                    playerHistoryUi.status = 'ready';
+                    playerHistoryUi.result = payload;
+                } else {
+                    playerHistoryUi.status = 'not_found';
+                    playerHistoryUi.result = null;
+                }
+            } else if (response.status === 400) {
+                playerHistoryUi.status = 'invalid';
+                playerHistoryUi.result = null;
+            } else if (response.status === 403) {
+                playerHistoryUi.status = 'blocked';
+                playerHistoryUi.result = null;
+            } else if (response.status === 429) {
+                playerHistoryUi.status = 'rate';
+                playerHistoryUi.result = null;
+                const retryAfter = Number.parseInt(response.headers.get('Retry-After') || '', 10);
+                playerHistoryUi.retryAfter = Number.isFinite(retryAfter)
+                    ? Math.max(1, Math.min(3600, retryAfter))
+                    : null;
+            } else if (response.status === 503) {
+                playerHistoryUi.status = 'unavailable';
+                playerHistoryUi.result = null;
+            } else {
+                playerHistoryUi.status = 'unavailable';
+                playerHistoryUi.result = null;
+            }
+            renderPlayerHistoryState();
+        } catch (error) {
+            if (playerHistoryUi.activeRequest !== request) return;
+            if (error && error.name === 'AbortError') return;
+            playerHistoryUi.status = 'network';
+            playerHistoryUi.result = null;
+            renderPlayerHistoryState();
+        } finally {
+            if (playerHistoryUi.activeRequest !== request) return;
+            input.value = '';
+            playerHistoryUi.activeRequest = null;
+            playerHistoryUi.abortController = null;
+            playerHistorySetInteractive(true);
+        }
+    }
+
+    function initPlayerHistory() {
+        if (!PLAYER_HISTORY_ROUTE) return;
+        const { form } = playerHistoryElements();
+        const enabled = String(PLAYER_HISTORY_API_BASE || '').trim() !== '';
+        playerHistorySetInteractive(enabled);
+        playerHistoryUi.status = enabled ? 'idle' : 'disabled';
+        playerHistoryUi.result = null;
+        playerHistoryUi.retryAfter = null;
+        if (form && !form.dataset.bound) {
+            form.dataset.bound = 'true';
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                void submitPlayerHistoryQuery();
+            });
+        }
+        renderPlayerHistoryState();
+    }
+
     const metaPick = {
         phase: 'idle', // idle | picking | miss_offer | reveal
         poolIds: [],
@@ -6221,12 +6623,10 @@
      */
     function metaPickAnalysisHtml(yourIds, bestIds, copy, options) {
         const opts = options || {};
-        const analysisTitle = opts.title || copy.gameAnalysisTitle || copy.teamDimsTitle || '';
-        const comparisonLegend = opts.comparisonLegend || copy.gameAnalysisYours || '你的選擇';
-        const primaryLegend = opts.primaryLegend || copy.gameAnalysisBest || '最佳 5 人';
         const yours = metaPickSixAxes(yourIds, copy);
         const best = metaPickSixAxes(bestIds, copy);
         const cap = best.cap;
+        const analysisTitle = opts.title || copy.gameAnalysisTitle || copy.teamDimsTitle || '';
         // 英雄強度：原始 5 人平均 solo WR（如 52.3%），不是 PR
         const strengthTxt = pct(best.strength.meanWr);
         // Re-sum damage dims from champ ids (more reliable than teamComposition.sums alone).
@@ -6241,9 +6641,9 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: yours.axes,
-                stroke: 'var(--text-muted)',
-                fill: 'color-mix(in srgb, var(--text-muted) 14%, transparent)',
-                dot: 'var(--text-muted)',
+                stroke: 'var(--radar-compare-stroke)',
+                fill: 'var(--radar-compare-fill)',
+                dot: 'var(--radar-compare-dot)',
             },
             {
                 axes: best.axes,
@@ -6304,12 +6704,11 @@
             );
         }).join('');
 
-        const hasOverrideWr = Object.prototype.hasOwnProperty.call(opts, 'winRate');
-        const bestEstWr = hasOverrideWr ? Number(opts.winRate) : Number(best.ev.estWr);
-        const hasBestEstWr = Number.isFinite(bestEstWr);
-        const bestWrTone = hasBestEstWr ? metaPickWrToneClass(bestEstWr) : 'is-empty';
-        const bestWrText = hasBestEstWr ? pct(bestEstWr) : '—';
-        const winRateLabel = opts.winRateLabel || copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率';
+        const bestEstWr = opts.finalWr === undefined ? Number(best.ev.estWr) : Number(opts.finalWr);
+        const showFinalWr = opts.showFinalWr === undefined
+            ? Number.isFinite(bestEstWr)
+            : (!!opts.showFinalWr && Number.isFinite(bestEstWr));
+        const bestWrTone = metaPickWrToneClass(bestEstWr);
         // flex-basis % 填滿 bar；圖例永遠三段。
         // Class names: is-phys / is-magic / is-true — NEVER is-ad (adblockers hide .is-ad).
         const mixSeg = (cls, n) => {
@@ -6341,16 +6740,27 @@
         const legend = (
             `<div class="game-an-legend" aria-label="${escHtml(analysisTitle)}">`
             + `<span class="game-an-legend-item is-yours">`
-            + `<span class="game-an-swatch is-yours"></span>${escHtml(comparisonLegend)}`
+            + `<span class="game-an-swatch is-yours"></span>${escHtml(opts.compareLabel || copy.gameAnalysisYours || '你的選擇')}`
             + `</span>`
             + `<span class="game-an-legend-item is-best">`
-            + `<span class="game-an-swatch is-best"></span>${escHtml(primaryLegend)}`
+            + `<span class="game-an-swatch is-best"></span>${escHtml(opts.primaryLabel || copy.gameAnalysisBest || '最佳 5 人')}`
             + `</span>`
             + `</div>`
         );
 
+        const wrHero = showFinalWr
+            ? (`<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(opts.wrLabel || copy.gameBestEstWr || '')}">`
+                + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
+                + `<span class="game-an-wr-label">${escHtml(opts.wrLabel || copy.gameBestEstWr || copy.gameOptimalWr || '')}</span>`
+                + `</div>`)
+            : '';
+        const wrNote = opts.note
+            ? `<p class="game-an-wr-note">${escHtml(opts.note)}</p>`
+            : '';
+        const analysisClass = opts.draft ? 'game-analysis is-draft-analysis' : 'game-analysis';
+
         return (
-            `<div class="game-analysis${opts.className ? ` ${escHtml(opts.className)}` : ''}">`
+            `<div class="${analysisClass}">`
             + `<div class="game-an-head">`
             + `<div class="game-an-head-left">`
             + `<div class="game-an-head-row">`
@@ -6358,12 +6768,9 @@
             + `</div>`
             + mixBar
             + `</div>`
-            + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(opts.note || winRateLabel)}">`
-            + `<span class="game-an-wr-num">${bestWrText}</span>`
-            + `<span class="game-an-wr-label">${escHtml(winRateLabel)}</span>`
-            + (opts.note ? `<span class="game-an-wr-note">${escHtml(opts.note)}</span>` : '')
+            + wrHero
             + `</div>`
-            + `</div>`
+            + wrNote
             + `<div class="game-an-dims-split is-best-only">`
             + `<div class="game-an-radar-col">`
             + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
@@ -6462,6 +6869,10 @@
     const AUG_DRAFT_ROUNDS = 4;
     const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
     const AUG_DRAFT_CHAMP_CHOICES = 3;
+    // Earlier picks carry more leverage, while later picks are increasingly
+    // conditional on the build already taking shape. These weights keep the
+    // projected rate readable instead of simply adding four independent lifts.
+    const AUG_DRAFT_POSITION_WEIGHT = [1, 0.84, 0.7, 0.58];
     // Champions below this see too few games for their per-augment lift to mean
     // anything; the draft would be scoring noise.
     const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
@@ -6600,52 +7011,67 @@
         return augs[String(id)] || augs[id] || null;
     }
 
-    function augDraftSlotStat(id, round) {
-        const row = augDraftRowFor(id, round);
-        const slot = row && Array.isArray(row.slots) ? row.slots[Number(round) || 0] : null;
-        if (slot && Number(slot.g) > 0 && Number.isFinite(Number(slot.wr))) {
-            return {
-                wr: Number(slot.wr),
-                rawWr: Number(slot.rawWr ?? slot.wr),
-                games: Number(slot.g),
-                fallback: false,
-            };
+    function augDraftSetKeys(aug) {
+        if (!aug) return [];
+        const rows = Array.isArray(aug.sets) ? aug.sets : [];
+        const keys = rows.map(s => String(s && (s.slug || s.name_zh || s.name_en || s.name) || ''))
+            .filter(Boolean);
+        if (aug.setSlug) keys.push(String(aug.setSlug));
+        if (aug.set) keys.push(String(aug.set));
+        return [...new Set(keys)];
+    }
+
+    function augDraftCategoryKeys(aug) {
+        return aug && Array.isArray(aug.cats) ? aug.cats.map(String) : [];
+    }
+
+    /** Small, visible context signal: set repeats and shared archetypes matter. */
+    function augDraftPairBonus(leftId, rightId) {
+        const left = augDraftAugFor(leftId);
+        const right = augDraftAugFor(rightId);
+        if (!left || !right) return 0;
+        const rightSets = new Set(augDraftSetKeys(right));
+        const rightCats = new Set(augDraftCategoryKeys(right));
+        const sameSet = augDraftSetKeys(left).some(k => rightSets.has(k));
+        const sharedCats = augDraftCategoryKeys(left).filter(k => rightCats.has(k)).length;
+        return (sameSet ? 0.005 : 0) + Math.min(sharedCats, 2) * 0.0015;
+    }
+
+    function augDraftPairBonusTotal(ids) {
+        let total = 0;
+        for (let i = 0; i < ids.length; i += 1) {
+            for (let j = i + 1; j < ids.length; j += 1) {
+                total += augDraftPairBonus(ids[i], ids[j]);
+            }
         }
-        return {
-            wr: row ? Number(row.wr || 0) : 0,
-            rawWr: row ? Number(row.wr || 0) : 0,
-            games: row ? Number(row.g || 0) : 0,
-            fallback: true,
-        };
+        return total;
     }
 
-    /**
-     * Production must not invent combo coefficients.  The trained sequence
-     * ensemble is validated offline but not yet exported to the static client;
-     * until that artifact is wired, rank strictly by the observed slot model.
-     */
-    function augDraftComboAdjustment(id, picks) {
-        void id;
-        void picks;
-        return { value: 0, kind: 'model-pending' };
+    function augDraftPositionWeight(round) {
+        const i = Math.max(0, Number(round) || 0);
+        return AUG_DRAFT_POSITION_WEIGHT[i] || AUG_DRAFT_POSITION_WEIGHT[AUG_DRAFT_POSITION_WEIGHT.length - 1];
     }
 
-    function augDraftEstimate(id, round, picks) {
-        const slot = augDraftSlotStat(id, round);
-        const combo = augDraftComboAdjustment(id, picks);
-        return {
-            projected: Math.max(0.05, Math.min(0.95, slot.wr + combo.value)),
-            slotWr: slot.wr,
-            slotRawWr: slot.rawWr,
-            slotGames: slot.games,
-            slotFallback: slot.fallback,
-            combo: combo.value,
-            comboKind: combo.kind,
-        };
+    function augDraftBaseWr() {
+        const champ = (DATA && DATA.champs && DATA.champs[augDraft.champId]) || {};
+        const wr = Number(champ.wr ?? champ.rawWr);
+        return Number.isFinite(wr) && wr > 0 ? wr : 0.5;
     }
 
+    /** Project the resulting champion WR after this candidate is added. */
     function augDraftProjectedWr(id, round, picks) {
-        return augDraftEstimate(id, round, picks).projected;
+        const history = Array.isArray(picks) ? picks : augDraft.picks;
+        const historyIds = history.map(p => String(p.id));
+        let projected = augDraftBaseWr();
+        history.forEach((p, index) => {
+            projected += Number(p.wrLift || 0) * augDraftPositionWeight(
+                p.round == null ? index : p.round
+            );
+        });
+        projected += augDraftPairBonusTotal(historyIds);
+        projected += Number(augDraftLift(id, round) || 0) * augDraftPositionWeight(round);
+        historyIds.forEach(prevId => { projected += augDraftPairBonus(prevId, id); });
+        return Math.max(0.05, Math.min(0.95, projected));
     }
 
     function augDraftDeal(n, soft, extraHard) {
@@ -6710,8 +7136,7 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const estimates = candidates.map(x => augDraftEstimate(x, augDraft.round, augDraft.picks));
-        const projected = estimates.map(x => x.projected);
+        const projected = candidates.map(x => augDraftProjectedWr(x, augDraft.round, augDraft.picks));
         const best = Math.max.apply(null, projected);
         const worst = Math.min.apply(null, projected);
         const mineIndex = candidates.map(String).indexOf(String(id));
@@ -6730,7 +7155,6 @@
             best,
             worst,
             projectedById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), projected[i]])),
-            estimateById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), estimates[i]])),
             wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
@@ -6879,37 +7303,20 @@
         // Show the two quantities the ranking is actually built from, not the
         // blended score: a bare "+1.3%" made a 114-game augment look better
         // than a 3,942-game one with no way to see why.
-        const estimate = o.estimate || null;
-        const slotNumber = Number(o.round == null ? augDraft.round : o.round) + 1;
-        const slotLabel = currentLang === 'en' ? `Pick ${slotNumber}` : zhUi(`第 ${slotNumber} 手`);
-        const dataLabel = estimate && estimate.slotFallback
-            ? (currentLang === 'en' ? 'All picks' : zhUi('全順位'))
-            : slotLabel;
-        const comboText = estimate
-            ? (estimate.comboKind === 'model-pending'
-                ? (currentLang === 'en' ? 'Pending' : zhUi('待接入'))
-                : `${estimate.combo >= 0 ? '+' : ''}${(Number(estimate.combo) * 100).toFixed(1)}%`)
-            : '';
-        const liftHtml = o.reveal && estimate
+        const liftHtml = o.reveal
             ? `<span class="aug-draft-stats">`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(dataLabel + (currentLang === 'en' ? ' observed' : zhUi('實戰')))}</span>`
-                + `<b class="aug-draft-wr">${escHtml(pct(estimate.slotRawWr))}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGameWinRate || 'Win rate')}</span>`
+                + `<b class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
+                + `${escHtml(pct(augDraftWr(id)))}</b></span>`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample' : zhUi('樣本'))}</span>`
-                + `<b class="aug-draft-pick">${escHtml(Number(estimate.slotGames || 0).toLocaleString())}</b></span>`
-                + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample-adjusted' : zhUi('樣本校正'))}</span>`
-                + `<b class="aug-draft-pick">${escHtml(pct(estimate.slotWr))}</b></span>`
-                + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sequence model' : zhUi('搭配模型'))}</span>`
-                + `<b class="aug-draft-combo ${estimate.combo > 0 ? 'is-good' : estimate.combo < 0 ? 'is-bad' : ''}">`
-                + `${escHtml(comboText)}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGamePickRateLabel || 'Pick rate')}</span>`
+                + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
                 + `</span>`
             : '';
         const projectedHtml = Number.isFinite(o.projectedWr)
             ? `<span class="aug-draft-projected">`
-                + `<span class="aug-draft-projected-label">${escHtml(dataLabel + (currentLang === 'en' ? ' adjusted estimate' : zhUi('順位校正')))}</span>`
+                + `<span class="aug-draft-projected-label">${escHtml(o.copy.augGameProjectedWr || 'Projected win rate')}</span>`
                 + `<b class="aug-draft-projected-value">${escHtml(pct(o.projectedWr))}</b>`
                 + `</span>`
             : '';
@@ -6969,9 +7376,6 @@
             const projectedById = last.projectedById || Object.fromEntries(
                 last.candidates.map(id => [String(id), augDraftProjectedWr(id, augDraft.round, augDraft.picks.slice(0, -1))])
             );
-            const estimateById = last.estimateById || Object.fromEntries(
-                last.candidates.map(id => [String(id), augDraftEstimate(id, augDraft.round, augDraft.picks.slice(0, -1))])
-            );
             const ranked = last.candidates.slice().sort((a, b) => {
                 const delta = Number(projectedById[String(b)] || 0) - Number(projectedById[String(a)] || 0);
                 return delta || String(a).localeCompare(String(b), undefined, { numeric: true });
@@ -6994,8 +7398,6 @@
                             best: rankById[String(id)] === 1,
                             rank: rankById[String(id)],
                             projectedWr: Number(projectedById[String(id)]),
-                            estimate: estimateById[String(id)],
-                            round: augDraft.round,
                             // Dim anything that was never live, but keep it visible
                             // because every hidden option still counts in the score.
                             stale: depth !== shownIdx,
@@ -7018,7 +7420,6 @@
                     ? (copy.augGameRerollUsed || 'Reroll used')
                     : (copy.augGameReroll || 'Reroll');
                 const buttonTitle = `${label} · ${copy.augGameRerollHint || 'One swap per card'}`;
-                const estimate = augDraftEstimate(id, augDraft.round, augDraft.picks);
                 return (
                     `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
                     + `<span class="aug-draft-choice-label">`
@@ -7027,9 +7428,7 @@
                         copy,
                         code,
                         interactive: true,
-                        projectedWr: estimate.projected,
-                        estimate,
-                        round: augDraft.round,
+                        projectedWr: augDraftProjectedWr(id, augDraft.round),
                     })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
                     + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
@@ -8403,6 +8802,13 @@
     function parseRoute() {
         let path = normalizePathname(location.pathname);
 
+        // The dedicated shell reuses Home's five-tab view but keeps its own
+        // address. Route marker presence is authoritative because this page
+        // is never emitted through the public SPA route table.
+        if (PLAYER_HISTORY_ROUTE) {
+            return { view: 'home', sub: '', urlLang: null, legacyHash: false, playerHistory: true };
+        }
+
         // Legacy hash deep-links (bookmarks / old shares).
         const rawHash = (location.hash || '').replace(/^#/, '');
         if (rawHash) {
@@ -8439,7 +8845,10 @@
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
-        if (historyMode === 'none') return;
+        // The unlisted player-history shell is one stable URL. Its language
+        // menu changes copy in place and must never rewrite the hidden route to
+        // the public Home path.
+        if (historyMode === 'none' || PLAYER_HISTORY_ROUTE) return;
         const wantPath = pathForRoute(view, sub);
         const needPath = location.pathname !== wantPath;
         const needClearHash = Boolean(location.hash);
@@ -8619,13 +9028,17 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.classic-mode-link').forEach(el => {
+        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
-            const aria = el.getAttribute(`data-aria-${suffix}`);
             if (href) el.setAttribute('href', href);
-            if (aria) el.setAttribute('aria-label', aria);
         });
+        const modeSummary = document.querySelector('#mode-menu > summary');
+        if (modeSummary) {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const aria = modeSummary.getAttribute(`data-aria-${suffix}`);
+            if (aria) modeSummary.setAttribute('aria-label', aria);
+        }
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
             columnArticle ? renderArticle(columnArticle) : renderColumnList();
@@ -8650,6 +9063,7 @@
         renderUpdatesPanel();
         setRecommendMode(recommendMode);
         renderSidePanel();
+        renderPlayerHistoryState();
         if (detailSelected) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (champ) openDetailForChamp(champ, true);
@@ -8851,6 +9265,12 @@
     });
 
     document.addEventListener('click', (ev) => {
+        const modeMenu = document.getElementById('mode-menu');
+        if (modeMenu && !modeMenu.contains(ev.target)) modeMenu.open = false;
+        const modePick = ev.target.closest('.mode-options [data-mode-target]');
+        if (modePick) {
+            trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
+        }
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
@@ -9305,6 +9725,7 @@
     // here finishes data-bound copy (cards, panels).  historyMode 'none': the
     // following routeFromLocation will write the locale prefix if needed.
     setRecommendMode(false);
+    initPlayerHistory();
     syncPickDecorations();
     renderSidePanel();
     if (currentLang !== 'zh') {
@@ -9467,6 +9888,13 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            const modeMenu = document.getElementById('mode-menu');
+            if (modeMenu && modeMenu.open) {
+                modeMenu.open = false;
+                const summary = modeMenu.querySelector('summary');
+                if (summary) summary.focus();
+                return;
+            }
             if (augChampsId != null) {
                 closeAugChamps();
                 return;

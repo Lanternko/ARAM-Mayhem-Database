@@ -1,6 +1,7 @@
 """Tier-list site rendering (split from build_tier_list.py): payload assembly,
 HTML shell, --shell-only fast preview, OG/favicon images, icon localization."""
 from __future__ import annotations
+import hashlib
 import os as _os, sys as _sys
 import math
 import time
@@ -24,14 +25,7 @@ def load_skill_scaling_snapshot(
     queue_id: int,
     path: Path | None = None,
 ) -> dict[int, dict]:
-    """Load and validate the versioned per-champion skill-scaling snapshot.
-
-    A queue mismatch is an intentional empty result: the current snapshot is
-    Mayhem-only and must never leak into Classic ARAM.  A missing, malformed,
-    or suspiciously partial Mayhem snapshot is a build error because silently
-    converting that global failure into 173 per-champion "not enough data"
-    cards is misleading.
-    """
+    """Load and validate the versioned per-champion skill-scaling snapshot."""
     snapshot_path = path or SKILL_SCALING_SNAPSHOT
     try:
         raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
@@ -40,10 +34,10 @@ def load_skill_scaling_snapshot(
             f"skill-scaling snapshot unavailable: {snapshot_path}: {exc}"
         ) from exc
 
-    if raw.get("schema_version") != 1:
+    if not isinstance(raw, dict) or raw.get("schema_version") != 1:
         raise click.ClickException(
             f"unsupported skill-scaling schema in {snapshot_path}: "
-            f"{raw.get('schema_version')!r}"
+            f"{raw.get('schema_version') if isinstance(raw, dict) else type(raw).__name__!r}"
         )
     try:
         artifact_queue = int(raw["queue_id"])
@@ -489,6 +483,15 @@ def _read_site_template(name: str) -> str:
     return (Path(__file__).resolve().parent / "templates" / name).read_text(encoding="utf-8")
 
 
+def _retire_player_history_css(css: str) -> str:
+    """Remove the hidden-route-only CSS block from ordinary shells."""
+    marker = "/* ===== Player history lookup ====="
+    head, sep, _tail = css.partition(marker)
+    if not sep:
+        raise ValueError("site.css player-history block not found")
+    return head.rstrip() + "\n"
+
+
 def _site_base_href(site_url: str) -> str:
     """Absolute site root ending in / for <base href>, or '' if unusable."""
     raw = (site_url or "").strip()
@@ -869,125 +872,286 @@ CHAMPION_DETAIL_FIELDS = (
 # Matchup formula (recommend_gui.predict_matchup_prob):
 #   P(ally wins) = sigmoid(logit_ally − logit_enemy + intercept)
 DRAFT_COMPOSITION_LR_DIR = Path("models/composition_lr_pooled_recency_7d")
-DRAFT_MODEL_MIN_SIGNAL = 1e-6
-DRAFT_ANALYSIS_AXES = ("front", "damage", "engage", "wave", "sustain", "cc")
+DRAFT_PUBLIC_COMP_FIELDS = (
+    "phys", "magic", "true", "front", "damage", "engage", "wave", "poke",
+    "sustain", "cc",
+)
+DRAFT_PUBLIC_RADAR_AXES = ("front", "damage", "engage", "wave", "sustain", "cc")
+DRAFT_MODEL_SIGNAL_EPSILON = 1e-10
+_DRAFT_MODEL_ERROR = "Draft prediction model failed public validation."
+_DRAFT_SCHEMA_ERROR = "Draft prediction model has an unsupported feature schema."
+_DRAFT_FALLBACK_REASON = "Composition signal unavailable; using champion-only model."
 
 
-def _draft_model_has_signal(payload: dict | None) -> bool:
-    """Reject a numerically collapsed classifier instead of publishing 50%."""
-    if not payload:
-        return False
-    coefficients = payload.get("coef") or []
-    if not coefficients or len(coefficients) != len(payload.get("feature_names") or []):
-        return False
+class _DraftNumericSignalError(ValueError):
+    """A model is structurally understood but has no safe numeric signal."""
+
+
+def _draft_finite_float(value: object) -> float:
+    value = float(value)
+    if not math.isfinite(value):
+        raise _DraftNumericSignalError
+    return value
+
+
+def _draft_nonnegative_float(value: object) -> float:
+    value = _draft_finite_float(value)
+    if value < 0:
+        raise _DraftNumericSignalError
+    return value
+
+
+def _draft_vocab_in_index_order(champ_to_idx: dict) -> list[int]:
+    """Return a canonical numeric champion vocab without reflecting bad input."""
     try:
-        return max(abs(float(value)) for value in coefficients) >= DRAFT_MODEL_MIN_SIGNAL
-    except (TypeError, ValueError):
-        return False
+        pairs = [(int(cid), int(idx)) for cid, idx in champ_to_idx.items()]
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR) from exc
+    if any(cid <= 0 or str(cid) != str(raw_cid) for (raw_cid, _), (cid, _) in zip(champ_to_idx.items(), pairs)):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+    pairs.sort(key=lambda item: item[1])
+    if [idx for _, idx in pairs] != list(range(len(pairs))):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+    return [cid for cid, _ in pairs]
 
 
-def _load_draft_champion_lr_fallback(
-    model_dir: Path,
+def _draft_composition_feature_names(
+    champ_to_idx: dict,
     *,
-    profiles: dict[str, dict],
-    trained_through: str | None,
-) -> dict | None:
-    """Load the champion-only fallback used by recommend_gui for 5v5 matchups."""
-    weights_path = model_dir / "lr_weights.json"
-    vocab_path = model_dir / "champ_to_idx.json"
-    if not weights_path.exists() or not vocab_path.exists():
-        return None
+    score_columns: tuple[str, ...] | list[str],
+    role_columns: tuple[str, ...] | list[str],
+    ad_bins: tuple[str, ...] | list[str],
+    front_groups: tuple[str, ...] | list[str],
+    wave_groups: tuple[str, ...] | list[str],
+    engage_groups: tuple[str, ...] | list[str],
+    poke_groups: tuple[str, ...] | list[str],
+) -> list[str]:
+    """Build the complete code-owned feature allowlist used by recommend.py."""
+    champion_names = [f"champion:{cid}" for cid in _draft_vocab_in_index_order(champ_to_idx)]
+    linear = [
+        "ad_share", "ad_ap_balance", "true_share", "front_count", "front_sum",
+        "core_lacks_count", "all_lacks_count",
+    ]
+    linear.extend(f"sum_{name}" for name in score_columns)
+    linear.extend(f"lack_{name}" for name in score_columns)
+    linear.extend(f"role_{str(role).lower()}" for role in role_columns)
+    interactions = [
+        f"ad_front:{front}:{ad_bin}"
+        for front in front_groups for ad_bin in ad_bins
+    ]
+    interactions.extend(
+        f"wave_engage:{wave}:{engage}"
+        for wave in wave_groups for engage in engage_groups
+    )
+    interactions.extend(
+        f"poke_front:{front}:{poke}"
+        for front in front_groups for poke in poke_groups
+    )
+    interactions.extend(
+        f"role_ad:{ad_bin}:{str(role).lower()}"
+        for ad_bin in ad_bins for role in role_columns
+    )
+    return champion_names + linear + interactions
+
+
+def _validate_draft_feature_schema(
+    feature_names: list[str],
+    expected_names: list[str],
+) -> None:
+    """Fail closed on any unknown, duplicate, missing, or non-string feature."""
+    if (
+        not isinstance(feature_names, list)
+        or any(not isinstance(name, str) for name in feature_names)
+        or len(feature_names) != len(expected_names)
+        or len(set(feature_names)) != len(feature_names)
+        or set(feature_names) != set(expected_names)
+    ):
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+
+
+def _draft_export_profiles(model, score_columns, role_columns) -> dict[str, dict]:
+    profiles: dict[str, dict] = {}
     try:
-        weights = json.loads(weights_path.read_text(encoding="utf-8"))
-        champ_to_idx = {
-            str(int(champion_id)): int(index)
-            for champion_id, index in json.loads(
-                vocab_path.read_text(encoding="utf-8")
-            ).items()
-        }
-        coefficients = [float(value) for value in weights["coef"]]
-        feature_names: list[str | None] = [None] * len(coefficients)
-        for champion_id, index in champ_to_idx.items():
-            if index < 0 or index >= len(feature_names) or feature_names[index] is not None:
-                raise ValueError(f"invalid champion LR index {index} for {champion_id}")
-            feature_names[index] = f"champion:{champion_id}"
-        if any(name is None for name in feature_names):
-            raise ValueError("champion LR vocabulary does not cover every coefficient")
-        payload = {
-            "kind": "champion_lr",
-            "source_model": f"{model_dir.name}/lr_weights.json",
-            "trained_through_patch": trained_through,
-            "intercept": round(float(weights["intercept"]), 8),
-            "coef": [round(value, 8) for value in coefficients],
-            "feature_names": feature_names,
-            "champ_to_idx": champ_to_idx,
-            "profiles": profiles,
-            "fallback_reason": "composition_lr_degenerate",
-        }
-        return payload if _draft_model_has_signal(payload) else None
-    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        click.echo(f"[tierlist] WARN: unable to export Draft champion LR fallback: {exc}")
-        return None
+        for cid, profile in model.profiles.items():
+            scores = {
+                name: round(_draft_finite_float(profile.scores[name]), 6)
+                for name in score_columns
+            }
+            roles = {
+                role: round(_draft_finite_float(profile.roles[role]), 6)
+                for role in role_columns
+            }
+            profiles[str(int(cid))] = {
+                "scores": scores,
+                "roles": roles,
+                "physical_dpm": round(_draft_finite_float(profile.physical_dpm), 4),
+                "magic_dpm": round(_draft_finite_float(profile.magic_dpm), 4),
+                "true_dpm": round(_draft_finite_float(profile.true_dpm), 4),
+            }
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise _DraftNumericSignalError from exc
+    return profiles
 
 
-def hydrate_draft_comp_profiles(payload: dict, draft_model: dict | None) -> int:
-    """Fill public team-analysis axes from the model's versioned profiles.
+def _draft_validate_coefficients(coef: list[object], feature_names: list[str]) -> list[float]:
+    if not isinstance(coef, list) or len(coef) != len(feature_names) or not coef:
+        raise _DraftNumericSignalError
+    try:
+        values = [_draft_finite_float(value) for value in coef]
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise _DraftNumericSignalError from exc
+    if max(abs(value) for value in values) <= DRAFT_MODEL_SIGNAL_EPSILON:
+        raise _DraftNumericSignalError
+    return values
 
-    The model bundle is already required for Draft and contains the same seven
-    capability scores used by the local recommender.  This keeps shell-only
-    builds valid even when ignored data/cache CSVs are unavailable.
-    """
-    champs = payload.get("champs") or {}
-    profiles = (draft_model or {}).get("profiles") or {}
-    score_fields = {
-        "wave": "wave_clear_score",
-        "cc": "cc_score",
-        "engage": "engage_score",
+
+def _load_draft_champion_lr_fallback(model_dir: Path, profiles: dict[str, dict]) -> dict:
+    """Load the code-owned champion-only fallback in canonical vocab order."""
+    try:
+        weights = json.loads((model_dir / "lr_weights.json").read_text(encoding="utf-8"))
+        vocab = json.loads((model_dir / "champ_to_idx.json").read_text(encoding="utf-8"))
+        ordered_ids = _draft_vocab_in_index_order(vocab)
+        feature_names = [f"champion:{cid}" for cid in ordered_ids]
+        _validate_draft_feature_schema(feature_names, feature_names)
+        coef = _draft_validate_coefficients(list(weights.get("coef") or []), feature_names)
+        intercept = _draft_finite_float(weights.get("intercept"))
+    except click.ClickException:
+        raise
+    except Exception as exc:
+        raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+    return {
+        "kind": "champion_lr",
+        "source_model": model_dir.name,
+        "trained_through_patch": None,
+        "intercept": round(intercept, 8),
+        "coef": [round(value, 8) for value in coef],
+        "feature_names": feature_names,
+        "champ_to_idx": {str(cid): idx for idx, cid in enumerate(ordered_ids)},
+        "profiles": profiles,
+        "fallback_reason": _DRAFT_FALLBACK_REASON,
+    }
+
+
+def validate_draft_model_payload(model: dict) -> None:
+    """Validate a browser model without accepting model-owned feature names."""
+    if not isinstance(model, dict) or model.get("kind") not in {"composition_lr", "champion_lr"}:
+        raise click.ClickException(_DRAFT_MODEL_ERROR)
+    try:
+        champ_to_idx = model["champ_to_idx"]
+        ordered_ids = _draft_vocab_in_index_order(champ_to_idx)
+        feature_names = model["feature_names"]
+        if model["kind"] == "champion_lr":
+            expected = [f"champion:{cid}" for cid in ordered_ids]
+        else:
+            from aram_nn.recommend import (
+                AD_BINS as CANONICAL_AD_BINS,
+                CORE_COLUMNS as CANONICAL_CORE_COLUMNS,
+                ENGAGE_GROUPS as CANONICAL_ENGAGE_GROUPS,
+                FRONT_GROUPS as CANONICAL_FRONT_GROUPS,
+                LACK_THRESHOLDS as CANONICAL_LACK_THRESHOLDS,
+                POKE_GROUPS as CANONICAL_POKE_GROUPS,
+                ROLE_COLUMNS as CANONICAL_ROLE_COLUMNS,
+                SCORE_COLUMNS as CANONICAL_SCORE_COLUMNS,
+                WAVE_GROUPS as CANONICAL_WAVE_GROUPS,
+            )
+            meta = model["meta"]
+            canonical_meta = {
+                "score_columns": list(CANONICAL_SCORE_COLUMNS),
+                "core_columns": list(CANONICAL_CORE_COLUMNS),
+                "role_columns": list(CANONICAL_ROLE_COLUMNS),
+                "lack_thresholds": {
+                    key: float(value) for key, value in CANONICAL_LACK_THRESHOLDS.items()
+                },
+                "ad_bins": list(CANONICAL_AD_BINS),
+                "front_groups": list(CANONICAL_FRONT_GROUPS),
+                "wave_groups": list(CANONICAL_WAVE_GROUPS),
+                "engage_groups": list(CANONICAL_ENGAGE_GROUPS),
+                "poke_groups": list(CANONICAL_POKE_GROUPS),
+            }
+            if any(meta.get(key) != value for key, value in canonical_meta.items()):
+                raise click.ClickException(_DRAFT_SCHEMA_ERROR)
+            expected = _draft_composition_feature_names(
+                champ_to_idx,
+                score_columns=CANONICAL_SCORE_COLUMNS,
+                role_columns=CANONICAL_ROLE_COLUMNS,
+                ad_bins=CANONICAL_AD_BINS,
+                front_groups=CANONICAL_FRONT_GROUPS,
+                wave_groups=CANONICAL_WAVE_GROUPS,
+                engage_groups=CANONICAL_ENGAGE_GROUPS,
+                poke_groups=CANONICAL_POKE_GROUPS,
+            )
+        _validate_draft_feature_schema(feature_names, expected)
+        _draft_validate_coefficients(model["coef"], feature_names)
+        _draft_finite_float(model["intercept"])
+    except click.ClickException:
+        raise
+    except _DraftNumericSignalError as exc:
+        raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+    except Exception as exc:
+        raise click.ClickException(_DRAFT_SCHEMA_ERROR) from exc
+
+
+def hydrate_draft_champion_profiles(payload: dict, model: dict) -> None:
+    """Overwrite public composition aggregates from the validated model bundle."""
+    profiles = model.get("profiles") or {}
+    score_map = {
+        "front": "frontline_score",
         "damage": "damage_score",
+        "engage": "engage_score",
+        "wave": "wave_clear_score",
         "poke": "poke_score",
         "sustain": "sustain_score",
-        "front": "frontline_score",
+        "cc": "cc_score",
     }
-    hydrated = 0
-    for champion_id, model_profile in profiles.items():
-        champion = champs.get(str(champion_id))
-        if not isinstance(champion, dict):
-            continue
-        comp = champion.setdefault("comp", {})
-        scores = model_profile.get("scores") or {}
-        comp.update({
-            "phys": round(float(model_profile.get("physical_dpm") or 0.0), 3),
-            "magic": round(float(model_profile.get("magic_dpm") or 0.0), 3),
-            "true": round(float(model_profile.get("true_dpm") or 0.0), 3),
-        })
-        for public_key, score_key in score_fields.items():
-            comp[public_key] = round(float(scores.get(score_key) or 0.0), 3)
-        hydrated += 1
-    return hydrated
+    for cid, champ in (payload.get("champs") or {}).items():
+        profile = profiles.get(str(cid))
+        if not isinstance(profile, dict):
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
+        try:
+            scores = profile["scores"]
+            try:
+                damage = {
+                    "phys": round(_draft_nonnegative_float(profile["physical_dpm"]), 3),
+                    "magic": round(_draft_nonnegative_float(profile["magic_dpm"]), 3),
+                    "true": round(_draft_nonnegative_float(profile["true_dpm"]), 3),
+                }
+            except (KeyError, TypeError, ValueError, OverflowError, _DraftNumericSignalError):
+                # Some legacy model profiles contain signed/corrupt DPM values.
+                # Keep the already validated public damage mix as one coherent
+                # trio instead of publishing a partly model-derived ratio.
+                current = champ.get("comp") or {}
+                damage = {
+                    key: round(_draft_nonnegative_float(current[key]), 3)
+                    for key in ("phys", "magic", "true")
+                }
+            comp = damage
+            comp.update({
+                public: round(_draft_finite_float(scores[source]), 3)
+                for public, source in score_map.items()
+            })
+        except Exception as exc:
+            raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+        champ["comp"] = comp
 
 
-def validate_draft_analysis_payload(payload: dict) -> None:
-    """Block a publish that would render a collapsed Draft analysis."""
+def validate_draft_public_payload(payload: dict) -> None:
+    """Reject payloads that would publish a dead model or all-centre radar."""
     champs = payload.get("champs") or {}
     if not champs:
-        raise click.ClickException("Draft analysis payload has no champions")
-    empty_axes = []
-    for axis in DRAFT_ANALYSIS_AXES:
-        has_signal = any(
-            abs(float(((champion or {}).get("comp") or {}).get(axis) or 0.0))
-            >= DRAFT_MODEL_MIN_SIGNAL
-            for champion in champs.values()
-        )
-        if not has_signal:
-            empty_axes.append(axis)
-    if empty_axes:
-        raise click.ClickException(
-            "Draft analysis axes have no usable signal: " + ", ".join(empty_axes)
-        )
-
-    draft_model = payload.get("draftModel")
-    if draft_model is not None and not _draft_model_has_signal(draft_model):
-        raise click.ClickException("Draft analysis model has no usable coefficients")
+        return
+    model = payload.get("draftModel")
+    validate_draft_model_payload(model)
+    for key in DRAFT_PUBLIC_COMP_FIELDS:
+        try:
+            values = [_draft_finite_float(champ["comp"][key]) for champ in champs.values()]
+        except Exception as exc:
+            raise click.ClickException(_DRAFT_MODEL_ERROR) from exc
+        if key in DRAFT_PUBLIC_RADAR_AXES and (
+            not values or max(values) - min(values) <= DRAFT_MODEL_SIGNAL_EPSILON
+        ):
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
 
 
 def load_draft_composition_lr_payload(
@@ -1026,27 +1190,35 @@ def load_draft_composition_lr_payload(
             except Exception:
                 trained_through = None
 
-        profiles: dict[str, dict] = {}
-        for cid, profile in model.profiles.items():
-            profiles[str(int(cid))] = {
-                "scores": {
-                    name: round(float(profile.scores[name]), 6) for name in SCORE_COLUMNS
-                },
-                "roles": {
-                    role: round(float(profile.roles[role]), 6) for role in ROLE_COLUMNS
-                },
-                "physical_dpm": round(float(profile.physical_dpm), 4),
-                "magic_dpm": round(float(profile.magic_dpm), 4),
-                "true_dpm": round(float(profile.true_dpm), 4),
-            }
+        profiles = _draft_export_profiles(model, SCORE_COLUMNS, ROLE_COLUMNS)
+        expected_features = _draft_composition_feature_names(
+            model.champ_to_idx,
+            score_columns=SCORE_COLUMNS,
+            role_columns=ROLE_COLUMNS,
+            ad_bins=AD_BINS,
+            front_groups=FRONT_GROUPS,
+            wave_groups=WAVE_GROUPS,
+            engage_groups=ENGAGE_GROUPS,
+            poke_groups=POKE_GROUPS,
+        )
+        feature_names = list(model.feature_names)
+        _validate_draft_feature_schema(feature_names, expected_features)
+        try:
+            coef = _draft_validate_coefficients(model.coef.tolist(), feature_names)
+            intercept = _draft_finite_float(model.intercept)
+        except _DraftNumericSignalError:
+            fallback = _load_draft_champion_lr_fallback(model_dir, profiles)
+            fallback["trained_through_patch"] = trained_through
+            validate_draft_model_payload(fallback)
+            return fallback
 
-        composition_payload = {
+        payload = {
             "kind": "composition_lr",
             "source_model": model_dir.name,
             "trained_through_patch": trained_through,
-            "intercept": round(float(model.intercept), 8),
-            "coef": [round(float(v), 8) for v in model.coef.tolist()],
-            "feature_names": list(model.feature_names),
+            "intercept": round(intercept, 8),
+            "coef": [round(value, 8) for value in coef],
+            "feature_names": feature_names,
             "champ_to_idx": {str(int(k)): int(v) for k, v in model.champ_to_idx.items()},
             "profiles": profiles,
             "meta": {
@@ -1061,26 +1233,12 @@ def load_draft_composition_lr_payload(
                 "poke_groups": list(POKE_GROUPS),
             },
         }
-        if _draft_model_has_signal(composition_payload):
-            return composition_payload
-
-        fallback = _load_draft_champion_lr_fallback(
-            model_dir,
-            profiles=profiles,
-            trained_through=trained_through,
-        )
-        if fallback is not None:
-            click.echo(
-                "[tierlist] WARN: Draft Composition LR has no usable signal; "
-                "using champion-only LR fallback"
-            )
-            return fallback
-        click.echo(
-            "[tierlist] WARN: Draft models have no usable signal; final WR disabled"
-        )
-        return None
+        validate_draft_model_payload(payload)
+        return payload
+    except click.ClickException:
+        raise
     except Exception as exc:
-        click.echo(f"[tierlist] WARN: unable to export Draft Composition LR: {exc}")
+        click.echo("[tierlist] WARN: unable to export Draft prediction model")
         return None
 
 
@@ -1228,6 +1386,25 @@ def versioned_payload_url(payload_url: str, version: str) -> str:
         return url
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}v={ver}"
+
+
+def payload_content_version(payload: dict) -> str:
+    """Return a stable cache key for the payload's user-visible contents.
+
+    ``detailVersion`` is excluded because it stores this key in the published
+    payload.  Excluding it avoids a circular hash while still invalidating the
+    URL whenever Draft model weights, hydrated profiles, or other payload data
+    changes during a shell-only publish.
+    """
+    version_basis = dict(payload)
+    version_basis.pop("detailVersion", None)
+    canonical = json.dumps(
+        version_basis,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()[:16]
 
 
 def _localize_full_shell_html(
@@ -1883,6 +2060,8 @@ def render_html(
     aug_global: dict[int, dict] | None = None,
     script_assets_dir: Path | None = None,
     meta_pick_api_url: str = "",
+    player_history_api_url: str = "",
+    player_history_route: bool = False,
     team_score_bundle: dict[str, object] | None = None,
 ) -> str:
     # Group champions by tier
@@ -2283,6 +2462,8 @@ def render_html(
         })
 
     css = _read_site_template("site.css")
+    if not player_history_route:
+        css = _retire_player_history_css(css)
 
     trained_composition = dict((team_score_bundle or {}).get("composition") or {})
     recommendation_composition = {
@@ -2331,17 +2512,11 @@ def render_html(
         "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": draft_model,
     }
-    hydrated_profiles = hydrate_draft_comp_profiles(payload, draft_model)
-    if hydrated_profiles:
-        click.echo(
-            f"[tierlist] hydrated Draft capability profiles for "
-            f"{hydrated_profiles} champions"
-        )
-    # render_html(records=[]) is also used for shell/metadata contract tests.
-    # Enforce the Draft signal invariant only when this is an actual champion
-    # payload; shell-only builds separately require champs before validation.
-    if payload.get("champs"):
-        validate_draft_analysis_payload(payload)
+    if js_champs:
+        if draft_model is None:
+            raise click.ClickException(_DRAFT_MODEL_ERROR)
+        hydrate_draft_champion_profiles(payload, draft_model)
+        validate_draft_public_payload(payload)
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
     _dedupe_item_objects(payload)
@@ -2404,14 +2579,24 @@ def render_html(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
     )
     meta_lines.append(f"<meta name='description' content=\"{seo_desc}\">")
+    # Ordinary Home shells are canonical at the site root. The unlisted
+    # player-history shell gets its own canonical URL so it never leaks the
+    # hidden page as a duplicate of Home in metadata.
+    canonical_url = site_url
+    if player_history_route and site_url:
+        canonical_url = site_url.rstrip("/") + "/p/player-history/"
     if site_url:
         # <base> keeps relative assets (api/, assets/, favicons) resolving from the
         # site root when History API deep paths like /column/<id> are active.
         base_href = _site_base_href(site_url)
         if base_href:
             meta_lines.append(f"<base href='{html.escape(base_href, quote=True)}'>")
-        meta_lines.append(f"<link rel='canonical' href='{site_url}'>")
-        meta_lines.append(f"<meta property='og:url' content='{site_url}'>")
+        meta_lines.append(f"<link rel='canonical' href='{html.escape(canonical_url, quote=True)}'>")
+        meta_lines.append(f"<meta property='og:url' content='{html.escape(canonical_url, quote=True)}'>")
+    if player_history_route:
+        # This page is intentionally unlisted: it is a product utility for
+        # direct sharing, not a public indexable route.
+        meta_lines.append('<meta name="robots" content="noindex,nofollow">')
     meta_lines.append("<meta property='og:type' content='website'>")
     meta_lines.append(f"<meta property='og:title' content=\"{og_title}\">")
     meta_lines.append(f"<meta property='og:description' content=\"{og_desc}\">")
@@ -2433,7 +2618,7 @@ def render_html(
             "@type": "WebSite",
             "name": header_title,
             "alternateName": seo_alternate,
-            "url": site_url,
+            "url": canonical_url,
             "description": seo_desc,
             "inLanguage": "zh-Hant",
         }
@@ -2444,7 +2629,17 @@ def render_html(
         )
 
     parts: list[str] = []
-    parts.append("<!doctype html><html lang='zh-Hant'><head>")
+    route_attrs = ""
+    if player_history_route:
+        api_base_attr = html.escape(
+            (player_history_api_url or "").strip().rstrip("/"),
+            quote=True,
+        )
+        route_attrs = (
+            " data-route='player-history' data-page='player-history'"
+            f" data-player-history-api-base='{api_base_attr}'"
+        )
+    parts.append(f"<!doctype html><html lang='zh-Hant'{route_attrs}><head>")
     parts.extend(meta_lines)
     parts.extend(
         render_analytics_tags(
@@ -2679,6 +2874,75 @@ def render_html(
         "</label>"
     )
     parts.append("</div>")  # /search-rail
+
+    # Optional player-history lookup. This markup is emitted only for the
+    # dedicated hidden shell; the ordinary Home/locale shells stay completely
+    # free of the panel while preserving the five primary tabs.
+    player_history_disabled = " disabled" if not (player_history_api_url or "").strip() else ""
+    player_history_initial_state = "disabled" if player_history_disabled else "idle"
+    player_history_initial_status = (
+        "玩家歷史查詢目前未啟用。"
+        if player_history_disabled
+        else "輸入 Name#TAG 後查詢近期對局。"
+    )
+    player_history_initial_status_cn = (
+        "玩家历史查询目前未启用。"
+        if player_history_disabled
+        else "输入 Name#TAG 后查询近期对局。"
+    )
+    player_history_initial_status_en = (
+        "Player history lookup is not enabled."
+        if player_history_disabled
+        else "Enter a Name#TAG to check recent matches."
+    )
+    parts.append(
+        "<section class='player-history-panel' id='player-history-panel' "
+        "aria-labelledby='player-history-title'>"
+        "<header class='player-history-head'>"
+        "<div class='player-history-heading'>"
+        "<h2 id='player-history-title' data-i18n-zh='玩家歷史' "
+        "data-i18n-zh-cn='玩家历史' data-i18n-en='Player history'>玩家歷史</h2>"
+        "<p class='player-history-sub' data-i18n-zh='用 Riot ID 查看這個網站捕獲到的近期對局。' "
+        "data-i18n-zh-cn='用 Riot ID 查看本網站捕获到的近期对局。' "
+        "data-i18n-en='See recent matches captured by this site for a Riot ID.'>"
+        "用 Riot ID 查看這個網站捕獲到的近期對局。</p>"
+        "</div>"
+        "<span class='player-history-region' data-i18n-zh='TW · Mayhem' "
+        "data-i18n-zh-cn='TW · Mayhem' data-i18n-en='TW · Mayhem' "
+        "aria-label='TW region'>TW · Mayhem</span>"
+        "</header>"
+        "<form class='player-history-form' id='player-history-form' autocomplete='off' novalidate>"
+        "<div class='player-history-field'>"
+        "<label for='player-history-input' data-i18n-zh='Name#TAG' "
+        "data-i18n-zh-cn='Name#TAG' data-i18n-en='Name#TAG'>Name#TAG</label>"
+        f"<input id='player-history-input' name='riot-id' type='text' maxlength='128' "
+        "autocomplete='off' spellcheck='false' inputmode='text' "
+        "placeholder='Name#TAG' aria-describedby='player-history-help player-history-status' "
+        f"{player_history_disabled}>"
+        "</div>"
+        f"<button class='player-history-submit' id='player-history-submit' type='submit' "
+        "aria-busy='false' "
+        "data-i18n-zh='查詢' data-i18n-zh-cn='查询' data-i18n-en='Check history' "
+        f"{player_history_disabled}>查詢</button>"
+        "</form>"
+        "<p class='player-history-help' id='player-history-help' "
+        "data-i18n-zh='只查 TW 區域。資料是本網站已捕獲的子集，不代表完整對局紀錄。' "
+        "data-i18n-zh-cn='仅查询 TW 区域。资料是本网站已捕获的子集，不代表完整对局记录。' "
+        "data-i18n-en='TW region only. This is a captured subset, not a complete match history.'>"
+        "只查 TW 區域。資料是本網站已捕獲的子集，不代表完整對局紀錄。</p>"
+        f"<p class='player-history-status' id='player-history-status' role='status' aria-live='polite' "
+        f"data-state='{player_history_initial_state}' data-i18n-zh='{player_history_initial_status}' "
+        f"data-i18n-zh-cn='{player_history_initial_status_cn}' "
+        f"data-i18n-en='{player_history_initial_status_en}'>"
+        f"{player_history_initial_status}</p>"
+        "<div class='player-history-result' id='player-history-result' role='region' "
+        "aria-live='polite' aria-label='Player history result' hidden></div>"
+        "</section>"
+    )
+    # Keep the player-history markup exclusive to the generated unlisted shell;
+    # ordinary Home/locale shells must not expose the panel at all.
+    if not player_history_route:
+        parts.pop()
 
     # Thin-patch disclosure.  Champion win rates are shrunk toward the previous
     for tier in TIER_ORDER:
@@ -3111,6 +3375,7 @@ def _run_shell_only(
     build_date: str, cloudflare_analytics_token: str, ga_measurement_id: str,
     min_pair_games: int, min_synergy_games: int,
     meta_pick_api_url: str = "",
+    player_history_api_url: str = "",
 ) -> None:
     """Regenerate index.html from the existing payload, skipping all data compute.
 
@@ -3153,13 +3418,10 @@ def _run_shell_only(
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
-    hydrated_profiles = hydrate_draft_comp_profiles(payload, payload.get("draftModel"))
-    if hydrated_profiles:
-        click.echo(
-            f"[shell-only] hydrated Draft capability profiles for "
-            f"{hydrated_profiles} champions"
-        )
-    validate_draft_analysis_payload(payload)
+    if draft_model is None:
+        raise click.ClickException(_DRAFT_MODEL_ERROR)
+    hydrate_draft_champion_profiles(payload, draft_model)
+    validate_draft_public_payload(payload)
 
     # Slim oversized payloads left over from older full builds (full ranked
     # aug/item lists).  Rewrite in place so the next fetch is smaller without a
@@ -3168,15 +3430,10 @@ def _run_shell_only(
     slim_stats = slim_site_payload(payload)
     if not build_date:
         build_date = _dt.date.today().isoformat()
-    # A shell-only rebuild must not mint a new data version: it is reusing the
-    # published snapshot, and only the HTML/CSS/JS shell is changing.
-    payload_ver = str(payload.get("detailVersion") or "").strip()
-    if not payload_ver:
-        payload_ver = build_date.replace("-", "")
-        try:
-            payload_ver = f"{payload_ver}-{int(payload_path.stat().st_mtime)}"
-        except OSError:
-            pass
+    # Shell-only can still replace Draft model weights and hydrated profiles.
+    # Derive the fetch version from the resulting payload so same-day publishes
+    # cannot keep serving a cached pre-update model.
+    payload_ver = payload_content_version(payload)
     resolved_payload_url = versioned_payload_url(
         payload_url or "api/tier-list.json",
         payload_ver,
@@ -3251,9 +3508,36 @@ def _run_shell_only(
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url="",
+        player_history_route=False,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+
+    hidden_path = out_path.parent / "p" / "player-history" / "index.html"
+    hidden_html = render_html(
+        records, champ_meta,
+        champ_profiles={}, champ_picks={}, champ_sets={}, champ_item_builds={},
+        champ_single_items={}, champ_boot_items={}, champ_spell_items={},
+        champ_item_clusters={}, champ_augment_types={}, champ_synergy={},
+        aug_meta=aug_meta, patch_changes=payload.get("patchChanges") or {},
+        new_aug_ids=frozenset(), queue_id=queue_id, patch_prefix=patch_prefix,
+        ddragon_version="", total_games=total_games, min_games_per_pair=min_pair_games,
+        min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
+        build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
+        ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
+        script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url=player_history_api_url,
+        player_history_route=True,
+    )
+    hidden_path.parent.mkdir(parents=True, exist_ok=True)
+    hidden_path.write_text(hidden_html, encoding="utf-8")
+    click.echo(
+        f"[shell-only] wrote hidden player-history shell {hidden_path} "
+        f"({hidden_path.stat().st_size:,} bytes)"
+    )
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     info_pages = write_site_info_pages(
         out_path,

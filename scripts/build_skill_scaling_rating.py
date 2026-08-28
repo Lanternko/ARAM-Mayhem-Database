@@ -20,10 +20,31 @@ import polars as pl
 
 PATCHES = ["16.11", "16.12", "16.13"]
 MIN_GAMES = 250
+MIN_SNAPSHOT_CHAMPIONS = 150
 SITE_SNAPSHOT = Path(__file__).resolve().parent / "site_data" / "champ_skill_scaling.json"
 
 
+def validate_site_snapshot_rows(ss_json: dict[str, dict]) -> None:
+    if not isinstance(ss_json, dict) or len(ss_json) < MIN_SNAPSHOT_CHAMPIONS:
+        count = len(ss_json) if isinstance(ss_json, dict) else 0
+        raise ValueError(
+            f"skill-scaling snapshot needs at least {MIN_SNAPSHOT_CHAMPIONS} champions; got {count}"
+        )
+    normalized_ids: set[int] = set()
+    for champion_id, value in ss_json.items():
+        cid = int(champion_id)
+        pp = float(value["pp"])
+        z_score = float(value["z"])
+        games = int(value["g"])
+        if cid in normalized_ids:
+            raise ValueError(f"duplicate normalized champion id: {cid}")
+        if not math.isfinite(pp) or not math.isfinite(z_score) or games <= 0:
+            raise ValueError(f"invalid metrics for champion {cid}")
+        normalized_ids.add(cid)
+
+
 def write_site_snapshot(ss_json: dict[str, dict]) -> None:
+    validate_site_snapshot_rows(ss_json)
     SITE_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
     SITE_SNAPSHOT.write_text(
         json.dumps(
@@ -51,14 +72,16 @@ def snapshot_from_analysis_csv(path: Path) -> int:
     missing = required.difference(df.columns)
     if missing:
         raise ValueError(f"analysis CSV is missing columns: {sorted(missing)}")
-    ss_json = {
-        str(int(row["champ"])): {
+    ss_json: dict[str, dict] = {}
+    for row in df.iter_rows(named=True):
+        champion_id = str(int(row["champ"]))
+        if champion_id in ss_json:
+            raise ValueError(f"analysis CSV contains duplicate champion: {champion_id}")
+        ss_json[champion_id] = {
             "pp": round(float(row["scaling_pp"]), 1),
             "z": round(float(row["z"]), 1),
             "g": int(row["games"]),
         }
-        for row in df.iter_rows(named=True)
-    }
     write_site_snapshot(ss_json)
     print(f"[done] {SITE_SNAPSHOT}  ({len(ss_json)} champions; restored from {path})")
     return len(ss_json)

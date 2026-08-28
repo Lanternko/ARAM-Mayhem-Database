@@ -3465,12 +3465,14 @@ def compute_champ_spell_affinities(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                chosen = sorted({
-                    int(spell_id)
-                    for spell_id in (participant.get("spells") or [])
-                    if int(spell_id) > 0
-                })
-                if len(chosen) != 2:
+                raw_chosen = participant.get("spells")
+                if not isinstance(raw_chosen, (list, tuple)) or len(raw_chosen) != 2:
+                    continue
+                try:
+                    chosen = sorted(int(spell_id) for spell_id in raw_chosen)
+                except (TypeError, ValueError):
+                    continue
+                if chosen[0] <= 0 or chosen[0] == chosen[1]:
                     continue
                 champ_total_games[cid] += 1
                 baseline = baseline_by_champ.get(cid, 0.5)
