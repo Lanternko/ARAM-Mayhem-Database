@@ -28,15 +28,30 @@ if ($watchdog) {
 
 $argsList = @(
     "scripts/mayhem_lcu_watchdog.py",
-    # 4 producers, raised from 2. Two was a write-lock ceiling, not an LCU one:
-    # both workers opened games.db directly and contended on the write lock
-    # (414 "database is locked" hits across the old worker logs). Under the
-    # single-writer fleet the producers never open the DB, so the ceiling is
-    # now the LCU client instead.
-    "--workers", "4",
-    "--degraded-workers", "2",
-    "--degrade-client-mb", "5200",
-    "--client-restart-mb", "5800",
+    # Back to 2 producers, measured 2026-08-28. Raising this to 4 under the
+    # single-writer fleet was meant to test whether the old ceiling was the write
+    # lock; it was not. Hourly games captured barely moved -- ~1,950/hr on 2
+    # producers (06-13 UTC) against ~2,040/hr on 4 (14-19 UTC), inside the daily
+    # swing -- so the ceiling really is the one shared LCU client every producer
+    # queries. The extra two bought nothing and doubled the blast radius: the
+    # fleet exits as a unit when any single producer dies (observed 2026-08-28
+    # 01:37, exitcode=1, ~1.5h of collection lost), where the old per-worker
+    # supervision only lost the one.
+    "--workers", "2",
+    "--degraded-workers", "1",
+    # Lowered 2026-08-28 from 5200/5800.  Measured over 17,021 watchdog cycles
+    # (30 days): counting upward crossings of each candidate threshold gives
+    # ~6.7 restarts/day at 5800 and ~6.9/day at 4500 -- essentially the same.
+    # Client memory does not wobble around a line; once it passes ~3.5GB it
+    # almost always runs away to 6GB+, so lowering the trigger catches the same
+    # excursions earlier rather than adding new ones.  Restarting at 4500
+    # instead of 5800 keeps the client ~1.3GB further from the
+    # worker-start-max gate below, which is what turned the 2026-08-28
+    # PreEndOfGame hang into a 4.5h outage: memory blew past every gate while
+    # the phase check blocked the restart.  Degrade keeps its 600MB lead so it
+    # still gets a chance to shed a producer before the client is recycled.
+    "--degrade-client-mb", "3900",
+    "--client-restart-mb", "4500",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
     # running are left alone, so the old value created a trap -- workers were
     # observed running fine with the client at 5,199MB, but once they needed a

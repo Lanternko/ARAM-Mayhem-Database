@@ -768,10 +768,34 @@ def append_state(path: Path, record: dict[str, Any]) -> None:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
-def should_restart_client(args: argparse.Namespace, health: dict[str, Any], main_mb: float) -> tuple[bool, str]:
+def should_restart_client(
+    args: argparse.Namespace,
+    health: dict[str, Any],
+    main_mb: float,
+    latest_capture_age_min: float | None = None,
+) -> tuple[bool, str]:
     # When LCU is down, gameflow has no phase; treat that like the idle "None" phase.
     phase = health.get("phase") or "None"
     if phase not in args.safe_restart_phase:
+        # The phase gate exists so a restart never interrupts a real game, but a
+        # client can park in an unsafe phase forever and then the gate becomes a
+        # trap.  Observed 2026-08-28: LeagueClientUx crashed as a game ended,
+        # gameflow stuck at PreEndOfGame for 3.5h while the client grew to
+        # 11.7GB.  The phase gate refused the restart, the memory gate then
+        # refused to start workers (keep_worker_stopped), and neither could
+        # release the other -- 226 minutes with no captures.
+        #
+        # A live game does not stop collection: producers keep crawling while the
+        # user plays (phase=InProgress with captures landing every cycle is the
+        # normal picture).  So a long capture drought means the client is not
+        # serving the API regardless of what phase it claims, and restarting it
+        # costs nothing that is not already lost.
+        age = float(latest_capture_age_min or 0.0)
+        if age >= args.unsafe_phase_restart_after_min:
+            return True, (
+                f"phase {phase!r} unsafe but no captures for {age:.0f}min "
+                f"(>= {args.unsafe_phase_restart_after_min:.0f}min): client is stuck"
+            )
         return False, f"phase {phase!r} is not safe to restart"
     if main_mb >= args.client_restart_mb:
         return True, f"LeagueClient memory {main_mb:.1f}MB >= {args.client_restart_mb:.1f}MB"
@@ -910,7 +934,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             if _STALL_STATE["consecutive_restarts"] >= args.worker_stall_client_restart_after:
                 stall_force_client_restart = True
 
-    restart, restart_reason = should_restart_client(args, health, main_mb)
+    restart, restart_reason = should_restart_client(args, health, main_mb, latest_age)
     if not restart and stall_force_client_restart:
         phase = health.get("phase") or "None"
         if phase in args.safe_restart_phase:
@@ -1025,6 +1049,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--worker-stall-client-restart-after", type=int, default=3)
     parser.add_argument("--client-ready-timeout-sec", type=int, default=600)
     parser.add_argument("--safe-restart-phase", action="append", default=["None", "EndOfGame"])
+    # Escape hatch for a client parked in an unsafe phase: once captures have
+    # been dead this long the phase gate is protecting a game that is not being
+    # played.  Matches the stall alert's 45min threshold so the two agree about
+    # when the crawler counts as down.
+    parser.add_argument("--unsafe-phase-restart-after-min", type=float, default=45.0)
     parser.add_argument("--target-games", type=int, default=50000)
     parser.add_argument("--max-players", type=int, default=50000)
     parser.add_argument("--history-window", type=int, default=20)

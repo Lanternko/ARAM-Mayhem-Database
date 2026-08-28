@@ -23,6 +23,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +61,38 @@ def resolve_webhook(explicit: str | None) -> str:
     )
 
 
+# The fleet supervisor runs the `snowball-workers` subcommand and owns the
+# producers as child processes; the legacy one-process-per-worker form runs
+# `snowball`.  Matching only the latter reported workers=0 for the whole fleet
+# from the 2026-08-27 migration onward, which drives health_color to yellow (or
+# red, once captures also lag) on every digest.
+_SNOWBALL_SUBCOMMANDS = ("snowball", "snowball-workers")
+
+
+def snowball_subcommand(cmdline: Sequence[Any]) -> str | None:
+    for part in cmdline:
+        text = str(part)
+        if text in _SNOWBALL_SUBCOMMANDS:
+            return text
+    return None
+
+
+def producer_count(cmdline: Sequence[Any]) -> int:
+    """Producers this process is responsible for.
+
+    The legacy form is one crawler per process.  The fleet supervisor is one
+    process running ``--workers N`` producers, so counting processes would
+    under-report it by a factor of N.
+    """
+    parts = [str(part) for part in cmdline]
+    if snowball_subcommand(parts) != "snowball-workers":
+        return 1
+    try:
+        return max(1, int(parts[parts.index("--workers") + 1]))
+    except (ValueError, IndexError):
+        return 1
+
+
 def is_snowball_worker(proc: psutil.Process) -> bool:
     try:
         name = (proc.name() or "").lower()
@@ -69,7 +102,7 @@ def is_snowball_worker(proc: psutil.Process) -> bool:
     if name not in ("python.exe", "pythonw.exe") or len(cmdline) < 2:
         return False
     joined = " ".join(str(p).replace("/", "\\") for p in cmdline)
-    return r"scripts\lcu_collector.py" in joined and "snowball" in cmdline
+    return r"scripts\lcu_collector.py" in joined and snowball_subcommand(cmdline) is not None
 
 
 def is_watchdog(proc: psutil.Process) -> bool:
@@ -101,10 +134,12 @@ def live_workers() -> list[dict[str, Any]]:
             cmdline = list(proc.info.get("cmdline") or [])
             rss = proc.info.get("memory_info").rss if proc.info.get("memory_info") else 0
             uptime_min = (time.time() - float(proc.info.get("create_time") or time.time())) / 60
+            producers = producer_count(cmdline)
             rows.append(
                 {
                     "pid": proc.info["pid"],
-                    "worker_id": worker_id(cmdline),
+                    "worker_id": "fleet" if producers > 1 else worker_id(cmdline),
+                    "producers": producers,
                     "rss_mb": round(rss / 1024 / 1024, 1),
                     "uptime_min": round(uptime_min, 1),
                 }
@@ -806,7 +841,9 @@ def build_status(
         "ts": utc_now().isoformat(),
         "watchdog": watchdog,
         "workers_live": workers,
-        "worker_count": len(workers),
+        # Producers, not processes: the fleet supervisor is a single process
+        # running N of them.
+        "worker_count": sum(int(w.get("producers") or 1) for w in workers),
         "league_main_mb": league_mb,
         "lcu_ok": lcu_ok,
         "phase": phase,
@@ -873,8 +910,10 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
 
     worker_lines = []
     for w in status.get("workers_live") or []:
+        producers = int(w.get("producers") or 1)
+        fleet_note = f" · {producers} producers" if producers > 1 else ""
         worker_lines.append(
-            f"`{w['worker_id']}` pid={w['pid']} 已跑 {w['uptime_min']} 分 · {w['rss_mb']} MB"
+            f"`{w['worker_id']}` pid={w['pid']} 已跑 {w['uptime_min']} 分 · {w['rss_mb']} MB{fleet_note}"
         )
     if not worker_lines:
         worker_lines = ["_（無）_"]
