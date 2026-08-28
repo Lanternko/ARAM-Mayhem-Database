@@ -8,6 +8,8 @@ from typing import Sequence
 from aram_nn.site.db import insert_public_games
 from aram_nn.site.static_publish import (
     CommandResult,
+    DEFAULT_DOC_PATHS,
+    DEFAULT_PLAYER_HISTORY_API_URL,
     decide_static_publish,
     publish_static_site_once,
     push_with_upstream_merge,
@@ -146,6 +148,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 # External app script: the shell references it by content-hash
                 # ?v=, so it must ship in the same publish as index.html.
                 "docs/assets/site.js",
+                "docs/classic.html",
                 # Clean-path deep-link shells, locale mirrors, share thumbnail and
                 # the static info pages: each embeds the current game count / patch
                 # / cache-bust, so they change with index.html and drift on the live
@@ -157,6 +160,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/game",
                 "docs/en",
                 "docs/zh-CN",
+                "docs/p/player-history",
                 "docs/og-image.png",
                 "docs/about",
                 "docs/privacy",
@@ -185,6 +189,11 @@ class StaticSitePublishTests(unittest.TestCase):
             first_index("scripts/build_tier_list.py"),
             first_index("scripts/build_champ_empirical_axes.py"),
         )
+
+    def test_player_history_allowlist_is_exact_and_build_passes_api_only_for_hidden_shell(self) -> None:
+        self.assertIn(Path("docs/p/player-history"), DEFAULT_DOC_PATHS)
+        self.assertNotIn(Path("docs/p"), DEFAULT_DOC_PATHS)
+        self.assertEqual(DEFAULT_PLAYER_HISTORY_API_URL, "https://api.arammeta.com")
 
     def test_untracked_output_does_not_block_publish(self) -> None:
         """A brand-new (untracked) site artifact -- e.g. champ-archetype-fit.json on

@@ -38,7 +38,18 @@
         --wr-positive: oklch(0.78 0.055 155);
         --wr-negative: oklch(0.79 0.05 18);
         --wr-neutral: var(--text-muted);
+        --wr-5: oklch(0.723 0.192 149.6);
+        --wr-4: oklch(0.871 0.136 154.4);
+        --wr-3: var(--text-muted);
+        --wr-2: oklch(0.802 0.086 11.8);
+        --wr-1: oklch(0.676 0.213 19.8);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(255, 255, 255, 0.10);
+        --radar-baseline: rgba(255, 255, 255, 0.32);
+        --radar-label: #d4d8de;
+        --radar-compare-stroke: rgba(196, 200, 208, 0.90);
+        --radar-compare-fill: rgba(160, 166, 176, 0.14);
+        --radar-compare-dot: rgba(210, 214, 220, 0.95);
         --header-h: 56px;
         --container: 1320px;
         --r-sm: 8px;
@@ -80,7 +91,18 @@
         --wr-positive: oklch(0.53 0.09 155);
         --wr-negative: oklch(0.56 0.09 18);
         --wr-neutral: var(--text-muted);
+        --wr-5: oklch(0.500 0.137 150.1);
+        --wr-4: oklch(0.490 0.092 155.3);
+        --wr-3: var(--text-muted);
+        --wr-2: oklch(0.530 0.126 10.2);
+        --wr-1: oklch(0.530 0.199 21.6);
         --pick-quiet: var(--text-muted);
+        --radar-grid: rgba(26, 30, 38, 0.14);
+        --radar-baseline: rgba(26, 30, 38, 0.32);
+        --radar-label: #46505e;
+        --radar-compare-stroke: rgba(91, 100, 114, 0.86);
+        --radar-compare-fill: rgba(91, 100, 114, 0.12);
+        --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
     * { box-sizing: border-box; }
@@ -1456,17 +1478,8 @@
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
     .champ img {
-        /* Overlap the padding box by half a pixel on every side.
-           The grid produces fractional tile widths (52.3px on a 375px viewport),
-           so a 2px border computes to 1.869px and the image edge lands a
-           sub-pixel short of it.  The tile's own background then shows through
-           as a thin dark seam between the tier-coloured frame and the portrait
-           -- most visible on OP, whose padding-box layer is a solid #1f2530
-           behind the prismatic border.  Growing the image past the seam removes
-           the whole class of rounding artefact without touching the frame width. */
-        width: calc(100% + 1px);
-        height: calc(100% + 1px);
-        margin: -0.5px;
+        width: 100%;
+        height: 100%;
         object-fit: cover;
         display: block;
         border-radius: 6px;
@@ -1929,19 +1942,71 @@
     }
     .cf-skill b { font-weight: 600; }
     .detail-overview-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(132px, 0.8fr);
+        border-bottom: 1px solid var(--border);
+    }
+    .ovr-stat {
+        min-width: 0;
+        padding: 14px 18px;
+    }
+    .ovr-stat + .ovr-stat {
+        border-left: 1px solid var(--border);
+    }
+    .ovr-stat:first-child { padding-left: 0; }
+    .ovr-stat:last-child { padding-right: 0; }
+    .ovr-stat-line {
         display: flex;
         align-items: baseline;
-        gap: 10px;
+        gap: 9px;
+        min-width: 0;
     }
-    .ovr-wr {
-        font-size: 22px;
+    .ovr-value {
+        color: var(--text);
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: -0.025em;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .ovr-stat-primary .ovr-value {
+        font-size: 30px;
         font-weight: 800;
-        color: #dce4ef;
-        letter-spacing: 0.3px;
     }
-    .ovr-meta {
-        font-size: 12px;
-        color: #9aa0a6;
+    .ovr-rank {
+        color: var(--accent-soft);
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.01em;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .ovr-label {
+        display: block;
+        margin-top: 7px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: 0.04em;
+    }
+    @media (max-width: 560px) {
+        .detail-overview-head {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .ovr-stat { padding: 13px 12px; }
+        .ovr-stat:first-child { padding-left: 0; }
+        .ovr-stat:nth-child(2) { padding-right: 0; }
+        .ovr-stat-primary .ovr-value { font-size: 26px; }
+        .ovr-value { font-size: 22px; }
+        .ovr-stat-games {
+            grid-column: 1 / -1;
+            padding: 12px 0 13px;
+            border-top: 1px solid var(--border);
+            border-left: 0 !important;
+        }
     }
     .comp-fit-main {
         display: flex;
@@ -2568,8 +2633,8 @@
         gap: 18px;
         align-items: start;
         margin-top: 18px;
-        padding-top: 14px;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        padding-top: 0;
+        border-top: 0;
     }
     .overview-split > .detail-section,
     .overview-split .overview-split-main > .detail-section {
@@ -2589,6 +2654,7 @@
     }
     .boot-rail-row.is-top { border-color: rgba(107, 209, 107, 0.32); background: #11151d; }
     .boot-rail-row:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3); }
+    .boot-rail-icons { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
     .boot-rail-icon { width: 32px; height: 32px; border-radius: 6px; background: #2a3142; object-fit: contain; flex: 0 0 auto; }
     .boot-rail-name { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #e6e8eb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .boot-rail-wr { flex: 0 0 auto; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -3199,11 +3265,11 @@
        Bad side stays pure red (not orange — orange is reserved for pick heat).
        wr-2 is desaturated pink-red; wr-1 is brighter saturated red so the step
        is obvious on dark chrome without looking brown/muddy. */
-    .aug .awr.wr-5 { color: #22c55e; } /* 正綠 */
-    .aug .awr.wr-4 { color: #86efac; } /* 淺綠 */
-    .aug .awr.wr-3 { color: var(--text-secondary); font-weight: 600; } /* 無色 */
-    .aug .awr.wr-2 { color: #f0a8b0; } /* 淺紅：粉紅偏淡 */
-    .aug .awr.wr-1 { color: #ff4d5e; } /* 正紅：飽和、明顯比 wr-2 重 */
+    .aug .awr.wr-5 { color: var(--wr-5); } /* 正綠 */
+    .aug .awr.wr-4 { color: var(--wr-4); } /* 淺綠 */
+    .aug .awr.wr-3 { color: var(--wr-3); font-weight: 600; } /* 無色 */
+    .aug .awr.wr-2 { color: var(--wr-2); } /* 淺紅：粉紅偏淡 */
+    .aug .awr.wr-1 { color: var(--wr-1); } /* 正紅：飽和、明顯比 wr-2 重 */
     .aug .alift {
         flex: 0 0 var(--aug-stat-h);
         display: flex;
@@ -3633,18 +3699,6 @@
             box-shadow: 0 22px 60px rgba(0,0,0,0.58);
         }
         .detail-close { display: inline-flex; }
-        /* The desktop rule reserves a min(280px, 32vw) lane on the right so the
-           × clears the floating search chip.  On mobile .search-rail is
-           display:none, so that lane reserved nothing and parked the × ~138px
-           in from the edge — floating in the middle of the name row, right up
-           against the role tags.  Pin it back to the sheet corner. */
-        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
-            top: 8px;
-            right: 4px;
-        }
-        body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
-            padding-right: 42px;
-        }
         .rec-fab { display: none; }
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
@@ -4009,59 +4063,102 @@
     }
     .brand:hover .brand-aram { color: var(--text-secondary, var(--text-muted)); }
     .brand:hover .brand-meta { color: var(--text); }
-    .classic-mode-link {
+    /* Game-mode switcher. It intentionally matches the Classic page so the
+       control keeps one learned location, shape and state vocabulary. */
+    .site-header .mode-menu {
+        position: relative;
         display: inline-flex;
-        align-items: center;
-        gap: 6px;
         flex: none;
-        margin-left: 8px;
-        padding: 5px 10px;
-        border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--border));
+    }
+    .site-header .mode-menu > summary { list-style: none; }
+    .site-header .mode-menu > summary::-webkit-details-marker { display: none; }
+    .site-header .mode-menu > summary::marker { content: ''; }
+    .site-header .mode-select {
+        display: inline-flex;
+        min-height: 32px;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 11px 6px 13px;
+        border: 1px solid color-mix(in oklab, var(--accent) 68%, var(--border));
         border-radius: 999px;
-        background: color-mix(in oklab, var(--accent) 9%, var(--surface));
-        /* Accent frame around --text-muted grey read as unfinished — the label
-           has to carry the accent too, so the chip is one object rather than a
-           coloured box drawn around unrelated text. */
-        color: color-mix(in oklab, var(--accent) 62%, var(--text));
+        background: var(--accent);
+        color: var(--accent-on);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: .02em;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 24%, transparent),
+                    0 2px 8px color-mix(in srgb, var(--accent) 18%, transparent);
+        transition: background-color var(--dur-2) var(--ease),
+                    border-color var(--dur-2) var(--ease),
+                    transform var(--dur-1) var(--ease);
+    }
+    .site-header .mode-select svg {
+        flex: none;
+        transition: transform var(--dur-2) var(--ease);
+    }
+    .site-header .mode-menu[open] .mode-select svg { transform: rotate(180deg); }
+    .site-header .mode-select:hover {
+        background: color-mix(in oklab, var(--accent) 90%, var(--text));
+        border-color: var(--accent);
+    }
+    .site-header .mode-select:active { transform: scale(0.97); }
+    .site-header .mode-select:focus-visible {
+        outline: 2px solid color-mix(in oklab, var(--accent) 58%, var(--text));
+        outline-offset: 2px;
+    }
+    .site-header .mode-options {
+        position: absolute;
+        top: calc(100% + 7px);
+        right: 0;
+        z-index: 90;
+        display: grid;
+        min-width: 144px;
+        padding: 5px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-md);
+        background: var(--surface-raised);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.50);
+    }
+    .site-header .mode-option {
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 7px 10px;
+        border-radius: var(--r-sm);
+        color: var(--text-muted);
         font-size: 12px;
         font-weight: 650;
-        line-height: 1;
         text-decoration: none;
         white-space: nowrap;
-        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease),
-                    border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
     }
-    .classic-mode-link:hover {
-        border-color: color-mix(in oklab, var(--accent) 78%, var(--border));
-        background: color-mix(in oklab, var(--accent) 15%, var(--surface));
-        color: var(--accent);
+    .site-header .mode-option:hover,
+    .site-header .mode-option:focus-visible {
+        background: var(--surface-2);
+        color: var(--text);
     }
-    /* Light theme mixes toward --text, not away from it: the same 62%/accent
-       ratio that reads as warm cream on the dark chip becomes a pale gold on a
-       near-white chip (~2:1).  Keep the accent tint, let the text carry the
-       contrast. */
-    :root[data-theme="light"] .classic-mode-link {
-        color: color-mix(in oklab, var(--accent) 30%, var(--text));
+    .site-header .mode-option:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
     }
-    :root[data-theme="light"] .classic-mode-link:hover {
-        color: color-mix(in oklab, var(--accent) 42%, var(--text));
+    .site-header .mode-option[aria-current="page"] {
+        background: color-mix(in oklab, var(--accent) 12%, var(--surface-2));
+        color: var(--text);
     }
-    .classic-mode-link:active { transform: scale(0.97); }
-    .classic-mode-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .classic-mode-link-short { display: none; }
-    /* Bare 8px amber lettering next to a 12px label was two type sizes and two
-       colours fighting inside a 23px pill.  A filled badge keeps the word but
-       reads as one deliberate mark. */
-    .classic-mode-link-new {
+    .site-header .mode-option[aria-current="page"]::after {
+        content: '';
+        width: 6px;
+        height: 6px;
         flex: none;
-        padding: 2px 4px 1px;
-        border-radius: 4px;
+        margin-left: 12px;
+        border-radius: 50%;
         background: var(--accent);
-        color: #12151a;
-        font-size: 8px;
-        font-weight: 800;
-        letter-spacing: .06em;
-        line-height: 1;
+    }
+    :root[data-theme="light"] .site-header .mode-options {
+        box-shadow: 0 18px 50px rgba(31, 41, 55, 0.16);
     }
     .nav-tabs {
         position: relative;
@@ -4347,6 +4444,7 @@
         background: var(--border);
         border: 1px solid var(--border);
     }
+    .draft-metrics:empty { display: none; }
     .draft-metric {
         min-width: 0;
         min-height: 136px;
@@ -5107,10 +5205,10 @@
     }
     @media (max-width: 900px) {
         .view-draft.is-active {
-            width: 100vw;
-            max-width: 100vw;
-            margin-left: calc(50% - 50vw);
-            margin-right: calc(50% - 50vw);
+            width: calc(100% + 32px);
+            max-width: none;
+            margin-left: -16px;
+            margin-right: -16px;
             margin-top: -16px;
             margin-bottom: -48px;
             padding: 0;
@@ -5178,6 +5276,13 @@
         }
         .draft-analysis-intro p { max-width: none; text-align: left; }
         .draft-metrics { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 700px) {
+        .view-draft.is-active {
+            width: calc(100% + 24px);
+            margin-left: -12px;
+            margin-right: -12px;
+        }
     }
     @media (max-width: 520px) {
         .draft-mode-tabs { gap: 16px; }
@@ -5353,11 +5458,12 @@
             gap: 0 10px;
         }
         .brand-title { font-size: 22px; }
-        .classic-mode-link { margin-left: 0; padding: 5px 8px; }
-        .classic-mode-link-full,
-        .classic-mode-link-new { display: none; }
-        .classic-mode-link-short { display: inline; }
         .header-actions { margin-left: auto; gap: 6px; }
+        .site-header .mode-select {
+            min-height: 30px;
+            padding: 5px 9px 5px 11px;
+            font-size: 11px;
+        }
         .site-header .theme-toggle,
         .site-header .lang-toggle { padding: 5px 8px; }
         .nav-tabs {
@@ -5551,11 +5657,11 @@
     [data-theme="light"] .rlabel-sort.is-active {
         background: rgba(0, 0, 0, 0.16);
     }
-    [data-theme="light"] .aug .awr.wr-5 { color: #15803d; } /* 正綠 */
-    [data-theme="light"] .aug .awr.wr-4 { color: #3d9b5f; } /* 淺綠 */
-    [data-theme="light"] .aug .awr.wr-3 { color: var(--text-muted); }
-    [data-theme="light"] .aug .awr.wr-2 { color: #d98992; } /* 淺紅 */
-    [data-theme="light"] .aug .awr.wr-1 { color: #d32f3f; } /* 正紅 */
+    [data-theme="light"] .aug .awr.wr-5 { color: var(--wr-5); } /* 正綠 */
+    [data-theme="light"] .aug .awr.wr-4 { color: var(--wr-4); } /* 淺綠 */
+    [data-theme="light"] .aug .awr.wr-3 { color: var(--wr-3); }
+    [data-theme="light"] .aug .awr.wr-2 { color: var(--wr-2); } /* 淺紅 */
+    [data-theme="light"] .aug .awr.wr-1 { color: var(--wr-1); } /* 正紅 */
     /* Light: solar ladder deepened for paper contrast (same order). */
     [data-theme="light"] .aug .alift.pick-1 { color: #94a3b8; font-weight: 500; }
     [data-theme="light"] .aug .alift.pick-2 { color: #374151; font-weight: 600; }
@@ -5653,7 +5759,6 @@
         border-top-color: var(--border);
     }
     [data-theme="light"] .section-meta,
-    [data-theme="light"] .ovr-meta,
     [data-theme="light"] .cg-options-label,
     [data-theme="light"] .cg-tail-label,
     [data-theme="light"] .cg-core-share,
@@ -5662,7 +5767,7 @@
     [data-theme="light"] .cf-cap {
         color: var(--text-muted);
     }
-    [data-theme="light"] .ovr-wr { color: var(--text); }
+    [data-theme="light"] .ovr-value { color: var(--text); }
     [data-theme="light"] .ab-label { color: var(--text-muted); }
     [data-theme="light"] .ab-bar { background: rgba(0, 0, 0, 0.06); }
     [data-theme="light"] .cf-skill {
@@ -7479,6 +7584,10 @@
     .game-metric-sub.is-grade-f { color: #f87171; }
     [data-theme="light"] .game-metric-grade.is-grade-a,
     [data-theme="light"] .game-metric-sub.is-grade-a { color: #15803d; }
+    [data-theme="light"] .game-metric-grade.is-grade-b,
+    [data-theme="light"] .game-metric-sub.is-grade-b { color: #0369a1; }
+    [data-theme="light"] .game-metric-grade.is-grade-c,
+    [data-theme="light"] .game-metric-sub.is-grade-c { color: #4b5563; }
     [data-theme="light"] .game-metric-grade.is-grade-d,
     [data-theme="light"] .game-metric-grade.is-grade-f,
     [data-theme="light"] .game-metric-sub.is-grade-d,
@@ -7635,6 +7744,15 @@
         flex-direction: column;
         gap: 6px;
     }
+    .draft-result .game-analysis.is-draft-analysis {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--surface);
+    }
     .game-an-head {
         display: flex;
         flex-wrap: wrap;
@@ -7718,6 +7836,12 @@
         font-weight: 600;
         letter-spacing: 0.04em;
         color: var(--text-dim);
+    }
+    .game-an-wr-note {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 11px;
+        line-height: 1.5;
     }
     /* 手機：標題放大、勝率放大、bar 再縮短 */
     @media (max-width: 560px) {
@@ -7920,6 +8044,10 @@
     .game-an-grade.is-grade-f .game-an-grade-val { color: #f87171; }
     [data-theme="light"] .game-an-grade.is-grade-a .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-ap .game-an-grade-val { color: #15803d; }
+    [data-theme="light"] .game-an-grade.is-grade-b .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-bp .game-an-grade-val { color: #0369a1; }
+    [data-theme="light"] .game-an-grade.is-grade-c .game-an-grade-val,
+    [data-theme="light"] .game-an-grade.is-grade-cp .game-an-grade-val { color: #4b5563; }
     [data-theme="light"] .game-an-grade.is-grade-d .game-an-grade-val,
     [data-theme="light"] .game-an-grade.is-grade-f .game-an-grade-val { color: #c62828; }
     /* 手機也維持 2 欄；列更緊湊以免擠 */
@@ -8543,33 +8671,39 @@
         border-color: var(--panel-line);
     }
 
-    /* WR carries meaning; it no longer competes with pick-rate decoration. */
+    /* WR carries meaning; item and augment values use the shared five-step
+       champion-relative lift scale instead of collapsing to three tones. */
     .team-eval-wr.is-good .team-wr-num,
     .item-build-wr.is-good,
     .cg-core-wr.is-good,
     .cg-option-wr.is-good,
-    .boot-rail-wr.is-good,
-    .aug .awr.wr-5,
-    .aug .awr.wr-4 {
+    .boot-rail-wr.is-good {
         color: var(--wr-positive);
     }
     .team-eval-wr.is-bad .team-wr-num,
     .item-build-wr.is-bad,
     .cg-core-wr.is-bad,
     .cg-option-wr.is-bad,
-    .boot-rail-wr.is-bad,
-    .aug .awr.wr-1,
-    .aug .awr.wr-2 {
+    .boot-rail-wr.is-bad {
         color: var(--wr-negative);
     }
     .team-eval-wr.is-even .team-wr-num,
     .item-build-wr.is-even,
     .cg-core-wr.is-even,
     .cg-option-wr.is-even,
-    .boot-rail-wr.is-even,
-    .aug .awr.wr-3 {
+    .boot-rail-wr.is-even {
         color: var(--wr-neutral);
     }
+    .item-build-wr.wr-5, .cg-core-wr.wr-5, .cg-option-wr.wr-5,
+    .boot-rail-wr.wr-5, .aug .awr.wr-5 { color: var(--wr-5); }
+    .item-build-wr.wr-4, .cg-core-wr.wr-4, .cg-option-wr.wr-4,
+    .boot-rail-wr.wr-4, .aug .awr.wr-4 { color: var(--wr-4); }
+    .item-build-wr.wr-3, .cg-core-wr.wr-3, .cg-option-wr.wr-3,
+    .boot-rail-wr.wr-3, .aug .awr.wr-3 { color: var(--wr-3); }
+    .item-build-wr.wr-2, .cg-core-wr.wr-2, .cg-option-wr.wr-2,
+    .boot-rail-wr.wr-2, .aug .awr.wr-2 { color: var(--wr-2); }
+    .item-build-wr.wr-1, .cg-core-wr.wr-1, .cg-option-wr.wr-1,
+    .boot-rail-wr.wr-1, .aug .awr.wr-1 { color: var(--wr-1); }
     .team-delta.tone-pos-2,
     .team-delta.tone-pos-1,
     .team-delta.tone-neg-1,
@@ -8633,6 +8767,18 @@
         border: 1px solid var(--panel-line);
     }
 
+    /* The leading rail row is a recommendation, not an active selection.
+       Use neutral elevation and type weight instead of a full accent outline. */
+    .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    [data-theme="light"] .boot-rail-row.is-top {
+        background: color-mix(in oklab, var(--panel-inner) 84%, var(--text) 16%);
+        border-color: color-mix(in oklab, var(--panel-line) 58%, var(--text-muted) 42%);
+    }
+    .boot-rail-row.is-top .boot-rail-name { font-weight: 650; }
+
     /* Reduced-motion override.  Disables prismShift / shineSweep /
        slideDown so vestibular-sensitive users don't get hue drift and
        sweep effects across the page. */
@@ -8646,4 +8792,245 @@
         ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
             animation: none !important;
         }
+    }
+
+    /* ===== Player history lookup =====
+       One quiet secondary panel on Home. It uses the shared theme tokens and
+       hairline section rules, with no nested cards or decorative gradients. */
+    .player-history-panel {
+        margin: 24px 0 30px;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+        background: var(--panel-surface);
+        color: var(--text);
+    }
+    .player-history-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--panel-line);
+    }
+    .player-history-heading { min-width: 0; }
+    .player-history-heading h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.25;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+    }
+    .player-history-sub {
+        margin: 5px 0 0;
+        max-width: 65ch;
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    .player-history-region {
+        flex: 0 0 auto;
+        padding: 5px 9px;
+        border: 1px solid color-mix(in oklab, var(--accent) 42%, var(--border));
+        border-radius: 999px;
+        color: color-mix(in oklab, var(--accent) 70%, var(--text));
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 12px;
+        padding: 16px 0 10px;
+    }
+    .player-history-field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+    }
+    .player-history-field label {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.25;
+    }
+    .player-history-field input {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-sm);
+        background: var(--panel-inner);
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+    }
+    .player-history-field input::placeholder { color: var(--text-dim); }
+    .player-history-field input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-color: var(--accent);
+    }
+    .player-history-submit {
+        min-width: 112px;
+        height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--accent);
+        border-radius: var(--r-sm);
+        background: var(--accent);
+        color: var(--accent-on);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease),
+                    color var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease);
+    }
+    .player-history-submit:hover:not(:disabled) {
+        background: var(--accent-soft);
+        border-color: var(--accent-soft);
+    }
+    .player-history-submit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+    .player-history-submit:disabled,
+    .player-history-field input:disabled {
+        cursor: not-allowed;
+        opacity: 0.54;
+    }
+    .player-history-help,
+    .player-history-status {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-help { padding-bottom: 12px; }
+    .player-history-status {
+        min-height: 1.5em;
+        padding-top: 12px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-status[data-state="error"] { color: var(--wr-negative); }
+    .player-history-status[data-state="ready"] { color: var(--text); }
+    .player-history-status[data-state="loading"] { color: var(--accent-soft); }
+    .player-history-result {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--panel-line);
+    }
+    .player-history-result[hidden] { display: none; }
+    .player-history-summary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 5px 14px;
+        margin-bottom: 12px;
+    }
+    .player-history-summary strong {
+        font-size: 16px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-summary span {
+        color: var(--text-muted);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-note {
+        margin: 0 0 12px;
+        color: var(--text-muted);
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .player-history-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-sm);
+    }
+    .player-history-table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    .player-history-table th,
+    .player-history-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--panel-line);
+        text-align: left;
+        vertical-align: middle;
+    }
+    .player-history-table th {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .player-history-table tbody tr:last-child td { border-bottom: 0; }
+    .player-history-table td:first-child,
+    .player-history-table th:first-child,
+    .player-history-table td:nth-child(2),
+    .player-history-table td:nth-child(4) {
+        font-variant-numeric: tabular-nums;
+    }
+    .player-history-champion {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 120px;
+        color: var(--text);
+        font-weight: 600;
+    }
+    .player-history-champion img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: var(--panel-inner);
+    }
+    .player-history-outcome.is-win { color: var(--wr-positive); font-weight: 700; }
+    .player-history-outcome.is-loss { color: var(--wr-negative); font-weight: 700; }
+    .player-history-snapshot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        margin-top: 10px;
+        color: var(--text-dim);
+        font-size: 11px;
+        line-height: 1.45;
+    }
+    .player-history-skeleton {
+        display: grid;
+        gap: 8px;
+    }
+    .player-history-skeleton span {
+        display: block;
+        height: 32px;
+        border-radius: 5px;
+        background: var(--panel-inner);
+        border: 1px solid var(--panel-line);
+    }
+    @media (max-width: 700px) {
+        .player-history-panel { margin: 20px 0 24px; padding: 14px; }
+        .player-history-head { gap: 10px; padding-bottom: 12px; }
+        .player-history-heading h2 { font-size: 17px; }
+        .player-history-sub { font-size: 12px; }
+        .player-history-region { padding: 4px 7px; font-size: 10px; }
+        .player-history-form { grid-template-columns: 1fr; gap: 10px; padding: 14px 0 9px; }
+        .player-history-submit { width: 100%; }
+        .player-history-table { min-width: 500px; }
+        .player-history-table th,
+        .player-history-table td { padding: 8px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .player-history-submit { transition: none; }
     }

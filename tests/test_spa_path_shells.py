@@ -15,6 +15,7 @@ from tierlist_render import (  # noqa: E402
     _site_base_href,
     _spa_deep_link_stub,
     champion_detail_base_url,
+    payload_content_version,
     render_adsense_verification_tag,
     slim_site_payload,
     split_champion_detail_payloads,
@@ -113,9 +114,27 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", en_body)
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
-            self.assertIn("https://arammeta.com/en", en_body)
+            self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
+            self.assertIn(
+                "hreflang='zh-Hans' href='https://arammeta.com/zh-CN/'",
+                en_body,
+            )
+            self.assertIn(
+                "hreflang='x-default' href='https://arammeta.com/'",
+                en_body,
+            )
             zh_cn = root / "zh-CN" / "index.html"
-            self.assertIn("FULL_SPA_SHELL", zh_cn.read_text(encoding="utf-8"))
+            zh_cn_body = zh_cn.read_text(encoding="utf-8")
+            self.assertIn("FULL_SPA_SHELL", zh_cn_body)
+            self.assertIn(
+                "rel='canonical' href='https://arammeta.com/zh-CN/'",
+                zh_cn_body,
+            )
+            root_body = index.read_text(encoding="utf-8")
+            self.assertIn(
+                "hreflang='en' href='https://arammeta.com/en/'",
+                root_body,
+            )
             self.assertIn("/zh-CN", SPA_FULL_SHELL_PATHS)
             self.assertIn("/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
@@ -123,6 +142,13 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertNotIn("/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/en/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/zh-CN/column", SPA_FULL_SHELL_PATHS)
+
+    def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
+        source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
+        self.assertIn("return prefix ? prefix + '/' : '/'", source)
+        self.assertIn("return prefix + '/' + view + '/'", source)
+        self.assertIn("const needPath = location.pathname !== wantPath", source)
+        self.assertIn("pathForRoute('home') + (location.search || '')", source)
 
     def test_write_site_info_pages_creates_policy_pages_and_ads_txt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -156,6 +182,30 @@ class SpaPathShellTests(unittest.TestCase):
             versioned_payload_url("api/tier-list.json?v=1", "20260712"),
             "api/tier-list.json?v=1",
         )
+
+    def test_payload_content_version_is_stable_and_tracks_model_data(self) -> None:
+        payload = {
+            "detailVersion": "old-build",
+            "draftModel": {"kind": "champion_lr", "coef": [0.1, -0.2]},
+            "champs": {"1": {"wr": 0.51, "draftProfile": {"front": 0.4}}},
+        }
+        version = payload_content_version(payload)
+        self.assertRegex(version, r"^[0-9a-f]{16}$")
+
+        same_contents = dict(payload, detailVersion="another-old-build")
+        self.assertEqual(payload_content_version(same_contents), version)
+
+        changed_model = {
+            **payload,
+            "draftModel": {"kind": "champion_lr", "coef": [0.1, -0.3]},
+        }
+        self.assertNotEqual(payload_content_version(changed_model), version)
+
+        changed_profile = {
+            **payload,
+            "champs": {"1": {"wr": 0.51, "draftProfile": {"front": 0.5}}},
+        }
+        self.assertNotEqual(payload_content_version(changed_profile), version)
 
     def test_champion_detail_base_url_tracks_payload_location(self) -> None:
         self.assertEqual(

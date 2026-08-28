@@ -1,5 +1,7 @@
 # ARAM Mayhem Database — DESIGN system
 
+> **Archived / superseded:** 這是早期 design snapshot。現行品牌、排版、色彩、元件與 CSS 規範只看根目錄 `../../DESIGN.md`。
+
 ## Color (OKLCH-tinted neutrals + tier hues)
 
 **Strategy**: Committed. Tier colours carry 30%+ of visible surface area as champion-thumbnail frames; the dark slate background recedes.

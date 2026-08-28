@@ -39,7 +39,7 @@ Crawler 通知（Task Scheduler）
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
 | Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0` |
-| League memory | 同上 | degrade 5200 MB；safe restart 5800 MB；worker start gate 6500 MB |
+| League memory | 同上 | degrade 3900 MB；safe restart 4500 MB（phase 卡住且 45 分沒收場則無視 phase 強制重啟）；worker start gate 6500 MB |
 | Frontier | 同上＋watchdog | manual pending cap 120；queue 450／2400／2450／4310；OPGG＋self＋friends |
 | Static publish | wrapper＋`src/aram_nn/site/static_publish.py` | growth 10%；patch `auto`；新 patch 至少 10,000 games |
 | Recommender refresh | `scripts/mayhem_lcu_watchdog.py` defaults | growth 25%；目前 patch 至少 15,000 games |

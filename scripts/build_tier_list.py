@@ -14,6 +14,9 @@ import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
+from aram_nn.site.static_publish import (  # noqa: E402
+    DEFAULT_CF_ANALYTICS_TOKEN as PRODUCTION_CF_ANALYTICS_TOKEN,
+)
 
 
 PRODUCTION_SITE_URL = "https://arammeta.com"
@@ -124,6 +127,36 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
     return normalized_api
 
 
+def resolve_production_shell_settings(
+    site_url: str,
+    payload_url: str,
+    cloudflare_analytics_token: str,
+) -> tuple[str, str]:
+    """Make the one-line production shell build safe by default.
+
+    Local previews preserve the caller's values.  For arammeta.com, shell-only
+    always reuses the existing split payload and keeps the public analytics
+    beacon unless the caller explicitly supplied another value.
+    """
+    if site_url.strip().rstrip("/") != PRODUCTION_SITE_URL:
+        return payload_url, cloudflare_analytics_token
+    return (
+        payload_url.strip() or "api/tier-list.json",
+        cloudflare_analytics_token.strip() or PRODUCTION_CF_ANALYTICS_TOKEN,
+    )
+
+
+def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -> str:
+    """Resolve the optional player-history API base without sharing Meta Pick.
+
+    There is deliberately no production default here. The player-history
+    service is independently deployable, so an empty value keeps the panel
+    disabled and a caller must explicitly provide its base URL.
+    """
+    del site_url  # Kept parallel to resolve_meta_pick_api_url for CLI symmetry.
+    return (player_history_api_url or "").strip().rstrip("/")
+
+
 
 
 @click.command()
@@ -162,12 +195,13 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
 @click.option("--payload-url", default="",
               help="Have the generated HTML fetch DATA from this URL instead of embedding it inline.")
 @click.option("--shell-only", is_flag=True, default=False,
-              help="Fast frontend-preview rebuild: regenerate ONLY index.html from the existing "
+              help="Fast frontend shell rebuild: regenerate route HTML and site.js from the existing "
                    "tier-list.json payload, skipping all win-rate / augment / affinity compute "
                    "(seconds vs the full multi-minute build). Champ grid + CSS/JS render as in "
                    "production and search still works (the client rebuilds its search index from "
-                   "the payload on load). Use while iterating on site.css / site.js / copy; run a "
-                   "normal build to refresh the data.")
+                   "the payload on load). With --site-url https://arammeta.com/, production split-"
+                   "payload and analytics defaults are applied automatically. Use a normal build "
+                   "only when the public data must also change.")
 @click.option("--reuse-model-artifacts", is_flag=True, default=False,
               help="Refresh current-patch statistics while reusing cached empirical profiles "
                    "and team-score artifacts; useful when only the data payload changed.")
@@ -179,6 +213,13 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
     default="",
     help="Base URL for Meta Pick leaderboard API (e.g. https://api.example.com). "
          "Empty disables remote submit/board. Injected into site.js as __META_PICK_API_BASE__.",
+)
+@click.option(
+    "--player-history-api-url",
+    envvar="ARAM_PLAYER_HISTORY_API_URL",
+    default="",
+    help="Base URL for the optional player-history query API. "
+         "Injected only into the hidden /p/player-history/ shell; empty disables its controls.",
 )
 def main(
     db: Path,
@@ -202,8 +243,10 @@ def main(
     reuse_model_artifacts: bool,
     skip_patch_comparison: bool,
     meta_pick_api_url: str,
+    player_history_api_url: str,
 ) -> None:
     meta_pick_api_url = resolve_meta_pick_api_url(site_url, meta_pick_api_url)
+    player_history_api_url = resolve_player_history_api_url(site_url, player_history_api_url)
     if site_url.strip().rstrip("/") == PRODUCTION_SITE_URL:
         click.echo(f"[tierlist] production Meta Pick API: {meta_pick_api_url}")
 
@@ -226,6 +269,11 @@ def main(
     click.echo(f"[tierlist] db={db}  queue={queue_id}  patch_prefix={patch_prefix}")
 
     if shell_only:
+        payload_url, cloudflare_analytics_token = resolve_production_shell_settings(
+            site_url,
+            payload_url,
+            cloudflare_analytics_token,
+        )
         _run_shell_only(
             out_path=out_path, db=db, queue_id=queue_id, patch_prefix=patch_prefix,
             payload_out=payload_out, payload_url=payload_url, site_url=site_url,
@@ -234,6 +282,7 @@ def main(
             ga_measurement_id=ga_measurement_id, min_pair_games=min_pair_games,
             min_synergy_games=min_synergy_games,
             meta_pick_api_url=meta_pick_api_url,
+            player_history_api_url=player_history_api_url,
         )
         return
 
@@ -474,7 +523,7 @@ def main(
         min_games=SPELL_MIN_GAMES,
     )
     click.echo(
-        f"[tierlist] {len(spell_affinity)} champions have >= 1 summoner-spell row "
+        f"[tierlist] {len(spell_affinity)} champions have >= 1 two-spell loadout row "
         f"(games >= {SPELL_MIN_GAMES}, top_lift >= {SPELL_TOP_MIN_LIFT:.1%})"
     )
     item_build_clusters = compute_champ_item_build_clusters(
@@ -618,6 +667,10 @@ def main(
         aug_global=aug_global,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
+        # Player history is rendered only into the dedicated unlisted shell
+        # below. Ordinary Home/locale output gets no panel or API URL.
+        player_history_api_url="",
+        player_history_route=False,
         team_score_bundle=team_score_bundle,
     )
     if payload_out is not None:
@@ -626,6 +679,54 @@ def main(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     click.echo(f"[tierlist] wrote {out_path}  ({out_path.stat().st_size:,} bytes)")
+
+    # One full shell for the hidden player-history utility. It deliberately
+    # reuses the same data payload and shared JS asset as Home, while carrying
+    # its route marker, noindex metadata, panel markup and API base only here.
+    player_history_path = out_path.parent / "p" / "player-history" / "index.html"
+    player_history_html = render_html(
+        champ_records,
+        champ_meta,
+        champ_profiles,
+        picks,
+        set_affinity,
+        item_pair_affinity,
+        single_item_affinity,
+        boot_item_affinity,
+        spell_affinity,
+        item_build_clusters,
+        augment_type_affinity,
+        synergy,
+        aug_meta,
+        patch_changes,
+        new_aug_ids=new_aug_ids,
+        queue_id=queue_id,
+        patch_prefix=patch_prefix,
+        ddragon_version=version,
+        total_games=total_games,
+        min_games_per_pair=min_pair_games,
+        min_synergy_games=min_synergy_games,
+        site_url=site_url,
+        og_image=og_image,
+        build_date=build_date,
+        cloudflare_analytics_token=cloudflare_analytics_token,
+        ga_measurement_id=ga_measurement_id,
+        payload_out_path=None,
+        payload_url=payload_url,
+        icon_assets_dir=out_path.parent / "assets" / "icons",
+        aug_global=aug_global,
+        script_assets_dir=out_path.parent / "assets",
+        meta_pick_api_url=meta_pick_api_url,
+        player_history_api_url=player_history_api_url,
+        player_history_route=True,
+        team_score_bundle=team_score_bundle,
+    )
+    player_history_path.parent.mkdir(parents=True, exist_ok=True)
+    player_history_path.write_text(player_history_html, encoding="utf-8")
+    click.echo(
+        f"[tierlist] wrote hidden player-history shell {player_history_path} "
+        f"({player_history_path.stat().st_size:,} bytes)"
+    )
     mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
