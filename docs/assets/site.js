@@ -103,7 +103,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260829-1787956391");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260829-1787958465");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -746,7 +746,7 @@
     const DATE_STR_ZH = "更新於 2026-08-29";
     const BUILD_DATE = "2026-08-29";
     const PATCH_LABEL = "patch 26.17";
-    const TOTAL_GAMES = "102,476";
+    const TOTAL_GAMES = "103,589";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
@@ -825,7 +825,7 @@
         zh: {
             htmlLang: 'zh-Hant',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: '搜尋英雄（中 / 英）   Ctrl+F',
+            searchPlaceholderDesktop: 'Ctrl+F',
             searchPlaceholderMobile: '搜尋英雄（中 / 英）',
             searchAria: '搜尋英雄',
             shownUnit: '隻',
@@ -1162,7 +1162,7 @@
         en: {
             htmlLang: 'en',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Search champions (ZH / EN)   Ctrl+F',
+            searchPlaceholderDesktop: 'Ctrl+F',
             searchPlaceholderMobile: 'Search champions (ZH / EN)',
             searchAria: 'Search champions',
             shownUnit: 'shown',
@@ -4579,7 +4579,7 @@
         return total;
     }
 
-    /** Full 5v5 Composition LR: sigmoid(ally_logit − enemy_logit + intercept). */
+    /** Full 5v5 LR: composition model when healthy, champion-only fallback otherwise. */
     function draftCompositionLrWinrate(allyIds, enemyIds) {
         const model = DATA && DATA.draftModel;
         if (!model || (model.kind !== 'composition_lr' && model.kind !== 'champion_lr')) return null;
@@ -4591,6 +4591,15 @@
         if (myLogit == null || enemyLogit == null) return null;
         const logit = myLogit - enemyLogit + Number(model.intercept || 0);
         return 1 / (1 + Math.exp(-logit));
+    }
+
+    function draftModelNote(finalWr, fullDraft) {
+        const copy = tr();
+        if (!fullDraft) return copy.draftMetricPartial;
+        if (finalWr == null) return copy.draftMetricUnavailable;
+        return DATA && DATA.draftModel && DATA.draftModel.kind === 'champion_lr'
+            ? copy.draftMetricChampionNote
+            : copy.draftMetricFinalNote;
     }
 
     /** Ally vs optional enemy: team details remain contextual; final WR is Composition LR. */
@@ -4886,14 +4895,28 @@
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
         const fullDraft = teamPicks.length === MAX_TEAM_PICKS && enemyPicks.length === MAX_TEAM_PICKS;
-        const note = !fullDraft ? copy.draftMetricPartial
-            : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote);
+        const note = draftModelNote(mu.finalWr, fullDraft);
         return `
             <div class="draft-metric final ${draftMetricTone(mu.finalWr)}">
                 <span class="draft-metric-label">${escHtml(copy.draftMetricFinal)}</span>
                 <strong class="draft-metric-value">${draftMetricValue(fullDraft ? mu.finalWr : null)}</strong>
                 <span class="draft-metric-note">${escHtml(note || '')}</span>
             </div>`;
+    }
+
+    function buildDraftMatchupAnalysisHtml(mu) {
+        const copy = tr();
+        const fullDraft = teamPicks.length === MAX_TEAM_PICKS
+            && enemyPicks.length === MAX_TEAM_PICKS;
+        return metaPickAnalysisHtml(enemyPicks, teamPicks, copy, {
+            className: 'is-draft-analysis',
+            title: copy.draftCompareTitle,
+            comparisonLegend: copy.draftLegendEnemy,
+            primaryLegend: copy.draftLegendAlly,
+            winRate: fullDraft ? mu.finalWr : null,
+            winRateLabel: copy.draftMetricFinal,
+            note: draftModelNote(mu.finalWr, fullDraft),
+        });
     }
 
     function renderDraftView() {
@@ -6869,10 +6892,6 @@
     const AUG_DRAFT_ROUNDS = 4;
     const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
     const AUG_DRAFT_CHAMP_CHOICES = 3;
-    // Earlier picks carry more leverage, while later picks are increasingly
-    // conditional on the build already taking shape. These weights keep the
-    // projected rate readable instead of simply adding four independent lifts.
-    const AUG_DRAFT_POSITION_WEIGHT = [1, 0.84, 0.7, 0.58];
     // Champions below this see too few games for their per-augment lift to mean
     // anything; the draft would be scoring noise.
     const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
@@ -7011,67 +7030,52 @@
         return augs[String(id)] || augs[id] || null;
     }
 
-    function augDraftSetKeys(aug) {
-        if (!aug) return [];
-        const rows = Array.isArray(aug.sets) ? aug.sets : [];
-        const keys = rows.map(s => String(s && (s.slug || s.name_zh || s.name_en || s.name) || ''))
-            .filter(Boolean);
-        if (aug.setSlug) keys.push(String(aug.setSlug));
-        if (aug.set) keys.push(String(aug.set));
-        return [...new Set(keys)];
-    }
-
-    function augDraftCategoryKeys(aug) {
-        return aug && Array.isArray(aug.cats) ? aug.cats.map(String) : [];
-    }
-
-    /** Small, visible context signal: set repeats and shared archetypes matter. */
-    function augDraftPairBonus(leftId, rightId) {
-        const left = augDraftAugFor(leftId);
-        const right = augDraftAugFor(rightId);
-        if (!left || !right) return 0;
-        const rightSets = new Set(augDraftSetKeys(right));
-        const rightCats = new Set(augDraftCategoryKeys(right));
-        const sameSet = augDraftSetKeys(left).some(k => rightSets.has(k));
-        const sharedCats = augDraftCategoryKeys(left).filter(k => rightCats.has(k)).length;
-        return (sameSet ? 0.005 : 0) + Math.min(sharedCats, 2) * 0.0015;
-    }
-
-    function augDraftPairBonusTotal(ids) {
-        let total = 0;
-        for (let i = 0; i < ids.length; i += 1) {
-            for (let j = i + 1; j < ids.length; j += 1) {
-                total += augDraftPairBonus(ids[i], ids[j]);
-            }
+    function augDraftSlotStat(id, round) {
+        const row = augDraftRowFor(id, round);
+        const slot = row && Array.isArray(row.slots) ? row.slots[Number(round) || 0] : null;
+        if (slot && Number(slot.g) > 0 && Number.isFinite(Number(slot.wr))) {
+            return {
+                wr: Number(slot.wr),
+                rawWr: Number(slot.rawWr ?? slot.wr),
+                games: Number(slot.g),
+                fallback: false,
+            };
         }
-        return total;
+        return {
+            wr: row ? Number(row.wr || 0) : 0,
+            rawWr: row ? Number(row.wr || 0) : 0,
+            games: row ? Number(row.g || 0) : 0,
+            fallback: true,
+        };
     }
 
-    function augDraftPositionWeight(round) {
-        const i = Math.max(0, Number(round) || 0);
-        return AUG_DRAFT_POSITION_WEIGHT[i] || AUG_DRAFT_POSITION_WEIGHT[AUG_DRAFT_POSITION_WEIGHT.length - 1];
+    /**
+     * Production must not invent combo coefficients.  The trained sequence
+     * ensemble is validated offline but not yet exported to the static client;
+     * until that artifact is wired, rank strictly by the observed slot model.
+     */
+    function augDraftComboAdjustment(id, picks) {
+        void id;
+        void picks;
+        return { value: 0, kind: 'model-pending' };
     }
 
-    function augDraftBaseWr() {
-        const champ = (DATA && DATA.champs && DATA.champs[augDraft.champId]) || {};
-        const wr = Number(champ.wr ?? champ.rawWr);
-        return Number.isFinite(wr) && wr > 0 ? wr : 0.5;
+    function augDraftEstimate(id, round, picks) {
+        const slot = augDraftSlotStat(id, round);
+        const combo = augDraftComboAdjustment(id, picks);
+        return {
+            projected: Math.max(0.05, Math.min(0.95, slot.wr + combo.value)),
+            slotWr: slot.wr,
+            slotRawWr: slot.rawWr,
+            slotGames: slot.games,
+            slotFallback: slot.fallback,
+            combo: combo.value,
+            comboKind: combo.kind,
+        };
     }
 
-    /** Project the resulting champion WR after this candidate is added. */
     function augDraftProjectedWr(id, round, picks) {
-        const history = Array.isArray(picks) ? picks : augDraft.picks;
-        const historyIds = history.map(p => String(p.id));
-        let projected = augDraftBaseWr();
-        history.forEach((p, index) => {
-            projected += Number(p.wrLift || 0) * augDraftPositionWeight(
-                p.round == null ? index : p.round
-            );
-        });
-        projected += augDraftPairBonusTotal(historyIds);
-        projected += Number(augDraftLift(id, round) || 0) * augDraftPositionWeight(round);
-        historyIds.forEach(prevId => { projected += augDraftPairBonus(prevId, id); });
-        return Math.max(0.05, Math.min(0.95, projected));
+        return augDraftEstimate(id, round, picks).projected;
     }
 
     function augDraftDeal(n, soft, extraHard) {
@@ -7136,7 +7140,8 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const projected = candidates.map(x => augDraftProjectedWr(x, augDraft.round, augDraft.picks));
+        const estimates = candidates.map(x => augDraftEstimate(x, augDraft.round, augDraft.picks));
+        const projected = estimates.map(x => x.projected);
         const best = Math.max.apply(null, projected);
         const worst = Math.min.apply(null, projected);
         const mineIndex = candidates.map(String).indexOf(String(id));
@@ -7155,6 +7160,7 @@
             best,
             worst,
             projectedById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), projected[i]])),
+            estimateById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), estimates[i]])),
             wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
@@ -7303,20 +7309,37 @@
         // Show the two quantities the ranking is actually built from, not the
         // blended score: a bare "+1.3%" made a 114-game augment look better
         // than a 3,942-game one with no way to see why.
-        const liftHtml = o.reveal
+        const estimate = o.estimate || null;
+        const slotNumber = Number(o.round == null ? augDraft.round : o.round) + 1;
+        const slotLabel = currentLang === 'en' ? `Pick ${slotNumber}` : zhUi(`第 ${slotNumber} 手`);
+        const dataLabel = estimate && estimate.slotFallback
+            ? (currentLang === 'en' ? 'All picks' : zhUi('全順位'))
+            : slotLabel;
+        const comboText = estimate
+            ? (estimate.comboKind === 'model-pending'
+                ? (currentLang === 'en' ? 'Pending' : zhUi('待接入'))
+                : `${estimate.combo >= 0 ? '+' : ''}${(Number(estimate.combo) * 100).toFixed(1)}%`)
+            : '';
+        const liftHtml = o.reveal && estimate
             ? `<span class="aug-draft-stats">`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGameWinRate || 'Win rate')}</span>`
-                + `<b class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
-                + `${escHtml(pct(augDraftWr(id)))}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(dataLabel + (currentLang === 'en' ? ' observed' : zhUi('實戰')))}</span>`
+                + `<b class="aug-draft-wr">${escHtml(pct(estimate.slotRawWr))}</b></span>`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGamePickRateLabel || 'Pick rate')}</span>`
-                + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample' : zhUi('樣本'))}</span>`
+                + `<b class="aug-draft-pick">${escHtml(Number(estimate.slotGames || 0).toLocaleString())}</b></span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample-adjusted' : zhUi('樣本校正'))}</span>`
+                + `<b class="aug-draft-pick">${escHtml(pct(estimate.slotWr))}</b></span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sequence model' : zhUi('搭配模型'))}</span>`
+                + `<b class="aug-draft-combo ${estimate.combo > 0 ? 'is-good' : estimate.combo < 0 ? 'is-bad' : ''}">`
+                + `${escHtml(comboText)}</b></span>`
                 + `</span>`
             : '';
         const projectedHtml = Number.isFinite(o.projectedWr)
             ? `<span class="aug-draft-projected">`
-                + `<span class="aug-draft-projected-label">${escHtml(o.copy.augGameProjectedWr || 'Projected win rate')}</span>`
+                + `<span class="aug-draft-projected-label">${escHtml(dataLabel + (currentLang === 'en' ? ' adjusted estimate' : zhUi('順位校正')))}</span>`
                 + `<b class="aug-draft-projected-value">${escHtml(pct(o.projectedWr))}</b>`
                 + `</span>`
             : '';
@@ -7376,6 +7399,9 @@
             const projectedById = last.projectedById || Object.fromEntries(
                 last.candidates.map(id => [String(id), augDraftProjectedWr(id, augDraft.round, augDraft.picks.slice(0, -1))])
             );
+            const estimateById = last.estimateById || Object.fromEntries(
+                last.candidates.map(id => [String(id), augDraftEstimate(id, augDraft.round, augDraft.picks.slice(0, -1))])
+            );
             const ranked = last.candidates.slice().sort((a, b) => {
                 const delta = Number(projectedById[String(b)] || 0) - Number(projectedById[String(a)] || 0);
                 return delta || String(a).localeCompare(String(b), undefined, { numeric: true });
@@ -7398,6 +7424,8 @@
                             best: rankById[String(id)] === 1,
                             rank: rankById[String(id)],
                             projectedWr: Number(projectedById[String(id)]),
+                            estimate: estimateById[String(id)],
+                            round: augDraft.round,
                             // Dim anything that was never live, but keep it visible
                             // because every hidden option still counts in the score.
                             stale: depth !== shownIdx,
@@ -7420,6 +7448,7 @@
                     ? (copy.augGameRerollUsed || 'Reroll used')
                     : (copy.augGameReroll || 'Reroll');
                 const buttonTitle = `${label} · ${copy.augGameRerollHint || 'One swap per card'}`;
+                const estimate = augDraftEstimate(id, augDraft.round, augDraft.picks);
                 return (
                     `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
                     + `<span class="aug-draft-choice-label">`
@@ -7428,7 +7457,9 @@
                         copy,
                         code,
                         interactive: true,
-                        projectedWr: augDraftProjectedWr(id, augDraft.round),
+                        projectedWr: estimate.projected,
+                        estimate,
+                        round: augDraft.round,
                     })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
                     + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
