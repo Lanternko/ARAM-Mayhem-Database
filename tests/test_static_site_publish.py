@@ -146,6 +146,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 # External app script: the shell references it by content-hash
                 # ?v=, so it must ship in the same publish as index.html.
                 "docs/assets/site.js",
+                "docs/classic.html",
                 # Clean-path deep-link shells, locale mirrors, share thumbnail and
                 # the static info pages: each embeds the current game count / patch
                 # / cache-bust, so they change with index.html and drift on the live

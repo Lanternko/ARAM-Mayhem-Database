@@ -2,6 +2,7 @@
 HTML shell, --shell-only fast preview, OG/favicon images, icon localization."""
 from __future__ import annotations
 import os as _os, sys as _sys
+import math
 import time
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import tierlist_engine as _eng  # noqa: E402,F401
@@ -12,6 +13,77 @@ ADSENSE_SITE_ORIGIN = "https://arammeta.com"
 ADSENSE_CLIENT_ID = "ca-pub-8593280194977470"
 ADSENSE_PUBLISHER_ID = "pub-8593280194977470"
 ADSENSE_CERTIFICATION_AUTHORITY_ID = "f08c47fec0942fa0"
+SKILL_SCALING_SNAPSHOT = (
+    Path(__file__).resolve().parent / "site_data" / "champ_skill_scaling.json"
+)
+MIN_SKILL_SCALING_CHAMPIONS = 150
+
+
+def load_skill_scaling_snapshot(
+    *,
+    queue_id: int,
+    path: Path | None = None,
+) -> dict[int, dict]:
+    """Load and validate the versioned per-champion skill-scaling snapshot.
+
+    A queue mismatch is an intentional empty result: the current snapshot is
+    Mayhem-only and must never leak into Classic ARAM.  A missing, malformed,
+    or suspiciously partial Mayhem snapshot is a build error because silently
+    converting that global failure into 173 per-champion "not enough data"
+    cards is misleading.
+    """
+    snapshot_path = path or SKILL_SCALING_SNAPSHOT
+    try:
+        raw = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot unavailable: {snapshot_path}: {exc}"
+        ) from exc
+
+    if raw.get("schema_version") != 1:
+        raise click.ClickException(
+            f"unsupported skill-scaling schema in {snapshot_path}: "
+            f"{raw.get('schema_version')!r}"
+        )
+    try:
+        artifact_queue = int(raw["queue_id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot has no valid queue_id: {snapshot_path}"
+        ) from exc
+    if artifact_queue != queue_id:
+        click.echo(
+            f"[tierlist] skill-scaling snapshot is queue {artifact_queue}; "
+            f"omitting it from queue {queue_id}"
+        )
+        return {}
+
+    champs = raw.get("champs")
+    if not isinstance(champs, dict) or len(champs) < MIN_SKILL_SCALING_CHAMPIONS:
+        count = len(champs) if isinstance(champs, dict) else 0
+        raise click.ClickException(
+            f"skill-scaling snapshot is incomplete: {count} champions in {snapshot_path}; "
+            f"expected at least {MIN_SKILL_SCALING_CHAMPIONS}"
+        )
+
+    loaded: dict[int, dict] = {}
+    try:
+        for champion_id, value in champs.items():
+            cid = int(champion_id)
+            pp = float(value["pp"])
+            z_score = float(value["z"])
+            games = int(value["g"])
+            if not math.isfinite(pp) or not math.isfinite(z_score) or games <= 0:
+                raise ValueError(f"invalid metrics for champion {cid}")
+            loaded[cid] = {"pp": pp, "z": z_score, "g": games}
+        if len(loaded) != len(champs):
+            raise ValueError("duplicate normalized champion ids")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise click.ClickException(
+            f"skill-scaling snapshot contains an invalid champion row: {snapshot_path}"
+        ) from exc
+    click.echo(f"[tierlist] loaded skill-scaling for {len(loaded)} champions")
+    return loaded
 
 
 def render_adsense_verification_tag(*, site_url: str = "") -> str:
@@ -797,6 +869,125 @@ CHAMPION_DETAIL_FIELDS = (
 # Matchup formula (recommend_gui.predict_matchup_prob):
 #   P(ally wins) = sigmoid(logit_ally − logit_enemy + intercept)
 DRAFT_COMPOSITION_LR_DIR = Path("models/composition_lr_pooled_recency_7d")
+DRAFT_MODEL_MIN_SIGNAL = 1e-6
+DRAFT_ANALYSIS_AXES = ("front", "damage", "engage", "wave", "sustain", "cc")
+
+
+def _draft_model_has_signal(payload: dict | None) -> bool:
+    """Reject a numerically collapsed classifier instead of publishing 50%."""
+    if not payload:
+        return False
+    coefficients = payload.get("coef") or []
+    if not coefficients or len(coefficients) != len(payload.get("feature_names") or []):
+        return False
+    try:
+        return max(abs(float(value)) for value in coefficients) >= DRAFT_MODEL_MIN_SIGNAL
+    except (TypeError, ValueError):
+        return False
+
+
+def _load_draft_champion_lr_fallback(
+    model_dir: Path,
+    *,
+    profiles: dict[str, dict],
+    trained_through: str | None,
+) -> dict | None:
+    """Load the champion-only fallback used by recommend_gui for 5v5 matchups."""
+    weights_path = model_dir / "lr_weights.json"
+    vocab_path = model_dir / "champ_to_idx.json"
+    if not weights_path.exists() or not vocab_path.exists():
+        return None
+    try:
+        weights = json.loads(weights_path.read_text(encoding="utf-8"))
+        champ_to_idx = {
+            str(int(champion_id)): int(index)
+            for champion_id, index in json.loads(
+                vocab_path.read_text(encoding="utf-8")
+            ).items()
+        }
+        coefficients = [float(value) for value in weights["coef"]]
+        feature_names: list[str | None] = [None] * len(coefficients)
+        for champion_id, index in champ_to_idx.items():
+            if index < 0 or index >= len(feature_names) or feature_names[index] is not None:
+                raise ValueError(f"invalid champion LR index {index} for {champion_id}")
+            feature_names[index] = f"champion:{champion_id}"
+        if any(name is None for name in feature_names):
+            raise ValueError("champion LR vocabulary does not cover every coefficient")
+        payload = {
+            "kind": "champion_lr",
+            "source_model": f"{model_dir.name}/lr_weights.json",
+            "trained_through_patch": trained_through,
+            "intercept": round(float(weights["intercept"]), 8),
+            "coef": [round(value, 8) for value in coefficients],
+            "feature_names": feature_names,
+            "champ_to_idx": champ_to_idx,
+            "profiles": profiles,
+            "fallback_reason": "composition_lr_degenerate",
+        }
+        return payload if _draft_model_has_signal(payload) else None
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        click.echo(f"[tierlist] WARN: unable to export Draft champion LR fallback: {exc}")
+        return None
+
+
+def hydrate_draft_comp_profiles(payload: dict, draft_model: dict | None) -> int:
+    """Fill public team-analysis axes from the model's versioned profiles.
+
+    The model bundle is already required for Draft and contains the same seven
+    capability scores used by the local recommender.  This keeps shell-only
+    builds valid even when ignored data/cache CSVs are unavailable.
+    """
+    champs = payload.get("champs") or {}
+    profiles = (draft_model or {}).get("profiles") or {}
+    score_fields = {
+        "wave": "wave_clear_score",
+        "cc": "cc_score",
+        "engage": "engage_score",
+        "damage": "damage_score",
+        "poke": "poke_score",
+        "sustain": "sustain_score",
+        "front": "frontline_score",
+    }
+    hydrated = 0
+    for champion_id, model_profile in profiles.items():
+        champion = champs.get(str(champion_id))
+        if not isinstance(champion, dict):
+            continue
+        comp = champion.setdefault("comp", {})
+        scores = model_profile.get("scores") or {}
+        comp.update({
+            "phys": round(float(model_profile.get("physical_dpm") or 0.0), 3),
+            "magic": round(float(model_profile.get("magic_dpm") or 0.0), 3),
+            "true": round(float(model_profile.get("true_dpm") or 0.0), 3),
+        })
+        for public_key, score_key in score_fields.items():
+            comp[public_key] = round(float(scores.get(score_key) or 0.0), 3)
+        hydrated += 1
+    return hydrated
+
+
+def validate_draft_analysis_payload(payload: dict) -> None:
+    """Block a publish that would render a collapsed Draft analysis."""
+    champs = payload.get("champs") or {}
+    if not champs:
+        raise click.ClickException("Draft analysis payload has no champions")
+    empty_axes = []
+    for axis in DRAFT_ANALYSIS_AXES:
+        has_signal = any(
+            abs(float(((champion or {}).get("comp") or {}).get(axis) or 0.0))
+            >= DRAFT_MODEL_MIN_SIGNAL
+            for champion in champs.values()
+        )
+        if not has_signal:
+            empty_axes.append(axis)
+    if empty_axes:
+        raise click.ClickException(
+            "Draft analysis axes have no usable signal: " + ", ".join(empty_axes)
+        )
+
+    draft_model = payload.get("draftModel")
+    if draft_model is not None and not _draft_model_has_signal(draft_model):
+        raise click.ClickException("Draft analysis model has no usable coefficients")
 
 
 def load_draft_composition_lr_payload(
@@ -849,7 +1040,7 @@ def load_draft_composition_lr_payload(
                 "true_dpm": round(float(profile.true_dpm), 4),
             }
 
-        return {
+        composition_payload = {
             "kind": "composition_lr",
             "source_model": model_dir.name,
             "trained_through_patch": trained_through,
@@ -870,6 +1061,24 @@ def load_draft_composition_lr_payload(
                 "poke_groups": list(POKE_GROUPS),
             },
         }
+        if _draft_model_has_signal(composition_payload):
+            return composition_payload
+
+        fallback = _load_draft_champion_lr_fallback(
+            model_dir,
+            profiles=profiles,
+            trained_through=trained_through,
+        )
+        if fallback is not None:
+            click.echo(
+                "[tierlist] WARN: Draft Composition LR has no usable signal; "
+                "using champion-only LR fallback"
+            )
+            return fallback
+        click.echo(
+            "[tierlist] WARN: Draft models have no usable signal; final WR disabled"
+        )
+        return None
     except Exception as exc:
         click.echo(f"[tierlist] WARN: unable to export Draft Composition LR: {exc}")
         return None
@@ -1034,6 +1243,8 @@ def _localize_full_shell_html(
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
     path = canonical_path if canonical_path.startswith("/") else f"/{canonical_path}"
+    if path != "/" and not path.endswith("/"):
+        path += "/"
     canonical = (origin + path) if origin.startswith("http") else path
     out = html_src
     out = re.sub(r"(<html\s+lang=)['\"][^'\"]*['\"]", rf"\1'{html_lang}'", out, count=1, flags=re.I)
@@ -1082,7 +1293,53 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
-    return out
+    return _inject_locale_alternates(out, site_url=site_url, canonical_path=path)
+
+
+_LOCALE_ALTERNATES_RE = re.compile(
+    r"<!-- arammeta:locale-alternates -->.*?<!-- /arammeta:locale-alternates -->",
+    flags=re.S,
+)
+
+
+def _inject_locale_alternates(
+    html_src: str,
+    *,
+    site_url: str,
+    canonical_path: str,
+) -> str:
+    """Add route-equivalent zh-Hant / zh-Hans / en hreflang links."""
+    origin = (_site_base_href(site_url) or "").rstrip("/")
+    if not origin.startswith("http"):
+        return html_src
+
+    path = canonical_path if canonical_path.startswith("/") else f"/{canonical_path}"
+    if path != "/" and not path.endswith("/"):
+        path += "/"
+    if path == "/en/" or path.startswith("/en/"):
+        suffix = path[len("/en") :]
+    elif path == "/zh-CN/" or path.startswith("/zh-CN/"):
+        suffix = path[len("/zh-CN") :]
+    else:
+        suffix = path
+
+    locale_paths = (
+        ("zh-Hant", suffix),
+        ("zh-Hans", "/zh-CN" + suffix),
+        ("en", "/en" + suffix),
+        ("x-default", suffix),
+    )
+    links = "".join(
+        f"<link rel='alternate' hreflang='{lang}' href='{origin}{route}'>"
+        for lang, route in locale_paths
+    )
+    block = (
+        "<!-- arammeta:locale-alternates -->"
+        + links
+        + "<!-- /arammeta:locale-alternates -->"
+    )
+    out = _LOCALE_ALTERNATES_RE.sub("", html_src)
+    return out.replace("</head>", block + "</head>", 1)
 
 
 def _spa_deep_link_stub(
@@ -1165,7 +1422,12 @@ def write_spa_path_shells(
     if not index_path.is_file():
         return []
     root = index_path.parent
-    full_shell = index_path.read_text(encoding="utf-8")
+    full_shell = _inject_locale_alternates(
+        index_path.read_text(encoding="utf-8"),
+        site_url=site_url,
+        canonical_path="/",
+    )
+    index_path.write_text(full_shell, encoding="utf-8")
 
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
@@ -1648,17 +1910,9 @@ def render_html(
     js_champs: dict[str, dict] = {}
 
     # Per-champion skill-scaling ("operation coefficient"): WR(high-skill lobbies) - WR(low-skill).
-    # Decoupled build-time artifact from build_skill_scaling_rating.py; absent -> field omitted.
-    skill_scaling_by_cid: dict[int, dict] = {}
-    _ss_path = Path("data/cache/champ_skill_scaling.json")
-    if _ss_path.exists():
-        try:
-            _ss_raw = json.loads(_ss_path.read_text(encoding="utf-8"))
-            for _k, _v in (_ss_raw.get("champs") or {}).items():
-                skill_scaling_by_cid[int(_k)] = _v
-            click.echo(f"[tierlist] loaded skill-scaling for {len(skill_scaling_by_cid)} champions")
-        except (ValueError, OSError):
-            skill_scaling_by_cid = {}
+    # This is a versioned public snapshot, not a local cache: resolving it from
+    # this module keeps local and isolated-worktree builds identical.
+    skill_scaling_by_cid = load_skill_scaling_snapshot(queue_id=queue_id)
 
     def _pack(r: dict) -> dict:
         # Display rule: show a number the raw sample can support.  We clamp the
@@ -1672,7 +1926,7 @@ def render_html(
         baseline = smoothed - float(r["lift"])  # baseline_wr, derived
         lo, hi = raw_wilson_bounds(wins, games)
         display_wr = min(max(smoothed, lo), hi)
-        return {
+        packed = {
             "id": r["augment_id"],
             "g": games,
             "wr": round(display_wr, 4),
@@ -1684,6 +1938,19 @@ def render_html(
             "peerPick": round(r.get("peer_pick_rate", 0.0), 4),
             "pickLift": round(r.get("pick_lift", 0.0), 3),
         }
+        slot_rows = []
+        for slot in r.get("slots") or []:
+            if not slot:
+                slot_rows.append(None)
+                continue
+            slot_rows.append({
+                "g": int(slot["games"]),
+                "wr": round(float(slot["smoothed_wr"]), 4),
+                "rawWr": round(float(slot["raw_wr"]), 4),
+            })
+        if slot_rows:
+            packed["slots"] = slot_rows
+        return packed
 
     def _pack_set(r: dict) -> dict:
         avg_value = float(r.get("avg_lift", r.get("global_lift", 0.0)) or 0.0)
@@ -2038,6 +2305,7 @@ def render_html(
         if key in trained_composition:
             recommendation_composition[key] = trained_composition[key]
 
+    draft_model = load_draft_composition_lr_payload()
     payload = {
         "champs": js_champs,
         "augs": js_augs,
@@ -2061,8 +2329,19 @@ def render_html(
         "patchChanges": patch_changes or {},
         "recommendation_composition": recommendation_composition,
         "team_score": _team_score_for_payload(team_score_bundle),
-        "draftModel": load_draft_composition_lr_payload(),
+        "draftModel": draft_model,
     }
+    hydrated_profiles = hydrate_draft_comp_profiles(payload, draft_model)
+    if hydrated_profiles:
+        click.echo(
+            f"[tierlist] hydrated Draft capability profiles for "
+            f"{hydrated_profiles} champions"
+        )
+    # render_html(records=[]) is also used for shell/metadata contract tests.
+    # Enforce the Draft signal invariant only when this is an actual champion
+    # payload; shell-only builds separately require champs before validation.
+    if payload.get("champs"):
+        validate_draft_analysis_payload(payload)
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
     _dedupe_item_objects(payload)
@@ -2285,18 +2564,6 @@ def render_html(
         "</span>"
         "</button>"
     )
-    parts.append(
-        "<a class='classic-mode-link' href='/classic.html' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
-        "aria-label='前往經典模式資料' data-aria-zh='前往經典模式資料' "
-        "data-aria-zh-cn='前往经典模式数据' data-aria-en='Open Classic Mode data'>"
-        "<span class='classic-mode-link-full' data-i18n-zh='經典模式' "
-        "data-i18n-zh-cn='经典模式' data-i18n-en='Classic Mode'>經典模式</span>"
-        "<span class='classic-mode-link-short' aria-hidden='true' data-i18n-zh='經典' "
-        "data-i18n-zh-cn='经典' data-i18n-en='Classic'>經典</span>"
-        "<span class='classic-mode-link-new' aria-hidden='true'>NEW</span>"
-        "</a>"
-    )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
     for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
         # Home (= 英雄) is active on first paint; brand and this tab both land there.
@@ -2314,6 +2581,30 @@ def render_html(
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
+    parts.append(
+        "<details class='mode-menu' id='mode-menu'>"
+        "<summary class='mode-select' aria-label='切換遊戲模式' "
+        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
+        "data-aria-en='Switch game mode'>"
+        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</span>"
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='m4 6 4 4 4-4'></path></svg>"
+        "</summary>"
+        "<div class='mode-options' role='menu'>"
+        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
+        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
+        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</a>"
+        "<a class='mode-option' role='menuitem' href='/classic.html' "
+        "data-mode-target='classic' data-href-zh='/classic.html' "
+        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
+        "data-i18n-en='Classic'>經典模式</a>"
+        "</div></details>"
+    )
     parts.append(
         "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
         "type='button' title='切換淺色' aria-label='切換主題'>"
@@ -2862,6 +3153,13 @@ def _run_shell_only(
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
+    hydrated_profiles = hydrate_draft_comp_profiles(payload, payload.get("draftModel"))
+    if hydrated_profiles:
+        click.echo(
+            f"[shell-only] hydrated Draft capability profiles for "
+            f"{hydrated_profiles} champions"
+        )
+    validate_draft_analysis_payload(payload)
 
     # Slim oversized payloads left over from older full builds (full ranked
     # aug/item lists).  Rewrite in place so the next fetch is smaller without a

@@ -1322,6 +1322,8 @@ def _scan_patch_counters(
     wins: Counter[int] = Counter()
     ca_games: Counter[tuple[int, int]] = Counter()
     ca_wins: Counter[tuple[int, int]] = Counter()
+    ca_slot_games: Counter[tuple[int, int, int]] = Counter()
+    ca_slot_wins: Counter[tuple[int, int, int]] = Counter()
     cp_games: Counter[tuple[int, int]] = Counter()
     cp_wins: Counter[tuple[int, int]] = Counter()
 
@@ -1353,12 +1355,18 @@ def _scan_patch_counters(
                 if cid <= 0:
                     continue
                 player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
-                for a in p.get("augments") or []:
+                for slot, a in enumerate(p.get("augments") or [], start=1):
                     a = int(a)
                     if a <= 0:
                         continue
                     ca_games[(cid, a)] += 1
                     ca_wins[(cid, a)] += player_won
+                    # The LCU list preserves pick order.  The public draft has
+                    # four rounds, so later/internal entries are deliberately
+                    # excluded from the site estimate.
+                    if slot <= 4:
+                        ca_slot_games[(cid, a, slot)] += 1
+                        ca_slot_wins[(cid, a, slot)] += player_won
     finally:
         con.close()
 
@@ -1367,6 +1375,8 @@ def _scan_patch_counters(
         "wins": wins,
         "ca_games": ca_games,
         "ca_wins": ca_wins,
+        "ca_slot_games": ca_slot_games,
+        "ca_slot_wins": ca_slot_wins,
         "cp_games": cp_games,
         "cp_wins": cp_wins,
     }
@@ -1445,6 +1455,8 @@ def _derive_winrate_records(
     wins = counters["wins"]
     ca_games = counters["ca_games"]
     ca_wins = counters["ca_wins"]
+    ca_slot_games = counters.get("ca_slot_games", Counter())
+    ca_slot_wins = counters.get("ca_slot_wins", Counter())
     cp_games = counters["cp_games"]
     cp_wins = counters["cp_wins"]
 
@@ -1481,6 +1493,27 @@ def _derive_winrate_records(
         raw = w / g if g else 0.0
         baseline = raw_wr_by_champ.get(cid, 0.5)
         smoothed = (w + baseline * pair_k) / (g + pair_k)
+        slots = []
+        for slot in range(1, 5):
+            slot_g = ca_slot_games[(cid, aid, slot)]
+            slot_w = ca_slot_wins[(cid, aid, slot)]
+            if not slot_g:
+                slots.append(None)
+                continue
+            # Slot cells are much thinner than the all-slot row.  Shrink each
+            # observed rate toward that champion+augment rate so sparse fourth
+            # picks cannot jump to the top from a handful of lucky games.
+            slot_prior_games = 150
+            slot_wr = (slot_w + smoothed * slot_prior_games) / (
+                slot_g + slot_prior_games
+            )
+            slots.append({
+                "slot": slot,
+                "games": slot_g,
+                "wins": slot_w,
+                "raw_wr": slot_w / slot_g,
+                "smoothed_wr": slot_wr,
+            })
         champ_aug_records.append({
             "champion_id": cid,
             "augment_id": aid,
@@ -1490,6 +1523,7 @@ def _derive_winrate_records(
             "smoothed_wr": smoothed,
             "baseline_wr": baseline,
             "lift": smoothed - baseline,
+            "slots": slots,
         })
 
     # Same-team pair synergy is a residual over each champion's marginal
@@ -1576,6 +1610,10 @@ def _encode_champ_counters(counters: dict[str, Counter]) -> dict:
             [int(cid), int(aid), int(g), int(counters["ca_wins"][(cid, aid)])]
             for (cid, aid), g in counters["ca_games"].items()
         ],
+        "champ_aug_slot": [
+            [int(cid), int(aid), int(slot), int(g), int(counters["ca_slot_wins"][(cid, aid, slot)])]
+            for (cid, aid, slot), g in counters.get("ca_slot_games", {}).items()
+        ],
         "champ_pair": [
             [int(cid), int(tid), int(g), int(counters["cp_wins"][(cid, tid)])]
             for (cid, tid), g in counters["cp_games"].items()
@@ -1588,6 +1626,8 @@ def _decode_champ_counters(payload: dict) -> dict[str, Counter]:
     wins: Counter[int] = Counter()
     ca_games: Counter[tuple[int, int]] = Counter()
     ca_wins: Counter[tuple[int, int]] = Counter()
+    ca_slot_games: Counter[tuple[int, int, int]] = Counter()
+    ca_slot_wins: Counter[tuple[int, int, int]] = Counter()
     cp_games: Counter[tuple[int, int]] = Counter()
     cp_wins: Counter[tuple[int, int]] = Counter()
     for cid, g, w in payload.get("champ") or []:
@@ -1596,6 +1636,10 @@ def _decode_champ_counters(payload: dict) -> dict[str, Counter]:
     for cid, aid, g, w in payload.get("champ_aug") or []:
         ca_games[(int(cid), int(aid))] = int(g)
         ca_wins[(int(cid), int(aid))] = int(w)
+    for cid, aid, slot, g, w in payload.get("champ_aug_slot") or []:
+        key = (int(cid), int(aid), int(slot))
+        ca_slot_games[key] = int(g)
+        ca_slot_wins[key] = int(w)
     for cid, tid, g, w in payload.get("champ_pair") or []:
         cp_games[(int(cid), int(tid))] = int(g)
         cp_wins[(int(cid), int(tid))] = int(w)
@@ -1604,6 +1648,8 @@ def _decode_champ_counters(payload: dict) -> dict[str, Counter]:
         "wins": wins,
         "ca_games": ca_games,
         "ca_wins": ca_wins,
+        "ca_slot_games": ca_slot_games,
+        "ca_slot_wins": ca_slot_wins,
         "cp_games": cp_games,
         "cp_wins": cp_wins,
     }
@@ -3372,14 +3418,13 @@ def compute_champ_spell_affinities(
     *,
     min_games: int = SPELL_MIN_GAMES,
 ) -> dict[int, dict]:
-    """Champion-level win/pick rate per summoner spell.
+    """Champion-level win/pick rate per two-spell loadout.
 
     Mirrors the boot/item affinity pipeline (same empirical-Bayes shrinkage so
-    small cells lean on the global per-spell baseline) but reads each
-    participant's ``spells`` list instead of items.  Mayhem players freely pick
-    *two* spells (Flash is near-universal; Mark/Dash, Ghost, Heal … are the real
-    second-slot choices), so every spell is counted and pick rates sum to ~200%
-    across the two slots.
+    small cells lean on the global per-loadout baseline) but reads each
+    participant's ``spells`` list instead of items. A player chooses two spells,
+    so the recommendation and its pick rate must describe the pair as one
+    decision. Incomplete captures are excluded from rows and denominators.
     """
     baseline_by_champ = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
@@ -3420,37 +3465,43 @@ def compute_champ_spell_affinities(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                chosen = [int(s) for s in (participant.get("spells") or []) if int(s) > 0]
-                if not chosen:
+                chosen = sorted({
+                    int(spell_id)
+                    for spell_id in (participant.get("spells") or [])
+                    if int(spell_id) > 0
+                })
+                if len(chosen) != 2:
                     continue
                 champ_total_games[cid] += 1
                 baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                for spell_id in chosen:
-                    slug = str(spell_id)
-                    key = (cid, slug)
-                    cs_games[key] += 1
-                    cs_wins[key] += player_won
-                    cs_baseline_games[key] += baseline
-                    category_games[slug] += 1
-                    category_wins[slug] += player_won
-                    category_baseline_games[slug] += baseline
-                    if slug not in category_names:
+                slug = "+".join(str(spell_id) for spell_id in chosen)
+                key = (cid, slug)
+                cs_games[key] += 1
+                cs_wins[key] += player_won
+                cs_baseline_games[key] += baseline
+                category_games[slug] += 1
+                category_wins[slug] += player_won
+                category_baseline_games[slug] += baseline
+                if slug not in category_names:
+                    spells: list[dict[str, object]] = []
+                    for spell_id in chosen:
                         meta = spell_meta.get(spell_id) or {}
                         name_zh = str(meta.get("name_zh") or meta.get("name") or f"#{spell_id}")
                         name_en = str(meta.get("name_en") or name_zh)
-                        category_names[slug] = {
+                        spells.append({
+                            "id": spell_id,
                             "name": name_zh,
                             "name_zh": name_zh,
                             "name_en": name_en,
-                            "items": [{
-                                "id": spell_id,
-                                "name": name_zh,
-                                "name_zh": name_zh,
-                                "name_en": name_en,
-                                "icon": str(meta.get("icon") or ""),
-                            }],
-                        }
+                            "icon": str(meta.get("icon") or ""),
+                        })
+                    category_names[slug] = {
+                        "name": _item_pair_name(spells, "name_zh"),
+                        "name_zh": _item_pair_name(spells, "name_zh"),
+                        "name_en": _item_pair_name(spells, "name_en"),
+                        "items": spells,
+                    }
     finally:
         con.close()
 

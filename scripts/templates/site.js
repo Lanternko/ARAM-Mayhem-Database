@@ -412,10 +412,10 @@
         const at = (i, r) => [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))];
         const ringPts = f => first.map((_, i) => at(i, R * f).map(v => v.toFixed(1)).join(',')).join(' ');
         const grid = [0.25, 0.5, 0.75, 1].map(f =>
-            `<polygon points="${ringPts(f)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`).join('');
+            `<polygon points="${ringPts(f)}" fill="none" stroke="var(--border)" stroke-width="1"/>`).join('');
         const spokes = first.map((_, i) => {
             const [x, y] = at(i, R);
-            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+            return `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
         }).join('');
         const polys = (series || []).map(s => {
             const axes = s.axes || [];
@@ -448,7 +448,7 @@
             if (anchor === 'start') lx = Math.min(lx, RADAR_VB_W - estW - edgePad);
             const y0 = ly + 4 - ((lines.length - 1) * fontSize * 1.15) / 2;
             return (
-                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="#d4d8de">`
+                `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--text-muted)">`
                 + radarLabelTspans(lines, lx, fontSize)
                 + `</text>`
             );
@@ -1032,7 +1032,7 @@
         zh: {
             htmlLang: 'zh-Hant',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: '搜尋英雄（中 / 英）   Ctrl+F',
+            searchPlaceholderDesktop: 'Ctrl+F',
             searchPlaceholderMobile: '搜尋英雄（中 / 英）',
             searchAria: '搜尋英雄',
             shownUnit: '隻',
@@ -1107,7 +1107,8 @@
             draftLegendEnemy: '對手',
             draftChampStrength: '英雄強度',
             draftMetricFinal: '最終勝率',
-            draftMetricFinalNote: 'AI推估勝率：綜合參考 1. 英雄強度 2. 搭配 3. 對戰組合。備註：勝率主要受英雄強度影響',
+            draftMetricFinalNote: '依雙方英雄與陣容特徵估計，不含玩家熟練度與臨場因素。',
+            draftMetricChampionNote: '依雙方英雄近期強度估計，不含玩家熟練度與臨場因素。',
             draftMetricPartial: '完成我方與對方各 5 隻英雄後計算',
             draftMetricUnavailable: '預測模型尚未載入或含未知英雄',
             draftOnOtherSide: '這隻已在另一邊陣容裡。',
@@ -1330,8 +1331,10 @@
             augChampsGames: games => `${games} 場`,
             augChampsEmpty: '樣本不足',
             augChampsFoot: n => `lift 與選取率皆為該英雄自身的數據；每組英雄×增幅樣本 ≥${n} 場`,
-            overviewWrLabel: '綜合勝率',
-            overviewGames: games => `${games} 場`,
+            overviewWrLabel: '勝率',
+            overviewPickLabel: '選取率',
+            overviewGamesLabel: '場次',
+            overviewRank: (rank, total) => `#${rank} / ${total}`,
             compFitTitle: '英雄能力',
             compFitMeta: '左：六軸能力百分位；右：操作係數與對局節奏',
             compFitAvoid: '避免',
@@ -1367,7 +1370,7 @@
         en: {
             htmlLang: 'en',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Search champions (ZH / EN)   Ctrl+F',
+            searchPlaceholderDesktop: 'Ctrl+F',
             searchPlaceholderMobile: 'Search champions (ZH / EN)',
             searchAria: 'Search champions',
             shownUnit: 'shown',
@@ -1442,7 +1445,8 @@
             draftLegendEnemy: 'Enemy',
             draftChampStrength: 'Champ strength',
             draftMetricFinal: 'Final win rate',
-            draftMetricFinalNote: 'AI win-rate estimate from 1) champion strength 2) synergy 3) matchup. Note: win rate is driven mainly by champion strength',
+            draftMetricFinalNote: 'Estimated from both teams’ champions and composition traits; player skill and in-game events are not included.',
+            draftMetricChampionNote: 'Estimated from both teams’ recent champion strength; player skill and in-game events are not included.',
             draftMetricPartial: 'Complete both 5-champion rosters to calculate',
             draftMetricUnavailable: 'Model not loaded or contains unknown champions',
             draftOnOtherSide: 'Already on the other team.',
@@ -1626,7 +1630,7 @@
             itemClusterGames: (games) => `${games}g`,
             coreBuildShare: (pick) => `${pick} pick`,
             coreBuildWr: (wr) => `${wr} WR`,
-            coreBuildThird: 'Other items',
+            coreBuildThird: 'following items',
             coreBuildTail: 'Also common',
             coreBuildTailTip: 'Built with this core but below the pick-rate / win-rate bar of the items above',
             coreBuildHeadTitle: (name, wr, lift, pick, games) => `${name} · WR ${wr} (${lift}) · pick ${pick} · ${games} games`,
@@ -1665,8 +1669,10 @@
             augChampsGames: games => `${games} games`,
             augChampsEmpty: 'Not enough data',
             augChampsFoot: n => `lift and pick rate are champion-relative; each champion×augment pair needs ≥${n} games`,
-            overviewWrLabel: 'Overall WR',
-            overviewGames: games => `${games} games`,
+            overviewWrLabel: 'Win rate',
+            overviewPickLabel: 'Pick rate',
+            overviewGamesLabel: 'Games',
+            overviewRank: (rank, total) => `#${rank} / ${total}`,
             compFitTitle: 'Abilities',
             compFitMeta: 'left: 6-axis ability percentiles; right: skill-scaling & tempo',
             compFitAvoid: 'Avoid',
@@ -3170,6 +3176,33 @@
         `;
     }
 
+    let championOverviewRankCache = null;
+    function championOverviewStats(cid, info) {
+        if (!championOverviewRankCache) {
+            const peers = Object.entries(DATA.champs || {}).filter(([, row]) => (
+                row && Number.isFinite(Number(row.wr)) && Number.isFinite(Number(row.g))
+            ));
+            const rankMap = (valueOf) => new Map(
+                [...peers]
+                    .sort((a, b) => valueOf(b[1]) - valueOf(a[1]) || Number(a[0]) - Number(b[0]))
+                    .map(([id], index) => [String(id), index + 1])
+            );
+            championOverviewRankCache = {
+                rankTotal: peers.length,
+                wr: rankMap(row => Number(row.wr || 0)),
+                pick: rankMap(row => Number(row.g || 0)),
+            };
+        }
+        const totalMatches = Number(String(TOTAL_GAMES || '').replace(/[^\d]/g, '')) || 0;
+        const key = String(cid);
+        return {
+            wrRank: championOverviewRankCache.wr.get(key) || 0,
+            pickRank: championOverviewRankCache.pick.get(key) || 0,
+            rankTotal: championOverviewRankCache.rankTotal,
+            pickRate: totalMatches > 0 ? Number(info.g || 0) / totalMatches : 0,
+        };
+    }
+
     function renderDetail(cid) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
@@ -3180,6 +3213,7 @@
             return `<div class="empty">${tr().detailEmpty}</div>`;
         }
         const copy = tr();
+        const overview = championOverviewStats(cid, info);
         const top = info.top || {};
         const setInfo = info.sets || {};
         const setTop = setInfo.top || [];
@@ -3304,7 +3338,7 @@
                 const games = Number(entry.g || 0);
                 const confirm = Number(entry.exactGames || 0);
                 const pickVal = Number(entry.pick || 0);
-                const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+                const wrTone = `wr-${wrToneTier(entry)}`;
                 const pickHeat = pickHeatClass(pickVal);
                 const clusterTitle = copy.itemClusterCardTitle
                     ? copy.itemClusterCardTitle(name, pct(entry.wr || 0), pct(pickVal), signed(liftValue), games, confirm, laneInfo ? laneInfo.label : lane)
@@ -3340,7 +3374,7 @@
                         <div class="item-cluster-top">${laneBadge}<span class="cluster-games">${escHtml(gamesText)}</span></div>
                         <div class="item-build-icons">${icons}</div>
                         <div class="item-cluster-stats">
-                            <span class="item-build-wr ${wrSign}">${pct(entry.wr || 0)}</span>
+                            <span class="item-build-wr ${wrTone}">${pct(entry.wr || 0)}</span>
                             <span class="cluster-pick ${pickHeat}">${escHtml(pickText)}</span>
                         </div>
                         <div class="item-build-name"><span>${escHtml(name)}</span></div>
@@ -3383,9 +3417,7 @@
             const cardClass = options.singleItem ? 'item-build-card single-item-card' : 'item-build-card';
             // Color WR vs champion baseline (lift), not absolute WR — a "top" pair
             // can still sit under the champ's overall WR (e.g. popular traps).
-            const wrSign = liftValue > 0.005 ? 'is-good'
-                : (liftValue < -0.005 ? 'is-bad' : 'is-even');
-            const wrClass = `item-build-wr ${wrSign}`;
+            const wrClass = `item-build-wr wr-${wrToneTier(entry)}`;
             // Filter attrs only on the strength carousel (not 常見但不推薦 traps).
             let filterAttrs = '';
             if (options.singleItem && options.singleItemFilterable) {
@@ -3642,7 +3674,7 @@
                 }).join('<span class="cg-arrow">▸</span>');
                 const options = (Array.isArray(grp.options) ? grp.options : []).map(o => {
                     const lift = Number(o.lift || 0);
-                    const wrSign = lift > 0.005 ? 'is-good' : (lift < -0.005 ? 'is-bad' : 'is-even');
+                    const wrTone = `wr-${wrToneTier(o)}`;
                     const pickVal = Number(o.pick || 0);
                     const pickHeat = pickHeatClass(pickVal);
                     const laneInfo = laneLabels[o.lane];
@@ -3666,7 +3698,7 @@
                     return `
                         <div class="cg-option has-item-tip" tabindex="0" aria-label="${escHtml(tip)}">
                             ${iconImg(o, 'cg-option-icon')}
-                            <span class="cg-option-wr ${wrSign}">${pct(o.wr || 0)}</span>
+                            <span class="cg-option-wr ${wrTone}">${pct(o.wr || 0)}</span>
                             <span class="cg-option-pick ${pickHeat}">${pct(pickVal)}</span>
                             ${badge}
                             ${itemTipSource(tipHtml)}
@@ -3686,9 +3718,9 @@
                     : '';
                 const share = copy.coreBuildShare ? copy.coreBuildShare(pct(grp.pick || 0)) : pct(grp.pick || 0);
                 const coreLift = Number(grp.lift || 0);
-                const coreWrSign = coreLift > 0.005 ? 'is-good' : (coreLift < -0.005 ? 'is-bad' : 'is-even');
+                const coreWrTone = `wr-${wrToneTier({ lift: coreLift, wr: grp.wr })}`;
                 const wrText = copy.coreBuildWr ? copy.coreBuildWr(pct(grp.wr || 0)) : pct(grp.wr || 0);
-                const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrSign}">${escHtml(wrText)}</span>` : '';
+                const wrHtml = grp.wr ? `<span class="cg-core-wr ${coreWrTone}">${escHtml(wrText)}</span>` : '';
                 const coreGroupName = (() => {
                     if (currentLang === 'en') return grp.name_en || grp.name || grp.name_zh || '';
                     if (currentLang === 'zh-CN') {
@@ -3747,10 +3779,8 @@
             const rows = (payload && payload.top) || [];
             if (!rows.length) return emptyDetailSection(title, meta);
             const railLimit = opts.limit || 4;
-            // Boots are one slot, so only the leader is highlighted.  Mayhem
-            // carries *two* summoner spells, so the rail highlights the top two
-            // (rows are lift-ranked, so those are the recommended pair).
             const railTopCount = opts.topCount || 1;
+            const railIconCount = opts.iconCount || 1;
             const railExtraClass = opts.extraClass ? ` ${opts.extraClass}` : '';
             const tipFn = copy.itemBuildCardTitle || ((itemName, wr, pick, lift, games) => (
                 currentLang === 'en'
@@ -3760,16 +3790,20 @@
             const items = rows.slice(0, railLimit).map((entry, idx) => {
                 const name = itemRowDisplayName(entry);
                 const pairItems = Array.isArray(entry.items) ? entry.items : [];
-                const icon = pairItems[0] && pairItems[0].icon;
+                const icons = pairItems.slice(0, railIconCount).map(item => (
+                    item.icon
+                        ? `<img class="boot-rail-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
+                        : '<span class="boot-rail-icon"></span>'
+                )).join('');
                 const wr = Number(entry.wr || 0);
                 const liftValue = Number(entry.lift ?? entry.res ?? 0);
-                const wrSign = liftValue > 0.005 ? 'is-good' : (liftValue < -0.005 ? 'is-bad' : 'is-even');
+                const wrTone = `wr-${wrToneTier(entry)}`;
                 const pickVal = Number(entry.pick || 0);
                 const pickHeat = pickHeatClass(pickVal);
                 const tip = tipFn(name, pct(wr), pct(pickVal), signed(liftValue), entry.g || 0);
                 const tipHtml = buildItemTipHtml({
                     name,
-                    items: pairItems.slice(0, 1),
+                    items: pairItems.slice(0, railIconCount),
                     wr: pct(wr),
                     pick: pct(pickVal),
                     pickRate: pickVal,
@@ -3779,9 +3813,9 @@
                 });
                 return `
                     <div class="boot-rail-row has-item-tip${idx < railTopCount ? ' is-top' : ''}" tabindex="0" data-match-text="${escHtml(entrySearchText(entry))}" aria-label="${escHtml(tip)}">
-                        ${icon ? `<img class="boot-rail-icon" src="${escHtml(icon)}" alt="" loading="lazy">` : '<span class="boot-rail-icon"></span>'}
+                        <span class="boot-rail-icons">${icons}</span>
                         <span class="boot-rail-name">${escHtml(name)}</span>
-                        <span class="boot-rail-wr ${wrSign}">${pct(wr)}</span>
+                        <span class="boot-rail-wr ${wrTone}">${pct(wr)}</span>
                         <span class="boot-rail-pick ${pickHeat}">${pct(pickVal)}</span>
                         ${itemTipSource(tipHtml)}
                     </div>`;
@@ -3843,16 +3877,37 @@
             : { overview: zhUi('概覽'), items: zhUi('出裝'), augments: zhUi('增幅裝置'), compfit: zhUi('英雄能力') };
         const bootItemTitle = pickLang('推薦鞋子', 'Recommended Boots');
         const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
-        const spellRailTitle = pickLang('召喚師技能', 'Summoner Spells');
-        // Mayhem players carry two spells, so pick rates sum to ~200% — that
-        // domain fact stays in code comments / tips, not the rail chrome.
+        const spellRailTitle = pickLang('召喚師技能組合', 'Summoner Spell Pairs');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
+        const overviewRank = (rank) => (
+            Number(rank) > 0 && Number(overview.rankTotal) > 0
+                ? `<span class="ovr-rank">${escHtml(copy.overviewRank(Number(rank), Number(overview.rankTotal)))}</span>`
+                : ''
+        );
         const overviewTabContent = `
             <div class="detail-section detail-overview-head">
-                <span class="ovr-wr">${pct(info.wr)}</span>
-                <span class="ovr-meta">${copy.overviewWrLabel} \u00b7 ${copy.overviewGames(info.g)}</span>
+                <div class="ovr-stat ovr-stat-primary">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value ovr-wr">${pct(info.wr)}</span>
+                        ${overviewRank(overview.wrRank)}
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewWrLabel)}</span>
+                </div>
+                <div class="ovr-stat">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value">${pct(overview.pickRate)}</span>
+                        ${overviewRank(overview.pickRank)}
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewPickLabel)}</span>
+                </div>
+                <div class="ovr-stat ovr-stat-games">
+                    <div class="ovr-stat-line">
+                        <span class="ovr-value">${fmtInt(info.g)}</span>
+                    </div>
+                    <span class="ovr-label">${escHtml(copy.overviewGamesLabel)}</span>
+                </div>
             </div>
             <div class="overview-split">
                 <div class="overview-split-main">
@@ -3866,7 +3921,7 @@
                     ${buildBootRail(bootItemTitle, bootItemMeta, bootInfo)}
                     ${buildBootRail(spellRailTitle, spellRailMeta, spellInfo, {
                         limit: 5,
-                        topCount: 2,
+                        iconCount: 2,
                         extraClass: 'spell-rail-section',
                     })}
                 </div>
@@ -4724,10 +4779,10 @@
         return total;
     }
 
-    /** Full 5v5 Composition LR: sigmoid(ally_logit − enemy_logit + intercept). */
+    /** Full 5v5 LR: composition model when healthy, champion-only fallback otherwise. */
     function draftCompositionLrWinrate(allyIds, enemyIds) {
         const model = DATA && DATA.draftModel;
-        if (!model || model.kind !== 'composition_lr') return null;
+        if (!model || !['composition_lr', 'champion_lr'].includes(model.kind)) return null;
         if (!Array.isArray(allyIds) || !Array.isArray(enemyIds) || allyIds.length !== 5 || enemyIds.length !== 5) {
             return null;
         }
@@ -4736,6 +4791,15 @@
         if (myLogit == null || enemyLogit == null) return null;
         const logit = myLogit - enemyLogit + Number(model.intercept || 0);
         return 1 / (1 + Math.exp(-logit));
+    }
+
+    function draftModelNote(finalWr, fullDraft) {
+        const copy = tr();
+        if (!fullDraft) return copy.draftMetricPartial;
+        if (finalWr == null) return copy.draftMetricUnavailable;
+        return DATA && DATA.draftModel && DATA.draftModel.kind === 'champion_lr'
+            ? copy.draftMetricChampionNote
+            : copy.draftMetricFinalNote;
     }
 
     /** Ally vs optional enemy: team details remain contextual; final WR is Composition LR. */
@@ -5031,14 +5095,28 @@
         const copy = tr();
         const mu = evaluateMatchup(teamPicks, enemyPicks);
         const fullDraft = teamPicks.length === MAX_TEAM_PICKS && enemyPicks.length === MAX_TEAM_PICKS;
-        const note = !fullDraft ? copy.draftMetricPartial
-            : (mu.finalWr == null ? copy.draftMetricUnavailable : copy.draftMetricFinalNote);
+        const note = draftModelNote(mu.finalWr, fullDraft);
         return `
             <div class="draft-metric final ${draftMetricTone(mu.finalWr)}">
                 <span class="draft-metric-label">${escHtml(copy.draftMetricFinal)}</span>
                 <strong class="draft-metric-value">${draftMetricValue(fullDraft ? mu.finalWr : null)}</strong>
                 <span class="draft-metric-note">${escHtml(note || '')}</span>
             </div>`;
+    }
+
+    function buildDraftMatchupAnalysisHtml(mu) {
+        const copy = tr();
+        const fullDraft = teamPicks.length === MAX_TEAM_PICKS
+            && enemyPicks.length === MAX_TEAM_PICKS;
+        return metaPickAnalysisHtml(enemyPicks, teamPicks, copy, {
+            className: 'is-draft-analysis',
+            title: copy.draftCompareTitle,
+            comparisonLegend: copy.draftLegendEnemy,
+            primaryLegend: copy.draftLegendAlly,
+            winRate: fullDraft ? mu.finalWr : null,
+            winRateLabel: copy.draftMetricFinal,
+            note: draftModelNote(mu.finalWr, fullDraft),
+        });
     }
 
     function renderDraftView() {
@@ -5069,9 +5147,7 @@
         // Both sides have ≥1 pick → overlaid radar + dual bars (partial rosters OK).
         // Only final LR WR still requires full 5v5 (see buildDraftMetricsHtml).
         if (mu.ally && mu.enemy) {
-            parts.push(buildMatchupCompareHtml(
-                mu.ally, mu.enemy, teamPicks.length, enemyPicks.length,
-            ));
+            parts.push(buildDraftMatchupAnalysisHtml(mu));
         } else if (mu.ally) {
             parts.push(`<div class="draft-eval-block"><div class="draft-eval-label">${escHtml(copy.draftAllyEval || '我方陣容')}</div>${buildTeamEvalHtml(teamPicks)}</div>`);
         } else if (mu.enemy) {
@@ -5133,7 +5209,9 @@
         document.querySelectorAll('.draft-side').forEach(el => {
             el.classList.toggle('is-targeting', el.getAttribute('data-draft-side') === draftSide);
         });
-        if (metricsEl) metricsEl.innerHTML = buildDraftMetricsHtml();
+        // The chosen Meta Pick analysis design owns the headline result, so the
+        // legacy standalone metric panel stays empty instead of repeating it.
+        if (metricsEl) metricsEl.innerHTML = '';
         if (resultEl) resultEl.innerHTML = buildDraftResultHtml();
 
         const searchEl = document.getElementById('draft-search');
@@ -6409,7 +6487,11 @@
     /**
      * Dual 6-axis radar (黃=你的 / 灰=最佳) + best-team letter grades on the right.
      */
-    function metaPickAnalysisHtml(yourIds, bestIds, copy) {
+    function metaPickAnalysisHtml(yourIds, bestIds, copy, options) {
+        const opts = options || {};
+        const analysisTitle = opts.title || copy.gameAnalysisTitle || copy.teamDimsTitle || '';
+        const comparisonLegend = opts.comparisonLegend || copy.gameAnalysisYours || '你的選擇';
+        const primaryLegend = opts.primaryLegend || copy.gameAnalysisBest || '最佳 5 人';
         const yours = metaPickSixAxes(yourIds, copy);
         const best = metaPickSixAxes(bestIds, copy);
         const cap = best.cap;
@@ -6427,9 +6509,9 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: yours.axes,
-                stroke: 'rgba(196,200,208,0.90)',
-                fill: 'rgba(160,166,176,0.14)',
-                dot: 'rgba(210,214,220,0.95)',
+                stroke: 'var(--text-muted)',
+                fill: 'color-mix(in srgb, var(--text-muted) 14%, transparent)',
+                dot: 'var(--text-muted)',
             },
             {
                 axes: best.axes,
@@ -6437,7 +6519,7 @@
                 fill: 'color-mix(in srgb, var(--accent, #f5c518) 22%, transparent)',
                 dot: 'var(--accent, #f5c518)',
             },
-        ], copy.gameAnalysisTitle || copy.teamDimsTitle || '');
+        ], analysisTitle);
 
         const grades = [
             {
@@ -6490,8 +6572,12 @@
             );
         }).join('');
 
-        const bestEstWr = Number(best.ev.estWr);
-        const bestWrTone = metaPickWrToneClass(bestEstWr);
+        const hasOverrideWr = Object.prototype.hasOwnProperty.call(opts, 'winRate');
+        const bestEstWr = hasOverrideWr ? Number(opts.winRate) : Number(best.ev.estWr);
+        const hasBestEstWr = Number.isFinite(bestEstWr);
+        const bestWrTone = hasBestEstWr ? metaPickWrToneClass(bestEstWr) : 'is-empty';
+        const bestWrText = hasBestEstWr ? pct(bestEstWr) : '—';
+        const winRateLabel = opts.winRateLabel || copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率';
         // flex-basis % 填滿 bar；圖例永遠三段。
         // Class names: is-phys / is-magic / is-true — NEVER is-ad (adblockers hide .is-ad).
         const mixSeg = (cls, n) => {
@@ -6521,28 +6607,29 @@
         );
 
         const legend = (
-            `<div class="game-an-legend" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            `<div class="game-an-legend" aria-label="${escHtml(analysisTitle)}">`
             + `<span class="game-an-legend-item is-yours">`
-            + `<span class="game-an-swatch is-yours"></span>${escHtml(copy.gameAnalysisYours || '你的選擇')}`
+            + `<span class="game-an-swatch is-yours"></span>${escHtml(comparisonLegend)}`
             + `</span>`
             + `<span class="game-an-legend-item is-best">`
-            + `<span class="game-an-swatch is-best"></span>${escHtml(copy.gameAnalysisBest || '最佳 5 人')}`
+            + `<span class="game-an-swatch is-best"></span>${escHtml(primaryLegend)}`
             + `</span>`
             + `</div>`
         );
 
         return (
-            `<div class="game-analysis">`
+            `<div class="game-analysis${opts.className ? ` ${escHtml(opts.className)}` : ''}">`
             + `<div class="game-an-head">`
             + `<div class="game-an-head-left">`
             + `<div class="game-an-head-row">`
-            + `<span class="game-an-head-title">${escHtml(copy.gameAnalysisTitle || '最強隊伍評價')}</span>`
+            + `<span class="game-an-head-title">${escHtml(analysisTitle)}</span>`
             + `</div>`
             + mixBar
             + `</div>`
-            + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(copy.gameBestEstWr || '最佳陣容勝率')}">`
-            + `<span class="game-an-wr-num">${pct(bestEstWr)}</span>`
-            + `<span class="game-an-wr-label">${escHtml(copy.gameBestEstWr || copy.gameOptimalWr || '最佳陣容勝率')}</span>`
+            + `<div class="game-an-wr-hero ${bestWrTone}" title="${escHtml(opts.note || winRateLabel)}">`
+            + `<span class="game-an-wr-num">${bestWrText}</span>`
+            + `<span class="game-an-wr-label">${escHtml(winRateLabel)}</span>`
+            + (opts.note ? `<span class="game-an-wr-note">${escHtml(opts.note)}</span>` : '')
             + `</div>`
             + `</div>`
             + `<div class="game-an-dims-split is-best-only">`
@@ -6550,7 +6637,7 @@
             + `<div class="game-an-radar draft-matchup-svg">${radar}</div>`
             + legend
             + `</div>`
-            + `<div class="game-an-grades" aria-label="${escHtml(copy.gameAnalysisTitle || '')}">`
+            + `<div class="game-an-grades" aria-label="${escHtml(analysisTitle)}">`
             + gradeRows
             + `</div>`
             + `</div>`
@@ -6643,10 +6730,6 @@
     const AUG_DRAFT_ROUNDS = 4;
     const AUG_DRAFT_OFFER = 3;          // Mayhem shows 3 augments per round
     const AUG_DRAFT_CHAMP_CHOICES = 3;
-    // Earlier picks carry more leverage, while later picks are increasingly
-    // conditional on the build already taking shape. These weights keep the
-    // projected rate readable instead of simply adding four independent lifts.
-    const AUG_DRAFT_POSITION_WEIGHT = [1, 0.84, 0.7, 0.58];
     // Champions below this see too few games for their per-augment lift to mean
     // anything; the draft would be scoring noise.
     const AUG_DRAFT_MIN_CHAMP_GAMES = 800;
@@ -6785,67 +6868,52 @@
         return augs[String(id)] || augs[id] || null;
     }
 
-    function augDraftSetKeys(aug) {
-        if (!aug) return [];
-        const rows = Array.isArray(aug.sets) ? aug.sets : [];
-        const keys = rows.map(s => String(s && (s.slug || s.name_zh || s.name_en || s.name) || ''))
-            .filter(Boolean);
-        if (aug.setSlug) keys.push(String(aug.setSlug));
-        if (aug.set) keys.push(String(aug.set));
-        return [...new Set(keys)];
-    }
-
-    function augDraftCategoryKeys(aug) {
-        return aug && Array.isArray(aug.cats) ? aug.cats.map(String) : [];
-    }
-
-    /** Small, visible context signal: set repeats and shared archetypes matter. */
-    function augDraftPairBonus(leftId, rightId) {
-        const left = augDraftAugFor(leftId);
-        const right = augDraftAugFor(rightId);
-        if (!left || !right) return 0;
-        const rightSets = new Set(augDraftSetKeys(right));
-        const rightCats = new Set(augDraftCategoryKeys(right));
-        const sameSet = augDraftSetKeys(left).some(k => rightSets.has(k));
-        const sharedCats = augDraftCategoryKeys(left).filter(k => rightCats.has(k)).length;
-        return (sameSet ? 0.005 : 0) + Math.min(sharedCats, 2) * 0.0015;
-    }
-
-    function augDraftPairBonusTotal(ids) {
-        let total = 0;
-        for (let i = 0; i < ids.length; i += 1) {
-            for (let j = i + 1; j < ids.length; j += 1) {
-                total += augDraftPairBonus(ids[i], ids[j]);
-            }
+    function augDraftSlotStat(id, round) {
+        const row = augDraftRowFor(id, round);
+        const slot = row && Array.isArray(row.slots) ? row.slots[Number(round) || 0] : null;
+        if (slot && Number(slot.g) > 0 && Number.isFinite(Number(slot.wr))) {
+            return {
+                wr: Number(slot.wr),
+                rawWr: Number(slot.rawWr ?? slot.wr),
+                games: Number(slot.g),
+                fallback: false,
+            };
         }
-        return total;
+        return {
+            wr: row ? Number(row.wr || 0) : 0,
+            rawWr: row ? Number(row.wr || 0) : 0,
+            games: row ? Number(row.g || 0) : 0,
+            fallback: true,
+        };
     }
 
-    function augDraftPositionWeight(round) {
-        const i = Math.max(0, Number(round) || 0);
-        return AUG_DRAFT_POSITION_WEIGHT[i] || AUG_DRAFT_POSITION_WEIGHT[AUG_DRAFT_POSITION_WEIGHT.length - 1];
+    /**
+     * Production must not invent combo coefficients.  The trained sequence
+     * ensemble is validated offline but not yet exported to the static client;
+     * until that artifact is wired, rank strictly by the observed slot model.
+     */
+    function augDraftComboAdjustment(id, picks) {
+        void id;
+        void picks;
+        return { value: 0, kind: 'model-pending' };
     }
 
-    function augDraftBaseWr() {
-        const champ = (DATA && DATA.champs && DATA.champs[augDraft.champId]) || {};
-        const wr = Number(champ.wr ?? champ.rawWr);
-        return Number.isFinite(wr) && wr > 0 ? wr : 0.5;
+    function augDraftEstimate(id, round, picks) {
+        const slot = augDraftSlotStat(id, round);
+        const combo = augDraftComboAdjustment(id, picks);
+        return {
+            projected: Math.max(0.05, Math.min(0.95, slot.wr + combo.value)),
+            slotWr: slot.wr,
+            slotRawWr: slot.rawWr,
+            slotGames: slot.games,
+            slotFallback: slot.fallback,
+            combo: combo.value,
+            comboKind: combo.kind,
+        };
     }
 
-    /** Project the resulting champion WR after this candidate is added. */
     function augDraftProjectedWr(id, round, picks) {
-        const history = Array.isArray(picks) ? picks : augDraft.picks;
-        const historyIds = history.map(p => String(p.id));
-        let projected = augDraftBaseWr();
-        history.forEach((p, index) => {
-            projected += Number(p.wrLift || 0) * augDraftPositionWeight(
-                p.round == null ? index : p.round
-            );
-        });
-        projected += augDraftPairBonusTotal(historyIds);
-        projected += Number(augDraftLift(id, round) || 0) * augDraftPositionWeight(round);
-        historyIds.forEach(prevId => { projected += augDraftPairBonus(prevId, id); });
-        return Math.max(0.05, Math.min(0.95, projected));
+        return augDraftEstimate(id, round, picks).projected;
     }
 
     function augDraftDeal(n, soft, extraHard) {
@@ -6910,7 +6978,8 @@
         if (augDraft.phase !== 'pick') return;
         if (!augDraftOffer().map(String).includes(String(id))) return;
         const candidates = augDraftCandidates();
-        const projected = candidates.map(x => augDraftProjectedWr(x, augDraft.round, augDraft.picks));
+        const estimates = candidates.map(x => augDraftEstimate(x, augDraft.round, augDraft.picks));
+        const projected = estimates.map(x => x.projected);
         const best = Math.max.apply(null, projected);
         const worst = Math.min.apply(null, projected);
         const mineIndex = candidates.map(String).indexOf(String(id));
@@ -6929,6 +6998,7 @@
             best,
             worst,
             projectedById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), projected[i]])),
+            estimateById: Object.fromEntries(candidates.map((candidate, i) => [String(candidate), estimates[i]])),
             wrLift: augDraftLift(id),
             // Flat 1.0 when every option was identical: there was nothing to read.
             score: best === worst ? 1 : (mine - worst) / (best - worst),
@@ -7077,20 +7147,37 @@
         // Show the two quantities the ranking is actually built from, not the
         // blended score: a bare "+1.3%" made a 114-game augment look better
         // than a 3,942-game one with no way to see why.
-        const liftHtml = o.reveal
+        const estimate = o.estimate || null;
+        const slotNumber = Number(o.round == null ? augDraft.round : o.round) + 1;
+        const slotLabel = currentLang === 'en' ? `Pick ${slotNumber}` : zhUi(`第 ${slotNumber} 手`);
+        const dataLabel = estimate && estimate.slotFallback
+            ? (currentLang === 'en' ? 'All picks' : zhUi('全順位'))
+            : slotLabel;
+        const comboText = estimate
+            ? (estimate.comboKind === 'model-pending'
+                ? (currentLang === 'en' ? 'Pending' : zhUi('待接入'))
+                : `${estimate.combo >= 0 ? '+' : ''}${(Number(estimate.combo) * 100).toFixed(1)}%`)
+            : '';
+        const liftHtml = o.reveal && estimate
             ? `<span class="aug-draft-stats">`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGameWinRate || 'Win rate')}</span>`
-                + `<b class="aug-draft-wr ${augDraftLift(id) >= 0 ? 'is-good' : 'is-bad'}">`
-                + `${escHtml(pct(augDraftWr(id)))}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(dataLabel + (currentLang === 'en' ? ' observed' : zhUi('實戰')))}</span>`
+                + `<b class="aug-draft-wr">${escHtml(pct(estimate.slotRawWr))}</b></span>`
                 + `<span class="aug-draft-stat">`
-                + `<span class="aug-draft-stat-label">${escHtml(o.copy.augGamePickRateLabel || 'Pick rate')}</span>`
-                + `<b class="aug-draft-pick">${escHtml(pct(augDraftPickRate(id)))}</b></span>`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample' : zhUi('樣本'))}</span>`
+                + `<b class="aug-draft-pick">${escHtml(Number(estimate.slotGames || 0).toLocaleString())}</b></span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sample-adjusted' : zhUi('樣本校正'))}</span>`
+                + `<b class="aug-draft-pick">${escHtml(pct(estimate.slotWr))}</b></span>`
+                + `<span class="aug-draft-stat">`
+                + `<span class="aug-draft-stat-label">${escHtml(currentLang === 'en' ? 'Sequence model' : zhUi('搭配模型'))}</span>`
+                + `<b class="aug-draft-combo ${estimate.combo > 0 ? 'is-good' : estimate.combo < 0 ? 'is-bad' : ''}">`
+                + `${escHtml(comboText)}</b></span>`
                 + `</span>`
             : '';
         const projectedHtml = Number.isFinite(o.projectedWr)
             ? `<span class="aug-draft-projected">`
-                + `<span class="aug-draft-projected-label">${escHtml(o.copy.augGameProjectedWr || 'Projected win rate')}</span>`
+                + `<span class="aug-draft-projected-label">${escHtml(dataLabel + (currentLang === 'en' ? ' adjusted estimate' : zhUi('順位校正')))}</span>`
                 + `<b class="aug-draft-projected-value">${escHtml(pct(o.projectedWr))}</b>`
                 + `</span>`
             : '';
@@ -7150,6 +7237,9 @@
             const projectedById = last.projectedById || Object.fromEntries(
                 last.candidates.map(id => [String(id), augDraftProjectedWr(id, augDraft.round, augDraft.picks.slice(0, -1))])
             );
+            const estimateById = last.estimateById || Object.fromEntries(
+                last.candidates.map(id => [String(id), augDraftEstimate(id, augDraft.round, augDraft.picks.slice(0, -1))])
+            );
             const ranked = last.candidates.slice().sort((a, b) => {
                 const delta = Number(projectedById[String(b)] || 0) - Number(projectedById[String(a)] || 0);
                 return delta || String(a).localeCompare(String(b), undefined, { numeric: true });
@@ -7172,6 +7262,8 @@
                             best: rankById[String(id)] === 1,
                             rank: rankById[String(id)],
                             projectedWr: Number(projectedById[String(id)]),
+                            estimate: estimateById[String(id)],
+                            round: augDraft.round,
                             // Dim anything that was never live, but keep it visible
                             // because every hidden option still counts in the score.
                             stale: depth !== shownIdx,
@@ -7194,6 +7286,7 @@
                     ? (copy.augGameRerollUsed || 'Reroll used')
                     : (copy.augGameReroll || 'Reroll');
                 const buttonTitle = `${label} · ${copy.augGameRerollHint || 'One swap per card'}`;
+                const estimate = augDraftEstimate(id, augDraft.round, augDraft.picks);
                 return (
                     `<div class="aug-draft-slot is-pick-slot is-${AUG_RARITY_CSS[code] || 'gold'}">`
                     + `<span class="aug-draft-choice-label">`
@@ -7202,7 +7295,9 @@
                         copy,
                         code,
                         interactive: true,
-                        projectedWr: augDraftProjectedWr(id, augDraft.round),
+                        projectedWr: estimate.projected,
+                        estimate,
+                        round: augDraft.round,
                     })
                     + `<button type="button" class="aug-slot-reroll" data-aug-reroll="${slot}"`
                     + `${used ? ' disabled' : ''} title="${escHtml(buttonTitle)}"`
@@ -8565,8 +8660,8 @@
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
-        if (!view || view === 'home') return prefix || '/';
-        return prefix + '/' + view;
+        if (!view || view === 'home') return prefix ? prefix + '/' : '/';
+        return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
         let path = pathname || '/';
@@ -8614,8 +8709,7 @@
         // historyMode: 'push' | 'replace' | 'none'
         if (historyMode === 'none') return;
         const wantPath = pathForRoute(view, sub);
-        const curNorm = normalizePathname(location.pathname);
-        const needPath = curNorm !== wantPath;
+        const needPath = location.pathname !== wantPath;
         const needClearHash = Boolean(location.hash);
         if (!needPath && !needClearHash) return;
         const url = wantPath + (location.search || '');
@@ -8793,13 +8887,17 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.classic-mode-link').forEach(el => {
+        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
-            const aria = el.getAttribute(`data-aria-${suffix}`);
             if (href) el.setAttribute('href', href);
-            if (aria) el.setAttribute('aria-label', aria);
         });
+        const modeSummary = document.querySelector('#mode-menu > summary');
+        if (modeSummary) {
+            const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
+            const aria = modeSummary.getAttribute(`data-aria-${suffix}`);
+            if (aria) modeSummary.setAttribute('aria-label', aria);
+        }
         if (document.getElementById('view-column')
                 && document.getElementById('view-column').classList.contains('is-active')) {
             columnArticle ? renderArticle(columnArticle) : renderColumnList();
@@ -9025,6 +9123,12 @@
     });
 
     document.addEventListener('click', (ev) => {
+        const modeMenu = document.getElementById('mode-menu');
+        if (modeMenu && !modeMenu.contains(ev.target)) modeMenu.open = false;
+        const modePick = ev.target.closest('.mode-options [data-mode-target]');
+        if (modePick) {
+            trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
+        }
         const detailRetry = ev.target.closest('[data-detail-retry]');
         if (detailRetry) {
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
@@ -9467,7 +9571,7 @@
                 if ((p === '/' || p === '') && (saved === 'en' || saved === 'zh-CN')) {
                     currentLang = normalizeLang(saved);
                     try {
-                        history.replaceState(null, '', (langMeta(currentLang).prefix || '/') + (location.search || ''));
+                        history.replaceState(null, '', pathForRoute('home') + (location.search || ''));
                     } catch {}
                 }
             } catch {}
@@ -9641,6 +9745,13 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            const modeMenu = document.getElementById('mode-menu');
+            if (modeMenu && modeMenu.open) {
+                modeMenu.open = false;
+                const summary = modeMenu.querySelector('summary');
+                if (summary) summary.focus();
+                return;
+            }
             if (augChampsId != null) {
                 closeAugChamps();
                 return;

@@ -113,9 +113,27 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", en_body)
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
-            self.assertIn("https://arammeta.com/en", en_body)
+            self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
+            self.assertIn(
+                "hreflang='zh-Hans' href='https://arammeta.com/zh-CN/'",
+                en_body,
+            )
+            self.assertIn(
+                "hreflang='x-default' href='https://arammeta.com/'",
+                en_body,
+            )
             zh_cn = root / "zh-CN" / "index.html"
-            self.assertIn("FULL_SPA_SHELL", zh_cn.read_text(encoding="utf-8"))
+            zh_cn_body = zh_cn.read_text(encoding="utf-8")
+            self.assertIn("FULL_SPA_SHELL", zh_cn_body)
+            self.assertIn(
+                "rel='canonical' href='https://arammeta.com/zh-CN/'",
+                zh_cn_body,
+            )
+            root_body = index.read_text(encoding="utf-8")
+            self.assertIn(
+                "hreflang='en' href='https://arammeta.com/en/'",
+                root_body,
+            )
             self.assertIn("/zh-CN", SPA_FULL_SHELL_PATHS)
             self.assertIn("/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
@@ -123,6 +141,13 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertNotIn("/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/en/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/zh-CN/column", SPA_FULL_SHELL_PATHS)
+
+    def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
+        source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
+        self.assertIn("return prefix ? prefix + '/' : '/'", source)
+        self.assertIn("return prefix + '/' + view + '/'", source)
+        self.assertIn("const needPath = location.pathname !== wantPath", source)
+        self.assertIn("pathForRoute('home') + (location.search || '')", source)
 
     def test_write_site_info_pages_creates_policy_pages_and_ads_txt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

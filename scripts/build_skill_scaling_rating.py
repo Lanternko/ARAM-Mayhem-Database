@@ -5,9 +5,12 @@ Validated as a REAL champ property by checking cross-patch stability (16.11 vs 1
 before pooling.  Read-only artifact (does NOT touch the published site).
 
 Inputs: data/ratings/game_skill_by_id.parquet, data/lcu/games.db, ddragon_champion_byid.json
-Output: outputs/skill_scaling_rating.csv  (champ, alias, scaling_pp, games, per-patch columns)
+Outputs:
+  outputs/skill_scaling_rating.csv  (analysis table; ignored local artifact)
+  scripts/site_data/champ_skill_scaling.json  (versioned site snapshot)
 """
 from __future__ import annotations
+import argparse
 import json
 import math
 import sqlite3
@@ -17,6 +20,48 @@ import polars as pl
 
 PATCHES = ["16.11", "16.12", "16.13"]
 MIN_GAMES = 250
+SITE_SNAPSHOT = Path(__file__).resolve().parent / "site_data" / "champ_skill_scaling.json"
+
+
+def write_site_snapshot(ss_json: dict[str, dict]) -> None:
+    SITE_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
+    SITE_SNAPSHOT.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "queue_id": 2400,
+                "region": "TW",
+                "patches": PATCHES,
+                "metric": "high_skill_wr_minus_low_skill_wr_pp",
+                "min_games_per_cohort": MIN_GAMES,
+                "champs": ss_json,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+
+def snapshot_from_analysis_csv(path: Path) -> int:
+    """Restore the site snapshot from a previously generated analysis table."""
+    df = pl.read_csv(path)
+    required = {"champ", "scaling_pp", "z", "games"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"analysis CSV is missing columns: {sorted(missing)}")
+    ss_json = {
+        str(int(row["champ"])): {
+            "pp": round(float(row["scaling_pp"]), 1),
+            "z": round(float(row["z"]), 1),
+            "g": int(row["games"]),
+        }
+        for row in df.iter_rows(named=True)
+    }
+    write_site_snapshot(ss_json)
+    print(f"[done] {SITE_SNAPSHOT}  ({len(ss_json)} champions; restored from {path})")
+    return len(ss_json)
 
 
 def parse_champs(s):
@@ -109,11 +154,12 @@ def main():
     df = pl.DataFrame(rows).sort("scaling_pp", descending=True)
     Path("outputs").mkdir(exist_ok=True)
     df.write_csv("outputs/skill_scaling_rating.csv")
-    # build-time artifact consumed by build_tier_list.py (per-champ payload field)
-    Path("data/cache").mkdir(parents=True, exist_ok=True)
-    Path("data/cache/champ_skill_scaling.json").write_text(
-        json.dumps({"champs": ss_json}, ensure_ascii=False), encoding="utf-8")
+    # This is a published, cross-patch metric rather than an ephemeral cache.
+    # Keep the snapshot in the tracked source tree so the isolated static-site
+    # publisher receives the exact same input as a local build.
+    write_site_snapshot(ss_json)
     print(f"\n[done] outputs/skill_scaling_rating.csv  ({df.height} champions)")
+    print(f"[done] {SITE_SNAPSHOT}  ({len(ss_json)} champions)")
     print("\n--- TOP skill-scaling (reward good lobbies) ---")
     for r in df.head(10).iter_rows(named=True):
         print(f"  {r['alias']:13s} {r['scaling_pp']:+5.1f}pp  (low {r['low_wr']}% -> high {r['high_wr']}%)")
@@ -123,4 +169,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--from-analysis-csv",
+        type=Path,
+        help="restore the tracked site snapshot from a prior analysis CSV without rescanning games.db",
+    )
+    args = parser.parse_args()
+    if args.from_analysis_csv is not None:
+        snapshot_from_analysis_csv(args.from_analysis_csv)
+    else:
+        main()

@@ -14,6 +14,9 @@ import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
+from aram_nn.site.static_publish import (  # noqa: E402
+    DEFAULT_CF_ANALYTICS_TOKEN as PRODUCTION_CF_ANALYTICS_TOKEN,
+)
 
 
 PRODUCTION_SITE_URL = "https://arammeta.com"
@@ -124,6 +127,25 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
     return normalized_api
 
 
+def resolve_production_shell_settings(
+    site_url: str,
+    payload_url: str,
+    cloudflare_analytics_token: str,
+) -> tuple[str, str]:
+    """Make the one-line production shell build safe by default.
+
+    Local previews preserve the caller's values.  For arammeta.com, shell-only
+    always reuses the existing split payload and keeps the public analytics
+    beacon unless the caller explicitly supplied another value.
+    """
+    if site_url.strip().rstrip("/") != PRODUCTION_SITE_URL:
+        return payload_url, cloudflare_analytics_token
+    return (
+        payload_url.strip() or "api/tier-list.json",
+        cloudflare_analytics_token.strip() or PRODUCTION_CF_ANALYTICS_TOKEN,
+    )
+
+
 
 
 @click.command()
@@ -162,12 +184,13 @@ def resolve_meta_pick_api_url(site_url: str, meta_pick_api_url: str) -> str:
 @click.option("--payload-url", default="",
               help="Have the generated HTML fetch DATA from this URL instead of embedding it inline.")
 @click.option("--shell-only", is_flag=True, default=False,
-              help="Fast frontend-preview rebuild: regenerate ONLY index.html from the existing "
+              help="Fast frontend shell rebuild: regenerate route HTML and site.js from the existing "
                    "tier-list.json payload, skipping all win-rate / augment / affinity compute "
                    "(seconds vs the full multi-minute build). Champ grid + CSS/JS render as in "
                    "production and search still works (the client rebuilds its search index from "
-                   "the payload on load). Use while iterating on site.css / site.js / copy; run a "
-                   "normal build to refresh the data.")
+                   "the payload on load). With --site-url https://arammeta.com/, production split-"
+                   "payload and analytics defaults are applied automatically. Use a normal build "
+                   "only when the public data must also change.")
 @click.option("--reuse-model-artifacts", is_flag=True, default=False,
               help="Refresh current-patch statistics while reusing cached empirical profiles "
                    "and team-score artifacts; useful when only the data payload changed.")
@@ -226,6 +249,11 @@ def main(
     click.echo(f"[tierlist] db={db}  queue={queue_id}  patch_prefix={patch_prefix}")
 
     if shell_only:
+        payload_url, cloudflare_analytics_token = resolve_production_shell_settings(
+            site_url,
+            payload_url,
+            cloudflare_analytics_token,
+        )
         _run_shell_only(
             out_path=out_path, db=db, queue_id=queue_id, patch_prefix=patch_prefix,
             payload_out=payload_out, payload_url=payload_url, site_url=site_url,
@@ -474,7 +502,7 @@ def main(
         min_games=SPELL_MIN_GAMES,
     )
     click.echo(
-        f"[tierlist] {len(spell_affinity)} champions have >= 1 summoner-spell row "
+        f"[tierlist] {len(spell_affinity)} champions have >= 1 two-spell loadout row "
         f"(games >= {SPELL_MIN_GAMES}, top_lift >= {SPELL_TOP_MIN_LIFT:.1%})"
     )
     item_build_clusters = compute_champ_item_build_clusters(
