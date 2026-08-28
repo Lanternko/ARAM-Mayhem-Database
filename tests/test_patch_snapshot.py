@@ -91,6 +91,13 @@ class PatchSnapshotTests(unittest.TestCase):
         direct = engine.compute_winrates(self.db, 2400, "16.14")
         settled = self._settled()
         self.assertEqual(direct, settled)
+        ordered = next(
+            row for row in direct[1]
+            if row["champion_id"] == 1 and row["augment_id"] == 71
+        )
+        self.assertEqual(ordered["slots"][0]["games"], 40)
+        self.assertEqual(ordered["slots"][0]["wins"], 20)
+        self.assertIsNone(ordered["slots"][1])
         # ...and the second call is served from the file, not the DB.
         self.assertTrue(patch_snapshot.snapshot_path("16.14", queue_id=2400,
                                                      snapshot_dir=self.snapshots).exists())

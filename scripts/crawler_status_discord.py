@@ -600,52 +600,77 @@ def run_stall_alert(
     return 0
 
 
-def publish_status(repo_root: Path, stale_hours: float) -> dict[str, Any]:
-    """Local commits that never reached origin — the silent auto-publish failure.
+def publish_status(
+    repo_root: Path,
+    state_file: Path,
+    stale_hours: float,
+) -> dict[str, Any]:
+    """Whether the publisher's last successful commit reached remote ``main``.
 
-    Deliberately offline: it compares HEAD against the *cached* origin/main ref,
-    which only advances on a successful push.  A live `git fetch` would be worse
-    than useless here — the failure mode this detects (watchdog push blocked on a
-    credential prompt) would hang the fetch on that same prompt.
-
-    Symptom this catches: commits pile up locally, the site never updates, and
-    nothing else in this report looks wrong (the crawler keeps saving games fine).
+    Routine publishing happens in a detached disposable worktree.  The primary
+    checkout may intentionally be hundreds of commits ahead of and behind main,
+    so ``origin/main..HEAD`` is not a publish queue and must never drive alerts.
+    Read the publisher-owned commit from its state file, query the public remote
+    with interactive Git authentication disabled, then check ancestry locally.
     """
     out: dict[str, Any] = {
         "ok": False,
-        "ahead": None,
-        "oldest_unpushed_age_h": None,
+        "synced": None,
+        "published_commit": None,
+        "remote_head": None,
+        "publish_commit_age_h": None,
         "stale": False,
         "stale_hours": stale_hours,
     }
 
     def git(*args: str) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+        env["GCM_INTERACTIVE"] = "Never"
         return subprocess.run(
             ["git", *args],
             cwd=str(repo_root),
             capture_output=True,
             text=True,
             timeout=15,
+            env=env,
         )
 
     try:
-        head = git("rev-list", "--count", "origin/main..HEAD")
-        if head.returncode != 0:
-            out["error"] = (head.stderr or "").strip()[:200] or "rev-list failed"
+        if not state_file.exists():
+            out["error"] = f"publisher state missing: {state_file}"
             return out
-        ahead = int((head.stdout or "0").strip() or 0)
-        out["ahead"] = ahead
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        published_commit = str(state.get("last_commit") or "").strip()
+        if not re.fullmatch(r"[0-9a-fA-F]{7,40}", published_commit):
+            out["error"] = "publisher state has no valid last_commit"
+            return out
+        out["published_commit"] = published_commit
+
+        published_at = state.get("last_publish_at_unix")
+        if isinstance(published_at, (int, float)) and published_at > 0:
+            age_h = (time.time() - float(published_at)) / 3600.0
+            out["publish_commit_age_h"] = round(age_h, 1)
+
+        remote = git("ls-remote", "origin", "refs/heads/main")
+        if remote.returncode != 0:
+            out["error"] = (remote.stderr or "").strip()[:200] or "ls-remote failed"
+            return out
+        remote_head = ((remote.stdout or "").strip().split() or [""])[0]
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", remote_head):
+            out["error"] = "origin main returned no valid commit"
+            return out
+        out["remote_head"] = remote_head
+
+        ancestor = git("merge-base", "--is-ancestor", published_commit, remote_head)
+        if ancestor.returncode not in (0, 1):
+            out["error"] = (ancestor.stderr or "").strip()[:200] or "merge-base failed"
+            return out
         out["ok"] = True
-        if ahead > 0:
-            # Committer timestamps of the unpushed commits; the oldest one is how
-            # long the publish leg has actually been broken.
-            log = git("log", "--format=%ct", f"-{ahead}", "HEAD")
-            stamps = [int(x) for x in (log.stdout or "").split() if x.strip().isdigit()]
-            if stamps:
-                age_h = (time.time() - min(stamps)) / 3600.0
-                out["oldest_unpushed_age_h"] = round(age_h, 1)
-                out["stale"] = age_h >= stale_hours
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        out["synced"] = ancestor.returncode == 0
+        if not out["synced"] and out["publish_commit_age_h"] is not None:
+            out["stale"] = out["publish_commit_age_h"] >= stale_hours
+    except (OSError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
         out["error"] = f"{type(exc).__name__}: {exc}"
     return out
 
@@ -814,7 +839,11 @@ def build_status(
     state = latest_state(state_file)
     stats = db_stats(db, window_hours=window_hours)
     logs = worker_log_stats(log_dir)
-    publish = publish_status(repo_root, stale_hours=publish_stale_hours)
+    publish = publish_status(
+        repo_root,
+        publish_state_file,
+        stale_hours=publish_stale_hours,
+    )
     site_publish = site_publish_status(
         publish_state_file, publish_err_log, stale_hours=site_publish_stale_hours
     )
@@ -958,21 +987,26 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
         f"pid={wd['pid']} · 已跑 {wd['uptime_min']} 分" if wd else "未運行"
     )
 
-    ahead = publish.get("ahead")
-    unpushed_age = publish.get("oldest_unpushed_age_h")
+    synced = publish.get("synced")
+    published_commit = str(publish.get("published_commit") or "")[:8]
+    publish_commit_age = publish.get("publish_commit_age_h")
     if publish.get("error"):
         publish_text = f"無法判斷（{str(publish['error'])[:80]}）"
     elif not publish.get("ok"):
         publish_text = "無法判斷"
-    elif not ahead:
-        publish_text = "已同步 ✅"
+    elif synced:
+        publish_text = f"已同步 ✅\n發布 commit `{published_commit}` 已在 remote main"
     elif publish_stale:
         publish_text = (
-            f"⚠️ **{ahead}** 個 commit 未上線\n卡了 **{unpushed_age}** 小時"
-            f"（門檻 {publish.get('stale_hours')}h）\n多半是 push 卡在認證視窗"
+            f"⚠️ 發布 commit `{published_commit}` 未出現在 remote main\n"
+            f"已 **{publish_commit_age}** 小時（門檻 {publish.get('stale_hours')}h）\n"
+            "檢查 publisher push 與 error log"
         )
     else:
-        publish_text = f"**{ahead}** 個 commit 待推\n最舊 {unpushed_age} 小時"
+        publish_text = (
+            f"發布 commit `{published_commit}` 尚未出現在 remote main\n"
+            f"已 {publish_commit_age} 小時"
+        )
 
     # Static-site publisher (rebuild leg) — separate from the git push leg above.
     sp_age = site_publish.get("last_publish_age_h")
@@ -1108,7 +1142,7 @@ def main(argv: list[str] | None = None) -> int:
         "--publish-stale-hours",
         type=float,
         default=3.0,
-        help="Unpushed commits older than this flag the report yellow",
+        help="Published commit absent from remote main longer than this flags yellow",
     )
     parser.add_argument(
         "--site-publish-stale-hours",
