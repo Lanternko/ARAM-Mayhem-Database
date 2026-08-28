@@ -2427,6 +2427,11 @@ def _classic_lane_arm_for_slot(claim_number: int, percent: int) -> str:
     claim_number parity would have silently run one arm 100% of the time and
     left the experiment with no control.
     """
+    if not _LANE_AB_ENABLED:
+        # Both halves must agree, or the lane silently loses budget: a "score"
+        # slot would filter on lane_arm(puuid) = 'score', match nothing now that
+        # every player hashes to 'due', and fall through to the general frontier.
+        return "due"
     normalized = min(100, max(0, int(percent)))
     if normalized <= 0:
         return "score"
@@ -2719,7 +2724,20 @@ def history_arm(puuid: str) -> str:
     return ("control", "probe", "full")[digest[0] % 3]
 
 
-_LANE_AB_ENABLED = True
+# Off: the experiment ran and the score ordering lost.  Over 15.4 hours the
+# score arm returned 186.6 Classic games per 1,000 visits against due's 361.2
+# (difference -174.6, 95% CI [-313.3, -38.8], so not a wash).  Mechanism: score
+# visits were 100% revisits while due's were 60%, because a never-visited row
+# carries classic_lambda = 0 and falls back to the 0.055 discovery prior, which
+# loses to any player with an observed rate.  That starved first visits -- and
+# first visits are where the yield is (6.21 games against ~1.5 on a revisit).
+# The prior was the error: 0.055 came from the lifetime average of already
+# visited players, which is itself diluted by revisits, so first visits were
+# priced with a number that describes revisits.
+#
+# Re-enabling means first fixing that prior against measured first-visit yield,
+# not just flipping this back.
+_LANE_AB_ENABLED = False
 
 
 def lane_arm(puuid: str) -> str:
@@ -2740,7 +2758,7 @@ def lane_arm(puuid: str) -> str:
     independent of the treatments they are already in.
     """
     if not _LANE_AB_ENABLED:
-        return "score"
+        return "due"
     digest = hashlib.sha1(b"lane-ab|" + str(puuid).encode("utf-8", "replace")).digest()
     return "score" if digest[0] & 1 else "due"
 

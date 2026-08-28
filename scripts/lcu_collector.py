@@ -40,6 +40,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import traceback
 import webbrowser
 import zipfile
 from collections import Counter
@@ -92,7 +93,29 @@ def _snowball_rpc_worker(
     with open(stdout_path, "a", encoding="utf-8", buffering=1) as stdout_file, open(
         stderr_path, "a", encoding="utf-8", buffering=1
     ) as stderr_file, contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
-        run_snowball(writer_client=writer_client, **kwargs)
+        try:
+            run_snowball(writer_client=writer_client, **kwargs)
+        except BaseException:
+            # Write the traceback HERE, while stderr still points at this
+            # worker's file.  Letting it escape instead loses it completely:
+            # the redirect ends as the `with` unwinds, so multiprocessing's
+            # _bootstrap prints to the real sys.stderr, which is None under
+            # pythonw.  That is why 16 producer deaths between 2026-08-27 and
+            # 2026-08-28 left `snowball_W0x.err` at zero bytes and the fleet
+            # supervisor with nothing to report but "exitcode=1" -- the logs
+            # simply stop mid-crawl, with no clue what threw.
+            traceback.print_exc(file=stderr_file)
+            stderr_file.flush()
+            raise
+
+
+# Producer restart policy.  Bounded so a genuinely broken producer degrades to
+# "one fewer producer" instead of a hot respawn loop, and so a fleet that has
+# lost every producer still exits and lets the watchdog rebuild it cleanly.
+_PRODUCER_RESTART_BACKOFF_SEC = 5.0
+_PRODUCER_RESTART_MAX_BACKOFF_SEC = 60.0
+_PRODUCER_MAX_RESTARTS = 5
+_PRODUCER_FAILURE_WINDOW_SEC = 1800.0
 
 
 def _run_snowball_fleet(
@@ -120,6 +143,7 @@ def _run_snowball_fleet(
     supervisor = WriterSupervisor(db, workers, context=context)
     clients = supervisor.start()
     processes: list[multiprocessing.Process] = []
+    worker_ids: dict[int, str] = {}
     stopping = False
 
     def request_stop(_signum=None, _frame=None) -> None:
@@ -135,10 +159,8 @@ def _run_snowball_fleet(
         except (OSError, ValueError):
             pass
 
-    try:
-        for idx, client in enumerate(clients):
+    def spawn_producer(idx: int, client, *, should_seed: bool) -> multiprocessing.Process:
             worker_id = f"{worker_prefix}{idx + 1:02d}"
-            should_seed = idx == 0 or not seed_on_first_only
             kwargs = dict(run_kwargs)
             kwargs.update(
                 worker_id=worker_id,
@@ -158,8 +180,15 @@ def _run_snowball_fleet(
                 args=(client, kwargs, str(stdout_path), str(stderr_path)),
             )
             process.start()
-            processes.append(process)
+            worker_ids[process.pid] = worker_id
             click.echo(f"  {worker_id}: producer_pid={process.pid} mode={'seed' if should_seed else 'consume'}")
+            return process
+
+    try:
+        for idx, client in enumerate(clients):
+            processes.append(
+                spawn_producer(idx, client, should_seed=idx == 0 or not seed_on_first_only)
+            )
             if stagger_sec > 0 and idx + 1 < workers:
                 time.sleep(stagger_sec)
 
@@ -167,16 +196,76 @@ def _run_snowball_fleet(
             f"[fleet] supervisor_pid={os.getpid()} writer_pid={getattr(supervisor._process, 'pid', None)} "
             f"producers={len(processes)} db={db}"
         )
-        while any(process.is_alive() for process in processes):
+        # A dead producer is restarted in place rather than taken as a fleet
+        # failure.  Tearing the fleet down on one producer's exit cost 26 fleet
+        # launches in the 15 hours after cutover -- 12 of them inside one 15
+        # minute window -- because a flaky LCU kills producers one at a time and
+        # each death took the writer and every healthy sibling with it.  The old
+        # two-worker topology absorbed this: the watchdog restarted the one dead
+        # worker and the other kept crawling.
+        #
+        # The writer is still fatal.  It owns the only DB handle, so there is
+        # nothing left to produce into.
+        failures: dict[int, int] = {}
+        last_failure_at: dict[int, float] = {}
+        retired: set[int] = set()
+        while True:
             if control_file.exists():
                 stopping = True
             if stopping:
                 break
             if not supervisor.is_alive:
                 raise RuntimeError("single DB writer exited; stopping all producers")
-            failed = [process for process in processes if process.exitcode not in (None, 0)]
-            if failed:
-                raise RuntimeError(f"producer failed: pid={failed[0].pid} exitcode={failed[0].exitcode}")
+
+            now = time.monotonic()
+            for idx, process in enumerate(processes):
+                if idx in retired or process.exitcode in (None, 0):
+                    continue
+                label = worker_ids.get(process.pid, process.name or "?")
+                # Forget an old failure once the producer has been healthy for a
+                # while, so a flaky night does not permanently retire a producer
+                # that is fine the next morning.
+                if now - last_failure_at.get(idx, 0.0) > _PRODUCER_FAILURE_WINDOW_SEC:
+                    failures[idx] = 0
+                failures[idx] = failures.get(idx, 0) + 1
+                last_failure_at[idx] = now
+                if failures[idx] > _PRODUCER_MAX_RESTARTS:
+                    retired.add(idx)
+                    click.echo(
+                        f"[fleet] {label} failed {failures[idx]}x in "
+                        f"{_PRODUCER_FAILURE_WINDOW_SEC:.0f}s; retiring it",
+                        err=True,
+                    )
+                    continue
+                backoff = min(_PRODUCER_RESTART_MAX_BACKOFF_SEC,
+                              _PRODUCER_RESTART_BACKOFF_SEC * failures[idx])
+                click.echo(
+                    f"[fleet] {label} exited with {process.exitcode} "
+                    f"(see snowball_{label}.err); restarting in {backoff:.0f}s "
+                    f"[{failures[idx]}/{_PRODUCER_MAX_RESTARTS}]",
+                    err=True,
+                )
+                time.sleep(backoff)
+                if control_file.exists():
+                    stopping = True
+                    break
+                # Never re-seed on restart: seeding is a one-time cost at fleet
+                # start, and repeating it on every flap would re-resolve the
+                # whole manual seed list each time.
+                processes[idx] = spawn_producer(idx, clients[idx], should_seed=False)
+
+            if stopping:
+                break
+            if not any(process.is_alive() for process in processes):
+                if retired:
+                    raise RuntimeError(
+                        "every producer is dead or retired; restarting the fleet"
+                    )
+                # All producers finished on their own (max_players reached, empty
+                # frontier).  That is a normal end of run, not a failure, and it
+                # must not be reported as one -- the watchdog would treat a clean
+                # finish as a crash and count it toward its restart budget.
+                break
             time.sleep(0.25)
 
         if stopping:

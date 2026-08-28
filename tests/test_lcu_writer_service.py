@@ -103,6 +103,8 @@ HOUR_MS = 3_600_000
 
 
 def test_writer_classic_score_claim_prefers_yield_over_wait_time(tmp_path: pathlib.Path) -> None:
+    """The score ordering is shipped but disabled (the A/B lost).  Keep it
+    under test so it is not silently rotting if the prior is ever refitted."""
     service = WriterService(tmp_path / "games.db")
     now_ms = int(time.time() * 1000)
     service.enqueue_player("stale-low-yield", discovered_match_created_ms=100)
@@ -120,7 +122,9 @@ def test_writer_classic_score_claim_prefers_yield_over_wait_time(tmp_path: pathl
         (10 * HOUR_MS, now_ms - 10 * HOUR_MS),
     )
     service.con.commit()
-    with patch("aram_nn.lcu.snowball.lane_arm", return_value="score"):
+    with patch("aram_nn.lcu.snowball.lane_arm", return_value="score"), patch(
+        "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
+    ):
         claimed = service.handle(
             {
                 "version": 1,

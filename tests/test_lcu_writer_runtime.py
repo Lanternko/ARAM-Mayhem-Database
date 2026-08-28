@@ -96,3 +96,75 @@ def test_snowball_run_kwargs_match_run_snowball_parameters() -> None:
     fleet_source = _function_source("snowball_workers")
     assert "_snowball_run_kwargs(" in snowball_source
     assert "_snowball_run_kwargs(" in fleet_source
+
+
+def _load_collector():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("lcu_collector_under_test", COLLECTOR)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_producer_traceback_reaches_its_own_err_file(tmp_path: Path, monkeypatch) -> None:
+    """A dying producer must leave evidence behind.
+
+    Between 2026-08-27 and 2026-08-28 sixteen producers died with exitcode=1 and
+    wrote nothing at all: the redirect unwinds before multiprocessing prints the
+    traceback, and the real stderr is None under pythonw.  The fleet logs just
+    stopped mid-crawl.
+    """
+    import aram_nn.lcu.snowball as snowball_module
+
+    collector = _load_collector()
+    stdout_path = tmp_path / "snowball_W02.log"
+    stderr_path = tmp_path / "snowball_W02.err"
+
+    def boom(**_kwargs: object) -> None:
+        raise RuntimeError("writer pipe went away")
+
+    monkeypatch.setattr(snowball_module, "run_snowball", boom)
+
+    try:
+        collector._snowball_rpc_worker(object(), {}, str(stdout_path), str(stderr_path))
+    except RuntimeError as exc:
+        assert "writer pipe went away" in str(exc)
+    else:  # pragma: no cover - the worker must not swallow the failure
+        raise AssertionError("the exception must still propagate so the fleet notices")
+
+    captured = stderr_path.read_text(encoding="utf-8")
+    assert "Traceback" in captured
+    assert "writer pipe went away" in captured
+
+
+def test_fleet_failure_message_names_the_worker() -> None:
+    """pid alone is useless after the fact; the worker id points at the logs."""
+    fleet_source = _function_source("_run_snowball_fleet")
+
+    assert "worker_ids[process.pid] = worker_id" in fleet_source
+    assert "snowball_{label}.err" in fleet_source
+
+
+def test_fleet_restarts_a_dead_producer_instead_of_collapsing() -> None:
+    """One producer's exit must not take the writer and its siblings with it.
+
+    That behaviour cost 26 fleet launches in the 15 hours after cutover, 12 of
+    them inside one 15 minute window, because a flaky LCU kills producers one at
+    a time.  Restart is in place, bounded, and never re-seeds.
+    """
+    fleet_source = _function_source("_run_snowball_fleet")
+
+    # The dead producer is replaced in its own slot.
+    assert "processes[idx] = spawn_producer(idx, clients[idx], should_seed=False)" in fleet_source
+    # Bounded, so a permanently broken producer cannot hot-loop.
+    assert "_PRODUCER_MAX_RESTARTS" in fleet_source
+    assert "_PRODUCER_RESTART_BACKOFF_SEC" in fleet_source
+    assert "retired" in fleet_source
+    # The writer staying fatal is the whole point of the asymmetry.
+    assert "single DB writer exited; stopping all producers" in fleet_source
+    # A producer exit no longer raises on its own.
+    assert "raise RuntimeError(f\"producer failed" not in fleet_source
+    # A clean finish is not a failure; only retirement escalates.
+    assert "if retired:" in fleet_source

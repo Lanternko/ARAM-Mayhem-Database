@@ -143,17 +143,35 @@ class ClassicClaimTests(unittest.TestCase):
         """Every reserved slot falls on a multiple of 100/percent, so a parity
         test on claim_number picks one arm forever and the experiment silently
         loses its control."""
-        for percent in (3, 10, 25):
-            slots = [n for n in range(1000) if _classic_claim_slot(n, percent)]
-            arms = [_classic_lane_arm_for_slot(n, percent) for n in slots]
-            self.assertEqual(arms.count("score"), arms.count("due"), percent)
-            self.assertEqual(arms[:4], ["score", "due", "score", "due"], percent)
+        with patch("aram_nn.lcu.snowball._LANE_AB_ENABLED", True):
+            for percent in (3, 10, 25):
+                slots = [n for n in range(1000) if _classic_claim_slot(n, percent)]
+                arms = [_classic_lane_arm_for_slot(n, percent) for n in slots]
+                self.assertEqual(arms.count("score"), arms.count("due"), percent)
+                self.assertEqual(arms[:4], ["score", "due", "score", "due"], percent)
+
+    def test_disabled_ab_puts_both_halves_on_the_same_arm(self) -> None:
+        """The slot selector and the per-player hash have to agree when the
+        experiment is off.  If the selector still handed out 'score' slots while
+        every player hashed to 'due', the WHERE clause would match nothing and
+        the slot would fall through to the general frontier -- the Classic lane
+        would quietly run at half its configured budget."""
+        slot_arms = {
+            _classic_lane_arm_for_slot(n, 10)
+            for n in range(1000)
+            if _classic_claim_slot(n, 10)
+        }
+        player_arms = {lane_arm(f"puuid-{index}") for index in range(500)}
+        self.assertEqual(slot_arms, {"due"})
+        self.assertEqual(player_arms, {"due"})
 
     def test_classic_slot_reserves_a_due_classic_player(self) -> None:
         self._add("general-newer", 200, classic=False)
         self._add("classic-older", 100, classic=True)
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=0), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="score"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
         ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 10)
         self.assertIsNotNone(claimed)
@@ -164,6 +182,8 @@ class ClassicClaimTests(unittest.TestCase):
         self._add("general", 200, classic=False)
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=0), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="score"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
         ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 10)
         self.assertIsNotNone(claimed)
@@ -205,6 +225,8 @@ class ClassicClaimTests(unittest.TestCase):
         self._add_two_classic_players()
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=1), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="due"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="due"
         ):
             # percent=100 makes every claim a classic slot, so slot 1 is the
             # 'due' arm.
@@ -217,6 +239,8 @@ class ClassicClaimTests(unittest.TestCase):
         self._add_two_classic_players()
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=0), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="score"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
         ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertIsNotNone(claimed)
@@ -236,6 +260,8 @@ class ClassicClaimTests(unittest.TestCase):
         self.con.commit()
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=0), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="score"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
         ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertIsNotNone(claimed)
@@ -257,16 +283,19 @@ class ClassicClaimTests(unittest.TestCase):
         self.assertEqual((row[0], row[1]), (0.0, 0))
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=0), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="score"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="score"
         ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertIsNotNone(claimed)
         self.assertEqual(claimed[0], "never-visited")
 
-    def test_lane_arm_split_is_stable_and_balanced(self) -> None:
-        arms = [lane_arm(f"puuid-{index}") for index in range(4000)]
-        self.assertEqual(set(arms), {"score", "due"})
-        self.assertAlmostEqual(arms.count("score") / len(arms), 0.5, delta=0.03)
-        self.assertEqual(lane_arm("puuid-7"), lane_arm("puuid-7"))
+    def test_lane_arm_split_is_stable_and_balanced_when_enabled(self) -> None:
+        with patch("aram_nn.lcu.snowball._LANE_AB_ENABLED", True):
+            arms = [lane_arm(f"puuid-{index}") for index in range(4000)]
+            self.assertEqual(set(arms), {"score", "due"})
+            self.assertAlmostEqual(arms.count("score") / len(arms), 0.5, delta=0.03)
+            self.assertEqual(lane_arm("puuid-7"), lane_arm("puuid-7"))
 
 
 class ClassicPersistenceTests(unittest.TestCase):
