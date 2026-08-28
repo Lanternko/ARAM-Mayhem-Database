@@ -157,8 +157,6 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
     return (player_history_api_url or "").strip().rstrip("/")
 
 
-
-
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"))
 @click.option("--queue", "queue_id", type=int, default=2400, help="450=ARAM, 2400=Mayhem")

@@ -21,6 +21,9 @@ python scripts/lcu_collector.py status
 
 # Production UI/CSS/文案 shell 重建；沿用現有 payload，不重算勝率資料
 python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/"
+
+# data/site 下的一次性 games.db 副本保留策略；不加 --apply 只印計畫
+python scripts/prune_stale_db_snapshots.py
 ```
 
 實驗的 dataset manifest、變因控制與 promotion gate 見 `notes/agents/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
@@ -47,6 +50,7 @@ python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/
 - `watchdog_mac.py` — macOS crawl watchdog 入口（wraps `crawler_mac`）
 - `ab_arm_report.py` — crawler A/B：`snapshot` 拍 per-player baseline、`report --split history|revisit` 算每訪產出 + cluster bootstrap CI + per-queue 歸因
 - `revisit_ab_report.py` — 舊版 revisit A/B 報表（只吃 arm 總計 baseline，無 CI；2026-08-07 那輪的原始基準）
+- `classic_lane_report.py` — 經典車道排序 A/B（score vs due）：直接讀 crawl_visit_events，不需要 baseline snapshot，只比保留配額的 slot
 - `lcu_backfill.py` — 補抓近期 LCU 對局回填 games.db
 - `lcu_dump.py` — 印出 LCU 原始對局資料供診斷
 - `lcu_probe_endpoints.py` — 探測 LCU API 找 10 人陣容欄位（推測）

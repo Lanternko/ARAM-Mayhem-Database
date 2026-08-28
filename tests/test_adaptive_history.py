@@ -7,6 +7,13 @@ def _history(queues):
     return [{"queueId": queue, "gameId": f"g{i}"} for i, queue in enumerate(queues)]
 
 
+def _versioned_history(rows):
+    return [
+        {"queueId": queue, "gameId": f"g{i}", "gameVersion": version}
+        for i, (queue, version) in enumerate(rows)
+    ]
+
+
 class AdaptiveHistoryTests(unittest.TestCase):
     def test_three_target_games_expand_full_history(self):
         self.assertEqual(_adaptive_target_game_ids(_history([450, 450, 450, 450, 2400]), {2400, 450}), [f"g{i}" for i in range(5)])
@@ -22,6 +29,42 @@ class AdaptiveHistoryTests(unittest.TestCase):
     def test_dense_non_mayhem_target_crawl_expands_full_window(self):
         history = _history([450, 450, 450, 450, 450])
         self.assertEqual(_adaptive_target_game_ids(history, {450}), [f"g{i}" for i in range(5)])
+
+    def test_jade_on_current_patch_makes_player_active(self):
+        history = _versioned_history(
+            [(4310, "16.15.1"), (420, "16.15.1"), (420, "16.15.1"), (420, "16.15.1")]
+        )
+        self.assertEqual(
+            _adaptive_target_game_ids(history, {4310}, current_patch="16.15.8024387"),
+            ["g0"],
+        )
+
+    def test_old_patch_targets_do_not_make_player_active(self):
+        history = _versioned_history(
+            [(4310, "16.14.9"), (2400, "16.14.9"), (450, "16.14.9"), (420, "16.15.1")]
+        )
+        self.assertEqual(
+            _adaptive_target_game_ids(history, {450, 2400, 4310}, current_patch="16.15"),
+            [],
+        )
+
+    def test_full_expansion_keeps_only_current_patch_targets(self):
+        history = _versioned_history(
+            [
+                (4310, "16.15.1"),
+                (2400, "16.15.2"),
+                (450, "16.15.3"),
+                (420, "16.15.4"),
+                (4310, "16.14.9"),
+                (4310, "16.15.5"),
+            ]
+        )
+        self.assertEqual(
+            _adaptive_target_game_ids(
+                history, {450, 2400, 4310}, current_patch="16.15"
+            ),
+            ["g0", "g1", "g2", "g5"],
+        )
 
 
 if __name__ == "__main__":

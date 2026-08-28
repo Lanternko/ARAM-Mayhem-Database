@@ -7,6 +7,7 @@
 ## Evidence supplements
 
 - `composition_analysis_handoff_2026_06_11.md` — composition 分析 handoff；保留實驗證據與限制，不是現行 policy owner。
+- `augment_sequence_ml_handoff_2026_08_12.md` — augment 順序、pair shrinkage、跨版本 strength-residual 與 ensemble 的完整實驗交接；模型尚未上線。
 
 ## Superseded or archived
 

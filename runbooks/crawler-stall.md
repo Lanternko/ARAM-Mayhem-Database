@@ -24,6 +24,7 @@ python scripts/lcu_collector.py family-stats --queue 2400
 ## Interpret
 
 - LCU 401/connection failure：重新抓 current credentials 與 `current_summoner`；通常是 restart 後 port/token 變更或 `/lol-*` 尚未 ready，不是 TLS cert 真過期。
+- Riot remoting 回 424：現有 Riot Client 的 product launcher 無法開 League；watchdog 必須殺掉 Riot Client 再冷啟動。不要對同一個 instance 反覆 POST。
 - Workers alive、done 增加、幾乎全是 `target_games=0`：active subgraph 已吃乾，換 seed page window。
 - `recent-active` 只短暫打開 queue，隨即回到零產出：換 root seed family，不要反覆 recent-active。
 - `manual_riot_id`/OPGG 是已驗證 productive family；舊的 manual yield=0 是 attribution bug 結論，不可沿用。

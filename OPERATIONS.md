@@ -1,6 +1,6 @@
 # OPERATIONS — 本機 harness 總圖
 
-這是「這台 Windows 主機有哪些常駐鏈、誰負責拉起、設定在哪裡、怎麼觀測與重建」的單一入口。Crawler stall 與網站 deploy 的精確判斷流程留在 `runbooks/`，不在這裡複製。
+這是「這台 Windows 主機有哪些常駐鏈、誰負責拉起、設定在哪裡、怎麼觀測與重建」的單一入口。Crawler stall、single-writer cutover 與網站 deploy 的精確判斷流程留在 `runbooks/`，不在這裡複製。
 
 ## 1. 拓撲
 
@@ -9,7 +9,7 @@ MayhemLCUWatchdogKeepalive（Task Scheduler，每分鐘）
 └─ scripts/watchdog_keepalive_hidden.vbs
    └─ scripts/watchdog_keepalive.ps1
       └─ pythonw scripts/mayhem_lcu_watchdog.py
-         ├─ lcu_collector.py snowball：W01、W02 共用 games.db frontier
+         ├─ lcu_collector.py snowball-workers：一個 SQLite writer + W01／W02 RPC producer
          ├─ publish_static_site.py --watch：資料成長門檻發布 GitHub Pages
          └─ refresh_recommender_models.py --watch：成長門檻更新本機推薦模型
 
@@ -21,6 +21,10 @@ ARAMMeta API／Tunnel（Task Scheduler，登入時啟動）
 
 ARAMMeta Backup（Task Scheduler，每日 03:15）
 └─ data/site/backup_meta_pick_db.py
+
+ArammetaPruneStaleDbSnapshots（Task Scheduler，每日 04:15）
+└─ scripts/prune_stale_db_snapshots_run.ps1
+   └─ python scripts/prune_stale_db_snapshots.py --apply
 
 Crawler 通知（Task Scheduler）
 ├─ ArammetaCrawlerStallAlert：每 5 分鐘，只有異常／恢復才送 Discord
@@ -34,8 +38,8 @@ Crawler 通知（Task Scheduler）
 | 設定 | Source of truth | 現行 production profile |
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
-| Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 2 workers；degraded 1；adaptive `games-per-player=0` |
-| League memory | 同上 | degrade 5200 MB；safe restart 5800 MB；worker start gate 6500 MB |
+| Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0` |
+| League memory | 同上 | degrade 3900 MB；safe restart 4500 MB（phase 卡住且 45 分沒收場則無視 phase 強制重啟）；worker start gate 6500 MB |
 | Frontier | 同上＋watchdog | manual pending cap 120；queue 450／2400／2450／4310；OPGG＋self＋friends |
 | Static publish | wrapper＋`src/aram_nn/site/static_publish.py` | growth 10%；patch `auto`；新 patch 至少 10,000 games |
 | Recommender refresh | `scripts/mayhem_lcu_watchdog.py` defaults | growth 25%；目前 patch 至少 15,000 games |
@@ -51,14 +55,18 @@ Crawler 通知（Task Scheduler）
 | Keepalive 啟動／心跳 | `logs/mayhem-lcu-watchdog-keepalive.log` |
 | Watchdog stdout／stderr | `logs/mayhem-lcu-watchdog.out.log`、`.err.log` |
 | Watchdog recovery events | `data/monitor/mayhem_lcu_watchdog.jsonl` |
-| Worker stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_W*.{out,err}.log` |
+| Fleet stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_fleet_*.{out,err}.log` |
+| Producer stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_W*.log`、`snowball_W*.err` |
 | Crawler growth metrics | `data/monitor/crawl_metrics.jsonl` |
 | Static publisher | `data/site/static_publish.{out,err}.log`、`static_publish_state.json` |
 | Model refresh | `data/site/model_refresh.{out,err}.log`、`model_refresh_state.json` |
 | Discord crawler tasks | `logs/crawler-stall-alert.log`、`logs/crawler-status-discord.log` |
+| Stale DB snapshot 保留策略 | `logs/prune-stale-db-snapshots.log`（無可刪時不寫 log） |
 | ARAMMeta API／tunnel／backup | `data/site/` 下對應 `.log`、`.out.log`、`.err.log` 與 `backups/` |
 
 State JSON／JSONL 是恢復與門檻判斷依據，不是可隨手清除的 cache。`games.db`、`games.db-wal`、`games.db-shm` 在 collector 執行時絕對不要移動、替換或分開處理。
+
+一次性任務複製整份 `games.db`（publish snapshot、offline backup）留下的 60 GB 級副本由 `scripts/prune_stale_db_snapshots.py` 收：預設只掃 `data/site`、只動 ≥1 GB 且 ≥7 天、有 SQLite magic header 的檔。`data/lcu` 與 `games.db`／`meta_pick.db` 是 hard-deny，改參數也碰不到。保護是明示的而不是靠檔名或年齡猜——`player_history/service/` 下 API 在服務的 snapshot 與 `games-backup-*` 同日、同命名詞彙，且 API 只在請求時開檔，獨佔開檔測試看起來一樣「空閒」。要新增保護目錄改 `DEFAULT_PROTECT_GLOBS`，或讓 manifest／state JSON 提到該檔名即可。無 `--apply` 時只印計畫。
 
 ## 4. 快速觀測
 
@@ -67,7 +75,7 @@ State JSON／JSONL 是恢復與門檻判斷依據，不是可隨手清除的 cac
 Get-ScheduledTask | Where-Object { $_.TaskName -match 'Mayhem|ARAMMeta|ArammetaCrawler' } | Select-Object TaskName,State
 Get-ScheduledTaskInfo -TaskName MayhemLCUWatchdogKeepalive
 
-# Watchdog、兩個 worker、publisher、model refresher
+# Watchdog、snowball-workers fleet、publisher、model refresher
 Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^python(w)?\.exe$' -and $_.CommandLine -match 'mayhem_lcu_watchdog|lcu_collector.py snowball|publish_static_site|refresh_recommender_models' } | Select-Object ProcessId,Name,CommandLine | Format-List
 
 # Collector 與最近 harness event

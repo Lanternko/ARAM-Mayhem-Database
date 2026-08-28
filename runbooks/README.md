@@ -7,6 +7,7 @@
 - `git-workflow.md` — human／agent worktree lifecycle、fetch／pull／rebase／merge／push 與安全清理。
 - `site-deploy.md` — GitHub Pages routine data、frontend shell、generator／schema 三條發布 lane，以及 deploy intent、排程與驗證。
 - `crawler-stall.md` — Mayhem crawler 停滯診斷、LCU recovery 與 production watchdog。
+- `single-writer-cutover.md` — 兩個直連 SQLite snowball worker 切成單一 `snowball-workers` fleet（RPC producers + 一個 writer）。
 - `opgg-seed-refresh.md` — OPGG page window refresh、seed hydration 與成功判準。
 
 ## Ownership rule

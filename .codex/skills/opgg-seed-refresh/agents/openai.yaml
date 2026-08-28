@@ -1,0 +1,4 @@
+interface:
+  display_name: "OPGG Seed Refresh"
+  short_description: "Refresh TW OPGG leaderboard seeds and restart the Mayhem snowball crawl"
+  default_prompt: "Use $opgg-seed-refresh to pull fresh TW Riot IDs from OPGG and relaunch the stalled LCU crawler."

@@ -13,17 +13,22 @@ not champion composition.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import itertools
 import json
+import math
 import os
+import random
 import re
 import sqlite3
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+from typing import Any, Mapping
 
 from .client import (
     LCUClient,
@@ -31,6 +36,7 @@ from .client import (
     get_current_summoner,
     get_friends,
     get_game_detail,
+    get_game_version,
     get_league_ladders,
     get_match_history,
     get_summoner_by_id,
@@ -39,6 +45,7 @@ from .client import (
 )
 from .poller import DEFAULT_QUEUES, _parse_game_detail, _participants_payload_has_postgame_stats
 from .process import get_credentials
+from .db_state import update_capture_watermark
 
 _EMPTY_QUEUE_GRACE_SEC = 30.0
 _EMPTY_QUEUE_IDLE_POLL_SEC = 60.0
@@ -56,6 +63,9 @@ _MANUAL_SEED_WARM_WINDOW_HOURS = 72
 _LCU_UNAVAILABLE_RETRY_DELAY_MS = 60_000
 _SCHEMA_INIT_RETRY_ATTEMPTS = 60
 _SCHEMA_INIT_RETRY_SLEEP_SEC = 2.0
+_DB_RETRY_ATTEMPTS = 10
+_DB_RETRY_BASE_SLEEP_SEC = 1.0
+_DB_RETRY_MAX_SLEEP_SEC = 15.0
 
 _CREATE_GAMES_SQL = """
 CREATE TABLE IF NOT EXISTS games (
@@ -87,7 +97,14 @@ CREATE TABLE IF NOT EXISTS crawl_seen (
     new_games_by_queue_json       TEXT,
     latest_seen_match_created_ms  INTEGER NOT NULL DEFAULT 0,
     last_crawled_match_created_ms INTEGER NOT NULL DEFAULT 0,
-    processed                     INTEGER NOT NULL DEFAULT 0
+    processed                     INTEGER NOT NULL DEFAULT 0,
+    discovered_queue_id           INTEGER NOT NULL DEFAULT 0,
+    classic_affinity              TEXT NOT NULL DEFAULT 'none',
+    classic_affinity_rank         INTEGER NOT NULL DEFAULT 0,
+    classic_games_24h             INTEGER NOT NULL DEFAULT 0,
+    classic_games_recent          INTEGER NOT NULL DEFAULT 0,
+    classic_last_seen_ms          INTEGER NOT NULL DEFAULT 0,
+    classic_revisit_interval_ms   INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -105,7 +122,9 @@ CREATE TABLE IF NOT EXISTS crawl_queue (
     claimed_by                  TEXT,
     claimed_at_ms               INTEGER NOT NULL DEFAULT 0,
     eligible_at_ms              INTEGER NOT NULL DEFAULT 0,
-    status                      TEXT NOT NULL DEFAULT 'pending'
+    status                      TEXT NOT NULL DEFAULT 'pending',
+    discovered_queue_id         INTEGER NOT NULL DEFAULT 0,
+    classic_affinity_rank       INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -139,6 +158,17 @@ CREATE INDEX IF NOT EXISTS idx_crawl_queue_source_priority
 ON crawl_queue(source, priority);
 """
 
+_CREATE_CLASSIC_CLAIM_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_classic_claim
+ON crawl_queue(
+    status,
+    eligible_at_ms ASC,
+    classic_affinity_rank DESC,
+    discovered_match_created_ms DESC,
+    queue_idx ASC
+);
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -165,6 +195,35 @@ CREATE TABLE IF NOT EXISTS crawl_runtime_state (
     state_value TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
+"""
+
+_CREATE_CRAWL_VISIT_EVENTS_SQL = """
+CREATE TABLE IF NOT EXISTS crawl_visit_events (
+    visit_id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    puuid                     TEXT NOT NULL,
+    revisit_arm               TEXT NOT NULL,
+    is_revisit                INTEGER NOT NULL,
+    visited_at                TEXT NOT NULL,
+    previous_crawled_at       TEXT,
+    revisit_interval_ms       INTEGER,
+    process_number            INTEGER NOT NULL,
+    source                    TEXT NOT NULL,
+    seed_family               TEXT NOT NULL,
+    worker_id                 TEXT,
+    current_patch             TEXT,
+    history_game_count        INTEGER NOT NULL,
+    target_game_count         INTEGER NOT NULL,
+    new_games_found           INTEGER NOT NULL,
+    new_games_by_queue_json   TEXT,
+    claim_lane                TEXT NOT NULL DEFAULT 'general',
+    classic_affinity          TEXT NOT NULL DEFAULT 'none',
+    classic_revisit_interval_ms INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+_CREATE_CRAWL_VISIT_EVENTS_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_visit_events_revisit_interval
+ON crawl_visit_events(is_revisit, revisit_arm, revisit_interval_ms, visited_at);
 """
 
 _CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL = """
@@ -207,7 +266,96 @@ _LCU_RIOT_ID_LOOKUP_BATCH = 10
 _RIOT_TIER_HYDRATION_DELAY_MS = 90_000
 _MANUAL_SEED_HYDRATION_DELAY_MS = 90_000
 _EMPTY_HISTORY_RETRY_LIMIT = 5
+_CLASSIC_QUEUE_ID = 4310
+_CLASSIC_DEFAULT_CLAIM_PERCENT = 10
+_CLASSIC_DEFAULT_REVISIT_MIN_MS = 10 * 3600_000
+_CLASSIC_DEFAULT_REVISIT_MAX_MS = 7 * 24 * 3600_000
+_CLASSIC_HISTORY_TARGET_GAMES = 20.0
+_CLASSIC_HISTORY_FILL_FRACTION = 0.8
 
+# --- Classic yield estimator ---------------------------------------------
+# classic_affinity_rank is a single-visit snapshot, and the Classic lane used to
+# order purely by eligible_at_ms, so rank never actually broke a tie (timestamps
+# are per-millisecond).  Measured 2026-08-27: every one of the 747 rank>=2 rows
+# sat past position 24,640 of 34,531 due rows, behind candidates yielding 52
+# Classic games per 1,000 visits against their 821-3,384.
+#
+# The snapshot also only demotes.  One quiet window sends a player to rank 0 with
+# no memory of what they produced before: 2,316 rank-0 players had 5,266 lifetime
+# Classic games between them, 44.3% of everything ever captured, and 652 of them
+# had >=3 -- against a rank>=2 pool of just 768.
+#
+# So the lane orders by expected yield instead: a decayed games-per-visit rate
+# times how much of the player's ~20-row window has refilled since we last looked.
+# The saturation term is what keeps this from starving the tail -- a quiet
+# player's score climbs until their window is full and then stops, so they
+# eventually outrank a heavy player who was visited an hour ago, but they never
+# outrank one whose window has refilled.
+_CLASSIC_RATE_TAU_MS = 7 * 24 * 3600_000
+# Prior for a player we have never visited.  Measured over visited players:
+# 0.055 Classic/visit for ones discovered in a Classic game, 0.0102 for the
+# population.  60% of the Classic lane's due rows have never been visited, so
+# without a prior they would all score zero and the lane would only ever revisit.
+_CLASSIC_RATE_PRIOR_DISCOVERED = 0.055
+_CLASSIC_RATE_PRIOR_POPULATION = 0.0102
+# Pseudo-visits of prior weight.  Stops one lucky first visit from impersonating
+# a heavy player.
+_CLASSIC_RATE_PRIOR_WEIGHT = 3.0
+# Bootstrap cap.  Lifetime counters seed the estimator so the 2,316 misfiled
+# players return to the pool immediately, but crediting a player with 40 visits
+# of evidence would take weeks of decay to forget if they have since quit.
+_CLASSIC_RATE_BOOTSTRAP_MAX_DEN = 10.0
+
+
+
+def _lifetime_classic_games(queue_counts_json: str | None) -> int:
+    """Classic games this player has produced across every visit so far."""
+    if not queue_counts_json:
+        return 0
+    try:
+        return int(json.loads(queue_counts_json).get(str(_CLASSIC_QUEUE_ID), 0))
+    except (ValueError, TypeError, AttributeError):
+        return 0
+
+def _decay_classic_rate(
+    num: float,
+    den: float,
+    elapsed_ms: int,
+    classic_found: int,
+    *,
+    tau_ms: int = _CLASSIC_RATE_TAU_MS,
+) -> tuple[float, float]:
+    """Fold one visit into the decayed games-per-visit estimate.
+
+    Counts are in visits, but the decay runs on wall time: a player who took a
+    day off decays by exp(-24/168) = 0.87 rather than being reset by one empty
+    window, which is the failure mode of the single-visit label.
+    """
+    decay = math.exp(-max(0, int(elapsed_ms)) / float(max(1, tau_ms)))
+    return num * decay + max(0, int(classic_found)), den * decay + 1.0
+
+
+
+def _classic_span_ms(revisit_interval_ms: int) -> int:
+    """How long this player's ~20-row history takes to refill.
+
+    revisit_interval_ms is already that fill time scaled by the safety factor,
+    so undo the factor to recover the span the saturation term needs.
+    """
+    return max(
+        _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+        int(max(0, int(revisit_interval_ms)) / _CLASSIC_HISTORY_FILL_FRACTION),
+    )
+
+def _classic_lambda(num: float, den: float, *, classic_discovered: bool) -> float:
+    """Shrink the decayed rate toward the prior for this player's discovery."""
+    prior = (
+        _CLASSIC_RATE_PRIOR_DISCOVERED
+        if classic_discovered
+        else _CLASSIC_RATE_PRIOR_POPULATION
+    )
+    weight = _CLASSIC_RATE_PRIOR_WEIGHT
+    return (float(num) + prior * weight) / (float(den) + weight)
 
 @dataclass
 class CrawlStats:
@@ -220,6 +368,227 @@ class CrawlStats:
     failed_games: int = 0
     requeued_players: int = 0
 
+
+@dataclass(frozen=True)
+class ClassicAffinityProfile:
+    label: str
+    rank: int
+    games_24h: int
+    games_recent: int
+    last_seen_ms: int
+    revisit_interval_ms: int
+
+
+@dataclass(frozen=True)
+class PlayerClaim:
+    puuid: str
+    depth: int
+    source: str
+    claimed_match_created_ms: int
+    seed_family: str
+    discovered_queue_id: int
+    claim_lane: str
+    token: str
+    generation: int
+
+
+@dataclass(frozen=True)
+class GameClaim:
+    game_id: str
+    token: str
+    generation: int
+
+
+class SnowballWriterError(RuntimeError):
+    """A writer response that cannot safely drive the producer forward."""
+
+
+class SnowballWriterStaleClaim(SnowballWriterError):
+    """The writer rejected a producer mutation because its lease is stale."""
+
+
+class SnowballWriterClaimsStopped(SnowballWriterError):
+    """The writer is no longer handing out new player claims."""
+
+
+class SnowballWriterFacade:
+    """Narrow snowball storage facade over a writer client.
+
+    The producer never receives a SQLite connection in this mode.  Every
+    mutable read/write is a fixed capability request and writer failures are
+    raised rather than silently falling back to direct SQLite.
+    """
+
+    _is_rpc_storage = True
+
+    def __init__(self, client: Any, *, request_prefix: str | None = None) -> None:
+        if client is None:
+            raise ValueError("writer client is required")
+        self.client = client
+        self._request_prefix = request_prefix or f"snowball-{uuid.uuid4().hex[:12]}"
+        self._request_counter = itertools.count()
+
+    def _request(self, command: str, **fields: Any) -> dict[str, Any]:
+        request_id = f"{self._request_prefix}-{next(self._request_counter)}"
+        message = {"version": 1, "command": command, "request_id": request_id, **fields}
+        submit = getattr(self.client, "submit", None) or getattr(self.client, "call", None) or getattr(self.client, "request", None)
+        if submit is None:
+            submit = getattr(self.client, "handle", None)
+        if submit is None:
+            raise TypeError("writer client must expose submit/call/request/handle")
+        try:
+            response = submit(message)
+        except Exception as exc:
+            if type(exc).__name__ == "WriterLifecycleError" and "CLAIMS_STOPPED" in str(exc):
+                raise SnowballWriterClaimsStopped("CLAIMS_STOPPED") from exc
+            # The transport is fail-closed; preserve that contract for the
+            # producer instead of attempting a local DB fallback.
+            raise SnowballWriterError("writer request failed") from exc
+        if not isinstance(response, Mapping):
+            raise SnowballWriterError("invalid writer response")
+        result = dict(response)
+        if result.get("status") == "STALE_CLAIM":
+            raise SnowballWriterStaleClaim("STALE_CLAIM")
+        if result.get("ok") is False:
+            raise SnowballWriterError(str(result.get("status") or "WRITER_ERROR"))
+        return result
+
+    def initialize(self, *, worker_id: str | None, claim_timeout_ms: int) -> dict[str, Any]:
+        return self._request("snowball_init", worker_id=worker_id or "", claim_timeout_ms=max(1, int(claim_timeout_ms)))
+
+    def runtime_get(self, key: str) -> str | None:
+        response = self._request("snowball_runtime", operation="get", key=str(key))
+        value = response.get("value")
+        return str(value) if value is not None else None
+
+    def runtime_set(self, key: str, value: str) -> None:
+        self._request("snowball_runtime", operation="set", key=str(key), value=str(value))
+
+    def runtime_delete(self, key: str) -> None:
+        self._request("snowball_runtime", operation="delete", key=str(key))
+
+    def family_increment(self, seed_family: str, delta: int) -> None:
+        self._request("snowball_runtime", operation="family_increment", seed_family=str(seed_family), delta=max(0, int(delta)))
+
+    def family_read(self, seed_family: str) -> int:
+        value = self._request("snowball_runtime", operation="family_read", seed_family=str(seed_family)).get("value")
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def enqueue_player(self, **kwargs: Any) -> str:
+        response = self._request("snowball_queue", operation="enqueue", **kwargs)
+        return str(response.get("result") or "noop")
+
+    def upsert_queue(self, **kwargs: Any) -> bool:
+        response = self._request("snowball_queue", operation="upsert", **kwargs)
+        return str(response.get("result") or "noop") == "requeued"
+
+    def suggested_reseed(self, puuid: str, cooldown_ms: int) -> bool:
+        response = self._request("snowball_queue", operation="suggested_reseed", puuid=str(puuid), cooldown_ms=max(0, int(cooldown_ms)))
+        return str(response.get("result") or "noop") == "requeued"
+
+    def reseed_recent(self, *, cap: int, cooldown_ms: int) -> int:
+        response = self._request("snowball_queue", operation="reseed_recent", cap=max(0, int(cap)), cooldown_ms=max(0, int(cooldown_ms)))
+        return int(response.get("count") or 0)
+
+    def reseed_source(self, *, sources: tuple[str, ...], cap: int, cooldown_ms: int) -> int:
+        response = self._request("snowball_queue", operation="reseed_source", sources=list(sources), cap=max(0, int(cap)), cooldown_ms=max(0, int(cooldown_ms)))
+        return int(response.get("count") or 0)
+
+    def requeue_stale(self, claim_timeout_ms: int) -> int:
+        response = self._request("snowball_queue", operation="requeue_stale", claim_timeout_ms=max(1, int(claim_timeout_ms)))
+        return int(response.get("count") or 0)
+
+    def pending_count(self) -> int:
+        response = self._request("snowball_queue", operation="pending_count")
+        return int(response.get("count") or 0)
+
+    def source_count(self, source: str) -> int:
+        response = self._request("snowball_queue", operation="source_count", source=str(source))
+        return int(response.get("count") or 0)
+
+    def next_wait_ms(self) -> int | None:
+        value = self._request("snowball_queue", operation="next_wait").get("wait_ms")
+        return None if value is None else max(0, int(value))
+
+    def claim_next(self, *, worker_id: str, claim_timeout_ms: int, classic_claim_percent: int) -> PlayerClaim | None:
+        response = self._request(
+            "snowball_queue", operation="claim_next", worker_id=str(worker_id),
+            claim_timeout_ms=max(1, int(claim_timeout_ms)), classic_claim_percent=min(100, max(0, int(classic_claim_percent))),
+        )
+        if str(response.get("status")) in {"EMPTY", "BUSY"}:
+            return None
+        required = ("puuid", "token", "generation")
+        if any(key not in response for key in required):
+            raise SnowballWriterError("invalid player claim response")
+        return PlayerClaim(
+            puuid=str(response["puuid"]), depth=int(response.get("depth") or 0),
+            source=str(response.get("source") or "match"),
+            claimed_match_created_ms=int(response.get("claimed_match_created_ms") or 0),
+            seed_family=str(response.get("seed_family") or _UNKNOWN_FAMILY),
+            discovered_queue_id=int(response.get("discovered_queue_id") or 0),
+            claim_lane=str(response.get("claim_lane") or "general"),
+            token=str(response["token"]), generation=int(response["generation"]),
+        )
+
+    def claim_game(self, game_id: str, *, claim_timeout_ms: int) -> GameClaim | None:
+        response = self._request("game_claim", game_id=str(game_id), lease_ms=max(1, int(claim_timeout_ms)))
+        if str(response.get("status")) in {"DONE", "BUSY"}:
+            return None
+        if str(response.get("status")) != "CLAIMED" or "token" not in response or "generation" not in response:
+            raise SnowballWriterError("invalid game claim response")
+        return GameClaim(game_id=str(game_id), token=str(response["token"]), generation=int(response["generation"]))
+
+    def commit_game(self, claim: GameClaim, record: Mapping[str, Any], participant_puuids: list[str]) -> bool:
+        response = self._request(
+            "commit_game", game_id=claim.game_id, token=claim.token, generation=claim.generation,
+            record=dict(record), participant_puuids=list(participant_puuids),
+        )
+        return str(response.get("status")) in {"COMMITTED", "DUPLICATE"}
+
+    def mark_game_done(self, claim: GameClaim) -> None:
+        self._request("mark_game_done", game_id=claim.game_id, token=claim.token, generation=claim.generation)
+
+    def release_game(self, claim: GameClaim) -> None:
+        self._request("release_game", game_id=claim.game_id, token=claim.token, generation=claim.generation)
+
+    def finalize_player(self, claim: PlayerClaim, **kwargs: Any) -> bool:
+        response = self._request(
+            "snowball_player", operation="finalize", puuid=claim.puuid,
+            token=claim.token, generation=claim.generation, **kwargs,
+        )
+        return str(response.get("status")) == "REQUEUED"
+
+    def defer_player(self, claim: PlayerClaim, *, delay_ms: int, reason: str) -> bool:
+        response = self._request(
+            "snowball_player", operation="defer", puuid=claim.puuid,
+            token=claim.token, generation=claim.generation, delay_ms=max(0, int(delay_ms)), reason=str(reason),
+        )
+        return str(response.get("status")) == "REQUEUED"
+
+    def release_player_unavailable(self, claim: PlayerClaim, *, delay_ms: int) -> None:
+        self._request(
+            "snowball_player", operation="release_unavailable", puuid=claim.puuid,
+            token=claim.token, generation=claim.generation, delay_ms=max(0, int(delay_ms)), reason="lcu_unavailable",
+        )
+
+    def bridge_get(self, public_puuid: str) -> tuple[str, str | None] | None:
+        response = self._request("snowball_bridge", operation="get", public_puuid=str(public_puuid))
+        if str(response.get("status")) != "FOUND":
+            return None
+        return str(response.get("riot_id") or ""), str(response["lcu_puuid"]) if response.get("lcu_puuid") else None
+
+    def bridge_upsert(self, *, public_puuid: str, riot_id: str, lcu_puuid: str | None, resolve_status: str) -> None:
+        self._request(
+            "snowball_bridge", operation="upsert", public_puuid=str(public_puuid),
+            riot_id=str(riot_id), lcu_puuid=lcu_puuid, resolve_status=str(resolve_status),
+        )
+
+
+def _is_rpc_storage(value: object) -> bool:
+    return isinstance(value, SnowballWriterFacade)
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -244,7 +613,92 @@ def _connect_db(db_path: Path) -> sqlite3.Connection:
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
     con.execute("PRAGMA busy_timeout=30000")
+    # Lets the Classic lane filter by A/B arm in SQL without materializing the
+    # arm into a column, which would need a 600k-row backfill and could then
+    # drift from the hash.  Only the Classic lane calls it, over ~34k rows a few
+    # dozen times an hour.
+    _register_sql_functions(con)
     return con
+
+
+def _register_sql_functions(con: sqlite3.Connection) -> None:
+    """Expose lane_arm() to SQL.
+
+    Wrapped rather than passed directly so the module-level name is resolved per
+    call, which keeps the function patchable in tests.  Not marked deterministic
+    for the same reason.
+    """
+    con.create_function("lane_arm", 1, lambda puuid: lane_arm(puuid))
+
+
+def _is_locked_error(exc: sqlite3.OperationalError) -> bool:
+    message = str(exc).lower()
+    return "database is locked" in message or "database table is locked" in message
+
+
+# Re-entrancy guard for _retry_on_locked.  Workers are single-threaded, so a
+# plain module-level counter is enough.  Only the outermost decorated call
+# retries: an inner one must not roll back a transaction its caller owns.
+_db_retry_depth = 0
+
+
+def _retry_on_locked(fn):
+    """Retry a DB unit that lost the write lock instead of killing the worker.
+
+    Two workers share one ~68GB games.db, so a write occasionally waits out the
+    30s busy_timeout in _connect_db and raises "database is locked".  That was
+    fatal: the traceback escaped run_snowball and the whole process died, and the
+    watchdog only noticed on its next 60s sweep.  Across the crash logs this is
+    by far the top cause of worker restarts (412 of 513 recorded exits), spread
+    over every write site rather than concentrated in a buggy one -- so the fix
+    belongs here, not at any single statement.
+
+    _ensure_schema_with_retry already treats a busy lock as recoverable during
+    startup; this extends the same policy to the steady-state crawl path.  Each
+    decorated function is a self-contained unit that re-reads whatever state it
+    needs, so rolling back and re-running it is safe: a failed attempt committed
+    nothing, and the merges these functions perform are monotone.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(con: sqlite3.Connection, *args, **kwargs):
+        global _db_retry_depth
+        if _db_retry_depth > 0 or not isinstance(con, sqlite3.Connection):
+            return fn(con, *args, **kwargs)
+
+        last_error: sqlite3.OperationalError | None = None
+        for attempt in range(1, _DB_RETRY_ATTEMPTS + 1):
+            _db_retry_depth += 1
+            try:
+                return fn(con, *args, **kwargs)
+            except sqlite3.OperationalError as exc:
+                if not _is_locked_error(exc):
+                    raise
+                last_error = exc
+            finally:
+                _db_retry_depth -= 1
+
+            try:
+                con.rollback()
+            except sqlite3.Error:
+                pass
+            if attempt >= _DB_RETRY_ATTEMPTS:
+                break
+            sleep_sec = min(
+                _DB_RETRY_MAX_SLEEP_SEC,
+                _DB_RETRY_BASE_SLEEP_SEC * (2 ** (attempt - 1)),
+            ) * (0.5 + random.random())
+            print(
+                f"[snowball] db locked  op={fn.__name__}  "
+                f"attempt={attempt}/{_DB_RETRY_ATTEMPTS}  sleep={sleep_sec:.1f}s",
+                flush=True,
+            )
+            time.sleep(sleep_sec)
+
+        assert last_error is not None
+        raise last_error
+
+    return wrapper
 
 
 def _table_exists(con: sqlite3.Connection, table_name: str) -> bool:
@@ -276,7 +730,9 @@ def _lookup_game_created_ms(con: sqlite3.Connection, game_id: str | None) -> int
 
 
 _SCHEMA_BACKFILL_FLAG = "schema_backfill_v1_done"
-
+_CLASSIC_AFFINITY_BACKFILL_FLAG = "classic_affinity_v1_backfill_done"
+_CLASSIC_RATE_BOOTSTRAP_FLAG = "classic_rate_v1_bootstrap_done"
+_CLASSIC_PRODUCER_FLOOR_FLAG = "classic_producer_floor_v1_backfill_done"
 
 def _schema_backfill_done(con: sqlite3.Connection) -> bool:
     """Return True once the one-time column backfills have completed.
@@ -305,13 +761,204 @@ def _mark_schema_backfill_done(con: sqlite3.Connection) -> None:
     )
 
 
+def _classic_affinity_backfill_done(con: sqlite3.Connection) -> bool:
+    row = con.execute(
+        "SELECT 1 FROM crawl_runtime_state WHERE state_key = ?",
+        (_CLASSIC_AFFINITY_BACKFILL_FLAG,),
+    ).fetchone()
+    return row is not None
+
+
+
+
+def _backfill_classic_producer_floor(con: sqlite3.Connection) -> None:
+    """Re-admit players the single-visit label had already ejected.
+
+    The floor in _mark_player_done only protects players from here on.  The ones
+    already sitting at rank 0 with lifetime Classic behind them -- 2,316 of them
+    holding 44.3% of every Classic game ever captured -- would otherwise stay
+    invisible to the Classic lane until chance re-drew them from a 600k-row
+    general frontier.  One-shot, flagged, and it only ever promotes.
+    """
+    row = con.execute(
+        "SELECT 1 FROM crawl_runtime_state WHERE state_key = ?",
+        (_CLASSIC_PRODUCER_FLOOR_FLAG,),
+    ).fetchone()
+    if row is not None:
+        return
+
+    con.execute(
+        """
+        UPDATE crawl_seen
+        SET classic_affinity = 'dormant',
+            classic_affinity_rank = 1,
+            processed = 0
+        WHERE classic_affinity_rank = 0
+          AND CAST(COALESCE(
+                json_extract(new_games_by_queue_json, '$."4310"'), 0
+              ) AS INTEGER) > 0
+        """
+    )
+    con.execute(
+        """
+        UPDATE crawl_queue
+        SET classic_affinity_rank = 1,
+            status = CASE WHEN status = 'done' THEN 'pending' ELSE status END,
+            eligible_at_ms = CASE WHEN status = 'done' THEN 0 ELSE eligible_at_ms END,
+            claimed_by = CASE WHEN status = 'done' THEN NULL ELSE claimed_by END,
+            claimed_at_ms = CASE WHEN status = 'done' THEN 0 ELSE claimed_at_ms END
+        WHERE classic_affinity_rank = 0
+          AND puuid IN (
+              SELECT puuid FROM crawl_seen WHERE classic_affinity = 'dormant'
+          )
+        """
+    )
+    con.execute(
+        "INSERT OR REPLACE INTO crawl_runtime_state(state_key, state_value, updated_at) "
+        "VALUES (?, ?, ?)",
+        (_CLASSIC_PRODUCER_FLOOR_FLAG, "1", _utc_now()),
+    )
+    con.commit()
+
+def _bootstrap_classic_rate(con: sqlite3.Connection) -> None:
+    """Seed the decayed rate estimator from the lifetime per-queue counters.
+
+    Without this the estimator starts empty and every player falls back to the
+    prior, which would take weeks of visits to rediscover what the counters
+    already record -- including the 2,316 players the single-visit label had
+    written off despite 5,266 Classic games between them.
+
+    den is capped: a player with 40 visits of history would otherwise need weeks
+    of decay to forget, and the whole point of the decay is that a player who has
+    since quit stops being chased.
+    """
+    row = con.execute(
+        "SELECT 1 FROM crawl_runtime_state WHERE state_key = ?",
+        (_CLASSIC_RATE_BOOTSTRAP_FLAG,),
+    ).fetchone()
+    if row is not None:
+        return
+
+    con.execute(
+        """
+        UPDATE crawl_seen
+        SET classic_rate_den = MIN(process_count, ?),
+            classic_rate_num = MIN(process_count, ?)
+                * (CAST(COALESCE(
+                        json_extract(new_games_by_queue_json, '$."4310"'), 0
+                   ) AS REAL) / process_count),
+            classic_last_crawl_ms = CAST(
+                (julianday(last_crawled_at) - 2440587.5) * 86400000 AS INTEGER
+            )
+        WHERE process_count > 0
+          AND last_crawled_at IS NOT NULL
+          AND classic_rate_den = 0
+        """,
+        (_CLASSIC_RATE_BOOTSTRAP_MAX_DEN, _CLASSIC_RATE_BOOTSTRAP_MAX_DEN),
+    )
+    # Propagate into the frontier copies the claim query reads.  Unvisited rows
+    # keep classic_lambda = 0, so they are given the prior here rather than
+    # scoring zero and never being claimed.
+    con.execute(
+        """
+        UPDATE crawl_queue
+        SET classic_lambda = COALESCE((
+                SELECT (s.classic_rate_num + ? * ?) / (s.classic_rate_den + ?)
+                FROM crawl_seen s WHERE s.puuid = crawl_queue.puuid
+            ), ?),
+            classic_last_crawl_ms = COALESCE((
+                SELECT s.classic_last_crawl_ms
+                FROM crawl_seen s WHERE s.puuid = crawl_queue.puuid
+            ), 0),
+            classic_span_ms = COALESCE((
+                SELECT MAX(?, CAST(s.classic_revisit_interval_ms / ? AS INTEGER))
+                FROM crawl_seen s WHERE s.puuid = crawl_queue.puuid
+            ), ?)
+        WHERE classic_affinity_rank > 0
+        """,
+        (
+            _CLASSIC_RATE_PRIOR_DISCOVERED,
+            _CLASSIC_RATE_PRIOR_WEIGHT,
+            _CLASSIC_RATE_PRIOR_WEIGHT,
+            _CLASSIC_RATE_PRIOR_DISCOVERED,
+            _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+            _CLASSIC_HISTORY_FILL_FRACTION,
+            _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+        ),
+    )
+    con.execute(
+        "INSERT OR REPLACE INTO crawl_runtime_state(state_key, state_value, updated_at) "
+        "VALUES (?, ?, ?)",
+        (_CLASSIC_RATE_BOOTSTRAP_FLAG, "1", _utc_now()),
+    )
+    con.commit()
+def _backfill_classic_affinity(con: sqlite3.Connection) -> None:
+    """Tag legacy frontier rows whose discovery match is known Classic.
+
+    This is deliberately one-shot: resolving every discovery game can scan the
+    large frontier, while all new rows carry the queue id directly.
+    """
+    if _classic_affinity_backfill_done(con):
+        return
+
+    con.execute(
+        """
+        UPDATE crawl_seen
+        SET discovered_queue_id = 4310,
+            classic_affinity = CASE
+                WHEN classic_affinity = 'none' THEN 'candidate'
+                ELSE classic_affinity
+            END,
+            classic_affinity_rank = MAX(classic_affinity_rank, 1)
+        WHERE discovered_from_game_id IS NOT NULL
+          AND EXISTS (
+              SELECT 1 FROM games
+              WHERE games.game_id = crawl_seen.discovered_from_game_id
+                AND games.queue_id = 4310
+          )
+        """
+    )
+    con.execute(
+        """
+        UPDATE crawl_queue
+        SET discovered_queue_id = 4310,
+            classic_affinity_rank = MAX(classic_affinity_rank, 1),
+            status = CASE WHEN status = 'done' THEN 'pending' ELSE status END,
+            eligible_at_ms = CASE WHEN status = 'done' THEN 0 ELSE eligible_at_ms END,
+            claimed_by = CASE WHEN status = 'done' THEN NULL ELSE claimed_by END,
+            claimed_at_ms = CASE WHEN status = 'done' THEN 0 ELSE claimed_at_ms END
+        WHERE puuid IN (
+            SELECT puuid FROM crawl_seen WHERE classic_affinity_rank > 0
+        )
+        """
+    )
+    con.execute(
+        """
+        UPDATE crawl_seen
+        SET processed = 0
+        WHERE classic_affinity_rank > 0
+          AND puuid IN (
+              SELECT puuid FROM crawl_queue WHERE status = 'pending'
+          )
+        """
+    )
+    con.execute(
+        "INSERT INTO crawl_runtime_state(state_key, state_value, updated_at) "
+        "VALUES (?, '1', ?) "
+        "ON CONFLICT(state_key) DO UPDATE SET state_value='1', updated_at=excluded.updated_at",
+        (_CLASSIC_AFFINITY_BACKFILL_FLAG, _utc_now()),
+    )
+
+
 def _ensure_schema(con: sqlite3.Connection) -> None:
+    _register_sql_functions(con)
     con.execute(_CREATE_GAMES_SQL)
     con.execute(_CREATE_CRAWL_SEEN_SQL)
     con.execute(_CREATE_CRAWL_QUEUE_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_SQL)
     con.execute(_CREATE_RIOT_ID_BRIDGE_SQL)
     con.execute(_CREATE_CRAWL_RUNTIME_STATE_SQL)
+    con.execute(_CREATE_CRAWL_VISIT_EVENTS_SQL)
 
     _ensure_column(
         con,
@@ -395,12 +1042,71 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
         "seed_family",
         "seed_family TEXT NOT NULL DEFAULT ''",
     )
+    for table, column, definition in (
+        ("crawl_seen", "discovered_queue_id", "discovered_queue_id INTEGER NOT NULL DEFAULT 0"),
+        ("crawl_seen", "classic_affinity", "classic_affinity TEXT NOT NULL DEFAULT 'none'"),
+        ("crawl_seen", "classic_affinity_rank", "classic_affinity_rank INTEGER NOT NULL DEFAULT 0"),
+        ("crawl_seen", "classic_games_24h", "classic_games_24h INTEGER NOT NULL DEFAULT 0"),
+        ("crawl_seen", "classic_games_recent", "classic_games_recent INTEGER NOT NULL DEFAULT 0"),
+        ("crawl_seen", "classic_last_seen_ms", "classic_last_seen_ms INTEGER NOT NULL DEFAULT 0"),
+        (
+            "crawl_seen",
+            "classic_revisit_interval_ms",
+            "classic_revisit_interval_ms INTEGER NOT NULL DEFAULT 0",
+        ),
+        # Decayed Classic yield estimate (see _decay_classic_rate).  num/den are
+        # in visits; last_crawl_ms mirrors last_crawled_at as epoch ms so the
+        # claim query can compute a saturation term without parsing ISO text on
+        # every row of a 34k-row scan.
+        ("crawl_seen", "classic_rate_num", "classic_rate_num REAL NOT NULL DEFAULT 0"),
+        ("crawl_seen", "classic_rate_den", "classic_rate_den REAL NOT NULL DEFAULT 0"),
+        (
+            "crawl_seen",
+            "classic_last_crawl_ms",
+            "classic_last_crawl_ms INTEGER NOT NULL DEFAULT 0",
+        ),        ("crawl_queue", "discovered_queue_id", "discovered_queue_id INTEGER NOT NULL DEFAULT 0"),
+        (
+            "crawl_queue",
+            "classic_affinity_rank",
+            "classic_affinity_rank INTEGER NOT NULL DEFAULT 0",
+        ),
+        # Denormalized from crawl_seen so the Classic lane's score ordering does
+        # not need a per-row PK lookup into a 674k-row table -- measured at 449ms
+        # per claim inside BEGIN IMMEDIATE, against 8ms for the due ordering.
+        # Written wherever classic_affinity_rank is written.
+        ("crawl_queue", "classic_lambda", "classic_lambda REAL NOT NULL DEFAULT 0"),
+        (
+            "crawl_queue",
+            "classic_last_crawl_ms",
+            "classic_last_crawl_ms INTEGER NOT NULL DEFAULT 0",
+        ),
+        ("crawl_queue", "classic_span_ms", "classic_span_ms INTEGER NOT NULL DEFAULT 0"),        ("crawl_visit_events", "claim_lane", "claim_lane TEXT NOT NULL DEFAULT 'general'"),
+        (
+            "crawl_visit_events",
+            "classic_affinity",
+            "classic_affinity TEXT NOT NULL DEFAULT 'none'",
+        ),
+        (
+            "crawl_visit_events",
+            "classic_revisit_interval_ms",
+            "classic_revisit_interval_ms INTEGER NOT NULL DEFAULT 0",
+        ),
+        ("crawl_visit_events", "lane_arm", "lane_arm TEXT NOT NULL DEFAULT ''"),
+        ("crawl_visit_events", "claim_score", "claim_score REAL NOT NULL DEFAULT 0"),    ):
+        _ensure_column(con, table, column, definition)
 
     con.execute(_CREATE_CRAWL_QUEUE_INDEX_SQL)
     con.execute(_CREATE_CRAWL_GAME_CLAIMS_INDEX_SQL)
+    con.execute(_CREATE_CRAWL_VISIT_EVENTS_INDEX_SQL)
     con.execute(_CREATE_SOURCE_PRIORITY_INDEX_SQL)
     con.execute(_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL)
+    con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
 
+    # Independent from the older backfill flag: production databases have
+    # already set that flag, but still need their Classic discovery rows tagged.
+    _backfill_classic_affinity(con)
+    _bootstrap_classic_rate(con)
+    _backfill_classic_producer_floor(con)
     # The large one-time backfills below scan crawl_queue / games and hold the
     # write lock. Skip them once completed so worker startup stays sub-second
     # and never monopolizes the lock against game inserts.
@@ -540,6 +1246,8 @@ def _ensure_schema_with_retry(
 
 
 def _get_runtime_state_text(con: sqlite3.Connection, key: str) -> str | None:
+    if _is_rpc_storage(con):
+        return con.runtime_get(key)
     row = con.execute(
         "SELECT state_value FROM crawl_runtime_state WHERE state_key = ?",
         (str(key),),
@@ -548,6 +1256,9 @@ def _get_runtime_state_text(con: sqlite3.Connection, key: str) -> str | None:
 
 
 def _set_runtime_state_text(con: sqlite3.Connection, key: str, value: str) -> None:
+    if _is_rpc_storage(con):
+        con.runtime_set(key, value)
+        return
     con.execute(
         """
         INSERT INTO crawl_runtime_state(state_key, state_value, updated_at)
@@ -562,6 +1273,9 @@ def _set_runtime_state_text(con: sqlite3.Connection, key: str, value: str) -> No
 
 
 def _delete_runtime_state(con: sqlite3.Connection, key: str) -> None:
+    if _is_rpc_storage(con):
+        con.runtime_delete(key)
+        return
     con.execute("DELETE FROM crawl_runtime_state WHERE state_key = ?", (str(key),))
     con.commit()
 
@@ -583,6 +1297,9 @@ def _increment_persisted_family_yield(
     """
     if delta <= 0:
         return
+    if _is_rpc_storage(con):
+        con.family_increment(seed_family, delta)
+        return
     con.execute(
         """
         INSERT INTO crawl_runtime_state(state_key, state_value, updated_at)
@@ -599,6 +1316,8 @@ def _increment_persisted_family_yield(
 
 
 def _read_persisted_family_yield(con: sqlite3.Connection, seed_family: str) -> int:
+    if _is_rpc_storage(con):
+        return con.family_read(seed_family)
     raw = _get_runtime_state_text(con, _family_yield_key(seed_family))
     if raw is None:
         return 0
@@ -788,6 +1507,27 @@ def _extract_target_game_ids(history: list[dict], target_queues: set[int]) -> li
     return game_ids
 
 
+def _major_minor_patch(version: object) -> str | None:
+    """Normalize an LCU build string to a major.minor gameplay patch."""
+    match = re.match(r"^(\d+)\.(\d+)(?:\.|$)", str(version or "").strip())
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
+def _is_current_patch_game(game: dict, current_patch: str | None) -> bool:
+    if current_patch is None:
+        return True
+    return _major_minor_patch(game.get("gameVersion")) == current_patch
+
+
+def _extract_current_patch_target_game_ids(
+    history: list[dict], target_queues: set[int], current_patch: str | None
+) -> list[str]:
+    return _extract_target_game_ids(
+        [game for game in history if _is_current_patch_game(game, current_patch)],
+        target_queues,
+    )
+
+
 def _adaptive_target_game_ids(
     history: list[dict],
     target_queues: set[int],
@@ -795,6 +1535,7 @@ def _adaptive_target_game_ids(
     probe_size: int = 4,
     full_history_min_mayhem: int = 3,
     puuid: str | None = None,
+    current_patch: str | None = None,
 ) -> list[str]:
     """Choose a cheap or full expansion based on recent target-queue density.
 
@@ -802,17 +1543,26 @@ def _adaptive_target_game_ids(
     metadata rows. One or two target rows fetch only the probe; three or more
     fetch the full recent window. A completed A/B test showed that counting all
     target queues increased Classic capture by 52.5% for about 13% more detail
-    work, so Classic is no longer allowed to ride only on Mayhem discovery.
+    work, so Classic and Jade no longer ride only on Mayhem discovery. When the
+    current patch is known, old-patch rows neither make a player active nor get
+    expanded; the crawler's scarce detail bandwidth stays on current data.
     """
-    all_target = _extract_target_game_ids(history, target_queues)
+    normalized_patch = _major_minor_patch(current_patch)
+    all_target = _extract_current_patch_target_game_ids(
+        history, target_queues, normalized_patch
+    )
     probe = history[: max(0, int(probe_size))]
     target_count = sum(
-        _queue_id_from_meta(game) in target_queues for game in probe
+        _queue_id_from_meta(game) in target_queues
+        and _is_current_patch_game(game, normalized_patch)
+        for game in probe
     )
     if target_count >= max(1, int(full_history_min_mayhem)):
         return all_target
     if target_count >= 1:
-        return _extract_target_game_ids(probe, target_queues)
+        return _extract_current_patch_target_game_ids(
+            probe, target_queues, normalized_patch
+        )
     return []
 
 
@@ -846,6 +1596,108 @@ def _count_recent_matches(history: list[dict], cutoff_ms: int) -> int:
     return count
 
 
+def _classic_affinity_profile(
+    history: list[dict],
+    *,
+    discovered_queue_id: int = 0,
+    now_ms: int | None = None,
+    min_revisit_ms: int = _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+    max_revisit_ms: int = _CLASSIC_DEFAULT_REVISIT_MAX_MS,
+    lifetime_classic_games: int = 0,
+    classic_rate_num: float = 0.0,
+) -> ClassicAffinityProfile:
+    """Classify Classic affinity and estimate when 20 history rows refill.
+
+    The affinity label only uses Classic (4310) activity.  The interval uses all
+    games because every mode consumes one of the LCU's roughly 20 history rows.
+    The 0.8 safety factor revisits before the estimated window is completely
+    replaced, then the user-selected 10-hour floor prevents wasteful rescans.
+
+    ``lifetime_classic_games`` / ``classic_rate_num`` are the producer floor.  The
+    label is otherwise a single-visit snapshot that can only demote: one window
+    with no Classic in it sends a player to rank 0 with no memory of what they
+    produced before, and promotion back requires being re-drawn by luck from the
+    general frontier.  Measured 2026-08-27, that had ejected 2,316 players who
+    between them account for 5,266 lifetime Classic games -- 44.3% of everything
+    ever captured -- against a rank>=2 pool of 768.  Past production keeps a
+    player at dormant/1 so they stay addressable by the Classic lane.
+    """
+    current_ms = _now_ms() if now_ms is None else int(now_ms)
+    lower_ms = max(_CLASSIC_DEFAULT_REVISIT_MIN_MS, int(min_revisit_ms))
+    upper_ms = max(lower_ms, int(max_revisit_ms))
+    created_times = sorted(
+        int(game.get("gameCreation") or 0)
+        for game in history
+        if int(game.get("gameCreation") or 0) > 0
+    )
+    classic_times = [
+        int(game.get("gameCreation") or 0)
+        for game in history
+        if _queue_id_from_meta(game) == _CLASSIC_QUEUE_ID
+        and int(game.get("gameCreation") or 0) > 0
+    ]
+    games_24h = sum(created_ms >= current_ms - 24 * 3600_000 for created_ms in classic_times)
+    games_recent = len(classic_times)
+    last_seen_ms = max(classic_times, default=0)
+
+    if games_24h >= 5:
+        label, rank = "heavy", 3
+    elif games_24h >= 2:
+        label, rank = "regular", 2
+    elif games_recent >= 1:
+        label, rank = "candidate", 1
+    elif int(discovered_queue_id) == _CLASSIC_QUEUE_ID:
+        label, rank = "dormant", 1
+    elif int(lifetime_classic_games) > 0 or float(classic_rate_num) > 0.0:
+        label, rank = "dormant", 1
+    else:
+        return ClassicAffinityProfile("none", 0, 0, 0, 0, 0)
+
+    interval_ms = upper_ms
+    if len(created_times) >= 2:
+        span_hours = (created_times[-1] - created_times[0]) / 3600_000
+        if span_hours > 0:
+            all_game_rate_per_hour = (len(created_times) - 1) / span_hours
+            fill_hours = _CLASSIC_HISTORY_TARGET_GAMES / all_game_rate_per_hour
+            estimated_ms = int(fill_hours * _CLASSIC_HISTORY_FILL_FRACTION * 3600_000)
+            interval_ms = min(max(estimated_ms, lower_ms), upper_ms)
+
+    return ClassicAffinityProfile(
+        label=label,
+        rank=rank,
+        games_24h=games_24h,
+        games_recent=games_recent,
+        last_seen_ms=last_seen_ms,
+        revisit_interval_ms=interval_ms,
+    )
+
+
+def _classic_revisit_eligible_at_ms(
+    previous_crawled_at: str | None,
+    revisit_interval_ms: int,
+    *,
+    now_ms: int | None = None,
+    min_revisit_ms: int = _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+) -> int:
+    """Return a due time with a hard minimum measured from the last crawl."""
+    current_ms = _now_ms() if now_ms is None else int(now_ms)
+    interval_ms = max(
+        int(revisit_interval_ms),
+        _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+        int(min_revisit_ms),
+    )
+    previous_ms = current_ms
+    if previous_crawled_at:
+        try:
+            previous_dt = datetime.fromisoformat(str(previous_crawled_at))
+            if previous_dt.tzinfo is None:
+                previous_dt = previous_dt.replace(tzinfo=timezone.utc)
+            previous_ms = int(previous_dt.timestamp() * 1000)
+        except (TypeError, ValueError):
+            previous_ms = current_ms
+    return max(current_ms, previous_ms + interval_ms)
+
+
 def _extract_participant_puuids(detail: dict) -> list[str]:
     puuids: list[str] = []
     for ident in detail.get("participantIdentities") or []:
@@ -856,12 +1708,15 @@ def _extract_participant_puuids(detail: dict) -> list[str]:
     return puuids
 
 
+@_retry_on_locked
 def _claim_game_id(
     con: sqlite3.Connection,
     game_id: str,
     worker_id: str,
     claim_timeout_ms: int,
-) -> bool:
+) -> bool | GameClaim | None:
+    if _is_rpc_storage(con):
+        return con.claim_game(game_id, claim_timeout_ms=claim_timeout_ms)
     now_text = _utc_now()
     now_ms = _now_ms()
     cutoff_ms = now_ms - claim_timeout_ms
@@ -927,7 +1782,13 @@ def _claim_game_id(
     return False
 
 
-def _mark_game_done(con: sqlite3.Connection, game_id: str) -> None:
+@_retry_on_locked
+def _mark_game_done(con: sqlite3.Connection, game_id: str, claim: GameClaim | None = None) -> None:
+    if _is_rpc_storage(con):
+        if claim is None:
+            raise SnowballWriterError("game claim required")
+        con.mark_game_done(claim)
+        return
     now_text = _utc_now()
     con.execute(
         """
@@ -945,7 +1806,13 @@ def _mark_game_done(con: sqlite3.Connection, game_id: str) -> None:
     con.commit()
 
 
-def _release_game_claim(con: sqlite3.Connection, game_id: str) -> None:
+@_retry_on_locked
+def _release_game_claim(con: sqlite3.Connection, game_id: str, claim: GameClaim | None = None) -> None:
+    if _is_rpc_storage(con):
+        if claim is None:
+            raise SnowballWriterError("game claim required")
+        con.release_game(claim)
+        return
     con.execute(
         """
         UPDATE crawl_game_claims
@@ -960,9 +1827,11 @@ def _release_game_claim(con: sqlite3.Connection, game_id: str) -> None:
     con.commit()
 
 
+@_retry_on_locked
 def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
-    before = con.total_changes
-    con.execute(
+    if _is_rpc_storage(con):
+        raise SnowballWriterError("RPC game insert requires a game claim")
+    cursor = con.execute(
         """
         INSERT OR IGNORE INTO games (
             game_id, queue_id, patch, blue_champs, red_champs,
@@ -985,11 +1854,20 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
             str(record.get("seed_family") or _UNKNOWN_FAMILY),
         ),
     )
+    inserted = cursor.rowcount > 0
+    if inserted:
+        update_capture_watermark(
+            con,
+            queue_id=int(record["queue_id"]),
+            captured_at=str(record["captured_at"]),
+        )
     con.commit()
-    return con.total_changes > before
+    return inserted
 
 
 def _backfill_participants_json(con: sqlite3.Connection, record: dict) -> bool:
+    if _is_rpc_storage(con):
+        return False
     row = con.execute(
         "SELECT participants_json, participants_private_json FROM games WHERE game_id = ?",
         (record["game_id"],),
@@ -1040,7 +1918,10 @@ def _backfill_participants_json(con: sqlite3.Connection, record: dict) -> bool:
     return con.total_changes > before
 
 
+@_retry_on_locked
 def _load_existing_game_ids(con: sqlite3.Connection) -> set[str]:
+    if _is_rpc_storage(con):
+        return set()
     return {str(row[0]) for row in con.execute("SELECT game_id FROM games").fetchall()}
 
 
@@ -1063,6 +1944,7 @@ def _pick_best_metadata(
     return best_source, best_priority, best_depth
 
 
+@_retry_on_locked
 def _upsert_queue_row(
     con: sqlite3.Connection,
     puuid: str,
@@ -1074,6 +1956,8 @@ def _upsert_queue_row(
     requeue: bool,
     eligible_at_ms: int = 0,
     seed_family: str = _UNKNOWN_FAMILY,
+    discovered_queue_id: int = 0,
+    classic_affinity_rank: int = 0,
 ) -> bool:
     """Insert or refresh a queue row. Returns True if it became pending now.
 
@@ -1081,10 +1965,19 @@ def _upsert_queue_row(
     ('', _UNKNOWN_FAMILY, _LEGACY_MATCH_FAMILY) so the first known root family
     sticks across re-discovery.
     """
+    if _is_rpc_storage(con):
+        return con.upsert_queue(
+            puuid=str(puuid), depth=int(depth), source=str(source), priority=int(priority),
+            discovered_from_game_id=discovered_from_game_id,
+            discovered_match_created_ms=int(discovered_match_created_ms), requeue=bool(requeue),
+            eligible_at_ms=max(0, int(eligible_at_ms)), seed_family=str(seed_family or _UNKNOWN_FAMILY),
+            discovered_queue_id=int(discovered_queue_id), classic_affinity_rank=int(classic_affinity_rank),
+        )
     now = _utc_now()
     row = con.execute(
         """
-        SELECT status, priority, depth, discovered_match_created_ms, seed_family
+        SELECT status, priority, depth, discovered_match_created_ms, seed_family,
+               discovered_queue_id, classic_affinity_rank
         FROM crawl_queue
         WHERE puuid = ?
         """,
@@ -1097,8 +1990,9 @@ def _upsert_queue_row(
             INSERT INTO crawl_queue (
                 puuid, depth, source, priority, discovered_from_game_id,
                 discovered_match_created_ms, enqueued_at, updated_at,
-                claimed_by, claimed_at_ms, eligible_at_ms, status, seed_family
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, 'pending', ?)
+                claimed_by, claimed_at_ms, eligible_at_ms, status, seed_family,
+                discovered_queue_id, classic_affinity_rank
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, ?, 'pending', ?, ?, ?)
             """,
             (
                 puuid,
@@ -1111,13 +2005,31 @@ def _upsert_queue_row(
                 now,
                 eligible_at_ms,
                 seed_family,
+                int(discovered_queue_id),
+                max(0, int(classic_affinity_rank)),
             ),
         )
         con.commit()
         return True
 
-    queue_status, queue_priority, queue_depth, queue_match_ms, queue_seed_family = row
+    (
+        queue_status,
+        queue_priority,
+        queue_depth,
+        queue_match_ms,
+        queue_seed_family,
+        queue_discovered_queue_id,
+        queue_classic_rank,
+    ) = row
     effective_family = _resolve_seed_family_update(str(queue_seed_family or ""), seed_family)
+    effective_discovered_queue_id = int(queue_discovered_queue_id or 0)
+    if int(discovered_queue_id) == _CLASSIC_QUEUE_ID:
+        effective_discovered_queue_id = _CLASSIC_QUEUE_ID
+    elif effective_discovered_queue_id == 0:
+        effective_discovered_queue_id = int(discovered_queue_id)
+    effective_classic_rank = max(
+        int(queue_classic_rank or 0), max(0, int(classic_affinity_rank))
+    )
     became_pending = False
     if str(queue_status) != "pending" and requeue:
         con.execute(
@@ -1126,7 +2038,7 @@ def _upsert_queue_row(
             SET depth = ?, source = ?, priority = ?, discovered_from_game_id = ?,
                 discovered_match_created_ms = ?, updated_at = ?, eligible_at_ms = ?,
                 claimed_by = NULL, claimed_at_ms = 0, status = 'pending',
-                seed_family = ?
+                seed_family = ?, discovered_queue_id = ?, classic_affinity_rank = ?
             WHERE puuid = ?
             """,
             (
@@ -1138,6 +2050,8 @@ def _upsert_queue_row(
                 now,
                 eligible_at_ms,
                 effective_family,
+                effective_discovered_queue_id,
+                effective_classic_rank,
                 puuid,
             ),
         )
@@ -1148,6 +2062,8 @@ def _upsert_queue_row(
             or priority < int(queue_priority)
             or depth < int(queue_depth)
             or effective_family != str(queue_seed_family or "")
+            or effective_discovered_queue_id != int(queue_discovered_queue_id or 0)
+            or effective_classic_rank != int(queue_classic_rank or 0)
         )
         if should_update:
             con.execute(
@@ -1155,6 +2071,7 @@ def _upsert_queue_row(
                 UPDATE crawl_queue
                 SET depth = ?, source = ?, priority = ?, discovered_from_game_id = ?,
                     discovered_match_created_ms = ?, updated_at = ?, seed_family = ?
+                    , discovered_queue_id = ?, classic_affinity_rank = ?
                     {", claimed_by = NULL, claimed_at_ms = 0" if str(queue_status) == "pending" else ""}
                 WHERE puuid = ?
                 """,
@@ -1166,6 +2083,8 @@ def _upsert_queue_row(
                     discovered_match_created_ms,
                     now,
                     effective_family,
+                    effective_discovered_queue_id,
+                    effective_classic_rank,
                     puuid,
                 ),
             )
@@ -1203,6 +2122,7 @@ def _derive_seed_family(source: str, explicit: str | None) -> str:
     return _UNKNOWN_FAMILY
 
 
+@_retry_on_locked
 def _enqueue_player(
     con: sqlite3.Connection,
     puuid: str,
@@ -1213,6 +2133,8 @@ def _enqueue_player(
     requeue_cooldown_ms: int = 0,
     initial_delay_ms: int = 0,
     seed_family: str | None = None,
+    discovered_queue_id: int = 0,
+    classic_revisit_min_ms: int = _CLASSIC_DEFAULT_REVISIT_MIN_MS,
 ) -> str:
     """Add puuid to seen-set and queue when needed.
 
@@ -1230,6 +2152,18 @@ def _enqueue_player(
     if not puuid:
         return "noop"
 
+    if _is_rpc_storage(con):
+        derived_family = _derive_seed_family(source, seed_family)
+        return con.enqueue_player(
+            puuid=str(puuid), depth=int(depth), source=str(source),
+            priority=int(_SOURCE_PRIORITY.get(source, 99)),
+            discovered_from_game_id=discovered_from_game_id,
+            discovered_match_created_ms=int(discovered_match_created_ms),
+            requeue_cooldown_ms=max(0, int(requeue_cooldown_ms)),
+            initial_delay_ms=max(0, int(initial_delay_ms)), seed_family=derived_family,
+            discovered_queue_id=int(discovered_queue_id), classic_affinity_rank=int(int(discovered_queue_id) == _CLASSIC_QUEUE_ID),
+        )
+
     now = _utc_now()
     priority = _SOURCE_PRIORITY.get(source, 99)
     derived_family = _derive_seed_family(source, seed_family)
@@ -1237,7 +2171,10 @@ def _enqueue_player(
         """
         SELECT source, priority, min_depth, discovered_from_game_id,
                latest_seen_match_created_ms, last_crawled_match_created_ms,
-               processed, seed_family
+               processed, seed_family, process_count, new_games_found,
+               first_seen_at, last_crawled_at, discovered_queue_id,
+               classic_affinity, classic_affinity_rank,
+               classic_revisit_interval_ms
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1245,13 +2182,16 @@ def _enqueue_player(
     ).fetchone()
 
     if row is None:
+        initial_classic_rank = int(int(discovered_queue_id) == _CLASSIC_QUEUE_ID)
+        initial_classic_affinity = "candidate" if initial_classic_rank else "none"
         con.execute(
             """
             INSERT INTO crawl_seen (
                 puuid, source, priority, min_depth, discovered_from_game_id,
                 first_seen_at, latest_seen_match_created_ms,
-                last_crawled_match_created_ms, processed, seed_family
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+                last_crawled_match_created_ms, processed, seed_family,
+                discovered_queue_id, classic_affinity, classic_affinity_rank
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)
             """,
             (
                 puuid,
@@ -1262,6 +2202,9 @@ def _enqueue_player(
                 now,
                 discovered_match_created_ms,
                 derived_family,
+                int(discovered_queue_id),
+                initial_classic_affinity,
+                initial_classic_rank,
             ),
         )
         con.commit()
@@ -1276,6 +2219,8 @@ def _enqueue_player(
             requeue=True,
             eligible_at_ms=_now_ms() + max(0, initial_delay_ms),
             seed_family=derived_family,
+            discovered_queue_id=int(discovered_queue_id),
+            classic_affinity_rank=initial_classic_rank,
         )
         return "new"
 
@@ -1288,6 +2233,14 @@ def _enqueue_player(
         last_crawled_match_ms,
         processed,
         old_seed_family,
+        process_count,
+        new_games_found,
+        first_seen_at,
+        last_crawled_at,
+        old_discovered_queue_id,
+        old_classic_affinity,
+        old_classic_rank,
+        old_classic_revisit_interval_ms,
     ) = row
     best_source, best_priority, best_depth = _pick_best_metadata(
         str(old_source),
@@ -1299,6 +2252,17 @@ def _enqueue_player(
     )
     effective_family = _resolve_seed_family_update(str(old_seed_family or ""), derived_family)
     latest_match_ms = max(int(old_latest_match_ms), int(discovered_match_created_ms))
+    effective_discovered_queue_id = int(old_discovered_queue_id or 0)
+    if int(discovered_queue_id) == _CLASSIC_QUEUE_ID:
+        effective_discovered_queue_id = _CLASSIC_QUEUE_ID
+    elif effective_discovered_queue_id == 0:
+        effective_discovered_queue_id = int(discovered_queue_id)
+    effective_classic_rank = max(
+        int(old_classic_rank or 0), int(effective_discovered_queue_id == _CLASSIC_QUEUE_ID)
+    )
+    effective_classic_affinity = str(old_classic_affinity or "none")
+    if effective_classic_rank and effective_classic_affinity == "none":
+        effective_classic_affinity = "candidate"
     best_game_id = old_discovered_game_id
     if discovered_match_created_ms >= int(old_latest_match_ms) and discovered_from_game_id:
         best_game_id = discovered_from_game_id
@@ -1307,7 +2271,9 @@ def _enqueue_player(
         """
         UPDATE crawl_seen
         SET source = ?, priority = ?, min_depth = ?, discovered_from_game_id = ?,
-            latest_seen_match_created_ms = ?, seed_family = ?
+            latest_seen_match_created_ms = ?, seed_family = ?,
+            discovered_queue_id = ?, classic_affinity = ?,
+            classic_affinity_rank = ?
         WHERE puuid = ?
         """,
         (
@@ -1317,6 +2283,9 @@ def _enqueue_player(
             best_game_id,
             latest_match_ms,
             effective_family,
+            effective_discovered_queue_id,
+            effective_classic_affinity,
+            effective_classic_rank,
             puuid,
         ),
     )
@@ -1326,6 +2295,38 @@ def _enqueue_player(
         int(discovered_match_created_ms) > int(last_crawled_match_ms)
         or (source == "manual_riot_id" and int(last_crawled_match_ms) == 0)
     )
+    eligible_at_ms = 0
+    if should_requeue:
+        if effective_classic_rank > 0:
+            classic_interval_ms = max(
+                int(old_classic_revisit_interval_ms or 0),
+                max(0, int(classic_revisit_min_ms)),
+            )
+            eligible_at_ms = _classic_revisit_eligible_at_ms(
+                str(last_crawled_at) if last_crawled_at else None,
+                classic_interval_ms,
+                min_revisit_ms=classic_revisit_min_ms,
+            )
+            eligible_at_ms = max(
+                eligible_at_ms,
+                _now_ms() + max(0, int(initial_delay_ms)),
+            )
+        elif revisit_arm(puuid) == "treatment":
+            effective_cooldown_ms = _treatment_cooldown_ms(
+                int(new_games_found or 0), first_seen_at, time.time()
+            )
+            eligible_at_ms = _now_ms() + max(
+                int(effective_cooldown_ms), int(initial_delay_ms)
+            )
+        else:
+            effective_cooldown_ms = _requeue_cooldown_for(
+                int(new_games_found or 0),
+                int(process_count or 0),
+                max(0, int(requeue_cooldown_ms)),
+            )
+            eligible_at_ms = _now_ms() + max(
+                int(effective_cooldown_ms), int(initial_delay_ms)
+            )
     became_pending = _upsert_queue_row(
         con,
         puuid,
@@ -1335,8 +2336,10 @@ def _enqueue_player(
         best_game_id,
         latest_match_ms,
         requeue=should_requeue,
-        eligible_at_ms=_now_ms() + max(requeue_cooldown_ms, initial_delay_ms) if should_requeue else 0,
+        eligible_at_ms=eligible_at_ms,
         seed_family=effective_family,
+        discovered_queue_id=effective_discovered_queue_id,
+        classic_affinity_rank=effective_classic_rank,
     )
     if should_requeue and became_pending:
         con.execute(
@@ -1350,7 +2353,10 @@ def _enqueue_player(
     return "noop"
 
 
+@_retry_on_locked
 def _requeue_stale_claims(con: sqlite3.Connection, claim_timeout_ms: int) -> int:
+    if _is_rpc_storage(con):
+        return con.requeue_stale(claim_timeout_ms)
     cutoff_ms = _now_ms() - claim_timeout_ms
     before = con.total_changes
     con.execute(
@@ -1370,15 +2376,98 @@ def _requeue_stale_claims(con: sqlite3.Connection, claim_timeout_ms: int) -> int
     return con.total_changes - before
 
 
+_CLASSIC_LANE_SELECT = """
+    SELECT q.queue_idx, q.puuid, q.depth, q.source,
+           q.discovered_match_created_ms, q.seed_family, q.discovered_queue_id
+    FROM crawl_queue q
+    WHERE q.status = 'pending'
+      AND q.eligible_at_ms <= :now_ms
+      AND q.classic_affinity_rank > 0
+      AND lane_arm(q.puuid) = :arm
+"""
+
+# Expected Classic games from visiting this player now: the shrunk decayed rate
+# times the fraction of their ~20-row window that has refilled since the last
+# visit.  A never-visited row has last_crawl_ms = 0, so it saturates at 1.0 and
+# scores its prior -- which is the point, since 60% of the lane has never been
+# visited.
+_CLASSIC_LANE_SCORE_EXPR = """
+    (CASE WHEN q.classic_lambda > 0 THEN q.classic_lambda ELSE :prior END)
+    * MIN(1.0,
+          MAX(0, :now_ms - q.classic_last_crawl_ms)
+          / MAX(CAST(:min_span_ms AS REAL), CAST(q.classic_span_ms AS REAL)))
+"""
+
+_CLASSIC_LANE_SQL = {
+    "score": _CLASSIC_LANE_SELECT + f"""
+    ORDER BY ({_CLASSIC_LANE_SCORE_EXPR}) DESC,
+             q.eligible_at_ms ASC,
+             q.queue_idx ASC
+    LIMIT 1
+    """,
+    # The shipped ordering, kept verbatim as the control arm.
+    "due": _CLASSIC_LANE_SELECT + """
+    ORDER BY q.eligible_at_ms ASC,
+             q.classic_affinity_rank DESC,
+             q.discovered_match_created_ms DESC,
+             q.priority ASC,
+             q.depth ASC,
+             q.queue_idx ASC
+    LIMIT 1
+    """,
+}
+
+
+
+def _classic_lane_arm_for_slot(claim_number: int, percent: int) -> str:
+    """Alternate the two lane orderings across reserved slots.
+
+    Must count SLOTS, not claims: _classic_claim_slot fires only on multiples of
+    100/percent, which are all even at the default 10%, so alternating on
+    claim_number parity would have silently run one arm 100% of the time and
+    left the experiment with no control.
+    """
+    if not _LANE_AB_ENABLED:
+        # Both halves must agree, or the lane silently loses budget: a "score"
+        # slot would filter on lane_arm(puuid) = 'score', match nothing now that
+        # every player hashes to 'due', and fall through to the general frontier.
+        return "due"
+    normalized = min(100, max(0, int(percent)))
+    if normalized <= 0:
+        return "score"
+    slot_index = int(claim_number) * normalized // 100
+    return "score" if slot_index % 2 == 0 else "due"
+
+def _classic_lane_params(now_ms: int, arm: str) -> dict[str, object]:
+    return {
+        "now_ms": int(now_ms),
+        "arm": arm,
+        "min_span_ms": float(_CLASSIC_DEFAULT_REVISIT_MIN_MS),
+        # Rows enqueued but never visited carry classic_lambda = 0.  Shrinkage
+        # means a visited player's estimate is never exactly 0, so 0 uniquely
+        # identifies "no observation yet" and gets the discovery prior -- without
+        # which 60% of the lane would score zero and never be claimed.
+        "prior": _CLASSIC_RATE_PRIOR_DISCOVERED,
+    }
+
+
+@_retry_on_locked
 def _claim_next_player(
     con: sqlite3.Connection,
     worker_id: str,
     claim_timeout_ms: int,
-) -> tuple[str, int, str, int, str] | None:
+    classic_claim_percent: int = _CLASSIC_DEFAULT_CLAIM_PERCENT,
+) -> tuple[str, int, str, int, str, int, str] | None:
     """Atomically claim one pending queue item for this worker.
 
-    Returns (puuid, depth, source, claimed_match_ms, seed_family).
+    Returns (puuid, depth, source, claimed_match_ms, seed_family,
+    discovered_queue_id, claim_lane).
     """
+    if _is_rpc_storage(con):
+        return con.claim_next(
+            worker_id=str(worker_id), claim_timeout_ms=int(claim_timeout_ms),
+            classic_claim_percent=int(classic_claim_percent),
+        )
     now_text = _utc_now()
     now_ms = _now_ms()
     cutoff_ms = now_ms - claim_timeout_ms
@@ -1397,6 +2486,21 @@ def _claim_next_player(
         """,
         (now_text, cutoff_ms),
     )
+    claim_number = _claim_counter()
+    row = None
+    claim_lane = "general"
+
+    # Reserve a dispersed share of claims for due Classic-tagged players.  An
+    # empty Classic lane falls through and returns its capacity to the main
+    # frontier.  Alternating slots between the two lane_arm orderings keeps the
+    # A/B halves at equal claim budget; see lane_arm for what is being compared.
+    if _classic_claim_slot(claim_number, classic_claim_percent):
+        arm = _classic_lane_arm_for_slot(claim_number, classic_claim_percent)
+        row = con.execute(
+            _CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm)
+        ).fetchone()
+        if row is not None:
+            claim_lane = f"classic_{arm}"
     # Reserve a share of claims for players never crawled before.
     #
     # Ordering by discovered_match_created_ms DESC means an active player jumps to
@@ -1410,16 +2514,17 @@ def _claim_next_player(
     # reserves rather than reorders. Unvisited players are also worth more per
     # scan: 6.21 games on a first visit against ~1.5 on a revisit, because a
     # player's recent games are largely already captured via their teammates.
-    take_unvisited = (_claim_counter() % _UNVISITED_CLAIM_PERIOD) == 0
-    row = None
-    if take_unvisited:
+    take_unvisited = (claim_number % _UNVISITED_CLAIM_PERIOD) == 0
+    if row is None and take_unvisited:
         row = con.execute(
             """
             SELECT q.queue_idx, q.puuid, q.depth, q.source,
-                   q.discovered_match_created_ms, q.seed_family
+                   q.discovered_match_created_ms, q.seed_family,
+                   q.discovered_queue_id
             FROM crawl_queue q
             WHERE q.status = 'pending'
               AND q.eligible_at_ms <= ?
+              AND q.classic_affinity_rank = 0
               AND NOT EXISTS (
                     SELECT 1 FROM crawl_seen s
                     WHERE s.puuid = q.puuid AND s.process_count > 0)
@@ -1430,14 +2535,17 @@ def _claim_next_player(
             LIMIT 1
             """
         , (now_ms,)).fetchone()
+        if row is not None:
+            claim_lane = "unvisited"
     if row is None:
         row = con.execute(
             """
             SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
-                   seed_family
+                   seed_family, discovered_queue_id
             FROM crawl_queue
             WHERE status = 'pending'
               AND eligible_at_ms <= ?
+              AND classic_affinity_rank = 0
             ORDER BY discovered_match_created_ms DESC,
                      priority ASC,
                      depth ASC,
@@ -1447,10 +2555,21 @@ def _claim_next_player(
             """
         , (now_ms,)).fetchone()
     if row is None:
+        # General frontier is empty, so this is spare capacity rather than the
+        # reserved budget.  It stays on the same alternating arms; tagging it
+        # separately keeps it out of the A/B comparison, which is only valid over
+        # the reserved slots where both arms get equal capacity.
+        arm = _classic_lane_arm_for_slot(claim_number, classic_claim_percent)
+        row = con.execute(
+            _CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm)
+        ).fetchone()
+        if row is not None:
+            claim_lane = f"classic_fallback_{arm}"
+    if row is None:
         con.commit()
         return None
 
-    queue_idx, puuid, depth, source, claimed_match_ms, seed_family = row
+    queue_idx, puuid, depth, source, claimed_match_ms, seed_family, discovered_queue_id = row
     before = con.total_changes
     con.execute(
         """
@@ -1474,10 +2593,15 @@ def _claim_next_player(
         str(source),
         int(claimed_match_ms),
         str(seed_family or "") or _UNKNOWN_FAMILY,
+        int(discovered_queue_id or 0),
+        claim_lane,
     )
 
 
+@_retry_on_locked
 def _pending_player_count(con: sqlite3.Connection) -> int:
+    if _is_rpc_storage(con):
+        return con.pending_count()
     return int(
         con.execute(
             "SELECT COUNT(*) FROM crawl_queue WHERE status = 'pending'"
@@ -1486,6 +2610,8 @@ def _pending_player_count(con: sqlite3.Connection) -> int:
 
 
 def _open_queue_source_count(con: sqlite3.Connection, source: str) -> int:
+    if _is_rpc_storage(con):
+        return con.source_count(source)
     return int(
         con.execute(
             """
@@ -1500,6 +2626,8 @@ def _open_queue_source_count(con: sqlite3.Connection, source: str) -> int:
 
 
 def _next_pending_wait_ms(con: sqlite3.Connection) -> int | None:
+    if _is_rpc_storage(con):
+        return con.next_wait_ms()
     row = con.execute(
         """
         SELECT MIN(eligible_at_ms)
@@ -1525,6 +2653,14 @@ _CLAIM_COUNT = itertools.count()
 
 def _claim_counter() -> int:
     return next(_CLAIM_COUNT)
+
+
+def _classic_claim_slot(claim_number: int, percent: int) -> bool:
+    """Disperse exactly ``percent`` reserved slots over each 100 claims."""
+    normalized = min(100, max(0, int(percent)))
+    if normalized == 0:
+        return False
+    return (int(claim_number) * normalized) % 100 < normalized
 
 
 _YIELD_BACKOFF_MIN_VISITS = 3
@@ -1553,7 +2689,7 @@ _YIELD_BACKOFF_DEAD = 240       # base 45s -> 3h
 # returns ~1.5 games instead of anything near the 20 the LCU could hold.
 _REVISIT_AB_ENABLED = True
 _REVISIT_TREATMENT_TARGET_GAMES = 15.0   # under 20 so nothing rolls off unseen
-_REVISIT_TREATMENT_MIN_MS = 6 * 3600_000
+_REVISIT_TREATMENT_MIN_MS = 24 * 3600_000
 _REVISIT_TREATMENT_MAX_MS = 21 * 24 * 3600_000
 
 
@@ -1586,6 +2722,45 @@ def history_arm(puuid: str) -> str:
         return "full"
     digest = hashlib.sha1(b"history-ab|" + str(puuid).encode("utf-8", "replace")).digest()
     return ("control", "probe", "full")[digest[0] % 3]
+
+
+# Off: the experiment ran and the score ordering lost.  Over 15.4 hours the
+# score arm returned 186.6 Classic games per 1,000 visits against due's 361.2
+# (difference -174.6, 95% CI [-313.3, -38.8], so not a wash).  Mechanism: score
+# visits were 100% revisits while due's were 60%, because a never-visited row
+# carries classic_lambda = 0 and falls back to the 0.055 discovery prior, which
+# loses to any player with an observed rate.  That starved first visits -- and
+# first visits are where the yield is (6.21 games against ~1.5 on a revisit).
+# The prior was the error: 0.055 came from the lifetime average of already
+# visited players, which is itself diluted by revisits, so first visits were
+# priced with a number that describes revisits.
+#
+# Re-enabling means first fixing that prior against measured first-visit yield,
+# not just flipping this back.
+_LANE_AB_ENABLED = False
+
+
+def lane_arm(puuid: str) -> str:
+    """Stable 50/50 split for the Classic lane's ordering.
+
+    due    the shipped ordering: most-overdue first, affinity rank as a tie-break
+           that per-millisecond timestamps never actually reach.
+    score  order by expected Classic yield (decayed rate x window saturation).
+
+    Split rather than switched because the offline comparison can only argue one
+    direction honestly.  Ranking players by lifetime yield and then scoring the
+    result by lifetime yield is circular, so the 34x it reported is an upper
+    bound; what is not circular is that the shipped ordering's top 1,000 held
+    zero rank>=2 players and zero Classic history at all.  The real number has to
+    come from forward measurement, which is what this arm is for.
+
+    Salted apart from revisit_arm and history_arm so a player's lane arm is
+    independent of the treatments they are already in.
+    """
+    if not _LANE_AB_ENABLED:
+        return "due"
+    digest = hashlib.sha1(b"lane-ab|" + str(puuid).encode("utf-8", "replace")).digest()
+    return "score" if digest[0] & 1 else "due"
 
 
 def revisit_arm(puuid: str) -> str:
@@ -1669,6 +2844,7 @@ def _merge_queue_counts(stored_json: str | None, added: dict[int, int] | None) -
     return json.dumps(totals, sort_keys=True, separators=(",", ":"))
 
 
+@_retry_on_locked
 def _mark_player_done(
     con: sqlite3.Connection,
     puuid: str,
@@ -1677,18 +2853,51 @@ def _mark_player_done(
     observed_match_created_ms: int,
     requeue_cooldown_ms: int,
     new_games_by_queue: dict[int, int] | None = None,
+    *,
+    source: str = "unknown",
+    seed_family: str = _UNKNOWN_FAMILY,
+    worker_id: str | None = None,
+    current_patch: str | None = None,
+    history_game_count: int = 0,
+    target_game_count: int = 0,
+    claim_lane: str = "general",
+    classic_profile: ClassicAffinityProfile | None = None,
+    classic_revisit_min_ms: int = _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+    claim: PlayerClaim | None = None,
 ) -> bool:
     """Finalize a claimed player.
 
     Returns True if the player was re-queued immediately due to a newer discovery
     arriving while this worker was processing it.
     """
+    if _is_rpc_storage(con):
+        if claim is None:
+            raise SnowballWriterError("player claim required")
+        profile = classic_profile or ClassicAffinityProfile("none", 0, 0, 0, 0, 0)
+        return con.finalize_player(
+            claim,
+            new_games_found=max(0, int(new_games_found)),
+            claimed_match_created_ms=int(claimed_match_created_ms),
+            observed_match_created_ms=int(observed_match_created_ms),
+            requeue_cooldown_ms=max(0, int(requeue_cooldown_ms)),
+            new_games_by_queue={str(k): int(v) for k, v in (new_games_by_queue or {}).items()},
+            source=str(source), seed_family=str(seed_family), worker_id=worker_id,
+            current_patch=current_patch, history_game_count=max(0, int(history_game_count)),
+            target_game_count=max(0, int(target_game_count)), claim_lane=str(claim_lane),
+            classic_affinity=str(profile.label), classic_rank=int(profile.rank),
+            classic_games_24h=int(profile.games_24h), classic_games_recent=int(profile.games_recent),
+            classic_last_seen_ms=int(profile.last_seen_ms),
+            classic_revisit_interval_ms=max(0, int(profile.revisit_interval_ms)),
+            classic_revisit_min_ms=max(0, int(classic_revisit_min_ms)),
+        )
     now = _utc_now()
     row = con.execute(
         """
         SELECT latest_seen_match_created_ms, last_crawled_match_created_ms,
                process_count, new_games_found, first_seen_at,
-               new_games_by_queue_json
+               new_games_by_queue_json, last_crawled_at,
+               classic_rate_num, classic_rate_den, classic_last_crawl_ms,
+               discovered_queue_id
         FROM crawl_seen
         WHERE puuid = ?
         """,
@@ -1702,6 +2911,93 @@ def _mark_player_done(
     prior_process_count = int(row[2] or 0) if row else 0
     prior_new_games = int(row[3] or 0) if row else 0
     prior_first_seen_at = row[4] if row else None
+    previous_crawled_at = str(row[6]) if row and row[6] else None
+    profile = classic_profile or ClassicAffinityProfile("none", 0, 0, 0, 0, 0)
+
+    # Fold this visit into the decayed Classic yield estimate.  Decay runs on the
+    # gap since the previous visit, so a player revisited every 10 hours and one
+    # revisited weekly are weighted on the same clock rather than by visit count.
+    now_epoch_ms = _now_ms()
+    prior_rate_num = float(row[7] or 0.0) if row else 0.0
+    prior_rate_den = float(row[8] or 0.0) if row else 0.0
+    prior_last_crawl_ms = int(row[9] or 0) if row else 0
+    classic_discovered = bool(row and int(row[10] or 0) == _CLASSIC_QUEUE_ID)
+    rate_num, rate_den = _decay_classic_rate(
+        prior_rate_num,
+        prior_rate_den,
+        now_epoch_ms - prior_last_crawl_ms if prior_last_crawl_ms else 0,
+        int((new_games_by_queue or {}).get(_CLASSIC_QUEUE_ID, 0)),
+    )
+    # Producer floor.  The caller classified from one 20-row window; a player who
+    # has produced Classic for us before must not be ejected to rank 0 just
+    # because this window happened to be quiet, because nothing promotes them
+    # back except being re-drawn from the general frontier by chance.
+    if profile.rank == 0 and (
+        _lifetime_classic_games(queue_counts_json) > 0 or rate_num > 0.0
+    ):
+        profile = ClassicAffinityProfile(
+            "dormant",
+            1,
+            profile.games_24h,
+            profile.games_recent,
+            profile.last_seen_ms,
+            max(int(profile.revisit_interval_ms), _CLASSIC_DEFAULT_REVISIT_MIN_MS),
+        )
+    revisit_interval_ms: int | None = None
+    if previous_crawled_at:
+        try:
+            previous_dt = datetime.fromisoformat(previous_crawled_at)
+            revisit_interval_ms = max(
+                0,
+                int(
+                    (datetime.fromisoformat(now) - previous_dt).total_seconds()
+                    * 1000
+                ),
+            )
+        except ValueError:
+            revisit_interval_ms = None
+    con.execute(
+        """
+        INSERT INTO crawl_visit_events (
+            puuid, revisit_arm, is_revisit, visited_at, previous_crawled_at,
+            revisit_interval_ms, process_number, source, seed_family,
+            worker_id, current_patch, history_game_count, target_game_count,
+            new_games_found, new_games_by_queue_json, claim_lane,
+            classic_affinity, classic_revisit_interval_ms, lane_arm, claim_score
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)        """,
+        (
+            puuid,
+            revisit_arm(puuid),
+            int(prior_process_count > 0 and previous_crawled_at is not None),
+            now,
+            previous_crawled_at,
+            revisit_interval_ms,
+            prior_process_count + 1,
+            source,
+            seed_family,
+            worker_id,
+            current_patch,
+            max(0, int(history_game_count)),
+            max(0, int(target_game_count)),
+            max(0, int(new_games_found)),
+            json.dumps(
+                {str(k): int(v) for k, v in (new_games_by_queue or {}).items()},
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            str(claim_lane or "general"),
+            profile.label,
+            max(0, int(profile.revisit_interval_ms)),
+            lane_arm(puuid),
+            # The rate estimate this player carried INTO the visit, logged for
+            # both arms so the two pools can be compared on the same axis.  The
+            # saturation half of the score is recoverable from
+            # previous_crawled_at in this same row, so only the rate is stored.
+            _classic_lambda(
+                prior_rate_num, prior_rate_den, classic_discovered=classic_discovered
+            ),
+        ),
+    )
     crawled_match_ms = max(
         last_crawled_match_ms,
         int(claimed_match_created_ms),
@@ -1709,19 +3005,30 @@ def _mark_player_done(
     )
     needs_requeue = latest_seen_match_ms > crawled_match_ms
 
-    if needs_requeue:
+    if needs_requeue or profile.rank > 0:
         total_games = prior_new_games + int(new_games_found)
-        if revisit_arm(puuid) == "treatment":
+        if profile.rank > 0:
+            effective_cooldown_ms = max(
+                int(profile.revisit_interval_ms),
+                max(0, int(classic_revisit_min_ms)),
+            )
+            eligible_at_ms = _classic_revisit_eligible_at_ms(
+                now,
+                effective_cooldown_ms,
+                min_revisit_ms=classic_revisit_min_ms,
+            )
+        elif revisit_arm(puuid) == "treatment":
             effective_cooldown_ms = _treatment_cooldown_ms(
                 total_games, prior_first_seen_at, time.time()
             )
+            eligible_at_ms = _now_ms() + effective_cooldown_ms
         else:
             effective_cooldown_ms = _requeue_cooldown_for(
                 total_games,
                 prior_process_count + 1,
                 max(0, requeue_cooldown_ms),
             )
-        eligible_at_ms = _now_ms() + effective_cooldown_ms
+            eligible_at_ms = _now_ms() + effective_cooldown_ms
         con.execute(
             """
             UPDATE crawl_seen
@@ -1730,10 +3037,32 @@ def _mark_player_done(
                 process_count = process_count + 1,
                 new_games_found = new_games_found + ?,
                 new_games_by_queue_json = ?,
-                last_crawled_match_created_ms = ?
-            WHERE puuid = ?
+                last_crawled_match_created_ms = ?,
+                classic_affinity = ?,
+                classic_affinity_rank = ?,
+                classic_games_24h = ?,
+                classic_games_recent = ?,
+                classic_last_seen_ms = ?,
+                classic_revisit_interval_ms = ?,
+                classic_rate_num = ?,
+                classic_rate_den = ?,
+                classic_last_crawl_ms = ?            WHERE puuid = ?
             """,
-            (now, new_games_found, queue_counts_json, crawled_match_ms, puuid),
+            (
+                now,
+                new_games_found,
+                queue_counts_json,
+                crawled_match_ms,
+                profile.label,
+                profile.rank,
+                profile.games_24h,
+                profile.games_recent,
+                profile.last_seen_ms,
+                profile.revisit_interval_ms,
+                rate_num,
+                rate_den,
+                now_epoch_ms,                puuid,
+            ),
         )
         con.execute(
             """
@@ -1742,10 +3071,24 @@ def _mark_player_done(
                 claimed_by = NULL,
                 claimed_at_ms = 0,
                 eligible_at_ms = ?,
-                updated_at = ?
+                updated_at = ?,
+                classic_affinity_rank = ?,
+                classic_lambda = ?,
+                classic_last_crawl_ms = ?,
+                classic_span_ms = ?
             WHERE puuid = ?
             """,
-            (eligible_at_ms, now, puuid),
+            (
+                eligible_at_ms,
+                now,
+                profile.rank,
+                _classic_lambda(
+                    rate_num, rate_den, classic_discovered=classic_discovered
+                ),
+                now_epoch_ms,
+                _classic_span_ms(profile.revisit_interval_ms),
+                puuid,
+            ),
         )
         con.commit()
         return True
@@ -1758,10 +3101,32 @@ def _mark_player_done(
             process_count = process_count + 1,
             new_games_found = new_games_found + ?,
             new_games_by_queue_json = ?,
-            last_crawled_match_created_ms = ?
-        WHERE puuid = ?
+            last_crawled_match_created_ms = ?,
+            classic_affinity = ?,
+            classic_affinity_rank = ?,
+            classic_games_24h = ?,
+            classic_games_recent = ?,
+            classic_last_seen_ms = ?,
+            classic_revisit_interval_ms = ?,
+            classic_rate_num = ?,
+            classic_rate_den = ?,
+            classic_last_crawl_ms = ?        WHERE puuid = ?
         """,
-        (now, new_games_found, queue_counts_json, crawled_match_ms, puuid),
+        (
+            now,
+            new_games_found,
+            queue_counts_json,
+            crawled_match_ms,
+            profile.label,
+            profile.rank,
+            profile.games_24h,
+            profile.games_recent,
+            profile.last_seen_ms,
+            profile.revisit_interval_ms,
+            rate_num,
+            rate_den,
+            now_epoch_ms,            puuid,
+        ),
     )
     con.execute(
         """
@@ -1769,10 +3134,21 @@ def _mark_player_done(
         SET status = 'done',
             claimed_by = NULL,
             claimed_at_ms = 0,
-            updated_at = ?
+            updated_at = ?,
+            classic_affinity_rank = ?,
+            classic_lambda = ?,
+            classic_last_crawl_ms = ?,
+            classic_span_ms = ?
         WHERE puuid = ?
         """,
-        (now, puuid),
+        (
+            now,
+            profile.rank,
+            _classic_lambda(rate_num, rate_den, classic_discovered=classic_discovered),
+            now_epoch_ms,
+            _classic_span_ms(profile.revisit_interval_ms),
+            puuid,
+        ),
     )
     con.commit()
     return False
@@ -1783,7 +3159,14 @@ def _defer_player_for_history_hydration(
     puuid: str,
     *,
     delay_ms: int = _MANUAL_SEED_HYDRATION_DELAY_MS,
+    claim: PlayerClaim | None = None,
 ) -> bool:
+    if _is_rpc_storage(con):
+        # The caller supplies the claim token through ``_rpc_player_claim``;
+        # direct invocation without one is unsafe and therefore fails closed.
+        if claim is None:
+            raise SnowballWriterError("player claim required")
+        return bool(con.defer_player(claim, delay_ms=delay_ms, reason="history_hydration"))
     row = con.execute(
         "SELECT process_count FROM crawl_seen WHERE puuid = ?",
         (puuid,),
@@ -1819,12 +3202,19 @@ def _defer_player_for_history_hydration(
     return True
 
 
+@_retry_on_locked
 def _release_player_for_lcu_unavailable(
     con: sqlite3.Connection,
     puuid: str,
     *,
     delay_ms: int = _LCU_UNAVAILABLE_RETRY_DELAY_MS,
+    claim: PlayerClaim | None = None,
 ) -> None:
+    if _is_rpc_storage(con):
+        if claim is None:
+            raise SnowballWriterError("player claim required")
+        con.release_player_unavailable(claim, delay_ms=delay_ms)
+        return
     now = _utc_now()
     con.execute(
         """
@@ -1888,6 +3278,12 @@ def _seed_suggested_players(
         if result in ("new", "requeued"):
             added += 1
         elif result == "noop":
+            if _is_rpc_storage(con):
+                if con.suggested_reseed(str(puuid), _SUGGESTED_RESEED_REQUEUE_COOLDOWN_SEC * 1000):
+                    added += 1
+                if added >= suggested_cap:
+                    return added
+                continue
             cutoff_text = datetime.fromtimestamp(
                 max(0.0, time.time() - _SUGGESTED_RESEED_REQUEUE_COOLDOWN_SEC),
                 tz=timezone.utc,
@@ -2070,6 +3466,8 @@ def _load_riot_id_seeds(
 
 
 def _get_riot_bridge(con: sqlite3.Connection, public_puuid: str) -> tuple[str, str | None] | None:
+    if _is_rpc_storage(con):
+        return con.bridge_get(public_puuid)
     row = con.execute(
         """
         SELECT riot_id, lcu_puuid
@@ -2091,6 +3489,12 @@ def _upsert_riot_bridge(
     lcu_puuid: str | None,
     resolve_status: str,
 ) -> None:
+    if _is_rpc_storage(con):
+        con.bridge_upsert(
+            public_puuid=public_puuid, riot_id=riot_id, lcu_puuid=lcu_puuid,
+            resolve_status=resolve_status,
+        )
+        return
     con.execute(
         """
         INSERT INTO riot_id_bridge(public_puuid, riot_id, lcu_puuid, resolved_at, resolve_status)
@@ -2352,6 +3756,8 @@ def _reseed_recent_active_players(
     """
     if cap <= 0:
         return 0
+    if _is_rpc_storage(con):
+        return con.reseed_recent(cap=cap, cooldown_ms=max(0, int(cooldown_sec * 1000)))
 
     cutoff_text = datetime.fromtimestamp(
         max(0.0, time.time() - max(0, cooldown_sec)),
@@ -2427,6 +3833,11 @@ def _reseed_source_family_players(
     """
     if cap <= 0 or not sources:
         return 0
+    if _is_rpc_storage(con):
+        return con.reseed_source(
+            sources=tuple(str(source) for source in sources if str(source)),
+            cap=cap, cooldown_ms=max(0, int(cooldown_sec * 1000)),
+        )
 
     normalized_sources = tuple(str(source) for source in sources if str(source))
     if not normalized_sources:
@@ -2518,6 +3929,11 @@ def run_snowball(
     seed_riot_id_files: tuple[Path, ...] = (),
     manual_seed_pending_cap: int = 40,
     max_depth: int = 3,
+    classic_claim_percent: int = _CLASSIC_DEFAULT_CLAIM_PERCENT,
+    classic_revisit_min_hours: float = 10.0,
+    classic_revisit_max_hours: float = 168.0,
+    writer_client: Any | None = None,
+    storage: SnowballWriterFacade | None = None,
 ) -> CrawlStats:
     """Expand the LCU-visible player graph and save unseen target-queue matches."""
     if target_queues is None:
@@ -2527,17 +3943,43 @@ def run_snowball(
     if creds is None:
         raise RuntimeError("League client not found")
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = _connect_db(db_path)
-    _ensure_schema_with_retry(con, worker_id=worker_id)
-    migrated = _migrate_legacy_crawl_players(con)
-    purged_riot_tier = _purge_invalid_riot_tier_rows(con)
-    synced_priorities = _sync_source_priorities(con, worker_id=worker_id)
+    if writer_client is not None and storage is not None:
+        raise ValueError("pass writer_client or storage, not both")
+    if writer_client is not None:
+        storage = SnowballWriterFacade(writer_client)
+    rpc_mode = storage is not None
+    if rpc_mode and not isinstance(storage, SnowballWriterFacade):
+        raise TypeError("storage must be SnowballWriterFacade")
+    con: sqlite3.Connection | None = None
+    if rpc_mode:
+        # No sqlite3.connect, path mkdir, or read-only preload in RPC mode.
+        worker_id = worker_id or f"pid-{os.getpid()}"
+        init_response = storage.initialize(worker_id=worker_id, claim_timeout_ms=max(1, claim_timeout_sec) * 1000)
+        migrated = int(init_response.get("migrated") or 0)
+        purged_riot_tier = int(init_response.get("purged") or 0)
+        synced_priorities = int(init_response.get("synced") or 0)
+    else:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        con = _connect_db(db_path)
+        _ensure_schema_with_retry(con, worker_id=worker_id)
+        migrated = _migrate_legacy_crawl_players(con)
+        purged_riot_tier = _purge_invalid_riot_tier_rows(con)
+        synced_priorities = _sync_source_priorities(con, worker_id=worker_id)
     claim_timeout_ms = max(1, claim_timeout_sec) * 1000
     player_requeue_cooldown_ms = max(0, player_requeue_cooldown_sec) * 1000
+    classic_claim_percent = min(100, max(0, int(classic_claim_percent)))
+    classic_revisit_min_ms = max(
+        _CLASSIC_DEFAULT_REVISIT_MIN_MS,
+        int(float(classic_revisit_min_hours) * 3600_000),
+    )
+    classic_revisit_max_ms = max(
+        classic_revisit_min_ms,
+        int(float(classic_revisit_max_hours) * 3600_000),
+    )
     worker_id = worker_id or f"pid-{os.getpid()}"
 
-    existing_game_ids = _load_existing_game_ids(con)
+    existing_game_ids = set() if rpc_mode else _load_existing_game_ids(con)
+    db = storage if rpc_mode else con
     expanded_game_ids: set[str] = set()
     local_puuid_latest_ms: dict[str, int] = {}
     stats = CrawlStats()
@@ -2552,14 +3994,14 @@ def run_snowball(
     source_family_run_yield: dict[str, int] = {source: 0 for source in source_family_sources}
     source_family_backoff_until: dict[str, float] = {}
     for source in source_family_sources:
-        state_text = _get_runtime_state_text(con, f"backoff:source-family:{source}")
+        state_text = _get_runtime_state_text(db, f"backoff:source-family:{source}")
         if state_text:
             try:
                 source_family_backoff_until[source] = float(state_text)
             except ValueError:
                 source_family_backoff_until[source] = 0.0
     recent_active_zero_streak = 0
-    recent_active_state = _get_runtime_state_text(con, "backoff:recent-active")
+    recent_active_state = _get_runtime_state_text(db, "backoff:recent-active")
     try:
         recent_active_backoff_until = float(recent_active_state) if recent_active_state else 0.0
     except ValueError:
@@ -2600,9 +4042,9 @@ def run_snowball(
                 source_family_run_yield.get(seed_family, 0) + new_games_found
             )
             # Mirror to persisted state so sister workers see the credit.
-            _increment_persisted_family_yield(con, seed_family, new_games_found)
+            _increment_persisted_family_yield(db, seed_family, new_games_found)
             source_family_backoff_until.pop(seed_family, None)
-            _delete_runtime_state(con, f"backoff:source-family:{seed_family}")
+            _delete_runtime_state(db, f"backoff:source-family:{seed_family}")
             print(
                 f"[snowball] seed-family yield  fam={seed_family}  "
                 f"+{new_games_found}  run_total={source_family_run_yield[seed_family]}  "
@@ -2620,7 +4062,7 @@ def run_snowball(
         # subgraph. Pull from BOTH local and persisted yield so a sibling
         # worker that captured games can rescue this worker's streak.
         local_yield = source_family_run_yield.get(seed_family, 0)
-        persisted_yield = _read_persisted_family_yield(con, seed_family)
+        persisted_yield = _read_persisted_family_yield(db, seed_family)
         effective_yield = max(local_yield, persisted_yield)
         if effective_yield > 0:
             source_family_zero_streaks[seed_family] = 0
@@ -2637,7 +4079,7 @@ def run_snowball(
         backoff_until = time.time() + _SOURCE_FAMILY_BACKOFF_SEC
         source_family_backoff_until[seed_family] = backoff_until
         _set_runtime_state_text(
-            con,
+            db,
             f"backoff:source-family:{seed_family}",
             str(backoff_until),
         )
@@ -2668,7 +4110,7 @@ def run_snowball(
             recent_active_zero_streak = 0
             if recent_active_backoff_until > 0.0:
                 recent_active_backoff_until = 0.0
-                _delete_runtime_state(con, "backoff:recent-active")
+                _delete_runtime_state(db, "backoff:recent-active")
             return
 
         recent_active_zero_streak += 1
@@ -2679,7 +4121,7 @@ def run_snowball(
         active_reseed_mode = None
         recent_active_backoff_until = time.time() + _RECENT_ACTIVE_BACKOFF_SEC
         _set_runtime_state_text(
-            con,
+            db,
             "backoff:recent-active",
             str(recent_active_backoff_until),
         )
@@ -2690,6 +4132,9 @@ def run_snowball(
         )
 
     with LCUClient(creds) as lcu:
+        current_patch = _major_minor_patch(get_game_version(lcu))
+        if games_per_player == 0 and current_patch is None:
+            raise RuntimeError("Could not determine current League patch from LCU")
         me = _get_current_summoner_with_retry(lcu)
         my_puuid = str(me["puuid"]) if me and me.get("puuid") else ""
         my_name = (me or {}).get("gameName") or (me or {}).get("displayName") or "?"
@@ -2702,7 +4147,7 @@ def run_snowball(
             )
 
         if include_self and has_current_summoner and _source_family_available("self"):
-            result = _enqueue_player(con, my_puuid, depth=0, source="self")
+            result = _enqueue_player(db, my_puuid, depth=0, source="self")
             if result == "new":
                 stats.seeded_players += 1
             elif result == "requeued":
@@ -2721,7 +4166,7 @@ def run_snowball(
                 friend_puuid = friend.get("puuid")
                 if not friend_puuid:
                     continue
-                result = _enqueue_player(con, str(friend_puuid), depth=0, source="friend")
+                result = _enqueue_player(db, str(friend_puuid), depth=0, source="friend")
                 if result == "new":
                     stats.seeded_players += 1
                 elif result == "requeued":
@@ -2736,7 +4181,7 @@ def run_snowball(
             print(f"[snowball] startup skip  source=friend  reason=backoff  worker={worker_id}", flush=True)
 
         if include_ladder and has_current_summoner and _source_family_available("ladder"):
-            stats.seeded_players += _seed_ladder_neighbors(con, lcu, my_puuid, ladder_cap)
+            stats.seeded_players += _seed_ladder_neighbors(db, lcu, my_puuid, ladder_cap)
         elif include_ladder and not has_current_summoner:
             print(
                 f"[snowball] startup skip  source=ladder  "
@@ -2746,18 +4191,18 @@ def run_snowball(
         elif include_ladder:
             print(f"[snowball] startup skip  source=ladder  reason=backoff  worker={worker_id}", flush=True)
 
-        stats.seeded_players += _seed_suggested_players(con, lcu, suggested_cap)
+        stats.seeded_players += _seed_suggested_players(db, lcu, suggested_cap)
 
         if include_apex and _source_family_available("apex"):
             stats.seeded_players += _seed_apex_players(
-                con, lcu, apex_queues=apex_queues, apex_tiers=apex_tiers, apex_cap=apex_cap
+                db, lcu, apex_queues=apex_queues, apex_tiers=apex_tiers, apex_cap=apex_cap
             )
         elif include_apex:
             print(f"[snowball] startup skip  source=apex  reason=backoff  worker={worker_id}", flush=True)
 
         if include_riot_tier and _source_family_available("riot_tier"):
             stats.seeded_players += _seed_riot_tier_players(
-                con,
+                db,
                 lcu,
                 region=riot_region,
                 riot_queues=riot_queues,
@@ -2779,7 +4224,7 @@ def run_snowball(
                 flush=True,
             )
             stats.seeded_players += _seed_manual_riot_ids(
-                con,
+                db,
                 lcu,
                 riot_ids=tuple(
                     f"{riot_id}\t{seed_family}"
@@ -2800,12 +4245,12 @@ def run_snowball(
                 flush=True,
             )
 
-        pending = _pending_player_count(con)
+        pending = _pending_player_count(db)
         if pending == 0:
-            suggested_reseeded = _seed_suggested_players(con, lcu, suggested_cap)
+            suggested_reseeded = _seed_suggested_players(db, lcu, suggested_cap)
             if suggested_reseeded:
                 stats.seeded_players += suggested_reseeded
-                pending = _pending_player_count(con)
+                pending = _pending_player_count(db)
                 _set_active_reseed_mode("suggested")
                 print(
                     f"[snowball] suggested-player reseed  "
@@ -2814,12 +4259,12 @@ def run_snowball(
                 )
         if pending == 0:
             source_reseeded = _reseed_source_family_players(
-                con,
+                db,
                 sources=_available_source_family_sources(),
             )
             if source_reseeded:
                 stats.requeued_players += source_reseeded
-                pending = _pending_player_count(con)
+                pending = _pending_player_count(db)
                 _set_active_reseed_mode("source-family")
                 print(
                     f"[snowball] source-family reseed  "
@@ -2827,10 +4272,10 @@ def run_snowball(
                     flush=True,
                 )
         if pending == 0:
-            recent_reseeded = _reseed_recent_active_players(con) if _recent_active_available() else 0
+            recent_reseeded = _reseed_recent_active_players(db) if _recent_active_available() else 0
             if recent_reseeded:
                 stats.requeued_players += recent_reseeded
-                pending = _pending_player_count(con)
+                pending = _pending_player_count(db)
                 _set_active_reseed_mode("recent-active")
                 print(
                     f"[snowball] recent-active reseed  "
@@ -2848,16 +4293,28 @@ def run_snowball(
             print(f"[snowball] purged invalid riot_tier public-puuid rows={purged_riot_tier}")
         if synced_priorities:
             print(f"[snowball] synced source priorities  rows={synced_priorities}")
-        reclaimed = _requeue_stale_claims(con, claim_timeout_ms)
+        reclaimed = _requeue_stale_claims(db, claim_timeout_ms)
         if reclaimed:
             print(f"[snowball] reclaimed stale claims={reclaimed}")
 
         waiting_logged = False
         empty_queue_wait_started_at: float | None = None
         while stats.saved_games < target_games and stats.processed_players < max_players:
-            next_player = _claim_next_player(con, worker_id=worker_id, claim_timeout_ms=claim_timeout_ms)
+            try:
+                next_player = _claim_next_player(
+                    db,
+                    worker_id=worker_id,
+                    claim_timeout_ms=claim_timeout_ms,
+                    classic_claim_percent=classic_claim_percent,
+                )
+            except SnowballWriterClaimsStopped:
+                print(
+                    f"[snowball] writer stopped new claims  worker={worker_id}",
+                    flush=True,
+                )
+                break
             if next_player is None:
-                wait_ms = _next_pending_wait_ms(con)
+                wait_ms = _next_pending_wait_ms(db)
                 if wait_ms is None:
                     now_monotonic = time.monotonic()
                     if empty_queue_wait_started_at is None:
@@ -2867,7 +4324,7 @@ def run_snowball(
                             f"grace={_EMPTY_QUEUE_GRACE_SEC:.0f}s  worker={worker_id}"
                         )
                     elif now_monotonic - empty_queue_wait_started_at >= _EMPTY_QUEUE_GRACE_SEC:
-                        suggested_reseeded = _seed_suggested_players(con, lcu, suggested_cap)
+                        suggested_reseeded = _seed_suggested_players(db, lcu, suggested_cap)
                         if suggested_reseeded:
                             stats.seeded_players += suggested_reseeded
                             empty_queue_wait_started_at = None
@@ -2880,7 +4337,7 @@ def run_snowball(
                             )
                             continue
                         source_reseeded = _reseed_source_family_players(
-                            con,
+                            db,
                             sources=_available_source_family_sources(),
                         )
                         if source_reseeded:
@@ -2895,7 +4352,7 @@ def run_snowball(
                             )
                             continue
                         recent_reseeded = (
-                            _reseed_recent_active_players(con)
+                            _reseed_recent_active_players(db)
                             if _recent_active_available()
                             else 0
                         )
@@ -2926,25 +4383,49 @@ def run_snowball(
                 if not waiting_logged:
                     print(
                         f"[snowball] waiting for eligible queue items  "
-                        f"pending={_pending_player_count(con)}  sleep={sleep_sec:.2f}s  "
+                        f"pending={_pending_player_count(db)}  sleep={sleep_sec:.2f}s  "
                         f"worker={worker_id}"
                     )
                     waiting_logged = True
                 time.sleep(sleep_sec)
                 continue
 
-            puuid, depth, source, claimed_match_created_ms, claimed_seed_family = next_player
+            player_claim: PlayerClaim | None = next_player if isinstance(next_player, PlayerClaim) else None
+            if player_claim is not None:
+                puuid = player_claim.puuid
+                depth = player_claim.depth
+                source = player_claim.source
+                claimed_match_created_ms = player_claim.claimed_match_created_ms
+                claimed_seed_family = player_claim.seed_family
+                discovered_queue_id = player_claim.discovered_queue_id
+                claim_lane = player_claim.claim_lane
+            else:
+                (
+                    puuid,
+                    depth,
+                    source,
+                    claimed_match_created_ms,
+                    claimed_seed_family,
+                    discovered_queue_id,
+                    claim_lane,
+                ) = next_player
             stats.processed_players += 1
             waiting_logged = False
             empty_queue_wait_started_at = None
 
             history = get_match_history(lcu, puuid, begin=0, end=history_window)
             observed_match_created_ms = _latest_any_match_created_ms(history)
+            classic_profile = _classic_affinity_profile(
+                history,
+                discovered_queue_id=discovered_queue_id,
+                min_revisit_ms=classic_revisit_min_ms,
+                max_revisit_ms=classic_revisit_max_ms,
+            )
             if observed_match_created_ms == 0 and get_current_summoner(lcu) is None:
-                _release_player_for_lcu_unavailable(con, puuid)
+                _release_player_for_lcu_unavailable(db, puuid, claim=player_claim)
                 print(
                     f"[snowball] LCU unavailable; released player  "
-                    f"source={source}  puuid={puuid[:12]}  "
+                    f"source={source}  player=redacted  "
                     f"delay_ms={_LCU_UNAVAILABLE_RETRY_DELAY_MS}  worker={worker_id}",
                     flush=True,
                 )
@@ -2953,12 +4434,12 @@ def run_snowball(
             if (
                 observed_match_created_ms == 0
                 and source in {"manual_riot_id", "riot_tier"}
-                and _defer_player_for_history_hydration(con, puuid)
+                and _defer_player_for_history_hydration(db, puuid, claim=player_claim)
             ):
                 stats.requeued_players += 1
                 print(
                     f"[snowball] history not hydrated; deferred player  "
-                    f"source={source}  puuid={puuid[:12]}  "
+                    f"source={source}  player=redacted  "
                     f"delay_ms={_MANUAL_SEED_HYDRATION_DELAY_MS}  worker={worker_id}",
                     flush=True,
                 )
@@ -2966,14 +4447,17 @@ def run_snowball(
             game_ids = _extract_target_game_ids(history, target_queues)
             if games_per_player == 0:
                 game_ids = _adaptive_target_game_ids(
-                    history, target_queues, puuid=puuid
+                    history,
+                    target_queues,
+                    puuid=puuid,
+                    current_patch=current_patch,
                 )
             elif games_per_player is not None and games_per_player > 0:
                 game_ids = game_ids[:games_per_player]
             print(
                 f"[snowball] player {stats.processed_players}/{max_players}  "
-                f"depth={depth}  source={source:<6}  puuid={puuid[:12]}  "
-                f"target_games={len(game_ids)}  pending={max(0, _pending_player_count(con) - 1)}  "
+                f"depth={depth}  source={source:<6}  player=redacted  "
+                f"target_games={len(game_ids)}  pending={max(0, _pending_player_count(db) - 1)}  "
                 f"worker={worker_id}"
             )
 
@@ -2985,12 +4469,14 @@ def run_snowball(
                 # games until a newer rediscovery, defeating full-window capture.
                 if game_id in expanded_game_ids:
                     continue
-                if not _claim_game_id(con, game_id, worker_id=worker_id, claim_timeout_ms=claim_timeout_ms):
+                game_claim_response = _claim_game_id(db, game_id, worker_id=worker_id, claim_timeout_ms=claim_timeout_ms)
+                if not game_claim_response:
                     continue
+                game_claim = game_claim_response if isinstance(game_claim_response, GameClaim) else None
 
                 detail = get_game_detail(lcu, game_id)
                 if not detail:
-                    _release_game_claim(con, game_id)
+                    _release_game_claim(db, game_id, game_claim)
                     stats.failed_games += 1
                     continue
 
@@ -2999,20 +4485,27 @@ def run_snowball(
 
                 record = _parse_game_detail(detail, target_queues)
                 if record is None:
-                    _mark_game_done(con, game_id)
+                    _mark_game_done(db, game_id, game_claim)
                     stats.filtered_games += 1
                     continue
 
-                if record["game_id"] in existing_game_ids:
-                    _backfill_participants_json(con, record)
-                    _mark_game_done(con, record["game_id"])
+                if not rpc_mode and record["game_id"] in existing_game_ids:
+                    _backfill_participants_json(db, record)
+                    _mark_game_done(db, record["game_id"], game_claim)
                     stats.existing_games += 1
                 else:
                     record["captured_at"] = _utc_now()
                     record["seed_family"] = claimed_seed_family
-                    if _insert_game(con, record):
+                    participant_puuids = _extract_participant_puuids(detail)
+                    inserted = (
+                        storage.commit_game(game_claim, record, participant_puuids)
+                        if rpc_mode and game_claim is not None
+                        else _insert_game(db, record)
+                    )
+                    if inserted:
                         existing_game_ids.add(record["game_id"])
-                        _mark_game_done(con, record["game_id"])
+                        if not rpc_mode:
+                            _mark_game_done(db, record["game_id"], game_claim)
                         stats.saved_games += 1
                         new_games_for_player += 1
                         queue_id = int(record["queue_id"])
@@ -3027,7 +4520,7 @@ def run_snowball(
                             f"worker={worker_id}"
                         )
                     else:
-                        _release_game_claim(con, record["game_id"])
+                        _release_game_claim(db, record["game_id"], game_claim)
                         stats.failed_games += 1
                         continue
 
@@ -3040,7 +4533,7 @@ def run_snowball(
                         continue
                     local_puuid_latest_ms[participant_puuid] = int(record["created_ms"])
                     result = _enqueue_player(
-                        con,
+                        db,
                         participant_puuid,
                         depth + 1,
                         source="match",
@@ -3048,6 +4541,8 @@ def run_snowball(
                         discovered_match_created_ms=int(record["created_ms"]),
                         requeue_cooldown_ms=player_requeue_cooldown_ms,
                         seed_family=claimed_seed_family,
+                        discovered_queue_id=int(record["queue_id"]),
+                        classic_revisit_min_ms=classic_revisit_min_ms,
                     )
                     if result == "new":
                         stats.seeded_players += 1
@@ -3064,19 +4559,30 @@ def run_snowball(
                 new_games_found=new_games_for_player,
             )
             requeued_on_finish = _mark_player_done(
-                con,
+                db,
                 puuid,
                 new_games_found=new_games_for_player,
                 claimed_match_created_ms=claimed_match_created_ms,
                 observed_match_created_ms=observed_match_created_ms,
                 requeue_cooldown_ms=player_requeue_cooldown_ms,
                 new_games_by_queue=new_games_by_queue,
+                source=source,
+                seed_family=claimed_seed_family,
+                worker_id=worker_id,
+                current_patch=current_patch,
+                history_game_count=len(history),
+                target_game_count=len(game_ids),
+                claim_lane=claim_lane,
+                classic_profile=classic_profile,
+                classic_revisit_min_ms=classic_revisit_min_ms,
+                claim=player_claim,
             )
             if requeued_on_finish:
                 stats.requeued_players += 1
 
-    pending_after = _pending_player_count(con)
-    con.close()
+    pending_after = _pending_player_count(db)
+    if con is not None:
+        con.close()
     print(
         f"[snowball] done  processed_players={stats.processed_players}  "
         f"expanded_games={stats.expanded_games}  saved_games={stats.saved_games}  "

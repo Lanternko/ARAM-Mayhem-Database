@@ -2105,7 +2105,7 @@ def render_html(
         baseline = smoothed - float(r["lift"])  # baseline_wr, derived
         lo, hi = raw_wilson_bounds(wins, games)
         display_wr = min(max(smoothed, lo), hi)
-        return {
+        packed = {
             "id": r["augment_id"],
             "g": games,
             "wr": round(display_wr, 4),
@@ -2117,6 +2117,19 @@ def render_html(
             "peerPick": round(r.get("peer_pick_rate", 0.0), 4),
             "pickLift": round(r.get("pick_lift", 0.0), 3),
         }
+        slot_rows = []
+        for slot in r.get("slots") or []:
+            if not slot:
+                slot_rows.append(None)
+                continue
+            slot_rows.append({
+                "g": int(slot["games"]),
+                "wr": round(float(slot["smoothed_wr"]), 4),
+                "rawWr": round(float(slot["raw_wr"]), 4),
+            })
+        if slot_rows:
+            packed["slots"] = slot_rows
+        return packed
 
     def _pack_set(r: dict) -> dict:
         avg_value = float(r.get("avg_lift", r.get("global_lift", 0.0)) or 0.0)

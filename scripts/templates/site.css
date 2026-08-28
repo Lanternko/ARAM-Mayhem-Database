@@ -6892,10 +6892,14 @@
         font-weight: 650;
     }
     .aug-draft-wr,
-    .aug-draft-pick { font-size: 12px; font-weight: 800; }
+    .aug-draft-pick,
+    .aug-draft-combo { font-size: 12px; font-weight: 800; }
     .aug-draft-wr.is-good { color: var(--aug-good); }
     .aug-draft-wr.is-bad { color: var(--aug-bad); }
     .aug-draft-pick { color: var(--text, oklch(0.93 0.01 260)); }
+    .aug-draft-combo { color: var(--text-muted, oklch(0.7 0.015 260)); }
+    .aug-draft-combo.is-good { color: var(--aug-good); }
+    .aug-draft-combo.is-bad { color: var(--aug-bad); }
     .aug-verdict {
         display: flex;
         align-items: center;
@@ -7831,6 +7835,7 @@
     .game-an-wr-hero.is-good .game-an-wr-num { color: #22c55e; }
     .game-an-wr-hero.is-bad .game-an-wr-num { color: #ff4d5e; }
     .game-an-wr-hero.is-even .game-an-wr-num { color: var(--text); }
+    .game-an-wr-hero.is-empty .game-an-wr-num { color: var(--text-dim); }
     .game-an-wr-label {
         font-size: 11px;
         font-weight: 600;
@@ -7842,6 +7847,10 @@
         color: var(--text-muted);
         font-size: 11px;
         line-height: 1.5;
+    }
+    .draft-result .game-analysis.is-draft-analysis {
+        width: 100%;
+        padding: 8px 0 0;
     }
     /* 手機：標題放大、勝率放大、bar 再縮短 */
     @media (max-width: 560px) {
