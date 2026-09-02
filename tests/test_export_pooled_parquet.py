@@ -131,3 +131,39 @@ def test_a_failed_export_leaves_the_previous_parquet_intact(
     # The half-written pool must not be published, and must not be left behind.
     assert pl.read_parquet(out)["match_id"].to_list() == ["previous"]
     assert not (tmp_path / "pooled.parquet.partial").exists()
+
+
+def test_cap_keeps_the_newest_games_and_never_splits_a_timestamp(
+    tmp_path: Path,
+) -> None:
+    """The cutoff replaces ORDER BY ... LIMIT, so ties must not be split."""
+    db = tmp_path / "games.db"
+    out = tmp_path / "pooled.parquet"
+    rows = [_game(i, "16.15.1", 1000 + i) for i in range(4)]
+    # Three games share the timestamp that the cap lands on.
+    rows += [_game(50 + j, "16.15.1", 2000) for j in range(3)]
+    rows += [_game(60 + j, "16.15.1", 3000 + j) for j in range(2)]
+    _make_db(db, rows)
+
+    result = CliRunner().invoke(EXPORT.main, [
+        "--db", str(db), "--out", str(out), "--patches", "16.15",
+        "--cap-oldest", "4", "--batch-rows", "3",
+    ])
+    assert result.exit_code == 0, result.output
+
+    kept = sorted(int(x) for x in pl.read_parquet(out)["match_id"].to_list())
+    # Newest 4 would cut through the 2000-tie; all three of those stay instead.
+    assert kept == [50, 51, 52, 60, 61]
+
+
+def test_cap_larger_than_the_patch_keeps_everything(tmp_path: Path) -> None:
+    db = tmp_path / "games.db"
+    out = tmp_path / "pooled.parquet"
+    _make_db(db, [_game(i, "16.15.1", 1000 + i) for i in range(3)])
+
+    result = CliRunner().invoke(EXPORT.main, [
+        "--db", str(db), "--out", str(out), "--patches", "16.15",
+        "--cap-oldest", "500",
+    ])
+    assert result.exit_code == 0, result.output
+    assert pl.read_parquet(out).height == 3

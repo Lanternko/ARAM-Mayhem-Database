@@ -30,6 +30,30 @@ SCHEMA = {
 }
 
 
+_BASE_WHERE = (
+    "queue_id=2400 AND blue_champs IS NOT NULL AND red_champs IS NOT NULL "
+    "AND blue_wins IS NOT NULL AND participants_json IS NOT NULL"
+)
+
+
+def _cap_cutoff(con, prefix, cap):
+    """created_ms of the cap-th newest game of one patch, or None if fewer.
+
+    Applying the cap as ORDER BY created_ms DESC LIMIT N on the full row made
+    sqlite carry each row's 11KB participants_json through its sorter: a 2.1GB
+    temp file, and the bulk of the export's runtime.  Sorting the timestamp by
+    itself covers the same rows with 8-byte keys, and -- because the column
+    lives in idx_games_queue_patch_created -- without faulting in the JSON's
+    overflow pages at all.
+    """
+    row = con.execute(
+        f"SELECT created_ms FROM games WHERE {_BASE_WHERE} AND patch LIKE ? "
+        "ORDER BY created_ms DESC LIMIT 1 OFFSET ?",
+        (prefix + ".%", max(0, cap - 1)),
+    ).fetchone()
+    return row[0] if row else None
+
+
 def _iter_rows(con, where, params=(), *, chunk=2000):
     """Stream rows instead of materializing the pool.
 
@@ -42,8 +66,7 @@ def _iter_rows(con, where, params=(), *, chunk=2000):
     cur = con.execute(
         "SELECT game_id, patch, queue_id, duration_sec, blue_champs, red_champs, "
         "blue_wins, created_ms, participants_json FROM games "
-        f"WHERE queue_id=2400 AND blue_champs IS NOT NULL AND red_champs IS NOT NULL "
-        f"AND blue_wins IS NOT NULL AND participants_json IS NOT NULL AND {where}",
+        f"WHERE {_BASE_WHERE} AND {where}",
         params,
     )
     cur.arraysize = chunk
@@ -120,10 +143,13 @@ def main(db, out, patches, cap_oldest, batch_rows):
 
     try:
         for i, pre in enumerate(prefixes):
-            if i == 0 and cap_oldest:
+            cutoff = _cap_cutoff(con, pre, cap_oldest) if i == 0 and cap_oldest else None
+            if cutoff is not None:
+                # Games sharing the cutoff timestamp all stay.  A LIMIT would
+                # have broken that tie arbitrarily; keeping them makes the cap
+                # deterministic across runs, at the cost of a few extra games.
                 rows = _iter_rows(
-                    con, "patch LIKE ? ORDER BY created_ms DESC LIMIT ?",
-                    (pre + ".%", cap_oldest),
+                    con, "patch LIKE ? AND created_ms >= ?", (pre + ".%", cutoff),
                 )
             else:
                 rows = _iter_rows(con, "patch LIKE ?", (pre + ".%",))
