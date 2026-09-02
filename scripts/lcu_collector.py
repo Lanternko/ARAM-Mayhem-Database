@@ -249,6 +249,17 @@ def _run_snowball_fleet(
                 if control_file.exists():
                     stopping = True
                     break
+                # The dead producer may have abandoned an in-flight request; its
+                # reply is still on the channel the replacement inherits.  Drop
+                # it, or every restart from here on reads one answer too early
+                # and dies with MISMATCHED_WRITER_RESPONSE.
+                dropped = clients[idx].discard_pending_responses()
+                if dropped:
+                    click.echo(
+                        f"[fleet] {label} dropped {dropped} stale writer "
+                        f"response(s) before restart",
+                        err=True,
+                    )
                 # Never re-seed on restart: seeding is a one-time cost at fleet
                 # start, and repeating it on every flap would re-resolve the
                 # whole manual seed list each time.

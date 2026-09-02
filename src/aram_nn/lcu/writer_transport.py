@@ -209,6 +209,28 @@ class WriterClient:
             raise WriterUnavailableError("MISMATCHED_WRITER_RESPONSE")
         return response
 
+    def discard_pending_responses(self) -> int:
+        """Drop replies left on this channel by an abandoned request.
+
+        A producer that dies on WRITER_RESPONSE_TIMEOUT leaves the writer's
+        reply sitting on the pipe.  The channel object is inherited by the
+        producer spawned in its place, so that next producer reads the stale
+        frame as the answer to its own first request and fails with
+        MISMATCHED_WRITER_RESPONSE -- and so does every producer after it,
+        because each failure leaves one more unread reply behind.  Draining
+        before a respawn is what keeps one timeout from retiring the worker
+        permanently.  Call this from the parent only, between producers.
+        """
+        dropped = 0
+        with self._lock:
+            try:
+                while self._connection.poll(0):
+                    self._connection.recv_bytes(MAX_FRAME_BYTES)
+                    dropped += 1
+            except (BrokenPipeError, EOFError, OSError):
+                self._fail_closed()
+        return dropped
+
     def _fail_closed(self) -> None:
         self._failed = True
         try:

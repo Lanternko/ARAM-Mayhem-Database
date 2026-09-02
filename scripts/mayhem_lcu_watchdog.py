@@ -30,7 +30,7 @@ DEFAULT_MODEL_REFRESH_STATE = ROOT / "data" / "site" / "model_refresh_state.json
 DEFAULT_MODEL_REFRESH_LOG_DIR = ROOT / "data" / "site"
 LEAGUE_LOCKFILES = (
     Path(r"C:\Riot Games\League of Legends\lockfile"),
-    Path(r"D:\?\Riot Games\League of Legends\lockfile"),
+    Path(r"D:\遊戲\Riot Games\League of Legends\lockfile"),
     Path(r"D:\Riot Games\League of Legends\lockfile"),
 )
 DEFAULT_RIOT_CLIENTS = (
@@ -294,8 +294,24 @@ def league_main_mb() -> float:
     return max(vals, default=0.0)
 
 
-def read_lockfile() -> tuple[str, str] | None:
+def lockfile_candidates() -> list[Path]:
+    """Prefer the install dir of a running client; fall back to known paths."""
+    paths: list[Path] = []
+    for row in league_processes():
+        exe = row.get("exe")
+        if not exe:
+            continue
+        candidate = Path(exe).parent / "lockfile"
+        if candidate not in paths:
+            paths.append(candidate)
     for path in LEAGUE_LOCKFILES:
+        if path not in paths:
+            paths.append(path)
+    return paths
+
+
+def read_lockfile() -> tuple[str, str] | None:
+    for path in lockfile_candidates():
         try:
             if not path.exists():
                 continue

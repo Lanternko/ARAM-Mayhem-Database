@@ -148,3 +148,26 @@ def test_transport_sources_use_only_byte_connection_api() -> None:
     assert not [token for token in forbidden if token in source]
     assert ".send_bytes(" in source
     assert ".recv_bytes(" in source
+
+
+def test_draining_a_channel_lets_the_next_producer_reuse_it(
+    tmp_path: pathlib.Path,
+) -> None:
+    """One abandoned reply must not poison the channel for every restart."""
+    supervisor = WriterSupervisor(tmp_path / "games.db", 1)
+    (client,) = supervisor.start()
+    try:
+        # Stand in for a producer that died between sending and reading: the
+        # reply lands on the channel with nobody left to consume it.
+        client._connection.send_bytes(encode_frame(_ping("abandoned")))
+        deadline = time.monotonic() + 5
+        while not client._connection.poll(0) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert client._connection.poll(0), "writer never answered"
+
+        assert client.discard_pending_responses() == 1
+        assert client.discard_pending_responses() == 0
+        # The replacement producer now gets its own answer, not the stale one.
+        assert client.submit(_ping("after-restart"))["request_id"] == "after-restart"
+    finally:
+        supervisor.shutdown()
