@@ -45,7 +45,15 @@ def identity(df, champ_to_idx, n):
 @click.option("--half-life-days", default=7.0, show_default=True)
 @click.option("--out-dir", required=True, type=click.Path(path_type=Path))
 def main(data, current_patch, val_size, half_life_days, out_dir):
-    df = pl.read_parquet(data).filter(pl.col("duration_sec") >= 300)
+    # participants_json is ~8.5GB of the pooled parquet in memory and nothing
+    # here reads it; leaving it out keeps this step off the OOM edge that the
+    # export used to fall over.
+    df = (
+        pl.scan_parquet(data)
+        .drop("participants_json", strict=False)
+        .filter(pl.col("duration_sec") >= 300)
+        .collect()
+    )
     df = df.with_columns(
         pl.col("patch").str.split(".").list.slice(0, 2).list.join(".").alias("pp")
     ).sort("game_creation_ms")

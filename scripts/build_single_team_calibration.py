@@ -36,7 +36,15 @@ DAY_MS = 86_400_000
 @click.option("--half-life-days", default=7.0, show_default=True)
 def main(data, model_dir, sample, half_life_days):
     model = load_composition_lr(Path(model_dir))
-    df = pl.read_parquet(data).filter(pl.col("duration_sec") >= 300).sort("game_creation_ms")
+    # Same reason as build_pooled_champ_lr: this step never opens
+    # participants_json, and it is ~8.5GB of the pooled parquet.
+    df = (
+        pl.scan_parquet(data)
+        .drop("participants_json", strict=False)
+        .filter(pl.col("duration_sec") >= 300)
+        .sort("game_creation_ms")
+        .collect()
+    )
     df = df.tail(sample)
 
     contribs, labels, weights = [], [], []
