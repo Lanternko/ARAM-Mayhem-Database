@@ -128,5 +128,3 @@ def sample_resources() -> ResourceSample:
         available_error=available_error,
         commit_error=commit_error,
     )
-
-
