@@ -84,9 +84,11 @@ def build_champion_profiles(
     train_df,
     min_games: int,
     replace_sustain: bool,
+    empirical_rows=None,
 ) -> dict[int, ChampionProfile]:
     rows = load_score_rows(score_csv)
     stats = collect_empirical_stats_from_rows(
+        empirical_rows if empirical_rows is not None else
         train_df.select(["blue_wins", "duration_sec", "participants_json"]).iter_rows()
     )
     damage_scores = blended_percentile_scores(
