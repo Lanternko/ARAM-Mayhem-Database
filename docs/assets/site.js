@@ -103,7 +103,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260908-1788870237");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260909-1788948516");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -743,10 +743,10 @@
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
     const SHORT_PATCH_ZH = "26.17";
-    const DATE_STR_ZH = "更新於 2026-09-08";
-    const BUILD_DATE = "2026-09-08";
+    const DATE_STR_ZH = "更新於 2026-09-09";
+    const BUILD_DATE = "2026-09-09";
     const PATCH_LABEL = "patch 26.17";
-    const TOTAL_GAMES = "726,642";
+    const TOTAL_GAMES = "736,426";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
