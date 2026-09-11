@@ -140,6 +140,7 @@ class StaticSitePublishTests(unittest.TestCase):
             [
                 "docs/index.html",
                 "docs/api/tier-list.json",
+                "docs/api/augment-pools.json",
                 "docs/api/champions",
                 "docs/api/champ-archetype-fit.json",
                 "docs/api/champ-empirical-axes.json",
