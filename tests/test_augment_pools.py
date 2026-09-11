@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from aram_nn.site.augment_pools import (
@@ -11,6 +12,7 @@ from aram_nn.site.augment_pools import (
     OPERATORS_PATH,
     build_payload,
     fnv1a32,
+    public_payload,
     resolve_pool_name,
 )
 
@@ -93,6 +95,22 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(d["pools"], [{"id": "{56299123}", "added": [102], "removed": []}])
         self.assertEqual(d["weights"], [{"champ": 13, "pool": "AH", "before": 150, "after": 200}])
         self.assertEqual(d["prev_version"], "prev")
+
+    def test_public_payload_hides_internal_names(self) -> None:
+        pub = public_payload(build_payload(fake_fetch, "cur", "prev"))
+        text = json.dumps(pub, ensure_ascii=False)
+        for secret in ('"AH"', '"CC"', "56299123", "0c7ef8ce", '"name":', '"hash":'):
+            self.assertNotIn(secret, text)
+        ids = {p["label_zh"]: p["id"] for p in pub["pools"]}
+        self.assertTrue(all(pid.startswith("p") for pid in ids.values()))
+        self.assertEqual(pub["champs"]["13"], [[ids["技能急速"], 200], [ids["控場"], 0]])
+        self.assertEqual(pub["diff"]["pools"][0]["id"], ids["控場"])
+        self.assertEqual(pub["diff"]["weights"][0]["pool"], ids["技能急速"])
+
+    def test_public_payload_places_archetype_pools_by_cell(self) -> None:
+        internal = {"pools": [{"id": "{2fe0f044}", "name": "RangedAttackerAD", "hash": "2fe0f044"}],
+                    "champs": {}, "diff": None}
+        self.assertEqual(public_payload(internal)["pools"][0]["cell"], [1, 0])
 
 
 if __name__ == "__main__":

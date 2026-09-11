@@ -211,8 +211,9 @@ def _pool_meta(raw_id: str, excluded: bool) -> dict:
         return {"name": name, "hash": h, "family": "archetype",
                 "label_zh": f"{_ARCH_ZH[r]}{_ARCH_ZH[s]}・{_ARCH_ZH[d]}",
                 "label_en": f"{r} {_ARCH_EN[s]} · {d}", "label_source": "name"}
-    if name:
-        return {"name": name, "hash": h, "family": "function", "label_zh": name, "label_en": name, "label_source": "name"}
+    if name:  # resolved but not labelled yet: never surface the raw name as a label
+        return {"name": name, "hash": h, "family": "function",
+                "label_zh": "未分類", "label_en": "Unclassified", "label_source": "name"}
     zh, en, src = INFERRED_POOLS.get(h or "", ("未命名", "Unnamed", "inferred"))
     family = "function" if src == "patch" else "inferred"
     return {"name": None, "hash": h, "family": family, "label_zh": zh, "label_en": en, "label_source": src}
@@ -232,7 +233,7 @@ def _snapshot(fetch: Fetch, version: str, kiwi_ids: dict[str, int] | None = None
 
 
 def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -> dict:
-    """Assemble the public ``augment-pools.json`` payload."""
+    """Assemble the internal payload (pool names and hashes included); publish via ``public_payload``."""
     cur = _snapshot(fetch, version)
     try:
         operators = fetch(version, OPERATORS_PATH)
@@ -288,6 +289,44 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
         payload["diff"] = diff_snapshots(_snapshot(fetch, prev_version, cur["ids"]), cur, cid_of)
         payload["diff"]["prev_version"] = prev_version
     return payload
+
+
+_ARCH_ROWS = ("MeleeAttacker", "RangedAttacker", "MeleeCaster", "RangedCaster")
+_ARCH_COLS = ("AD", "AP", "Burst", "DPS")
+
+
+def public_payload(payload: dict) -> dict:
+    """Copy of ``payload`` safe to publish: no internal pool names or hashes.
+
+    The page shows only the zh/en labels. Pool ids become opaque ``p1``..``pN``
+    (consistent within one file), and archetype pools carry their matrix slot
+    as ``cell`` = [row, col] so the page never has to parse a name.
+    """
+    ids: dict[str, str] = {}
+
+    def pub(pid: str) -> str:
+        return ids.setdefault(pid, f"p{len(ids) + 1}")
+
+    pools = []
+    for p in payload["pools"]:
+        out = {k: v for k, v in p.items() if k not in ("name", "hash")}
+        out["id"] = pub(p["id"])
+        m = _ARCH_RE.match(p.get("name") or "")
+        if m:
+            r, s, d = m.groups()
+            out["cell"] = [_ARCH_ROWS.index(r + s), _ARCH_COLS.index(d)]
+        pools.append(out)
+    champs = {cid: [[pub(pid), w] for pid, w in rows] for cid, rows in payload["champs"].items()}
+    diff = payload.get("diff")
+    if diff:
+        diff = {
+            **diff,
+            "pools": [{**x, "id": pub(x["id"])} for x in diff["pools"]],
+            "new_pools": [pub(x) for x in diff["new_pools"]],
+            "removed_pools": [pub(x) for x in diff["removed_pools"]],
+            "weights": [{**x, "pool": pub(x["pool"])} for x in diff["weights"]],
+        }
+    return {**payload, "pools": pools, "champs": champs, "diff": diff}
 
 
 def diff_snapshots(prev: dict, cur: dict, cid_of: Callable[[str], int | None]) -> dict:
