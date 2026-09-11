@@ -654,6 +654,51 @@ def build_champ_empirical_axes(
     return {"built": True, "reason": "ok", "parquet": str(resolved)}
 
 
+# The Classic page pools the newest N patches: the current one alone is too thin
+# right after a patch flip, and pooling every patch lets the launch patch dominate.
+CLASSIC_RECENT_PATCHES = 2
+CLASSIC_PAGE_OUTPUTS = (
+    Path("docs/classic.html"),
+    Path("docs/zh-CN/classic.html"),
+    Path("docs/en/classic.html"),
+)
+
+
+def build_classic_page(
+    *,
+    runner: CommandRunner,
+    db: Path = Path("data/lcu/games.db"),
+    recent_patches: int = CLASSIC_RECENT_PATCHES,
+) -> dict[str, Any]:
+    """Regenerate the standalone Classic (queue 4310) page and its locale copies.
+
+    Independent of the tier list, but published in the same commit so it can no
+    longer freeze at whatever day someone last ran it by hand.  Deliberately
+    NON-FATAL -- it fetches CommunityDragon metadata, and a CDN hiccup must never
+    block the Mayhem publish.  On failure the three pages are restored so a
+    half-written locale set cannot ship; the previous Classic page goes out as-is.
+    """
+    command = [
+        sys.executable,
+        "scripts/build_classic_page.py",
+        "--db",
+        str(db),
+        "--recent-patches",
+        str(recent_patches),
+    ]
+    result = runner(command)
+    if result.returncode != 0:
+        detail = (result.stderr.strip() or result.stdout.strip())[:500]
+        runner(["git", "checkout", "HEAD", "--", *(str(path) for path in CLASSIC_PAGE_OUTPUTS)])
+        print(
+            "[static-site] WARN: classic page build failed; "
+            f"publishing with the previous Classic page: {detail}",
+            file=sys.stderr,
+        )
+        return {"built": False, "reason": "build failed", "recent_patches": recent_patches}
+    return {"built": True, "reason": "ok", "recent_patches": recent_patches}
+
+
 @guarded_pipeline
 def publish_static_site_once(
     *,
@@ -778,6 +823,9 @@ def publish_static_site_once(
     # rebuilt tier-list.json + pooled parquet so the 後期 / 滾雪球 bars ship in the
     # same commit.  Also non-fatal -- a failure here must never block the publish.
     empirical_axes = build_champ_empirical_axes(runner=runner, parquet=comp_fit_parquet)
+    # The Classic page reads only the DB, not tier-list.json, but it rides the same
+    # commit so it stays current.  Non-fatal, like the two artifacts above.
+    classic = build_classic_page(runner=runner, db=db)
 
     changed = docs_have_diff(runner, DEFAULT_DOC_PATHS)
     if not changed:
@@ -808,6 +856,7 @@ def publish_static_site_once(
             "max_age_hours": max_age_hours,
             "comp_fit": comp_fit,
             "empirical_axes": empirical_axes,
+            "classic": classic,
         }
 
     today = dt.date.today().isoformat()
@@ -827,6 +876,7 @@ def publish_static_site_once(
             "commit_message": message,
             "comp_fit": comp_fit,
             "empirical_axes": empirical_axes,
+            "classic": classic,
         }
 
     _run_checked(runner, ["git", "add", *(str(path) for path in DEFAULT_DOC_PATHS)])

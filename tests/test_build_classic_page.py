@@ -171,6 +171,50 @@ class ClassicResearchPageTests(unittest.TestCase):
         self.assertIn("toLocaleString('en-US')", english)
         self.assertIn("Switch win rate and items by position", english)
 
+    def test_recent_patch_prefixes_pick_newest_minor_versions_with_trailing_dot(self) -> None:
+        import tempfile
+
+        from aram_nn.gamedata import iter_games
+        from aram_nn.site.db import insert_public_games
+
+        def row(game_id: str, patch: str, queue_id: int = classic.CLASSIC_QUEUE_ID) -> dict:
+            return {
+                "game_id": game_id,
+                "queue_id": queue_id,
+                "patch": patch,
+                "blue_champs": [1, 2, 3, 4, 5],
+                "red_champs": [6, 7, 8, 9, 10],
+                "blue_wins": True,
+                "duration_sec": 1500,
+                "created_ms": 1,
+                "captured_at": "2026-09-01T00:00:00Z",
+                "participants_json": [],
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "games.db"
+            insert_public_games(
+                db,
+                [
+                    row("G1", "16.9.700"),
+                    row("G2", "16.1.600"),
+                    row("G3", "16.10.705"),
+                    row("G4", "16.10.706"),
+                    row("G5", "16.11.710"),
+                    # A newer patch in another queue must not move the Classic window.
+                    row("G6", "16.12.720", queue_id=2400),
+                ],
+            )
+            prefixes = classic.recent_patch_prefixes(db, 2)
+            self.assertEqual(prefixes, ["16.11.", "16.10."])
+            # Numeric, not lexicographic: 16.9 is older than 16.10.
+            self.assertEqual(classic.recent_patch_prefixes(db, 3)[-1], "16.9.")
+            # The trailing dot keeps "16.1." from matching 16.10 / 16.11.
+            only_16_1 = list(
+                iter_games(db, queue_id=classic.CLASSIC_QUEUE_ID, patch_prefix="16.1.")
+            )
+            self.assertEqual([g["game_id"] for g in only_16_1], ["G2"])
+
 
 if __name__ == "__main__":
     unittest.main()

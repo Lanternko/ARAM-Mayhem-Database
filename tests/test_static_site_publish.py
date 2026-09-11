@@ -189,6 +189,48 @@ class StaticSitePublishTests(unittest.TestCase):
             first_index("scripts/build_tier_list.py"),
             first_index("scripts/build_champ_empirical_axes.py"),
         )
+        # The Classic page is rebuilt on every publish (it froze for a month when it
+        # was hand-run only), from the same DB and the newest two patches.
+        self.assertEqual(result["classic"]["built"], True)
+        classic_cmd = commands[first_index("scripts/build_classic_page.py")]
+        self.assertEqual(classic_cmd[classic_cmd.index("--recent-patches") + 1], "2")
+        self.assertEqual(classic_cmd[classic_cmd.index("--db") + 1], str(db))
+
+    def test_failed_classic_build_restores_pages_and_still_publishes(self) -> None:
+        commands: list[list[str]] = []
+
+        def runner(command: Sequence[str]) -> CommandResult:
+            cmd = list(command)
+            commands.append(cmd)
+            if cmd[:4] == ["git", "rev-parse", "--abbrev-ref", "HEAD"]:
+                return CommandResult(0, "main\n")
+            if cmd[:3] == ["git", "status", "--short"]:
+                return CommandResult(0, "")
+            if cmd[:3] == ["git", "diff", "--quiet"]:
+                return CommandResult(1, "")
+            if any("build_classic_page.py" in part for part in cmd):
+                return CommandResult(1, "", "CommunityDragon timed out")
+            return CommandResult(0, "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "games.db"
+            insert_public_games(db, [game_row("TW_1")])
+            result = publish_static_site_once(
+                db=db,
+                state_path=Path(tmp) / "state.json",
+                threshold=1,
+                dry_run=True,
+                comp_fit_parquet=Path(tmp) / "pool.parquet",
+                runner=runner,
+            )
+
+        self.assertEqual(result["reason"], "dry run")
+        self.assertEqual(result["classic"]["built"], False)
+        pages = ["docs/classic.html", "docs/zh-CN/classic.html", "docs/en/classic.html"]
+        self.assertIn(
+            ["git", "checkout", "HEAD", "--", *(str(Path(page)) for page in pages)],
+            commands,
+        )
 
     def test_player_history_allowlist_is_exact_and_build_passes_api_only_for_hidden_shell(self) -> None:
         self.assertIn(Path("docs/p/player-history"), DEFAULT_DOC_PATHS)

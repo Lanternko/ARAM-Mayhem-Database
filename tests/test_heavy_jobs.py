@@ -75,6 +75,8 @@ def test_resource_abort_is_fatal_for_optional_radar(monkeypatch):
         static_publish.build_champ_archetype_fit(runner=runner)
     with pytest.raises(jobs.ResourcePressure):
         static_publish.build_champ_empirical_axes(runner=runner)
+    with pytest.raises(jobs.ResourcePressure):
+        static_publish.build_classic_page(runner=runner)
 
 
 def test_real_command_output_and_failure(monkeypatch, tmp_path):
