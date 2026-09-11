@@ -21,6 +21,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import click
+from aram_nn.parquet_batches import iter_parquet_rows
 
 SCHEMA_KIND = "champ_empirical_axes"
 SNOWBALL_SPREE_W = 0.6
@@ -48,23 +49,11 @@ EARLY_MAX_SEC = 16 * 60
 @click.option("--out", default=Path("docs/api/champ-empirical-axes.json"),
               type=click.Path(path_type=Path), show_default=True)
 def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games, out):
-    import polars as pl
-
     patch_set = {p.strip() for p in patches.split(",") if p.strip()}
-    print("[1/3] loading games ...", flush=True)
-    df = pl.read_parquet(data, columns=["patch", "duration_sec", "blue_wins", "participants_json"])
-    df = df.filter(pl.col("duration_sec") >= min_duration)
-    if patch_set:
-        df = df.with_columns(
-            pl.col("patch").str.split(".").list.slice(0, 2).list.join(".").alias("pp")
-        ).filter(pl.col("pp").is_in(list(patch_set)))
-    dur = df["duration_sec"].to_list()
-    bw = df["blue_wins"].to_list()
-    pjs = df["participants_json"].to_list()
-    median_dur = sorted(dur)[len(dur) // 2] if dur else 0
+    print("[1/3] streaming games in batches of 256 ...", flush=True)
+    dur = []
 
-    print(f"[2/3] accumulating per-champ (median {median_dur}s, late>={late_min}s / "
-          f"early<={early_max}s, {len(dur)} games) ...", flush=True)
+    print(f"[2/3] accumulating per-champ (late>={late_min}s / early<={early_max}s) ...", flush=True)
     # scaling: [late_g, late_w, early_g, early_w]; snowball: [g, sum_spree, sum_multi, sum_kills]
     # perf: [g, sum_dmg_pm, sum_mit_pm, sum_cc_pm, sum_gold_pm, sum_ka_pm]
     # NOTE no sustain here: LCU stats lack a shield field, so total_heal misses shield-enchanters
@@ -73,7 +62,14 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
     scal = defaultdict(lambda: [0, 0, 0, 0])
     snow = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
     perf = defaultdict(lambda: [0, 0.0, 0.0, 0.0, 0.0, 0.0])
-    for d, b, pj in zip(dur, bw, pjs):
+    for patch, d, b, pj in iter_parquet_rows(
+        data, ["patch", "duration_sec", "blue_wins", "participants_json"]
+    ):
+        if d is None or d < min_duration:
+            continue
+        if patch_set and (patch is None or ".".join(patch.split(".")[:2]) not in patch_set):
+            continue
+        dur.append(d)
         parts = json.loads(pj) if isinstance(pj, str) else pj
         late = d >= late_min
         early = d <= early_max
@@ -101,6 +97,8 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
             pf[4] += (st.get("gold_earned", 0) or 0) / mins
             pf[5] += ((st.get("kills", 0) or 0) + (st.get("assists", 0) or 0)) / mins
 
+    dur.sort()
+    median_dur = dur[len(dur) // 2] if dur else 0
     print("[3/3] writing artifact ...", flush=True)
     champs_meta = json.loads(Path("docs/api/tier-list.json").read_text(encoding="utf-8")).get("champs", {})
     names = {int(k): (v.get("alias") or v.get("name") or k) for k, v in champs_meta.items()}

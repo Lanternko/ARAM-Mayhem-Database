@@ -26,6 +26,7 @@ from pathlib import Path
 
 import click
 import numpy as np
+from aram_nn.parquet_batches import TEAM_COLUMNS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analyze_composition_signals import champion_matrix  # noqa: E402
@@ -44,7 +45,7 @@ def load_all(data: Path, patches, *, min_duration=300, val_frac=0.15):
     full window, unlike the ablation which holds out a test split for the gate."""
     import polars as pl
 
-    df = pl.read_parquet(data).filter(pl.col("duration_sec") >= min_duration)
+    df = pl.read_parquet(data, columns=TEAM_COLUMNS).filter(pl.col("duration_sec") >= min_duration)
     df = df.with_columns(
         pl.col("patch").str.split(".").list.slice(0, 2).list.join(".").alias("patch_prefix")
     )

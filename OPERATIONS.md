@@ -80,6 +80,16 @@ State JSON／JSONL 是恢復與門檻判斷依據，不是可隨手清除的 cac
 
 ## 4. 快速觀測
 
+### 背景分析的共同資源保護
+
+`src/aram_nn/heavy_jobs.py` 在 publisher 與 model refresh 的 Python pipeline 入口共用同一個 OS file lock，整輪持有，涵蓋 isolated publisher worktree 與所有分析子程序。等待中的工作不載入分析資料；`--force` 不略過保護。`--check-only` 與 model refresh 的 `--dry-run` 僅檢查、不占鎖；publisher 的 `--dry-run` 仍會 build，因此受保護。
+
+- 啟動：available RAM ≥24 GiB、commit ≤70%、commit 剩餘額度 ≥24 GiB，連續三次、間隔 30 秒。計數器缺失則等待。保守預設由 `heavy_jobs.Limits` 擁有；這是 admission 餘裕，並非各工作峰值估計。
+- 執行：每秒取樣；available RAM ≤4 GiB、commit ≥85% 或計數器失效即停止該分析程序樹，讓本輪失敗。Watch daemon 依既有 interval 重試，下輪仍須重新通過 admission。Resource abort 不會被 optional radar 的一般 nonzero-exit fallback 吞掉，也不會推送本輪網站或更新成功 watermark。
+- 鎖與事件：預設 `%LOCALAPPDATA%/AramMeta/heavy-jobs/{analysis.lock,events.jsonl}`，不同 checkout、不同 state 檔仍互斥。測試／獨立主機可用 `ARAM_HEAVY_JOB_DIR` 指定；同主機的兩條 production 管線必須保持相同值。不可刪除使用中的 lock 檔。
+- Event 保存 waiting/admission/abort/release、系統 sample、threshold、command，以及子程序與 descendants 的 PID、PPID、creation time、RSS、Private Bytes；事件含本機路徑，僅留本機。
+- 修正啟用需讓兩個既有 daemon 載入新 source；只更新檔案不會改變已啟動的 Python process。此保護只涵蓋這兩條管線；手動直接執行訓練腳本不在範圍內。每秒取樣仍無法保證阻止瞬間大於餘裕的配置，也不修復分析腳本本身的整批載入問題。
+
 ```powershell
 # 排程狀態
 Get-ScheduledTask | Where-Object { $_.TaskName -match 'Mayhem|ARAMMeta|ArammetaCrawler' } | Select-Object TaskName,State

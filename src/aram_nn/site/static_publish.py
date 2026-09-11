@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
+from aram_nn.heavy_jobs import guarded_pipeline, run_command
+
 from .db import count_games
 
 
@@ -343,15 +345,7 @@ def decide_static_publish(
 
 
 def _default_runner(command: Sequence[str]) -> CommandResult:
-    # CREATE_NO_WINDOW (Windows-only; 0 elsewhere) stops every git invocation from
-    # popping a conhost window when run under the windowless pythonw watchdog/publisher.
-    completed = subprocess.run(
-        command,
-        text=True,
-        capture_output=True,
-        check=False,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+    completed = run_command(command)
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
@@ -432,14 +426,7 @@ def runner_in(cwd: Path) -> CommandRunner:
     """Return a no-window command runner rooted in an isolated worktree."""
 
     def run(command: Sequence[str]) -> CommandResult:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            text=True,
-            capture_output=True,
-            check=False,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+        completed = run_command(command, cwd=cwd)
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
     return run
@@ -667,6 +654,7 @@ def build_champ_empirical_axes(
     return {"built": True, "reason": "ok", "parquet": str(resolved)}
 
 
+@guarded_pipeline
 def publish_static_site_once(
     *,
     db: Path = Path("data/lcu/games.db"),

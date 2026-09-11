@@ -34,12 +34,12 @@ from typing import Any
 import click
 import numpy as np
 import polars as pl
+from aram_nn.parquet_batches import TEAM_COLUMNS, SOURCE_ROW, iter_parquet_rows
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from train_ability_nn import TeamDataset, build_vocab  # noqa: E402
-from train_semantic_tree import train_frame_for_empirical_scores  # noqa: E402
 from analyze_composition_signals import build_champion_profiles, champion_matrix  # noqa: E402
 from train_composition_lr import (  # noqa: E402
     C_GRID, build_feature_blocks, build_team_profiles, metrics, select_blocks,
@@ -126,7 +126,7 @@ def ev(model, x, y, mask=None):
 def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, val_size,
          half_life_days, feature_set, empirical_min_games, mover_min_drift, out, seed):
     np.random.seed(seed)
-    df = pl.read_parquet(data).filter(pl.col("duration_sec") >= 300)
+    df = pl.read_parquet(data, columns=TEAM_COLUMNS, row_index_name=SOURCE_ROW).filter(pl.col("duration_sec") >= 300)
     df = patch_prefix_col(df).sort("game_creation_ms")
 
     cur = df.filter(pl.col("pp") == current_patch)
@@ -151,7 +151,11 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
 
     # Empirical champion profiles from TRAIN ONLY (no leakage; includes early current patch).
     profiles = build_champion_profiles(score_csv=score_csv, train_df=train_df,
-                                       min_games=empirical_min_games, replace_sustain=True)
+                                       min_games=empirical_min_games, replace_sustain=True,
+                                       empirical_rows=iter_parquet_rows(
+                                           data, ["blue_wins", "duration_sec", "participants_json"],
+                                           selected_rows=set(train_df[SOURCE_ROW].to_list()),
+                                       ))
 
     x_tr, y_tr, feat_names = build_x(train_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
     x_va, y_va, _ = build_x(val_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)

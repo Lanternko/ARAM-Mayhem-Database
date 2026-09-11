@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from aram_nn.heavy_jobs import guarded_pipeline
+
 from .db import connect, count_games
 from .db import _patch_major_minor  # noqa: PLC2701 - internal reuse within the package
 from .static_publish import (
@@ -263,6 +265,7 @@ def _record_attempt_failure(
     return streak
 
 
+@guarded_pipeline
 def refresh_models_once(
     *,
     db: Path = Path("data/lcu/games.db"),
