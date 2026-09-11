@@ -6518,13 +6518,13 @@
     .apool-row,
     .apool-scale {
         display: grid;
-        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(90px, 1.6fr) 56px;
+        grid-template-columns: minmax(0, 1.2fr) minmax(90px, 1.6fr) 56px;
         align-items: center;
         gap: 12px;
     }
     .apool-scale { padding: 0 8px; font-size: 11px; color: var(--text-dim); }
-    .apool-scale-label { grid-column: 1 / 3; }
-    .apool-scale-track { grid-column: 3; position: relative; height: 14px; font-variant-numeric: tabular-nums; }
+    .apool-scale-label { grid-column: 1; }
+    .apool-scale-track { grid-column: 2; position: relative; height: 14px; font-variant-numeric: tabular-nums; }
     .apool-scale-track span { position: absolute; top: 0; transform: translateX(-50%); }
     .apool-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
     .apool-row-item + .apool-row-item { border-top: 1px solid var(--panel-line); }
@@ -6542,7 +6542,6 @@
     .apool-row:hover,
     .apool-row-item.is-open .apool-row { background: var(--surface-2); }
     .apool-row-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-size: 14px; font-weight: 500; }
-    .apool-row-id { overflow: hidden; font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
     .apool-bar { position: relative; height: 8px; overflow: hidden; border-radius: 4px; background: var(--apool-track); }
     .apool-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--apool-bar); }
     .apool-fill.is-default { background: repeating-linear-gradient(135deg, var(--apool-bar) 0 3px, transparent 3px 6px); }
@@ -6571,6 +6570,8 @@
     }
     .apool-aug img { width: 22px; height: 22px; border-radius: 50%; }
     .apool-aug.is-excluded { color: var(--text-dim); text-decoration: line-through; }
+    .apool-aug:hover { box-shadow: inset 0 0 0 1px var(--border-strong); }
+    .apool-aug:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
     .apool-empty { margin: 4px 8px 10px; font-size: 13px; color: var(--text-muted); }
     .apool-section { display: flex; flex-direction: column; gap: 16px; }
     .apool-h { margin: 0; font-size: 18px; font-weight: 600; }
@@ -6665,10 +6666,12 @@
         .apool-champs { flex-direction: row; flex-wrap: wrap; max-height: 176px; }
         .apool-champ { width: auto; }
         .apool-row,
-        .apool-scale { grid-template-columns: minmax(0, 1fr) minmax(72px, 1fr) 48px; }
-        .apool-row-id,
+        .apool-scale { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 40px; }
+        /* The wider track leaves less room for the label; 13px keeps pool names on one line. */
+        .apool-row-name { font-size: 13px; }
         .apool-scale-label { display: none; }
-        .apool-scale-track { grid-column: 2; }
+        /* 75 and 100 sit 12.5% apart; the smaller face keeps them from touching on a phone. */
+        .apool-scale-track { grid-column: 2; font-size: 10px; }
         .apool-detail { padding: 14px 12px; }
     }
 
