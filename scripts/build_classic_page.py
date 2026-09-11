@@ -23,9 +23,11 @@ import html
 import json
 import math
 import copy
+import sqlite3
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime, timezone
-from itertools import combinations
+from itertools import chain, combinations
 from pathlib import Path
 
 import click
@@ -543,8 +545,37 @@ def classify_item(meta: dict) -> str:
     return "complete"
 
 
-def collect_stats(db: Path, patch_prefix: str | None) -> dict:
-    """Aggregate heroes plus final-inventory item association for queue 4310."""
+def recent_patch_prefixes(db: Path, count: int) -> list[str]:
+    """Return the newest *count* ``major.minor.`` prefixes that have Classic games.
+
+    The trailing dot matters: ``iter_games`` filters with ``LIKE '<prefix>%'``, so
+    a bare ``16.1`` would also swallow 16.10-16.19.
+    """
+    con = sqlite3.connect(f"file:{Path(db).as_posix()}?mode=ro", uri=True, timeout=60)
+    try:
+        rows = con.execute(
+            "SELECT DISTINCT patch FROM games WHERE queue_id=?", (CLASSIC_QUEUE_ID,)
+        ).fetchall()
+    finally:
+        con.close()
+    versions: set[tuple[int, int]] = set()
+    for (patch,) in rows:
+        parts = str(patch or "").split(".")
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            versions.add((int(parts[0]), int(parts[1])))
+    return [f"{major}.{minor}." for major, minor in sorted(versions, reverse=True)[:count]]
+
+
+def collect_stats(db: Path, patch_prefix: str | Sequence[str] | None) -> dict:
+    """Aggregate heroes plus final-inventory item association for queue 4310.
+
+    *patch_prefix* may be one prefix, several (games from each are pooled), or
+    None for every patch.
+    """
+    if patch_prefix is None or isinstance(patch_prefix, str):
+        prefixes: list[str | None] = [patch_prefix]
+    else:
+        prefixes = list(patch_prefix)
     games: dict[int, int] = defaultdict(int)
     wins: dict[int, int] = defaultdict(int)
     per_patch: dict[str, int] = defaultdict(int)
@@ -576,11 +607,14 @@ def collect_stats(db: Path, patch_prefix: str | None) -> dict:
     position_eligible_teams = 0
     position_total_teams = 0
     total = 0
-    for g in iter_games(
-        db,
-        queue_id=CLASSIC_QUEUE_ID,
-        patch_prefix=patch_prefix,
-        parse_participants=True,
+    for g in chain.from_iterable(
+        iter_games(
+            db,
+            queue_id=CLASSIC_QUEUE_ID,
+            patch_prefix=prefix,
+            parse_participants=True,
+        )
+        for prefix in prefixes
     ):
         total += 1
         per_patch[g["patch"] or "?"] += 1
@@ -2224,6 +2258,12 @@ def render_research_preview(
 @click.option("--db", default="data/lcu/games.db", type=click.Path(exists=True))
 @click.option("--out", default="docs/classic.html", type=click.Path())
 @click.option("--patch", "patch_prefix", default="", help="版本前綴過濾；省略＝全收")
+@click.option(
+    "--recent-patches",
+    default=0,
+    type=click.IntRange(min=0),
+    help="只收 DB 裡最新 N 個 major.minor 版本（0＝不限）；不可與 --patch 併用",
+)
 @click.option("--icon-dir", default=str(ICON_DIR), type=click.Path())
 @click.option("--item-icon-dir", default=str(ITEM_ICON_DIR), type=click.Path())
 @click.option("--refresh-icons", is_flag=True, help="重新下載頭像（改版換美術時用）")
@@ -2231,15 +2271,23 @@ def main(
     db: str,
     out: str,
     patch_prefix: str,
+    recent_patches: int,
     icon_dir: str,
     item_icon_dir: str,
     refresh_icons: bool,
 ) -> None:
     db_path = Path(db)
-    prefix = patch_prefix or None
+    if recent_patches and patch_prefix:
+        raise click.UsageError("--patch and --recent-patches are mutually exclusive")
+    prefixes: str | list[str] | None = patch_prefix or None
+    if recent_patches:
+        prefixes = recent_patch_prefixes(db_path, recent_patches)
+        if not prefixes:
+            raise click.ClickException(f"no queue {CLASSIC_QUEUE_ID} patches found in {db}")
+        click.echo(f"[classic] recent patches: {', '.join(p.rstrip('.') for p in prefixes)}")
 
     click.echo(f"[classic] scanning queue {CLASSIC_QUEUE_ID} from {db_path} ...")
-    stats = collect_stats(db_path, prefix)
+    stats = collect_stats(db_path, prefixes)
     games = stats["hero_games"]
     wins = stats["hero_wins"]
     total = stats["total_games"]
