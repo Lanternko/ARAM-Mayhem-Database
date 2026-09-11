@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import datetime as dt
 import json
 import os
 import re
+import shutil
 import signal
 import ssl
 import subprocess
@@ -20,6 +22,18 @@ import psutil
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from aram_nn.resource_guard import (  # noqa: E402
+    ResourceGuard,
+    ResourceGuardConfig,
+    ResourceSample,
+    sample_resources,
+)
+
+
 DEFAULT_DB = ROOT / "data" / "lcu" / "games.db"
 DEFAULT_SEED_FILE = ROOT / "data" / "seeds" / "opgg_tw.txt"
 DEFAULT_LOG_DIR = ROOT / ".codex" / "logs" / "mayhem_lcu_watchdog"
@@ -63,10 +77,20 @@ def mb(rss: int | float) -> float:
 
 def iter_processes() -> list[psutil.Process]:
     procs: list[psutil.Process] = []
-    for proc in psutil.process_iter(["pid", "name", "exe", "cmdline", "memory_info"]):
+    for proc in psutil.process_iter(["pid", "name"]):
         try:
-            # Touch info now so later access is less likely to race.
-            _ = proc.info
+            name = (proc.info.get("name") or "").lower()
+            normalized_name = name.replace(" ", "")
+            if not (
+                normalized_name in {"python.exe", "pythonw.exe"}
+                or name.startswith("leagueclient")
+                or normalized_name.startswith("riotclient")
+            ):
+                continue
+            # The detailed fields are expensive on Windows.  Fetch them only
+            # after the cheap name filter, while preserving the info mapping
+            # expected by the existing process classifiers.
+            proc.info.update(proc.as_dict(attrs=["exe", "cmdline", "memory_info"]))
             procs.append(proc)
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
@@ -207,6 +231,119 @@ def worker_number_from_cmdline(cmdline: Sequence[Any]) -> int | None:
     return None
 
 
+def worker_count_from_cmdline(cmdline: Sequence[Any]) -> int | None:
+    try:
+        parts = [str(part) for part in cmdline]
+        value = parts[parts.index("--workers") + 1]
+        count = int(value)
+        return count if count > 0 else None
+    except (ValueError, IndexError, TypeError):
+        return None
+
+
+def fleet_worker_count(workers: list[dict[str, Any]]) -> int:
+    """Count producer workers from each fleet supervisor's argv."""
+
+    count = 0
+    for worker in workers:
+        parsed = worker_count_from_cmdline(worker.get("cmdline") or [])
+        count += parsed if parsed is not None else 1
+    return count
+
+
+def resource_guard_for_args(args: argparse.Namespace) -> ResourceGuard:
+    config = ResourceGuardConfig(
+        normal_workers=max(1, int(args.workers)),
+        degraded_workers=max(1, int(args.degraded_workers)),
+        degrade_commit_percent=float(getattr(args, "system_degrade_commit_percent", 80.0)),
+        pause_commit_percent=float(getattr(args, "system_pause_commit_percent", 90.0)),
+        resume_commit_percent=float(getattr(args, "system_resume_commit_percent", 70.0)),
+        degrade_available_mb=float(getattr(args, "system_degrade_available_mb", 3072.0)),
+        pause_available_mb=float(getattr(args, "system_pause_available_mb", 1536.0)),
+        resume_available_mb=float(getattr(args, "system_resume_available_mb", 4096.0)),
+        degrade_commit_headroom_mb=float(
+            getattr(args, "system_degrade_commit_headroom_mb", 4096.0)
+        ),
+        pause_commit_headroom_mb=float(
+            getattr(args, "system_pause_commit_headroom_mb", 2048.0)
+        ),
+        client_degrade_mb=float(args.degrade_client_mb),
+        recovery_samples=max(1, int(getattr(args, "resource_recovery_samples", 3))),
+        degraded_restart_samples=max(
+            1, int(getattr(args, "resource_degraded_restart_samples", 10))
+        ),
+    )
+    guard = getattr(args, "_resource_guard", None)
+    if not isinstance(guard, ResourceGuard) or guard.config != config:
+        guard = ResourceGuard(config)
+        setattr(args, "_resource_guard", guard)
+    return guard
+
+
+# Hysteresis latch for the disk guard; survives across check_once ticks.
+_DISK_STATE: dict[str, Any] = {"paused": False}
+
+
+def disk_free_sample(path: Path) -> dict[str, Any]:
+    """Free space on the volume holding the DB (walks up to an existing dir)."""
+    probe = path
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
+    try:
+        usage = shutil.disk_usage(probe)
+    except OSError as exc:
+        return {"path": str(probe), "free_mb": None, "error": f"{type(exc).__name__}: {exc}"}
+    return {
+        "path": str(probe),
+        "free_mb": round(mb(usage.free), 1),
+        "total_mb": round(mb(usage.total), 1),
+    }
+
+
+def apply_disk_guard(
+    args: argparse.Namespace,
+    decision: Any,
+    disk: dict[str, Any],
+) -> tuple[Any, bool]:
+    """Force a pause while the DB volume is nearly full.
+
+    A full volume surfaces downstream only as WRITER_START_FAILED / "disk I/O
+    error", and every recovery path (fleet respawn, stall restart, client
+    restart) just churns.  Pause instead, and hold until free space clears a
+    higher resume bar so a volume hovering at the edge does not flap.
+    Returns (decision, newly_paused).
+    """
+
+    free_mb = disk.get("free_mb")
+    was_paused = bool(_DISK_STATE["paused"])
+    if free_mb is None:
+        # Unknown free space never starts or ends a pause on its own.
+        paused = was_paused
+    elif was_paused:
+        paused = free_mb < args.disk_resume_free_mb
+    else:
+        paused = free_mb < args.disk_pause_free_mb
+    _DISK_STATE["paused"] = paused
+    if not paused:
+        return decision, False
+    reason = (
+        f"disk {disk.get('path')} free {free_mb}MB below "
+        f"{'resume' if was_paused else 'pause'} threshold "
+        f"{args.disk_resume_free_mb if was_paused else args.disk_pause_free_mb:.0f}MB"
+    )
+    return (
+        dataclasses.replace(
+            decision,
+            desired_workers=0,
+            state="paused_disk",
+            paused=True,
+            capture_suppressed=True,
+            reason=reason,
+        ),
+        not was_paused,
+    )
+
+
 def fleet_control_file_from_cmdline(cmdline: Sequence[Any]) -> Path | None:
     parts = [str(part) for part in cmdline]
     try:
@@ -275,13 +412,23 @@ def league_processes() -> list[dict[str, Any]]:
             name = proc.info.get("name") or ""
             if not name.lower().startswith("leagueclient"):
                 continue
-            rss = proc.info.get("memory_info").rss if proc.info.get("memory_info") else 0
+            memory_info = proc.info.get("memory_info")
+            rss = memory_info.rss if memory_info else 0
+            private = getattr(memory_info, "private", None) if memory_info else None
+            rss_mb = mb(rss)
+            private_mb = mb(private) if private is not None else None
+            pressure_mb = max(rss_mb, private_mb) if private_mb is not None else rss_mb
             rows.append(
                 {
                     "pid": proc.info["pid"],
                     "name": name,
                     "exe": proc.info.get("exe"),
-                    "rss_mb": mb(rss),
+                    "rss_mb": rss_mb,
+                    "private_mb": private_mb,
+                    "pressure_mb": pressure_mb,
+                    "pressure_metric": (
+                        "max(rss_mb,private_mb)" if private_mb is not None else "rss_mb"
+                    ),
                 }
             )
         except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -289,9 +436,31 @@ def league_processes() -> list[dict[str, Any]]:
     return rows
 
 
+def league_main_metrics() -> dict[str, Any]:
+    rows = [
+        row
+        for row in league_processes()
+        if row["name"].lower() == "leagueclient.exe"
+    ]
+    if not rows:
+        return {
+            "rss_mb": 0.0,
+            "private_mb": None,
+            "pressure_mb": 0.0,
+            "pressure_metric": "rss_mb",
+        }
+    row = max(rows, key=lambda item: item["pressure_mb"])
+    return {
+        "rss_mb": row["rss_mb"],
+        "private_mb": row["private_mb"],
+        "pressure_mb": row["pressure_mb"],
+        "pressure_metric": row["pressure_metric"],
+    }
+
+
 def league_main_mb() -> float:
-    vals = [row["rss_mb"] for row in league_processes() if row["name"].lower() == "leagueclient.exe"]
-    return max(vals, default=0.0)
+    """Return the main client's memory pressure for legacy callers."""
+    return float(league_main_metrics()["pressure_mb"])
 
 
 def lockfile_candidates() -> list[Path]:
@@ -629,6 +798,58 @@ def start_snowball_fleet(args: argparse.Namespace, worker_count: int) -> dict[st
     }
 
 
+def reconcile_resource_workers(
+    args: argparse.Namespace,
+    workers: list[dict[str, Any]],
+    desired_workers: int,
+    health: dict[str, Any],
+    main_mb: float,
+    resource_decision: Any,
+    actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Move the fleet only when the pressure controller changes its target."""
+
+    desired_workers = max(0, int(desired_workers))
+    actual_workers = fleet_worker_count(workers)
+    if actual_workers == desired_workers:
+        return workers
+
+    # A fleet owns its producer count for its lifetime.  Resize in either
+    # direction by closing the old fleet before starting a replacement.
+    if actual_workers > 0:
+        stopped = stop_snowball_workers(grace_sec=10)
+        actions.append(
+            {
+                "action": "pause_workers_resource" if desired_workers == 0 else "resize_workers_resource",
+                "pids": stopped,
+                "actual_workers": actual_workers,
+                "desired_workers": desired_workers,
+                "resource_guard": resource_decision.as_dict(),
+            }
+        )
+        workers = snowball_workers()
+        actual_workers = fleet_worker_count(workers)
+        if workers:
+            return workers
+
+    if desired_workers > actual_workers:
+        can_start = health.get("ok") and 0 < main_mb <= args.worker_start_max_client_mb
+        if not can_start:
+            return workers
+        started = start_snowball_fleet(args, desired_workers)
+        actions.append(
+            {
+                "action": "resume_workers_resource" if actual_workers == 0 else "resize_workers_resource",
+                "actual_workers": actual_workers,
+                "desired_workers": desired_workers,
+                "start": started,
+                "resource_guard": resource_decision.as_dict(),
+            }
+        )
+        workers = snowball_workers()
+    return workers
+
+
 def ensure_static_site_publisher(args: argparse.Namespace) -> dict[str, Any] | None:
     if not args.site_publisher or args.once:
         return None
@@ -820,9 +1041,24 @@ def should_restart_client(
     return False, "client healthy enough"
 
 
-def action_context(args: argparse.Namespace, health: dict[str, Any], main_mb: float) -> dict[str, Any]:
+def action_context(
+    args: argparse.Namespace,
+    health: dict[str, Any],
+    main_mb: float,
+    main_metrics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metrics = main_metrics or {
+        "rss_mb": None,
+        "private_mb": None,
+        "pressure_mb": main_mb,
+        "pressure_metric": "legacy_argument",
+    }
     return {
         "league_main_mb_at_action": main_mb,
+        "league_main_rss_mb_at_action": metrics["rss_mb"],
+        "league_main_private_mb_at_action": metrics["private_mb"],
+        "league_main_pressure_mb_at_action": metrics["pressure_mb"],
+        "league_main_pressure_metric_at_action": metrics["pressure_metric"],
         "degrade_client_mb": args.degrade_client_mb,
         "client_restart_mb": args.client_restart_mb,
         "worker_start_max_client_mb": args.worker_start_max_client_mb,
@@ -840,14 +1076,21 @@ def wait_for_lcu_ready(args: argparse.Namespace) -> dict[str, Any]:
     while time.monotonic() < deadline:
         attempt += 1
         last_health = lcu_health()
-        main_mb = league_main_mb()
+        main_metrics = league_main_metrics()
+        main_mb = float(main_metrics["pressure_mb"])
         if last_health["ok"] and main_mb and main_mb <= args.worker_start_max_client_mb:
-            return {"ready": True, "health": last_health, "league_main_mb": main_mb}
+            return {
+                "ready": True,
+                "health": last_health,
+                "league_main_mb": main_mb,
+                "league_main_metrics": main_metrics,
+            }
         append_state(
             args.state_file,
             {
                 "ts": iso_now(),
                 "league_main_mb": main_mb,
+                "league_main_metrics": main_metrics,
                 "lcu": last_health,
                 "workers": snowball_workers(),
                 "latest_capture_age_min": latest_capture_age_min(args.db),
@@ -861,16 +1104,37 @@ def wait_for_lcu_ready(args: argparse.Namespace) -> dict[str, Any]:
             },
         )
         time.sleep(args.check_interval_sec)
-    return {"ready": False, "health": last_health, "league_main_mb": league_main_mb()}
+    main_metrics = league_main_metrics()
+    return {
+        "ready": False,
+        "health": last_health,
+        "league_main_mb": main_metrics["pressure_mb"],
+        "league_main_metrics": main_metrics,
+    }
 
 
 def check_once(args: argparse.Namespace) -> dict[str, Any]:
     workers = snowball_workers()
-    target_workers = max(1, int(args.workers))
-    main_mb = league_main_mb()
+    main_metrics = league_main_metrics()
+    main_mb = float(main_metrics["pressure_mb"])
     health = lcu_health()
     latest_age = latest_capture_age_min(args.db)
+    resource_guard = resource_guard_for_args(args)
+    resource_sample = sample_resources()
+    resource_decision = resource_guard.decide(
+        resource_sample,
+        fleet_worker_count(workers),
+        main_mb,
+        latest_age,
+    )
+    disk = disk_free_sample(args.db)
+    resource_decision, disk_newly_paused = apply_disk_guard(args, resource_decision, disk)
+    target_workers = resource_decision.desired_workers
     actions: list[dict[str, Any]] = []
+    if disk_newly_paused:
+        actions.append(
+            {"action": "pause_workers_disk_full", "reason": resource_decision.reason, "disk": disk}
+        )
     publisher_action = ensure_static_site_publisher(args)
     if publisher_action:
         actions.append(publisher_action)
@@ -897,26 +1161,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "action": "stop_workers_lcu_unhealthy",
                 "pids": stopped,
-                **action_context(args, health, main_mb),
-            }
-        )
-    elif (
-        workers
-        and target_workers > args.degraded_workers
-        and main_mb >= args.degrade_client_mb
-        and main_mb < args.client_restart_mb
-        and health["ok"]
-    ):
-        target_workers = max(1, int(args.degraded_workers))
-        stopped = stop_snowball_workers(grace_sec=10)
-        workers = snowball_workers()
-        actions.append(
-            {
-                "action": "degrade_workers",
-                "pids": stopped,
-                "reason": f"LeagueClient memory {main_mb:.1f}MB >= {args.degrade_client_mb:.1f}MB",
-                "target_workers": args.degraded_workers,
-                **action_context(args, health, main_mb),
+                **action_context(args, health, main_mb, main_metrics),
             }
         )
 
@@ -924,7 +1169,11 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
     # capture for worker-stall-min while the youngest worker has been up at
     # least that long (fake-healthy hang: PID alive + LCU 200 but blocked call).
     stall_force_client_restart = False
-    if args.worker_stall_min > 0 and latest_age is not None:
+    if (
+        not resource_decision.capture_suppressed
+        and args.worker_stall_min > 0
+        and latest_age is not None
+    ):
         if latest_age < args.worker_stall_min:
             _STALL_STATE["consecutive_restarts"] = 0
         elif (
@@ -944,13 +1193,18 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                     "pids": stopped,
                     "latest_capture_age_min": latest_age,
                     "consecutive_stall_restarts": _STALL_STATE["consecutive_restarts"],
-                    **action_context(args, health, main_mb),
+                    **action_context(args, health, main_mb, main_metrics),
                 }
             )
             if _STALL_STATE["consecutive_restarts"] >= args.worker_stall_client_restart_after:
                 stall_force_client_restart = True
 
-    restart, restart_reason = should_restart_client(args, health, main_mb, latest_age)
+    restart, restart_reason = should_restart_client(
+        args,
+        health,
+        main_mb,
+        None if resource_decision.capture_suppressed else latest_age,
+    )
     if not restart and stall_force_client_restart:
         phase = health.get("phase") or "None"
         if phase in args.safe_restart_phase:
@@ -969,7 +1223,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                     "action": "stop_workers_before_client_restart",
                     "pids": stopped,
                     "reason": restart_reason,
-                    **action_context(args, health, main_mb),
+                    **action_context(args, health, main_mb, main_metrics),
                 }
             )
         closed = close_league_client()
@@ -980,7 +1234,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                 "reason": restart_reason,
                 "closed_pids": closed,
                 "start": started,
-                **action_context(args, health, main_mb),
+                **action_context(args, health, main_mb, main_metrics),
             }
         )
         append_state(
@@ -996,24 +1250,56 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         )
         ready = wait_for_lcu_ready(args)
         health = ready.get("health") or lcu_health()
-        main_mb = float(ready.get("league_main_mb") or league_main_mb())
+        main_metrics = ready.get("league_main_metrics") or league_main_metrics()
+        main_mb = float(ready.get("league_main_mb") or main_metrics["pressure_mb"])
+        latest_age = latest_capture_age_min(args.db)
+        workers = snowball_workers()
+        resource_sample = sample_resources()
+        resource_decision = resource_guard.decide(
+            resource_sample,
+            fleet_worker_count(workers),
+            main_mb,
+            latest_age,
+        )
+        disk = disk_free_sample(args.db)
+        resource_decision, _ = apply_disk_guard(args, resource_decision, disk)
+        target_workers = resource_decision.desired_workers
         actions.append({"action": "wait_for_lcu_ready", **ready})
 
     workers = snowball_workers()
-    if (
+    if health["ok"]:
+        workers = reconcile_resource_workers(
+            args,
+            workers,
+            target_workers,
+            health,
+            main_mb,
+            resource_decision,
+            actions,
+        )
+    if not workers and resource_decision.state == "paused_disk":
+        actions.append(
+            {"action": "keep_workers_paused_disk", "reason": resource_decision.reason, "disk": disk}
+        )
+    elif not workers and health["ok"] and resource_decision.paused:
+        actions.append(
+            {
+                "action": "keep_workers_paused_resource",
+                "reason": resource_decision.reason,
+                **action_context(args, health, main_mb, main_metrics),
+            }
+        )
+    elif (
         not workers
         and health["ok"]
-        and 0 < main_mb <= args.worker_start_max_client_mb
+        and target_workers > 0
+        and main_mb > args.worker_start_max_client_mb
     ):
-        started_fleet = start_snowball_fleet(args, target_workers)
-        actions.append({"action": "start_fleet", **started_fleet})
-        workers = snowball_workers()
-    elif not workers and health["ok"] and main_mb > args.worker_start_max_client_mb:
         actions.append(
             {
                 "action": "keep_worker_stopped",
                 "reason": f"LeagueClient memory {main_mb:.1f}MB > start max {args.worker_start_max_client_mb:.1f}MB",
-                **action_context(args, health, main_mb),
+                **action_context(args, health, main_mb, main_metrics),
             }
         )
     elif len(workers) > 1:
@@ -1029,12 +1315,20 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
     record = {
         "ts": iso_now(),
         "league_main_mb": main_mb,
+        "league_main_rss_mb": main_metrics["rss_mb"],
+        "league_main_private_mb": main_metrics["private_mb"],
+        "league_main_pressure_mb": main_metrics["pressure_mb"],
+        "league_main_pressure_metric": main_metrics["pressure_metric"],
         "lcu": health,
         "workers": snowball_workers(),
         "static_site_publishers": static_site_publishers(),
         "model_refreshers": model_refreshers(),
         "model_refresh_health": refresh_health,
         "latest_capture_age_min": latest_age,
+        "resource_guard": resource_decision.as_dict(),
+        "disk": disk,
+        "actual_worker_count": fleet_worker_count(workers),
+        "desired_worker_count": resource_decision.desired_workers,
         "actions": actions,
     }
     append_state(args.state_file, record)
@@ -1056,6 +1350,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
     parser.add_argument("--worker-stop-client-mb", type=float, default=5000.0)
     parser.add_argument("--worker-start-max-client-mb", type=float, default=3500.0)
+    parser.add_argument("--system-degrade-commit-percent", type=float, default=80.0)
+    parser.add_argument("--system-pause-commit-percent", type=float, default=90.0)
+    parser.add_argument("--system-resume-commit-percent", type=float, default=70.0)
+    parser.add_argument("--system-degrade-available-mb", type=float, default=3072.0)
+    parser.add_argument("--system-pause-available-mb", type=float, default=1536.0)
+    parser.add_argument("--system-resume-available-mb", type=float, default=4096.0)
+    parser.add_argument("--system-degrade-commit-headroom-mb", type=float, default=4096.0)
+    parser.add_argument("--system-pause-commit-headroom-mb", type=float, default=2048.0)
+    # DB-volume free space.  Below pause the fleet stops (writes would fail
+    # anyway); it resumes only once free space clears the higher resume bar.
+    parser.add_argument("--disk-pause-free-mb", type=float, default=5120.0)
+    parser.add_argument("--disk-resume-free-mb", type=float, default=10240.0)
+    parser.add_argument("--resource-recovery-samples", type=int, default=3)
+    parser.add_argument("--resource-degraded-restart-samples", type=int, default=10)
     # Zero-throughput stall recovery: restart workers when no new 2400 capture
     # for this many minutes while workers look alive (0 disables).
     parser.add_argument("--worker-stall-min", type=float, default=30.0)

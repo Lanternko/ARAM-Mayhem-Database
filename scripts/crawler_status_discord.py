@@ -214,16 +214,6 @@ def fmt_int(value: Any) -> str:
     return f"{int(value):,}"
 
 
-def fmt_wan(value: Any) -> str:
-    """Millions of games are read at a glance, not counted: 3035473 -> '303.5 萬'."""
-    if not isinstance(value, (int, float)):
-        return "?"
-    n = int(value)
-    if n < 10_000:
-        return f"{n:,}"
-    return f"{n / 10_000:.1f} 萬"
-
-
 def fmt_minutes(value: Any) -> str:
     """Minutes are the wrong unit past an hour: 624.5 -> '10 小時 25 分'."""
     if not isinstance(value, (int, float)):
@@ -232,7 +222,9 @@ def fmt_minutes(value: Any) -> str:
     if total < 60:
         # One decimal is the honest resolution for a sub-hour gap; two was noise.
         return f"{total:.1f} 分"
-    hours, minutes = divmod(int(round(total)), 60)
+    # Half-up, not round()'s banker's rounding: 624.5 reading as 10 小時 24 分
+    # is the kind of small wrongness that makes a reader distrust the rest.
+    hours, minutes = divmod(int(total + 0.5), 60)
     if hours < 24:
         return f"{hours} 小時 {minutes} 分" if minutes else f"{hours} 小時"
     days, hours = divmod(hours, 24)
@@ -263,6 +255,7 @@ INCIDENT_ACTIONS = {
     "restart_workers_capture_stalled": "零產出強制重啟",
     "stop_workers_lcu_unhealthy": "LCU 異常停工",
     "degrade_workers": "記憶體降載",
+    "pause_workers_disk_full": "磁碟空間不足停工",
 }
 
 # One heartbeat row is ~3.4 KB and the log is already 270 MB, so never read it
@@ -287,10 +280,16 @@ def recent_incidents(state_file: Path, window_hours: float) -> dict[str, Any]:
         with state_file.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
             size = handle.tell()
-            handle.seek(max(0, size - INCIDENT_TAIL_BYTES))
+            offset = max(0, size - INCIDENT_TAIL_BYTES)
+            handle.seek(offset)
             chunk = handle.read().decode("utf-8", "replace")
-        # Drop the first line: seeking by bytes almost always lands mid-record.
-        for line in chunk.split("\n")[1:]:
+        lines = chunk.split("\n")
+        # Seeking by bytes lands mid-record, so the first line is a fragment --
+        # but only when we actually skipped ahead.  Dropping it unconditionally
+        # discarded the entire log whenever it was smaller than the tail window.
+        if offset > 0:
+            lines = lines[1:]
+        for line in lines:
             line = line.strip()
             if not line.startswith("{"):
                 continue
@@ -315,15 +314,28 @@ def recent_incidents(state_file: Path, window_hours: float) -> dict[str, Any]:
     return out
 
 
-def current_patch_stats(db: Path) -> dict[str, Any]:
-    """Games on the patch currently being collected.
+# The two lanes with their own crawl budgets.  4310 is what the crawler's
+# classic lane means by "classic" (_CLASSIC_QUEUE_ID in
+# src/aram_nn/lcu/snowball.py); Summoner's Rift queues are never collected.
+MAYHEM_QUEUE_ID = 2400
+CLASSIC_QUEUE_ID = 4310
+PATCH_QUEUE_LABELS: tuple[tuple[int, str], ...] = (
+    (MAYHEM_QUEUE_ID, "Mayhem"),
+    (CLASSIC_QUEUE_ID, "經典"),
+)
 
-    Covered by idx_games_queue_patch_created, so this is a ~0.5s index scan even
-    against the 64 GB DB -- cheap enough to run every digest.  The live patch is
-    the one holding the newest game rather than the highest version string, so a
-    hotfix build landing out of order cannot mislabel it.
+
+def current_patch_stats(db: Path) -> dict[str, Any]:
+    """Mayhem and classic games on the patch currently being collected.
+
+    Covered by idx_games_queue_patch_created, so this is a sub-second index scan
+    even against the 64 GB DB -- cheap enough to run every digest.  The live
+    patch is the one holding the newest Mayhem game rather than the highest
+    version string, so a hotfix build landing out of order cannot mislabel it,
+    and string ordering gets it wrong on its own terms anyway ('16.9' sorts
+    above '16.17').
     """
-    out: dict[str, Any] = {"ok": False, "patch": None, "games": None}
+    out: dict[str, Any] = {"ok": False, "patch": None, "by_queue": {}}
     if not db.exists():
         out["error"] = "db missing"
         return out
@@ -335,29 +347,78 @@ def current_patch_stats(db: Path) -> dict[str, Any]:
         except sqlite3.Error:
             pass
         rows = con.execute(
-            "select patch, count(*), max(created_ms) from games "
-            "where queue_id=2400 group by patch"
+            "select queue_id, patch, count(*), max(created_ms) from games "
+            "where queue_id in (?, ?) group by queue_id, patch",
+            (MAYHEM_QUEUE_ID, CLASSIC_QUEUE_ID),
         ).fetchall()
         con.close()
     except Exception as exc:  # noqa: BLE001 — status probe must never crash the report
         out["error"] = f"{type(exc).__name__}: {exc}"
         return out
 
-    if not rows:
-        out["error"] = "no rows"
+    # Mayhem is the reference lane: classic is a 10% side budget and can go a
+    # whole patch without a game, which would leave it unable to name a patch.
+    mayhem = [r for r in rows if int(r[0]) == MAYHEM_QUEUE_ID]
+    if not mayhem:
+        out["error"] = "no mayhem rows"
         return out
 
-    patch, games, _ = max(rows, key=lambda r: (r[2] or 0))
+    patch = max(mayhem, key=lambda r: (r[3] or 0))[1]
+    patch_short = short_patch(patch)
     out["ok"] = True
     out["patch"] = patch
-    out["patch_short"] = short_patch(patch)
-    out["games"] = int(games)
-    # Same major.minor across hotfix builds, which is what "this patch" means
-    # to a reader comparing against the previous one.
-    same_minor = sum(
-        int(n) for p, n, _ in rows if short_patch(p) == out["patch_short"]
-    )
-    out["games_minor"] = same_minor
+    out["patch_short"] = patch_short
+    # Hotfix builds of the same minor are one patch to a reader comparing
+    # against the previous one.
+    by_queue: dict[int, int] = {}
+    for queue_id, row_patch, count, _ in rows:
+        if short_patch(row_patch) != patch_short:
+            continue
+        by_queue[int(queue_id)] = by_queue.get(int(queue_id), 0) + int(count)
+    out["by_queue"] = by_queue
+    return out
+
+
+# Seed families whose members came from a high-rank OPGG ladder page.  `apex` is
+# master and above; `opgg_level:*` is a level-based page with no rank attached,
+# so it deliberately does not count.
+HIGH_TIER_SEED_RE = re.compile(r"(^apex$|^apex:|^opgg_tier:diamond:)")
+
+
+def frontier_intake(db: Path, window_hours: float) -> dict[str, Any]:
+    """New players enqueued in the window, and how many trace to a high-rank seed.
+
+    This is the frontier's pulse.  Throughput can look healthy for hours while
+    intake has already stopped, and the first visible symptom is a stall much
+    later -- by which point the fix (refresh the OPGG seed pages) is overdue.
+    """
+    out: dict[str, Any] = {"ok": False, "total": None, "high_tier": None}
+    if not db.exists():
+        out["error"] = "db missing"
+        return out
+    cutoff = (utc_now() - dt.timedelta(hours=window_hours)).isoformat()
+    try:
+        uri = db.resolve().as_uri() + "?mode=ro"
+        con = sqlite3.connect(uri, uri=True, timeout=30)
+        try:
+            con.execute("pragma query_only=on")
+        except sqlite3.Error:
+            pass
+        rows = con.execute(
+            "select seed_family, count(*) from crawl_queue where enqueued_at >= ?"
+            " group by seed_family",
+            (cutoff,),
+        ).fetchall()
+        con.close()
+    except Exception as exc:  # noqa: BLE001 — status probe must never crash the report
+        out["error"] = f"{type(exc).__name__}: {exc}"
+        return out
+
+    total = sum(int(n) for _, n in rows)
+    high = sum(int(n) for family, n in rows if HIGH_TIER_SEED_RE.search(str(family or "")))
+    out["ok"] = True
+    out["total"] = total
+    out["high_tier"] = high
     return out
 
 
@@ -728,7 +789,7 @@ def run_stall_alert(
             saved = forensics.get("_saved_to")
             if saved:
                 desc += f"完整採證：`{Path(saved).name}`\n"
-        desc += "多半是 League 客戶端斷線 / 卡在登入畫面，需要手動登入。"
+        desc += "停收原因需核對 watchdog 的資源保護、worker 與 LCU 狀態；不一定需要重新登入。"
         alert_msg = {
             "username": "arammeta 爬蟲",
             "embeds": [
@@ -1000,6 +1061,7 @@ def build_status(
     state = latest_state(state_file)
     stats = db_stats(db, window_hours=window_hours)
     patch_stats = current_patch_stats(db)
+    intake = frontier_intake(db, window_hours=window_hours)
     incidents = recent_incidents(state_file, window_hours=window_hours)
     logs = worker_log_stats(log_dir)
     publish = publish_status(
@@ -1044,6 +1106,7 @@ def build_status(
         "capture_age_min": age,
         "db": stats,
         "current_patch": patch_stats,
+        "frontier_intake": intake,
         "incidents": incidents,
         "publish": publish,
         "site_publish": site_publish,
@@ -1054,9 +1117,16 @@ def build_status(
 
 
 def format_message(status: dict[str, Any]) -> dict[str, Any]:
-    # Discord's fixed brand colors; health_color returns one of these.
-    RED, YELLOW = 0xED4245, 0xFEE75C
+    """Render the 6-hourly digest.
 
+    Layered on purpose.  The previous version was ten fields, eight of them
+    inline, which Discord lays out as a 3-wide grid of equally-weighted boxes:
+    the one thing that needed action (a publisher stuck for 26 hours) carried
+    exactly as much visual weight as the lifetime row count, and sat eighth.
+    Here the verdict is the title, anything actionable is the description, the
+    three numbers worth tracking get their own row, and diagnostics collapse
+    into a single trailing line.
+    """
     workers = status["worker_count"]
     lcu_ok = status.get("lcu_ok")
     age = status.get("capture_age_min")
@@ -1067,15 +1137,18 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
     window_h = status.get("window_hours") or 6
     window_saves = db.get("window_saves")
 
-    # Crawler must be producing for staleness to mean "stuck" vs "legitimately
-    # idle" (a quiet patch can sit below the +10% publish gate for a while).
+    # Crawler must be producing for staleness to mean "stuck" rather than
+    # "legitimately idle": a quiet patch can sit below the +10% publish gate.
     crawler_producing = isinstance(window_saves, int) and window_saves > 0
     site_crashing = bool(site_publish.get("crashing"))
     site_stale = bool(site_publish.get("stale")) and crawler_producing
     site_publish_bad = site_crashing or site_stale
     color = health_color(
-        workers, lcu_ok if isinstance(lcu_ok, bool) else None, age,
-        publish_stale, site_publish_bad,
+        workers,
+        lcu_ok if isinstance(lcu_ok, bool) else None,
+        age,
+        publish_stale,
+        site_publish_bad,
     )
 
     if site_crashing:
@@ -1092,181 +1165,179 @@ def format_message(status: dict[str, Any]) -> dict[str, Any]:
         headline = "Worker 還在，LCU 不健康"
     elif age is not None and age <= STALE_CAPTURE_MIN:
         # Zero workers but captures still landing: sampled mid-restart, not down.
-        # Calling this "已停止" next to "距上次收場 2.75 分鐘" in the same embed
-        # was actively misleading.
         headline = f"Worker 重啟中（{fmt_minutes(age)}前仍在收場）"
     else:
         headline = "爬蟲已停止"
 
-    rate = (
-        round(window_saves / float(window_h))
-        if isinstance(window_saves, int) and window_h > 0
-        else None
-    )
-
-    def _fmt_h(hours: Any) -> str:
-        return fmt_minutes(float(hours) * 60) if isinstance(hours, (int, float)) else "?"
-
-    # ---- Layer 1: the one line that needs a human, if any ----------------
-    # The old layout排 10 個 field，把「⚠️ 已 26.3 小時沒發布」和「資料庫總場數」
-    # 給了一樣的視覺權重。現在唯一要處理的事放進 description（embed 裡權重最高、
-    # 最上方、全寬），其餘按層級進 fields。
-    banner: str | None = None
-    if color == RED:
-        # A genuine data outage outranks any publish problem (which only ever
-        # forces yellow), so it leads even when the site is also stale.  The
-        # capture gap itself is on the pulse line below, so name the fault here
-        # rather than restate the number.
-        banner = "🔴 **資料沒有進來** — 檢查 worker / LCU 客戶端"
-    elif site_crashing:
-        err = str(site_publish.get("last_error") or "")[:120]
-        banner = (
-            "🔴 **靜態網站發布器崩潰中** — 上次成功發布 "
-            f"{_fmt_h(site_publish.get('last_publish_age_h'))} 前"
-            + (f"\n`{err}`" if err else "")
-        )
-    elif publish_stale:
-        banner = (
-            "⚠️ **發布 commit 未進 remote main** — 已 "
-            f"{_fmt_h(publish.get('publish_commit_age_h'))}"
-            f"（門檻 {publish.get('stale_hours')}h），檢查 publisher push / error log"
+    # --- description: only what the reader might have to act on --------------
+    todo: list[str] = []
+    if site_crashing:
+        err = str(site_publish.get("last_error") or "")[:90]
+        todo.append(
+            "🔴 **發布器崩潰中** — 上次成功發布 "
+            f"{fmt_minutes((site_publish.get('last_publish_age_h') or 0) * 60)}前\n"
+            f"　　`{err}`"
         )
     elif site_stale:
-        banner = (
-            "⚠️ **網站太久沒重建** — 已 "
-            f"{_fmt_h(site_publish.get('last_publish_age_h'))}"
-            f"（門檻 {site_publish.get('stale_hours')}h），但 crawler 仍在收場"
+        todo.append(
+            "⚠️ **網站 "
+            f"{fmt_minutes((site_publish.get('last_publish_age_h') or 0) * 60)}沒重建**"
+            f"（門檻 {site_publish.get('stale_hours')}h）— crawler 仍在收場，發布器可能卡住"
         )
-    elif color == YELLOW:
-        banner = f"⚠️ {headline}"
+    if publish_stale:
+        todo.append(
+            f"⚠️ **發布 commit `{str(publish.get('published_commit') or '')[:8]}` 未進 remote main**"
+            f" — 已 {fmt_minutes((publish.get('publish_commit_age_h') or 0) * 60)}"
+            f"（門檻 {publish.get('stale_hours')}h）"
+        )
+    if lcu_ok is False:
+        todo.append("⚠️ **LCU 不健康** — 客戶端多半掉線或卡在登入畫面")
+    if db.get("error"):
+        todo.append(f"⚠️ **資料庫探測失敗** — `{str(db['error'])[:120]}`")
 
-    # ---- Layer 2: crawler pulse (always shown) --------------------------
-    pulse_bits = [f"距上次收場 **{fmt_minutes(age)}**"]
-    if window_saves is not None:
-        near = f"近 {window_h}h 新增 **{fmt_int(window_saves)}** 場"
-        if rate is not None:
-            near += f"（約 {fmt_int(rate)} 場/時）"
-        pulse_bits.append(near)
-    pulse = "　·　".join(pulse_bits)
-    description = f"{banner}\n\n{pulse}" if banner else pulse
-
-    # ---- current patch total (new) -----------------------------------
-    cp = status.get("current_patch") or {}
-    if cp.get("ok"):
-        cp_name = f"本 patch · {cp.get('patch_short') or cp.get('patch')}"
-        cp_value = f"**{fmt_int(cp.get('games_minor') if cp.get('games_minor') is not None else cp.get('games'))}** 場"
-    else:
-        cp_name, cp_value = "本 patch", "?"
-
-    # ---- watchdog interventions in the window (new) -----------------
-    inc = status.get("incidents") or {}
-    if not inc.get("ok"):
-        inc_value = "—"
-    elif not inc.get("total"):
-        inc_value = f"近 {window_h}h 無介入 ✅"
-    else:
-        inc_value = "\n".join(
-            f"{INCIDENT_ACTIONS.get(a, a)} ×{n}"
-            for a, n in sorted(inc.get("counts", {}).items(), key=lambda kv: -kv[1])
+    intake = status.get("frontier_intake") or {}
+    intake_ok = intake.get("ok") and isinstance(intake.get("total"), int)
+    intake_total = intake["total"] if intake_ok else None
+    intake_high = intake.get("high_tier") or 0
+    # Zero intake belongs in the description, not a field: throughput stays
+    # healthy for hours after the frontier stops being fed, so this is the early
+    # warning rather than the stall itself.  Only meaningful while still
+    # collecting -- a stopped crawler enqueues nothing by definition.
+    if intake_ok and intake_total == 0 and crawler_producing:
+        todo.append(
+            f"⚠️ **近 {window_h} 小時沒有新玩家入隊** — 目前仍在收場，"
+            "但前線已停止擴張，多半要刷 OPGG seeds"
         )
 
-    # ---- publish legs, compact (detail already in the banner) -------
-    commit = str(publish.get("published_commit") or "")[:8]
-    if publish.get("error"):
-        publish_text = f"無法判斷\n`{str(publish['error'])[:60]}`"
-    elif not publish.get("ok"):
-        publish_text = "無法判斷"
-    elif publish.get("synced"):
-        publish_text = f"已同步 ✅\n`{commit}`"
-    elif publish_stale:
-        publish_text = f"⚠️ 未推送 {_fmt_h(publish.get('publish_commit_age_h'))}\n`{commit}`"
-    else:
-        publish_text = f"尚未推送 {_fmt_h(publish.get('publish_commit_age_h'))}\n`{commit}`"
+    description = "\n".join(todo) if todo else "✅ 沒有需要處理的事"
 
-    sp_age = site_publish.get("last_publish_age_h")
-    sp_total = site_publish.get("last_published_total")
-    if site_publish.get("error"):
-        site_publish_text = "無法判斷"
-    elif site_crashing:
-        site_publish_text = f"🔴 崩潰中\n上次 {_fmt_h(sp_age)} 前"
-    elif site_stale:
-        site_publish_text = f"⚠️ {_fmt_h(sp_age)}沒發布"
-    elif not site_publish.get("ok"):
-        site_publish_text = "無發布記錄"
-    else:
-        tail = f" · {fmt_int(sp_total)} 場" if sp_total else ""
-        site_publish_text = f"{_fmt_h(sp_age)} 前{tail}"
+    # --- the three numbers actually tracked ----------------------------------
+    rate = None
+    if isinstance(window_saves, int) and window_h > 0:
+        # Per minute, where one decimal is the honest resolution: rounding ~39
+        # to a whole number throws away 2-3% of the reading.
+        rate = round(window_saves / (float(window_h) * 60), 1)
 
-    wd = status.get("watchdog")
-    wd_text = f"已跑 {fmt_minutes(wd['uptime_min'])}" if wd else "未運行 ⚠️"
-
-    lcu_label = "正常" if lcu_ok is True else ("異常" if lcu_ok is False else "未知")
-    phase = status.get("phase")
-    phase_label = "閒置" if phase in (None, "None") else str(phase)
-
-    worker_lines = []
-    for w in status.get("workers_live") or []:
-        producers = int(w.get("producers") or 1)
-        note = f" · {producers} producers" if producers > 1 else ""
-        worker_lines.append(
-            f"`{w['worker_id']}` 跑 {fmt_minutes(w['uptime_min'])} · {fmt_int(w['rss_mb'])} MB{note}"
+    patch = status.get("current_patch") or {}
+    # Queue ids are ints in-process but strings through any JSON round-trip, and
+    # a silent type mismatch would blank both lanes.
+    patch_counts: dict[int, int] = {}
+    for key, value in (patch.get("by_queue") or {}).items():
+        try:
+            patch_counts[int(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+    if patch.get("ok") and patch_counts:
+        patch_name = f"本 patch `{patch.get('patch_short')}`"
+        patch_value = "\n".join(
+            f"{label} **{fmt_int(patch_counts.get(qid, 0))}** 場"
+            for qid, label in PATCH_QUEUE_LABELS
         )
-    workers_value = f"**{workers}** producers" + (
-        "\n" + "\n".join(worker_lines) if worker_lines else "\n_（無）_"
-    )
-
-    # ---- patch mix, collapsed to one line ---------------------------
-    # Old版本用 3 行講「16.17 佔 100%」。抽樣的唯一用途是抓「爬蟲漂到舊 patch
-    # 在浪費配額」，沒漂就是一行帶過。
-    collapsed: dict[str, int] = {}
-    for patch, n in (status.get("patch_mix_recent") or {}).items():
-        collapsed[short_patch(patch)] = collapsed.get(short_patch(patch), 0) + int(n)
-    mix = sorted(collapsed.items(), key=lambda kv: (-kv[1], kv[0]))
-    mix_total = sum(n for _, n in mix)
-    if not mix:
-        mix_text = "—"
-    elif len(mix) == 1 or (mix_total and mix[0][1] / mix_total >= 0.95):
-        pct = round(100 * mix[0][1] / mix_total) if mix_total else 100
-        mix_text = f"幾乎全是 **{mix[0][0]}**（{pct}%）"
     else:
-        mix_text = " · ".join(
-            f"{p} {round(100 * n / mix_total)}%" for p, n in mix[:3]
-        )
+        patch_name = "本 patch 累積"
+        patch_value = "—"
 
-    fields = [
-        # Layer 3 — 產出量
-        {"name": cp_name, "value": cp_value, "inline": True},
-        {"name": "資料庫總量", "value": fmt_wan(db.get("total_mayhem")), "inline": True},
-        {"name": f"近 {window_h}h 介入", "value": inc_value, "inline": True},
-        # Layer 4 — 發布管線
-        {"name": "Git 推送", "value": publish_text, "inline": True},
-        {"name": "網站重建", "value": site_publish_text, "inline": True},
-        {"name": "Watchdog", "value": wd_text, "inline": True},
-        # Layer 5 — 基礎設施
+    fields: list[dict[str, Any]] = [
         {
-            "name": "LCU / 客戶端",
+            "name": f"近 {window_h} 小時新增",
             "value": (
-                f"LCU `{lcu_label}` · 階段 `{phase_label}`\n"
-                f"LeagueClient {fmt_int(status.get('league_main_mb'))} MB"
+                f"**{fmt_int(window_saves)}** 場\n"
+                + (f"約 {rate:,.1f} 場/分" if rate is not None else "速率未知")
             ),
             "inline": True,
         },
-        {"name": "Workers", "value": workers_value, "inline": True},
-        {"name": "版本分佈（近端抽樣）", "value": mix_text, "inline": True},
+        {
+            "name": patch_name,
+            "value": patch_value,
+            "inline": True,
+        },
     ]
 
-    if db.get("error"):
+    # --- stability: did it stay up, not merely is it up right now ------------
+    incidents = status.get("incidents") or {}
+    if not incidents.get("ok"):
+        stability = "—"
+    elif incidents.get("total", 0) == 0:
+        stability = f"近 {window_h} 小時無中斷 ✅"
+    else:
+        parts = [
+            f"{label} **{incidents['counts'][key]}** 次"
+            for key, label in INCIDENT_ACTIONS.items()
+            if incidents.get("counts", {}).get(key)
+        ]
+        stability = f"近 {window_h} 小時　" + "　·　".join(parts)
+    fields.append({"name": "穩定度", "value": stability, "inline": False})
+
+    # --- frontier intake: shown only when there is something to say ---------
+    if intake_total:
+        share = f"（其中高分段 **{fmt_int(intake_high)}** 人）" if intake_high else ""
         fields.append(
-            {"name": "資料庫探測錯誤", "value": str(db["error"])[:500], "inline": False}
+            {
+                "name": "前線新血",
+                "value": f"近 {window_h} 小時新入隊 **{fmt_int(intake_total)}** 人{share}",
+                "inline": False,
+            }
         )
+
+    # --- publish legs: one line each when healthy; detail lives above --------
+    if publish.get("error") or not publish.get("ok"):
+        git_line = "Git 推送　無法判斷"
+    elif publish.get("synced"):
+        git_line = f"Git 推送　已同步 ✅　`{str(publish.get('published_commit') or '')[:8]}`"
+    else:
+        git_line = (
+            f"Git 推送　`{str(publish.get('published_commit') or '')[:8]}` 尚未進 remote"
+            f"（{fmt_minutes((publish.get('publish_commit_age_h') or 0) * 60)}）"
+        )
+
+    sp_age_h = site_publish.get("last_publish_age_h")
+    if site_publish.get("error"):
+        site_line = "網站重建　無法判斷"
+    elif site_crashing or site_stale:
+        # Already spelled out in the description; do not say it twice.
+        site_line = f"網站重建　見上方 ⚠️（{fmt_minutes((sp_age_h or 0) * 60)}前）"
+    elif not site_publish.get("ok"):
+        site_line = "網站重建　無發布記錄"
+    else:
+        total_txt = (
+            f"，{fmt_int(site_publish.get('last_published_total'))} 場"
+            if site_publish.get("last_published_total")
+            else ""
+        )
+        site_line = f"網站重建　{fmt_minutes((sp_age_h or 0) * 60)}前 ✅{total_txt}"
+
+    fields.append({"name": "發布", "value": f"{git_line}\n{site_line}", "inline": False})
+
+    # --- everything else, compressed into one small trailing line -----------
+    wd = status.get("watchdog")
+    fleet_bits = []
+    for w in status.get("workers_live") or []:
+        producers = int(w.get("producers") or 1)
+        suffix = f"×{producers}" if producers > 1 else ""
+        fleet_bits.append(f"{w['worker_id']}{suffix} {fmt_minutes(w['uptime_min'])}")
+    phase = status.get("phase")
+
+    detail_bits = [
+        f"LCU {'正常' if lcu_ok is True else ('異常' if lcu_ok is False else '未知')}",
+        f"階段 {'閒置' if phase in (None, 'None') else phase}",
+        f"客戶端 {status.get('league_main_mb')}MB",
+        f"collector {' / '.join(fleet_bits) if fleet_bits else '無'}",
+        f"watchdog {fmt_minutes((wd or {}).get('uptime_min')) if wd else '未運行'}",
+    ]
+    if patch.get("ok") and patch.get("patch"):
+        detail_bits.append(f"build {patch['patch']}")
+    # -# is Discord's subtext marker: renders small and grey.
+    fields.append(
+        {"name": "細節", "value": "-# " + "　·　".join(detail_bits), "inline": False}
+    )
 
     embed = {
         "title": f"ARAM 大亂鬥爬蟲 · {headline}",
-        "color": color,
         "description": description,
+        "color": color,
         "timestamp": status.get("ts"),
         "fields": fields,
-        "footer": {"text": "arammeta 爬蟲狀態（每 6 小時）"},
+        "footer": {"text": f"arammeta 爬蟲狀態（每 {window_h} 小時）"},
     }
     return {
         "username": "arammeta 爬蟲",

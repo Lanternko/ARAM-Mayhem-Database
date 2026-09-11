@@ -39,7 +39,9 @@ Crawler 通知（Task Scheduler）
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
 | Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0` |
-| League memory | 同上 | degrade 3900 MB；safe restart 4500 MB（phase 卡住且 45 分沒收場則無視 phase 強制重啟）；worker start gate 6500 MB |
+| League memory | 同上 | degrade 3900 MB；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
+| System memory | 同上 | commit ≥80% 或 available RAM ≤3072 MB 降為 1 producer；commit ≥90% 或 available RAM ≤1536 MB 暫停收集；連續 3 次 commit ≤70%、available RAM ≥4096 MB 且 client <3500 MB 才恢復 |
+| DB 磁碟空間 | `scripts/mayhem_lcu_watchdog.py` defaults | `games.db` 所在磁碟剩 <5 GB 暫停收集（事件 `pause_workers_disk_full`），≥10 GB 才恢復；暫停期間不做零產出／client 重啟。磁碟滿在下游只會表現成 `WRITER_START_FAILED`／`disk I/O error` |
 | Frontier | 同上＋watchdog | manual pending cap 120；queue 450／2400／2450／4310；OPGG＋self＋friends |
 | Static publish | wrapper＋`src/aram_nn/site/static_publish.py` | growth 10%；patch `auto`；新 patch 至少 10,000 games |
 | Recommender refresh | `scripts/mayhem_lcu_watchdog.py` defaults | growth 25%；目前 patch 至少 15,000 games |
@@ -65,6 +67,14 @@ Crawler 通知（Task Scheduler）
 | ARAMMeta API／tunnel／backup | `data/site/` 下對應 `.log`、`.out.log`、`.err.log` 與 `backups/` |
 
 State JSON／JSONL 是恢復與門檻判斷依據，不是可隨手清除的 cache。`games.db`、`games.db-wal`、`games.db-shm` 在 collector 執行時絕對不要移動、替換或分開處理。
+
+### 記憶體監控與調節
+
+- League 門檻使用 `max(RSS, Private Bytes)`。RSS 只代表目前駐留 RAM 的頁面，不能代表程序對全系統記憶體承諾額度的占用；state 同時保留兩個數值及所選指標。
+- Windows system commit 直接取 `GetPerformanceInfo` 的 CommitTotal／CommitLimit（[Microsoft 欄位定義](https://learn.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-performance_information)）；可用實體 RAM 取系統計數器。每個監控週期取一次，不啟動 WMI／PowerShell 子程序，也不掃描歷史 log。
+- 系統壓力先降 worker，嚴重時透過既有 graceful fleet stop 暫停收集；不停止其他應用程式、publisher 或 model refresher。壓力恢復後會自動續跑；worker 數相同時不重建 fleet。
+- 恢復採連續健康樣本，避免門檻附近反覆重開。讀值缺失不當成記憶體充足；既有 client 門檻仍有效。資源保護造成的暫停不可當作 client 卡住、進而繞過遊戲狀態保護的證據。
+- 這是每分鐘的壓力調節，不是硬性配置額度；其他程式在兩次取樣間突然大量配置記憶體仍可能耗盡系統。Client 重開會回收舊程序記憶體，無法根治其內部持續增長的原因。
 
 一次性任務複製整份 `games.db`（publish snapshot、offline backup）留下的 60 GB 級副本由 `scripts/prune_stale_db_snapshots.py` 收：預設只掃 `data/site`、只動 ≥1 GB 且 ≥7 天、有 SQLite magic header 的檔。`data/lcu` 與 `games.db`／`meta_pick.db` 是 hard-deny，改參數也碰不到。保護是明示的而不是靠檔名或年齡猜——`player_history/service/` 下 API 在服務的 snapshot 與 `games-backup-*` 同日、同命名詞彙，且 API 只在請求時開檔，獨佔開檔測試看起來一樣「空閒」。要新增保護目錄改 `DEFAULT_PROTECT_GLOBS`，或讓 manifest／state JSON 提到該檔名即可。無 `--apply` 時只印計畫。
 

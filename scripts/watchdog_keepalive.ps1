@@ -61,6 +61,15 @@ $argsList = @(
     # 6500 stays above the observed-good ceiling while still catching a client that
     # has genuinely run away.
     "--worker-start-max-client-mb", "6500",
+    # Whole-system committed memory and available RAM, not page-file usage.
+    # Recover only after three healthy samples to avoid fleet restart churn.
+    "--system-degrade-commit-percent", "80",
+    "--system-pause-commit-percent", "90",
+    "--system-resume-commit-percent", "70",
+    "--system-degrade-available-mb", "3072",
+    "--system-pause-available-mb", "1536",
+    "--system-resume-available-mb", "4096",
+    "--resource-recovery-samples", "3",
     "--manual-seed-pending-cap", "120",
     "--check-interval-sec", "60",
     "--client-ready-timeout-sec", "600",

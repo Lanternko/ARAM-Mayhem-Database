@@ -73,3 +73,5 @@ Thumbs.db
 .claude/settings.local.json
 # Claude Code worktrees are local checkouts; never stage them
 .claude/worktrees/
+# Agent worktrees (any tool); local checkouts, never stage them
+.worktrees/
