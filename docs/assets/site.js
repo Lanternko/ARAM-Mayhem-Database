@@ -1777,9 +1777,25 @@
         return String(text || '').replace(AUG_VALUE_TOKEN, 'X');
     }
 
+    // CommunityDragon also ships unresolved 「{{key}}」 template keys: the ability
+    // name (champion-specific, so no single value exists) and the on-hit keyword.
+    // Both leak into every locale.  Substitute a generic word rather than print
+    // the raw key — 33 zh and 36 en augment descriptions carry one.
+    const AUG_NAME_TOKENS = [
+        [/\{\{\s*spellname\s*\}\}/gi, '技能', 'ability'],
+        [/\{\{\s*item_keyword_onhit\s*\}\}/gi, '攻擊特效', 'on-hit'],
+    ];
+    function augFillNameTokens(text) {
+        let out = String(text || '');
+        AUG_NAME_TOKENS.forEach(([re, zh, en]) => {
+            out = out.replace(re, currentLang === 'en' ? en : zhUi(zh));
+        });
+        return out;
+    }
+
     function augDesc(aug, aid) {
         if (!aug) return '';
-        return augFillValueToken(augDescRaw(aug, aid));
+        return augFillNameTokens(augFillValueToken(augDescRaw(aug, aid)));
     }
 
     function augDescRaw(aug, aid) {
@@ -2721,11 +2737,12 @@
         ['unused', '空池或未使用', 'Empty or unused',
             '沒有增幅，或沒有任何英雄引用。', 'No augments, or no champion references them.'],
     ];
+    // Row/column order matches the payload's archetype `cell` = [row, col].
     const APOOL_ARCH_ROWS = [
-        ['MeleeAttacker', '近戰普攻型', 'Melee Attacker'], ['RangedAttacker', '遠程普攻型', 'Ranged Attacker'],
-        ['MeleeCaster', '近戰施法型', 'Melee Caster'], ['RangedCaster', '遠程施法型', 'Ranged Caster'],
+        ['近戰普攻型', 'Melee Attacker'], ['遠程普攻型', 'Ranged Attacker'],
+        ['近戰施法型', 'Melee Caster'], ['遠程施法型', 'Ranged Caster'],
     ];
-    const APOOL_ARCH_COLS = [['AD', '物攻', 'AD'], ['AP', '魔攻', 'AP'], ['Burst', '爆發', 'Burst'], ['DPS', '持續', 'DPS']];
+    const APOOL_ARCH_COLS = [['物攻', 'AD'], ['魔攻', 'AP'], ['爆發', 'Burst'], ['持續', 'DPS']];
 
     function setAugMode(next) {
         augMode = next === 'pools' ? 'pools' : 'tier';
@@ -2742,7 +2759,6 @@
         trackEvent('aug_mode', { mode: augMode });
     }
     function apoolLabel(p) { return p ? pickLang(p.label_zh, p.label_en) : ''; }
-    function apoolInternal(p) { return p.name || ('#' + (p.hash || p.id)); }
     function apoolTag(p) {
         if (!p || (p.label_source !== 'inferred' && p.label_source !== 'patch')) return '';
         const txt = p.label_source === 'patch' ? pickLang('公告名稱', 'Patch-note name') : pickLang('推定名稱', 'Inferred name');
@@ -2754,12 +2770,24 @@
         const raw = (augPools.data && augPools.data.augs && augPools.data.augs[aid]) || {};
         const name = site ? augName(site, aid)
             : (currentLang === 'en' ? (raw.en || raw.zh || '') : zhUi(raw.zh || raw.en || ''));
-        return { name: name || '#' + aid, icon: (site && site.icon) || raw.icon || '' };
+        return {
+            name: name || '#' + aid,
+            icon: (site && site.icon) || raw.icon || '',
+            // Some pool augments have no site row (never picked yet); the pool payload carries their text.
+            desc: (site && augDesc(site, aid)) || augDesc({ desc_zh: raw.desc_zh || '', desc_en: raw.desc_en || '' }, aid),
+            rarity: (site && site.rarity) || raw.rarity || '',
+        };
     }
     function apoolChamp(cid) {
         const info = DATA && DATA.champs && DATA.champs[cid];
         return { name: info ? champName(info, cid) : '#' + cid, image: (info && info.image) || '' };
     }
+    // Champion lists sort A→Z by English name in every language.
+    function apoolAbcKey(cid) {
+        const info = (DATA && DATA.champs && DATA.champs[cid]) || {};
+        return String(info.name_en || info.alias || info.name || cid);
+    }
+    function apoolAbc(a, b) { return apoolAbcKey(a).localeCompare(apoolAbcKey(b), 'en', { sensitivity: 'base' }); }
     function apoolIndex(d) {
         augPools.byId = {};
         augPools.excluded = new Set();
@@ -2838,9 +2866,7 @@
             .filter(Boolean).join(' ').toLowerCase();
     }
     function apoolChampListHtml(d) {
-        const coll = currentLang === 'en' ? 'en' : 'zh-Hant';
-        const rows = Object.keys(d.champs || {}).map(cid => ({ cid, ...apoolChamp(cid) }));
-        rows.sort((a, b) => a.name.localeCompare(b.name, coll));
+        const rows = Object.keys(d.champs || {}).sort(apoolAbc).map(cid => ({ cid, ...apoolChamp(cid) }));
         return rows.map(r => {
             const on = r.cid === augPools.champ;
             return `<button type="button" class="apool-champ${on ? ' is-active' : ''}" data-apool-champ="${escHtml(r.cid)}" `
@@ -2860,13 +2886,22 @@
             return `<p class="apool-empty">${escHtml(pickLang('這個池子目前沒有任何增幅。', 'This pool has no augments.'))}</p>`;
         }
         const strike = p.family !== 'excluded';
-        const exTitle = pickLang('同時在排除池內，不會出現', 'Also in the excluded pool; never offered');
+        const exNote = pickLang('同時在排除池內，不會出現', 'Also in the excluded pool; never offered');
+        const rarityLabels = tr().rarityLabels || {};
         return `<ul class="apool-augs">` + p.augs.map(aid => {
             const a = apoolAug(aid);
             const ex = strike && augPools.excluded.has(String(aid));
-            return `<li class="apool-aug${ex ? ' is-excluded' : ''}"${ex ? ` title="${escHtml(exTitle)}"` : ''}>`
+            // Shared float tip (hover, keyboard focus, tap); focusable so the last two work.
+            const tip = buildItemTipHtml({
+                name: a.name,
+                icons: a.icon ? [a.icon] : [],
+                subtitle: rarityLabels[a.rarity] || '',
+                desc: a.desc,
+                note: ex ? exNote : '',
+            });
+            return `<li class="apool-aug has-item-tip${ex ? ' is-excluded' : ''}" tabindex="0">`
                 + (a.icon ? `<img src="${escHtml(a.icon)}" alt="" loading="lazy" width="22" height="22">` : '')
-                + `<span>${escHtml(a.name)}</span></li>`;
+                + `<span>${escHtml(a.name)}</span>${itemTipSource(tip)}</li>`;
         }).join('') + `</ul>`;
     }
     function apoolDetailHtml(d) {
@@ -2880,13 +2915,12 @@
         rows.forEach(r => r.p.augs.forEach(a => { if (!augPools.excluded.has(String(a))) union.add(String(a)); }));
         const c = apoolChamp(cid);
         // 175 sits too close to 150/200 to label on a phone; each row prints its value.
-        const ticks = [75, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
+        const ticks = [75, 100, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
         const body = rows.map(r => {
             const open = augPools.openRow === r.p.id;
             return `<li class="apool-row-item${open ? ' is-open' : ''}">`
                 + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}" aria-expanded="${open}">`
                 + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
-                + `<span class="apool-row-id">${escHtml(apoolInternal(r.p))}</span>`
                 + `<span class="apool-bar"><span class="apool-fill${r.w ? '' : ' is-default'}" style="width:${(r.w || 100) / 2}%"></span></span>`
                 + `<span class="apool-w${r.w ? '' : ' is-default'}">${escHtml(apoolWeightText(r.w))}</span>`
                 + `</button>`
@@ -2903,24 +2937,24 @@
             + `<span class="apool-scale-track">${ticks}</span></div>`
             + `<ul class="apool-rows">${body}</ul>`
             + `<p class="apool-footnote">${escHtml(pickLang(
-                '斜線條表示遊戲檔沒寫權重、套用預設值（實際數值不在檔案中）。點任一列可展開該池的增幅。',
-                'Hatched bars mean no weight is written and the default applies (its value is not in the files). Select a row to list that pool’s augments.'))}</p>`;
+                '斜線條表示遊戲檔沒寫權重、套用預設值（實際數值不在檔案中）。點任一列可展開該池的增幅，滑過或點增幅可看說明。',
+                'Hatched bars mean no weight is written and the default applies (its value is not in the files). Select a row to list that pool’s augments; hover or tap an augment for its description.'))}</p>`;
     }
     function apoolPoolBtnHtml(p) {
         const on = p.id === augPools.openPool;
         return `<button type="button" class="apool-pool${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" aria-expanded="${on}">`
             + `<span class="apool-pool-name">${escHtml(apoolLabel(p))}${apoolTag(p)}</span>`
-            + `<span class="apool-pool-meta">${escHtml(apoolInternal(p))} · ${escHtml(pickLang(
+            + `<span class="apool-pool-meta">${escHtml(pickLang(
                 `${p.augs.length} 增幅 · ${p.champs} 英雄`, `${p.augs.length} augments · ${p.champs} champs`))}</span>`
             + `</button>`;
     }
     function apoolMatrixHtml(list) {
-        const byName = {};
-        list.forEach(p => { byName[p.name] = p; });
-        const head = `<tr><th></th>${APOOL_ARCH_COLS.map(c => `<th scope="col">${escHtml(pickLang(c[1], c[2]))}</th>`).join('')}</tr>`;
-        const body = APOOL_ARCH_ROWS.map(r => `<tr><th scope="row">${escHtml(pickLang(r[1], r[2]))}</th>`
-            + APOOL_ARCH_COLS.map(c => {
-                const p = byName[r[0] + c[0]];
+        const byCell = {};
+        list.forEach(p => { if (p.cell) byCell[p.cell.join(',')] = p; });
+        const head = `<tr><th></th>${APOOL_ARCH_COLS.map(c => `<th scope="col">${escHtml(pickLang(c[0], c[1]))}</th>`).join('')}</tr>`;
+        const body = APOOL_ARCH_ROWS.map((r, ri) => `<tr><th scope="row">${escHtml(pickLang(r[0], r[1]))}</th>`
+            + APOOL_ARCH_COLS.map((c, ci) => {
+                const p = byCell[ri + ',' + ci];
                 if (!p) return '<td></td>';
                 const on = p.id === augPools.openPool;
                 return `<td><button type="button" class="apool-cell${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" `
@@ -2935,19 +2969,17 @@
         if (!p) return '';
         const members = (augPools.members[p.id] || []).slice();
         const groups = {};
-        members.forEach(([cid, w]) => { (groups[w] = groups[w] || []).push(apoolChamp(cid).name); });
+        members.forEach(([cid, w]) => { (groups[w] = groups[w] || []).push(cid); });
         const ws = Object.keys(groups).map(Number).sort((a, b) => (b || 100) - (a || 100));
-        const coll = currentLang === 'en' ? 'en' : 'zh-Hant';
         const sep = pickLang('、', ', ');
         const memberHtml = ws.length
             ? ws.map(w => `<div class="apool-wgroup"><span class="apool-w${w ? '' : ' is-default'}">${escHtml(apoolWeightText(w))}</span>`
-                + `<span>${escHtml(groups[w].sort((a, b) => a.localeCompare(b, coll)).join(sep))}</span></div>`).join('')
+                + `<span>${escHtml(groups[w].sort(apoolAbc).map(cid => apoolChamp(cid).name).join(sep))}</span></div>`).join('')
             : `<p class="apool-empty">${escHtml(p.family === 'excluded'
                 ? pickLang('沒有英雄引用這個池子；它由全域規則排除。', 'No champion references this pool; a global rule excludes it.')
                 : pickLang('沒有英雄引用這個池子。', 'No champion references this pool.'))}</p>`;
         return `<div class="apool-pool-detail">`
-            + `<div class="apool-pool-detail-head"><h4>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4>`
-            + `<span class="apool-row-id">${escHtml(apoolInternal(p))}</span></div>`
+            + `<div class="apool-pool-detail-head"><h4>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4></div>`
             + `<h5>${escHtml(pickLang(`包含的增幅（${p.augs.length}）`, `Augments (${p.augs.length})`))}</h5>`
             + apoolAugListHtml(p)
             + `<h5>${escHtml(pickLang(`所屬英雄（${members.length}），依權重分組`, `Champions (${members.length}) by weight`))}</h5>`
@@ -3010,8 +3042,8 @@
                 '每位英雄的每個池子都標了權重：75、150、175、200，或沒寫而套用預設值。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
                 'Each of a champion’s pools carries a weight: 75, 150, 175, 200, or none (the default). A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
             [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
-                '遊戲檔把多數池子名稱存成 hash。顯示英文內部名稱的池子，是用該名稱重新計算 hash 並完全吻合，所以名稱是確定的；標「推定名稱」的池子無法還原，中文名稱是依內容推定的。',
-                'Most pool names are stored as hashes. Pools shown with an internal name were confirmed by re-hashing that name and matching it exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents.')],
+                '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
+                'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
             [pickLang('這裡沒有的規則', 'Rules not shown here'), pickLang(
                 '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行，所以「可能抽到的增幅」尚未扣除這些規則。',
                 'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them, so “up to N augments” does not subtract them.')],
