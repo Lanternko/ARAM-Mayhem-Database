@@ -125,3 +125,29 @@ def test_stop_tree_kills_descendant(tmp_path):
     finally:
         if process.poll() is None:
             jobs._stop_tree(process)
+
+
+def test_git_timeout_kills_tree_and_reports(tmp_path):
+    # Child spawns a grandchild that inherits stdio, like a stuck credential helper.
+    code = ('import subprocess, sys, time; '
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+            "print('waiting for credentials', file=sys.stderr, flush=True); time.sleep(60)")
+    started = __import__('time').monotonic()
+    result = jobs._run_git([sys.executable, '-c', code], timeout=2)
+    assert __import__('time').monotonic() - started < 20
+    assert result.returncode == 124
+    assert 'timed out after 2s' in result.stderr
+    assert 'waiting for credentials' in result.stderr
+
+
+def test_git_runs_noninteractive(monkeypatch):
+    seen = {}
+    original = jobs.subprocess.Popen
+    def launch(command, **kwargs):
+        seen.update(kwargs['env'])
+        return original([sys.executable, '-c', "print('ok')"], **kwargs)
+    monkeypatch.setattr(jobs.subprocess, 'Popen', launch)
+    result = jobs.run_command(['git', 'push', 'origin', 'HEAD:main'])
+    assert result.returncode == 0 and result.stdout.strip() == 'ok'
+    assert seen['GIT_TERMINAL_PROMPT'] == '0'
+    assert seen['GCM_INTERACTIVE'] == 'never'

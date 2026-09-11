@@ -158,10 +158,43 @@ def _stop_tree(process):
         raise RuntimeError('analysis descendants did not exit; refusing to continue')
 
 
+# A hidden background git can never answer a credential prompt. On 2026-09-10 an
+# expired GitHub token left `git push` parked in git-credential-manager for 19h
+# while the publisher looked alive, so git must fail fast and loudly instead.
+GIT_TIMEOUT_SEC = 600
+GIT_NONINTERACTIVE_ENV = {'GIT_TERMINAL_PROMPT': '0', 'GCM_INTERACTIVE': 'never'}
+
+
+def _run_git(command, cwd=None, timeout=None):
+    timeout = GIT_TIMEOUT_SEC if timeout is None else timeout
+    env = {**os.environ, **GIT_NONINTERACTIVE_ENV}
+    # Temp files, not pipes: a surviving credential helper can hold a pipe open
+    # and turn communicate() into the very hang this timeout exists to stop.
+    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=stdout, stderr=stderr,
+                                   creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _stop_tree(process)
+            stderr.seek(0)
+            detail = stderr.read().decode(errors='replace').strip()
+            message = (f'timed out after {timeout:g}s (credential prompt or network hang?)'
+                       + (f': {detail}' if detail else ''))
+            return subprocess.CompletedProcess(command, 124, '', message)
+        stdout.seek(0)
+        stderr.seek(0)
+        return subprocess.CompletedProcess(command, process.returncode,
+                                           stdout.read().decode(errors='replace'),
+                                           stderr.read().decode(errors='replace'))
+
+
 def run_command(command, cwd=None):
     """Capture output on disk and monitor only analysis children, never git cleanup."""
+    if Path(str(command[0])).stem.lower() == 'git':
+        return _run_git(command, cwd=cwd)
     job = _active.get()
-    if job is None or Path(str(command[0])).stem.lower() == 'git':
+    if job is None:
         return subprocess.run(command, cwd=cwd, text=True, capture_output=True,
                               check=False, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     sample = sample_resources()
