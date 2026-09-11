@@ -40,6 +40,7 @@ python scripts/prune_stale_db_snapshots.py
 - `sync_site_backend.py` — 本機對局同步到 backend API CLI（`--watch` 依上次成功 upload 的 growth watermark 推送）
 - `tier_list.py` — 舊版 LR-solo 權重抽英雄 tier list（CSV 輸出，非現行站台管線）
 - `build_augment_category_editor.py` — 產生 `augment-category-editor.html`（手動修正 augment 分類 → `scripts/augment_category_overrides.json`）
+- `build_augment_pools.py` — 從 CommunityDragon 遊戲資料產生 `docs/api/augment-pools.json`（增幅 → 增幅池子分頁）；每個 patch 跑一次，不隨 data publisher 自動更新
 
 ## 2. 資料收集 harness（LCU collector / watchdog / snowball / overwolf）
 - `lcu_collector.py` — LCU collector 主 CLI（collect/snowball/export/dataset/stats 等 subcommand，凍結）

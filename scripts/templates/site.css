@@ -6402,6 +6402,276 @@
     }
     .game-mode-tab:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
 
+    /* ---- 增幅 view submodes (增幅榜 / 增幅池): same segmented control as the
+       Game view, on its own class so the Game click handler never sees it. ---- */
+    .aug-mode-tabs {
+        display: flex;
+        gap: 6px;
+        max-width: 360px;
+        margin: 10px 0 18px;
+        padding: 4px;
+        border-radius: 12px;
+        background: var(--surface-raised);
+        border: 1px solid var(--border);
+    }
+    .aug-mode-tab {
+        flex: 1;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--text-muted);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+    }
+    .aug-mode-tab:hover { color: var(--text); }
+    .aug-mode-tab.is-active { background: var(--accent); color: var(--accent-on); }
+    .aug-mode-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .aug-mode-panel[hidden] { display: none !important; }
+
+    /* ---- 增幅池: one flat lookup panel + hairline-separated reference sections.
+       Weight bars stay neutral; gold marks only the current selection. ---- */
+    #aug-pools-host {
+        --apool-bar: color-mix(in oklab, var(--text) 52%, transparent);
+        --apool-track: color-mix(in oklab, var(--text) 9%, transparent);
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+    }
+    .apool-status { margin: 0; padding: 32px 0; color: var(--text-muted); font-size: 14px; }
+    .apool-intro { display: flex; flex-direction: column; gap: 4px; }
+    .apool-lede { margin: 0; max-width: 70ch; font-size: 14px; line-height: 1.6; }
+    .apool-meta { margin: 0; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .apool-panel {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        background: var(--panel-surface);
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-md);
+        box-shadow: var(--panel-shadow);
+        overflow: hidden;
+    }
+    .apool-picker {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+        padding: 12px;
+        border-right: 1px solid var(--panel-line);
+    }
+    .apool-search {
+        box-sizing: border-box;
+        width: 100%;
+        height: 40px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        font-size: 14px;
+    }
+    .apool-search:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+    .apool-champs {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        max-height: 640px;
+        margin: 0 -4px;
+        padding: 0 4px;
+        overflow-y: auto;
+    }
+    .apool-champ {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 5px 8px;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+    }
+    .apool-champ[hidden] { display: none; }
+    .apool-champ img { flex: none; width: 24px; height: 24px; border-radius: 6px; }
+    .apool-champ:hover { background: var(--surface-2); }
+    .apool-champ.is-active {
+        background: color-mix(in oklab, var(--accent) 14%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent);
+    }
+    .apool-champ:focus-visible,
+    .apool-row:focus-visible,
+    .apool-pool:focus-visible,
+    .apool-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .apool-detail { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px 20px 18px; }
+    .apool-detail-head { display: flex; align-items: center; gap: 12px; }
+    .apool-detail-head img { width: 44px; height: 44px; border-radius: 10px; }
+    .apool-detail-name { margin: 0; font-size: 22px; font-weight: 600; line-height: 1.1; }
+    .apool-detail-sub { margin: 2px 0 0; font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .apool-row,
+    .apool-scale {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(90px, 1.6fr) 56px;
+        align-items: center;
+        gap: 12px;
+    }
+    .apool-scale { padding: 0 8px; font-size: 11px; color: var(--text-dim); }
+    .apool-scale-label { grid-column: 1 / 3; }
+    .apool-scale-track { grid-column: 3; position: relative; height: 14px; font-variant-numeric: tabular-nums; }
+    .apool-scale-track span { position: absolute; top: 0; transform: translateX(-50%); }
+    .apool-rows { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+    .apool-row-item + .apool-row-item { border-top: 1px solid var(--panel-line); }
+    .apool-row {
+        width: 100%;
+        padding: 8px;
+        border: 0;
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .apool-row:hover,
+    .apool-row-item.is-open .apool-row { background: var(--surface-2); }
+    .apool-row-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; font-size: 14px; font-weight: 500; }
+    .apool-row-id { overflow: hidden; font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+    .apool-bar { position: relative; height: 8px; overflow: hidden; border-radius: 4px; background: var(--apool-track); }
+    .apool-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--apool-bar); }
+    .apool-fill.is-default { background: repeating-linear-gradient(135deg, var(--apool-bar) 0 3px, transparent 3px 6px); }
+    .apool-w { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+    .apool-w.is-default { font-weight: 500; color: var(--text-muted); }
+    .apool-tag {
+        padding: 0 7px;
+        border: 1px dashed var(--border-strong);
+        border-radius: 999px;
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.6;
+        white-space: nowrap;
+    }
+    .apool-footnote { margin: 0; max-width: 72ch; font-size: 12px; color: var(--text-muted); }
+    .apool-augs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; padding: 0 8px; list-style: none; }
+    .apool-aug {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 9px 3px 4px;
+        border-radius: 999px;
+        background: var(--surface-2);
+        font-size: 12px;
+    }
+    .apool-aug img { width: 22px; height: 22px; border-radius: 50%; }
+    .apool-aug.is-excluded { color: var(--text-dim); text-decoration: line-through; }
+    .apool-empty { margin: 4px 8px 10px; font-size: 13px; color: var(--text-muted); }
+    .apool-section { display: flex; flex-direction: column; gap: 16px; }
+    .apool-h { margin: 0; font-size: 18px; font-weight: 600; }
+    .apool-family { display: flex; flex-direction: column; gap: 10px; }
+    .apool-family-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+    .apool-family-head h4 { margin: 0; font-size: 14px; font-weight: 600; }
+    .apool-family-head p { margin: 0; font-size: 12px; color: var(--text-muted); }
+    .apool-pool-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        background: var(--panel-line);
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-md);
+    }
+    .apool-pool {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 10px 12px;
+        border: 0;
+        background: var(--panel-surface);
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .apool-pool:hover,
+    .apool-cell:hover { background: var(--surface-2); }
+    .apool-pool.is-active,
+    .apool-cell.is-active { box-shadow: inset 0 0 0 1px var(--accent); }
+    .apool-pool-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+    .apool-pool-meta { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    .apool-matrix-wrap { overflow-x: auto; }
+    .apool-matrix { min-width: 520px; border-collapse: separate; border-spacing: 4px; }
+    .apool-matrix th { padding: 4px 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-align: left; white-space: nowrap; }
+    .apool-cell {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        width: 100%;
+        min-width: 96px;
+        padding: 9px 12px;
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-sm);
+        background: var(--panel-surface);
+        color: var(--text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .apool-cell-n { font-size: 18px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .apool-cell-s { font-size: 11px; color: var(--text-muted); }
+    .apool-pool-detail {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 14px 16px;
+        border: 1px solid var(--panel-line);
+        border-radius: var(--r-md);
+        background: var(--panel-inner);
+    }
+    .apool-pool-detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+    .apool-pool-detail-head h4 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 16px; font-weight: 600; }
+    .apool-pool-detail h5 { margin: 6px 0 0; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .apool-pool-detail .apool-augs { padding: 0; }
+    .apool-wgroup {
+        display: grid;
+        grid-template-columns: 56px minmax(0, 1fr);
+        gap: 12px;
+        padding: 6px 0;
+        border-top: 1px solid var(--panel-line);
+        font-size: 13px;
+        line-height: 1.6;
+    }
+    .apool-wgroup .apool-w { text-align: left; }
+    .apool-diff { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+    .apool-diff b { font-weight: 600; }
+    .apool-notes {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+    }
+    .apool-notes h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+    .apool-notes p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+    @media (max-width: 760px) {
+        .apool-panel { grid-template-columns: minmax(0, 1fr); }
+        .apool-picker { border-right: 0; border-bottom: 1px solid var(--panel-line); }
+        .apool-champs { flex-direction: row; flex-wrap: wrap; max-height: 176px; }
+        .apool-champ { width: auto; }
+        .apool-row,
+        .apool-scale { grid-template-columns: minmax(0, 1fr) minmax(72px, 1fr) 48px; }
+        .apool-row-id,
+        .apool-scale-label { display: none; }
+        .apool-scale-track { grid-column: 2; }
+        .apool-detail { padding: 14px 12px; }
+    }
+
     /* ---- 選增幅: compact, explicit decision flow ---- */
     #aug-draft-host {
         --aug-silver: oklch(0.79 0.024 258);

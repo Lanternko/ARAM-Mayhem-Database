@@ -3248,8 +3248,24 @@ def render_html(
         "<section class='view view-augments' id='view-augments' data-view='augments' role='tabpanel' aria-labelledby='tab-augments'>"
         "<div class='view-narrow'>"
         "<h2 class='section-head' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments'>增幅</h2>"
+        # 增幅榜 / 增幅池 submodes; labels are server-rendered like the Game
+        # view's switcher, panels are toggled by JS (setAugMode).
+        "<div class='aug-mode-tabs' role='tablist' aria-label='增幅'>"
+        "<button type='button' class='aug-mode-tab is-active' id='aug-mode-tier' "
+        "data-aug-mode='tier' role='tab' aria-selected='true' aria-controls='aug-mode-panel-tier' "
+        "data-i18n-zh='增幅榜' data-i18n-zh-cn='海克斯榜' data-i18n-en='Tier list'>增幅榜</button>"
+        "<button type='button' class='aug-mode-tab' id='aug-mode-pools' "
+        "data-aug-mode='pools' role='tab' aria-selected='false' tabindex='-1' aria-controls='aug-pools-host' "
+        "data-i18n-zh='增幅池' data-i18n-zh-cn='海克斯池' data-i18n-en='Augment pools'>增幅池</button>"
+        "</div>"
+        "<div class='aug-mode-panel' id='aug-mode-panel-tier' data-aug-mode='tier' "
+        "role='tabpanel' aria-labelledby='aug-mode-tier'>"
         "<div class='aug-tier-filters' id='aug-tier-filters'></div>"
         "<div id='aug-tier-host'></div>"
+        "</div>"
+        # 增幅池 — rendered entirely by JS from api/augment-pools.json.
+        "<div class='aug-mode-panel' id='aug-pools-host' data-aug-mode='pools' "
+        "role='tabpanel' aria-labelledby='aug-mode-pools' hidden></div>"
         "</div>"
         "</section>"
     )

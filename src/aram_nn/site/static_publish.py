@@ -56,6 +56,10 @@ COMP_FIT_PARQUET_CANDIDATES = (
 DEFAULT_DOC_PATHS = (
     Path("docs/index.html"),
     Path("docs/api/tier-list.json"),
+    # Mayhem augment pools (增幅 → 增幅池 sub-tab), fetched on demand.  Built once
+    # per patch by scripts/build_augment_pools.py from game data, not by this
+    # publisher; tracked so a deploy can never ship the tab without its payload.
+    Path("docs/api/augment-pools.json"),
     # Per-champion detail shards are loaded on demand from the tier-list shell.
     # They must be staged atomically with the summary payload that references them.
     Path("docs/api/champions"),

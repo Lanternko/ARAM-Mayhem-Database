@@ -2962,7 +2962,401 @@
             `<div class="aug-cat-bar aug-rarity-bar" role="group" aria-label="${escHtml(rarLbl)}">${rarChips}</div>`
             + `<div class="aug-cat-bar" role="group" aria-label="${escHtml(catLbl)}">${catChips}</div>`;
     }
+    // ----- 增幅 view submodes (增幅榜 / 增幅池) -----
+    // 增幅池 shows which augment pools each champion draws from and at what
+    // weight, read from game data by scripts/build_augment_pools.py into
+    // api/augment-pools.json (fetched on first open, never on page load).
+    let augMode = 'tier';
+    const augPools = {
+        data: null, loading: false, failed: false, champ: null, q: '',
+        openRow: null, openPool: null, byId: null, members: null, excluded: null,
+    };
+    const APOOL_FAMILIES = [
+        ['stat', '屬性池', 'Stat pools',
+            '依英雄吃的屬性分組。', 'Grouped by the stats a champion uses.'],
+        ['archetype', '輸出原型池', 'Damage archetypes',
+            '近戰／遠程 × 普攻型／施法型 × 物攻／魔攻／爆發／持續，格子內是英雄數。',
+            'Melee/Ranged × Attacker/Caster × AD/AP/Burst/DPS. Cells show champion counts.'],
+        ['function', '功能池', 'Function pools',
+            '依打法功能分組，例如控場、開戰、治療與護盾。',
+            'Grouped by play pattern: crowd control, engage, heals, shields and more.'],
+        ['inferred', '名稱未確認的池子', 'Pools with unconfirmed names',
+            '遊戲檔只存了名稱的 hash，無法還原；中文名稱是依內容推定的。',
+            'Only a hash of the name is stored and it could not be recovered; labels describe the contents.'],
+        ['excluded', '排除池', 'Excluded pool',
+            '被全域規則排除，裡面的增幅不會出現在任何英雄身上。',
+            'Removed by a global rule: these augments are never offered to anyone.'],
+        ['unused', '空池或未使用', 'Empty or unused',
+            '沒有增幅，或沒有任何英雄引用。', 'No augments, or no champion references them.'],
+    ];
+    const APOOL_ARCH_ROWS = [
+        ['MeleeAttacker', '近戰普攻型', 'Melee Attacker'], ['RangedAttacker', '遠程普攻型', 'Ranged Attacker'],
+        ['MeleeCaster', '近戰施法型', 'Melee Caster'], ['RangedCaster', '遠程施法型', 'Ranged Caster'],
+    ];
+    const APOOL_ARCH_COLS = [['AD', '物攻', 'AD'], ['AP', '魔攻', 'AP'], ['Burst', '爆發', 'Burst'], ['DPS', '持續', 'DPS']];
+
+    function setAugMode(next) {
+        augMode = next === 'pools' ? 'pools' : 'tier';
+        document.querySelectorAll('.aug-mode-tab').forEach(tab => {
+            const on = tab.getAttribute('data-aug-mode') === augMode;
+            tab.classList.toggle('is-active', on);
+            tab.setAttribute('aria-selected', String(on));
+            tab.tabIndex = on ? 0 : -1;
+        });
+        document.querySelectorAll('.aug-mode-panel').forEach(panel => {
+            panel.hidden = panel.getAttribute('data-aug-mode') !== augMode;
+        });
+        renderAugmentTier();
+        trackEvent('aug_mode', { mode: augMode });
+    }
+    function apoolLabel(p) { return p ? pickLang(p.label_zh, p.label_en) : ''; }
+    function apoolInternal(p) { return p.name || ('#' + (p.hash || p.id)); }
+    function apoolTag(p) {
+        if (!p || (p.label_source !== 'inferred' && p.label_source !== 'patch')) return '';
+        const txt = p.label_source === 'patch' ? pickLang('公告名稱', 'Patch-note name') : pickLang('推定名稱', 'Inferred name');
+        return `<span class="apool-tag">${escHtml(txt)}</span>`;
+    }
+    function apoolWeightText(w) { return w ? String(w) : pickLang('預設', 'Default'); }
+    function apoolAug(aid) {
+        const site = DATA && DATA.augs && DATA.augs[aid];
+        const raw = (augPools.data && augPools.data.augs && augPools.data.augs[aid]) || {};
+        const name = site ? augName(site, aid)
+            : (currentLang === 'en' ? (raw.en || raw.zh || '') : zhUi(raw.zh || raw.en || ''));
+        return { name: name || '#' + aid, icon: (site && site.icon) || raw.icon || '' };
+    }
+    function apoolChamp(cid) {
+        const info = DATA && DATA.champs && DATA.champs[cid];
+        return { name: info ? champName(info, cid) : '#' + cid, image: (info && info.image) || '' };
+    }
+    function apoolIndex(d) {
+        augPools.byId = {};
+        augPools.excluded = new Set();
+        augPools.members = {};
+        (d.pools || []).forEach(p => {
+            augPools.byId[p.id] = p;
+            if (p.family === 'excluded') p.augs.forEach(a => augPools.excluded.add(String(a)));
+        });
+        Object.entries(d.champs || {}).forEach(([cid, rows]) => rows.forEach(([pid, w]) => {
+            (augPools.members[pid] = augPools.members[pid] || []).push([cid, w]);
+        }));
+        if (!augPools.champ || !(d.champs || {})[augPools.champ]) {
+            // Open on the most-played champion so the first look shows real rows.
+            let best = null, bestG = -1;
+            Object.keys(d.champs || {}).forEach(cid => {
+                const g = (DATA && DATA.champs && DATA.champs[cid] && DATA.champs[cid].g) || 0;
+                if (g > bestG) { best = cid; bestG = g; }
+            });
+            augPools.champ = best;
+        }
+    }
+    function loadAugPools() {
+        if (augPools.data || augPools.loading) return;
+        augPools.loading = true;
+        loadSitePayload('api/augment-pools.json')
+            .then(d => { augPools.data = d; apoolIndex(d); })
+            .catch(() => { augPools.failed = true; })
+            .finally(() => { augPools.loading = false; if (augMode === 'pools') renderAugPools(); });
+    }
+    function renderAugPools() {
+        const host = document.getElementById('aug-pools-host');
+        if (!host) return;
+        const d = augPools.data;
+        if (!d) {
+            const msg = augPools.failed
+                ? pickLang('增幅池資料載入失敗，請重新整理頁面再試一次。', 'Augment pool data failed to load. Refresh the page to try again.')
+                : pickLang('正在載入增幅池…', 'Loading augment pools…');
+            host.innerHTML = `<p class="apool-status">${escHtml(msg)}</p>`;
+            if (!augPools.failed) loadAugPools();
+            return;
+        }
+        const nPools = (d.pools || []).length;
+        const nChamps = Object.keys(d.champs || {}).length;
+        const patch = d.patch || '';
+        const searchLbl = pickLang('搜尋英雄', 'Search champions');
+        host.innerHTML =
+            `<div class="apool-intro">`
+            + `<p class="apool-lede">${escHtml(pickLang(
+                '每位英雄只會從自己所屬的池子抽增幅，每個池子各有權重。選一位英雄，看它屬於哪些池子。',
+                'Each champion only draws augments from the pools it belongs to, and each pool carries a weight. Pick a champion to see its pools.'))}</p>`
+            + `<p class="apool-meta">${escHtml(pickLang(
+                `版本 ${patch} · ${nPools} 個池子 · ${nChamps} 位英雄 · 來源：遊戲資料`,
+                `Patch ${patch} · ${nPools} pools · ${nChamps} champions · Source: game data`))}</p>`
+            + `</div>`
+            + `<section class="apool-panel" aria-label="${escHtml(pickLang('用英雄查池子', 'Pools by champion'))}">`
+            + `<div class="apool-picker">`
+            + `<input class="apool-search" id="apool-search" type="search" autocomplete="off" `
+            + `placeholder="${escHtml(pickLang('搜尋英雄（中 / 英）', 'Search champions'))}" aria-label="${escHtml(searchLbl)}">`
+            + `<div class="apool-champs" id="apool-champs" role="group" aria-label="${escHtml(pickLang('英雄', 'Champions'))}">`
+            + apoolChampListHtml(d)
+            + `</div></div>`
+            + `<div class="apool-detail" id="apool-detail">${apoolDetailHtml(d)}</div>`
+            + `</section>`
+            + `<section class="apool-section" id="apool-all">${apoolAllHtml(d)}</section>`
+            + apoolDiffHtml(d)
+            + apoolNotesHtml(d);
+        if (augPools.q) {
+            const input = document.getElementById('apool-search');
+            if (input) input.value = augPools.q;
+            apoolFilter(augPools.q);
+        }
+    }
+    function apoolSearchKey(cid) {
+        const info = (DATA && DATA.champs && DATA.champs[cid]) || {};
+        return [info.name_zh, info.name, info.name_en, info.alias, champName(info, cid)]
+            .filter(Boolean).join(' ').toLowerCase();
+    }
+    function apoolChampListHtml(d) {
+        const coll = currentLang === 'en' ? 'en' : 'zh-Hant';
+        const rows = Object.keys(d.champs || {}).map(cid => ({ cid, ...apoolChamp(cid) }));
+        rows.sort((a, b) => a.name.localeCompare(b.name, coll));
+        return rows.map(r => {
+            const on = r.cid === augPools.champ;
+            return `<button type="button" class="apool-champ${on ? ' is-active' : ''}" data-apool-champ="${escHtml(r.cid)}" `
+                + `data-search="${escHtml(apoolSearchKey(r.cid))}" aria-pressed="${on}">`
+                + (r.image ? `<img src="${escHtml(r.image)}" alt="" loading="lazy" width="24" height="24">` : '')
+                + `<span>${escHtml(r.name)}</span></button>`;
+        }).join('');
+    }
+    function apoolFilter(q) {
+        const needle = String(q || '').trim().toLowerCase();
+        document.querySelectorAll('#apool-champs .apool-champ').forEach(btn => {
+            btn.hidden = Boolean(needle) && !(btn.getAttribute('data-search') || '').includes(needle);
+        });
+    }
+    function apoolAugListHtml(p) {
+        if (!p.augs.length) {
+            return `<p class="apool-empty">${escHtml(pickLang('這個池子目前沒有任何增幅。', 'This pool has no augments.'))}</p>`;
+        }
+        const strike = p.family !== 'excluded';
+        const exTitle = pickLang('同時在排除池內，不會出現', 'Also in the excluded pool; never offered');
+        return `<ul class="apool-augs">` + p.augs.map(aid => {
+            const a = apoolAug(aid);
+            const ex = strike && augPools.excluded.has(String(aid));
+            return `<li class="apool-aug${ex ? ' is-excluded' : ''}"${ex ? ` title="${escHtml(exTitle)}"` : ''}>`
+                + (a.icon ? `<img src="${escHtml(a.icon)}" alt="" loading="lazy" width="22" height="22">` : '')
+                + `<span>${escHtml(a.name)}</span></li>`;
+        }).join('') + `</ul>`;
+    }
+    function apoolDetailHtml(d) {
+        const cid = augPools.champ;
+        const rows = ((d.champs || {})[cid] || [])
+            .map(([pid, w]) => ({ p: augPools.byId[pid], w }))
+            .filter(r => r.p);
+        // Default weight's value isn't in the files; it sorts between 75 and 150.
+        rows.sort((a, b) => (b.w || 100) - (a.w || 100) || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
+        const union = new Set();
+        rows.forEach(r => r.p.augs.forEach(a => { if (!augPools.excluded.has(String(a))) union.add(String(a)); }));
+        const c = apoolChamp(cid);
+        // 175 sits too close to 150/200 to label on a phone; each row prints its value.
+        const ticks = [75, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
+        const body = rows.map(r => {
+            const open = augPools.openRow === r.p.id;
+            return `<li class="apool-row-item${open ? ' is-open' : ''}">`
+                + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}" aria-expanded="${open}">`
+                + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
+                + `<span class="apool-row-id">${escHtml(apoolInternal(r.p))}</span>`
+                + `<span class="apool-bar"><span class="apool-fill${r.w ? '' : ' is-default'}" style="width:${(r.w || 100) / 2}%"></span></span>`
+                + `<span class="apool-w${r.w ? '' : ' is-default'}">${escHtml(apoolWeightText(r.w))}</span>`
+                + `</button>`
+                + (open ? apoolAugListHtml(r.p) : '')
+                + `</li>`;
+        }).join('');
+        return `<div class="apool-detail-head">`
+            + (c.image ? `<img src="${escHtml(c.image)}" alt="" width="44" height="44">` : '')
+            + `<div><h3 class="apool-detail-name">${escHtml(c.name)}</h3>`
+            + `<p class="apool-detail-sub">${escHtml(pickLang(
+                `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`,
+                `${rows.length} pools · up to ${union.size} augments`))}</p></div></div>`
+            + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
+            + `<span class="apool-scale-track">${ticks}</span></div>`
+            + `<ul class="apool-rows">${body}</ul>`
+            + `<p class="apool-footnote">${escHtml(pickLang(
+                '斜線條表示遊戲檔沒寫權重、套用預設值（實際數值不在檔案中）。點任一列可展開該池的增幅。',
+                'Hatched bars mean no weight is written and the default applies (its value is not in the files). Select a row to list that pool’s augments.'))}</p>`;
+    }
+    function apoolPoolBtnHtml(p) {
+        const on = p.id === augPools.openPool;
+        return `<button type="button" class="apool-pool${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" aria-expanded="${on}">`
+            + `<span class="apool-pool-name">${escHtml(apoolLabel(p))}${apoolTag(p)}</span>`
+            + `<span class="apool-pool-meta">${escHtml(apoolInternal(p))} · ${escHtml(pickLang(
+                `${p.augs.length} 增幅 · ${p.champs} 英雄`, `${p.augs.length} augments · ${p.champs} champs`))}</span>`
+            + `</button>`;
+    }
+    function apoolMatrixHtml(list) {
+        const byName = {};
+        list.forEach(p => { byName[p.name] = p; });
+        const head = `<tr><th></th>${APOOL_ARCH_COLS.map(c => `<th scope="col">${escHtml(pickLang(c[1], c[2]))}</th>`).join('')}</tr>`;
+        const body = APOOL_ARCH_ROWS.map(r => `<tr><th scope="row">${escHtml(pickLang(r[1], r[2]))}</th>`
+            + APOOL_ARCH_COLS.map(c => {
+                const p = byName[r[0] + c[0]];
+                if (!p) return '<td></td>';
+                const on = p.id === augPools.openPool;
+                return `<td><button type="button" class="apool-cell${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" `
+                    + `aria-expanded="${on}" aria-label="${escHtml(apoolLabel(p))}">`
+                    + `<span class="apool-cell-n">${p.champs}</span>`
+                    + `<span class="apool-cell-s">${escHtml(pickLang(`英雄 · ${p.augs.length} 增幅`, `champs · ${p.augs.length} aug.`))}</span>`
+                    + `</button></td>`;
+            }).join('') + `</tr>`).join('');
+        return `<div class="apool-matrix-wrap"><table class="apool-matrix"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    }
+    function apoolPoolDetailHtml(p) {
+        if (!p) return '';
+        const members = (augPools.members[p.id] || []).slice();
+        const groups = {};
+        members.forEach(([cid, w]) => { (groups[w] = groups[w] || []).push(apoolChamp(cid).name); });
+        const ws = Object.keys(groups).map(Number).sort((a, b) => (b || 100) - (a || 100));
+        const coll = currentLang === 'en' ? 'en' : 'zh-Hant';
+        const sep = pickLang('、', ', ');
+        const memberHtml = ws.length
+            ? ws.map(w => `<div class="apool-wgroup"><span class="apool-w${w ? '' : ' is-default'}">${escHtml(apoolWeightText(w))}</span>`
+                + `<span>${escHtml(groups[w].sort((a, b) => a.localeCompare(b, coll)).join(sep))}</span></div>`).join('')
+            : `<p class="apool-empty">${escHtml(p.family === 'excluded'
+                ? pickLang('沒有英雄引用這個池子；它由全域規則排除。', 'No champion references this pool; a global rule excludes it.')
+                : pickLang('沒有英雄引用這個池子。', 'No champion references this pool.'))}</p>`;
+        return `<div class="apool-pool-detail">`
+            + `<div class="apool-pool-detail-head"><h4>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4>`
+            + `<span class="apool-row-id">${escHtml(apoolInternal(p))}</span></div>`
+            + `<h5>${escHtml(pickLang(`包含的增幅（${p.augs.length}）`, `Augments (${p.augs.length})`))}</h5>`
+            + apoolAugListHtml(p)
+            + `<h5>${escHtml(pickLang(`所屬英雄（${members.length}），依權重分組`, `Champions (${members.length}) by weight`))}</h5>`
+            + memberHtml
+            + `</div>`;
+    }
+    function apoolAllHtml(d) {
+        const byFam = {};
+        (d.pools || []).forEach(p => { (byFam[p.family] = byFam[p.family] || []).push(p); });
+        return `<h3 class="apool-h">${escHtml(pickLang('全部池子', 'All pools'))}</h3>`
+            + APOOL_FAMILIES.map(([fam, zh, en, dzh, den]) => {
+                const list = (byFam[fam] || []).slice().sort((a, b) => b.champs - a.champs);
+                if (!list.length) return '';
+                const inner = fam === 'archetype'
+                    ? apoolMatrixHtml(list)
+                    : `<div class="apool-pool-list">${list.map(apoolPoolBtnHtml).join('')}</div>`;
+                const open = list.find(p => p.id === augPools.openPool);
+                return `<div class="apool-family">`
+                    + `<div class="apool-family-head"><h4>${escHtml(pickLang(zh, en))}</h4><p>${escHtml(pickLang(dzh, den))}</p></div>`
+                    + inner + (open ? apoolPoolDetailHtml(open) : '')
+                    + `</div>`;
+            }).join('');
+    }
+    function apoolDiffHtml(d) {
+        const df = d.diff;
+        if (!df) return '';
+        const sep = pickLang('、', ', ');
+        const colon = pickLang('：', ': ');
+        const augNames = ids => ids.map(a => apoolAug(a).name).join(sep);
+        const wText = v => (v == null ? pickLang('不在池內', 'not in pool') : apoolWeightText(v));
+        const items = [];
+        (df.new_pools || []).forEach(pid => {
+            const p = augPools.byId[pid];
+            if (p) items.push(`<li><b>${escHtml(apoolLabel(p))}</b>${escHtml(colon + pickLang('新增的池子', 'new pool'))}</li>`);
+        });
+        (df.pools || []).forEach(x => {
+            const p = augPools.byId[x.id];
+            if (!p) return;
+            const parts = [];
+            if (x.removed.length) parts.push(pickLang('移除 ', 'removed ') + augNames(x.removed));
+            if (x.added.length) parts.push(pickLang('加入 ', 'added ') + augNames(x.added));
+            items.push(`<li><b>${escHtml(apoolLabel(p))}</b>${escHtml(colon + parts.join(pickLang('；', '; ')))}</li>`);
+        });
+        const byPool = {};
+        (df.weights || []).forEach(x => { (byPool[x.pool] = byPool[x.pool] || []).push(x); });
+        Object.entries(byPool).forEach(([pid, list]) => {
+            const p = augPools.byId[pid];
+            if (!p) return;
+            const txt = list.map(x => `${apoolChamp(String(x.champ)).name} ${wText(x.before)} → ${wText(x.after)}`).join(sep);
+            items.push(`<li><b>${escHtml(apoolLabel(p))}</b>${escHtml(pickLang('權重：', ' weight: ') + txt)}</li>`);
+        });
+        if (!items.length) return '';
+        return `<section class="apool-section"><h3 class="apool-h">${escHtml(pickLang(
+                `本版改動（${df.prev_version} → ${d.patch}）`, `Changes this patch (${df.prev_version} → ${d.patch})`))}</h3>`
+            + `<ul class="apool-diff">${items.join('')}</ul></section>`;
+    }
+    function apoolNotesHtml(d) {
+        const notes = [
+            [pickLang('權重是什麼', 'What the weight means'), pickLang(
+                '每位英雄的每個池子都標了權重：75、150、175、200，或沒寫而套用預設值。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
+                'Each of a champion’s pools carries a weight: 75, 150, 175, 200, or none (the default). A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
+            [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
+                '遊戲檔把多數池子名稱存成 hash。顯示英文內部名稱的池子，是用該名稱重新計算 hash 並完全吻合，所以名稱是確定的；標「推定名稱」的池子無法還原，中文名稱是依內容推定的。',
+                'Most pool names are stored as hashes. Pools shown with an internal name were confirmed by re-hashing that name and matching it exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents.')],
+            [pickLang('這裡沒有的規則', 'Rules not shown here'), pickLang(
+                '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行，所以「可能抽到的增幅」尚未扣除這些規則。',
+                'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them, so “up to N augments” does not subtract them.')],
+            [pickLang('資料來源', 'Source'), pickLang(
+                `${d.patch || ''} 版 CommunityDragon 遊戲資料：augmentgroups.bin（池子內容）、map12.bin（英雄與權重）、augmentoperators.bin（排除規則）。`,
+                `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)],
+        ];
+        return `<section class="apool-section apool-notes">`
+            + notes.map(([h, t]) => `<div><h4>${escHtml(h)}</h4><p>${escHtml(t)}</p></div>`).join('')
+            + `</section>`;
+    }
+    function apoolRefocus(selector) {
+        const el = document.querySelector(selector);
+        if (el) el.focus({ preventScroll: true });
+    }
+    document.addEventListener('click', (ev) => {
+        if (!ev.target.closest) return;
+        const modeTab = ev.target.closest('.aug-mode-tab');
+        if (modeTab) {
+            ev.preventDefault();
+            setAugMode(modeTab.getAttribute('data-aug-mode'));
+            return;
+        }
+        if (!ev.target.closest('#aug-pools-host') || !augPools.data) return;
+        const champ = ev.target.closest('[data-apool-champ]');
+        if (champ) {
+            augPools.champ = champ.getAttribute('data-apool-champ');
+            augPools.openRow = null;
+            document.querySelectorAll('#apool-champs .apool-champ').forEach(btn => {
+                const on = btn === champ;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            const detail = document.getElementById('apool-detail');
+            if (detail) detail.innerHTML = apoolDetailHtml(augPools.data);
+            trackEvent('aug_pool_champ', { champ: augPools.champ });
+            return;
+        }
+        const row = ev.target.closest('[data-apool-row]');
+        if (row) {
+            const id = row.getAttribute('data-apool-row');
+            augPools.openRow = augPools.openRow === id ? null : id;
+            const detail = document.getElementById('apool-detail');
+            if (detail) detail.innerHTML = apoolDetailHtml(augPools.data);
+            apoolRefocus(`[data-apool-row="${CSS.escape(id)}"]`);
+            return;
+        }
+        const pool = ev.target.closest('[data-apool-pool]');
+        if (pool) {
+            const id = pool.getAttribute('data-apool-pool');
+            augPools.openPool = augPools.openPool === id ? null : id;
+            const all = document.getElementById('apool-all');
+            if (all) all.innerHTML = apoolAllHtml(augPools.data);
+            apoolRefocus(`[data-apool-pool="${CSS.escape(id)}"]`);
+        }
+    });
+    document.addEventListener('input', (ev) => {
+        if (ev.target && ev.target.id === 'apool-search') {
+            augPools.q = ev.target.value;
+            apoolFilter(augPools.q);
+        }
+    });
+    document.addEventListener('keydown', (ev) => {
+        const tab = ev.target && ev.target.closest && ev.target.closest('.aug-mode-tab');
+        if (!tab || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
+        ev.preventDefault();
+        const tabs = [...document.querySelectorAll('.aug-mode-tab')];
+        const next = tabs[(tabs.indexOf(tab) + (ev.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        setAugMode(next.getAttribute('data-aug-mode'));
+        next.focus();
+    });
+
     function renderAugmentTier() {
+        if (augMode === 'pools') {
+            renderAugPools();
+            return;
+        }
         const host = document.getElementById('aug-tier-host');
         if (!host) return;
         // The board's HTML depends only on the language (labels / names) and on
