@@ -2910,8 +2910,8 @@ def render_html(
         "<label class='search-wrap'>"
         f"{search_icon}"
         '<input class="search" id="champ-search" type="search" '
-        'placeholder="搜尋英雄（中 / 英）" autocomplete="off" '
-        'aria-label="搜尋英雄">'
+        'placeholder="搜尋英雄、裝備、增幅" autocomplete="off" '
+        'aria-label="搜尋英雄、裝備、增幅">'
         "</label>"
     )
     parts.append("</div>")  # /search-rail

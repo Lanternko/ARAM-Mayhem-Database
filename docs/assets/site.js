@@ -825,9 +825,11 @@
         zh: {
             htmlLang: 'zh-Hant',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Ctrl+F',
-            searchPlaceholderMobile: '搜尋英雄（中 / 英）',
-            searchAria: '搜尋英雄',
+            searchPlaceholderDesktop: '搜尋英雄、裝備、增幅',
+            searchPlaceholderMobile: '搜尋英雄、裝備、增幅',
+            draftSearchPlaceholderMobile: '搜尋英雄（中 / 英）',
+            draftSearchAria: '搜尋英雄',
+            searchAria: '搜尋英雄、裝備、增幅',
             shownUnit: '隻',
             tierUnit: '隻',
             updatesButton: '近期更新',
@@ -1162,9 +1164,11 @@
         en: {
             htmlLang: 'en',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Ctrl+F',
-            searchPlaceholderMobile: 'Search champions (ZH / EN)',
-            searchAria: 'Search champions',
+            searchPlaceholderDesktop: 'Search champions, items, augments',
+            searchPlaceholderMobile: 'Search champions, items, augments',
+            draftSearchPlaceholderMobile: 'Search champions (ZH / EN)',
+            draftSearchAria: 'Search champions',
+            searchAria: 'Search champions, items, augments',
             shownUnit: 'shown',
             tierUnit: 'shown',
             updatesButton: 'Updates',
@@ -1732,8 +1736,8 @@
         // Draft pool search is a separate input (hardcoded zh in HTML shell).
         const draftSearch = document.getElementById('draft-search');
         if (draftSearch) {
-            draftSearch.placeholder = copy.searchPlaceholderMobile;
-            draftSearch.setAttribute('aria-label', copy.searchAria);
+            draftSearch.placeholder = copy.draftSearchPlaceholderMobile;
+            draftSearch.setAttribute('aria-label', copy.draftSearchAria);
         }
     }
 
@@ -5575,8 +5579,8 @@
         if (searchEl) {
             if (searchEl.value !== draftQuery) searchEl.value = draftQuery;
             // Keep placeholder/aria in sync even if applyLanguage skipped update.
-            searchEl.placeholder = copy.searchPlaceholderMobile;
-            searchEl.setAttribute('aria-label', copy.searchAria);
+            searchEl.placeholder = copy.draftSearchPlaceholderMobile;
+            searchEl.setAttribute('aria-label', copy.draftSearchAria);
         }
     }
 
