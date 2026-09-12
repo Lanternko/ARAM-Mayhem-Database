@@ -6645,12 +6645,10 @@
     .apool-row-name { min-width: 0; font-size: 14px; font-weight: 500; }
     .apool-bar { position: relative; height: 8px; overflow: hidden; border-radius: 4px; background: var(--apool-track); }
     .apool-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--apool-bar); }
-    .apool-fill.is-default { background: repeating-linear-gradient(135deg, var(--apool-bar) 0 3px, transparent 3px 6px); }
     .apool-w { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
-    .apool-row[data-hue] .apool-w:not(.is-default) {
+    .apool-row[data-hue] .apool-w {
         color: color-mix(in oklab, var(--apool-bar) 70%, var(--text));
     }
-    .apool-w.is-default { font-weight: 500; color: var(--text-muted); }
     .apool-tag {
         padding: 0 7px;
         border: 1px dashed var(--border-strong);

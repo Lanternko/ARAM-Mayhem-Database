@@ -3069,7 +3069,10 @@
         const txt = p.label_source === 'patch' ? pickLang('公告名稱', 'Patch-note name') : pickLang('推定名稱', 'Inferred name');
         return `<span class="apool-tag">${escHtml(txt)}</span>`;
     }
-    function apoolWeightText(w) { return w ? String(w) : pickLang('預設', 'Default'); }
+    // Omitted WEIGHT in map12 is stored as 0. Observed written values are
+    // only 75/150/175/200 — never 100 — so 0 displays as 100.
+    function apoolWeight(w) { return w || 100; }
+    function apoolWeightText(w) { return String(apoolWeight(w)); }
     function apoolAug(aid) {
         const site = DATA && DATA.augs && DATA.augs[aid];
         const raw = (augPools.data && augPools.data.augs && augPools.data.augs[aid]) || {};
@@ -3243,8 +3246,7 @@
         const rows = ((d.champs || {})[cid] || [])
             .map(([pid, w]) => ({ p: augPools.byId[pid], w }))
             .filter(r => r.p);
-        // Default weight's value isn't in the files; it sorts between 75 and 150.
-        rows.sort((a, b) => (b.w || 100) - (a.w || 100) || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
+        rows.sort((a, b) => apoolWeight(b.w) - apoolWeight(a.w) || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
         const union = new Set();
         rows.forEach(r => r.p.augs.forEach(a => { if (!augPools.excluded.has(String(a))) union.add(String(a)); }));
         const c = apoolChamp(cid);
@@ -3255,8 +3257,8 @@
             return `<li class="apool-row-item${open ? ' is-open' : ''}">`
                 + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}"${apoolHueAttr(r.p)} aria-expanded="${open}">`
                 + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
-                + `<span class="apool-bar"><span class="apool-fill${r.w ? '' : ' is-default'}" style="width:${(r.w || 100) / 2}%"></span></span>`
-                + `<span class="apool-w${r.w ? '' : ' is-default'}">${escHtml(apoolWeightText(r.w))}</span>`
+                + `<span class="apool-bar"><span class="apool-fill" style="width:${apoolWeight(r.w) / 2}%"></span></span>`
+                + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}</span>`
                 + `</button>`
                 + (open ? apoolAugListHtml(r.p) : '')
                 + `</li>`;
@@ -3272,8 +3274,8 @@
             + `<span class="apool-scale-track">${ticks}</span></div>`
             + `<ul class="apool-rows">${body}</ul>`
             + `<p class="apool-footnote">${escHtml(pickLang(
-                '斜線條表示遊戲檔沒寫權重、套用預設值（實際數值不在檔案中）。點任一列可展開該池的增幅，滑過或點增幅可看說明。',
-                'Hatched bars mean no weight is written and the default applies (its value is not in the files). Select a row to list that pool’s augments; hover or tap an augment for its description.'))}</p>`;
+                '點任一列可展開該池的增幅，滑過或點增幅可看說明。',
+                'Select a row to list that pool’s augments; hover or tap an augment for its description.'))}</p>`;
     }
     function apoolPoolBtnHtml(p) {
         const on = p.id === augPools.openPool;
@@ -3305,10 +3307,10 @@
         const members = (augPools.members[p.id] || []).slice();
         const groups = {};
         members.forEach(([cid, w]) => { (groups[w] = groups[w] || []).push(cid); });
-        const ws = Object.keys(groups).map(Number).sort((a, b) => (b || 100) - (a || 100));
+        const ws = Object.keys(groups).map(Number).sort((a, b) => apoolWeight(b) - apoolWeight(a));
         const sep = pickLang('、', ', ');
         const memberHtml = ws.length
-            ? ws.map(w => `<div class="apool-wgroup"><span class="apool-w${w ? '' : ' is-default'}">${escHtml(apoolWeightText(w))}</span>`
+            ? ws.map(w => `<div class="apool-wgroup"><span class="apool-w">${escHtml(apoolWeightText(w))}</span>`
                 + `<span>${escHtml(groups[w].sort(apoolAbc).map(cid => apoolChamp(cid).name).join(sep))}</span></div>`).join('')
             : `<p class="apool-empty">${escHtml(p.family === 'excluded'
                 ? pickLang('沒有英雄引用這個池子；它由全域規則排除。', 'No champion references this pool; a global rule excludes it.')
@@ -3374,8 +3376,8 @@
     function apoolNotesHtml(d) {
         const notes = [
             [pickLang('權重是什麼', 'What the weight means'), pickLang(
-                '每位英雄的每個池子都標了權重：75、150、175、200，或沒寫而套用預設值。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
-                'Each of a champion’s pools carries a weight: 75, 150, 175, 200, or none (the default). A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
+                '每位英雄的每個池子都有權重：75、100、150、175、200。遊戲檔沒寫 WEIGHT 的就是 100（檔裡沒有任何一筆明確寫 100）。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
+                'Each of a champion’s pools carries a weight: 75, 100, 150, 175, or 200. A missing WEIGHT in the files is 100 — no row writes 100 explicitly. A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
             [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
                 '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
                 'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
