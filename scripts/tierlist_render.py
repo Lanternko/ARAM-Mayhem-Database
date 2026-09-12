@@ -1473,6 +1473,23 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
+    if path in {"/augments/pools/", "/en/augments/pools/", "/zh-CN/augments/pools/"}:
+        # Pools describe draw rules, so the home page's top champion is misleading.
+        # Reuse the published brand asset and discard inherited image metadata.
+        out = re.sub(
+            r"<meta\s+(?:property|name)=['\"](?:og:image|twitter:image)(?::[^'\"]+)?['\"][^>]*>",
+            "", out, flags=re.I,
+        )
+        image_url = origin + "/mayhem-single-die-icon.png"
+        image_tags = (
+            f"<meta property='og:image' content='{html.escape(image_url, quote=True)}'>"
+            "<meta property='og:image:width' content='180'>"
+            "<meta property='og:image:height' content='180'>"
+            f"<meta property='og:image:alt' content='{html.escape(title, quote=True)}'>"
+            f"<meta name='twitter:image' content='{html.escape(image_url, quote=True)}'>"
+            f"<meta name='twitter:image:alt' content='{html.escape(title, quote=True)}'>"
+        )
+        out = out.replace("</head>", image_tags + "</head>", 1)
     return _inject_locale_alternates(out, site_url=site_url, canonical_path=path)
 
 

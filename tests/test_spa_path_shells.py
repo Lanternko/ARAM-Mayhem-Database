@@ -91,6 +91,10 @@ class SpaPathShellTests(unittest.TestCase):
                 "<title>app</title>"
                 "<link rel='canonical' href='https://arammeta.com/'>"
                 "<meta property='og:url' content='https://arammeta.com/'>"
+                "<meta property='og:image' content='https://arammeta.com/og-image.png?v=old'>"
+                "<meta property='og:image:width' content='512'>"
+                "<meta property='og:image:height' content='512'>"
+                "<meta name='twitter:image' content='https://arammeta.com/og-image.png?v=old'>"
                 "</head><body>FULL_SPA_SHELL</body></html>",
                 encoding="utf-8",
             )
@@ -167,6 +171,15 @@ class SpaPathShellTests(unittest.TestCase):
                 root / "zh-CN" / "augments" / "pools" / "index.html"
             ).read_text(encoding="utf-8")
             self.assertIn("<title>海克斯池 · arammeta</title>", zh_cn_pools)
+            for pool_html in (pools_body, en_pools, zh_cn_pools):
+                self.assertNotIn("/og-image.png", pool_html)
+                self.assertIn("property='og:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
+                self.assertIn("name='twitter:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
+                self.assertIn("property='og:image:width' content='180'", pool_html)
+                self.assertIn("property='og:image:height' content='180'", pool_html)
+                self.assertEqual(pool_html.count("property='og:image'"), 1)
+            self.assertIn("/og-image.png?v=old", root_body)
+            self.assertIn("/og-image.png?v=old", en_body)
 
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
