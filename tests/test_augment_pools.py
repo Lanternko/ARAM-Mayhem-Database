@@ -87,7 +87,7 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(pools["{56299123}"]["family"], "function")
         self.assertEqual(pools["{56299123}"]["hue"], "function")
         self.assertEqual(pools["{56299123}"]["augs"], [101, 102])
-        self.assertEqual(pools["{0c7ef8ce}"]["family"], "excluded")
+        self.assertEqual(pools["{0c7ef8ce}"]["family"], "norandom")
         self.assertEqual(pools["{0c7ef8ce}"]["hue"], "other")
         self.assertEqual(pools["AH"]["family"], "stat")
         self.assertEqual(pools["AH"]["hue"], "cd")
@@ -143,7 +143,7 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(pool_hue(None, "10f8e38e", "inferred"), "tank")
         self.assertEqual(pool_hue(None, "563cdf9c", "inferred"), "other")
         self.assertEqual(pool_hue(None, "73f04b68", "inferred"), "function")
-        self.assertEqual(pool_hue("AH", None, "excluded"), "other")
+        self.assertEqual(pool_hue("AH", None, "norandom"), "other")
 
     def test_public_payload_keeps_hue(self) -> None:
         pub = public_payload(build_payload(fake_fetch, "cur", "prev"))
