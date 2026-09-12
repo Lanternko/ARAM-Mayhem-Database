@@ -2716,7 +2716,7 @@
     // api/augment-pools.json (fetched on first open, never on page load).
     let augMode = 'tier';
     const augPools = {
-        data: null, loading: false, failed: false, champ: null, q: '',
+        data: null, loading: false, failed: false, champ: null, q: '', role: '',
         openRow: null, openPool: null, byId: null, members: null, excluded: null,
     };
     const APOOL_FAMILIES = [
@@ -2846,40 +2846,69 @@
             + `<div class="apool-picker">`
             + `<input class="apool-search" id="apool-search" type="search" autocomplete="off" `
             + `placeholder="${escHtml(pickLang('搜尋英雄（中 / 英）', 'Search champions'))}" aria-label="${escHtml(searchLbl)}">`
+            + apoolRoleBarHtml()
             + `<div class="apool-champs" id="apool-champs" role="group" aria-label="${escHtml(pickLang('英雄', 'Champions'))}">`
             + apoolChampListHtml(d)
+            + `<p class="apool-empty apool-champ-empty" id="apool-champ-empty" hidden>`
+            + escHtml(pickLang('沒有符合的英雄', 'No champions match'))
+            + `</p>`
             + `</div></div>`
             + `<div class="apool-detail" id="apool-detail">${apoolDetailHtml(d)}</div>`
             + `</section>`
             + `<section class="apool-section" id="apool-all">${apoolAllHtml(d)}</section>`
             + apoolDiffHtml(d)
             + apoolNotesHtml(d);
-        if (augPools.q) {
-            const input = document.getElementById('apool-search');
-            if (input) input.value = augPools.q;
-            apoolFilter(augPools.q);
-        }
+        const input = document.getElementById('apool-search');
+        if (input && augPools.q) input.value = augPools.q;
+        apoolFilter();
     }
     function apoolSearchKey(cid) {
         const info = (DATA && DATA.champs && DATA.champs[cid]) || {};
         return [info.name_zh, info.name, info.name_en, info.alias, champName(info, cid)]
             .filter(Boolean).join(' ').toLowerCase();
     }
+    function apoolChampRoles(cid) {
+        const info = (DATA && DATA.champs && DATA.champs[cid]) || {};
+        return Array.isArray(info.tags) ? info.tags.map(String).filter(Boolean) : [];
+    }
+    function apoolRoleBarHtml() {
+        const chip = (role) => {
+            const labels = itemFilterRoleLabels(role);
+            const shown = currentLang === 'en' ? labels.en : zhUi(labels.zh);
+            const on = (augPools.role || '') === (role || '');
+            const klass = `apool-role-chip${role ? ` role-${role}` : ''}${on ? ' is-active' : ''}`;
+            return `<button type="button" class="${klass}" data-apool-role="${escHtml(role)}" `
+                + `data-label-zh="${escHtml(labels.zh)}" data-label-en="${escHtml(labels.en)}" `
+                + `aria-pressed="${on}">${escHtml(shown)}</button>`;
+        };
+        const chips = [chip('')].concat(ITEM_FILTER_ROLE_ORDER.map(chip));
+        return `<div class="apool-role-bar" role="group" aria-label="${escHtml(pickLang('職業', 'Roles'))}">${chips.join('')}</div>`;
+    }
     function apoolChampListHtml(d) {
         const rows = Object.keys(d.champs || {}).sort(apoolAbc).map(cid => ({ cid, ...apoolChamp(cid) }));
         return rows.map(r => {
             const on = r.cid === augPools.champ;
+            const roles = apoolChampRoles(r.cid).join(' ');
             return `<button type="button" class="apool-champ${on ? ' is-active' : ''}" data-apool-champ="${escHtml(r.cid)}" `
-                + `data-search="${escHtml(apoolSearchKey(r.cid))}" aria-pressed="${on}">`
+                + `data-search="${escHtml(apoolSearchKey(r.cid))}" data-roles="${escHtml(roles)}" aria-pressed="${on}">`
                 + (r.image ? `<img src="${escHtml(r.image)}" alt="" loading="lazy" width="24" height="24">` : '')
                 + `<span>${escHtml(r.name)}</span></button>`;
         }).join('');
     }
-    function apoolFilter(q) {
-        const needle = String(q || '').trim().toLowerCase();
+    function apoolFilter() {
+        const needle = String(augPools.q || '').trim().toLowerCase();
+        const role = augPools.role || '';
+        let shown = 0;
         document.querySelectorAll('#apool-champs .apool-champ').forEach(btn => {
-            btn.hidden = Boolean(needle) && !(btn.getAttribute('data-search') || '').includes(needle);
+            const matchQ = !needle || (btn.getAttribute('data-search') || '').includes(needle);
+            const roles = (btn.getAttribute('data-roles') || '').split(/\s+/).filter(Boolean);
+            const matchRole = !role || roles.includes(role);
+            const hide = !(matchQ && matchRole);
+            btn.hidden = hide;
+            if (!hide) shown++;
         });
+        const empty = document.getElementById('apool-champ-empty');
+        if (empty) empty.hidden = shown > 0;
     }
     function apoolAugListHtml(p) {
         if (!p.augs.length) {
@@ -3068,6 +3097,19 @@
             return;
         }
         if (!ev.target.closest('#aug-pools-host') || !augPools.data) return;
+        const roleChip = ev.target.closest('.apool-role-chip');
+        if (roleChip) {
+            ev.preventDefault();
+            augPools.role = roleChip.getAttribute('data-apool-role') || '';
+            document.querySelectorAll('.apool-role-chip').forEach(btn => {
+                const on = (btn.getAttribute('data-apool-role') || '') === augPools.role;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            apoolFilter();
+            trackEvent('aug_pool_role', { role: augPools.role || 'all' });
+            return;
+        }
         const champ = ev.target.closest('[data-apool-champ]');
         if (champ) {
             augPools.champ = champ.getAttribute('data-apool-champ');
@@ -3103,7 +3145,7 @@
     document.addEventListener('input', (ev) => {
         if (ev.target && ev.target.id === 'apool-search') {
             augPools.q = ev.target.value;
-            apoolFilter(augPools.q);
+            apoolFilter();
         }
     });
     document.addEventListener('keydown', (ev) => {
@@ -9448,7 +9490,7 @@
         document.querySelectorAll('.tier-count-unit').forEach(el => {
             el.textContent = copy.tierUnit;
         });
-        document.querySelectorAll('.chip, .item-role-chip').forEach(chip => {
+        document.querySelectorAll('.chip, .item-role-chip, .apool-role-chip').forEach(chip => {
             if (currentLang === 'en') {
                 chip.textContent = chip.getAttribute('data-label-en') || chip.textContent || '';
             } else {
