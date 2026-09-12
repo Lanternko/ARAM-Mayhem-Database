@@ -6437,11 +6437,18 @@
         font-family: inherit;
         font-size: 13px;
         font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+        box-sizing: border-box;
         cursor: pointer;
         transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
     }
+    .aug-mode-tab:link,
+    .aug-mode-tab:visited { color: var(--text-muted); }
     .aug-mode-tab:hover { color: var(--text); }
-    .aug-mode-tab.is-active { background: var(--accent); color: var(--accent-on); }
+    .aug-mode-tab.is-active,
+    .aug-mode-tab.is-active:link,
+    .aug-mode-tab.is-active:visited { background: var(--accent); color: var(--accent-on); }
     .aug-mode-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .aug-mode-panel[hidden] { display: none !important; }
 

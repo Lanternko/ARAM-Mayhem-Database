@@ -139,16 +139,43 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/zh-CN/game", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/augments/pools", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/en/augments/pools", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/zh-CN/augments/pools", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/en/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/zh-CN/column", SPA_FULL_SHELL_PATHS)
+            pools = root / "augments" / "pools" / "index.html"
+            self.assertTrue(pools.is_file())
+            pools_body = pools.read_text(encoding="utf-8")
+            self.assertIn("FULL_SPA_SHELL", pools_body)
+            self.assertNotIn("location.replace('/')", pools_body)
+            self.assertIn(
+                "rel='canonical' href='https://arammeta.com/augments/pools/'",
+                pools_body,
+            )
+            self.assertIn("<title>增幅池 · arammeta</title>", pools_body)
+            en_pools = (root / "en" / "augments" / "pools" / "index.html").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("<title>Augment pools · arammeta</title>", en_pools)
+            self.assertIn(
+                "rel='canonical' href='https://arammeta.com/en/augments/pools/'",
+                en_pools,
+            )
+            zh_cn_pools = (
+                root / "zh-CN" / "augments" / "pools" / "index.html"
+            ).read_text(encoding="utf-8")
+            self.assertIn("<title>海克斯池 · arammeta</title>", zh_cn_pools)
 
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
         self.assertIn("return prefix ? prefix + '/' : '/'", source)
         self.assertIn("return prefix + '/' + view + '/'", source)
+        self.assertIn("return prefix + '/' + view + '/pools/'", source)
         self.assertIn("const needPath = location.pathname !== wantPath", source)
         self.assertIn("pathForRoute('home') + (location.search || '')", source)
+        self.assertIn("segs[1] === 'pools'", source)
 
     def test_write_site_info_pages_creates_policy_pages_and_ads_txt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
