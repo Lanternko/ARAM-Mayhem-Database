@@ -9,7 +9,9 @@ client files:
   champion -> pools table: each champion points at a config listing
   ``(pool, WEIGHT)`` pairs.  A missing WEIGHT means the class default.
 - ``game/maps/modespecificdata/augmentoperators.bin`` (new in 26.18) holds
-  global rules; today one rule excludes a whole pool from ever being offered.
+  global rules; today one rule marks a group of augments as never handed out
+  at random.  The file records which pools a rule selects but not what it
+  does, so the effect comes from the patch notes, not from the data.
 - ``kiwi.bin`` AugmentData maps each augment path to its public numeric id
   (``AugmentPlatformId``), the same id the site's augment payload uses.
 
@@ -153,7 +155,7 @@ def parse_pools(groups: dict) -> dict[str, dict]:
     }
 
 
-def parse_excluded_group_keys(operators: dict) -> set[str]:
+def parse_operator_group_keys(operators: dict) -> set[str]:
     keys: set[str] = set()
     for obj in operators.values():
         if not isinstance(obj, dict):
@@ -194,11 +196,14 @@ def _icon_url(path: str | None) -> str:
     return f"{CDRAGON_BASE}/latest/plugins/rcp-be-lol-game-data/global/default/{rest}"
 
 
-def _pool_meta(raw_id: str, excluded: bool) -> dict:
+def _pool_meta(raw_id: str, operator_group: bool) -> dict:
     name, h = resolve_pool_name(raw_id)
-    if excluded:
-        return {"name": name, "hash": h, "family": "excluded",
-                "label_zh": "排除池", "label_en": "Excluded", "label_source": "operator"}
+    if operator_group:
+        # 16.18 patch notes: augments in this group are never handed out at random
+        # (Transmute, Pandora's Box, Crown Me King).  Normal selection still offers
+        # them, so do NOT subtract them from a champion's reachable augments.
+        return {"name": name, "hash": h, "family": "norandom",
+                "label_zh": "排除池", "label_en": "Excluded from random", "label_source": "operator"}
     if name in STAT_POOLS:
         zh, en = STAT_POOLS[name]
         return {"name": name, "hash": h, "family": "stat", "label_zh": zh, "label_en": en, "label_source": "name"}
@@ -239,7 +244,7 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
         operators = fetch(version, OPERATORS_PATH)
     except Exception:  # file absent before 26.18
         operators = {}
-    excluded_ids = {cur["key_to_id"][k] for k in parse_excluded_group_keys(operators) if k in cur["key_to_id"]}
+    operator_ids = {cur["key_to_id"][k] for k in parse_operator_group_keys(operators) if k in cur["key_to_id"]}
 
     champ_rows = fetch(version, CHAMPS_PATH.format(locale="default"))
     alias_to_id = {str(c["alias"]).lower(): int(c["id"]) for c in champ_rows if int(c.get("id", -1)) > 0}
@@ -259,8 +264,8 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
 
     pools_out = []
     for pid, augs in cur["pools"].items():
-        meta = _pool_meta(pid, pid in excluded_ids)
-        if meta["family"] not in ("excluded",) and (not augs or not members.get(pid)):
+        meta = _pool_meta(pid, pid in operator_ids)
+        if meta["family"] not in ("norandom",) and (not augs or not members.get(pid)):
             meta["family"] = "unused"
         pools_out.append({"id": pid, **meta, "augs": augs, "champs": members.get(pid, 0)})
 

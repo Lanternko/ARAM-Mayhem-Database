@@ -84,7 +84,7 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(pools["{56299123}"]["name"], "CC")
         self.assertEqual(pools["{56299123}"]["family"], "function")
         self.assertEqual(pools["{56299123}"]["augs"], [101, 102])
-        self.assertEqual(pools["{0c7ef8ce}"]["family"], "excluded")
+        self.assertEqual(pools["{0c7ef8ce}"]["family"], "norandom")
         self.assertEqual(pools["AH"]["family"], "stat")
         self.assertEqual(p["champs"], {"13": [["AH", 200], ["{56299123}", 0]]})
         self.assertEqual(p["augs"]["101"]["zh"], "甲")

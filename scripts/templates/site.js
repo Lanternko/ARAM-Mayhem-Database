@@ -2985,7 +2985,7 @@
     let augMode = 'tier';
     const augPools = {
         data: null, loading: false, failed: false, champ: null, q: '',
-        openRow: null, openPool: null, byId: null, members: null, excluded: null,
+        openRow: null, openPool: null, byId: null, members: null,
     };
     const APOOL_FAMILIES = [
         ['stat', '屬性池', 'Stat pools',
@@ -2999,9 +2999,9 @@
         ['inferred', '名稱未確認的池子', 'Pools with unconfirmed names',
             '遊戲檔只存了名稱的 hash，無法還原；中文名稱是依內容推定的。',
             'Only a hash of the name is stored and it could not be recovered; labels describe the contents.'],
-        ['excluded', '排除池', 'Excluded pool',
-            '被全域規則排除，裡面的增幅不會出現在任何英雄身上。',
-            'Removed by a global rule: these augments are never offered to anyone.'],
+        ['norandom', '排除池', 'Excluded from random',
+            '這些增幅不會被隨機給予（質變、潘朵拉的寶盒、封我為王），但一般選用照常出現。',
+            'These augments are never handed out at random (Transmute, Pandora’s Box, Crown Me King); normal selection still offers them.'],
         ['unused', '空池或未使用', 'Empty or unused',
             '沒有增幅，或沒有任何英雄引用。', 'No augments, or no champion references them.'],
     ];
@@ -3058,12 +3058,8 @@
     function apoolAbc(a, b) { return apoolAbcKey(a).localeCompare(apoolAbcKey(b), 'en', { sensitivity: 'base' }); }
     function apoolIndex(d) {
         augPools.byId = {};
-        augPools.excluded = new Set();
         augPools.members = {};
-        (d.pools || []).forEach(p => {
-            augPools.byId[p.id] = p;
-            if (p.family === 'excluded') p.augs.forEach(a => augPools.excluded.add(String(a)));
-        });
+        (d.pools || []).forEach(p => { augPools.byId[p.id] = p; });
         Object.entries(d.champs || {}).forEach(([cid, rows]) => rows.forEach(([pid, w]) => {
             (augPools.members[pid] = augPools.members[pid] || []).push([cid, w]);
         }));
@@ -3153,21 +3149,17 @@
         if (!p.augs.length) {
             return `<p class="apool-empty">${escHtml(pickLang('這個池子目前沒有任何增幅。', 'This pool has no augments.'))}</p>`;
         }
-        const strike = p.family !== 'excluded';
-        const exNote = pickLang('同時在排除池內，不會出現', 'Also in the excluded pool; never offered');
         const rarityLabels = tr().rarityLabels || {};
         return `<ul class="apool-augs">` + p.augs.map(aid => {
             const a = apoolAug(aid);
-            const ex = strike && augPools.excluded.has(String(aid));
             // Shared float tip (hover, keyboard focus, tap); focusable so the last two work.
             const tip = buildItemTipHtml({
                 name: a.name,
                 icons: a.icon ? [a.icon] : [],
                 subtitle: rarityLabels[a.rarity] || '',
                 desc: a.desc,
-                note: ex ? exNote : '',
             });
-            return `<li class="apool-aug has-item-tip${ex ? ' is-excluded' : ''}" tabindex="0">`
+            return `<li class="apool-aug has-item-tip" tabindex="0">`
                 + (a.icon ? `<img src="${escHtml(a.icon)}" alt="" loading="lazy" width="22" height="22">` : '')
                 + `<span>${escHtml(a.name)}</span>${itemTipSource(tip)}</li>`;
         }).join('') + `</ul>`;
@@ -3180,7 +3172,7 @@
         // Default weight's value isn't in the files; it sorts between 75 and 150.
         rows.sort((a, b) => (b.w || 100) - (a.w || 100) || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
         const union = new Set();
-        rows.forEach(r => r.p.augs.forEach(a => { if (!augPools.excluded.has(String(a))) union.add(String(a)); }));
+        rows.forEach(r => r.p.augs.forEach(a => union.add(String(a))));
         const c = apoolChamp(cid);
         // 175 sits too close to 150/200 to label on a phone; each row prints its value.
         const ticks = [75, 100, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
@@ -3243,8 +3235,8 @@
         const memberHtml = ws.length
             ? ws.map(w => `<div class="apool-wgroup"><span class="apool-w${w ? '' : ' is-default'}">${escHtml(apoolWeightText(w))}</span>`
                 + `<span>${escHtml(groups[w].sort(apoolAbc).map(cid => apoolChamp(cid).name).join(sep))}</span></div>`).join('')
-            : `<p class="apool-empty">${escHtml(p.family === 'excluded'
-                ? pickLang('沒有英雄引用這個池子；它由全域規則排除。', 'No champion references this pool; a global rule excludes it.')
+            : `<p class="apool-empty">${escHtml(p.family === 'norandom'
+                ? pickLang('沒有英雄引用這個群組；它只是隨機排除規則的對象。', 'No champion references this group; it is only the subject of the no-random-grant rule.')
                 : pickLang('沒有英雄引用這個池子。', 'No champion references this pool.'))}</p>`;
         return `<div class="apool-pool-detail">`
             + `<div class="apool-pool-detail-head"><h4>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4></div>`
@@ -3313,8 +3305,8 @@
                 '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
                 'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
             [pickLang('這裡沒有的規則', 'Rules not shown here'), pickLang(
-                '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行，所以「可能抽到的增幅」尚未扣除這些規則。',
-                'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them, so “up to N augments” does not subtract them.')],
+                '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行，所以「可能抽到的增幅」尚未扣除這些規則。「排除池」也一樣沒有扣除：它只擋隨機給予，不影響自選。',
+                'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them, so “up to N augments” does not subtract them. The excluded pool is not subtracted either: it only blocks random grants, never normal selection.')],
             [pickLang('資料來源', 'Source'), pickLang(
                 `${d.patch || ''} 版 CommunityDragon 遊戲資料：augmentgroups.bin（池子內容）、map12.bin（英雄與權重）、augmentoperators.bin（排除規則）。`,
                 `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)],

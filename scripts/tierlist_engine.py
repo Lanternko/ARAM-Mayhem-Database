@@ -2702,12 +2702,13 @@ def augment_category_infos(
 # decides which pools a champion draws from, so these are the real "kinds of
 # augment" a champion is offered — far better than keyword-guessing from the
 # augment text.  Families `unused` (no augments or no champion references it)
-# and `excluded` (removed by a global rule, never offered) are skipped: nothing
-# there can be picked, so they would only add empty rows.
+# and `norandom` (the operator group: no champion draws from it — it only stops
+# those augments being handed out at random) are skipped: neither describes a
+# draw pool, so they would only add rows that explain nothing.
 AUGMENT_POOL_PAYLOAD_PATH = (
     Path(__file__).resolve().parents[1] / "docs" / "api" / "augment-pools.json"
 )
-AUGMENT_POOL_SKIP_FAMILIES = frozenset({"unused", "excluded"})
+AUGMENT_POOL_SKIP_FAMILIES = frozenset({"unused", "norandom"})
 
 
 def load_augment_pool_infos(
