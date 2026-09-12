@@ -164,7 +164,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 - **Win-rate tiers:** `tier-op`、`tier-t1`、`tier-t2`、`tier-t3`、`tier-t4`、`tier-t5` 只編碼勝率分級。OP 可使用低速稜彩邊框；T1 可使用受控的紅橘漸層邊框；T2 至 T5 使用單色。
 - **Champion roles:** Assassin、Fighter、Mage、Marksman、Support、Tank 分別使用 `role-assassin`、`role-fighter`、`role-mage`、`role-marksman`、`role-support`、`role-tank`。角色色只出現在 chip、dot、細邊框或小型標籤，不能染滿 panel。
-- **Augment-pool hues:** 增幅池權重列用低彩度分類色掃讀，不是勝率好壞。`ad` 紅、`ap` 藍、`cd` 橘、`support` 青、`function` 玫紅、`gold` 琥珀、`tank` 紫；只出現在權重條、8px swatch 與數值 tint，不染滿列或 panel。通用／未分類維持中性灰。琥珀只編碼金錢池，不能取代品牌金色選取態。`cd` 不用青，以免和輔助 teal 撞色。
+- **Augment-pool hues:** 增幅池權重列用低彩度分類色掃讀，不是勝率好壞。`ad` 紅、`ap` 藍、`cd` 天空青、`support` teal、`function` 玫紅、`gold` 琥珀、`tank` 橄欖綠；只出現在權重條、8px swatch 與數值 tint，不染滿列或 panel。通用／未分類維持中性灰。琥珀只編碼金錢池，不能取代品牌金色選取態。冷卻不用橘、坦克不用紫，以免和金錢琥珀、功能玫紅混讀。輔助偏綠、冷卻偏藍，兩個青要能分開。
 
 ### Neutral
 
