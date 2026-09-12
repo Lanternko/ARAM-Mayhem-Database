@@ -121,6 +121,156 @@ li + li { margin-top: 8px; }
   text-decoration: none;
 }
 .action:hover { filter: brightness(1.06); }
+.feedback-page {
+  --accent: oklch(0.80 0.16 88);
+  --accent-soft: oklch(0.27 0.04 88);
+  --focus: oklch(0.78 0.14 88);
+}
+.feedback-page .action { color: oklch(0.22 0.025 88); }
+@media (prefers-color-scheme: light) {
+  .feedback-page {
+    --accent: oklch(0.60 0.14 85);
+    --accent-soft: oklch(0.94 0.035 88);
+    --focus: oklch(0.55 0.13 85);
+  }
+}
+.feedback-form {
+  margin-top: 34px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.feedback-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.feedback-fieldset + .feedback-fieldset,
+.feedback-fieldset + .feedback-field,
+.feedback-field + .feedback-field,
+.feedback-field + .feedback-context,
+.feedback-context + .feedback-field,
+.feedback-field + .feedback-submit-row { margin-top: 24px; }
+.feedback-fieldset legend,
+.feedback-label { padding: 0; color: var(--text); font-size: 14px; font-weight: 700; }
+.feedback-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.feedback-option {
+  display: flex;
+  min-height: 48px;
+  gap: 10px;
+  padding: 12px 14px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 92%, var(--bg));
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 180ms ease-out, background-color 180ms ease-out;
+}
+.feedback-option:hover { border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); }
+.feedback-option:focus-within {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-option input,
+.feedback-check input { accent-color: var(--accent); }
+.feedback-option input { margin: 3px 0 0; flex: 0 0 auto; }
+.feedback-option span { line-height: 1.4; }
+.feedback-field { display: flex; flex-direction: column; gap: 8px; }
+.feedback-field select,
+.feedback-field input[type='email'],
+.feedback-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.feedback-field select,
+.feedback-field input[type='email'] { min-height: 42px; padding: 8px 11px; }
+.feedback-field textarea { min-height: 150px; padding: 11px 12px; line-height: 1.6; resize: vertical; }
+.feedback-field select:focus-visible,
+.feedback-field input[type='email']:focus-visible,
+.feedback-field textarea:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-help { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.feedback-context { margin-top: 24px; border-top: 1px solid var(--border); }
+.feedback-context summary {
+  width: fit-content;
+  padding-top: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+.feedback-context summary:hover { color: var(--text); }
+.feedback-context summary:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.feedback-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.feedback-context-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.feedback-context-grid input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.feedback-check {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.feedback-check input { margin-top: 4px; flex: 0 0 auto; }
+.feedback-privacy { margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.feedback-submit-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.feedback-submit-row .action { margin-top: 0; border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border)); cursor: pointer; }
+.feedback-submit-row .action:disabled { cursor: wait; filter: saturate(.45); opacity: .7; }
+.feedback-status {
+  flex: 1 1 280px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.feedback-status.is-success {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.feedback-status.is-error {
+  border-color: color-mix(in oklch, oklch(0.62 0.14 25) 48%, var(--border));
+  background: color-mix(in oklch, oklch(0.62 0.14 25) 10%, var(--surface));
+  color: var(--text);
+}
+.feedback-fallback { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
+.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.feedback-form.is-submitted .feedback-submit-row { align-items: flex-start; }
 .page-footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
@@ -139,8 +289,11 @@ li + li { margin-top: 8px; }
   main { padding: 48px 0 64px; }
   h1 { font-size: 31px; }
   .lede { font-size: 17px; }
+  .feedback-option-grid,
+  .feedback-context-grid { grid-template-columns: 1fr; }
+  .feedback-form { padding-top: 24px; }
 }
-</style></head><body><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/' aria-current='page'>隱私權</a><a href='/contact/'>聯絡</a></nav></div></header><main><p class='eyebrow'>Privacy</p><h1>隱私權政策</h1><p class='lede'>arammeta 如何處理瀏覽資料、排行榜內容、Cookie 與第三方服務。</p><p class='updated'>最後更新：2026-09-12</p>
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/' aria-current='page'>隱私權</a><a href='/contact/'>聯絡</a><a href='/feedback/'>功能回饋</a></nav></div></header><main><p class='eyebrow'>Privacy</p><h1>隱私權政策</h1><p class='lede'>arammeta 如何處理瀏覽資料、排行榜內容、Cookie 與第三方服務。</p><p class='updated'>最後更新：2026-09-12</p>
 <section><h2>我們處理哪些資料</h2>
 <ul>
 <li><strong>瀏覽與裝置資料：</strong>託管、API 與流量分析服務可能處理 IP 位址、瀏覽器類型、作業系統、來源頁、瀏覽路徑、國家或約略地區及效能資料，用於安全、除錯與流量統計。</li>
@@ -160,5 +313,7 @@ li + li { margin-top: 8px; }
 <section><h2>查詢與請求</h2>
 <p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
 <p><a href="/contact/">前往聯絡與回報</a></p></section>
+<section><h2>功能回饋</h2>
+<p>功能建議與使用體驗可以透過<a href="/feedback/">功能回饋頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
 <div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
-</main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/' aria-current='page'>隱私權</a><a href='/contact/'>聯絡</a></nav><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></div></footer></body></html>
+</main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/' aria-current='page'>隱私權</a><a href='/contact/'>聯絡</a><a href='/feedback/'>功能回饋</a></nav><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></div></footer></body></html>

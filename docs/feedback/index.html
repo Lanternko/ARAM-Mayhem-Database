@@ -1,0 +1,408 @@
+<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>功能回饋 | arammeta</title><meta name='description' content='告訴我們哪個地方讓你更難做判斷，或下一步最值得加入什麼。可匿名送出；這份表單不會要求 Riot ID。'><link rel='canonical' href='https://arammeta.com/feedback/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-CN/feedback/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/feedback/'><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.feedback-page {
+  --accent: oklch(0.80 0.16 88);
+  --accent-soft: oklch(0.27 0.04 88);
+  --focus: oklch(0.78 0.14 88);
+}
+.feedback-page .action { color: oklch(0.22 0.025 88); }
+@media (prefers-color-scheme: light) {
+  .feedback-page {
+    --accent: oklch(0.60 0.14 85);
+    --accent-soft: oklch(0.94 0.035 88);
+    --focus: oklch(0.55 0.13 85);
+  }
+}
+.feedback-form {
+  margin-top: 34px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.feedback-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.feedback-fieldset + .feedback-fieldset,
+.feedback-fieldset + .feedback-field,
+.feedback-field + .feedback-field,
+.feedback-field + .feedback-context,
+.feedback-context + .feedback-field,
+.feedback-field + .feedback-submit-row { margin-top: 24px; }
+.feedback-fieldset legend,
+.feedback-label { padding: 0; color: var(--text); font-size: 14px; font-weight: 700; }
+.feedback-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.feedback-option {
+  display: flex;
+  min-height: 48px;
+  gap: 10px;
+  padding: 12px 14px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 92%, var(--bg));
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 180ms ease-out, background-color 180ms ease-out;
+}
+.feedback-option:hover { border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); }
+.feedback-option:focus-within {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-option input,
+.feedback-check input { accent-color: var(--accent); }
+.feedback-option input { margin: 3px 0 0; flex: 0 0 auto; }
+.feedback-option span { line-height: 1.4; }
+.feedback-field { display: flex; flex-direction: column; gap: 8px; }
+.feedback-field select,
+.feedback-field input[type='email'],
+.feedback-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.feedback-field select,
+.feedback-field input[type='email'] { min-height: 42px; padding: 8px 11px; }
+.feedback-field textarea { min-height: 150px; padding: 11px 12px; line-height: 1.6; resize: vertical; }
+.feedback-field select:focus-visible,
+.feedback-field input[type='email']:focus-visible,
+.feedback-field textarea:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-help { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.feedback-context { margin-top: 24px; border-top: 1px solid var(--border); }
+.feedback-context summary {
+  width: fit-content;
+  padding-top: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+.feedback-context summary:hover { color: var(--text); }
+.feedback-context summary:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.feedback-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.feedback-context-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.feedback-context-grid input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.feedback-check {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.feedback-check input { margin-top: 4px; flex: 0 0 auto; }
+.feedback-privacy { margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.feedback-submit-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.feedback-submit-row .action { margin-top: 0; border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border)); cursor: pointer; }
+.feedback-submit-row .action:disabled { cursor: wait; filter: saturate(.45); opacity: .7; }
+.feedback-status {
+  flex: 1 1 280px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.feedback-status.is-success {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.feedback-status.is-error {
+  border-color: color-mix(in oklch, oklch(0.62 0.14 25) 48%, var(--border));
+  background: color-mix(in oklch, oklch(0.62 0.14 25) 10%, var(--surface));
+  color: var(--text);
+}
+.feedback-fallback { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
+.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.feedback-form.is-submitted .feedback-submit-row { align-items: flex-start; }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+  .feedback-option-grid,
+  .feedback-context-grid { grid-template-columns: 1fr; }
+  .feedback-form { padding-top: 24px; }
+}
+</style></head><body class='feedback-page'><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/'>聯絡</a><a href='/feedback/' aria-current='page'>功能回饋</a></nav></div></header><main><p class='eyebrow'>LISTENING LOOP</p><h1>功能回饋</h1><p class='lede'>告訴我們哪個地方讓你更難做判斷，或下一步最值得加入什麼。可匿名送出；這份表單不會要求 Riot ID。</p><p class='updated'>最後更新：2026-09-12</p>
+<div class="feedback-language" aria-label="語系"><a href='/feedback/' aria-current='page'>繁中</a> <a href='/zh-CN/feedback/'>简中</a> <a href='/en/feedback/'>English</a></div>
+<form class="feedback-form" data-feedback-form data-endpoint="https://api.arammeta.com/api/feedback" data-locale="zh-Hant">
+<fieldset class="feedback-fieldset"><legend>你想回饋哪一類？</legend>
+<div class="feedback-option-grid"><label class='feedback-option'><input type='radio' name='category' value='feature' required><span>新功能建議</span></label><label class='feedback-option'><input type='radio' name='category' value='usability' required><span>現有功能不好用</span></label><label class='feedback-option'><input type='radio' name='category' value='bug' required><span>互動或載入錯誤</span></label><label class='feedback-option'><input type='radio' name='category' value='data' required><span>資料或結果疑問</span></label><label class='feedback-option'><input type='radio' name='category' value='other' required><span>其他</span></label></div></fieldset>
+<label class="feedback-field"><span class="feedback-label">關於哪個功能？</span>
+<select name="feature" required><option value="" selected disabled>關於哪個功能？</option><option value='champions'>英雄榜</option><option value='augments'>增幅</option><option value='draft'>Draft</option><option value='metapick'>Meta Pick</option><option value='changes'>版本變動</option><option value='mobile'>手機版</option><option value='other'>其他</option></select></label>
+<label class="feedback-field"><span class="feedback-label">請描述你的想法</span>
+<span class="feedback-help" id="feedback-message-help">你原本想完成什麼？哪一步卡住？希望它怎麼運作？</span>
+<textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="例如：我想比較兩個陣容，但目前看不到足夠的比較依據……"></textarea></label>
+<fieldset class="feedback-fieldset"><legend>這件事對你的影響</legend>
+<div class="feedback-option-grid"><label class='feedback-option'><input type='radio' name='impact' value='blocked'><span>無法完成目前要做的事</span></label><label class='feedback-option'><input type='radio' name='impact' value='friction'><span>有點困擾但仍能繼續</span></label><label class='feedback-option'><input type='radio' name='impact' value='idea' checked><span>單純建議／想法</span></label></div></fieldset>
+<details class="feedback-context"><summary>附加環境資訊（選填）</summary>
+<div class="feedback-context-grid">
+<label>目前頁面<input data-context="page_path" type="text" readonly></label>
+<label>語系<input data-context="locale" type="text" readonly></label>
+<label>主題<input data-context="theme" type="text" readonly></label>
+<label>裝置<input data-context="viewport" type="text" readonly></label>
+</div></details>
+<label class="feedback-field"><span class="feedback-label">如果希望回覆，可留下 Email（選填）</span>
+<input name="contact_email" type="email" maxlength="254" autocomplete="email">
+<span class="feedback-help">只有勾選同意回覆時才會保存。</span>
+<span class="feedback-check"><input name="contact_consent" type="checkbox"><span>我同意 arammeta 僅為回覆這份回饋而使用此 Email。</span></span></label>
+<div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+<p class="feedback-privacy">請不要提供真實姓名、Riot ID、PUUID、IP 位址、權杖或其他敏感資料。回饋內容與可選的 Email 會存放在私有收件資料庫，不會直接公開。</p>
+<div class="feedback-submit-row"><button class="action" type="submit">送出回饋</button>
+<p class="feedback-status" data-feedback-status role="status" aria-live="polite" tabindex="-1" hidden></p></div>
+</form>
+<p class="feedback-fallback">表單暫時無法使用？前往 GitHub 建立公開 Issue，請勿貼上個資。 <a href="https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new" target="_blank" rel="noopener">建立 GitHub Issue</a></p>
+<script>
+(() => {
+  const form = document.querySelector('[data-feedback-form]');
+  if (!form) return;
+  const endpoint = String(form.dataset.endpoint || '').trim();
+  const status = form.querySelector('[data-feedback-status]');
+  const submit = form.querySelector('button[type="submit"]');
+  const copy = {"sending": "送出中……", "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。", "offline": "目前表單尚未連上收件服務，請改用下方 GitHub Issue。", "network": "送出失敗，請檢查網路後再試。", "rate": "送出次數過於頻繁，請稍後再試。", "server": "目前無法收件，請稍後再試或改用 GitHub Issue。", "consent_error": "若填寫 Email，請先勾選同意回覆。", "reference": "參考編號"};
+  const email = form.elements.namedItem('contact_email');
+  const consent = form.elements.namedItem('contact_consent');
+  const getText = (name) => {
+    const field = form.elements.namedItem(name);
+    return field ? String(field.value || '').trim() : '';
+  };
+  const setStatus = (message, kind) => {
+    status.textContent = message;
+    status.className = `feedback-status is-${kind}`;
+    status.hidden = false;
+    status.focus?.();
+  };
+  const syncContext = () => {
+    const values = {
+      page_path: window.location.pathname,
+      locale: form.dataset.locale || 'zh-Hant',
+      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      viewport: window.matchMedia('(max-width: 640px)').matches ? 'mobile' : 'desktop'
+    };
+    Object.entries(values).forEach(([key, value]) => {
+      const field = form.querySelector(`[data-context="${key}"]`);
+      if (field) field.value = value;
+    });
+    return values;
+  };
+  const syncConsentValidity = () => {
+    if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
+  };
+  email?.addEventListener('input', syncConsentValidity);
+  consent?.addEventListener('change', syncConsentValidity);
+  syncContext();
+  window.addEventListener('resize', syncContext, { passive: true });
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    syncConsentValidity();
+    if (!form.reportValidity()) return;
+    if (!endpoint) { setStatus(copy.offline, 'error'); return; }
+    const context = syncContext();
+    const category = form.querySelector('input[name="category"]:checked');
+    const impact = form.querySelector('input[name="impact"]:checked');
+    const payload = {
+      category: category ? category.value : '',
+      feature: getText('feature'),
+      message: getText('message'),
+      impact: impact ? impact.value : 'idea',
+      ...context,
+      contact_email: getText('contact_email'),
+      contact_consent: Boolean(form.elements.namedItem('contact_consent')?.checked),
+      website: getText('website')
+    };
+    submit.disabled = true;
+    submit.textContent = copy.sending;
+    status.hidden = true;
+    try {
+      const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      let body = {};
+      try { body = await response.json(); } catch {}
+      if (!response.ok) {
+        if (response.status === 429) throw new Error(copy.rate);
+        throw new Error(response.status >= 500 ? copy.server : copy.network);
+      }
+      const reference = body.reference ? ` ${copy.reference}: ${body.reference}` : '';
+      form.reset();
+      syncContext();
+      form.classList.add('is-submitted');
+      setStatus(copy.success + reference, 'success');
+    } catch (error) {
+      setStatus(error instanceof Error && error.message ? error.message : copy.network, 'error');
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "送出回饋";
+    }
+  });
+})();
+</script>
+</main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/'>首頁</a><a href='/about/'>關於</a><a href='/privacy/'>隱私權</a><a href='/contact/'>聯絡</a><a href='/feedback/' aria-current='page'>功能回饋</a></nav><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></div></footer></body></html>
