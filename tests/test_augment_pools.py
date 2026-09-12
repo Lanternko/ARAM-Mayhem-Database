@@ -12,6 +12,8 @@ from aram_nn.site.augment_pools import (
     OPERATORS_PATH,
     build_payload,
     fnv1a32,
+    pool_hue,
+    POOL_HUES,
     public_payload,
     resolve_pool_name,
 )
@@ -83,9 +85,12 @@ class AugmentPoolTests(unittest.TestCase):
         pools = {x["id"]: x for x in p["pools"]}
         self.assertEqual(pools["{56299123}"]["name"], "CC")
         self.assertEqual(pools["{56299123}"]["family"], "function")
+        self.assertEqual(pools["{56299123}"]["hue"], "function")
         self.assertEqual(pools["{56299123}"]["augs"], [101, 102])
         self.assertEqual(pools["{0c7ef8ce}"]["family"], "excluded")
+        self.assertEqual(pools["{0c7ef8ce}"]["hue"], "other")
         self.assertEqual(pools["AH"]["family"], "stat")
+        self.assertEqual(pools["AH"]["hue"], "cd")
         self.assertEqual(p["champs"], {"13": [["AH", 200], ["{56299123}", 0]]})
         self.assertEqual(p["augs"]["101"]["zh"], "甲")
         self.assertTrue(p["augs"]["101"]["icon"].endswith("/assets/ux/cherry/augments/icons/one_small.png"))
@@ -111,6 +116,41 @@ class AugmentPoolTests(unittest.TestCase):
         internal = {"pools": [{"id": "{2fe0f044}", "name": "RangedAttackerAD", "hash": "2fe0f044"}],
                     "champs": {}, "diff": None}
         self.assertEqual(public_payload(internal)["pools"][0]["cell"], [1, 0])
+
+    def test_pool_hue_categories(self) -> None:
+        self.assertEqual(pool_hue("AD", None, "stat"), "ad")
+        self.assertEqual(pool_hue("AS", None, "stat"), "ad")
+        self.assertEqual(pool_hue("AH", None, "stat"), "cd")
+        self.assertEqual(pool_hue("AP", None, "stat"), "ap")
+        self.assertEqual(pool_hue("Armor", None, "stat"), "tank")
+        self.assertEqual(pool_hue("MS", None, "stat"), "function")
+        self.assertEqual(pool_hue("Economy", None, "function"), "gold")
+        self.assertEqual(pool_hue("CC", None, "function"), "function")
+        self.assertEqual(pool_hue("Peel", None, "function"), "support")
+        self.assertEqual(pool_hue("HealSelfless", None, "function"), "support")
+        self.assertEqual(pool_hue("ShieldSelfless", None, "function"), "support")
+        self.assertEqual(pool_hue("HealSelfish", None, "function"), "function")
+        self.assertEqual(pool_hue(None, "a1d5fd67", "inferred"), "support")
+        self.assertEqual(pool_hue(None, "86d9be15", "inferred"), "support")
+        self.assertEqual(pool_hue("Burn", None, "function"), "ap")
+        self.assertEqual(pool_hue("SizeBig", None, "function"), "tank")
+        self.assertEqual(pool_hue("RangedAttackerAD", None, "archetype"), "ad")
+        self.assertEqual(pool_hue("RangedCasterAD", None, "archetype"), "ad")
+        self.assertEqual(pool_hue("MeleeAttackerAP", None, "archetype"), "ap")
+        self.assertEqual(pool_hue("RangedAttackerDPS", None, "archetype"), "ad")
+        self.assertEqual(pool_hue("RangedCasterBurst", None, "archetype"), "ap")
+        self.assertEqual(pool_hue(None, "ba7415bd", "inferred"), "cd")
+        self.assertEqual(pool_hue(None, "10f8e38e", "inferred"), "tank")
+        self.assertEqual(pool_hue(None, "563cdf9c", "inferred"), "other")
+        self.assertEqual(pool_hue(None, "73f04b68", "inferred"), "function")
+        self.assertEqual(pool_hue("AH", None, "excluded"), "other")
+
+    def test_public_payload_keeps_hue(self) -> None:
+        pub = public_payload(build_payload(fake_fetch, "cur", "prev"))
+        hues = {p["label_zh"]: p["hue"] for p in pub["pools"]}
+        self.assertEqual(hues["技能急速"], "cd")
+        self.assertEqual(hues["控場"], "function")
+        self.assertTrue(set(hues.values()) <= set(POOL_HUES))
 
 
 if __name__ == "__main__":

@@ -2743,6 +2743,17 @@
         ['近戰施法型', 'Melee Caster'], ['遠程施法型', 'Ranged Caster'],
     ];
     const APOOL_ARCH_COLS = [['物攻', 'AD'], ['魔攻', 'AP'], ['爆發', 'Burst'], ['持續', 'DPS']];
+    const APOOL_HUES = [
+        ['ad', '物攻', 'AD'],
+        ['ap', '法術', 'AP'],
+        ['cd', '冷卻', 'CD'],
+        ['support', '輔助', 'Support'],
+        ['function', '功能', 'Utility'],
+        ['gold', '金錢', 'Gold'],
+        ['tank', '坦克', 'Tank'],
+        ['other', '其他', 'Other'],
+    ];
+    const APOOL_HUE_OK = { ad: 1, ap: 1, cd: 1, support: 1, function: 1, gold: 1, tank: 1, other: 1 };
 
     function setAugMode(next) {
         augMode = next === 'pools' ? 'pools' : 'tier';
@@ -2759,6 +2770,32 @@
         trackEvent('aug_mode', { mode: augMode });
     }
     function apoolLabel(p) { return p ? pickLang(p.label_zh, p.label_en) : ''; }
+    function apoolHue(p) {
+        if (p && APOOL_HUE_OK[p.hue]) return p.hue;
+        if (!p) return 'other';
+        const zh = p.label_zh || '';
+        const en = p.label_en || '';
+        const fam = p.family || '';
+        if (fam === 'excluded') return 'other';
+        if (/坦克|物防|魔防|^生命$|體型變大/.test(zh) || /Tank|Magic Resist|^Armor$|^Health$|Size Up/.test(en)) return 'tank';
+        if (/金錢|裝備升級/.test(zh) || /Economy|Item upgrades/.test(en)) return 'gold';
+        if (/技能急速|冷卻/.test(zh) || /Ability Haste|cooldown/.test(en)) return 'cd';
+        if (/保護隊友|治療隊友|護盾隊友|治療與護盾輔助|輔助/.test(zh) || /Peel|Ally Heal|Ally Shield|Heal & shield support|\bSupport\b/i.test(en)) return 'support';
+        if (/物攻|攻速|暴擊|普攻吸血|全能吸血|物穿/.test(zh) || /Attack Damage|Attack Speed|Crit|Life Steal|Omnivamp|Armor Pen|\bAD\b/.test(en)) return 'ad';
+        if (/魔攻|魔穿|魔力|技能吸血|燃燒/.test(zh) || /Ability Power|Magic Pen|^Mana$|Spell Vamp|Burn|\bAP\b/.test(en)) return 'ap';
+        if (/普攻型/.test(zh) || /Attacker/.test(en)) return 'ad';
+        if (/施法型/.test(zh) || /Caster/.test(en)) return 'ap';
+        if (fam === 'function') return 'function';
+        if (/控場|保護|護盾|治療|突進|開戰|跑速|隱身|大絕招|衝進|恐懼|輔助|機動|雪球|前期|後期|位移|體型變小|召喚師/.test(zh)) return 'function';
+        return 'other';
+    }
+    function apoolHueAttr(p) { return ` data-hue="${escHtml(apoolHue(p))}"`; }
+    function apoolLegendHtml() {
+        return `<ul class="apool-legend" aria-label="${escHtml(pickLang('池子類型', 'Pool categories'))}">`
+            + APOOL_HUES.map(([hue, zh, en]) =>
+                `<li data-hue="${hue}">${escHtml(pickLang(zh, en))}</li>`).join('')
+            + `</ul>`;
+    }
     function apoolTag(p) {
         if (!p || (p.label_source !== 'inferred' && p.label_source !== 'patch')) return '';
         const txt = p.label_source === 'patch' ? pickLang('公告名稱', 'Patch-note name') : pickLang('推定名稱', 'Inferred name');
@@ -2919,7 +2956,7 @@
         const body = rows.map(r => {
             const open = augPools.openRow === r.p.id;
             return `<li class="apool-row-item${open ? ' is-open' : ''}">`
-                + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}" aria-expanded="${open}">`
+                + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}"${apoolHueAttr(r.p)} aria-expanded="${open}">`
                 + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
                 + `<span class="apool-bar"><span class="apool-fill${r.w ? '' : ' is-default'}" style="width:${(r.w || 100) / 2}%"></span></span>`
                 + `<span class="apool-w${r.w ? '' : ' is-default'}">${escHtml(apoolWeightText(r.w))}</span>`
@@ -2933,6 +2970,7 @@
             + `<p class="apool-detail-sub">${escHtml(pickLang(
                 `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`,
                 `${rows.length} pools · up to ${union.size} augments`))}</p></div></div>`
+            + apoolLegendHtml()
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
             + `<ul class="apool-rows">${body}</ul>`
@@ -2942,7 +2980,7 @@
     }
     function apoolPoolBtnHtml(p) {
         const on = p.id === augPools.openPool;
-        return `<button type="button" class="apool-pool${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" aria-expanded="${on}">`
+        return `<button type="button" class="apool-pool${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}"${apoolHueAttr(p)} aria-expanded="${on}">`
             + `<span class="apool-pool-name">${escHtml(apoolLabel(p))}${apoolTag(p)}</span>`
             + `<span class="apool-pool-meta">${escHtml(pickLang(
                 `${p.augs.length} 增幅 · ${p.champs} 英雄`, `${p.augs.length} augments · ${p.champs} champs`))}</span>`
@@ -2957,7 +2995,7 @@
                 const p = byCell[ri + ',' + ci];
                 if (!p) return '<td></td>';
                 const on = p.id === augPools.openPool;
-                return `<td><button type="button" class="apool-cell${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}" `
+                return `<td><button type="button" class="apool-cell${on ? ' is-active' : ''}" data-apool-pool="${escHtml(p.id)}"${apoolHueAttr(p)} `
                     + `aria-expanded="${on}" aria-label="${escHtml(apoolLabel(p))}">`
                     + `<span class="apool-cell-n">${p.champs}</span>`
                     + `<span class="apool-cell-s">${escHtml(pickLang(`英雄 · ${p.augs.length} 增幅`, `champs · ${p.augs.length} aug.`))}</span>`
@@ -2979,7 +3017,7 @@
                 ? pickLang('沒有英雄引用這個池子；它由全域規則排除。', 'No champion references this pool; a global rule excludes it.')
                 : pickLang('沒有英雄引用這個池子。', 'No champion references this pool.'))}</p>`;
         return `<div class="apool-pool-detail">`
-            + `<div class="apool-pool-detail-head"><h4>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4></div>`
+            + `<div class="apool-pool-detail-head"><h4${apoolHueAttr(p)}>${escHtml(apoolLabel(p))}${apoolTag(p)}</h4></div>`
             + `<h5>${escHtml(pickLang(`包含的增幅（${p.augs.length}）`, `Augments (${p.augs.length})`))}</h5>`
             + apoolAugListHtml(p)
             + `<h5>${escHtml(pickLang(`所屬英雄（${members.length}），依權重分組`, `Champions (${members.length}) by weight`))}</h5>`

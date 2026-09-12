@@ -87,6 +87,39 @@ _ARCH_ZH = {
     "AD": "物攻", "AP": "魔攻", "Burst": "爆發", "DPS": "持續",
 }
 _ARCH_EN = {"Attacker": "Attacker", "Caster": "Caster", "DPS": "DPS"}
+# Scan-aid categories for the champion pool-weight list. Distinct from
+# ``family`` (how the pool was labelled). The page colors bars by this.
+POOL_HUES = ("ad", "ap", "cd", "support", "function", "gold", "tank", "other")
+_STAT_HUE = {
+    "AD": "ad", "AS": "ad", "CritChance": "ad", "ArmorPen": "ad",
+    "LifeSteal": "ad", "Omnivamp": "ad",
+    "AP": "ap", "MagicPen": "ap", "Mana": "ap", "Spellvamp": "ap",
+    "AH": "cd",
+    "Health": "tank", "Armor": "tank", "MR": "tank",
+    "MS": "function",
+}
+_FUNCTION_HUE = {
+    "Economy": "gold",
+    "Burn": "ap",
+    "SizeBig": "tank",
+    "Peel": "support",
+    "HealSelfless": "support",
+    "ShieldSelfless": "support",
+}
+_INFERRED_HUE = {
+    "10f8e38e": "tank",       # 坦克（廣）
+    "ba0256ad": "tank",       # 坦克（核心）
+    "ba7415bd": "cd",         # 通用 C：技能與冷卻
+    "73f04b68": "function",   # 大絕招
+    "8c232386": "function",   # 隱身與跑速
+    "2b5a8648": "function",   # 衝進敵陣
+    "4f40633b": "function",   # 機動與刺殺
+    "a1d5fd67": "support",    # 輔助（小）
+    "86d9be15": "support",    # 治療與護盾輔助
+    "257a6f57": "function",   # 恐懼與困住
+    "99d70c96": "function",   # 強勢後期成長
+    "9579774e": "gold",       # 裝備升級
+}
 KNOWN_POOL_NAMES = tuple(STAT_POOLS) + tuple(FUNCTION_POOLS) + tuple(
     f"{r}{s}{d}"
     for r in ("Melee", "Ranged")
@@ -194,29 +227,56 @@ def _icon_url(path: str | None) -> str:
     return f"{CDRAGON_BASE}/latest/plugins/rcp-be-lol-game-data/global/default/{rest}"
 
 
+def pool_hue(name: str | None, h: str | None, family: str) -> str:
+    """Gameplay color for a pool: ad / ap / cd / support / function / gold / tank / other."""
+    if family == "excluded":
+        return "other"
+    if name in _STAT_HUE:
+        return _STAT_HUE[name]
+    if name in FUNCTION_POOLS:
+        return _FUNCTION_HUE.get(name, "function")
+    m = _ARCH_RE.match(name or "")
+    if m:
+        _, style, dmg = m.groups()
+        if dmg == "AD":
+            return "ad"
+        if dmg == "AP":
+            return "ap"
+        return "ad" if style == "Attacker" else "ap"
+    if h and h in _INFERRED_HUE:
+        return _INFERRED_HUE[h]
+    if family == "function":
+        return "function"
+    return "other"
+
+
 def _pool_meta(raw_id: str, excluded: bool) -> dict:
     name, h = resolve_pool_name(raw_id)
     if excluded:
-        return {"name": name, "hash": h, "family": "excluded",
+        meta = {"name": name, "hash": h, "family": "excluded",
                 "label_zh": "排除池", "label_en": "Excluded", "label_source": "operator"}
-    if name in STAT_POOLS:
+    elif name in STAT_POOLS:
         zh, en = STAT_POOLS[name]
-        return {"name": name, "hash": h, "family": "stat", "label_zh": zh, "label_en": en, "label_source": "name"}
-    if name in FUNCTION_POOLS:
+        meta = {"name": name, "hash": h, "family": "stat", "label_zh": zh, "label_en": en, "label_source": "name"}
+    elif name in FUNCTION_POOLS:
         zh, en = FUNCTION_POOLS[name]
-        return {"name": name, "hash": h, "family": "function", "label_zh": zh, "label_en": en, "label_source": "name"}
-    m = _ARCH_RE.match(name or "")
-    if m:
-        r, s, d = m.groups()
-        return {"name": name, "hash": h, "family": "archetype",
-                "label_zh": f"{_ARCH_ZH[r]}{_ARCH_ZH[s]}・{_ARCH_ZH[d]}",
-                "label_en": f"{r} {_ARCH_EN[s]} · {d}", "label_source": "name"}
-    if name:  # resolved but not labelled yet: never surface the raw name as a label
-        return {"name": name, "hash": h, "family": "function",
-                "label_zh": "未分類", "label_en": "Unclassified", "label_source": "name"}
-    zh, en, src = INFERRED_POOLS.get(h or "", ("未命名", "Unnamed", "inferred"))
-    family = "function" if src == "patch" else "inferred"
-    return {"name": None, "hash": h, "family": family, "label_zh": zh, "label_en": en, "label_source": src}
+        meta = {"name": name, "hash": h, "family": "function", "label_zh": zh, "label_en": en, "label_source": "name"}
+    else:
+        m = _ARCH_RE.match(name or "")
+        if m:
+            r, s, d = m.groups()
+            meta = {"name": name, "hash": h, "family": "archetype",
+                    "label_zh": f"{_ARCH_ZH[r]}{_ARCH_ZH[s]}・{_ARCH_ZH[d]}",
+                    "label_en": f"{r} {_ARCH_EN[s]} · {d}", "label_source": "name"}
+        elif name:  # resolved but not labelled yet: never surface the raw name as a label
+            meta = {"name": name, "hash": h, "family": "function",
+                    "label_zh": "未分類", "label_en": "Unclassified", "label_source": "name"}
+        else:
+            zh, en, src = INFERRED_POOLS.get(h or "", ("未命名", "Unnamed", "inferred"))
+            family = "function" if src == "patch" else "inferred"
+            meta = {"name": None, "hash": h, "family": family, "label_zh": zh, "label_en": en, "label_source": src}
+    meta["hue"] = pool_hue(name, h, meta["family"])
+    return meta
 
 
 def _snapshot(fetch: Fetch, version: str, kiwi_ids: dict[str, int] | None = None) -> dict:
