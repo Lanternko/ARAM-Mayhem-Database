@@ -166,6 +166,9 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/about",
                 "docs/privacy",
                 "docs/contact",
+                "docs/feedback",
+                "docs/en/feedback",
+                "docs/zh-CN/feedback",
                 "docs/champion-roles.json",
             ],
         )

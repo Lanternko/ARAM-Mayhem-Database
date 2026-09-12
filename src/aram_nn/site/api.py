@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from .db import count_games, insert_public_games, latest_patch_prefix
+from .feedback import (
+    DEFAULT_FEEDBACK_DB,
+    FeedbackValidationError,
+    feedback_rate_limit_per_hour,
+    insert_feedback,
+    normalize_feedback,
+)
 from .meta_pick import (
     InProcessRateLimiter,
     MetaPickError,
@@ -51,6 +58,7 @@ if _cors_raw:
 
 # Best-effort single-process submit limiter (not shared across workers).
 _submit_limiter = InProcessRateLimiter(rate_limit_per_hour())
+_feedback_limiter = InProcessRateLimiter(feedback_rate_limit_per_hour())
 
 
 def _require_admin_token(authorization: str | None) -> None:
@@ -63,6 +71,10 @@ def _require_admin_token(authorization: str | None) -> None:
 
 def _site_db() -> Path:
     return Path(os.environ.get("ARAM_SITE_DB", str(DEFAULT_SITE_DB)))
+
+
+def _feedback_db() -> Path:
+    return Path(os.environ.get("ARAM_FEEDBACK_DB", str(DEFAULT_FEEDBACK_DB)))
 
 
 def _snapshot_path() -> Path:
@@ -165,6 +177,31 @@ def post_meta_pick_run(payload: dict[str, Any], request: Request) -> dict[str, A
         raise _http_meta_pick_error(exc) from exc
     except MetaPickError as exc:
         raise _http_meta_pick_error(exc) from exc
+
+
+@app.post("/feedback")
+@app.post("/api/feedback")
+def post_feedback(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Accept privacy-aware product feedback without exposing the inbox."""
+    key = client_key_from_request(request)
+    if not _feedback_limiter.allow(key):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+    try:
+        normalized = normalize_feedback(payload)
+    except FeedbackValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Honeypot submissions deliberately return a success-shaped response while
+    # avoiding a database write, so bots do not learn the spam boundary.
+    if normalized is None:
+        return {"ok": True, "accepted": False}
+
+    feedback_id = insert_feedback(_feedback_db(), normalized)
+    return {
+        "ok": True,
+        "accepted": True,
+        "reference": f"F-{feedback_id:06d}",
+    }
 
 
 @app.get("/meta-pick/leaderboard")

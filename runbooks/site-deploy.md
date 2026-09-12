@@ -81,4 +81,6 @@ Routine data：確認 live payload patch／timestamp／row count、主要 JSON 2
 
 Frontend shell：確認 live CSS／JS／HTML change、canonical／OG／analytics metadata、desktop/mobile 與 console；確認公開 payload version 與 data timestamp 沒有因 UI ship 改變。
 
+功能回饋頁屬於 frontend shell 的 static artifact，`docs/feedback`、`docs/en/feedback` 與 `docs/zh-CN/feedback` 必須和 footer link 一起 atomic publish。表單送出依賴 API 的 `POST /api/feedback`；若只發布 Pages 而 API task 尚未更新，頁面會保留 GitHub Issue fallback，不得宣稱私有回饋已成功收件。
+
 Pages／CDN 可能短暫延遲，但這是 artifact propagation，不是 website restart。回報時明示本輪是「data publish」或「frontend shell publish」，並說明哪些資料有／沒有重算。

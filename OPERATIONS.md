@@ -117,6 +117,7 @@ Get-Content data/site/model_refresh_state.json
 - `workers alive + Mayhem 不成長`、大量 `target_games=0`、LCU auth 或 seed family 問題：用 `runbooks/crawler-stall.md`；需要換 OPGG page window 時再用 `runbooks/opgg-seed-refresh.md`。
 - Harness 只擁有 routine data publisher：它在 disposable isolated worktree 依成長門檻更新資料，development worktree dirty 不應阻擋或被覆寫。Frontend shell publish 是 task workflow，不是 watchdog child；兩者都只發布 GitHub Pages 靜態檔案，不會重啟 crawler、API、tunnel 或其他 runtime。失敗先看 `data/site/static_publish.err.log`，lane 與操作依 `runbooks/site-deploy.md`；一般 Git／worktree lifecycle 依 `runbooks/git-workflow.md`。
 - `sync_site_backend.py --watch` 是本機 DB → 公開 games backend 的獨立鏈，不由 crawler watchdog 啟動；首次灌資料才使用 `--force`。Public schema 會拒絕 PUUID、summoner name、Riot ID 與 UUID-like PUUID。
+- `POST /api/feedback` 是只寫入的功能回饋入口，資料獨立保存於 `ARAM_FEEDBACK_DB`（預設 `data/site/feedback.db`），沒有公開讀取 API。正式 API task 必須保留該路徑在私有資料目錄，並可用 `ARAM_FEEDBACK_RATE_LIMIT_PER_HOUR` 調整每個客戶端的限流；回饋內容需透過受控的本機資料庫流程整理，不直接自動轉成公開 Issue。
 - OPGG、crawler、publisher 正在跑時，不整理 `data/lcu/`；舊 log 只在 collector 完全停止後移到 `logs/archive/`，SQLite 三件套永遠排除。
 
 ## 6. 重建
