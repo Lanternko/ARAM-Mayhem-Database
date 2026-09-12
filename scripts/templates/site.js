@@ -1324,7 +1324,7 @@
             // already carry the structure; the long methodology caption was noise.
             itemClusterSectionMeta: '',
             augTypeSectionTitle: '推薦增幅裝置傾向',
-            augTypeSectionMeta: '細分類優先；分數扣掉同角色／傷害型英雄的平均偏好',
+            augTypeSectionMeta: '依遊戲本身的增幅池分組；分數扣掉同角色／傷害型英雄的平均偏好',
             relativeBest: '相對最佳',
             best: '最佳',
             worst: '最差',
@@ -1661,7 +1661,7 @@
             // Empty on purpose — see zh itemClusterSectionMeta note.
             itemClusterSectionMeta: '',
             augTypeSectionTitle: 'Recommended Augment Tendencies',
-            augTypeSectionMeta: 'Fine-grained first; scores are adjusted against similar role/damage-profile champions.',
+            augTypeSectionMeta: "Grouped by the game's own augment pools; scores are adjusted against similar role/damage-profile champions.",
             relativeBest: 'Relative Best',
             best: 'Best',
             worst: 'Worst',

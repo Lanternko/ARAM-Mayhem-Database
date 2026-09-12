@@ -453,6 +453,19 @@ def main(
             click.echo(f"[tierlist] WARN: {exc}; using explicit legacy team-score fallback")
         except Exception as exc:
             click.echo(f"[tierlist] WARN: team-score retraining failed: {exc}; using legacy fallback")
+    # Champion augment tendencies are grouped by the game's own augment pools
+    # (docs/api/augment-pools.json, refreshed per patch by build_augment_pools.py).
+    augment_group_infos = load_augment_pool_infos() or None
+    if augment_group_infos is None:
+        click.echo(
+            "[tierlist] WARN: augment-pool payload missing; augment tendencies "
+            "fall back to the keyword classifier"
+        )
+    else:
+        click.echo(
+            f"[tierlist] augment tendencies grouped by game pools "
+            f"({len(augment_group_infos)} augments carry a pool)"
+        )
     set_affinity, item_style_affinity, augment_type_affinity = compute_champ_category_affinities(
         db,
         queue_id,
@@ -464,6 +477,8 @@ def main(
         min_set_games=affinity_min_games,
         min_item_games=item_style_min_games,
         min_augtype_games=augment_type_min_games,
+        augment_group_infos=augment_group_infos,
+        augment_category_overrides=load_augment_category_overrides(),
     )
     click.echo(
         f"[tierlist] {len(set_affinity)} champions have >= 1 augment-set affinity row "

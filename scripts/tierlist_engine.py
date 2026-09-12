@@ -2677,6 +2677,77 @@ def resolve_augment_categories(
     return augment_filter_categories(aid, meta, new_aug_ids)
 
 
+def augment_category_infos(
+    aid: int,
+    meta: dict | None,
+    overrides: dict[int, list[str]] | None = None,
+) -> list[dict[str, str]]:
+    """Label entries for the coarse user-facing augment categories.
+
+    Same taxonomy as the 增幅池 filter chips (AUGMENT_CATEGORY_ORDER).  `new` is
+    dropped on purpose: "introduced this patch" is a rolling window, not a build
+    tendency.  Only a fallback for the per-champion tendencies now — the real
+    grouping comes from the game's own augment pools
+    (`load_augment_pool_infos`)."""
+    cats = resolve_augment_categories(aid, meta, frozenset(), overrides)
+    return [
+        _label_entry(AUGMENT_CATEGORY_LABELS, cat)
+        for cat in cats
+        if cat != "new"
+    ]
+
+
+# The game's own augment grouping, built once per patch by
+# scripts/build_augment_pools.py from augmentgroups.bin + map12.bin.  Riot
+# decides which pools a champion draws from, so these are the real "kinds of
+# augment" a champion is offered — far better than keyword-guessing from the
+# augment text.  Families `unused` (no augments or no champion references it)
+# and `excluded` (removed by a global rule, never offered) are skipped: nothing
+# there can be picked, so they would only add empty rows.
+AUGMENT_POOL_PAYLOAD_PATH = (
+    Path(__file__).resolve().parents[1] / "docs" / "api" / "augment-pools.json"
+)
+AUGMENT_POOL_SKIP_FAMILIES = frozenset({"unused", "excluded"})
+
+
+def load_augment_pool_infos(
+    path: Path | str = AUGMENT_POOL_PAYLOAD_PATH,
+) -> dict[int, list[dict[str, str]]]:
+    """augment id -> label entries for every pool that augment belongs to.
+
+    Returns an empty dict when the payload is missing or unreadable; callers
+    fall back to the keyword classifier rather than dropping the section."""
+    payload_path = Path(path)
+    if not payload_path.exists():
+        return {}
+    try:
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    pools = payload.get("pools") if isinstance(payload, dict) else None
+    if not isinstance(pools, list):
+        return {}
+    out: dict[int, list[dict[str, str]]] = {}
+    for pool in pools:
+        if not isinstance(pool, dict):
+            continue
+        if str(pool.get("family") or "") in AUGMENT_POOL_SKIP_FAMILIES:
+            continue
+        slug = str(pool.get("id") or "")
+        if not slug:
+            continue
+        name_en = str(pool.get("label_en") or slug)
+        name_zh = str(pool.get("label_zh") or name_en)
+        info = {"name": name_zh, "name_zh": name_zh, "name_en": name_en, "slug": slug}
+        for aid in pool.get("augs") or []:
+            try:
+                key = int(aid)
+            except (TypeError, ValueError):
+                continue
+            out.setdefault(key, []).append(info)
+    return out
+
+
 def derive_new_augment_ids(
     current_champ_aug: list[dict],
     baseline_champ_aug: list[dict] | None,
@@ -3024,6 +3095,8 @@ def compute_champ_category_affinities(
     min_set_games: int,
     min_item_games: int,
     min_augtype_games: int,
+    augment_group_infos: dict[int, list[dict[str, str]]] | None = None,
+    augment_category_overrides: dict[int, list[str]] | None = None,
 ) -> tuple[dict[int, dict], dict[int, dict], dict[int, dict]]:
     baseline_by_champ = {
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
@@ -3042,6 +3115,14 @@ def compute_champ_category_affinities(
             "WHERE queue_id=? AND participants_json IS NOT NULL",
             (queue_id,),
         )
+
+    # The game's own pools when the per-patch payload is available; the keyword
+    # classifier only as a fallback so a missing payload degrades the labels
+    # instead of dropping the whole section.
+    def _augment_group_of(aid: int, meta: dict) -> list[dict[str, str]]:
+        if augment_group_infos is not None:
+            return augment_group_infos.get(aid) or []
+        return augment_category_infos(aid, meta, augment_category_overrides)
 
     dims = ("sets", "items", "augtypes")
     cs_games = {dim: Counter() for dim in dims}
@@ -3089,7 +3170,7 @@ def compute_champ_category_affinities(
                     if not meta:
                         continue
                     set_infos.extend(meta.get("sets") or [])
-                    aug_type_infos.extend(augment_type_infos(meta))
+                    aug_type_infos.extend(_augment_group_of(int(augment_id), meta))
                 item_infos = _participant_item_infos(
                     participant.get("items") or participant.get("itemSlots") or [],
                     item_meta,
