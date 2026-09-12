@@ -5683,14 +5683,16 @@
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
     [data-theme="light"] .item-role-chip:not(.is-active),
-    [data-theme="light"] .item-scope-chip:not(.is-active) {
+    [data-theme="light"] .item-scope-chip:not(.is-active),
+    [data-theme="light"] .apool-role-chip:not(.is-active) {
         background: var(--chip-bg);
         color: var(--text-muted);
         border-color: var(--border);
     }
     [data-theme="light"] .aug-cat-chip:not(.is-active):hover,
     [data-theme="light"] .item-role-chip:not(.is-active):hover,
-    [data-theme="light"] .item-scope-chip:not(.is-active):hover {
+    [data-theme="light"] .item-scope-chip:not(.is-active):hover,
+    [data-theme="light"] .apool-role-chip:not(.is-active):hover {
         background: #e2e6ee;
         border-color: var(--border-strong);
         color: var(--text);
@@ -6510,6 +6512,37 @@
         font-size: 14px;
     }
     .apool-search:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+    .apool-role-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .apool-role-chip {
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.4;
+        cursor: pointer;
+        --role-color: var(--accent);
+    }
+    .apool-role-chip:hover { background: var(--overlay); color: var(--text); }
+    .apool-role-chip.is-active {
+        background: var(--role-color);
+        color: var(--accent-on, #14110a);
+        border-color: var(--role-color);
+    }
+    .apool-role-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .apool-role-chip.role-Assassin { --role-color: #ef4444; }
+    .apool-role-chip.role-Fighter  { --role-color: #f97316; }
+    .apool-role-chip.role-Mage     { --role-color: #3b82f6; }
+    .apool-role-chip.role-Marksman { --role-color: #22c55e; }
+    .apool-role-chip.role-Support  { --role-color: #ec4899; }
+    .apool-role-chip.role-Tank     { --role-color: #a855f7; }
     .apool-champs {
         display: flex;
         flex-direction: column;
@@ -6535,6 +6568,7 @@
         cursor: pointer;
     }
     .apool-champ[hidden] { display: none; }
+    .apool-champ-empty { flex: 1 1 100%; margin: 8px 4px; }
     .apool-champ img { flex: none; width: 24px; height: 24px; border-radius: 6px; }
     .apool-champ:hover { background: var(--surface-2); }
     .apool-champ.is-active {
@@ -6736,6 +6770,7 @@
     @media (max-width: 760px) {
         .apool-panel { grid-template-columns: minmax(0, 1fr); }
         .apool-picker { border-right: 0; border-bottom: 1px solid var(--panel-line); }
+        .apool-role-chip { padding: 6px 10px; min-height: 32px; }
         .apool-champs { flex-direction: row; flex-wrap: wrap; max-height: 176px; }
         .apool-champ { width: auto; }
         .apool-row,
