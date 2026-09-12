@@ -10,6 +10,7 @@ arammeta 將實際對局整理成英雄、增幅與陣容資料，協助玩家�
 
 - [英雄榜](https://arammeta.com/)：搜尋或篩選英雄，查看 Tier、調整後勝率、樣本數、推薦增幅與裝備。
 - [增幅榜](https://arammeta.com/augments/)：依稀有度與類型比較增幅，點開後查看最適合的英雄。
+- [增幅池](https://arammeta.com/augments/pools/)：查看每位英雄從哪些池子抽增幅，以及各池權重。
 - [Draft](https://arammeta.com/draft/)：選擇我方與敵方英雄；陣容未滿時取得補位建議，選滿後比較隊伍特性與估計勝率。
 - [遊戲工具](https://arammeta.com/game/)：用 Meta Pick 練習選角，或用增幅 Draft 比較每輪候選。
 - [版本變動](https://arammeta.com/changes/)：查看英雄與增幅在不同版本之間的變化。

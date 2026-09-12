@@ -249,7 +249,7 @@ Panel 使用 8px、12px、16px 三級圓角。8px 屬於 button、input、tile �
 
 Classic 是 header 內獨立的 pill link，可附 `NEW` badge，但不計入第六個主要分頁。Home、About、Privacy、Contact 是資訊頁，亦不加入產品 tab。尚未發布的 Articles / 專欄不計入頁數，也不能預留空白 tab。
 
-Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
+Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。增幅內含 增幅榜（`/augments/`）與 增幅池（`/augments/pools/`）。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
 
 桌面 header 高度為 56px，字標在左、主要 tab 在中、theme、language、Classic 與其他 utilities 在右。行動版改為兩列，主要 tab 可水平捲動且 active item 必須被帶入可視區，不能把五個 tab 壓成無法閱讀的縮寫。
 

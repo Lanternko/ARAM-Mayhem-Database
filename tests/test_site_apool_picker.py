@@ -12,6 +12,7 @@ class AugmentPoolPickerUiTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.js = (ROOT / "scripts" / "templates" / "site.js").read_text(encoding="utf-8")
         cls.css = (ROOT / "scripts" / "templates" / "site.css").read_text(encoding="utf-8")
+        cls.render = (ROOT / "scripts" / "tierlist_render.py").read_text(encoding="utf-8")
 
     def test_champion_picker_has_role_filter_chips(self) -> None:
         self.assertIn("function apoolRoleBarHtml()", self.js)
@@ -31,3 +32,13 @@ class AugmentPoolPickerUiTests(unittest.TestCase):
         self.assertIn("btn.hidden = hide", self.js)
         self.assertIn("apool-champ-empty", self.js)
         self.assertIn("沒有符合的英雄", self.js)
+
+    def test_pools_view_has_shareable_path(self) -> None:
+        self.assertIn("function pathForRoute(view, sub)", self.js)
+        self.assertIn("return prefix + '/' + view + '/pools/'", self.js)
+        self.assertIn("segs[1] === 'pools'", self.js)
+        self.assertIn("syncUrlToRoute('augments', augmentsSub()", self.js)
+        self.assertIn("href='/augments/pools/'", self.render)
+        self.assertIn("function poolsPageTitle()", self.js)
+        self.assertIn("function augmentsPageTitle()", self.js)
+        self.assertIn(".aug-mode-tab:visited", self.css)
