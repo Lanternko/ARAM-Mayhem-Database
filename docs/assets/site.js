@@ -103,7 +103,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260912-1789195253");
+    const DATA = await loadSitePayload("api/tier-list.json?v=d36f92b533a2b8cb");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -2734,8 +2734,9 @@
         ['norandom', '排除池', 'Excluded from random',
             '這些增幅不會被隨機給予（質變、潘朵拉的寶盒、封我為王），但一般選用照常出現。',
             'These augments are never handed out at random (Transmute, Pandora’s Box, Crown Me King); normal selection still offers them.'],
-        ['unused', '空池或未使用', 'Empty or unused',
-            '沒有增幅，或沒有任何英雄引用。', 'No augments, or no champion references them.'],
+        ['unused', '沒有英雄直接引用', 'Not referenced by champions',
+            '池子有增幅，但英雄表沒有直接指向它；裡面的增幅多半也收在其他池子裡。',
+            'The pool has augments, but no champion points at it; its augments mostly also sit in other pools.'],
     ];
     // Row/column order matches the payload's archetype `cell` = [row, col].
     const APOOL_ARCH_ROWS = [
@@ -3094,7 +3095,10 @@
             + APOOL_FAMILIES.map(([fam, zh, en, dzh, den]) => {
                 const list = (byFam[fam] || []).slice().sort((a, b) => b.champs - a.champs);
                 if (!list.length) return '';
-                const inner = fam === 'archetype'
+                // Matrix needs `cell` from the payload.  A cached older site.js
+                // against a newer payload (or the reverse) would otherwise draw a
+                // grid of empty <td>s, so fall back to the plain pool list.
+                const inner = fam === 'archetype' && list.some(p => p.cell)
                     ? apoolMatrixHtml(list)
                     : `<div class="apool-pool-list">${list.map(apoolPoolBtnHtml).join('')}</div>`;
                 const open = list.find(p => p.id === augPools.openPool);

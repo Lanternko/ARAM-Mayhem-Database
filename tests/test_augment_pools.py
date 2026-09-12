@@ -26,6 +26,7 @@ def _groups(cc_augs):
         "{k1}": {"ID": "AH", "augments": [{"Augment": A + "One"}], "__type": "{fead7e9b}"},
         "{k2}": {"ID": "{56299123}", "augments": [{"Augment": A + x} for x in cc_augs], "__type": "{fead7e9b}"},
         "{k3}": {"ID": "{0c7ef8ce}", "augments": [{"Augment": A + "Two"}], "__type": "{fead7e9b}"},
+        "{k4}": {"ID": "MS", "augments": [], "__type": "{fead7e9b}"},
         "__linked": [],
     }
 
@@ -33,7 +34,8 @@ def _groups(cc_augs):
 def _map12(ah_weight):
     return {
         "{tbl}": {"{0bf9074a}": [{"championName": "Characters/Ryze", "{f1500c60}": "{c1}"}]},
-        "{c1}": {"{248cf7db}": [{"{c940fe53}": "{k1}", "WEIGHT": ah_weight}, {"{c940fe53}": "{k2}"}],
+        "{c1}": {"{248cf7db}": [{"{c940fe53}": "{k1}", "WEIGHT": ah_weight}, {"{c940fe53}": "{k2}"},
+                                {"{c940fe53}": "{k4}"}],
                  "__type": "{f9e46502}"},
     }
 
@@ -94,6 +96,13 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(p["champs"], {"13": [["AH", 200], ["{56299123}", 0]]})
         self.assertEqual(p["augs"]["101"]["zh"], "甲")
         self.assertTrue(p["augs"]["101"]["icon"].endswith("/assets/ux/cherry/augments/icons/one_small.png"))
+
+    def test_empty_pools_are_dropped_everywhere(self) -> None:
+        # A pool with no augments can never be offered, even though map12 still
+        # points every champion at it; it must not reach the page at all.
+        p = build_payload(fake_fetch, "cur", "prev")
+        self.assertNotIn("MS", {x["id"] for x in p["pools"]})
+        self.assertNotIn("MS", [pid for pid, _ in p["champs"]["13"]])
 
     def test_diff_against_previous_patch(self) -> None:
         d = build_payload(fake_fetch, "cur", "prev")["diff"]

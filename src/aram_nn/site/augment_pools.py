@@ -82,6 +82,8 @@ FUNCTION_POOLS = {
     "EarlySpike": ("前期強勢", "Early Spike"),
     "SnowBall": ("雪球", "Snowball"),
     "SummonerSpell": ("召喚師技能", "Summoner Spell"),
+    # Only pool whose name carries a "Pool" suffix; verified by hash like the rest.
+    "AutoCastPool": ("自動施放", "Auto-cast"),
 }
 _ARCH_RE = re.compile(r"^(Melee|Ranged)(Attacker|Caster)(AD|AP|Burst|DPS)$")
 _ARCH_ZH = {
@@ -148,6 +150,7 @@ INFERRED_POOLS = {
     "a1d5fd67": ("輔助（小）", "Support (small)", "inferred"),
     "86d9be15": ("治療與護盾輔助", "Heal & shield support", "inferred"),
     "257a6f57": ("恐懼與困住", "Fear & trap", "inferred"),
+    "9579774e": ("裝備升級", "Item upgrades", "inferred"),
 }
 
 Fetch = Callable[[str, str], Any]
@@ -312,24 +315,31 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
     def cid_of(alias: str) -> int | None:
         return alias_to_id.get(alias.lower())
 
+    # A pool with no augments can never be offered; drop it everywhere rather
+    # than publishing a card that says "0 augments" next to a champion count.
+    empty = {pid for pid, augs in cur["pools"].items() if not augs}
+
     champs_out: dict[str, list] = {}
     members: dict[str, int] = {}
     for alias, pools in sorted(cur["weights"].items()):
         cid = cid_of(alias)
         if cid is None:
             continue
-        champs_out[str(cid)] = [[pid, w] for pid, w in pools.items()]
+        champs_out[str(cid)] = [[pid, w] for pid, w in pools.items() if pid not in empty]
         for pid in pools:
-            members[pid] = members.get(pid, 0) + 1
+            if pid not in empty:
+                members[pid] = members.get(pid, 0) + 1
 
     pools_out = []
     for pid, augs in cur["pools"].items():
+        if pid in empty:
+            continue
         meta = _pool_meta(pid, pid in operator_ids)
-        if meta["family"] != "norandom" and (not augs or not members.get(pid)):
+        if meta["family"] != "norandom" and not members.get(pid):
             meta["family"] = "unused"
         pools_out.append({"id": pid, **meta, "augs": augs, "champs": members.get(pid, 0)})
 
-    aug_ids = sorted({a for p in cur["pools"].values() for a in p})
+    aug_ids = sorted({a for pid, p in cur["pools"].items() if pid not in empty for a in p})
     zh_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="zh_tw"))}
     en_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="default"))}
     augs_out = {}
