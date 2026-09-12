@@ -51,12 +51,19 @@
                 toggle.title = lab;
                 toggle.setAttribute('aria-label', 'Language / 語言: ' + lab);
             }
-            if (pendingBootLang === 'en') {
-                const search = document.getElementById('search');
+            if (pendingBootLang === 'en' || pendingBootLang === 'zh-CN') {
+                const search = document.getElementById('champ-search');
                 if (search) {
-                    search.placeholder = 'Search champions (ZH / EN)';
-                    search.setAttribute('aria-label', 'Search champions');
+                    const isEnglish = pendingBootLang === 'en';
+                    search.placeholder = isEnglish
+                        ? 'Search champion names (ZH / EN)'
+                        : '搜索英雄名称（中 / 英）';
+                    search.setAttribute('aria-label', isEnglish
+                        ? 'Search champion names'
+                        : '搜索英雄名称');
                 }
+                const scopeValue = document.getElementById('search-scope-value');
+                if (scopeValue && pendingBootLang === 'en') scopeValue.textContent = 'Champions';
                 const shownUnit = document.getElementById('shown-unit');
                 if (shownUnit) shownUnit.textContent = 'shown';
                 document.querySelectorAll('.tier-count-unit').forEach(el => {
@@ -170,6 +177,12 @@
             m.c = itemsMap[id];
             if (descsMap[id]) m.dc = descsMap[id];
         }
+        // The CN dictionary is loaded lazily on zh-TW / EN routes.  Refresh the
+        // lightweight hero-only attributes when it arrives so a Simplified
+        // Chinese query works without requiring a page reload.
+        document.querySelectorAll('.champ[data-cid]').forEach(champ => {
+            try { enrichChampCard(champ); } catch {}
+        });
     }
     function mergeArchFit(src) {
         if (!src || !src.champs || !DATA.champs) return;
@@ -825,11 +838,23 @@
         zh: {
             htmlLang: 'zh-Hant',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? '全版本' : `版本 ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: '搜尋英雄、裝備、增幅',
-            searchPlaceholderMobile: '搜尋英雄、裝備、增幅',
+            searchPlaceholderDesktop: '搜尋英雄名稱（中 / 英）',
+            searchPlaceholderMobile: '搜尋英雄名稱（中 / 英）',
+            searchPlaceholderAllDesktop: '搜尋英雄、裝備、增幅',
+            searchPlaceholderAllMobile: '搜尋英雄、裝備、增幅',
             draftSearchPlaceholderMobile: '搜尋英雄（中 / 英）',
             draftSearchAria: '搜尋英雄',
-            searchAria: '搜尋英雄、裝備、增幅',
+            searchAriaChampion: '搜尋英雄名稱',
+            searchAriaAll: '搜尋英雄、裝備、增幅',
+            searchScopeLabel: '搜尋範圍',
+            searchScopeChampions: '英雄',
+            searchScopeAll: '全部',
+            searchScopeToggle: '展開進階搜尋',
+            searchScopeHint: '預設只搜尋英雄名稱；展開後可搜尋增幅與裝備',
+            searchScopeChampionOption: '只搜英雄',
+            searchScopeChampionHint: '中／英文名稱、別名',
+            searchScopeAllOption: '英雄＋增幅＋裝備',
+            searchScopeAllHint: '查誰適合某個增幅或出裝',
             shownUnit: '隻',
             tierUnit: '隻',
             updatesButton: '近期更新',
@@ -1164,11 +1189,23 @@
         en: {
             htmlLang: 'en',
             subtitle: () => (SHORT_PATCH_ZH === 'all patches' ? 'All patches' : `Patch ${SHORT_PATCH_ZH}`),
-            searchPlaceholderDesktop: 'Search champions, items, augments',
-            searchPlaceholderMobile: 'Search champions, items, augments',
+            searchPlaceholderDesktop: 'Search champion names (ZH / EN)',
+            searchPlaceholderMobile: 'Search champion names (ZH / EN)',
+            searchPlaceholderAllDesktop: 'Search champions, items, augments',
+            searchPlaceholderAllMobile: 'Search champions, items, augments',
             draftSearchPlaceholderMobile: 'Search champions (ZH / EN)',
             draftSearchAria: 'Search champions',
-            searchAria: 'Search champions, items, augments',
+            searchAriaChampion: 'Search champion names',
+            searchAriaAll: 'Search champions, items, augments',
+            searchScopeLabel: 'Search scope',
+            searchScopeChampions: 'Champions',
+            searchScopeAll: 'All data',
+            searchScopeToggle: 'Open advanced search',
+            searchScopeHint: 'Searches champion names by default; expand for augments and items',
+            searchScopeChampionOption: 'Champions only',
+            searchScopeChampionHint: 'Chinese / English names and aliases',
+            searchScopeAllOption: 'Champions + augments + items',
+            searchScopeAllHint: 'Find champions for an augment or build',
             shownUnit: 'shown',
             tierUnit: 'shown',
             updatesButton: 'Updates',
@@ -1515,7 +1552,7 @@
     let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
-    let filterState = { role: '', q: '' };
+    let filterState = { role: '', q: '', scope: 'champions' };
     let _trZhCN = null;
 
     // Product term (aramkit / CN client): 增幅(裝置) → 海克斯.
@@ -1720,19 +1757,43 @@
         return window.matchMedia('(max-width: 700px)').matches;
     }
 
-    function searchPlaceholderFor(copy) {
+    function searchPlaceholderFor(copy, scope = filterState.scope) {
+        const all = scope === 'all';
         return isMobileViewport()
-            ? copy.searchPlaceholderMobile
-            : copy.searchPlaceholderDesktop;
+            ? (all ? copy.searchPlaceholderAllMobile : copy.searchPlaceholderMobile)
+            : (all ? copy.searchPlaceholderAllDesktop : copy.searchPlaceholderDesktop);
     }
 
     function updateSearchPlaceholder() {
         const copy = tr();
+        const all = filterState.scope === 'all';
         const searchEl = document.getElementById('champ-search');
         if (searchEl) {
             searchEl.placeholder = searchPlaceholderFor(copy);
-            searchEl.setAttribute('aria-label', copy.searchAria);
+            searchEl.setAttribute('aria-label', all ? copy.searchAriaAll : copy.searchAriaChampion);
+            searchEl.setAttribute('data-search-scope', filterState.scope);
+            searchEl.setAttribute('aria-describedby', 'search-scope-hint');
         }
+        const scopeHint = document.getElementById('search-scope-hint');
+        if (scopeHint) scopeHint.textContent = copy.searchScopeHint;
+        const scopeValue = document.getElementById('search-scope-value');
+        if (scopeValue) scopeValue.textContent = all ? copy.searchScopeAll : copy.searchScopeChampions;
+        const scopeSummary = document.getElementById('search-scope-summary');
+        if (scopeSummary) {
+            const selectedScope = all ? copy.searchScopeAll : copy.searchScopeChampions;
+            scopeSummary.title = `${copy.searchScopeToggle}: ${selectedScope}`;
+            scopeSummary.setAttribute('aria-label', `${copy.searchScopeLabel}: ${selectedScope}. ${copy.searchScopeToggle}`);
+        }
+        const scopeMenu = document.getElementById('search-scope-menu');
+        if (scopeMenu) scopeMenu.setAttribute('aria-label', copy.searchScopeLabel);
+        document.querySelectorAll('.search-scope-option').forEach(option => {
+            const on = (option.getAttribute('data-search-scope') || 'champions') === filterState.scope;
+            option.classList.toggle('is-active', on);
+            option.setAttribute('aria-pressed', String(on));
+            const label = option.querySelector('span')?.textContent?.trim() || '';
+            const hint = option.querySelector('small')?.textContent?.trim() || '';
+            option.setAttribute('aria-label', hint ? `${label}：${hint}` : label);
+        });
         // Draft pool search is a separate input (hardcoded zh in HTML shell).
         const draftSearch = document.getElementById('draft-search');
         if (draftSearch) {
@@ -2214,17 +2275,116 @@
         }, 80);
     }
 
+    function normalizeSearchText(value) {
+        let text = String(value || '');
+        try { text = text.normalize('NFKC'); } catch {}
+        text = text.toLocaleLowerCase();
+        try { text = text.normalize('NFD'); } catch {}
+        return text
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[\u200b-\u200d\ufeff]/g, '');
+    }
+
+    function searchVariants(value) {
+        const base = normalizeSearchText(value);
+        if (!base) return [];
+        const map = (NAMES_ZH_CN && NAMES_ZH_CN.t2s) || null;
+        if (!map) return [base];
+        let simplified = '';
+        for (const ch of base) simplified += map[ch] || ch;
+        return simplified === base ? [base] : [base, simplified];
+    }
+
     function compactSearchText(value) {
-        return String(value || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '');
+        return normalizeSearchText(value).replace(/[^a-z0-9\u3400-\u9fff]+/g, '');
+    }
+
+    function searchTokens(value) {
+        return normalizeSearchText(value)
+            .replace(/[^a-z0-9\u3400-\u9fff]+/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean);
+    }
+
+    function isSearchSubsequence(query, candidate) {
+        let at = 0;
+        for (const ch of candidate) {
+            if (ch === query[at]) at += 1;
+            if (at === query.length) return true;
+        }
+        return false;
+    }
+
+    function searchEditDistanceWithin(a, b, limit) {
+        if (Math.abs(a.length - b.length) > limit) return limit + 1;
+        let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+        for (let i = 1; i <= a.length; i += 1) {
+            const next = [i];
+            for (let j = 1; j <= b.length; j += 1) {
+                const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+                const value = Math.min(
+                    next[j - 1] + 1,
+                    prev[j] + 1,
+                    prev[j - 1] + cost,
+                );
+                next.push(value);
+            }
+            prev = next;
+        }
+        return prev[b.length];
+    }
+
+    function searchTokenMatches(query, candidate) {
+        if (!query || !candidate) return false;
+        if (candidate.includes(query)) return true;
+        const isHan = /[\u3400-\u9fff]/.test(query);
+        // Short queries stay exact.  A one-edit match for `she` would also
+        // match unrelated 3-letter windows such as `ste`, making the hero
+        // picker feel noisy before the user has finished typing a name.
+        const fuzzyMinLength = isHan ? 4 : 5;
+        if (query.length < fuzzyMinLength) return false;
+
+        if (isSearchSubsequence(query, candidate)) return true;
+
+        // Keep fuzzy matching to one edit.  Two edits make a query such as
+        // `sheen` match unrelated terms like `scientist` or `shrink`; the
+        // exact substring path above already handles the common case.
+        const maxEdits = 1;
+        // Only compare same-length windows.  Comparing a 3-letter query with
+        // 2-letter windows makes `she` match any token containing `he`, which
+        // is far too permissive for the default hero picker.
+        if (candidate.length >= Math.max(3, query.length - maxEdits)) {
+            for (let start = 0; start + query.length <= candidate.length; start += 1) {
+                const window = candidate.slice(start, start + query.length);
+                if (searchEditDistanceWithin(query, window, maxEdits) <= maxEdits) return true;
+            }
+        }
+        if (candidate.length >= 3
+                && Math.abs(candidate.length - query.length) <= maxEdits
+                && searchEditDistanceWithin(query, candidate, maxEdits) <= maxEdits) {
+            return true;
+        }
+        return false;
     }
 
     function searchMatchesText(haystack, query) {
-        const q = String(query || '').trim().toLowerCase();
-        if (!q) return false;
-        const text = String(haystack || '').toLowerCase();
-        if (text.includes(q)) return true;
-        const compactQ = compactSearchText(q);
-        return Boolean(compactQ) && compactSearchText(text).includes(compactQ);
+        const qVariants = searchVariants(String(query || '').trim());
+        if (!qVariants.length) return false;
+        const textVariants = searchVariants(haystack);
+        for (const q of qVariants) {
+            for (const text of textVariants) {
+                if (text.includes(q)) return true;
+                const compactQ = compactSearchText(q);
+                if (compactQ && compactSearchText(text).includes(compactQ)) return true;
+                const qTokens = searchTokens(q);
+                const textTokens = searchTokens(text);
+                if (qTokens.length && textTokens.length
+                        && qTokens.every(token => textTokens.some(candidate => searchTokenMatches(token, candidate)))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function entrySearchText(entry) {
@@ -2257,6 +2417,91 @@
     function currentSearchQuery() {
         const searchEl = document.getElementById('champ-search');
         return searchEl ? searchEl.value : filterState.q;
+    }
+
+    let loadedRelatedSearchIndex = null;
+    let relatedSearchIndexPromise = null;
+
+    function addRelatedSearchTerm(index, target, value, cid) {
+        if (value === null || value === undefined) return;
+        if (Array.isArray(value)) {
+            value.forEach(item => addRelatedSearchTerm(index, target, item, cid));
+            return;
+        }
+        if (value && typeof value === 'object') {
+            Object.values(value).forEach(item => addRelatedSearchTerm(index, target, item, cid));
+            return;
+        }
+        const text = String(value).trim();
+        if (!text) return;
+        if (!index[target][text]) index[target][text] = [];
+        if (!index[target][text].includes(String(cid))) index[target][text].push(String(cid));
+    }
+
+    function addRelatedNamedObject(index, target, value, cid) {
+        if (!value || typeof value !== 'object') return;
+        ['name', 'name_zh', 'name_en', 'name_cn', 'set', 'set_zh', 'set_en', 'set_cn', 'slug']
+            .forEach(key => addRelatedSearchTerm(index, target, value[key], cid));
+        Object.values(value).forEach(nested => {
+            if (nested && typeof nested === 'object') addRelatedNamedObject(index, target, nested, cid);
+        });
+    }
+
+    function buildClientRelatedSearchIndex(champs) {
+        const index = { augments: {}, items: {} };
+        Object.entries(champs || {}).forEach(([cid, info]) => {
+            if (!info || typeof info !== 'object') return;
+            const augmentIds = new Set();
+            ['top', 'bot'].forEach(side => {
+                const buckets = info[side] || {};
+                Object.values(buckets).forEach(rows => {
+                    (rows || []).forEach(row => {
+                        const aid = row && row.id != null ? String(row.id) : '';
+                        if (aid && DATA.augs && DATA.augs[aid]) augmentIds.add(aid);
+                    });
+                });
+            });
+            augmentIds.forEach(aid => addRelatedNamedObject(index, 'augments', DATA.augs[aid], cid));
+            ['sets', 'augTypes'].forEach(key => addRelatedNamedObject(index, 'augments', info[key], cid));
+            ['items', 'singleItems', 'boots', 'itemClusters']
+                .forEach(key => addRelatedNamedObject(index, 'items', info[key], cid));
+        });
+        return index;
+    }
+
+    function activeRelatedSearchIndex() {
+        return (DATA.searchIndex && DATA.searchIndex.related) || loadedRelatedSearchIndex;
+    }
+
+    function relatedSearchMatches(query) {
+        const matches = new Set();
+        const related = activeRelatedSearchIndex();
+        if (!related || typeof related !== 'object') return matches;
+        Object.values(related).forEach(kindIndex => {
+            if (!kindIndex || typeof kindIndex !== 'object') return;
+            Object.entries(kindIndex).forEach(([term, cids]) => {
+                if (!searchMatchesText(term, query) || !Array.isArray(cids)) return;
+                cids.forEach(cid => matches.add(String(cid)));
+            });
+        });
+        return matches;
+    }
+
+    async function ensureRelatedSearchIndex() {
+        if (activeRelatedSearchIndex()) return activeRelatedSearchIndex();
+        if (relatedSearchIndexPromise) return relatedSearchIndexPromise;
+        relatedSearchIndexPromise = (async () => {
+            const ids = Object.keys(DATA.champs || {});
+            // A legacy split payload has no reverse index.  Fetch its detail
+            // shards only when the user explicitly asks for advanced search.
+            for (let i = 0; i < ids.length; i += 8) {
+                await Promise.all(ids.slice(i, i + 8).map(cid => ensureChampDetail(cid).catch(() => null)));
+                await yieldToMain();
+            }
+            loadedRelatedSearchIndex = buildClientRelatedSearchIndex(DATA.champs || {});
+            return loadedRelatedSearchIndex;
+        })().finally(() => { relatedSearchIndexPromise = null; });
+        return relatedSearchIndexPromise;
     }
 
     function applySearchHighlights(root = document) {
@@ -10245,8 +10490,28 @@
         const cid = champ.getAttribute('data-cid');
         const info = (DATA.champs || {})[String(cid)];
         if (!info) return;
+        const championTerms = [champ.getAttribute('data-champion-search') || ''];
+        addSearchTerm(championTerms, [
+            info.name,
+            info.name_zh,
+            info.name_en,
+            info.name_cn,
+            info.alias,
+            NAMES_ZH_CN && NAMES_ZH_CN.champs && NAMES_ZH_CN.champs[String(cid)],
+        ]);
+        const championSeen = new Set();
+        const championBlob = championTerms
+            .flatMap(term => String(term).toLowerCase().split(/\s+/))
+            .filter(term => {
+                if (!term || championSeen.has(term)) return false;
+                championSeen.add(term);
+                return true;
+            })
+            .join(' ');
+        champ.setAttribute('data-champion-search', championBlob);
+
         const terms = [champ.getAttribute('data-search') || ''];
-        addSearchTerm(terms, [info.name, info.name_zh, info.name_en, info.alias, info.tags || []]);
+        addSearchTerm(terms, championTerms);
         ['top', 'bot'].forEach(side => {
             Object.values(info[side] || {}).forEach(rows => (rows || []).forEach(row => addAugmentSearchRow(terms, row)));
             ['sets', 'items', 'singleItems', 'boots', 'itemClusters', 'augTypes'].forEach(key => {
@@ -10268,8 +10533,9 @@
     // Background pass: rehydrate + enrich every champion card in small chunks,
     // yielding between chunks so we never hold the main thread long enough to
     // stall a tap.  Grid filtering by champion name works BEFORE this settles
-    // (the server-rendered data-search already carries champion names); augment /
-    // item term search just gets progressively better as cards are enriched.
+    // (the server-rendered data-champion-search already carries champion names);
+    // detail-based highlighting is still progressively enriched for older
+    // payloads without the reverse search index.
     // Resilient: a chunk that throws is logged and skipped, never leaving init
     // half-done silently.
     async function warmChampIndexesInBackground() {
@@ -10398,15 +10664,30 @@
     function applyFilters() {
         const role = filterState.role;
         const q = filterState.q.trim();
+        const allSearch = filterState.scope === 'all';
+        const relatedMatches = allSearch && q ? relatedSearchMatches(q) : null;
+        const hasRelatedIndex = Boolean(activeRelatedSearchIndex());
         let shown = 0;
         document.querySelectorAll('.tier-block').forEach(block => {
             let tierShown = 0;
             const champs = block.querySelectorAll(':scope > .tier-grid > .champ');
             champs.forEach(c => {
                 const tags = (c.getAttribute('data-tags') || '').split(' ');
-                const blob = c.getAttribute('data-search') || '';
+                const championBlob = c.getAttribute('data-champion-search') || [
+                    c.getAttribute('data-name-zh') || '',
+                    c.getAttribute('data-name-en') || '',
+                ].join(' ');
+                const blob = c.getAttribute('data-search') || championBlob;
                 const matchRole = !role || tags.includes(role);
-                const matchQ = !q || searchMatchesText(blob, q);
+                const heroMatch = !q || searchMatchesText(championBlob, q);
+                const relatedMatch = Boolean(
+                    q
+                    && allSearch
+                    && (hasRelatedIndex
+                        ? relatedMatches.has(c.getAttribute('data-cid') || '')
+                        : searchMatchesText(blob, q))
+                );
+                const matchQ = !q || (allSearch ? (heroMatch || relatedMatch) : heroMatch);
                 // Keep the open detail's champ pinned even when it fails the
                 // active role/search filter, so searching never closes the
                 // panel you're reading.  (Ctrl+F focuses this search box; a
@@ -10416,6 +10697,7 @@
                     && c.getAttribute('data-cid') === detailSelected;
                 const hide = !(matchRole && matchQ) && !isSelected;
                 c.classList.toggle('hidden', hide);
+                c.classList.toggle('search-related-hit', Boolean(relatedMatch && !heroMatch));
                 if (!hide) tierShown++;
             });
             // Update tier count number
@@ -10610,6 +10892,11 @@
             filterState.q = searchEl.value || '';
             clearTimeout(searchDebounceT);
             searchDebounceT = setTimeout(() => { searchDebounceT = null; applyFilters(); }, 120);
+            if (filterState.scope === 'all') {
+                ensureRelatedSearchIndex().then(() => {
+                    if (filterState.scope === 'all') applyFilters();
+                }).catch(() => {});
+            }
         });
         // Esc inside the search clears the filter and unfocuses, so the
         // typical "open, search, escape back to grid" flow works.  Immediate:
@@ -10626,13 +10913,38 @@
         });
     }
 
+    // Home search defaults to champions.  The native details disclosure keeps
+    // augment/item lookup available without making the primary typing surface
+    // compete with the hero picker.
+    document.getElementById('search-scope')?.addEventListener('click', (ev) => {
+        const option = ev.target.closest('[data-search-scope]');
+        if (!option) return;
+        ev.preventDefault();
+        const next = option.getAttribute('data-search-scope') === 'all' ? 'all' : 'champions';
+        if (filterState.scope === next) {
+            document.getElementById('search-scope').open = false;
+            return;
+        }
+        filterState.scope = next;
+        updateSearchPlaceholder();
+        applyFilters();
+        if (next === 'all') {
+            ensureRelatedSearchIndex().then(() => {
+                if (filterState.scope === 'all') applyFilters();
+            }).catch(() => {});
+        }
+        document.getElementById('search-scope').open = false;
+        trackEvent('search_scope_change', { scope: next });
+    });
+
     // Ctrl+F / Cmd+F shortcut → focus our search input.
     //
-    // Rationale: our search already understands zh-TW name + English alias +
-    // role keywords (gua-Liang in one go).  Native browser find can also
-    // discover champions thanks to the .sr-only English alias spans, but
-    // the in-page search additionally filters out non-matches — usually
-    // what the user wants.
+    // Rationale: the default scope is a focused hero picker with zh-TW name,
+    // English name, aliases, and conservative typo tolerance.  The advanced
+    // scope remains available for augment/item lookup without making those
+    // terms compete with the common champion-search flow.  Native browser
+    // find can also discover champions thanks to the .sr-only English alias
+    // spans, but the in-page search additionally filters out non-matches.
     //
     // If the user is already inside the search box, fall through to the
     // browser's native find dialog (no preventDefault) so they retain that

@@ -259,7 +259,7 @@
         min-height: var(--filter-row-h, 40px);
         margin: 0;
         /* Room for sticky search chip on the right (count lives after Tank). */
-        padding: 0 max(160px, calc(min(280px, 32vw) + 24px)) 0 0;
+        padding: 0 max(260px, calc(min(280px, 32vw) + 112px)) 0 0;
         background: transparent;
         border-radius: 0;
         box-shadow: none;
@@ -332,6 +332,80 @@
     .search-rail .search:focus {
         box-shadow: none;
     }
+    .search-rail .search-control {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: 100%;
+    }
+    .search-scope {
+        position: relative;
+        flex: 0 0 auto;
+    }
+    .search-scope > summary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-height: 40px;
+        padding: 0 10px;
+        background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
+        list-style: none;
+        transition: background-color .12s var(--ease), color .12s var(--ease),
+                    border-color .12s var(--ease), box-shadow .12s var(--ease);
+    }
+    .search-scope > summary::-webkit-details-marker { display: none; }
+    .search-scope > summary:hover,
+    .search-scope[open] > summary {
+        color: var(--text);
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--surface-raised) 100%, transparent);
+    }
+    .search-scope[open] > summary svg { transform: rotate(180deg); }
+    .search-scope > summary svg { transition: transform .16s var(--ease); }
+    .search-scope-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 48;
+        display: grid;
+        gap: 4px;
+        width: max-content;
+        min-width: 230px;
+        padding: 6px;
+        background: var(--surface);
+        border: 1px solid var(--border-strong, var(--border));
+        border-radius: 8px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+    }
+    .search-scope-option {
+        display: grid;
+        gap: 2px;
+        width: 100%;
+        padding: 9px 10px;
+        background: transparent;
+        color: var(--text);
+        border: 1px solid transparent;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+    }
+    .search-scope-option:hover,
+    .search-scope-option.is-active {
+        background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+    }
+    .search-scope-option > span { font-size: 12px; font-weight: 700; }
+    .search-scope-option > small { color: var(--text-muted); font-size: 11px; line-height: 1.35; }
     .role-chips {
         display: flex;
         flex-wrap: wrap;
@@ -3599,13 +3673,28 @@
             gap: 8px 10px;
             align-items: center;
         }
-        /* Mobile: teammate mode + search are rarely used on phone; role chips
-           stay. Desktop keeps search-rail + recommend. */
+        /* Keep search available on phone: this is often used during champion
+           select, when role chips alone are slower than typing a name. */
         .filter-tools,
         #recommend-mode,
-        .search-rail,
-        .search-wrap,
         .shown-count { display: none !important; }
+        .search-rail {
+            display: flex !important;
+            position: static;
+            width: 100%;
+            max-width: none;
+            justify-content: stretch;
+            margin: 0 0 12px !important;
+        }
+        .search-rail .search-control { width: 100%; }
+        .search-rail .search-wrap {
+            display: block !important;
+            flex: 1 1 auto;
+            width: auto;
+            max-width: none;
+            min-width: 0;
+        }
+        .search-scope-menu { max-width: calc(100vw - 24px); }
         /* Inside the fixed detail sheet the scroller is .detail-host, so pin
            main tabs to the sheet top (search rail is hidden on mobile). */
         .detail-host .detail-main-tabs > .detail-tab-rail {
@@ -3971,6 +4060,8 @@
     .pick-chip:focus-visible,
     .rec-row:focus-visible,
     .search:focus-visible,
+    .search-scope > summary:focus-visible,
+    .search-scope-option:focus-visible,
     .champ:focus-visible,
     .item-build-card:focus-visible,
     .aug:focus-visible {
@@ -5483,7 +5574,7 @@
        substitution and gets stuck on the old colour).  Transition
        background-color instead for the interactive chrome, which IS
        interpolable, so theme switches always land. */
-    .chip, .icon-btn, .gh-star, .tool-btn, .search, .change-tab,
+    .chip, .icon-btn, .gh-star, .tool-btn, .search, .search-scope > summary, .search-scope-option, .change-tab,
     .pick-chip, .meta-help, .detail-tab-label, .rec-fab, .side-close,
     .detail-close, .nav-tab, .champ, .article-card, .setting-card {
         transition: background-color var(--dur-2) var(--ease),
@@ -5512,6 +5603,15 @@
     [data-theme="light"] .search-rail .search-wrap {
         background: color-mix(in srgb, var(--bg) 82%, transparent);
         border-color: var(--border);
+    }
+    [data-theme="light"] .search-scope > summary {
+        background: var(--surface);
+        border-color: var(--border-strong);
+    }
+    [data-theme="light"] .search-scope-menu {
+        background: var(--surface);
+        border-color: var(--border-strong);
+        box-shadow: 0 12px 30px rgba(31, 41, 55, 0.14);
     }
     [data-theme="light"] .detail-main-tabs > .detail-tab-rail {
         background: color-mix(in srgb, var(--surface) 92%, transparent);

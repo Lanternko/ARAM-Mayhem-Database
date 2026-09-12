@@ -2854,6 +2854,17 @@ def render_html(
                     item.get("id"),
                 )
 
+    # Common TW player nicknames and typo variants belong to the hero-only
+    # index. Keep this deliberately small and explicit: ambiguous slang can
+    # make a fast in-game lookup noisier than a normal substring search.
+    _CHAMPION_SEARCH_ALIASES: dict[str, tuple[str, ...]] = {
+        "shen": ("腎",),
+        "morgana": ("莫甘娜", "模乾那"),
+        "ezreal": ("EZ",),
+        "brand": ("火人",),
+        "karthus": ("死歌", "死哥"),
+    }
+
     def _champ_search_blob(cid: int, display_name: str, meta: dict, tags: list[str]) -> str:
         terms: list[str] = []
         _add_search_terms(
@@ -2863,16 +2874,12 @@ def render_html(
             meta.get("name_zh"),
             meta.get("name_en"),
             meta.get("alias"),
-            tags,
+            meta.get("name_cn"),
+            _CHAMPION_SEARCH_ALIASES.get(str(meta.get("alias") or "").lower(), ()),
         )
-        # NOTE: augment / item / set search terms used to be packed in here too
-        # (~1 MB across all champs), but the client's enrichSearchIndexes() rebuilds
-        # the full search blob from the loaded payload on init (see site.js) and
-        # OVERWRITES this attribute — so server-rendering them was pure duplication
-        # that only bloated index.html.  We now emit just the champion's own name
-        # terms; the client fills in augment / item / set terms from the payload on
-        # load.  Search behaves identically (production already relied on the client
-        # rebuild).
+        # This attribute is the first-paint, hero-only index. Do not add roles,
+        # augments, items, or sets here: the default search is intentionally a
+        # champion picker, so a query such as "she" must not match Sheen builds.
         seen: set[str] = set()
         unique_terms: list[str] = []
         for term in terms:
@@ -2882,6 +2889,83 @@ def render_html(
             seen.add(normalized)
             unique_terms.append(normalized)
         return " ".join(unique_terms)
+
+    def _build_related_search_index(champs: dict[str, dict]) -> dict[str, dict[str, list[int]]]:
+        """Build a compact augment/item → champion reverse index.
+
+        The split payload keeps champion detail lazy, but advanced search still
+        needs to answer questions such as "who can roll Jeweled Gauntlet?".
+        Store each distinct display term once and point it at matching champs.
+        """
+        related: dict[str, dict[str, set[int]]] = {
+            "augments": {},
+            "items": {},
+        }
+
+        def add(target: str, value: object, cid: int) -> None:
+            if value is None:
+                return
+            if isinstance(value, dict):
+                for nested in value.values():
+                    add(target, nested, cid)
+                return
+            if isinstance(value, (list, tuple, set)):
+                for nested in value:
+                    add(target, nested, cid)
+                return
+            text = str(value).strip()
+            if text:
+                related[target].setdefault(text, set()).add(cid)
+
+        def add_named_object(target: str, obj: object, cid: int) -> None:
+            if not isinstance(obj, dict):
+                return
+            for key in (
+                "name", "name_zh", "name_en", "name_cn",
+                "set", "set_zh", "set_en", "set_cn", "slug",
+            ):
+                add(target, obj.get(key), cid)
+            for value in obj.values():
+                if isinstance(value, (dict, list, tuple, set)):
+                    add_named_object(target, value, cid)
+
+        for raw_cid, info in champs.items():
+            try:
+                cid = int(raw_cid)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(info, dict):
+                continue
+            augment_ids: set[int] = set()
+            for side in ("top", "bot"):
+                buckets = info.get(side) or {}
+                if not isinstance(buckets, dict):
+                    continue
+                for rows in buckets.values():
+                    if not isinstance(rows, list):
+                        continue
+                    for row in rows:
+                        if not isinstance(row, dict):
+                            continue
+                        try:
+                            aid = int(row.get("id"))
+                        except (TypeError, ValueError):
+                            continue
+                        if aid in aug_meta:
+                            augment_ids.add(aid)
+            for aid in augment_ids:
+                add_named_object("augments", aug_meta.get(aid), cid)
+            for key in ("sets", "augTypes"):
+                add_named_object("augments", info.get(key), cid)
+            for key in ("items", "singleItems", "boots", "itemClusters"):
+                add_named_object("items", info.get(key), cid)
+        return {
+            target: {
+                term: sorted(cids)
+                for term, cids in sorted(values.items(), key=lambda item: item[0].casefold())
+            }
+            for target, values in related.items()
+        }
 
     visible_cids = [int(r["champion_id"]) for r in records]
     visible_cid_set = set(visible_cids)
@@ -2975,6 +3059,7 @@ def render_html(
                 float(champ_stat_by_cid.get(cid, {}).get("prev_mix", 0.0) or 0.0), 3
             ),
         }
+    related_search_index = _build_related_search_index(js_champs)
     aug_cat_overrides = load_augment_category_overrides()
     if aug_cat_overrides:
         click.echo(
@@ -3077,6 +3162,13 @@ def render_html(
         "recommendation_composition": recommendation_composition,
         "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": draft_model,
+        # Full builds can answer advanced augment/item searches immediately.
+        # A shell-only render has no detail rows in js_champs, so leave an empty
+        # marker and let the client load legacy detail shards on demand.
+        "searchIndex": (
+            {"related": related_search_index}
+            if any(related_search_index.values()) else {}
+        ),
     }
     if js_champs:
         if draft_model is None:
@@ -3435,10 +3527,36 @@ def render_html(
         "<label class='search-wrap'>"
         f"{search_icon}"
         '<input class="search" id="champ-search" type="search" '
-        'placeholder="搜尋英雄、裝備、增幅" autocomplete="off" '
-        'aria-label="搜尋英雄、裝備、增幅">'
+        'placeholder="搜尋英雄名稱（中 / 英）" autocomplete="off" '
+        'aria-label="搜尋英雄名稱" aria-describedby="search-scope-hint">'
         "</label>"
     )
+    parts.append(
+        "<details class='search-scope' id='search-scope'>"
+        "<summary class='search-scope-summary' id='search-scope-summary' "
+        "title='展開進階搜尋' aria-label='搜尋範圍：英雄。展開進階搜尋'>"
+        "<span id='search-scope-value'>英雄</span>"
+        "<svg viewBox='0 0 24 24' width='14' height='14' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'><path d='m6 9 6 6 6-6'></path></svg>"
+        "</summary>"
+        "<div class='search-scope-menu' id='search-scope-menu' role='group' aria-label='搜尋範圍'>"
+        "<button type='button' class='search-scope-option is-active' "
+        "data-search-scope='champions' aria-pressed='true' "
+        "aria-label='只搜英雄：中／英文名稱、別名'>"
+        "<span data-i18n-zh='只搜英雄' data-i18n-en='Champions only'>只搜英雄</span>"
+        "<small data-i18n-zh='中／英文名稱、別名' data-i18n-en='Chinese / English names and aliases'>中／英文名稱、別名</small>"
+        "</button>"
+        "<button type='button' class='search-scope-option' "
+        "data-search-scope='all' aria-pressed='false' "
+        "aria-label='英雄＋增幅＋裝備：查誰適合某個增幅或出裝'>"
+        "<span data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='Champions + augments + items'>英雄＋增幅＋裝備</span>"
+        "<small data-i18n-zh='查誰適合某個增幅或出裝' data-i18n-en='Find champions for an augment or build'>查誰適合某個增幅或出裝</small>"
+        "</button>"
+        "</div>"
+        "</details>"
+    )
+    parts.append("<span class='sr-only' id='search-scope-hint'>預設只搜尋英雄名稱</span>")
     parts.append("</div>")  # /search-rail
 
     # Optional player-history lookup. This markup is emitted only for the
@@ -3542,7 +3660,7 @@ def render_html(
             primary_role = tags[0] if tags else ""
             secondary_role = tags[1] if len(tags) > 1 else ""
             alias = meta.get("alias", "")
-            search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
+            champion_search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
             # Keep the detailed blend disclosure available on the champion tooltip,
             # without adding a page-level warning banner.
             _pm = float(r.get("prev_mix") or 0.0)
@@ -3558,7 +3676,8 @@ def render_html(
                 f"data-name-en=\"{html.escape(meta.get('name_en', alias or r['name']))}\" "
                 f"data-tags='{tag_str}' data-primary-role='{html.escape(primary_role)}' "
                 f"data-secondary-role='{html.escape(secondary_role)}' "
-                f"data-search=\"{html.escape(search_blob, quote=True)}\" "
+                f"data-champion-search=\"{html.escape(champion_search_blob, quote=True)}\" "
+                f"data-search=\"{html.escape(champion_search_blob, quote=True)}\" "
                 f"data-tier='{tier}' data-wr='{wr_pct}' data-games='{r['games']}' "
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"role='button' tabindex='0' "
@@ -3966,14 +4085,15 @@ def _run_shell_only(
 
     The slow part of a normal build is the win-rate + augment + item/affinity
     computation (it scans hundreds of thousands of games several times) that
-    produces tier-list.json.  While iterating on the frontend (site.css /
+    produces tier-list.json. While iterating on the frontend (site.css /
     site.js / copy / columns) that data hasn't changed, so we reload the last
     payload, reconstruct only the inputs the HTML shell + server-rendered champ
     grid actually need (champ win-rates + names / tags / portraits) and re-render
-    the page in ~seconds.  The server-side search blob is name-only here, but the
-    client's enrichSearchIndexes() rebuilds the full search index from the loaded
-    payload on init, so search behaves identically.  Run a normal (non-shell)
-    build to refresh the underlying data / produce the exact production artifact.
+    the page in ~seconds. The server-side search blob is hero-name-only here;
+    the client keeps that first paint immediate and loads detail shards only when
+    the user explicitly selects advanced augment/item search. Run a normal
+    (non-shell) build to refresh the underlying data / produce the exact
+    production artifact.
     """
     import time
     t0 = time.time()
