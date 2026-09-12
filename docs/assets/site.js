@@ -2755,8 +2755,10 @@
     ];
     const APOOL_HUE_OK = { ad: 1, ap: 1, cd: 1, support: 1, function: 1, gold: 1, tank: 1, other: 1 };
 
-    function setAugMode(next) {
-        augMode = next === 'pools' ? 'pools' : 'tier';
+    function augmentsSub() {
+        return augMode === 'pools' ? 'pools' : '';
+    }
+    function applyAugModeChrome() {
         document.querySelectorAll('.aug-mode-tab').forEach(tab => {
             const on = tab.getAttribute('data-aug-mode') === augMode;
             tab.classList.toggle('is-active', on);
@@ -2766,8 +2768,40 @@
         document.querySelectorAll('.aug-mode-panel').forEach(panel => {
             panel.hidden = panel.getAttribute('data-aug-mode') !== augMode;
         });
-        renderAugmentTier();
-        trackEvent('aug_mode', { mode: augMode });
+        syncAugModeHrefs();
+    }
+    function syncAugModeHrefs() {
+        document.querySelectorAll('.aug-mode-tab[data-aug-mode]').forEach(tab => {
+            const sub = tab.getAttribute('data-aug-mode') === 'pools' ? 'pools' : '';
+            tab.setAttribute('href', pathForRoute('augments', sub));
+        });
+    }
+    function poolsPageTitle() {
+        if (currentLang === 'en') return 'Augment pools · arammeta';
+        if (currentLang === 'zh-CN') return '海克斯池 · arammeta';
+        return '增幅池 · arammeta';
+    }
+    function augmentsPageTitle() {
+        if (augMode === 'pools') return poolsPageTitle();
+        if (currentLang === 'en') return 'Augments · arammeta';
+        if (currentLang === 'zh-CN') return '海克斯 · arammeta';
+        return '增幅 · arammeta';
+    }
+    function setAugMode(next, historyMode) {
+        const mode = next === 'pools' ? 'pools' : 'tier';
+        const changed = mode !== augMode;
+        augMode = mode;
+        applyAugModeChrome();
+        if (changed) {
+            renderAugmentTier();
+            trackEvent('aug_mode', { mode: augMode });
+        }
+        if (document.querySelector('.view-augments.is-active')) {
+            document.title = augmentsPageTitle();
+        }
+        if (historyMode !== 'none') {
+            syncUrlToRoute('augments', augmentsSub(), historyMode || 'push');
+        }
     }
     function apoolLabel(p) { return p ? pickLang(p.label_zh, p.label_en) : ''; }
     function apoolHue(p) {
@@ -3132,6 +3166,8 @@
         if (!ev.target.closest) return;
         const modeTab = ev.target.closest('.aug-mode-tab');
         if (modeTab) {
+            // Let modified clicks (new tab / new window) use the real href.
+            if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
             ev.preventDefault();
             setAugMode(modeTab.getAttribute('data-aug-mode'));
             return;
@@ -9325,12 +9361,15 @@
     //   /                  home (zh)
     //   /en                home (en)
     //   /augments          augment tier (zh)
+    //   /augments/pools    augment pools (zh)
     //   /en/augments       augment tier (en)
+    //   /en/augments/pools augment pools (en)
     // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix ? prefix + '/' : '/';
+        if (view === 'augments' && sub === 'pools') return prefix + '/' + view + '/pools/';
         return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
@@ -9380,7 +9419,8 @@
         }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
-        return { view, sub: '', urlLang, legacyHash: false };
+        const sub = (view === 'augments' && segs[1] === 'pools') ? 'pools' : '';
+        return { view, sub, urlLang, legacyHash: false };
     }
     function syncUrlToRoute(view, sub, historyMode) {
         // historyMode: 'push' | 'replace' | 'none'
@@ -9412,9 +9452,9 @@
         columnArticle = null;
         // Migrating an old #hash always replaceStates onto the clean path.
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
-        setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode);
+        setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode, sub);
     }
-    function setActiveView(name, instant, historyMode) {
+    function setActiveView(name, instant, historyMode, sub) {
         // Old /settings bookmarks land on home (settings chrome was removed).
         if (name === 'settings' || !VIEWS.includes(name)) name = 'home';
         if (historyMode == null) historyMode = 'replace';
@@ -9435,9 +9475,13 @@
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
             columnArticle = null;
-            document.title = BASE_TITLE;
             if (name === 'augments') {
+                augMode = sub === 'pools' ? 'pools' : 'tier';
+                applyAugModeChrome();
+                document.title = augmentsPageTitle();
                 renderAugmentTier();
+            } else {
+                document.title = BASE_TITLE;
             }
             if (name === 'draft') {
                 renderDraft();
@@ -9448,7 +9492,8 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            syncUrlToRoute(name, '', historyMode);
+            const routeSub = name === 'augments' ? augmentsSub() : '';
+            syncUrlToRoute(name, routeSub, historyMode);
             window.scrollTo(0, 0);
             moveTabIndicator();
         };
@@ -9607,13 +9652,16 @@
             const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
             if (champ) openDetailForChamp(champ, true);
         }
+        syncAugModeHrefs();
         // Keep the path prefix in sync with language so shared links stay bilingual.
         if (historyMode !== 'none') {
             const active = document.querySelector('.view.is-active');
             let view = (active && active.getAttribute('data-view')) || 'home';
             if (!VIEWS.includes(view)) view = 'home';
-            const sub = (view === 'column' && columnArticle) ? columnArticle : '';
+            const sub = (view === 'column' && columnArticle) ? columnArticle
+                : (view === 'augments' ? augmentsSub() : '');
             syncUrlToRoute(view, sub, historyMode);
+            if (view === 'augments') document.title = augmentsPageTitle();
         }
     }
 
