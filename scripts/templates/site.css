@@ -5635,6 +5635,17 @@
         margin: 5px auto 1px;
         padding: 4px;
     }
+    /* 增幅池 chips reuse the same disc, scaled to the 22px pill icon so the
+       pastel art keeps an edge against the pale chip. */
+    [data-theme="light"] .apool-aug img {
+        padding: 2px;
+        box-sizing: border-box;
+        background:
+            radial-gradient(circle at 50% 42%, #222836 0%, #12151c 62%, #07090d 100%);
+        box-shadow:
+            0 0 0 1px #2c3444,
+            0 1px 3px rgba(0, 0, 0, 0.25);
+    }
     /* Detail popup header icon (.augch-icon) uses the same disc treatment
        in base CSS (always-on) — no light-only override needed. */
     [data-theme="light"] .aug .aname {
