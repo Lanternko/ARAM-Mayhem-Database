@@ -674,3 +674,39 @@ def test_safe_phase_paths_are_unchanged() -> None:
     assert over_memory[0] is True and "memory" in over_memory[1]
     assert unhealthy[0] is True and "health check failed" in unhealthy[1]
     assert healthy[0] is False
+
+
+def test_default_commit_headroom_rungs_are_sized_to_the_fleet_not_the_host(
+    monkeypatch,
+) -> None:
+    """Thin-but-workable commit headroom must not halve capture.
+
+    The whole fleet -- supervisor, writer and one producer -- was measured at
+    152 MB on 2026-09-13, and a second producer adds 33 MB, so shrinking it
+    returns nothing worth having.  4470 MB is this host's median hour once the
+    09-09 reboot left the pagefile 10 GB short of its configured size; 1200 MB
+    is the real floor worth stopping for.
+    """
+    monkeypatch.setattr(sys, "argv", ["mayhem_lcu_watchdog.py"])
+    args = WATCHDOG.parse_args()
+
+    assert args.system_degrade_commit_headroom_mb == 2560.0
+    assert args.system_pause_commit_headroom_mb == 1536.0
+
+    limit = 53819.0
+
+    def headroom(free_mb: float):
+        return WATCHDOG.ResourceSample(
+            available_mb=9900.0,
+            commit_total_mb=limit - free_mb,
+            commit_limit_mb=limit,
+            commit_percent=round((limit - free_mb) / limit * 100.0, 1),
+        )
+
+    guard = WATCHDOG.resource_guard_for_args(args)
+    for _ in range(args.resource_recovery_samples):
+        workable = guard.decide(headroom(4470.0), 2, 2400.0, 1.0)
+    starved = guard.decide(headroom(1200.0), 2, 2400.0, 1.0)
+
+    assert workable.desired_workers == 2 and workable.system_pressure is False
+    assert starved.desired_workers == 0 and starved.paused is True

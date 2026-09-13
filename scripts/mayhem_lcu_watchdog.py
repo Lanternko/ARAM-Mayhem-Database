@@ -1356,8 +1356,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--system-degrade-available-mb", type=float, default=3072.0)
     parser.add_argument("--system-pause-available-mb", type=float, default=1536.0)
     parser.add_argument("--system-resume-available-mb", type=float, default=4096.0)
-    parser.add_argument("--system-degrade-commit-headroom-mb", type=float, default=4096.0)
-    parser.add_argument("--system-pause-commit-headroom-mb", type=float, default=2048.0)
+    # Sized against what the fleet actually occupies, not against host commit.
+    # Measured 2026-09-13: supervisor + writer + producer together hold 152 MB,
+    # and a second producer adds 33 MB, so throttling the fleet cannot relieve
+    # commit pressure -- it only halves capture.  The old 4096/2048 pair sat
+    # inside this host's normal headroom band (p50 3783 MB after the 09-09
+    # reboot left d:\pagefile.sys 10 GB short of its configured 24576 MB), so
+    # the fleet ran at 1.01 producers and spent 35% of every day at zero.
+    # Replaying 1368 recorded samples: 2560/1536 gives 1.39 producers, 13% at
+    # zero, and fewer fleet rebuilds than 4096/2048.  Observed headroom floor is
+    # 648 MB and available RAM never fell below 3444 MB, so the pause rung still
+    # fires ahead of the real floor and the RAM rungs are deliberately untouched.
+    parser.add_argument("--system-degrade-commit-headroom-mb", type=float, default=2560.0)
+    parser.add_argument("--system-pause-commit-headroom-mb", type=float, default=1536.0)
     # DB-volume free space.  Below pause the fleet stops (writes would fail
     # anyway); it resumes only once free space clears the higher resume bar.
     parser.add_argument("--disk-pause-free-mb", type=float, default=5120.0)
