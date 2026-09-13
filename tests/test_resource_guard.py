@@ -328,3 +328,38 @@ def test_degraded_fleet_restarts_immediately_when_no_pause_preceded_it() -> None
 
     assert decision.desired_workers == 1
     assert decision.state == "degraded"
+
+
+def test_client_hysteresis_band_does_not_halve_an_already_healthy_fleet() -> None:
+    """`resume_safe` lifts a stopped fleet; it must never demote a running one.
+
+    Between `client_degrade_mb - 400` and `client_degrade_mb` a sample is too
+    warm for `healthy` but carries no pressure flag at all.  A two-producer
+    fleet observed there is working fine, and resizing it means destroying and
+    rebuilding it, so it stays as it is.
+    """
+    controller = guard.ResourceGuard(
+        guard.ResourceGuardConfig(
+            normal_workers=2, degraded_workers=1, client_degrade_mb=3900
+        )
+    )
+
+    decision = controller.decide(_sample(), 2, 3641.0, 1.0)
+
+    assert decision.system_pressure is False
+    assert decision.client_pressure is False
+    assert decision.desired_workers == 2
+
+
+def test_client_band_still_holds_a_single_producer_and_still_degrades_above_it() -> None:
+    controller = guard.ResourceGuard(
+        guard.ResourceGuardConfig(
+            normal_workers=2, degraded_workers=1, client_degrade_mb=3900
+        )
+    )
+
+    held = controller.decide(_sample(), 1, 3641.0, 1.0)
+    degraded = controller.decide(_sample(), 2, 3939.0, 1.0)
+
+    assert held.desired_workers == 1
+    assert degraded.desired_workers == 1 and degraded.client_pressure is True

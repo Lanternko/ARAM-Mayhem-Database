@@ -362,10 +362,18 @@ def evaluate_resource_guard(
             reason = "starting conservatively while healthy sample window fills"
     elif resume_safe:
         next_healthy_samples = 0
-        desired_workers = (
+        recovered = (
             degraded_workers if resume_samples >= recovery_samples
             else min(actual_workers, degraded_workers)
         )
+        # This branch only lifts a stopped fleet back to one producer while the
+        # recovery window fills; neither pressure flag is set by the time it is
+        # reached.  A fleet that already runs wider must therefore be left alone,
+        # because resizing means destroying and rebuilding it.  Until 2026-09-13
+        # a healthy two-producer fleet was halved every time LeagueClient drifted
+        # into the client hysteresis band (too high for `healthy`, too low for
+        # `client_pressure`), which cost 73-145 needless rebuilds a day.
+        desired_workers = max(recovered, min(actual_workers, normal_workers))
         state_name = "resumed_degraded" if desired_workers else "recovering_paused"
         reason = "system recovered; conservative fleet awaits or holds its safe recovery window"
     else:
