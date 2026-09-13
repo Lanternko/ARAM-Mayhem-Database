@@ -81,7 +81,13 @@ def _team_rows_from_parquet(
 ) -> tuple[list[tuple[list[int], int]], int]:
     import polars as pl  # local import: keeps the GUI loader free of polars
 
-    df = pl.read_parquet(data_path)
+    # The pooled parquet carries participants_json, which dwarfs the four columns
+    # read here; taking the whole frame peaked at 7.1GB and tripped the memory
+    # guard mid-run.  Intersect with the schema instead of naming the columns
+    # outright, so a parquet predating duration_sec still loads as before.
+    wanted = ["duration_sec", "blue_champions", "red_champions", "blue_wins"]
+    present = set(pl.scan_parquet(data_path).collect_schema().names())
+    df = pl.read_parquet(data_path, columns=[c for c in wanted if c in present])
     if min_duration_sec and "duration_sec" in df.columns:
         df = df.filter(pl.col("duration_sec") >= min_duration_sec)
     blue = df["blue_champions"].to_list()
