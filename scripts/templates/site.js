@@ -762,6 +762,7 @@
     const TOTAL_GAMES = __TOTAL_GAMES__;
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
+    const SEARCH_SCOPE_KEY = 'aram-mayhem-site-search-scope';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
     const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
     // Player-history copy is kept separate from the legacy game copy table so
@@ -1820,7 +1821,12 @@
     let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
-    let filterState = { role: '', q: '', scope: 'champions' };
+    let filterState = { role: '', q: '', scope: readSavedSearchScope() };
+    function readSavedSearchScope() {
+        try {
+            return localStorage.getItem(SEARCH_SCOPE_KEY) === 'all' ? 'all' : 'champions';
+        } catch { return 'champions'; }
+    }
     let _trZhCN = null;
 
     // Product term (aramkit / CN client): 增幅(裝置) → 海克斯.
@@ -11194,6 +11200,7 @@
             return;
         }
         filterState.scope = next;
+        try { localStorage.setItem(SEARCH_SCOPE_KEY, next); } catch {}
         updateSearchPlaceholder();
         applyFilters();
         if (next === 'all') {
@@ -11204,6 +11211,14 @@
         document.getElementById('search-scope').open = false;
         trackEvent('search_scope_change', { scope: next });
     });
+    // A remembered 'all' scope needs the augment/item index before its
+    // matches can appear; champion-only results render in the meantime.
+    if (filterState.scope === 'all') {
+        updateSearchPlaceholder();
+        ensureRelatedSearchIndex().then(() => {
+            if (filterState.scope === 'all') applyFilters();
+        }).catch(() => {});
+    }
 
     // Ctrl+F / Cmd+F shortcut → focus our search input.
     //
