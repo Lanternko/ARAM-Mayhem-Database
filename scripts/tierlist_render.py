@@ -637,6 +637,156 @@ li + li { margin-top: 8px; }
   text-decoration: none;
 }
 .action:hover { filter: brightness(1.06); }
+.feedback-page {
+  --accent: oklch(0.80 0.16 88);
+  --accent-soft: oklch(0.27 0.04 88);
+  --focus: oklch(0.78 0.14 88);
+}
+.feedback-page .action { color: oklch(0.22 0.025 88); }
+@media (prefers-color-scheme: light) {
+  .feedback-page {
+    --accent: oklch(0.60 0.14 85);
+    --accent-soft: oklch(0.94 0.035 88);
+    --focus: oklch(0.55 0.13 85);
+  }
+}
+.feedback-form {
+  margin-top: 34px;
+  padding-top: 28px;
+  border-top: 1px solid var(--border);
+}
+.feedback-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.feedback-fieldset + .feedback-fieldset,
+.feedback-fieldset + .feedback-field,
+.feedback-field + .feedback-field,
+.feedback-field + .feedback-context,
+.feedback-context + .feedback-field,
+.feedback-field + .feedback-submit-row { margin-top: 24px; }
+.feedback-fieldset legend,
+.feedback-label { padding: 0; color: var(--text); font-size: 14px; font-weight: 700; }
+.feedback-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.feedback-option {
+  display: flex;
+  min-height: 48px;
+  gap: 10px;
+  padding: 12px 14px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 92%, var(--bg));
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 180ms ease-out, background-color 180ms ease-out;
+}
+.feedback-option:hover { border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); }
+.feedback-option:focus-within {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-option input,
+.feedback-check input { accent-color: var(--accent); }
+.feedback-option input { margin: 3px 0 0; flex: 0 0 auto; }
+.feedback-option span { line-height: 1.4; }
+.feedback-field { display: flex; flex-direction: column; gap: 8px; }
+.feedback-field select,
+.feedback-field input[type='email'],
+.feedback-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+.feedback-field select,
+.feedback-field input[type='email'] { min-height: 42px; padding: 8px 11px; }
+.feedback-field textarea { min-height: 150px; padding: 11px 12px; line-height: 1.6; resize: vertical; }
+.feedback-field select:focus-visible,
+.feedback-field input[type='email']:focus-visible,
+.feedback-field textarea:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 2px;
+  border-color: var(--focus);
+}
+.feedback-help { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.feedback-context { margin-top: 24px; border-top: 1px solid var(--border); }
+.feedback-context summary {
+  width: fit-content;
+  padding-top: 18px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+.feedback-context summary:hover { color: var(--text); }
+.feedback-context summary:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.feedback-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.feedback-context-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
+.feedback-context-grid input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.feedback-check {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-start;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.feedback-check input { margin-top: 4px; flex: 0 0 auto; }
+.feedback-privacy { margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.feedback-submit-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.feedback-submit-row .action { margin-top: 0; border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border)); cursor: pointer; }
+.feedback-submit-row .action:disabled { cursor: wait; filter: saturate(.45); opacity: .7; }
+.feedback-status {
+  flex: 1 1 280px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.feedback-status.is-success {
+  border-color: color-mix(in oklch, var(--accent) 42%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.feedback-status.is-error {
+  border-color: color-mix(in oklch, oklch(0.62 0.14 25) 48%, var(--border));
+  background: color-mix(in oklch, oklch(0.62 0.14 25) 10%, var(--surface));
+  color: var(--text);
+}
+.feedback-fallback { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
+.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.feedback-form.is-submitted .feedback-submit-row { align-items: flex-start; }
 .page-footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
@@ -655,6 +805,9 @@ li + li { margin-top: 8px; }
   main { padding: 48px 0 64px; }
   h1 { font-size: 31px; }
   .lede { font-size: 17px; }
+  .feedback-option-grid,
+  .feedback-context-grid { grid-template-columns: 1fr; }
+  .feedback-form { padding-top: 24px; }
 }
 """
 
@@ -668,18 +821,27 @@ def _info_page_html(
     body_html: str,
     site_url: str,
     updated: str,
+    html_lang: str = "zh-Hant",
+    canonical_path: str | None = None,
+    nav_items: tuple[tuple[str, str, str], ...] | None = None,
+    head_extra_html: str = "",
+    updated_label: str = "最後更新",
+    updated_separator: str = "：",
+    footer_disclaimer: str = "arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。",
+    body_class: str = "",
 ) -> str:
     """Render a lightweight, crawlable station-information page."""
     esc = html.escape
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
-    canonical_path = f"/{slug}/"
+    canonical_path = canonical_path or f"/{slug}/"
     canonical = (origin + canonical_path) if origin.startswith("http") else canonical_path
-    nav_items = (
+    nav_items = nav_items or (
         ("/", "首頁", "home"),
         ("/about/", "關於", "about"),
         ("/privacy/", "隱私權", "privacy"),
         ("/contact/", "聯絡", "contact"),
+        ("/feedback/", "功能回饋", "feedback"),
     )
     nav = "".join(
         f"<a href='{href}'"
@@ -689,13 +851,15 @@ def _info_page_html(
     )
     adsense = render_adsense_verification_tag(site_url=site_url)
     return (
-        "<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        f"<!doctype html><html lang='{esc(html_lang, quote=True)}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         f"<title>{esc(title)} | arammeta</title>"
         f"<meta name='description' content='{esc(description, quote=True)}'>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
-        f"{adsense}<style>{_INFO_PAGE_CSS}</style></head><body>"
+        f"{head_extra_html}"
+        f"{adsense}<style>{_INFO_PAGE_CSS}</style></head>"
+        f"<body class='{esc(body_class, quote=True)}'>"
         "<header class='topbar'><div class='topbar-inner'>"
         "<a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a>"
         f"<nav class='topnav' aria-label='站務導覽'>{nav}</nav>"
@@ -703,14 +867,323 @@ def _info_page_html(
         "<main>"
         f"<p class='eyebrow'>{esc(eyebrow)}</p><h1>{esc(title)}</h1>"
         f"<p class='lede'>{esc(description)}</p>"
-        f"<p class='updated'>最後更新：{esc(updated)}</p>"
+        f"<p class='updated'>{esc(updated_label)}{esc(updated_separator)}{esc(updated)}</p>"
         f"{body_html}</main>"
         "<footer class='page-footer'><div class='page-footer-inner'>"
         f"<nav aria-label='頁尾導覽'>{nav}</nav>"
-        "<p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。"
-        "Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p>"
+        f"<p>{esc(footer_disclaimer)}</p>"
         "</div></footer></body></html>\n"
     )
+
+
+_FEEDBACK_COPY = {
+    "zh": {
+        "html_lang": "zh-Hant",
+        "prefix": "",
+        "eyebrow": "LISTENING LOOP",
+        "title": "功能回饋",
+        "description": "告訴我們哪個地方讓你更難做判斷，或下一步最值得加入什麼。可匿名送出；這份表單不會要求 Riot ID。",
+        "nav": {"home": "首頁", "about": "關於", "privacy": "隱私權", "contact": "聯絡", "feedback": "功能回饋"},
+        "language": "語系",
+        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
+        "topic": "你想回饋哪一類？",
+        "topics": (("feature", "新功能建議"), ("usability", "現有功能不好用"), ("bug", "互動或載入錯誤"), ("data", "資料或結果疑問"), ("other", "其他")),
+        "feature": "關於哪個功能？",
+        "features": (("champions", "英雄榜"), ("augments", "增幅"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本變動"), ("mobile", "手機版"), ("other", "其他")),
+        "message": "請描述你的想法",
+        "message_help": "你原本想完成什麼？哪一步卡住？希望它怎麼運作？",
+        "message_placeholder": "例如：我想比較兩個陣容，但目前看不到足夠的比較依據……",
+        "impact": "這件事對你的影響",
+        "impacts": (("blocked", "無法完成目前要做的事"), ("friction", "有點困擾但仍能繼續"), ("idea", "單純建議／想法")),
+        "context": "附加環境資訊（選填）",
+        "page": "目前頁面",
+        "theme": "主題",
+        "viewport": "裝置",
+        "email": "如果希望回覆，可留下 Email（選填）",
+        "email_help": "只有勾選同意回覆時才會保存。",
+        "consent": "我同意 arammeta 僅為回覆這份回饋而使用此 Email。",
+        "privacy": "請不要提供真實姓名、Riot ID、PUUID、IP 位址、權杖或其他敏感資料。回饋內容與可選的 Email 會存放在私有收件資料庫，不會直接公開。",
+        "submit": "送出回饋",
+        "sending": "送出中……",
+        "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。",
+        "offline": "目前表單尚未連上收件服務，請改用下方 GitHub Issue。",
+        "network": "送出失敗，請檢查網路後再試。",
+        "rate": "送出次數過於頻繁，請稍後再試。",
+        "server": "目前無法收件，請稍後再試或改用 GitHub Issue。",
+        "consent_error": "若填寫 Email，請先勾選同意回覆。",
+        "fallback": "表單暫時無法使用？前往 GitHub 建立公開 Issue，請勿貼上個資。",
+        "issue": "建立 GitHub Issue",
+        "reference": "參考編號",
+    },
+    "zh-CN": {
+        "html_lang": "zh-Hans",
+        "prefix": "/zh-CN",
+        "eyebrow": "LISTENING LOOP",
+        "title": "功能反馈",
+        "description": "告诉我们哪里让你更难做判断，或下一步最值得加入什么。可以匿名提交；这份表单不会要求 Riot ID。",
+        "nav": {"home": "首页", "about": "关于", "privacy": "隐私权", "contact": "联系", "feedback": "功能反馈"},
+        "language": "语言",
+        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
+        "topic": "你想反馈哪一类？",
+        "topics": (("feature", "新功能建议"), ("usability", "现有功能不好用"), ("bug", "交互或加载错误"), ("data", "数据或结果疑问"), ("other", "其他")),
+        "feature": "关于哪个功能？",
+        "features": (("champions", "英雄榜"), ("augments", "海克斯"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本变动"), ("mobile", "手机版"), ("other", "其他")),
+        "message": "请描述你的想法",
+        "message_help": "你原本想完成什么？哪一步卡住？希望它如何运作？",
+        "message_placeholder": "例如：我想比较两个阵容，但目前看不到足够的比较依据……",
+        "impact": "这件事对你的影响",
+        "impacts": (("blocked", "无法完成当前要做的事"), ("friction", "有点困扰但仍能继续"), ("idea", "单纯建议／想法")),
+        "context": "附加环境信息（选填）",
+        "page": "当前页面",
+        "theme": "主题",
+        "viewport": "设备",
+        "email": "如果希望回复，可以留下 Email（选填）",
+        "email_help": "只有勾选同意回复时才会保存。",
+        "consent": "我同意 arammeta 仅为回复这份反馈而使用此 Email。",
+        "privacy": "请不要提供真实姓名、Riot ID、PUUID、IP 地址、令牌或其他敏感资料。反馈内容与可选的 Email 会存放在私有收件数据库，不会直接公开。",
+        "submit": "提交反馈",
+        "sending": "提交中……",
+        "success": "已收到。谢谢你帮助 arammeta 更容易做判断。",
+        "offline": "当前表单尚未连接收件服务，请改用下方 GitHub Issue。",
+        "network": "提交失败，请检查网络后再试。",
+        "rate": "提交次数过于频繁，请稍后再试。",
+        "server": "当前无法收件，请稍后再试或改用 GitHub Issue。",
+        "consent_error": "如果填写 Email，请先勾选同意回复。",
+        "fallback": "表单暂时无法使用？前往 GitHub 创建公开 Issue，请勿贴上个人资料。",
+        "issue": "创建 GitHub Issue",
+        "reference": "参考编号",
+    },
+    "en": {
+        "html_lang": "en",
+        "prefix": "/en",
+        "eyebrow": "LISTENING LOOP",
+        "title": "Feature feedback",
+        "description": "Tell us what makes a decision harder, or what would make arammeta more useful next. You can submit anonymously; this form never asks for a Riot ID.",
+        "nav": {"home": "Home", "about": "About", "privacy": "Privacy", "contact": "Contact", "feedback": "Feature feedback"},
+        "language": "Language",
+        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
+        "topic": "What kind of feedback is this?",
+        "topics": (("feature", "New feature idea"), ("usability", "Hard to use"), ("bug", "Interaction or loading bug"), ("data", "Data or result question"), ("other", "Other")),
+        "feature": "Which feature is it about?",
+        "features": (("champions", "Champion tier list"), ("augments", "Augments"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "Patch changes"), ("mobile", "Mobile"), ("other", "Other")),
+        "message": "Tell us what you think",
+        "message_help": "What were you trying to do? Where did you get stuck? How would you expect it to work?",
+        "message_placeholder": "For example: I want to compare two team comps, but I cannot find enough evidence to compare them…",
+        "impact": "How much did this affect you?",
+        "impacts": (("blocked", "I could not complete the task"), ("friction", "It was confusing, but I continued"), ("idea", "Just an idea or suggestion")),
+        "context": "Additional context (optional)",
+        "page": "Current page",
+        "theme": "Theme",
+        "viewport": "Device",
+        "email": "Leave an Email if you would like a reply (optional)",
+        "email_help": "It is stored only when you consent to a reply.",
+        "consent": "I agree that arammeta may use this Email only to reply to this feedback.",
+        "privacy": "Please do not include your real name, Riot ID, PUUID, IP address, tokens, or other sensitive information. Feedback and an optional Email are stored in a private inbox and are not published directly.",
+        "submit": "Send feedback",
+        "sending": "Sending…",
+        "success": "Received. Thanks for helping make arammeta easier to use for decisions.",
+        "offline": "This form is not connected to a receiving service yet. Please use the GitHub Issue below.",
+        "network": "Could not send your feedback. Check your connection and try again.",
+        "rate": "Too many submissions. Please try again later.",
+        "server": "The inbox is temporarily unavailable. Try again later or use GitHub Issue.",
+        "consent_error": "If you enter an Email, please consent to a reply first.",
+        "fallback": "Is the form unavailable? Create a public GitHub Issue, and do not include personal information.",
+        "issue": "Create a GitHub Issue",
+        "reference": "Reference",
+    },
+}
+
+
+def _feedback_nav(copy: dict) -> tuple[tuple[str, str, str], ...]:
+    prefix = str(copy["prefix"]).rstrip("/")
+    home_href = f"{prefix}/" if prefix else "/"
+    feedback_href = f"{prefix}/feedback/" if prefix else "/feedback/"
+    labels = copy["nav"]
+    return (
+        (home_href, labels["home"], "home"),
+        ("/about/", labels["about"], "about"),
+        ("/privacy/", labels["privacy"], "privacy"),
+        ("/contact/", labels["contact"], "contact"),
+        (feedback_href, labels["feedback"], "feedback"),
+    )
+
+
+def _feedback_head_links(*, site_url: str) -> str:
+    base = _site_base_href(site_url) or "/"
+    origin = base.rstrip("/")
+    routes = (
+        ("zh-Hant", "/feedback/"),
+        ("zh-Hans", "/zh-CN/feedback/"),
+        ("en", "/en/feedback/"),
+    )
+    links = []
+    for lang, path in routes:
+        href = origin + path if origin.startswith("http") else path
+        links.append(
+            f"<link rel='alternate' hreflang='{html.escape(lang, quote=True)}' "
+            f"href='{html.escape(href, quote=True)}'>"
+        )
+    x_default = origin + "/feedback/" if origin.startswith("http") else "/feedback/"
+    links.append(
+        f"<link rel='alternate' hreflang='x-default' href='{html.escape(x_default, quote=True)}'>"
+    )
+    return "".join(links)
+
+
+def _feedback_body_html(
+    *,
+    copy: dict,
+    api_endpoint: str,
+    issues_url: str,
+) -> str:
+    esc = html.escape
+    copy_json = json.dumps(
+        {
+            key: copy[key]
+            for key in (
+                "sending",
+                "success",
+                "offline",
+                "network",
+                "rate",
+                "server",
+                "consent_error",
+                "reference",
+            )
+        },
+        ensure_ascii=False,
+    ).replace("</", "<\\/")
+    language_links = " ".join(
+        f"<a href='{esc(href)}'" + (" aria-current='page'" if href.rstrip("/") == f"{str(copy['prefix']).rstrip('/')}/feedback" else "") + f">{esc(label)}</a>"
+        for href, label in copy["languages"]
+    )
+    topic_options = "".join(
+        f"<label class='feedback-option'><input type='radio' name='category' value='{esc(value)}' required><span>{esc(label)}</span></label>"
+        for value, label in copy["topics"]
+    )
+    impact_options = "".join(
+        f"<label class='feedback-option'><input type='radio' name='impact' value='{esc(value)}'"
+        + (" checked" if value == "idea" else "")
+        + f"><span>{esc(label)}</span></label>"
+        for value, label in copy["impacts"]
+    )
+    feature_options = "".join(
+        f"<option value='{esc(value)}'>{esc(label)}</option>"
+        for value, label in copy["features"]
+    )
+    return f"""
+<div class="feedback-language" aria-label="{esc(copy['language'])}">{language_links}</div>
+<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc(copy['html_lang'], quote=True)}">
+<fieldset class="feedback-fieldset"><legend>{esc(copy['topic'])}</legend>
+<div class="feedback-option-grid">{topic_options}</div></fieldset>
+<label class="feedback-field"><span class="feedback-label">{esc(copy['feature'])}</span>
+<select name="feature" required><option value="" selected disabled>{esc(copy['feature'])}</option>{feature_options}</select></label>
+<label class="feedback-field"><span class="feedback-label">{esc(copy['message'])}</span>
+<span class="feedback-help" id="feedback-message-help">{esc(copy['message_help'])}</span>
+<textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
+<fieldset class="feedback-fieldset"><legend>{esc(copy['impact'])}</legend>
+<div class="feedback-option-grid">{impact_options}</div></fieldset>
+<details class="feedback-context"><summary>{esc(copy['context'])}</summary>
+<div class="feedback-context-grid">
+<label>{esc(copy['page'])}<input data-context="page_path" type="text" readonly></label>
+<label>{esc(copy['language'])}<input data-context="locale" type="text" readonly></label>
+<label>{esc(copy['theme'])}<input data-context="theme" type="text" readonly></label>
+<label>{esc(copy['viewport'])}<input data-context="viewport" type="text" readonly></label>
+</div></details>
+<label class="feedback-field"><span class="feedback-label">{esc(copy['email'])}</span>
+<input name="contact_email" type="email" maxlength="254" autocomplete="email">
+<span class="feedback-help">{esc(copy['email_help'])}</span>
+<span class="feedback-check"><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></span></label>
+<div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
+<p class="feedback-privacy">{esc(copy['privacy'])}</p>
+<div class="feedback-submit-row"><button class="action" type="submit">{esc(copy['submit'])}</button>
+<p class="feedback-status" data-feedback-status role="status" aria-live="polite" tabindex="-1" hidden></p></div>
+</form>
+<p class="feedback-fallback">{esc(copy['fallback'])} <a href="{esc(issues_url, quote=True)}" target="_blank" rel="noopener">{esc(copy['issue'])}</a></p>
+<script>
+(() => {{
+  const form = document.querySelector('[data-feedback-form]');
+  if (!form) return;
+  const endpoint = String(form.dataset.endpoint || '').trim();
+  const status = form.querySelector('[data-feedback-status]');
+  const submit = form.querySelector('button[type="submit"]');
+  const copy = {copy_json};
+  const email = form.elements.namedItem('contact_email');
+  const consent = form.elements.namedItem('contact_consent');
+  const getText = (name) => {{
+    const field = form.elements.namedItem(name);
+    return field ? String(field.value || '').trim() : '';
+  }};
+  const setStatus = (message, kind) => {{
+    status.textContent = message;
+    status.className = `feedback-status is-${{kind}}`;
+    status.hidden = false;
+    status.focus?.();
+  }};
+  const syncContext = () => {{
+    const values = {{
+      page_path: window.location.pathname,
+      locale: form.dataset.locale || 'zh-Hant',
+      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      viewport: window.matchMedia('(max-width: 640px)').matches ? 'mobile' : 'desktop'
+    }};
+    Object.entries(values).forEach(([key, value]) => {{
+      const field = form.querySelector(`[data-context="${{key}}"]`);
+      if (field) field.value = value;
+    }});
+    return values;
+  }};
+  const syncConsentValidity = () => {{
+    if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
+  }};
+  email?.addEventListener('input', syncConsentValidity);
+  consent?.addEventListener('change', syncConsentValidity);
+  syncContext();
+  window.addEventListener('resize', syncContext, {{ passive: true }});
+  form.addEventListener('submit', async (event) => {{
+    event.preventDefault();
+    syncConsentValidity();
+    if (!form.reportValidity()) return;
+    if (!endpoint) {{ setStatus(copy.offline, 'error'); return; }}
+    const context = syncContext();
+    const category = form.querySelector('input[name="category"]:checked');
+    const impact = form.querySelector('input[name="impact"]:checked');
+    const payload = {{
+      category: category ? category.value : '',
+      feature: getText('feature'),
+      message: getText('message'),
+      impact: impact ? impact.value : 'idea',
+      ...context,
+      contact_email: getText('contact_email'),
+      contact_consent: Boolean(form.elements.namedItem('contact_consent')?.checked),
+      website: getText('website')
+    }};
+    submit.disabled = true;
+    submit.textContent = copy.sending;
+    status.hidden = true;
+    try {{
+      const response = await fetch(endpoint, {{ method: 'POST', headers: {{ 'Content-Type': 'application/json' }}, body: JSON.stringify(payload) }});
+      let body = {{}};
+      try {{ body = await response.json(); }} catch {{}}
+      if (!response.ok) {{
+        if (response.status === 429) throw new Error(copy.rate);
+        throw new Error(response.status >= 500 ? copy.server : copy.network);
+      }}
+      const reference = body.reference ? ` ${{copy.reference}}: ${{body.reference}}` : '';
+      form.reset();
+      syncContext();
+      form.classList.add('is-submitted');
+      setStatus(copy.success + reference, 'success');
+    }} catch (error) {{
+      setStatus(error instanceof Error && error.message ? error.message : copy.network, 'error');
+    }} finally {{
+      submit.disabled = false;
+      submit.textContent = {json.dumps(copy['submit'], ensure_ascii=False)};
+    }}
+  }});
+}})();
+</script>
+"""
 
 
 def _retire_public_column_code(site_js: str) -> str:
@@ -738,7 +1211,7 @@ def write_site_info_pages(
     site_url: str = "",
     build_date: str = "",
 ) -> list[Path]:
-    """Write About, Privacy, Contact, and the production ads.txt file."""
+    """Write info pages, localized feedback routes, and production ads.txt."""
     root = Path(index_path).parent
     updated = build_date or _dt.date.today().isoformat()
     repo_url = "https://github.com/Lanternko/ARAM-Mayhem-Database"
@@ -780,6 +1253,8 @@ def write_site_info_pages(
 <section><h2>查詢與請求</h2>
 <p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
 <p><a href="/contact/">前往聯絡與回報</a></p></section>
+<section><h2>功能回饋</h2>
+<p>功能建議與使用體驗可以透過<a href="/feedback/">功能回饋頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
 <div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
 """
     contact_body = f"""
@@ -790,6 +1265,8 @@ def write_site_info_pages(
 <p>GitHub Issue 會公開顯示。請勿貼上真實姓名、電子郵件、IP 位址、Riot ID、PUUID、驗證權杖或其他敏感資料。隱私請求只需提供排行榜暱稱、版本與大約提交時間，站方會視需要提供後續處理方式。</p></section>
 <section><h2>處理方式</h2>
 <p>請在標題簡述問題，並附上頁面網址、使用裝置與可重現步驟。資料問題若能附版本與畫面截圖，通常會更快定位。</p></section>
+<section><h2>功能建議</h2>
+<p>如果是新功能想法或使用流程建議，請改用<a href="/feedback/">功能回饋頁</a>；這類回饋可以匿名送出，內容不會直接公開。</p></section>
 """
     specs = (
         ("about", "關於 arammeta", "About", "ARAM Mayhem 的獨立資料工具、統計方法與開源資訊。", about_body),
@@ -809,6 +1286,54 @@ def write_site_info_pages(
                 body_html=body,
                 site_url=site_url,
                 updated=updated,
+            ),
+            encoding="utf-8",
+        )
+        written.append(dest)
+
+    # Feedback is a real product surface, so it gets the same three locale
+    # routes as the main app.  The older policy pages stay on their existing
+    # root routes until their translations are reviewed separately.
+    feedback_api_base = ""
+    if (site_url or "").strip().rstrip("/") == ADSENSE_SITE_ORIGIN:
+        feedback_api_base = "https://api.arammeta.com"
+    feedback_endpoint = (
+        f"{feedback_api_base.rstrip('/')}/api/feedback" if feedback_api_base else ""
+    )
+    feedback_footer_disclaimers = {
+        "zh": "arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。",
+        "zh-CN": "arammeta 未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 及其相关资产是 Riot Games, Inc. 的商标或注册商标。",
+        "en": "arammeta is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
+    }
+    feedback_updated_labels = {"zh": "最後更新", "zh-CN": "最后更新", "en": "Last updated"}
+    for locale, copy in _FEEDBACK_COPY.items():
+        prefix = str(copy["prefix"]).strip("/")
+        relative_dir = Path(prefix) if prefix else Path()
+        dest = root / relative_dir / "feedback" / "index.html"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        canonical_path = f"/{prefix}/feedback/" if prefix else "/feedback/"
+        body = _feedback_body_html(
+            copy=copy,
+            api_endpoint=feedback_endpoint,
+            issues_url=issues_url,
+        )
+        dest.write_text(
+            _info_page_html(
+                slug="feedback",
+                title=copy["title"],
+                eyebrow=copy["eyebrow"],
+                description=copy["description"],
+                body_html=body,
+                site_url=site_url,
+                updated=updated,
+                html_lang=copy["html_lang"],
+                canonical_path=canonical_path,
+                nav_items=_feedback_nav(copy),
+                head_extra_html=_feedback_head_links(site_url=site_url),
+                updated_label=feedback_updated_labels[locale],
+                updated_separator=":" if locale == "en" else "：",
+                footer_disclaimer=feedback_footer_disclaimers[locale],
+                body_class="feedback-page",
             ),
             encoding="utf-8",
         )
@@ -1473,6 +1998,23 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
+    if path in {"/augments/pools/", "/en/augments/pools/", "/zh-CN/augments/pools/"}:
+        # Pools describe draw rules, so the home page's top champion is misleading.
+        # Reuse the published brand asset and discard inherited image metadata.
+        out = re.sub(
+            r"<meta\s+(?:property|name)=['\"](?:og:image|twitter:image)(?::[^'\"]+)?['\"][^>]*>",
+            "", out, flags=re.I,
+        )
+        image_url = origin + "/mayhem-single-die-icon.png"
+        image_tags = (
+            f"<meta property='og:image' content='{html.escape(image_url, quote=True)}'>"
+            "<meta property='og:image:width' content='180'>"
+            "<meta property='og:image:height' content='180'>"
+            f"<meta property='og:image:alt' content='{html.escape(title, quote=True)}'>"
+            f"<meta name='twitter:image' content='{html.escape(image_url, quote=True)}'>"
+            f"<meta name='twitter:image:alt' content='{html.escape(title, quote=True)}'>"
+        )
+        out = out.replace("</head>", image_tags + "</head>", 1)
     return _inject_locale_alternates(out, site_url=site_url, canonical_path=path)
 
 
@@ -2312,6 +2854,17 @@ def render_html(
                     item.get("id"),
                 )
 
+    # Common TW player nicknames and typo variants belong to the hero-only
+    # index. Keep this deliberately small and explicit: ambiguous slang can
+    # make a fast in-game lookup noisier than a normal substring search.
+    _CHAMPION_SEARCH_ALIASES: dict[str, tuple[str, ...]] = {
+        "shen": ("腎",),
+        "morgana": ("莫甘娜", "模乾那"),
+        "ezreal": ("EZ",),
+        "brand": ("火人",),
+        "karthus": ("死歌", "死哥"),
+    }
+
     def _champ_search_blob(cid: int, display_name: str, meta: dict, tags: list[str]) -> str:
         terms: list[str] = []
         _add_search_terms(
@@ -2321,16 +2874,12 @@ def render_html(
             meta.get("name_zh"),
             meta.get("name_en"),
             meta.get("alias"),
-            tags,
+            meta.get("name_cn"),
+            _CHAMPION_SEARCH_ALIASES.get(str(meta.get("alias") or "").lower(), ()),
         )
-        # NOTE: augment / item / set search terms used to be packed in here too
-        # (~1 MB across all champs), but the client's enrichSearchIndexes() rebuilds
-        # the full search blob from the loaded payload on init (see site.js) and
-        # OVERWRITES this attribute — so server-rendering them was pure duplication
-        # that only bloated index.html.  We now emit just the champion's own name
-        # terms; the client fills in augment / item / set terms from the payload on
-        # load.  Search behaves identically (production already relied on the client
-        # rebuild).
+        # This attribute is the first-paint, hero-only index. Do not add roles,
+        # augments, items, or sets here: the default search is intentionally a
+        # champion picker, so a query such as "she" must not match Sheen builds.
         seen: set[str] = set()
         unique_terms: list[str] = []
         for term in terms:
@@ -2340,6 +2889,83 @@ def render_html(
             seen.add(normalized)
             unique_terms.append(normalized)
         return " ".join(unique_terms)
+
+    def _build_related_search_index(champs: dict[str, dict]) -> dict[str, dict[str, list[int]]]:
+        """Build a compact augment/item → champion reverse index.
+
+        The split payload keeps champion detail lazy, but advanced search still
+        needs to answer questions such as "who can roll Jeweled Gauntlet?".
+        Store each distinct display term once and point it at matching champs.
+        """
+        related: dict[str, dict[str, set[int]]] = {
+            "augments": {},
+            "items": {},
+        }
+
+        def add(target: str, value: object, cid: int) -> None:
+            if value is None:
+                return
+            if isinstance(value, dict):
+                for nested in value.values():
+                    add(target, nested, cid)
+                return
+            if isinstance(value, (list, tuple, set)):
+                for nested in value:
+                    add(target, nested, cid)
+                return
+            text = str(value).strip()
+            if text:
+                related[target].setdefault(text, set()).add(cid)
+
+        def add_named_object(target: str, obj: object, cid: int) -> None:
+            if not isinstance(obj, dict):
+                return
+            for key in (
+                "name", "name_zh", "name_en", "name_cn",
+                "set", "set_zh", "set_en", "set_cn", "slug",
+            ):
+                add(target, obj.get(key), cid)
+            for value in obj.values():
+                if isinstance(value, (dict, list, tuple, set)):
+                    add_named_object(target, value, cid)
+
+        for raw_cid, info in champs.items():
+            try:
+                cid = int(raw_cid)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(info, dict):
+                continue
+            augment_ids: set[int] = set()
+            for side in ("top", "bot"):
+                buckets = info.get(side) or {}
+                if not isinstance(buckets, dict):
+                    continue
+                for rows in buckets.values():
+                    if not isinstance(rows, list):
+                        continue
+                    for row in rows:
+                        if not isinstance(row, dict):
+                            continue
+                        try:
+                            aid = int(row.get("id"))
+                        except (TypeError, ValueError):
+                            continue
+                        if aid in aug_meta:
+                            augment_ids.add(aid)
+            for aid in augment_ids:
+                add_named_object("augments", aug_meta.get(aid), cid)
+            for key in ("sets", "augTypes"):
+                add_named_object("augments", info.get(key), cid)
+            for key in ("items", "singleItems", "boots", "itemClusters"):
+                add_named_object("items", info.get(key), cid)
+        return {
+            target: {
+                term: sorted(cids)
+                for term, cids in sorted(values.items(), key=lambda item: item[0].casefold())
+            }
+            for target, values in related.items()
+        }
 
     visible_cids = [int(r["champion_id"]) for r in records]
     visible_cid_set = set(visible_cids)
@@ -2433,6 +3059,7 @@ def render_html(
                 float(champ_stat_by_cid.get(cid, {}).get("prev_mix", 0.0) or 0.0), 3
             ),
         }
+    related_search_index = _build_related_search_index(js_champs)
     aug_cat_overrides = load_augment_category_overrides()
     if aug_cat_overrides:
         click.echo(
@@ -2535,6 +3162,13 @@ def render_html(
         "recommendation_composition": recommendation_composition,
         "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": draft_model,
+        # Full builds can answer advanced augment/item searches immediately.
+        # A shell-only render has no detail rows in js_champs, so leave an empty
+        # marker and let the client load legacy detail shards on demand.
+        "searchIndex": (
+            {"related": related_search_index}
+            if any(related_search_index.values()) else {}
+        ),
     }
     if js_champs:
         if draft_model is None:
@@ -2893,10 +3527,36 @@ def render_html(
         "<label class='search-wrap'>"
         f"{search_icon}"
         '<input class="search" id="champ-search" type="search" '
-        'placeholder="搜尋英雄（中 / 英）" autocomplete="off" '
-        'aria-label="搜尋英雄">'
+        'placeholder="搜尋英雄名稱（中 / 英）" autocomplete="off" '
+        'aria-label="搜尋英雄名稱" aria-describedby="search-scope-hint">'
         "</label>"
     )
+    parts.append(
+        "<details class='search-scope' id='search-scope'>"
+        "<summary class='search-scope-summary' id='search-scope-summary' "
+        "title='展開進階搜尋' aria-label='搜尋範圍：英雄。展開進階搜尋'>"
+        "<span id='search-scope-value'>英雄</span>"
+        "<svg viewBox='0 0 24 24' width='14' height='14' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'><path d='m6 9 6 6 6-6'></path></svg>"
+        "</summary>"
+        "<div class='search-scope-menu' id='search-scope-menu' role='group' aria-label='搜尋範圍'>"
+        "<button type='button' class='search-scope-option is-active' "
+        "data-search-scope='champions' aria-pressed='true' "
+        "aria-label='只搜英雄：中／英文名稱、別名'>"
+        "<span data-i18n-zh='只搜英雄' data-i18n-en='Champions only'>只搜英雄</span>"
+        "<small data-i18n-zh='中／英文名稱、別名' data-i18n-en='Chinese / English names and aliases'>中／英文名稱、別名</small>"
+        "</button>"
+        "<button type='button' class='search-scope-option' "
+        "data-search-scope='all' aria-pressed='false' "
+        "aria-label='英雄＋增幅＋裝備：查誰適合某個增幅或出裝'>"
+        "<span data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='Champions + augments + items'>英雄＋增幅＋裝備</span>"
+        "<small data-i18n-zh='查誰適合某個增幅或出裝' data-i18n-en='Find champions for an augment or build'>查誰適合某個增幅或出裝</small>"
+        "</button>"
+        "</div>"
+        "</details>"
+    )
+    parts.append("<span class='sr-only' id='search-scope-hint'>預設只搜尋英雄名稱</span>")
     parts.append("</div>")  # /search-rail
 
     # Optional player-history lookup. This markup is emitted only for the
@@ -3000,7 +3660,7 @@ def render_html(
             primary_role = tags[0] if tags else ""
             secondary_role = tags[1] if len(tags) > 1 else ""
             alias = meta.get("alias", "")
-            search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
+            champion_search_blob = _champ_search_blob(int(r["champion_id"]), r["name"], meta, tags)
             # Keep the detailed blend disclosure available on the champion tooltip,
             # without adding a page-level warning banner.
             _pm = float(r.get("prev_mix") or 0.0)
@@ -3016,7 +3676,8 @@ def render_html(
                 f"data-name-en=\"{html.escape(meta.get('name_en', alias or r['name']))}\" "
                 f"data-tags='{tag_str}' data-primary-role='{html.escape(primary_role)}' "
                 f"data-secondary-role='{html.escape(secondary_role)}' "
-                f"data-search=\"{html.escape(search_blob, quote=True)}\" "
+                f"data-champion-search=\"{html.escape(champion_search_blob, quote=True)}\" "
+                f"data-search=\"{html.escape(champion_search_blob, quote=True)}\" "
                 f"data-tier='{tier}' data-wr='{wr_pct}' data-games='{r['games']}' "
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"role='button' tabindex='0' "
@@ -3072,6 +3733,8 @@ def render_html(
         "data-i18n-en='Privacy'>隱私權</a>"
         "<a href='/contact/' data-i18n-zh='聯絡' data-i18n-zh-cn='联系' "
         "data-i18n-en='Contact'>聯絡</a>"
+        "<a href='/feedback/' data-i18n-zh='功能回饋' data-i18n-zh-cn='功能反馈' "
+        "data-i18n-en='Feature feedback'>功能回饋</a>"
         "</nav>"
     )
     # Footer open-source control: pill affordance so it reads as clickable,
@@ -3422,14 +4085,15 @@ def _run_shell_only(
 
     The slow part of a normal build is the win-rate + augment + item/affinity
     computation (it scans hundreds of thousands of games several times) that
-    produces tier-list.json.  While iterating on the frontend (site.css /
+    produces tier-list.json. While iterating on the frontend (site.css /
     site.js / copy / columns) that data hasn't changed, so we reload the last
     payload, reconstruct only the inputs the HTML shell + server-rendered champ
     grid actually need (champ win-rates + names / tags / portraits) and re-render
-    the page in ~seconds.  The server-side search blob is name-only here, but the
-    client's enrichSearchIndexes() rebuilds the full search index from the loaded
-    payload on init, so search behaves identically.  Run a normal (non-shell)
-    build to refresh the underlying data / produce the exact production artifact.
+    the page in ~seconds. The server-side search blob is hero-name-only here;
+    the client keeps that first paint immediate and loads detail shards only when
+    the user explicitly selects advanced augment/item search. Run a normal
+    (non-shell) build to refresh the underlying data / produce the exact
+    production artifact.
     """
     import time
     t0 = time.time()

@@ -120,6 +120,11 @@ DEFAULT_DOC_PATHS = (
     Path("docs/about"),
     Path("docs/privacy"),
     Path("docs/contact"),
+    # Feature feedback has localized static routes and must ship atomically
+    # with the shell so the footer link never points at a missing page.
+    Path("docs/feedback"),
+    Path("docs/en/feedback"),
+    Path("docs/zh-CN/feedback"),
     # Build artifact (champion role spec) regenerated with the current patch each
     # build.  The live site does not fetch it -- only the offline
     # build_semantic_score_review_page.py reads it -- so its staleness is harmless

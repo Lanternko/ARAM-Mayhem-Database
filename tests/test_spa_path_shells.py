@@ -91,6 +91,10 @@ class SpaPathShellTests(unittest.TestCase):
                 "<title>app</title>"
                 "<link rel='canonical' href='https://arammeta.com/'>"
                 "<meta property='og:url' content='https://arammeta.com/'>"
+                "<meta property='og:image' content='https://arammeta.com/og-image.png?v=old'>"
+                "<meta property='og:image:width' content='512'>"
+                "<meta property='og:image:height' content='512'>"
+                "<meta name='twitter:image' content='https://arammeta.com/og-image.png?v=old'>"
                 "</head><body>FULL_SPA_SHELL</body></html>",
                 encoding="utf-8",
             )
@@ -167,6 +171,15 @@ class SpaPathShellTests(unittest.TestCase):
                 root / "zh-CN" / "augments" / "pools" / "index.html"
             ).read_text(encoding="utf-8")
             self.assertIn("<title>海克斯池 · arammeta</title>", zh_cn_pools)
+            for pool_html in (pools_body, en_pools, zh_cn_pools):
+                self.assertNotIn("/og-image.png", pool_html)
+                self.assertIn("property='og:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
+                self.assertIn("name='twitter:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
+                self.assertIn("property='og:image:width' content='180'", pool_html)
+                self.assertIn("property='og:image:height' content='180'", pool_html)
+                self.assertEqual(pool_html.count("property='og:image'"), 1)
+            self.assertIn("/og-image.png?v=old", root_body)
+            self.assertIn("/og-image.png?v=old", en_body)
 
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
@@ -187,7 +200,7 @@ class SpaPathShellTests(unittest.TestCase):
                 site_url="https://arammeta.com/",
                 build_date="2026-07-15",
             )
-            self.assertEqual(len(written), 4)
+            self.assertEqual(len(written), 7)
             privacy = (root / "privacy" / "index.html").read_text(encoding="utf-8")
             self.assertIn("Google AdSense", privacy)
             self.assertIn("Meta Pick 排行榜", privacy)
@@ -195,6 +208,21 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("最後更新：2026-07-15", privacy)
             self.assertTrue((root / "about" / "index.html").is_file())
             self.assertTrue((root / "contact" / "index.html").is_file())
+            feedback = (root / "feedback" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("功能回饋", feedback)
+            self.assertIn("https://api.arammeta.com/api/feedback", feedback)
+            self.assertIn("data-feedback-form", feedback)
+            self.assertIn("hreflang='en'", feedback)
+            self.assertTrue((root / "en" / "feedback" / "index.html").is_file())
+            self.assertIn(
+                "Feature feedback",
+                (root / "en" / "feedback" / "index.html").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((root / "zh-CN" / "feedback" / "index.html").is_file())
+            self.assertIn(
+                "功能反馈",
+                (root / "zh-CN" / "feedback" / "index.html").read_text(encoding="utf-8"),
+            )
             self.assertEqual(
                 (root / "ads.txt").read_text(encoding="utf-8"),
                 "google.com, pub-8593280194977470, DIRECT, f08c47fec0942fa0\n",
