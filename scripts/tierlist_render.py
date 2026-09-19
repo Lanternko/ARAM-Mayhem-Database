@@ -2620,6 +2620,7 @@ def render_html(
     build_date: str = "",
     cloudflare_analytics_token: str = "",
     ga_measurement_id: str = "",
+    shell_payload: dict | None = None,
     payload_out_path: Path | None = None,
     payload_url: str = "",
     icon_assets_dir: Path | None = None,
@@ -3287,7 +3288,8 @@ def render_html(
         if key in trained_composition:
             recommendation_composition[key] = trained_composition[key]
 
-    draft_model = load_draft_composition_lr_payload()
+    draft_model = (shell_payload.get("draftModel") if shell_payload is not None
+                   else load_draft_composition_lr_payload())
     payload = {
         "champs": js_champs,
         "augs": js_augs,
@@ -3313,14 +3315,15 @@ def render_html(
         "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": draft_model,
         # Full builds can answer advanced augment/item searches immediately.
-        # A shell-only render has no detail rows in js_champs, so leave an empty
-        # marker and let the client load legacy detail shards on demand.
+        # Shell-only builds reuse the published index when the snapshot has one.
         "searchIndex": (
-            {"related": related_search_index}
+            shell_payload.get("searchIndex")
+            if shell_payload is not None and shell_payload.get("searchIndex")
+            else {"related": related_search_index}
             if any(related_search_index.values()) else {}
         ),
     }
-    if js_champs:
+    if js_champs and shell_payload is None:
         if draft_model is None:
             raise click.ClickException(_DRAFT_MODEL_ERROR)
         hydrate_draft_champion_profiles(payload, draft_model)
@@ -4254,60 +4257,22 @@ def _run_shell_only(
         )
     payload_text = payload_path.read_text(encoding="utf-8")
     payload = json.loads(payload_text)
-    # Stamp snapshot id when an older payload predates Meta Pick leaderboard.
-    if patch_prefix and not payload.get("patch_prefix"):
-        payload["patch_prefix"] = patch_prefix
-    # Always (re)export Draft model on shell-only so migrations
-    # (DeepSets → Composition LR) land without a multi-minute data rebuild.
-    draft_model = load_draft_composition_lr_payload()
-    if draft_model is not None:
-        prev_kind = (payload.get("draftModel") or {}).get("kind")
-        payload["draftModel"] = draft_model
-        if prev_kind and prev_kind != draft_model.get("kind"):
-            click.echo(
-                f"[shell-only] draftModel {prev_kind} → {draft_model.get('kind')} "
-                f"({draft_model.get('source_model')})"
-            )
-    elif not payload.get("draftModel"):
-        click.echo("[shell-only] WARN: Draft Composition LR unavailable; final WR disabled")
+    # The published snapshot belongs to the data lane. Shell builds must never
+    # migrate models, rehydrate profiles, slim JSON, or rewrite detail shards.
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
-    if draft_model is None:
-        raise click.ClickException(_DRAFT_MODEL_ERROR)
-    hydrate_draft_champion_profiles(payload, draft_model)
     validate_draft_public_payload(payload)
-
-    # Slim oversized payloads left over from older full builds (full ranked
-    # aug/item lists).  Rewrite in place so the next fetch is smaller without a
-    # multi-minute data rebuild.
-    before_bytes = payload_path.stat().st_size
-    slim_stats = slim_site_payload(payload)
+    patch_prefix = payload.get("patch_prefix") or patch_prefix
     if not build_date:
         build_date = _dt.date.today().isoformat()
-    # Shell-only can still replace Draft model weights and hydrated profiles.
-    # Derive the fetch version from the resulting payload so same-day publishes
-    # cannot keep serving a cached pre-update model.
-    payload_ver = payload_content_version(payload)
+    # Keep the published snapshot's existing cache key on a shell-only build.
+    # A frontend deploy must not make the browser fetch the data lane again.
+    payload_version = str(payload.get("detailVersion") or payload_content_version(payload))
     resolved_payload_url = versioned_payload_url(
         payload_url or "api/tier-list.json",
-        payload_ver,
+        payload_version,
     )
-    shard_stats = write_champion_detail_shards(
-        payload,
-        payload_out_path=payload_path,
-        payload_url=resolved_payload_url,
-        version=payload_ver,
-    )
-    slim_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    if slim_json != payload_text or shard_stats["champs"]:
-        payload_path.write_text(slim_json, encoding="utf-8")
-        click.echo(
-            f"[shell-only] slimmed {payload_path.name}: "
-            f"{before_bytes / 1e6:.1f} MB → {len(slim_json.encode('utf-8')) / 1e6:.1f} MB "
-            f"(rows {slim_stats['before_rows']:,} → {slim_stats['after_rows']:,})"
-        )
-    champs = payload.get("champs") or {}
 
     # Reconstruct just what the shell + server grid need straight from the payload
     # (no DB win-rate / affinity compute).  champ_meta carries name / tags /
@@ -4360,6 +4325,7 @@ def _run_shell_only(
         min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        shell_payload=payload,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
@@ -4381,6 +4347,7 @@ def _run_shell_only(
         min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        shell_payload=payload,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
