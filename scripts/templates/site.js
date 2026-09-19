@@ -3412,11 +3412,61 @@
     function loadAugPools() {
         if (augPools.data || augPools.loading) return;
         augPools.loading = true;
+        augPools.failed = false;
         loadSitePayload('api/augment-pools.json')
             .then(d => { augPools.data = d; apoolIndex(d); })
             .catch(() => { augPools.failed = true; })
-            .finally(() => { augPools.loading = false; if (augMode === 'pools') renderAugPools(); });
+            .finally(() => { augPools.loading = false; if (augMode === 'pools') renderAugPools(); renderChampionPools(); });
     }
+    // Pool weights belong to memberships, never individual augments.
+    function championPoolFamily(p) {
+        if (p.family !== 'inferred') return p.family;
+        // Naming confidence stays on the label; group by gameplay meaning.
+        return ['ad', 'ap', 'cd', 'tank'].includes(apoolHue(p)) ? 'stat' : 'function';
+    }
+    function championPoolsHtml(cid) {
+        const d = augPools.data;
+        if (!d) return `<p role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
+            + (augPools.failed ? `<button type="button" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
+        const rows = ((d.champs || {})[cid] || []).map(([pid, w]) => ({p: augPools.byId[pid], w: apoolWeight(w)})).filter(r => r.p);
+        if (!rows.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
+        const union = new Set(rows.flatMap(r => r.p.augs.map(String)));
+        const families = APOOL_FAMILIES.filter(f => f[0] !== 'inferred');
+        if (rows.some(r => !families.some(f => f[0] === championPoolFamily(r.p)))) families.push(['other', '其他池子', 'Other pools']);
+        const groups = families.map(([family, zh, en]) => {
+            const members = rows.filter(r => family === 'other' ? !APOOL_FAMILIES.some(f => f[0] === championPoolFamily(r.p)) : championPoolFamily(r.p) === family)
+                .sort((a, b) => b.w - a.w || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
+            if (!members.length) return '';
+            return `<section class="champ-pool-group"><h3>${escHtml(pickLang(zh, en))} <small>${members.length}</small></h3>`
+                + members.map(({p, w}) => {
+                    const rarities = [...new Set(p.augs.map(aid => apoolAug(aid).rarity))].sort((a, b) => ['kSilver', 'kGold', 'kPrismatic'].indexOf(a) - ['kSilver', 'kGold', 'kPrismatic'].indexOf(b));
+                    const contents = rarities.map(rarity => `<h4>${escHtml((tr().rarityLabels || {})[rarity] || pickLang('未分類', 'Unclassified'))}</h4>`
+                        + apoolAugListHtml({...p, augs: p.augs.filter(aid => apoolAug(aid).rarity === rarity)})).join('');
+                    return `<details class="champ-pool"><summary${apoolHueAttr(p)}><span class="champ-pool-name">${escHtml(apoolLabel(p))}${apoolTag(p)}</span>`
+                        + `<span class="champ-pool-count">${escHtml(pickLang(`${p.augs.length} 增幅`, `${p.augs.length} augments`))}</span>`
+                        + `<span class="champ-pool-weight">${escHtml(pickLang('權重', 'Weight'))} <b>${w}</b></span></summary>`
+                        + `<div class="champ-pool-contents">${contents || apoolAugListHtml(p)}</div></details>`;
+                }).join('') + '</section>';
+        }).join('');
+        return `<p class="champ-pools-summary">${escHtml(pickLang(`${rows.length} 個池子 · 收錄 ${union.size} 種不重複增幅`, `${rows.length} pools · ${union.size} unique augments listed`))}</p>`
+            + `<p class="champ-pools-note">${escHtml(pickLang('池子權重，非抽中率。點開查看增幅。', 'Pool weights, not draw probabilities. Expand to see augments.'))}</p>`
+            + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
+    }
+    function renderChampionPools() {
+        document.querySelectorAll('[data-champ-pools]').forEach(host => {
+            host.innerHTML = championPoolsHtml(host.dataset.champPools);
+        });
+    }
+    document.addEventListener('change', ev => {
+        if (!ev.target.matches('.detail-tab-input[id$="-pools"]')) return;
+        renderChampionPools();
+        loadAugPools();
+    });
+    document.addEventListener('click', ev => {
+        if (!ev.target.closest('[data-champ-pools-retry]')) return;
+        loadAugPools();
+        renderChampionPools();
+    });
     function renderAugPools() {
         const host = document.getElementById('aug-pools-host');
         if (!host) return;
@@ -4836,6 +4886,7 @@
             { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
+            { key: 'pools', label: pickLang('增幅池', 'Augment pools'), content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
         ], 'detail-main-tabs', stickyLeadHtml);
         return detailTabs;
