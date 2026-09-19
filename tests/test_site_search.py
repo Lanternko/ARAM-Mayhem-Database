@@ -98,6 +98,8 @@ class SiteSearchContractTests(unittest.TestCase):
         self.assertIn("searchAriaAll", self.js)
         self.assertIn("aria-label='搜尋範圍：英雄。展開進階搜尋'", self.render)
         self.assertIn("aria-label='只搜英雄：中／英文名稱、別名'", self.render)
+        self.assertIn("data-i18n-zh='全部' data-i18n-en='ALL'>全部</span>", self.render)
+        self.assertIn("data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='champions + augments + items'>英雄＋增幅＋裝備</small>", self.render)
         for alias in ("腎", "莫甘娜", "模乾那", "EZ", "火人", "死歌", "死哥"):
             self.assertIn(alias, self.render)
 
