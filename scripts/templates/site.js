@@ -3450,7 +3450,6 @@
         }).join('');
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${rows.length} 個池子 · 收錄 ${union.size} 種不重複增幅`, `${rows.length} pools · ${union.size} unique augments listed`))}</p>`
             + `<p class="champ-pools-note">${escHtml(pickLang('池子權重，非抽中率。點開查看增幅。', 'Pool weights, not draw probabilities. Expand to see augments.'))}</p>`
-            
             + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
     }
     function renderChampionPools() {
