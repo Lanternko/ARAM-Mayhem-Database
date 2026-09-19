@@ -3196,38 +3196,67 @@
                 }).join('')}</ul>` : `<div class="item-tip-sub" role="status">${escHtml(status)}</div>`)
             + '</div>';
     }
-    // Pool weights belong to memberships, never individual augments.
-    function championPoolFamily(p) {
-        if (p.family !== 'inferred') return p.family;
-        // Naming confidence stays on the label; group by gameplay meaning.
-        return ['ad', 'ap', 'cd', 'tank'].includes(apoolHue(p)) ? 'stat' : 'function';
+    const CHAMP_POOL_CATEGORIES = [
+        ['ad', 'AD', 'AD'], ['ap', 'AP', 'AP'], ['amp', '通用輸出', 'General damage'],
+        ['tank', '防守', 'Defense'], ['support', '輔助', 'Support'], ['cd', '冷卻', 'Cooldown'],
+        ['gold', '經濟', 'Economy'], ['mechanic', '特殊機制', 'Special mechanics'], ['other', '其他', 'Other'],
+    ];
+    // A fixed primary category avoids moving an augment between categories by champion.
+    // Specific utility takes precedence over broad damage tags; remaining tags stay in the tip.
+    function championPoolCategory(cats) {
+        const priority = ['gold', 'cd', 'support', 'tank', 'ad', 'ap', 'crit', 'amp', 'mechanic'];
+        const category = priority.find(cat => cats.includes(cat)) || 'other';
+        return category === 'crit' ? 'amp' : category;
+    }
+    function championPoolEntries(cid, data, catalogue) {
+        const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
+        const entries = new Map();
+        for (const [pid, rawWeight] of (data.champs || {})[cid] || []) {
+            const pool = pools.get(String(pid));
+            if (!pool) continue;
+            const weight = apoolWeight(rawWeight);
+            for (const aid of new Set((pool.augs || []).map(String))) {
+                if (!entries.has(aid)) entries.set(aid, {
+                    id: aid, weight, category: championPoolCategory((catalogue[aid] || {}).cats || []), sources: [],
+                });
+                const entry = entries.get(aid);
+                entry.weight = Math.max(entry.weight, weight);
+                if (!entry.sources.some(source => source.pool.id === pool.id)) entry.sources.push({pool, weight});
+            }
+        }
+        return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
+    }
+    function championPoolAugHtml(entry) {
+        const aug = apoolAug(entry.id);
+        const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
+        const tags = ((DATA.augs[entry.id] || {}).cats || []).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
+        const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
+            `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
+        const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
+        const tip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc})
+            .trim().replace(/<\/div>$/, sourceHtml + '</div>');
+        return `<li><button type="button" class="champ-pool-augment has-item-tip" data-pool-augment="${escHtml(entry.id)}">`
+            + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="28" height="28">` : '')
+            + `<span>${escHtml(aug.name)}<small>${escHtml(rarity)}</small></span>${itemTipSource(tip)}</button></li>`;
     }
     function championPoolsHtml(cid) {
         const d = augPools.data;
         if (!d) return `<p role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
             + (augPools.failed ? `<button type="button" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
-        const rows = ((d.champs || {})[cid] || []).map(([pid, w]) => ({p: augPools.byId[pid], w: apoolWeight(w)})).filter(r => r.p);
-        if (!rows.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
-        const union = new Set(rows.flatMap(r => r.p.augs.map(String)));
-        const families = APOOL_FAMILIES.filter(f => f[0] !== 'inferred');
-        if (rows.some(r => !families.some(f => f[0] === championPoolFamily(r.p)))) families.push(['other', '其他池子', 'Other pools']);
-        const groups = families.map(([family, zh, en]) => {
-            const members = rows.filter(r => family === 'other' ? !APOOL_FAMILIES.some(f => f[0] === championPoolFamily(r.p)) : championPoolFamily(r.p) === family)
-                .sort((a, b) => b.w - a.w || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
-            if (!members.length) return '';
-            return `<section class="champ-pool-group"><h3>${escHtml(pickLang(zh, en))} <small>${members.length}</small></h3>`
-                + members.map(({p, w}) => {
-                    const rarities = [...new Set(p.augs.map(aid => apoolAug(aid).rarity))].sort((a, b) => ['kSilver', 'kGold', 'kPrismatic'].indexOf(a) - ['kSilver', 'kGold', 'kPrismatic'].indexOf(b));
-                    const contents = rarities.map(rarity => `<h4>${escHtml((tr().rarityLabels || {})[rarity] || pickLang('未分類', 'Unclassified'))}</h4>`
-                        + apoolAugListHtml({...p, augs: p.augs.filter(aid => apoolAug(aid).rarity === rarity)})).join('');
-                    return `<details class="champ-pool"><summary${apoolHueAttr(p)}><span class="champ-pool-name">${escHtml(apoolLabel(p))}${apoolTag(p)}</span>`
-                        + `<span class="champ-pool-count">${escHtml(pickLang(`${p.augs.length} 增幅`, `${p.augs.length} augments`))}</span>`
-                        + `<span class="champ-pool-weight">${escHtml(pickLang('權重', 'Weight'))} <b>${w}</b></span></summary>`
-                        + `<div class="champ-pool-contents">${contents || apoolAugListHtml(p)}</div></details>`;
+        const entries = championPoolEntries(cid, d, DATA.augs || {});
+        if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
+        const weights = [...new Set(entries.map(e => e.weight))];
+        const groups = weights.map(weight => {
+            const members = entries.filter(e => e.weight === weight);
+            return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
+                + CHAMP_POOL_CATEGORIES.map(([cat, zh, en]) => {
+                    const list = members.filter(e => e.category === cat).sort((a, b) => apoolAug(a.id).name.localeCompare(apoolAug(b.id).name));
+                    if (!list.length) return '';
+                    return `<div class="champ-pool-category"><h4>${escHtml(pickLang(zh, en))}<small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
-        return `<p class="champ-pools-summary">${escHtml(pickLang(`${rows.length} 個池子 · 收錄 ${union.size} 種不重複增幅`, `${rows.length} pools · ${union.size} unique augments listed`))}</p>`
-            + `<p class="champ-pools-note">${escHtml(pickLang('池子權重，非抽中率。點開查看增幅。', 'Pool weights, not draw probabilities. Expand to see augments.'))}</p>`
+        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
+            + `<p class="champ-pools-note">${escHtml(pickLang('取來源池最高權重排序，非抽中率。點增幅看來源。', 'Sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
             + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
     }
     function renderChampionPools() {
