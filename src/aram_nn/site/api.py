@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from .db import count_games, insert_public_games, latest_patch_prefix
+from .feedback_discord import start_discord_worker
 from .feedback import (
     DEFAULT_FEEDBACK_DB,
     FeedbackValidationError,
@@ -41,7 +44,19 @@ except Exception as exc:  # pragma: no cover - import-time guidance for optional
     ) from exc
 
 
-app = FastAPI(title="ARAM Mayhem Database API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    worker = start_discord_worker(_feedback_db())
+    try:
+        yield
+    finally:
+        if worker:
+            stop, thread = worker
+            stop.set()
+            await asyncio.to_thread(thread.join, 15)
+
+
+app = FastAPI(title="ARAM Mayhem Database API", version="0.1.0", lifespan=lifespan)
 
 # CORS only when ARAM_SITE_CORS_ORIGINS is set (comma-separated). Production
 # typically: ARAM_SITE_CORS_ORIGINS=https://arammeta.com

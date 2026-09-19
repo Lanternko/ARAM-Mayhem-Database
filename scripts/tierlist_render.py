@@ -922,7 +922,7 @@ _FEEDBACK_COPY = {
         "email": "Email（選填）",
         "email_help": "若需要回覆，請留下 Email。",
         "consent": "我同意 arammeta 僅為回覆這份回饋而使用此 Email。",
-        "privacy": "留言不會公開。請勿附上 Riot ID、密碼或其他敏感資料。",
+        "privacy": "留言將私下轉送至站方 Discord 收件頻道。請勿附上 Riot ID、密碼或其他敏感資料。",
         "submit": "送出回饋",
         "sending": "送出中……",
         "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。",
@@ -946,7 +946,7 @@ _FEEDBACK_COPY = {
         "email": "Email（选填）",
         "email_help": "如需回复，请留下 Email。",
         "consent": "我同意 arammeta 仅为回复这份反馈而使用此 Email。",
-        "privacy": "留言不会公开。请勿附上 Riot ID、密码或其他敏感资料。",
+        "privacy": "留言将私下转发至站方 Discord 收件频道。请勿附上 Riot ID、密码或其他敏感资料。",
         "submit": "提交反馈",
         "sending": "提交中……",
         "success": "已收到。谢谢你帮助 arammeta 更容易做判断。",
@@ -970,7 +970,7 @@ _FEEDBACK_COPY = {
         "email": "Email (optional)",
         "email_help": "Leave your email only if you would like a reply.",
         "consent": "I agree that arammeta may use this Email only to reply to this feedback.",
-        "privacy": "Your message stays private. Please leave out Riot IDs, passwords, and other sensitive information.",
+        "privacy": "Your message is forwarded to our private Discord inbox. Please leave out Riot IDs, passwords, and other sensitive information.",
         "submit": "Send feedback",
         "sending": "Sending…",
         "success": "Received. Thanks for helping make arammeta easier to use for decisions.",
@@ -1204,7 +1204,7 @@ def write_site_info_pages(
 <p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
 <p><a href="/feedback/">前往回饋與聯絡</a></p></section>
 <section><h2>回饋與聯絡</h2>
-<p>功能建議與使用體驗可以透過<a href="/feedback/">回饋與聯絡頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
+<p>功能建議與使用體驗可以透過<a href="/feedback/">回饋與聯絡頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。回饋內容與已同意提供的 Email 會轉送至站方 Discord 收件頻道，供站方處理與回覆。</p></section>
 <div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
 """
     specs = (
