@@ -3250,7 +3250,12 @@
             const members = entries.filter(e => e.weight === weight);
             return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
                 + CHAMP_POOL_CATEGORIES.map(([cat, zh, en]) => {
-                    const list = members.filter(e => e.category === cat).sort((a, b) => apoolAug(a.id).name.localeCompare(apoolAug(b.id).name));
+                    const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
+                    const list = members.filter(e => e.category === cat).sort((a, b) => {
+                        const left = apoolAug(a.id), right = apoolAug(b.id);
+                        return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
+                            || left.name.localeCompare(right.name);
+                    });
                     if (!list.length) return '';
                     return `<div class="champ-pool-category"><h4>${escHtml(pickLang(zh, en))}<small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
                 }).join('') + '</section>';
