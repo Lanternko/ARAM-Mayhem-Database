@@ -9345,6 +9345,19 @@
     .champ-pool summary::after { grid-column: 3; grid-row: 1 / 3; }
 }
 
+    .recommended-pool-chip { font: inherit; cursor: pointer; }
+    .recommended-pool-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .item-float-tip.is-pool-tip { pointer-events: auto; }
+    .recommended-pool-members { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+    .recommended-pool-members li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .recommended-pool-members img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 28px; }
+    .item-float-tip.is-pool-tip.is-visible { display: block !important; }
+    .item-float-tip.is-pool-tip { filter: none; box-shadow: var(--panel-shadow); }
+    .is-pool-tip .item-tip-card { background: var(--surface-raised); color: var(--text); border-color: var(--border-strong); }
+    .is-pool-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
+    .is-pool-tip .item-tip-name { color: var(--text); }
+    .is-pool-tip .item-tip-sub { color: var(--text-muted); }
+
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and
        hairline section rules, with no nested cards or decorative gradients. */
@@ -9621,15 +9634,3 @@
     .feedback-main h1 { font-size: 24px; }
     .feedback-footer { padding-inline: 12px; }
 }
-    .recommended-pool-chip { font: inherit; cursor: pointer; }
-    .recommended-pool-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-    .item-float-tip.is-pool-tip { pointer-events: auto; }
-    .recommended-pool-members { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
-    .recommended-pool-members li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .recommended-pool-members img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 28px; }
-    .item-float-tip.is-pool-tip.is-visible { display: block !important; }
-    .item-float-tip.is-pool-tip { filter: none; box-shadow: var(--panel-shadow); }
-    .is-pool-tip .item-tip-card { background: var(--surface-raised); color: var(--text); border-color: var(--border-strong); }
-    .is-pool-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
-    .is-pool-tip .item-tip-name { color: var(--text); }
-    .is-pool-tip .item-tip-sub { color: var(--text-muted); }
