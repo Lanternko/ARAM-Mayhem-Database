@@ -2592,17 +2592,23 @@
     function searchEditDistanceWithin(a, b, limit) {
         if (Math.abs(a.length - b.length) > limit) return limit + 1;
         let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+        let prevPrev = null;
         for (let i = 1; i <= a.length; i += 1) {
             const next = [i];
             for (let j = 1; j <= b.length; j += 1) {
                 const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-                const value = Math.min(
+                let value = Math.min(
                     next[j - 1] + 1,
                     prev[j] + 1,
                     prev[j - 1] + cost,
                 );
+                // Adjacent mistyped letters count as one edit (ireila → irelia).
+                if (prevPrev && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                    value = Math.min(value, prevPrev[j - 2] + 1);
+                }
                 next.push(value);
             }
+            prevPrev = prev;
             prev = next;
         }
         return prev[b.length];
@@ -2659,6 +2665,11 @@
             }
         }
         return false;
+    }
+
+    function searchHasExactToken(haystack, query) {
+        const queries = searchVariants(String(query || '').trim()).map(compactSearchText).filter(Boolean);
+        return searchVariants(haystack).some(text => searchTokens(text).some(token => queries.includes(token)));
     }
 
     function entrySearchText(entry) {
@@ -10997,6 +11008,12 @@
         const allSearch = filterState.scope === 'all';
         const relatedMatches = allSearch && q ? relatedSearchMatches(q) : null;
         const hasRelatedIndex = Boolean(activeRelatedSearchIndex());
+        // Prefer an exact nickname over partial/fuzzy hits: 刀妹 is Irelia,
+        // while 剪刀妹 is Gwen. Fall back when no complete name/alias matches.
+        const exactHeroes = new Set();
+        if (q) document.querySelectorAll('.tier-grid > .champ').forEach(c => {
+            if (searchHasExactToken(c.getAttribute('data-champion-search') || '', q)) exactHeroes.add(c);
+        });
         let shown = 0;
         document.querySelectorAll('.tier-block').forEach(block => {
             let tierShown = 0;
@@ -11009,7 +11026,7 @@
                 ].join(' ');
                 const blob = c.getAttribute('data-search') || championBlob;
                 const matchRole = !role || tags.includes(role);
-                const heroMatch = !q || searchMatchesText(championBlob, q);
+                const heroMatch = !q || (exactHeroes.size ? exactHeroes.has(c) : searchMatchesText(championBlob, q));
                 const relatedMatch = Boolean(
                     q
                     && allSearch
