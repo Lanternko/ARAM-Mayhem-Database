@@ -295,6 +295,10 @@ Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與
 - **States:** Loading、empty、error 與 disabled 均保留同一高度和 layout，避免資料到達時跳動。
 - **Search behavior:** Champion、augment 與跨語系 alias 可被索引，結果更新不應阻塞鍵盤輸入。
 
+### Augment category hierarchy
+
+增幅用途分類由 `src/aram_nn/site/augment_taxonomy.py` 共用。增幅裝置保留 AD、AP、暴擊、增傷、防守、輔助、冷卻、經濟、特殊機制的細分類；英雄增幅池將 AD／AP／暴擊／增傷合併為「輸出」，其餘名稱一致。缺乏用途標籤的項目顯示「未分類」；「本版新增」是獨立狀態篩選，不作用途分類。細分類可多選，池內採固定優先序指定單一主類，以保留跨英雄一致的去重呈現。池內排序依最高來源池權重，再按分類及銀／金／彩稀有度；所有來源權重保留在增幅提示中。
+
 ### Tier tiles and data rows
 
 - **Tier group:** 依 OP 到 T5 固定排序，每組同時顯示 tier label、顏色與門檻或描述。

@@ -3119,6 +3119,8 @@
         border-color: var(--cat-color);
     }
     .aug-cat-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
+    /* New is a status filter; keep it visually separate from purpose filters. */
+    .aug-cat-chip.cat-new { margin-inline-start: 10px; }
     .aug-cat-chip.cat-ap       { --cat-color: #3b82f6; }
     .aug-cat-chip.cat-ad       { --cat-color: #f97316; }
     .aug-cat-chip.cat-tank     { --cat-color: #a855f7; }

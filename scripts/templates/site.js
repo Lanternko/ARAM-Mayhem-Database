@@ -2847,7 +2847,7 @@
         const pickHeat = onBoard
             ? pickHeatClass(pickRate, augBoardColorTier)
             : pickHeatClass(pickRate);
-        const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
+        const cats = augmentPurposeTags(aug && aug.cats).join(' ');
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
@@ -3122,8 +3122,13 @@
     // show/hide the matching cards (+ collapse rarity rows that empty out)
     // without re-rendering the whole detail.
     const augCatFilter = new Set();
+    const AUGMENT_TAXONOMY = __AUGMENT_TAXONOMY__;
     function augCatMeta() {
-        return (DATA && DATA.augCategories) || { order: [], labels: {}, newPatch: '' };
+        return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
+    }
+    function augmentPurposeTags(cats) {
+        const tags = (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
+        return tags.some(cat => cat !== 'new' && cat !== 'other') ? tags.filter(cat => cat !== 'other') : [...new Set([...tags, 'other'])];
     }
     function augCatLabel(cat) {
         const lbl = (augCatMeta().labels || {})[cat];
@@ -3464,17 +3469,10 @@
                 }).join('')}</ul>` : `<div class="item-tip-sub" role="status">${escHtml(status)}</div>`)
             + '</div>';
     }
-    const CHAMP_POOL_CATEGORIES = [
-        ['ad', 'AD', 'AD'], ['ap', 'AP', 'AP'], ['amp', '通用輸出', 'General damage'],
-        ['tank', '防守', 'Defense'], ['support', '輔助', 'Support'], ['cd', '冷卻', 'Cooldown'],
-        ['gold', '經濟', 'Economy'], ['mechanic', '特殊機制', 'Special mechanics'], ['other', '其他', 'Other'],
-    ];
-    // A fixed primary category avoids moving an augment between categories by champion.
-    // Specific utility takes precedence over broad damage tags; remaining tags stay in the tip.
+    // Pool groups are the compact view of the same detailed filter taxonomy.
     function championPoolCategory(cats) {
-        const priority = ['gold', 'cd', 'support', 'tank', 'ad', 'ap', 'crit', 'amp', 'mechanic'];
-        const category = priority.find(cat => cats.includes(cat)) || 'other';
-        return category === 'crit' ? 'amp' : category;
+        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || 'other';
+        return AUGMENT_TAXONOMY.groups.find(group => group.categories.includes(category)).id;
     }
     function championPoolEntries(cid, data, catalogue) {
         const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
@@ -3497,7 +3495,7 @@
     function championPoolAugHtml(entry) {
         const aug = apoolAug(entry.id);
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
-        const tags = ((DATA.augs[entry.id] || {}).cats || []).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
+        const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
         const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
@@ -3517,7 +3515,7 @@
         const groups = weights.map(weight => {
             const members = entries.filter(e => e.weight === weight);
             return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
-                + CHAMP_POOL_CATEGORIES.map(([cat, zh, en]) => {
+                + AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
                     const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
                     const list = members.filter(e => e.category === cat).sort((a, b) => {
                         const left = apoolAug(a.id), right = apoolAug(b.id);
@@ -8456,7 +8454,7 @@
     function augDraftCatLabel(aug) {
         const cats = aug && Array.isArray(aug.cats) ? aug.cats : [];
         if (!cats.length) return '';
-        const meta = (DATA && DATA.augCategories && DATA.augCategories.labels) || {};
+        const meta = augCatMeta().labels;
         const row = meta[cats[0]];
         if (!row) return '';
         return currentLang === 'en' ? (row.en || '') : zhUi(row.zh || row.en || '');

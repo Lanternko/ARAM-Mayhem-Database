@@ -3919,6 +3919,7 @@ def render_html(
         "資料載入失敗，請稍後再試。</div>`);\n" \
         "});"
     js = js.replace("__PAYLOAD__", payload_expr)
+    js = js.replace("__AUGMENT_TAXONOMY__", json.dumps(augment_taxonomy_payload(), ensure_ascii=False))
     js = js.replace("__HEADER_TITLE_ZH__", json.dumps(header_title, ensure_ascii=False))
     js = js.replace("__HEADER_TITLE_EN__", json.dumps(header_title_en, ensure_ascii=False))
     js = js.replace("__SHORT_PATCH_ZH__", json.dumps(short_patch, ensure_ascii=False))
