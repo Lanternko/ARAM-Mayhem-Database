@@ -2179,6 +2179,7 @@
 
     let _itemFloatTipEl = null;
     let _itemFloatTipHideTimer = 0;
+    let _itemFloatTipAnchor = null;
     function ensureItemFloatTip() {
         if (_itemFloatTipEl && document.body.contains(_itemFloatTipEl)) return _itemFloatTipEl;
         const el = document.createElement('div');
@@ -2186,6 +2187,8 @@
         el.className = 'item-float-tip';
         el.setAttribute('role', 'tooltip');
         el.hidden = true;
+        el.addEventListener('mouseenter', () => clearTimeout(_itemFloatTipHideTimer));
+        el.addEventListener('mouseleave', scheduleHideItemFloatTip);
         document.body.appendChild(el);
         _itemFloatTipEl = el;
         return el;
@@ -2196,6 +2199,8 @@
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
+        if (_itemFloatTipAnchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        _itemFloatTipAnchor = null;
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
@@ -2260,14 +2265,20 @@
 
     function showItemFloatTip(anchor) {
         if (!anchor) return;
+        const poolId = anchor.getAttribute('data-recommended-pool');
         const src = anchor.querySelector('.item-tip-src');
-        if (!src) return;
+        if (!src && !poolId) return;
+        if (_itemFloatTipAnchor && _itemFloatTipAnchor !== anchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        _itemFloatTipAnchor = anchor;
+        anchor.setAttribute('aria-describedby', 'item-float-tip');
+        if (poolId && !augPools.data) loadAugPools();
         if (_itemFloatTipHideTimer) {
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
         const el = ensureItemFloatTip();
-        el.innerHTML = src.innerHTML;
+        el.classList.toggle('is-pool-tip', Boolean(poolId));
+        el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
         el.hidden = false;
         el.classList.add('is-visible');
         positionItemFloatTip(anchor);
@@ -3159,7 +3170,31 @@
         loadSitePayload('api/augment-pools.json')
             .then(d => { augPools.data = d; apoolIndex(d); })
             .catch(() => { augPools.failed = true; })
-            .finally(() => { augPools.loading = false; if (augMode === 'pools') renderAugPools(); renderChampionPools(); });
+            .finally(() => {
+                augPools.loading = false;
+                if (augMode === 'pools') renderAugPools();
+                renderChampionPools();
+                const anchor = _itemFloatTipAnchor;
+                if (anchor && anchor.isConnected && anchor.hasAttribute('data-recommended-pool')) {
+                    const el = ensureItemFloatTip();
+                    el.innerHTML = recommendedPoolTip(anchor.getAttribute('data-recommended-pool'), anchor.textContent.trim());
+                    positionItemFloatTip(anchor);
+                }
+            });
+    }
+    function recommendedPoolTip(poolId, fallbackName) {
+        const pool = augPools.byId && augPools.byId[poolId];
+        const ids = pool ? [...new Set(pool.augs || [])] : [];
+        const status = !augPools.data
+            ? (augPools.failed ? pickLang('載入失敗，請再次開啟重試', 'Could not load. Open again to retry.') : pickLang('正在載入增幅池…', 'Loading augment pool…'))
+            : pickLang('找不到此增幅池的內容', 'Pool contents unavailable');
+        return `<div class="item-tip-card"><div class="item-tip-name">${escHtml(pool ? apoolLabel(pool) : fallbackName)}</div>`
+            + (pool ? `<div class="item-tip-sub">${escHtml(pickLang('池內增幅', 'Pool augments'))} · ${ids.length}</div>`
+                + `<ul class="recommended-pool-members">${ids.map(id => {
+                    const aug = apoolAug(id);
+                    return `<li>${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}<span>${escHtml(aug.name)}</span></li>`;
+                }).join('')}</ul>` : `<div class="item-tip-sub" role="status">${escHtml(status)}</div>`)
+            + '</div>';
     }
     // Pool weights belong to memberships, never individual augments.
     function championPoolFamily(p) {
@@ -4300,7 +4335,7 @@
                         <h3>${title}</h3>
                         ${metaHtml}
                     </div>
-                    ${buildFitList(bestRows, 'good')}
+                    ${options.augmentPools ? `<div class="fit-chip-list">${bestRows.map(entry => `<button type="button" class="fit-chip good has-item-tip recommended-pool-chip" data-recommended-pool="${escHtml(entry.slug || '')}">${escHtml(setEntryName(entry))}</button>`).join('')}</div>` : buildFitList(bestRows, 'good')}
                 </div>
             `;
         };
@@ -4613,7 +4648,7 @@
                     ${topRows}
                 </div>
             </div>
-            ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
+            ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
         `;
         // Champ icon + name live inside the sticky rail with the main tabs so
         // they pin together under the site header (and floating search chip).
@@ -10842,6 +10877,10 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            if (_itemFloatTipAnchor && _itemFloatTipAnchor.hasAttribute('data-recommended-pool')) {
+                hideItemFloatTip();
+                return;
+            }
             const modeMenu = document.getElementById('mode-menu');
             if (modeMenu && modeMenu.open) {
                 modeMenu.open = false;
@@ -10901,7 +10940,7 @@
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         const to = ev.relatedTarget;
-        if (to && host.contains(to)) return;
+        if (to && (host.contains(to) || (_itemFloatTipEl && _itemFloatTipEl.contains(to)))) return;
         // Moving between nested hosts (core icon -> head) should not flicker off.
         if (to && to.closest && to.closest('.has-item-tip')) return;
         scheduleHideItemFloatTip();
@@ -10914,11 +10953,20 @@
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         const to = ev.relatedTarget;
-        if (to && host.contains(to)) return;
+        if (to && (host.contains(to) || (_itemFloatTipEl && _itemFloatTipEl.contains(to)))) return;
         if (to && to.closest && to.closest('.has-item-tip')) return;
         scheduleHideItemFloatTip();
     });
-    window.addEventListener('scroll', () => hideItemFloatTip(), { passive: true, capture: true });
+    document.addEventListener('click', ev => {
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool]');
+        if (host) showItemFloatTip(host);
+        else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
+    });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') hideItemFloatTip(); });
+    window.addEventListener('scroll', ev => {
+        if (_itemFloatTipEl && _itemFloatTipEl.contains(ev.target)) return;
+        hideItemFloatTip();
+    }, { passive: true, capture: true });
     window.addEventListener('resize', () => hideItemFloatTip(), { passive: true });
 
     document.addEventListener('mouseover', (ev) => {
