@@ -287,85 +287,39 @@ def write_og_image(
     img.convert("RGB").save(out_path, "PNG", optimize=True)
 
 def write_favicon_svg(out_path: Path) -> None:
-    """Write a compact favicon matching the flat Mayhem die mark (readable at 16–32px)."""
-    # Flat die on rounded square — same language as mayhem-single-die-icon.png.
-    # Avoid the old isometric cube + orbit (muddy at header/favicon sizes).
-    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
-  <defs>
-    <linearGradient id='die' x1='72' y1='56' x2='196' y2='208' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#f7fbff'/>
-      <stop offset='0.45' stop-color='#d7e8ff'/>
-      <stop offset='1' stop-color='#e8d6ff'/>
-    </linearGradient>
-  </defs>
-  <rect x='8' y='8' width='240' height='240' rx='52' fill='#0b0f1a'/>
-  <rect x='48' y='48' width='160' height='160' rx='36' fill='url(#die)'
-        stroke='rgba(255,255,255,0.55)' stroke-width='6'/>
-  <g fill='#0b0f1a'>
-    <circle cx='96' cy='96' r='14'/>
-    <circle cx='160' cy='96' r='14'/>
-    <circle cx='96' cy='128' r='14'/>
-    <circle cx='160' cy='128' r='14'/>
-    <circle cx='96' cy='160' r='14'/>
-    <circle cx='160' cy='160' r='14'/>
-  </g>
-</svg>
-"""
+    """Write the canonical geometric arammeta mark."""
+    from aram_nn.site.brand_icon import icon_svg
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(svg, encoding="utf-8")
+    out_path.write_text(icon_svg(), encoding="utf-8")
+
 
 def favicon_asset_version() -> str:
-    """Use icon-source or generator mtime so browser cache updates on asset tweaks."""
-    candidates = [Path(__file__)]
-    if SITE_ICON_SOURCE.exists():
-        candidates.append(SITE_ICON_SOURCE)
-    existing = [path for path in candidates if path.exists()]
-    if existing:
-        latest = max(path.stat().st_mtime for path in existing)
-        stamp = _dt.datetime.fromtimestamp(latest)
-        return stamp.strftime("%Y%m%d%H%M%S")
-    return (_dt.date.today().isoformat()).replace("-", "")
+    from aram_nn.site.brand_icon import icon_version
+
+    return icon_version()
+
 
 def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) -> list[Path]:
-    """Generate favicon PNG/ICO assets by directly downscaling the checked-in icon."""
-    from PIL import Image, ImageChops, ImageDraw
-
-    if not source_path.exists():
-        return []
-
-    img_master = Image.open(source_path).convert("RGBA")
-    source_has_alpha = img_master.getchannel("A").getextrema()[0] < 255
-
-    def _resized(img_rgba: "Image.Image", size: tuple[int, int]) -> "Image.Image":
-        resized = img_rgba.resize(size, Image.LANCZOS)
-        if source_has_alpha:
-            return resized
-        radius = max(4, round(min(size) * 0.22))
-        mask = Image.new("L", size, 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius=radius, fill=255)
-        alpha = resized.getchannel("A")
-        resized.putalpha(ImageChops.multiply(alpha, mask))
-        return resized
+    """Export the canonical mark; source_path remains for caller compatibility."""
+    from aram_nn.site.brand_icon import icon_image
 
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    outputs: list[Path] = []
-    raster_targets = {
-        "mayhem-single-die-icon.png": (180, 180),
-        "mayhem-tab-icon.png": (180, 180),
-        "favicon-32.png": (32, 32),
-        "apple-touch-icon.png": (180, 180),
-    }
-    for name, size in raster_targets.items():
+    svg_path = out_dir / "favicon.svg"
+    write_favicon_svg(svg_path)
+    outputs: list[Path] = [svg_path]
+    # Keep legacy URLs so bookmarks, share metadata and older shells still work.
+    for name, size in {
+        "mayhem-single-die-icon.png": 180,
+        "mayhem-tab-icon.png": 180,
+        "favicon-32.png": 32,
+        "apple-touch-icon.png": 180,
+    }.items():
         target = out_dir / name
-        resized = _resized(img_master, size)
-        resized.save(target, "PNG", optimize=True)
+        icon_image(size).save(target, "PNG", optimize=True)
         outputs.append(target)
-
     ico_path = out_dir / "favicon.ico"
-    ico_master = _resized(img_master, (256, 256))
-    ico_master.save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    icon_image(256).save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
     outputs.append(ico_path)
     return outputs
 
@@ -890,7 +844,7 @@ def _info_page_html(
         f"<title>{esc(title)} | arammeta</title>"
         f"<meta name='description' content='{esc(description, quote=True)}'>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
-        "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
+        f"<link rel='icon' href='/favicon.svg?v={favicon_asset_version()}' type='image/svg+xml'>"
         f"{head_extra_html}"
         f"{adsense}<style>{_INFO_PAGE_CSS}</style></head>"
         f"<body class='{esc(body_class, quote=True)}'>"
