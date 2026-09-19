@@ -203,7 +203,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 ### Favicon
 
-分頁圖示使用純骰子：單色金 `#f5c518` 圓角正方形直接形成外輪廓，內部為兩顆大型炭黑 `#101114` 圓點，沿對角線排列；外側透明，不加黑色底框，也不融合字母 A。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`；SVG、PNG 與 ICO 共用同一座標。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
+分頁圖示使用純骰子：炭黑 `#101114` 圓角正方形形成骰面，內部為兩顆大型金色 `#f5c518` 圓點，沿對角線排列；外側透明，不加第二層底框，也不融合字母 A。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`；SVG、PNG 與 ICO 共用同一座標。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
 
 ### Hierarchy
 
