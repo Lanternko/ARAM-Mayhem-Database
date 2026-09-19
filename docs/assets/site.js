@@ -3176,6 +3176,7 @@
             + `</div>`
             + `<section class="apool-panel" aria-label="${escHtml(pickLang('用英雄查池子', 'Pools by champion'))}">`
             + `<div class="apool-picker">`
+            + `<label class="apool-picker-label" for="apool-search">${escHtml(pickLang("選擇英雄", "Choose a champion"))}</label>`
             + `<input class="apool-search" id="apool-search" type="search" autocomplete="off" `
             + `placeholder="${escHtml(pickLang('搜尋英雄（中 / 英）', 'Search champions'))}" aria-label="${escHtml(searchLbl)}">`
             + apoolRoleBarHtml()
@@ -3278,7 +3279,7 @@
                 + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}"${apoolHueAttr(r.p)} aria-expanded="${open}">`
                 + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
                 + `<span class="apool-bar"><span class="apool-fill" style="width:${apoolWeight(r.w) / 2}%"></span></span>`
-                + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}</span>`
+                + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}<span class="apool-chevron" aria-hidden="true">${open ? "−" : "+"}</span></span>`
                 + `</button>`
                 + (open ? apoolAugListHtml(r.p) : '')
                 + `</li>`;
@@ -3289,7 +3290,7 @@
             + `<p class="apool-detail-sub">${escHtml(pickLang(
                 `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`,
                 `${rows.length} pools · up to ${union.size} augments`))}</p></div></div>`
-            + apoolLegendHtml()
+            + `<p class="apool-footnote">${escHtml(pickLang("權重越高，越容易抽到該池；數值不是機率。點選池子查看增幅。", "Higher weights favor a pool; values are not probabilities. Select a pool to see its augments."))}</p>`
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
             + `<ul class="apool-rows">${body}</ul>`
@@ -3357,10 +3358,10 @@
                     ? apoolMatrixHtml(list)
                     : `<div class="apool-pool-list">${list.map(apoolPoolBtnHtml).join('')}</div>`;
                 const open = list.find(p => p.id === augPools.openPool);
-                return `<div class="apool-family">`
-                    + `<div class="apool-family-head"><h4>${escHtml(pickLang(zh, en))}</h4><p>${escHtml(pickLang(dzh, den))}</p></div>`
-                    + inner + (open ? apoolPoolDetailHtml(open) : '')
-                    + `</div>`;
+                return `<details class="apool-family" data-apool-family="${escHtml(fam)}"${open ? " open" : ""}>`
+                    + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang(zh, en))}<span class="apool-family-count">${list.length}</span></span><span class="apool-family-desc">${escHtml(pickLang(dzh, den))}</span></summary>`
+                    + `<div class="apool-family-body">` + inner + (open ? apoolPoolDetailHtml(open) : '')
+                    + `</div></details>`;
             }).join('');
     }
     function apoolDiffHtml(d) {
@@ -3471,7 +3472,11 @@
             const id = pool.getAttribute('data-apool-pool');
             augPools.openPool = augPools.openPool === id ? null : id;
             const all = document.getElementById('apool-all');
-            if (all) all.innerHTML = apoolAllHtml(augPools.data);
+            if (all) {
+                const expanded = new Set([...all.querySelectorAll('details[open]')].map(el => el.dataset.apoolFamily));
+                all.innerHTML = apoolAllHtml(augPools.data);
+                all.querySelectorAll('details').forEach(el => { if (expanded.has(el.dataset.apoolFamily)) el.open = true; });
+            }
             apoolRefocus(`[data-apool-pool="${CSS.escape(id)}"]`);
         }
     });
