@@ -637,156 +637,6 @@ li + li { margin-top: 8px; }
   text-decoration: none;
 }
 .action:hover { filter: brightness(1.06); }
-.feedback-page {
-  --accent: oklch(0.80 0.16 88);
-  --accent-soft: oklch(0.27 0.04 88);
-  --focus: oklch(0.78 0.14 88);
-}
-.feedback-page .action { color: oklch(0.22 0.025 88); }
-@media (prefers-color-scheme: light) {
-  .feedback-page {
-    --accent: oklch(0.60 0.14 85);
-    --accent-soft: oklch(0.94 0.035 88);
-    --focus: oklch(0.55 0.13 85);
-  }
-}
-.feedback-form {
-  margin-top: 34px;
-  padding-top: 28px;
-  border-top: 1px solid var(--border);
-}
-.feedback-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.feedback-fieldset + .feedback-fieldset,
-.feedback-fieldset + .feedback-field,
-.feedback-field + .feedback-field,
-.feedback-field + .feedback-context,
-.feedback-context + .feedback-field,
-.feedback-field + .feedback-submit-row { margin-top: 24px; }
-.feedback-fieldset legend,
-.feedback-label { padding: 0; color: var(--text); font-size: 14px; font-weight: 700; }
-.feedback-option-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-.feedback-option {
-  display: flex;
-  min-height: 48px;
-  gap: 10px;
-  padding: 12px 14px;
-  align-items: flex-start;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--surface) 92%, var(--bg));
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 180ms ease-out, background-color 180ms ease-out;
-}
-.feedback-option:hover { border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); }
-.feedback-option:focus-within {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 2px;
-  border-color: var(--focus);
-}
-.feedback-option input,
-.feedback-check input { accent-color: var(--accent); }
-.feedback-option input { margin: 3px 0 0; flex: 0 0 auto; }
-.feedback-option span { line-height: 1.4; }
-.feedback-field { display: flex; flex-direction: column; gap: 8px; }
-.feedback-field select,
-.feedback-field input[type='email'],
-.feedback-field textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 15px;
-}
-.feedback-field select,
-.feedback-field input[type='email'] { min-height: 42px; padding: 8px 11px; }
-.feedback-field textarea { min-height: 150px; padding: 11px 12px; line-height: 1.6; resize: vertical; }
-.feedback-field select:focus-visible,
-.feedback-field input[type='email']:focus-visible,
-.feedback-field textarea:focus-visible {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 2px;
-  border-color: var(--focus);
-}
-.feedback-help { color: var(--muted); font-size: 13px; line-height: 1.5; }
-.feedback-context { margin-top: 24px; border-top: 1px solid var(--border); }
-.feedback-context summary {
-  width: fit-content;
-  padding-top: 18px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-}
-.feedback-context summary:hover { color: var(--text); }
-.feedback-context summary:focus-visible {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-.feedback-context-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-.feedback-context-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
-.feedback-context-grid input {
-  width: 100%;
-  min-height: 38px;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-}
-.feedback-check {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: flex-start;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-.feedback-check input { margin-top: 4px; flex: 0 0 auto; }
-.feedback-privacy { margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.feedback-submit-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-.feedback-submit-row .action { margin-top: 0; border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border)); cursor: pointer; }
-.feedback-submit-row .action:disabled { cursor: wait; filter: saturate(.45); opacity: .7; }
-.feedback-status {
-  flex: 1 1 280px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.feedback-status.is-success {
-  border-color: color-mix(in oklch, var(--accent) 42%, var(--border));
-  background: var(--accent-soft);
-  color: var(--text);
-}
-.feedback-status.is-error {
-  border-color: color-mix(in oklch, oklch(0.62 0.14 25) 48%, var(--border));
-  background: color-mix(in oklch, oklch(0.62 0.14 25) 10%, var(--surface));
-  color: var(--text);
-}
-.feedback-fallback { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
-.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.feedback-form.is-submitted .feedback-submit-row { align-items: flex-start; }
 .page-footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
@@ -805,11 +655,196 @@ li + li { margin-top: 8px; }
   main { padding: 48px 0 64px; }
   h1 { font-size: 31px; }
   .lede { font-size: 17px; }
-  .feedback-option-grid,
-  .feedback-context-grid { grid-template-columns: 1fr; }
-  .feedback-form { padding-top: 24px; }
 }
 """
+
+
+def _site_header_html() -> str:
+    """Canonical product header shared by the app and feedback page."""
+    parts: list[str] = []
+    globe_icon = (
+        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='12' cy='12' r='10'></circle>"
+        "<path d='M2 12h20'></path>"
+        "<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path>"
+        "</svg>"
+    )
+    # Fixed top header: brand (= home) + primary tabs + theme + language.
+    # 「英雄」 is the home tier-list tab; brand also returns home.
+    # Patch lives in the footer freshness line — not next to the wordmark.
+    # On narrow screens (<=700px) the header wraps: brand + actions on top,
+    # .nav-tabs as a full-bleed scrollable strip underneath.
+    # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
+    # that does not t2s-convert — CN / aramkit call it 海克斯.
+    NAV_TABS = (
+        ("home", "英雄", "Champions", None),
+        ("augments", "增幅", "Augments", "海克斯"),
+        ("draft", "Draft", "Draft", None),
+        ("game", "小遊戲", "Game", "小游戏"),
+        ("changes", "版本變動", "Patch Changes", None),
+        # 專欄 is unpublished; keep its draft source out of the public shell.
+        # ("column", "專欄", "Articles", None),
+    )
+    sun_icon = (
+        "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='12' cy='12' r='4'></circle>"
+        "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
+        "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
+        "</svg>"
+    )
+    moon_icon = (
+        "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
+        "</svg>"
+    )
+    # data-nosnippet: without it Google's snippet fallback scrapes the nav
+    # tabs / role chips into the search result blurb.
+    parts.append("<header class='site-header' data-nosnippet>")
+    parts.append("<div class='site-header-inner'>")
+    parts.append(
+        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
+        "title='主頁'>"
+        # Wordmark only in the header — no icon, no patch chip (favicon stays for the tab).
+        # Weight split on aram/meta; both langs share the Latin mark.
+        "<span class='brand-title' id='site-title' aria-label='arammeta'>"
+        "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
+        "</span>"
+        "</button>"
+    )
+    parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
+    for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
+        # Home (= 英雄) is active on first paint; brand and this tab both land there.
+        is_home = nav_key == "home"
+        zh_cn_attr = (
+            f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
+        )
+        parts.append(
+            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
+            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
+            f"aria-selected='{'true' if is_home else 'false'}' "
+            f"tabindex='{'0' if is_home else '-1'}' "
+            f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
+        )
+    parts.append("<span class='nav-ind' aria-hidden='true'></span>")
+    parts.append("</nav>")
+    parts.append("<div class='header-actions'>")
+    parts.append(
+        "<details class='mode-menu' id='mode-menu'>"
+        "<summary class='mode-select' aria-label='切換遊戲模式' "
+        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
+        "data-aria-en='Switch game mode'>"
+        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</span>"
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='m4 6 4 4 4-4'></path></svg>"
+        "</summary>"
+        "<div class='mode-options' role='menu'>"
+        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
+        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
+        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</a>"
+        "<a class='mode-option' role='menuitem' href='/classic.html' "
+        "data-mode-target='classic' data-href-zh='/classic.html' "
+        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
+        "data-i18n-en='Classic'>經典模式</a>"
+        "</div></details>"
+    )
+    parts.append(
+        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
+        "type='button' title='切換淺色' aria-label='切換主題'>"
+        f"{sun_icon}{moon_icon}"
+        "</button>"
+    )
+    # Language menu (aramkit-style <details> dropdown): 繁體 / 简体 / English.
+    parts.append(
+        "<details class='lang-menu' id='lang-menu'>"
+        "<summary class='icon-btn lang-toggle' id='lang-toggle' "
+        "title='繁體中文' aria-label='語言: 繁體中文'>"
+        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
+        "</summary>"
+        "<div class='lang-menu-list' role='menu'>"
+        "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
+        "aria-current='true'>繁體中文</button>"
+        "<button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button>"
+        "<button type='button' role='menuitem' data-lang='en'>English</button>"
+        "</div>"
+        "</details>"
+    )
+    parts.append("</div>")  # /header-actions
+    parts.append("</div>")  # /site-header-inner
+    parts.append("</header>")
+    return "".join(parts)
+
+
+def _feedback_page_html(*, title: str, description: str, body_html: str,
+                        site_url: str, html_lang: str, canonical_path: str,
+                        head_extra_html: str, footer_disclaimer: str) -> str:
+    """Use the product's header and CSS without loading its statistics runtime."""
+    esc = html.escape
+    locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
+    suffix = {"zh": "zh", "zh-CN": "zh-cn", "en": "en"}[locale]
+    prefix = "" if locale == "zh" else "/" + locale
+    header = _site_header_html()
+
+    def nav_link(match: re.Match) -> str:
+        attrs, key, content = match.groups()
+        href = prefix + ("/" if key == "home" else f"/{key}/")
+        attrs = re.sub(r" (?:role|aria-controls|aria-selected|tabindex|type|title)='[^']*'", "", attrs)
+        attrs = attrs.replace("nav-tab active", "nav-tab")
+        return f"<a{attrs} href='{href}'>{content}</a>"
+
+    header = re.sub(r"<button([^>]*data-nav-tab='([^']+)'[^>]*)>(.*?)</button>", nav_link, header)
+    header = header.replace(" role='tablist'", "")
+    nav_label = {"zh": "主要分頁", "zh-CN": "主要分页", "en": "Main navigation"}[locale]
+    header = header.replace("aria-label='主要分頁'", f"aria-label='{nav_label}'")
+    header = header.replace("<span class='nav-ind' aria-hidden='true'></span>", "")
+
+    def translate(match: re.Match) -> str:
+        tag, attrs, content = match.groups()
+        found = re.search(r"data-i18n-" + suffix + r"='([^']*)'", attrs)
+        if found:
+            content = found.group(1)
+        href = re.search(r"data-href-" + suffix + r"='([^']*)'", attrs)
+        if href:
+            attrs = re.sub(r"(?<!-)href='[^']*'", "href='" + href.group(1) + "'", attrs)
+        aria = re.search(r"data-aria-" + suffix + r"='([^']*)'", attrs)
+        if aria:
+            attrs = re.sub(r"aria-label='[^']*'", "aria-label='" + aria.group(1) + "'", attrs)
+        return f"<{tag}{attrs}>{content}</{tag}>"
+
+    header = re.sub(r"<(a|span|button)([^>]*data-i18n-zh=[^>]*)>([^<]*)</\1>", translate, header)
+    if locale == "zh-CN":
+        header = header.replace(">版本變動</a>", ">版本变动</a>")
+    label = {"zh": "繁體中文", "zh-CN": "简体中文", "en": "English"}[locale]
+    header = header.replace("title='繁體中文' aria-label='語言: 繁體中文'", f"title='{label}' aria-label='Language: {label}'")
+    header = header.replace("id='lang-toggle-label'>繁體中文", f"id='lang-toggle-label'>{label}")
+    header = header.replace(" class='is-active' aria-current='true'", "")
+    header = header.replace(f"data-lang='{locale}'", f"data-lang='{locale}' class='is-active' aria-current='true'")
+    header = header.replace("aria-label='切換遊戲模式'", {"zh": "aria-label='切換遊戲模式'", "zh-CN": "aria-label='切换游戏模式'", "en": "aria-label='Switch game mode'"}[locale])
+    origin = (_site_base_href(site_url) or "/").rstrip("/")
+    canonical = origin + canonical_path if origin.startswith("http") else canonical_path
+    css = _read_site_template("site.css")
+    page_js = _read_site_template("feedback.js")
+    return (f"<!doctype html><html lang='{html_lang}' data-feedback-locale='{locale}'><head>"
+        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{esc(title)} | arammeta</title><meta name='description' content='{esc(description, quote=True)}'>"
+        f"<link rel='canonical' href='{esc(canonical, quote=True)}'>{head_extra_html}"
+        "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'>"
+        "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
+        f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
+        f"<main class='site-main feedback-main'><h1>{esc(title)}</h1><p class='feedback-intro'>{esc(description)}</p>"
+        f"{body_html}</main><footer class='feedback-footer'><p>{esc(footer_disclaimer)}</p></footer>"
+        f"<script>{page_js}</script></body></html>\n")
 
 
 def _info_page_html(
@@ -840,8 +875,7 @@ def _info_page_html(
         ("/", "首頁", "home"),
         ("/about/", "關於", "about"),
         ("/privacy/", "隱私權", "privacy"),
-        ("/contact/", "聯絡", "contact"),
-        ("/feedback/", "功能回饋", "feedback"),
+        ("/feedback/", "回饋與聯絡", "feedback"),
     )
     nav = "".join(
         f"<a href='{href}'"
@@ -880,29 +914,15 @@ _FEEDBACK_COPY = {
     "zh": {
         "html_lang": "zh-Hant",
         "prefix": "",
-        "eyebrow": "LISTENING LOOP",
-        "title": "功能回饋",
-        "description": "告訴我們哪個地方讓你更難做判斷，或下一步最值得加入什麼。可匿名送出；這份表單不會要求 Riot ID。",
-        "nav": {"home": "首頁", "about": "關於", "privacy": "隱私權", "contact": "聯絡", "feedback": "功能回饋"},
-        "language": "語系",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "你想回饋哪一類？",
-        "topics": (("feature", "新功能建議"), ("usability", "現有功能不好用"), ("bug", "互動或載入錯誤"), ("data", "資料或結果疑問"), ("other", "其他")),
-        "feature": "關於哪個功能？",
-        "features": (("champions", "英雄榜"), ("augments", "增幅"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本變動"), ("mobile", "手機版"), ("other", "其他")),
-        "message": "請描述你的想法",
-        "message_help": "你原本想完成什麼？哪一步卡住？希望它怎麼運作？",
+        "title": "回饋與聯絡",
+        "description": "功能建議、問題回報或站務聯絡，都可以在這裡留言。",
+        "message": "想告訴我們什麼？",
+        "message_help": "只需填寫這一欄，至少 5 個字。",
         "message_placeholder": "例如：我想比較兩個陣容，但目前看不到足夠的比較依據……",
-        "impact": "這件事對你的影響",
-        "impacts": (("blocked", "無法完成目前要做的事"), ("friction", "有點困擾但仍能繼續"), ("idea", "單純建議／想法")),
-        "context": "附加環境資訊（選填）",
-        "page": "目前頁面",
-        "theme": "主題",
-        "viewport": "裝置",
-        "email": "如果希望回覆，可留下 Email（選填）",
-        "email_help": "只有勾選同意回覆時才會保存。",
+        "email": "Email（選填）",
+        "email_help": "若需要回覆，請留下 Email。",
         "consent": "我同意 arammeta 僅為回覆這份回饋而使用此 Email。",
-        "privacy": "請不要提供真實姓名、Riot ID、PUUID、IP 位址、權杖或其他敏感資料。回饋內容與可選的 Email 會存放在私有收件資料庫，不會直接公開。",
+        "privacy": "留言不會公開。請勿附上 Riot ID、密碼或其他敏感資料。",
         "submit": "送出回饋",
         "sending": "送出中……",
         "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。",
@@ -911,36 +931,22 @@ _FEEDBACK_COPY = {
         "rate": "送出次數過於頻繁，請稍後再試。",
         "server": "目前無法收件，請稍後再試或改用 GitHub Issue。",
         "consent_error": "若填寫 Email，請先勾選同意回覆。",
-        "fallback": "表單暫時無法使用？前往 GitHub 建立公開 Issue，請勿貼上個資。",
+        "fallback": "也可以透過 GitHub 公開回報，請勿附上個資。",
         "issue": "建立 GitHub Issue",
         "reference": "參考編號",
     },
     "zh-CN": {
         "html_lang": "zh-Hans",
         "prefix": "/zh-CN",
-        "eyebrow": "LISTENING LOOP",
-        "title": "功能反馈",
-        "description": "告诉我们哪里让你更难做判断，或下一步最值得加入什么。可以匿名提交；这份表单不会要求 Riot ID。",
-        "nav": {"home": "首页", "about": "关于", "privacy": "隐私权", "contact": "联系", "feedback": "功能反馈"},
-        "language": "语言",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "你想反馈哪一类？",
-        "topics": (("feature", "新功能建议"), ("usability", "现有功能不好用"), ("bug", "交互或加载错误"), ("data", "数据或结果疑问"), ("other", "其他")),
-        "feature": "关于哪个功能？",
-        "features": (("champions", "英雄榜"), ("augments", "海克斯"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本变动"), ("mobile", "手机版"), ("other", "其他")),
-        "message": "请描述你的想法",
-        "message_help": "你原本想完成什么？哪一步卡住？希望它如何运作？",
+        "title": "反馈与联系",
+        "description": "功能建议、问题反馈或站务联系，都可以在这里留言。",
+        "message": "想告诉我们什么？",
+        "message_help": "只需填写这一栏，至少 5 个字。",
         "message_placeholder": "例如：我想比较两个阵容，但目前看不到足够的比较依据……",
-        "impact": "这件事对你的影响",
-        "impacts": (("blocked", "无法完成当前要做的事"), ("friction", "有点困扰但仍能继续"), ("idea", "单纯建议／想法")),
-        "context": "附加环境信息（选填）",
-        "page": "当前页面",
-        "theme": "主题",
-        "viewport": "设备",
-        "email": "如果希望回复，可以留下 Email（选填）",
-        "email_help": "只有勾选同意回复时才会保存。",
+        "email": "Email（选填）",
+        "email_help": "如需回复，请留下 Email。",
         "consent": "我同意 arammeta 仅为回复这份反馈而使用此 Email。",
-        "privacy": "请不要提供真实姓名、Riot ID、PUUID、IP 地址、令牌或其他敏感资料。反馈内容与可选的 Email 会存放在私有收件数据库，不会直接公开。",
+        "privacy": "留言不会公开。请勿附上 Riot ID、密码或其他敏感资料。",
         "submit": "提交反馈",
         "sending": "提交中……",
         "success": "已收到。谢谢你帮助 arammeta 更容易做判断。",
@@ -949,36 +955,22 @@ _FEEDBACK_COPY = {
         "rate": "提交次数过于频繁，请稍后再试。",
         "server": "当前无法收件，请稍后再试或改用 GitHub Issue。",
         "consent_error": "如果填写 Email，请先勾选同意回复。",
-        "fallback": "表单暂时无法使用？前往 GitHub 创建公开 Issue，请勿贴上个人资料。",
+        "fallback": "也可以通过 GitHub 公开反馈，请勿附上个人资料。",
         "issue": "创建 GitHub Issue",
         "reference": "参考编号",
     },
     "en": {
         "html_lang": "en",
         "prefix": "/en",
-        "eyebrow": "LISTENING LOOP",
-        "title": "Feature feedback",
-        "description": "Tell us what makes a decision harder, or what would make arammeta more useful next. You can submit anonymously; this form never asks for a Riot ID.",
-        "nav": {"home": "Home", "about": "About", "privacy": "Privacy", "contact": "Contact", "feedback": "Feature feedback"},
-        "language": "Language",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "What kind of feedback is this?",
-        "topics": (("feature", "New feature idea"), ("usability", "Hard to use"), ("bug", "Interaction or loading bug"), ("data", "Data or result question"), ("other", "Other")),
-        "feature": "Which feature is it about?",
-        "features": (("champions", "Champion tier list"), ("augments", "Augments"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "Patch changes"), ("mobile", "Mobile"), ("other", "Other")),
-        "message": "Tell us what you think",
-        "message_help": "What were you trying to do? Where did you get stuck? How would you expect it to work?",
+        "title": "Feedback & contact",
+        "description": "Share an idea, report a problem, or get in touch.",
+        "message": "Your message",
+        "message_help": "This is the only required field. At least 5 characters.",
         "message_placeholder": "For example: I want to compare two team comps, but I cannot find enough evidence to compare them…",
-        "impact": "How much did this affect you?",
-        "impacts": (("blocked", "I could not complete the task"), ("friction", "It was confusing, but I continued"), ("idea", "Just an idea or suggestion")),
-        "context": "Additional context (optional)",
-        "page": "Current page",
-        "theme": "Theme",
-        "viewport": "Device",
-        "email": "Leave an Email if you would like a reply (optional)",
-        "email_help": "It is stored only when you consent to a reply.",
+        "email": "Email (optional)",
+        "email_help": "Leave your email only if you would like a reply.",
         "consent": "I agree that arammeta may use this Email only to reply to this feedback.",
-        "privacy": "Please do not include your real name, Riot ID, PUUID, IP address, tokens, or other sensitive information. Feedback and an optional Email are stored in a private inbox and are not published directly.",
+        "privacy": "Your message stays private. Please leave out Riot IDs, passwords, and other sensitive information.",
         "submit": "Send feedback",
         "sending": "Sending…",
         "success": "Received. Thanks for helping make arammeta easier to use for decisions.",
@@ -987,25 +979,11 @@ _FEEDBACK_COPY = {
         "rate": "Too many submissions. Please try again later.",
         "server": "The inbox is temporarily unavailable. Try again later or use GitHub Issue.",
         "consent_error": "If you enter an Email, please consent to a reply first.",
-        "fallback": "Is the form unavailable? Create a public GitHub Issue, and do not include personal information.",
+        "fallback": "Prefer GitHub? Issues are public; leave out personal information.",
         "issue": "Create a GitHub Issue",
         "reference": "Reference",
     },
 }
-
-
-def _feedback_nav(copy: dict) -> tuple[tuple[str, str, str], ...]:
-    prefix = str(copy["prefix"]).rstrip("/")
-    home_href = f"{prefix}/" if prefix else "/"
-    feedback_href = f"{prefix}/feedback/" if prefix else "/feedback/"
-    labels = copy["nav"]
-    return (
-        (home_href, labels["home"], "home"),
-        ("/about/", labels["about"], "about"),
-        ("/privacy/", labels["privacy"], "privacy"),
-        ("/contact/", labels["contact"], "contact"),
-        (feedback_href, labels["feedback"], "feedback"),
-    )
 
 
 def _feedback_head_links(*, site_url: str) -> str:
@@ -1053,47 +1031,16 @@ def _feedback_body_html(
         },
         ensure_ascii=False,
     ).replace("</", "<\\/")
-    language_links = " ".join(
-        f"<a href='{esc(href)}'" + (" aria-current='page'" if href.rstrip("/") == f"{str(copy['prefix']).rstrip('/')}/feedback" else "") + f">{esc(label)}</a>"
-        for href, label in copy["languages"]
-    )
-    topic_options = "".join(
-        f"<label class='feedback-option'><input type='radio' name='category' value='{esc(value)}' required><span>{esc(label)}</span></label>"
-        for value, label in copy["topics"]
-    )
-    impact_options = "".join(
-        f"<label class='feedback-option'><input type='radio' name='impact' value='{esc(value)}'"
-        + (" checked" if value == "idea" else "")
-        + f"><span>{esc(label)}</span></label>"
-        for value, label in copy["impacts"]
-    )
-    feature_options = "".join(
-        f"<option value='{esc(value)}'>{esc(label)}</option>"
-        for value, label in copy["features"]
-    )
     return f"""
-<div class="feedback-language" aria-label="{esc(copy['language'])}">{language_links}</div>
-<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc(copy['html_lang'], quote=True)}">
-<fieldset class="feedback-fieldset"><legend>{esc(copy['topic'])}</legend>
-<div class="feedback-option-grid">{topic_options}</div></fieldset>
-<label class="feedback-field"><span class="feedback-label">{esc(copy['feature'])}</span>
-<select name="feature" required><option value="" selected disabled>{esc(copy['feature'])}</option>{feature_options}</select></label>
+<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc('zh-CN' if copy['prefix'] == '/zh-CN' else copy['html_lang'], quote=True)}">
 <label class="feedback-field"><span class="feedback-label">{esc(copy['message'])}</span>
 <span class="feedback-help" id="feedback-message-help">{esc(copy['message_help'])}</span>
 <textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
-<fieldset class="feedback-fieldset"><legend>{esc(copy['impact'])}</legend>
-<div class="feedback-option-grid">{impact_options}</div></fieldset>
-<details class="feedback-context"><summary>{esc(copy['context'])}</summary>
-<div class="feedback-context-grid">
-<label>{esc(copy['page'])}<input data-context="page_path" type="text" readonly></label>
-<label>{esc(copy['language'])}<input data-context="locale" type="text" readonly></label>
-<label>{esc(copy['theme'])}<input data-context="theme" type="text" readonly></label>
-<label>{esc(copy['viewport'])}<input data-context="viewport" type="text" readonly></label>
-</div></details>
 <label class="feedback-field"><span class="feedback-label">{esc(copy['email'])}</span>
 <input name="contact_email" type="email" maxlength="254" autocomplete="email">
 <span class="feedback-help">{esc(copy['email_help'])}</span>
-<span class="feedback-check"><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></span></label>
+</label>
+<label class="feedback-check" data-consent-row hidden><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></label>
 <div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
 <p class="feedback-privacy">{esc(copy['privacy'])}</p>
 <div class="feedback-submit-row"><button class="action" type="submit">{esc(copy['submit'])}</button>
@@ -1124,7 +1071,7 @@ def _feedback_body_html(
     const values = {{
       page_path: window.location.pathname,
       locale: form.dataset.locale || 'zh-Hant',
-      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
       viewport: window.matchMedia('(max-width: 640px)').matches ? 'mobile' : 'desktop'
     }};
     Object.entries(values).forEach(([key, value]) => {{
@@ -1134,6 +1081,7 @@ def _feedback_body_html(
     return values;
   }};
   const syncConsentValidity = () => {{
+    form.querySelector('[data-consent-row]').hidden = !email.value.trim();
     if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
   }};
   email?.addEventListener('input', syncConsentValidity);
@@ -1142,17 +1090,16 @@ def _feedback_body_html(
   window.addEventListener('resize', syncContext, {{ passive: true }});
   form.addEventListener('submit', async (event) => {{
     event.preventDefault();
+    if (submit.disabled) return;
     syncConsentValidity();
     if (!form.reportValidity()) return;
     if (!endpoint) {{ setStatus(copy.offline, 'error'); return; }}
     const context = syncContext();
-    const category = form.querySelector('input[name="category"]:checked');
-    const impact = form.querySelector('input[name="impact"]:checked');
     const payload = {{
-      category: category ? category.value : '',
-      feature: getText('feature'),
+      category: 'other',
+      feature: 'other',
       message: getText('message'),
-      impact: impact ? impact.value : 'idea',
+      impact: 'idea',
       ...context,
       contact_email: getText('contact_email'),
       contact_consent: Boolean(form.elements.namedItem('contact_consent')?.checked),
@@ -1169,13 +1116,16 @@ def _feedback_body_html(
         if (response.status === 429) throw new Error(copy.rate);
         throw new Error(response.status >= 500 ? copy.server : copy.network);
       }}
+      if (body.ok !== true) throw new Error(copy.server);
       const reference = body.reference ? ` ${{copy.reference}}: ${{body.reference}}` : '';
       form.reset();
+      syncConsentValidity();
       syncContext();
       form.classList.add('is-submitted');
       setStatus(copy.success + reference, 'success');
     }} catch (error) {{
-      setStatus(error instanceof Error && error.message ? error.message : copy.network, 'error');
+      const message = [copy.rate, copy.server, copy.network].includes(error?.message) ? error.message : copy.network;
+      setStatus(message, 'error');
     }} finally {{
       submit.disabled = false;
       submit.textContent = {json.dumps(copy['submit'], ensure_ascii=False)};
@@ -1252,26 +1202,14 @@ def write_site_info_pages(
 <p>託管與安全紀錄依服務供應商的保存政策處理。排行榜紀錄可能持續保存，直到例行維護、功能停止或收到合理的移除請求。彙總且無法識別個人的統計資料可能長期保留。</p></section>
 <section><h2>查詢與請求</h2>
 <p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
-<p><a href="/contact/">前往聯絡與回報</a></p></section>
-<section><h2>功能回饋</h2>
-<p>功能建議與使用體驗可以透過<a href="/feedback/">功能回饋頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
+<p><a href="/feedback/">前往回饋與聯絡</a></p></section>
+<section><h2>回饋與聯絡</h2>
+<p>功能建議與使用體驗可以透過<a href="/feedback/">回饋與聯絡頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
 <div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
-"""
-    contact_body = f"""
-<section><h2>適合回報的事項</h2>
-<ul><li>英雄、增幅、裝備或版本資料異常。</li><li>手機版、無障礙、載入速度或互動錯誤。</li><li>Meta Pick 排行榜紀錄移除。</li><li>隱私權、廣告或站務問題。</li></ul>
-<p><a class="action" href="{issues_url}" target="_blank" rel="noopener">建立 GitHub Issue</a></p></section>
-<section><h2>隱私提醒</h2>
-<p>GitHub Issue 會公開顯示。請勿貼上真實姓名、電子郵件、IP 位址、Riot ID、PUUID、驗證權杖或其他敏感資料。隱私請求只需提供排行榜暱稱、版本與大約提交時間，站方會視需要提供後續處理方式。</p></section>
-<section><h2>處理方式</h2>
-<p>請在標題簡述問題，並附上頁面網址、使用裝置與可重現步驟。資料問題若能附版本與畫面截圖，通常會更快定位。</p></section>
-<section><h2>功能建議</h2>
-<p>如果是新功能想法或使用流程建議，請改用<a href="/feedback/">功能回饋頁</a>；這類回饋可以匿名送出，內容不會直接公開。</p></section>
 """
     specs = (
         ("about", "關於 arammeta", "About", "ARAM Mayhem 的獨立資料工具、統計方法與開源資訊。", about_body),
         ("privacy", "隱私權政策", "Privacy", "arammeta 如何處理瀏覽資料、排行榜內容、Cookie 與第三方服務。", privacy_body),
-        ("contact", "聯絡與回報", "Contact", "回報資料、介面、排行榜、隱私權與站務問題。", contact_body),
     )
     written: list[Path] = []
     for slug, title, eyebrow, description, body in specs:
@@ -1305,7 +1243,6 @@ def write_site_info_pages(
         "zh-CN": "arammeta 未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 及其相关资产是 Riot Games, Inc. 的商标或注册商标。",
         "en": "arammeta is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
     }
-    feedback_updated_labels = {"zh": "最後更新", "zh-CN": "最后更新", "en": "Last updated"}
     for locale, copy in _FEEDBACK_COPY.items():
         prefix = str(copy["prefix"]).strip("/")
         relative_dir = Path(prefix) if prefix else Path()
@@ -1318,26 +1255,28 @@ def write_site_info_pages(
             issues_url=issues_url,
         )
         dest.write_text(
-            _info_page_html(
-                slug="feedback",
+            _feedback_page_html(
                 title=copy["title"],
-                eyebrow=copy["eyebrow"],
                 description=copy["description"],
                 body_html=body,
                 site_url=site_url,
-                updated=updated,
                 html_lang=copy["html_lang"],
                 canonical_path=canonical_path,
-                nav_items=_feedback_nav(copy),
                 head_extra_html=_feedback_head_links(site_url=site_url),
-                updated_label=feedback_updated_labels[locale],
-                updated_separator=":" if locale == "en" else "：",
                 footer_disclaimer=feedback_footer_disclaimers[locale],
-                body_class="feedback-page",
             ),
             encoding="utf-8",
         )
         written.append(dest)
+
+    contact = root / "contact" / "index.html"
+    contact.parent.mkdir(parents=True, exist_ok=True)
+    contact.write_text("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        "<meta http-equiv='refresh' content='0;url=/feedback/'>"
+        "<link rel='canonical' href='" + html.escape(site_url.rstrip('/') + '/feedback/', quote=True) + "'>"
+        "<title>回饋與聯絡 | arammeta</title></head><body>"
+        "<a href='/feedback/'>回饋與聯絡 / Feedback &amp; contact</a></body></html>", encoding="utf-8")
+    written.append(contact)
 
     if (site_url or "").strip().rstrip("/") == ADSENSE_SITE_ORIGIN:
         ads_txt = root / "ads.txt"
@@ -3349,15 +3288,6 @@ def render_html(
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
     short_patch = display_patch if display_patch else "all patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
-    globe_icon = (
-        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<circle cx='12' cy='12' r='10'></circle>"
-        "<path d='M2 12h20'></path>"
-        "<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path>"
-        "</svg>"
-    )
     gh_icon = (
         "<svg viewBox='0 0 16 16' width='12' height='12' fill='currentColor' "
         "aria-hidden='true'><path d='M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1"
@@ -3371,117 +3301,7 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Fixed top header: brand (= home) + primary tabs + theme + language.
-    # 「英雄」 is the home tier-list tab; brand also returns home.
-    # Patch lives in the footer freshness line — not next to the wordmark.
-    # On narrow screens (<=700px) the header wraps: brand + actions on top,
-    # .nav-tabs as a full-bleed scrollable strip underneath.
-    # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
-    # that does not t2s-convert — CN / aramkit call it 海克斯.
-    NAV_TABS = (
-        ("home", "英雄", "Champions", None),
-        ("augments", "增幅", "Augments", "海克斯"),
-        ("draft", "Draft", "Draft", None),
-        ("game", "小遊戲", "Game", "小游戏"),
-        ("changes", "版本變動", "Patch Changes", None),
-        # 專欄 is unpublished; keep its draft source out of the public shell.
-        # ("column", "專欄", "Articles", None),
-    )
-    sun_icon = (
-        "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<circle cx='12' cy='12' r='4'></circle>"
-        "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
-        "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
-        "</svg>"
-    )
-    moon_icon = (
-        "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
-        "</svg>"
-    )
-    # data-nosnippet: without it Google's snippet fallback scrapes the nav
-    # tabs / role chips into the search result blurb.
-    parts.append("<header class='site-header' data-nosnippet>")
-    parts.append("<div class='site-header-inner'>")
-    parts.append(
-        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
-        "title='主頁'>"
-        # Wordmark only in the header — no icon, no patch chip (favicon stays for the tab).
-        # Weight split on aram/meta; both langs share the Latin mark.
-        "<span class='brand-title' id='site-title' aria-label='arammeta'>"
-        "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
-        "</span>"
-        "</button>"
-    )
-    parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
-    for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
-        # Home (= 英雄) is active on first paint; brand and this tab both land there.
-        is_home = nav_key == "home"
-        zh_cn_attr = (
-            f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
-        )
-        parts.append(
-            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
-            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
-            f"aria-selected='{'true' if is_home else 'false'}' "
-            f"tabindex='{'0' if is_home else '-1'}' "
-            f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
-        )
-    parts.append("<span class='nav-ind' aria-hidden='true'></span>")
-    parts.append("</nav>")
-    parts.append("<div class='header-actions'>")
-    parts.append(
-        "<details class='mode-menu' id='mode-menu'>"
-        "<summary class='mode-select' aria-label='切換遊戲模式' "
-        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
-        "data-aria-en='Switch game mode'>"
-        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</span>"
-        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
-        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='m4 6 4 4 4-4'></path></svg>"
-        "</summary>"
-        "<div class='mode-options' role='menu'>"
-        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
-        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
-        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</a>"
-        "<a class='mode-option' role='menuitem' href='/classic.html' "
-        "data-mode-target='classic' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
-        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
-        "data-i18n-en='Classic'>經典模式</a>"
-        "</div></details>"
-    )
-    parts.append(
-        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
-        "type='button' title='切換淺色' aria-label='切換主題'>"
-        f"{sun_icon}{moon_icon}"
-        "</button>"
-    )
-    # Language menu (aramkit-style <details> dropdown): 繁體 / 简体 / English.
-    parts.append(
-        "<details class='lang-menu' id='lang-menu'>"
-        "<summary class='icon-btn lang-toggle' id='lang-toggle' "
-        "title='繁體中文' aria-label='語言: 繁體中文'>"
-        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
-        "</summary>"
-        "<div class='lang-menu-list' role='menu'>"
-        "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
-        "aria-current='true'>繁體中文</button>"
-        "<button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button>"
-        "<button type='button' role='menuitem' data-lang='en'>English</button>"
-        "</div>"
-        "</details>"
-    )
-    parts.append("</div>")  # /header-actions
-    parts.append("</div>")  # /site-header-inner
-    parts.append("</header>")
+    parts.append(_site_header_html())
     parts.append("<main class='site-main'>")
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
@@ -3731,10 +3551,8 @@ def render_html(
         "data-i18n-en='About'>關於</a>"
         "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
         "data-i18n-en='Privacy'>隱私權</a>"
-        "<a href='/contact/' data-i18n-zh='聯絡' data-i18n-zh-cn='联系' "
-        "data-i18n-en='Contact'>聯絡</a>"
-        "<a href='/feedback/' data-i18n-zh='功能回饋' data-i18n-zh-cn='功能反馈' "
-        "data-i18n-en='Feature feedback'>功能回饋</a>"
+        "<a href='/feedback/' data-href-zh='/feedback/' data-href-zh-cn='/zh-CN/feedback/' data-href-en='/en/feedback/' data-i18n-zh='回饋與聯絡' data-i18n-zh-cn='反馈与联系' "
+        "data-i18n-en='Feedback & contact'>回饋與聯絡</a>"
         "</nav>"
     )
     # Footer open-source control: pill affordance so it reads as clickable,

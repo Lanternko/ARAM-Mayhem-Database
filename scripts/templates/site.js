@@ -10142,7 +10142,7 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
+        document.querySelectorAll('[data-href-zh]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
             if (href) el.setAttribute('href', href);

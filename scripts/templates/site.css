@@ -9557,3 +9557,39 @@
     @media (prefers-reduced-motion: reduce) {
         .player-history-submit { transition: none; }
     }
+
+/* Feedback is an information page within the same product shell. */
+.feedback-page .brand, .feedback-page .nav-tab { text-decoration: none; }
+.feedback-main { max-width: 720px; padding-top: 48px; }
+.feedback-main h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; }
+.feedback-intro { margin: 0 0 28px; color: var(--text-muted); line-height: 1.7; }
+.feedback-form { display: flex; flex-direction: column; gap: 20px; }
+.feedback-field { display: flex; flex-direction: column; gap: 8px; }
+.feedback-label { color: var(--text); font-size: 14px; font-weight: 600; }
+.feedback-help, .feedback-check, .feedback-privacy, .feedback-fallback { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.feedback-field textarea, .feedback-field input {
+    width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit;
+}
+.feedback-field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
+.feedback-field input { max-width: 420px; }
+.feedback-page :is(input, textarea, button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.feedback-check { display: flex; align-items: start; gap: 8px; margin-top: -8px; }
+.feedback-check[hidden], .feedback-status[hidden] { display: none; }
+.feedback-check input { accent-color: var(--accent); margin-top: 4px; }
+.feedback-privacy { margin: 0; max-width: 68ch; }
+.feedback-submit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.feedback-submit-row .action { min-height: 44px; border: 0; border-radius: var(--r-sm); padding: 10px 20px; background: var(--accent); color: var(--accent-on); font: inherit; font-weight: 600; cursor: pointer; }
+.feedback-submit-row .action:hover { filter: brightness(1.07); }
+.feedback-submit-row .action:disabled { opacity: .6; cursor: wait; }
+.feedback-status { font-size: 14px; margin: 0; }
+.feedback-status.is-error { color: var(--wr-negative); }
+.feedback-fallback { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.feedback-fallback a { color: var(--accent-soft); }
+.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.feedback-footer { max-width: 720px; margin: 0 auto; padding: 0 24px 32px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }
+@media (max-width: 700px) {
+    .feedback-main { padding-top: 28px; }
+    .feedback-main h1 { font-size: 24px; }
+    .feedback-footer { padding-inline: 12px; }
+}
