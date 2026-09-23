@@ -48,9 +48,15 @@ $argsList = @(
     # instead of 5800 keeps the client ~1.3GB further from the
     # worker-start-max gate below, which is what turned the 2026-08-28
     # PreEndOfGame hang into a 4.5h outage: memory blew past every gate while
-    # the phase check blocked the restart.  Degrade keeps its 600MB lead so it
-    # still gets a chance to shed a producer before the client is recycled.
-    "--degrade-client-mb", "3900",
+    # the phase check blocked the restart.
+    # Degrade raised to the restart line 2026-09-23 (was 3900), which retires
+    # client-memory degrade.  The growth is LeagueClient caching ~7-9.5MB per
+    # never-seen puuid in match history, so the memory spent per game is fixed:
+    # shedding a producer only ran the 3900->4500 stretch at half speed (21% of
+    # fleet time over 09-21..09-23) without delaying the restart by one game.
+    # System-pressure degrade below still protects the machine; commit headroom
+    # never dropped under 18GB (p5) in the same window.
+    "--degrade-client-mb", "4500",
     "--client-restart-mb", "4500",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
     # running are left alone, so the old value created a trap -- workers were

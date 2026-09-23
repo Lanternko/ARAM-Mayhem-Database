@@ -39,7 +39,7 @@ Crawler 通知（Task Scheduler）
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
 | Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0` |
-| League memory | 同上 | degrade 3900 MB；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
+| League memory | 同上 | client 記憶體不降載（degrade=restart=4500 MB；leak 是每個新 puuid 固定成本，降載只會變慢）；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
 | System memory | 同上 | commit ≥80% 或 available RAM ≤3072 MB 降為 1 producer；commit ≥90% 或 available RAM ≤1536 MB 暫停收集；連續 3 次 commit ≤70%、available RAM ≥4096 MB 且 client <3500 MB 才恢復 |
 | DB 磁碟空間 | `scripts/mayhem_lcu_watchdog.py` defaults | `games.db` 所在磁碟剩 <5 GB 暫停收集（事件 `pause_workers_disk_full`），≥10 GB 才恢復；暫停期間不做零產出／client 重啟。磁碟滿在下游只會表現成 `WRITER_START_FAILED`／`disk I/O error` |
 | Frontier | 同上＋watchdog | manual pending cap 120；queue 450／2400／2450／4310；OPGG＋self＋friends |
