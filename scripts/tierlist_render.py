@@ -287,85 +287,39 @@ def write_og_image(
     img.convert("RGB").save(out_path, "PNG", optimize=True)
 
 def write_favicon_svg(out_path: Path) -> None:
-    """Write a compact favicon matching the flat Mayhem die mark (readable at 16–32px)."""
-    # Flat die on rounded square — same language as mayhem-single-die-icon.png.
-    # Avoid the old isometric cube + orbit (muddy at header/favicon sizes).
-    svg = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
-  <defs>
-    <linearGradient id='die' x1='72' y1='56' x2='196' y2='208' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#f7fbff'/>
-      <stop offset='0.45' stop-color='#d7e8ff'/>
-      <stop offset='1' stop-color='#e8d6ff'/>
-    </linearGradient>
-  </defs>
-  <rect x='8' y='8' width='240' height='240' rx='52' fill='#0b0f1a'/>
-  <rect x='48' y='48' width='160' height='160' rx='36' fill='url(#die)'
-        stroke='rgba(255,255,255,0.55)' stroke-width='6'/>
-  <g fill='#0b0f1a'>
-    <circle cx='96' cy='96' r='14'/>
-    <circle cx='160' cy='96' r='14'/>
-    <circle cx='96' cy='128' r='14'/>
-    <circle cx='160' cy='128' r='14'/>
-    <circle cx='96' cy='160' r='14'/>
-    <circle cx='160' cy='160' r='14'/>
-  </g>
-</svg>
-"""
+    """Write the canonical geometric arammeta mark."""
+    from aram_nn.site.brand_icon import icon_svg
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(svg, encoding="utf-8")
+    out_path.write_text(icon_svg(), encoding="utf-8")
+
 
 def favicon_asset_version() -> str:
-    """Use icon-source or generator mtime so browser cache updates on asset tweaks."""
-    candidates = [Path(__file__)]
-    if SITE_ICON_SOURCE.exists():
-        candidates.append(SITE_ICON_SOURCE)
-    existing = [path for path in candidates if path.exists()]
-    if existing:
-        latest = max(path.stat().st_mtime for path in existing)
-        stamp = _dt.datetime.fromtimestamp(latest)
-        return stamp.strftime("%Y%m%d%H%M%S")
-    return (_dt.date.today().isoformat()).replace("-", "")
+    from aram_nn.site.brand_icon import icon_version
+
+    return icon_version()
+
 
 def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) -> list[Path]:
-    """Generate favicon PNG/ICO assets by directly downscaling the checked-in icon."""
-    from PIL import Image, ImageChops, ImageDraw
-
-    if not source_path.exists():
-        return []
-
-    img_master = Image.open(source_path).convert("RGBA")
-    source_has_alpha = img_master.getchannel("A").getextrema()[0] < 255
-
-    def _resized(img_rgba: "Image.Image", size: tuple[int, int]) -> "Image.Image":
-        resized = img_rgba.resize(size, Image.LANCZOS)
-        if source_has_alpha:
-            return resized
-        radius = max(4, round(min(size) * 0.22))
-        mask = Image.new("L", size, 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius=radius, fill=255)
-        alpha = resized.getchannel("A")
-        resized.putalpha(ImageChops.multiply(alpha, mask))
-        return resized
+    """Export the canonical mark; source_path remains for caller compatibility."""
+    from aram_nn.site.brand_icon import icon_image
 
     out_dir.mkdir(parents=True, exist_ok=True)
-
-    outputs: list[Path] = []
-    raster_targets = {
-        "mayhem-single-die-icon.png": (180, 180),
-        "mayhem-tab-icon.png": (180, 180),
-        "favicon-32.png": (32, 32),
-        "apple-touch-icon.png": (180, 180),
-    }
-    for name, size in raster_targets.items():
+    svg_path = out_dir / "favicon.svg"
+    write_favicon_svg(svg_path)
+    outputs: list[Path] = [svg_path]
+    # Keep legacy URLs so bookmarks, share metadata and older shells still work.
+    for name, size in {
+        "mayhem-single-die-icon.png": 180,
+        "mayhem-tab-icon.png": 180,
+        "favicon-32.png": 32,
+        "apple-touch-icon.png": 180,
+    }.items():
         target = out_dir / name
-        resized = _resized(img_master, size)
-        resized.save(target, "PNG", optimize=True)
+        icon_image(size).save(target, "PNG", optimize=True)
         outputs.append(target)
-
     ico_path = out_dir / "favicon.ico"
-    ico_master = _resized(img_master, (256, 256))
-    ico_master.save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
+    icon_image(256).save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
     outputs.append(ico_path)
     return outputs
 
@@ -637,156 +591,6 @@ li + li { margin-top: 8px; }
   text-decoration: none;
 }
 .action:hover { filter: brightness(1.06); }
-.feedback-page {
-  --accent: oklch(0.80 0.16 88);
-  --accent-soft: oklch(0.27 0.04 88);
-  --focus: oklch(0.78 0.14 88);
-}
-.feedback-page .action { color: oklch(0.22 0.025 88); }
-@media (prefers-color-scheme: light) {
-  .feedback-page {
-    --accent: oklch(0.60 0.14 85);
-    --accent-soft: oklch(0.94 0.035 88);
-    --focus: oklch(0.55 0.13 85);
-  }
-}
-.feedback-form {
-  margin-top: 34px;
-  padding-top: 28px;
-  border-top: 1px solid var(--border);
-}
-.feedback-fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
-.feedback-fieldset + .feedback-fieldset,
-.feedback-fieldset + .feedback-field,
-.feedback-field + .feedback-field,
-.feedback-field + .feedback-context,
-.feedback-context + .feedback-field,
-.feedback-field + .feedback-submit-row { margin-top: 24px; }
-.feedback-fieldset legend,
-.feedback-label { padding: 0; color: var(--text); font-size: 14px; font-weight: 700; }
-.feedback-option-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-.feedback-option {
-  display: flex;
-  min-height: 48px;
-  gap: 10px;
-  padding: 12px 14px;
-  align-items: flex-start;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--surface) 92%, var(--bg));
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 180ms ease-out, background-color 180ms ease-out;
-}
-.feedback-option:hover { border-color: color-mix(in oklch, var(--accent) 45%, var(--border)); }
-.feedback-option:focus-within {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 2px;
-  border-color: var(--focus);
-}
-.feedback-option input,
-.feedback-check input { accent-color: var(--accent); }
-.feedback-option input { margin: 3px 0 0; flex: 0 0 auto; }
-.feedback-option span { line-height: 1.4; }
-.feedback-field { display: flex; flex-direction: column; gap: 8px; }
-.feedback-field select,
-.feedback-field input[type='email'],
-.feedback-field textarea {
-  width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: 15px;
-}
-.feedback-field select,
-.feedback-field input[type='email'] { min-height: 42px; padding: 8px 11px; }
-.feedback-field textarea { min-height: 150px; padding: 11px 12px; line-height: 1.6; resize: vertical; }
-.feedback-field select:focus-visible,
-.feedback-field input[type='email']:focus-visible,
-.feedback-field textarea:focus-visible {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 2px;
-  border-color: var(--focus);
-}
-.feedback-help { color: var(--muted); font-size: 13px; line-height: 1.5; }
-.feedback-context { margin-top: 24px; border-top: 1px solid var(--border); }
-.feedback-context summary {
-  width: fit-content;
-  padding-top: 18px;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 650;
-}
-.feedback-context summary:hover { color: var(--text); }
-.feedback-context summary:focus-visible {
-  outline: 3px solid color-mix(in oklch, var(--focus) 35%, transparent);
-  outline-offset: 3px;
-  border-radius: 4px;
-}
-.feedback-context-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
-.feedback-context-grid label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; font-weight: 650; }
-.feedback-context-grid input {
-  width: 100%;
-  min-height: 38px;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--surface) 88%, var(--bg));
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-}
-.feedback-check {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-  align-items: flex-start;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-.feedback-check input { margin-top: 4px; flex: 0 0 auto; }
-.feedback-privacy { margin: 24px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-.feedback-submit-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
-.feedback-submit-row .action { margin-top: 0; border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border)); cursor: pointer; }
-.feedback-submit-row .action:disabled { cursor: wait; filter: saturate(.45); opacity: .7; }
-.feedback-status {
-  flex: 1 1 280px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.5;
-}
-.feedback-status.is-success {
-  border-color: color-mix(in oklch, var(--accent) 42%, var(--border));
-  background: var(--accent-soft);
-  color: var(--text);
-}
-.feedback-status.is-error {
-  border-color: color-mix(in oklch, oklch(0.62 0.14 25) 48%, var(--border));
-  background: color-mix(in oklch, oklch(0.62 0.14 25) 10%, var(--surface));
-  color: var(--text);
-}
-.feedback-fallback { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
-.feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.feedback-form.is-submitted .feedback-submit-row { align-items: flex-start; }
 .page-footer {
   border-top: 1px solid var(--border);
   color: var(--muted);
@@ -805,11 +609,196 @@ li + li { margin-top: 8px; }
   main { padding: 48px 0 64px; }
   h1 { font-size: 31px; }
   .lede { font-size: 17px; }
-  .feedback-option-grid,
-  .feedback-context-grid { grid-template-columns: 1fr; }
-  .feedback-form { padding-top: 24px; }
 }
 """
+
+
+def _site_header_html() -> str:
+    """Canonical product header shared by the app and feedback page."""
+    parts: list[str] = []
+    globe_icon = (
+        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='12' cy='12' r='10'></circle>"
+        "<path d='M2 12h20'></path>"
+        "<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path>"
+        "</svg>"
+    )
+    # Fixed top header: brand (= home) + primary tabs + theme + language.
+    # 「英雄」 is the home tier-list tab; brand also returns home.
+    # Patch lives in the footer freshness line — not next to the wordmark.
+    # On narrow screens (<=700px) the header wraps: brand + actions on top,
+    # .nav-tabs as a full-bleed scrollable strip underneath.
+    # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
+    # that does not t2s-convert — CN / aramkit call it 海克斯.
+    NAV_TABS = (
+        ("home", "英雄", "Champions", None),
+        ("augments", "增幅", "Augments", "海克斯"),
+        ("draft", "Draft", "Draft", None),
+        ("game", "小遊戲", "Game", "小游戏"),
+        ("changes", "版本變動", "Patch Changes", None),
+        # 專欄 is unpublished; keep its draft source out of the public shell.
+        # ("column", "專欄", "Articles", None),
+    )
+    sun_icon = (
+        "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='12' cy='12' r='4'></circle>"
+        "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
+        "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
+        "</svg>"
+    )
+    moon_icon = (
+        "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
+        "</svg>"
+    )
+    # data-nosnippet: without it Google's snippet fallback scrapes the nav
+    # tabs / role chips into the search result blurb.
+    parts.append("<header class='site-header' data-nosnippet>")
+    parts.append("<div class='site-header-inner'>")
+    parts.append(
+        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
+        "title='主頁'>"
+        # Wordmark only in the header — no icon, no patch chip (favicon stays for the tab).
+        # Weight split on aram/meta; both langs share the Latin mark.
+        "<span class='brand-title' id='site-title' aria-label='arammeta'>"
+        "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
+        "</span>"
+        "</button>"
+    )
+    parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
+    for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
+        # Home (= 英雄) is active on first paint; brand and this tab both land there.
+        is_home = nav_key == "home"
+        zh_cn_attr = (
+            f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
+        )
+        parts.append(
+            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
+            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
+            f"aria-selected='{'true' if is_home else 'false'}' "
+            f"tabindex='{'0' if is_home else '-1'}' "
+            f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
+        )
+    parts.append("<span class='nav-ind' aria-hidden='true'></span>")
+    parts.append("</nav>")
+    parts.append("<div class='header-actions'>")
+    parts.append(
+        "<details class='mode-menu' id='mode-menu'>"
+        "<summary class='mode-select' aria-label='切換遊戲模式' "
+        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
+        "data-aria-en='Switch game mode'>"
+        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</span>"
+        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
+        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='m4 6 4 4 4-4'></path></svg>"
+        "</summary>"
+        "<div class='mode-options' role='menu'>"
+        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
+        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
+        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
+        "data-i18n-en='Mayhem'>大亂鬥</a>"
+        "<a class='mode-option' role='menuitem' href='/classic.html' "
+        "data-mode-target='classic' data-href-zh='/classic.html' "
+        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
+        "data-i18n-en='Classic'>經典模式</a>"
+        "</div></details>"
+    )
+    parts.append(
+        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
+        "type='button' title='切換淺色' aria-label='切換主題'>"
+        f"{sun_icon}{moon_icon}"
+        "</button>"
+    )
+    # Language menu (aramkit-style <details> dropdown): 繁體 / 简体 / English.
+    parts.append(
+        "<details class='lang-menu' id='lang-menu'>"
+        "<summary class='icon-btn lang-toggle' id='lang-toggle' "
+        "title='繁體中文' aria-label='語言: 繁體中文'>"
+        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
+        "</summary>"
+        "<div class='lang-menu-list' role='menu'>"
+        "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
+        "aria-current='true'>繁體中文</button>"
+        "<button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button>"
+        "<button type='button' role='menuitem' data-lang='en'>English</button>"
+        "</div>"
+        "</details>"
+    )
+    parts.append("</div>")  # /header-actions
+    parts.append("</div>")  # /site-header-inner
+    parts.append("</header>")
+    return "".join(parts)
+
+
+def _feedback_page_html(*, title: str, description: str, body_html: str,
+                        site_url: str, html_lang: str, canonical_path: str,
+                        head_extra_html: str, footer_disclaimer: str) -> str:
+    """Use the product's header and CSS without loading its statistics runtime."""
+    esc = html.escape
+    locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
+    suffix = {"zh": "zh", "zh-CN": "zh-cn", "en": "en"}[locale]
+    prefix = "" if locale == "zh" else "/" + locale
+    header = _site_header_html()
+
+    def nav_link(match: re.Match) -> str:
+        attrs, key, content = match.groups()
+        href = prefix + ("/" if key == "home" else f"/{key}/")
+        attrs = re.sub(r" (?:role|aria-controls|aria-selected|tabindex|type|title)='[^']*'", "", attrs)
+        attrs = attrs.replace("nav-tab active", "nav-tab")
+        return f"<a{attrs} href='{href}'>{content}</a>"
+
+    header = re.sub(r"<button([^>]*data-nav-tab='([^']+)'[^>]*)>(.*?)</button>", nav_link, header)
+    header = header.replace(" role='tablist'", "")
+    nav_label = {"zh": "主要分頁", "zh-CN": "主要分页", "en": "Main navigation"}[locale]
+    header = header.replace("aria-label='主要分頁'", f"aria-label='{nav_label}'")
+    header = header.replace("<span class='nav-ind' aria-hidden='true'></span>", "")
+
+    def translate(match: re.Match) -> str:
+        tag, attrs, content = match.groups()
+        found = re.search(r"data-i18n-" + suffix + r"='([^']*)'", attrs)
+        if found:
+            content = found.group(1)
+        href = re.search(r"data-href-" + suffix + r"='([^']*)'", attrs)
+        if href:
+            attrs = re.sub(r"(?<!-)href='[^']*'", "href='" + href.group(1) + "'", attrs)
+        aria = re.search(r"data-aria-" + suffix + r"='([^']*)'", attrs)
+        if aria:
+            attrs = re.sub(r"aria-label='[^']*'", "aria-label='" + aria.group(1) + "'", attrs)
+        return f"<{tag}{attrs}>{content}</{tag}>"
+
+    header = re.sub(r"<(a|span|button)([^>]*data-i18n-zh=[^>]*)>([^<]*)</\1>", translate, header)
+    if locale == "zh-CN":
+        header = header.replace(">版本變動</a>", ">版本变动</a>")
+    label = {"zh": "繁體中文", "zh-CN": "简体中文", "en": "English"}[locale]
+    header = header.replace("title='繁體中文' aria-label='語言: 繁體中文'", f"title='{label}' aria-label='Language: {label}'")
+    header = header.replace("id='lang-toggle-label'>繁體中文", f"id='lang-toggle-label'>{label}")
+    header = header.replace(" class='is-active' aria-current='true'", "")
+    header = header.replace(f"data-lang='{locale}'", f"data-lang='{locale}' class='is-active' aria-current='true'")
+    header = header.replace("aria-label='切換遊戲模式'", {"zh": "aria-label='切換遊戲模式'", "zh-CN": "aria-label='切换游戏模式'", "en": "aria-label='Switch game mode'"}[locale])
+    origin = (_site_base_href(site_url) or "/").rstrip("/")
+    canonical = origin + canonical_path if origin.startswith("http") else canonical_path
+    css = _read_site_template("site.css")
+    page_js = _read_site_template("feedback.js")
+    return (f"<!doctype html><html lang='{html_lang}' data-feedback-locale='{locale}'><head>"
+        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
+        f"<title>{esc(title)} | arammeta</title><meta name='description' content='{esc(description, quote=True)}'>"
+        f"<link rel='canonical' href='{esc(canonical, quote=True)}'>{head_extra_html}"
+        "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'>"
+        "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
+        f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
+        f"<main class='site-main feedback-main'><h1>{esc(title)}</h1><p class='feedback-intro'>{esc(description)}</p>"
+        f"{body_html}</main><footer class='feedback-footer'><p>{esc(footer_disclaimer)}</p></footer>"
+        f"<script>{page_js}</script></body></html>\n")
 
 
 def _info_page_html(
@@ -840,8 +829,7 @@ def _info_page_html(
         ("/", "首頁", "home"),
         ("/about/", "關於", "about"),
         ("/privacy/", "隱私權", "privacy"),
-        ("/contact/", "聯絡", "contact"),
-        ("/feedback/", "功能回饋", "feedback"),
+        ("/feedback/", "回饋與聯絡", "feedback"),
     )
     nav = "".join(
         f"<a href='{href}'"
@@ -856,7 +844,7 @@ def _info_page_html(
         f"<title>{esc(title)} | arammeta</title>"
         f"<meta name='description' content='{esc(description, quote=True)}'>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
-        "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
+        f"<link rel='icon' href='/favicon.svg?v={favicon_asset_version()}' type='image/svg+xml'>"
         f"{head_extra_html}"
         f"{adsense}<style>{_INFO_PAGE_CSS}</style></head>"
         f"<body class='{esc(body_class, quote=True)}'>"
@@ -880,29 +868,15 @@ _FEEDBACK_COPY = {
     "zh": {
         "html_lang": "zh-Hant",
         "prefix": "",
-        "eyebrow": "LISTENING LOOP",
-        "title": "功能回饋",
-        "description": "告訴我們哪個地方讓你更難做判斷，或下一步最值得加入什麼。可匿名送出；這份表單不會要求 Riot ID。",
-        "nav": {"home": "首頁", "about": "關於", "privacy": "隱私權", "contact": "聯絡", "feedback": "功能回饋"},
-        "language": "語系",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "你想回饋哪一類？",
-        "topics": (("feature", "新功能建議"), ("usability", "現有功能不好用"), ("bug", "互動或載入錯誤"), ("data", "資料或結果疑問"), ("other", "其他")),
-        "feature": "關於哪個功能？",
-        "features": (("champions", "英雄榜"), ("augments", "增幅"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本變動"), ("mobile", "手機版"), ("other", "其他")),
-        "message": "請描述你的想法",
-        "message_help": "你原本想完成什麼？哪一步卡住？希望它怎麼運作？",
+        "title": "回饋與聯絡",
+        "description": "功能建議、問題回報或站務聯絡，都可以在這裡留言。",
+        "message": "想告訴我們什麼？",
+        "message_help": "只需填寫這一欄，至少 5 個字。",
         "message_placeholder": "例如：我想比較兩個陣容，但目前看不到足夠的比較依據……",
-        "impact": "這件事對你的影響",
-        "impacts": (("blocked", "無法完成目前要做的事"), ("friction", "有點困擾但仍能繼續"), ("idea", "單純建議／想法")),
-        "context": "附加環境資訊（選填）",
-        "page": "目前頁面",
-        "theme": "主題",
-        "viewport": "裝置",
-        "email": "如果希望回覆，可留下 Email（選填）",
-        "email_help": "只有勾選同意回覆時才會保存。",
+        "email": "Email（選填）",
+        "email_help": "若需要回覆，請留下 Email。",
         "consent": "我同意 arammeta 僅為回覆這份回饋而使用此 Email。",
-        "privacy": "請不要提供真實姓名、Riot ID、PUUID、IP 位址、權杖或其他敏感資料。回饋內容與可選的 Email 會存放在私有收件資料庫，不會直接公開。",
+        "privacy": "留言將私下轉送至站方 Discord 收件頻道。請勿附上 Riot ID、密碼或其他敏感資料。",
         "submit": "送出回饋",
         "sending": "送出中……",
         "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。",
@@ -911,36 +885,22 @@ _FEEDBACK_COPY = {
         "rate": "送出次數過於頻繁，請稍後再試。",
         "server": "目前無法收件，請稍後再試或改用 GitHub Issue。",
         "consent_error": "若填寫 Email，請先勾選同意回覆。",
-        "fallback": "表單暫時無法使用？前往 GitHub 建立公開 Issue，請勿貼上個資。",
+        "fallback": "也可以透過 GitHub 公開回報，請勿附上個資。",
         "issue": "建立 GitHub Issue",
         "reference": "參考編號",
     },
     "zh-CN": {
         "html_lang": "zh-Hans",
         "prefix": "/zh-CN",
-        "eyebrow": "LISTENING LOOP",
-        "title": "功能反馈",
-        "description": "告诉我们哪里让你更难做判断，或下一步最值得加入什么。可以匿名提交；这份表单不会要求 Riot ID。",
-        "nav": {"home": "首页", "about": "关于", "privacy": "隐私权", "contact": "联系", "feedback": "功能反馈"},
-        "language": "语言",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "你想反馈哪一类？",
-        "topics": (("feature", "新功能建议"), ("usability", "现有功能不好用"), ("bug", "交互或加载错误"), ("data", "数据或结果疑问"), ("other", "其他")),
-        "feature": "关于哪个功能？",
-        "features": (("champions", "英雄榜"), ("augments", "海克斯"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "版本变动"), ("mobile", "手机版"), ("other", "其他")),
-        "message": "请描述你的想法",
-        "message_help": "你原本想完成什么？哪一步卡住？希望它如何运作？",
+        "title": "反馈与联系",
+        "description": "功能建议、问题反馈或站务联系，都可以在这里留言。",
+        "message": "想告诉我们什么？",
+        "message_help": "只需填写这一栏，至少 5 个字。",
         "message_placeholder": "例如：我想比较两个阵容，但目前看不到足够的比较依据……",
-        "impact": "这件事对你的影响",
-        "impacts": (("blocked", "无法完成当前要做的事"), ("friction", "有点困扰但仍能继续"), ("idea", "单纯建议／想法")),
-        "context": "附加环境信息（选填）",
-        "page": "当前页面",
-        "theme": "主题",
-        "viewport": "设备",
-        "email": "如果希望回复，可以留下 Email（选填）",
-        "email_help": "只有勾选同意回复时才会保存。",
+        "email": "Email（选填）",
+        "email_help": "如需回复，请留下 Email。",
         "consent": "我同意 arammeta 仅为回复这份反馈而使用此 Email。",
-        "privacy": "请不要提供真实姓名、Riot ID、PUUID、IP 地址、令牌或其他敏感资料。反馈内容与可选的 Email 会存放在私有收件数据库，不会直接公开。",
+        "privacy": "留言将私下转发至站方 Discord 收件频道。请勿附上 Riot ID、密码或其他敏感资料。",
         "submit": "提交反馈",
         "sending": "提交中……",
         "success": "已收到。谢谢你帮助 arammeta 更容易做判断。",
@@ -949,36 +909,22 @@ _FEEDBACK_COPY = {
         "rate": "提交次数过于频繁，请稍后再试。",
         "server": "当前无法收件，请稍后再试或改用 GitHub Issue。",
         "consent_error": "如果填写 Email，请先勾选同意回复。",
-        "fallback": "表单暂时无法使用？前往 GitHub 创建公开 Issue，请勿贴上个人资料。",
+        "fallback": "也可以通过 GitHub 公开反馈，请勿附上个人资料。",
         "issue": "创建 GitHub Issue",
         "reference": "参考编号",
     },
     "en": {
         "html_lang": "en",
         "prefix": "/en",
-        "eyebrow": "LISTENING LOOP",
-        "title": "Feature feedback",
-        "description": "Tell us what makes a decision harder, or what would make arammeta more useful next. You can submit anonymously; this form never asks for a Riot ID.",
-        "nav": {"home": "Home", "about": "About", "privacy": "Privacy", "contact": "Contact", "feedback": "Feature feedback"},
-        "language": "Language",
-        "languages": (("/feedback/", "繁中"), ("/zh-CN/feedback/", "简中"), ("/en/feedback/", "English")),
-        "topic": "What kind of feedback is this?",
-        "topics": (("feature", "New feature idea"), ("usability", "Hard to use"), ("bug", "Interaction or loading bug"), ("data", "Data or result question"), ("other", "Other")),
-        "feature": "Which feature is it about?",
-        "features": (("champions", "Champion tier list"), ("augments", "Augments"), ("draft", "Draft"), ("metapick", "Meta Pick"), ("changes", "Patch changes"), ("mobile", "Mobile"), ("other", "Other")),
-        "message": "Tell us what you think",
-        "message_help": "What were you trying to do? Where did you get stuck? How would you expect it to work?",
+        "title": "Feedback & contact",
+        "description": "Share an idea, report a problem, or get in touch.",
+        "message": "Your message",
+        "message_help": "This is the only required field. At least 5 characters.",
         "message_placeholder": "For example: I want to compare two team comps, but I cannot find enough evidence to compare them…",
-        "impact": "How much did this affect you?",
-        "impacts": (("blocked", "I could not complete the task"), ("friction", "It was confusing, but I continued"), ("idea", "Just an idea or suggestion")),
-        "context": "Additional context (optional)",
-        "page": "Current page",
-        "theme": "Theme",
-        "viewport": "Device",
-        "email": "Leave an Email if you would like a reply (optional)",
-        "email_help": "It is stored only when you consent to a reply.",
+        "email": "Email (optional)",
+        "email_help": "Leave your email only if you would like a reply.",
         "consent": "I agree that arammeta may use this Email only to reply to this feedback.",
-        "privacy": "Please do not include your real name, Riot ID, PUUID, IP address, tokens, or other sensitive information. Feedback and an optional Email are stored in a private inbox and are not published directly.",
+        "privacy": "Your message is forwarded to our private Discord inbox. Please leave out Riot IDs, passwords, and other sensitive information.",
         "submit": "Send feedback",
         "sending": "Sending…",
         "success": "Received. Thanks for helping make arammeta easier to use for decisions.",
@@ -987,25 +933,11 @@ _FEEDBACK_COPY = {
         "rate": "Too many submissions. Please try again later.",
         "server": "The inbox is temporarily unavailable. Try again later or use GitHub Issue.",
         "consent_error": "If you enter an Email, please consent to a reply first.",
-        "fallback": "Is the form unavailable? Create a public GitHub Issue, and do not include personal information.",
+        "fallback": "Prefer GitHub? Issues are public; leave out personal information.",
         "issue": "Create a GitHub Issue",
         "reference": "Reference",
     },
 }
-
-
-def _feedback_nav(copy: dict) -> tuple[tuple[str, str, str], ...]:
-    prefix = str(copy["prefix"]).rstrip("/")
-    home_href = f"{prefix}/" if prefix else "/"
-    feedback_href = f"{prefix}/feedback/" if prefix else "/feedback/"
-    labels = copy["nav"]
-    return (
-        (home_href, labels["home"], "home"),
-        ("/about/", labels["about"], "about"),
-        ("/privacy/", labels["privacy"], "privacy"),
-        ("/contact/", labels["contact"], "contact"),
-        (feedback_href, labels["feedback"], "feedback"),
-    )
 
 
 def _feedback_head_links(*, site_url: str) -> str:
@@ -1053,47 +985,16 @@ def _feedback_body_html(
         },
         ensure_ascii=False,
     ).replace("</", "<\\/")
-    language_links = " ".join(
-        f"<a href='{esc(href)}'" + (" aria-current='page'" if href.rstrip("/") == f"{str(copy['prefix']).rstrip('/')}/feedback" else "") + f">{esc(label)}</a>"
-        for href, label in copy["languages"]
-    )
-    topic_options = "".join(
-        f"<label class='feedback-option'><input type='radio' name='category' value='{esc(value)}' required><span>{esc(label)}</span></label>"
-        for value, label in copy["topics"]
-    )
-    impact_options = "".join(
-        f"<label class='feedback-option'><input type='radio' name='impact' value='{esc(value)}'"
-        + (" checked" if value == "idea" else "")
-        + f"><span>{esc(label)}</span></label>"
-        for value, label in copy["impacts"]
-    )
-    feature_options = "".join(
-        f"<option value='{esc(value)}'>{esc(label)}</option>"
-        for value, label in copy["features"]
-    )
     return f"""
-<div class="feedback-language" aria-label="{esc(copy['language'])}">{language_links}</div>
-<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc(copy['html_lang'], quote=True)}">
-<fieldset class="feedback-fieldset"><legend>{esc(copy['topic'])}</legend>
-<div class="feedback-option-grid">{topic_options}</div></fieldset>
-<label class="feedback-field"><span class="feedback-label">{esc(copy['feature'])}</span>
-<select name="feature" required><option value="" selected disabled>{esc(copy['feature'])}</option>{feature_options}</select></label>
+<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc('zh-CN' if copy['prefix'] == '/zh-CN' else copy['html_lang'], quote=True)}">
 <label class="feedback-field"><span class="feedback-label">{esc(copy['message'])}</span>
 <span class="feedback-help" id="feedback-message-help">{esc(copy['message_help'])}</span>
 <textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
-<fieldset class="feedback-fieldset"><legend>{esc(copy['impact'])}</legend>
-<div class="feedback-option-grid">{impact_options}</div></fieldset>
-<details class="feedback-context"><summary>{esc(copy['context'])}</summary>
-<div class="feedback-context-grid">
-<label>{esc(copy['page'])}<input data-context="page_path" type="text" readonly></label>
-<label>{esc(copy['language'])}<input data-context="locale" type="text" readonly></label>
-<label>{esc(copy['theme'])}<input data-context="theme" type="text" readonly></label>
-<label>{esc(copy['viewport'])}<input data-context="viewport" type="text" readonly></label>
-</div></details>
 <label class="feedback-field"><span class="feedback-label">{esc(copy['email'])}</span>
 <input name="contact_email" type="email" maxlength="254" autocomplete="email">
 <span class="feedback-help">{esc(copy['email_help'])}</span>
-<span class="feedback-check"><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></span></label>
+</label>
+<label class="feedback-check" data-consent-row hidden><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></label>
 <div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
 <p class="feedback-privacy">{esc(copy['privacy'])}</p>
 <div class="feedback-submit-row"><button class="action" type="submit">{esc(copy['submit'])}</button>
@@ -1124,7 +1025,7 @@ def _feedback_body_html(
     const values = {{
       page_path: window.location.pathname,
       locale: form.dataset.locale || 'zh-Hant',
-      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+      theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark',
       viewport: window.matchMedia('(max-width: 640px)').matches ? 'mobile' : 'desktop'
     }};
     Object.entries(values).forEach(([key, value]) => {{
@@ -1134,6 +1035,7 @@ def _feedback_body_html(
     return values;
   }};
   const syncConsentValidity = () => {{
+    form.querySelector('[data-consent-row]').hidden = !email.value.trim();
     if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
   }};
   email?.addEventListener('input', syncConsentValidity);
@@ -1142,17 +1044,16 @@ def _feedback_body_html(
   window.addEventListener('resize', syncContext, {{ passive: true }});
   form.addEventListener('submit', async (event) => {{
     event.preventDefault();
+    if (submit.disabled) return;
     syncConsentValidity();
     if (!form.reportValidity()) return;
     if (!endpoint) {{ setStatus(copy.offline, 'error'); return; }}
     const context = syncContext();
-    const category = form.querySelector('input[name="category"]:checked');
-    const impact = form.querySelector('input[name="impact"]:checked');
     const payload = {{
-      category: category ? category.value : '',
-      feature: getText('feature'),
+      category: 'other',
+      feature: 'other',
       message: getText('message'),
-      impact: impact ? impact.value : 'idea',
+      impact: 'idea',
       ...context,
       contact_email: getText('contact_email'),
       contact_consent: Boolean(form.elements.namedItem('contact_consent')?.checked),
@@ -1169,13 +1070,16 @@ def _feedback_body_html(
         if (response.status === 429) throw new Error(copy.rate);
         throw new Error(response.status >= 500 ? copy.server : copy.network);
       }}
+      if (body.ok !== true) throw new Error(copy.server);
       const reference = body.reference ? ` ${{copy.reference}}: ${{body.reference}}` : '';
       form.reset();
+      syncConsentValidity();
       syncContext();
       form.classList.add('is-submitted');
       setStatus(copy.success + reference, 'success');
     }} catch (error) {{
-      setStatus(error instanceof Error && error.message ? error.message : copy.network, 'error');
+      const message = [copy.rate, copy.server, copy.network].includes(error?.message) ? error.message : copy.network;
+      setStatus(message, 'error');
     }} finally {{
       submit.disabled = false;
       submit.textContent = {json.dumps(copy['submit'], ensure_ascii=False)};
@@ -1252,26 +1156,14 @@ def write_site_info_pages(
 <p>託管與安全紀錄依服務供應商的保存政策處理。排行榜紀錄可能持續保存，直到例行維護、功能停止或收到合理的移除請求。彙總且無法識別個人的統計資料可能長期保留。</p></section>
 <section><h2>查詢與請求</h2>
 <p>若要詢問資料處理方式或要求移除排行榜紀錄，請透過聯絡頁提出。GitHub Issue 是公開頁面，請只描述需求，不要張貼 IP、帳號識別資訊或其他敏感資料。</p>
-<p><a href="/contact/">前往聯絡與回報</a></p></section>
-<section><h2>功能回饋</h2>
-<p>功能建議與使用體驗可以透過<a href="/feedback/">功能回饋頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。</p></section>
+<p><a href="/feedback/">前往回饋與聯絡</a></p></section>
+<section><h2>回饋與聯絡</h2>
+<p>功能建議與使用體驗可以透過<a href="/feedback/">回饋與聯絡頁</a>匿名送出；若選擇留下 Email，只有在明確同意回覆時才會保存。回饋內容與已同意提供的 Email 會轉送至站方 Discord 收件頻道，供站方處理與回覆。</p></section>
 <div class="notice"><p>本政策可能隨功能、服務供應商或法令要求更新，重大變更會以更新日期標示。</p></div>
-"""
-    contact_body = f"""
-<section><h2>適合回報的事項</h2>
-<ul><li>英雄、增幅、裝備或版本資料異常。</li><li>手機版、無障礙、載入速度或互動錯誤。</li><li>Meta Pick 排行榜紀錄移除。</li><li>隱私權、廣告或站務問題。</li></ul>
-<p><a class="action" href="{issues_url}" target="_blank" rel="noopener">建立 GitHub Issue</a></p></section>
-<section><h2>隱私提醒</h2>
-<p>GitHub Issue 會公開顯示。請勿貼上真實姓名、電子郵件、IP 位址、Riot ID、PUUID、驗證權杖或其他敏感資料。隱私請求只需提供排行榜暱稱、版本與大約提交時間，站方會視需要提供後續處理方式。</p></section>
-<section><h2>處理方式</h2>
-<p>請在標題簡述問題，並附上頁面網址、使用裝置與可重現步驟。資料問題若能附版本與畫面截圖，通常會更快定位。</p></section>
-<section><h2>功能建議</h2>
-<p>如果是新功能想法或使用流程建議，請改用<a href="/feedback/">功能回饋頁</a>；這類回饋可以匿名送出，內容不會直接公開。</p></section>
 """
     specs = (
         ("about", "關於 arammeta", "About", "ARAM Mayhem 的獨立資料工具、統計方法與開源資訊。", about_body),
         ("privacy", "隱私權政策", "Privacy", "arammeta 如何處理瀏覽資料、排行榜內容、Cookie 與第三方服務。", privacy_body),
-        ("contact", "聯絡與回報", "Contact", "回報資料、介面、排行榜、隱私權與站務問題。", contact_body),
     )
     written: list[Path] = []
     for slug, title, eyebrow, description, body in specs:
@@ -1305,7 +1197,6 @@ def write_site_info_pages(
         "zh-CN": "arammeta 未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 及其相关资产是 Riot Games, Inc. 的商标或注册商标。",
         "en": "arammeta is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
     }
-    feedback_updated_labels = {"zh": "最後更新", "zh-CN": "最后更新", "en": "Last updated"}
     for locale, copy in _FEEDBACK_COPY.items():
         prefix = str(copy["prefix"]).strip("/")
         relative_dir = Path(prefix) if prefix else Path()
@@ -1318,26 +1209,28 @@ def write_site_info_pages(
             issues_url=issues_url,
         )
         dest.write_text(
-            _info_page_html(
-                slug="feedback",
+            _feedback_page_html(
                 title=copy["title"],
-                eyebrow=copy["eyebrow"],
                 description=copy["description"],
                 body_html=body,
                 site_url=site_url,
-                updated=updated,
                 html_lang=copy["html_lang"],
                 canonical_path=canonical_path,
-                nav_items=_feedback_nav(copy),
                 head_extra_html=_feedback_head_links(site_url=site_url),
-                updated_label=feedback_updated_labels[locale],
-                updated_separator=":" if locale == "en" else "：",
                 footer_disclaimer=feedback_footer_disclaimers[locale],
-                body_class="feedback-page",
             ),
             encoding="utf-8",
         )
         written.append(dest)
+
+    contact = root / "contact" / "index.html"
+    contact.parent.mkdir(parents=True, exist_ok=True)
+    contact.write_text("<!doctype html><html lang='zh-Hant'><head><meta charset='utf-8'>"
+        "<meta http-equiv='refresh' content='0;url=/feedback/'>"
+        "<link rel='canonical' href='" + html.escape(site_url.rstrip('/') + '/feedback/', quote=True) + "'>"
+        "<title>回饋與聯絡 | arammeta</title></head><body>"
+        "<a href='/feedback/'>回饋與聯絡 / Feedback &amp; contact</a></body></html>", encoding="utf-8")
+    written.append(contact)
 
     if (site_url or "").strip().rstrip("/") == ADSENSE_SITE_ORIGIN:
         ads_txt = root / "ads.txt"
@@ -2620,6 +2513,7 @@ def render_html(
     build_date: str = "",
     cloudflare_analytics_token: str = "",
     ga_measurement_id: str = "",
+    shell_payload: dict | None = None,
     payload_out_path: Path | None = None,
     payload_url: str = "",
     icon_assets_dir: Path | None = None,
@@ -2855,14 +2749,164 @@ def render_html(
                 )
 
     # Common TW player nicknames and typo variants belong to the hero-only
-    # index. Keep this deliberately small and explicit: ambiguous slang can
+    # index. Keep this explicit: ambiguous slang can
     # make a fast in-game lookup noisier than a normal substring search.
     _CHAMPION_SEARCH_ALIASES: dict[str, tuple[str, ...]] = {
-        "shen": ("腎",),
-        "morgana": ("莫甘娜", "模乾那"),
-        "ezreal": ("EZ",),
-        "brand": ("火人",),
+        # Short nicknames/typos are explicit: fuzzy matching stays conservative
+        # so two-character queries do not match every similarly named champion.
+        # Include both scripts for slang absent from the official-name t2s map.
+        "aatrox": ("劍魔", "剑魔", "暗裔劍魔", "厄薩斯"),
+        "ahri": ("狐狸", "九尾狐"),
+        "akali": ("阿卡莉", "阿卡利"),
+        "akshan": ("阿克尚", "阿克桑"),
+        "alistar": ("牛", "牛頭", "牛头", "老牛"),
+        "amumu": ("木木", "阿木木", "木乃伊"),
+        "anivia": ("冰鳥", "冰鸟", "鳳凰", "凤凰"),
+        "annie": ("安妮", "火女"),
+        "aphelios": ("月男", "亞菲利歐", "亚菲利欧"),
+        "ashe": ("艾希", "寒冰", "冰弓"),
+        "aurelionsol": ("龍王", "龙王", "索爾", "索尔", "ASol"),
+        "azir": ("沙皇",),
+        "bard": ("巴德",),
+        "blitzcrank": ("機器人", "机器人", "機械人", "机械人"),
+        "brand": ("火人", "火男"),
+        "braum": ("布朗姆", "布隆"),
+        "caitlyn": ("女警", "凱特琳", "凯特琳"),
+        "camille": ("卡蜜兒", "青鋼影", "青钢影"),
+        "cassiopeia": ("蛇女",),
+        "chogath": ("大蟲", "大虫", "科加斯"),
+        "corki": ("飛機", "飞机"),
+        "darius": ("諾手", "诺手", "達瑞斯", "达瑞斯"),
+        "diana": ("皎月", "黛安娜"),
+        "draven": ("德萊文", "德莱文"),
+        "drmundo": ("蒙多", "蒙多醫生", "蒙多医生"),
+        "ekko": ("艾克",),
+        "elise": ("蜘蛛", "蜘蛛女"),
+        "evelynn": ("寡婦", "寡妇", "伊芙琳"),
+        "ezreal": ("EZ", "伊澤", "伊泽", "小黃毛", "小黄毛"),
+        "fiddlesticks": ("稻草人",),
+        "fiora": ("劍姬", "剑姬"),
+        "fizz": ("小魚人", "小鱼人", "魚人", "鱼人"),
+        "galio": ("加里歐", "加里奥"),
+        "gangplank": ("船長", "船长", "GP"),
+        "garen": ("蓋倫", "盖伦"),
+        "gnar": ("吶兒", "呐儿", "納兒"),
+        "gragas": ("酒桶", "古拉格斯"),
+        "graves": ("男槍", "男枪", "葛雷夫"),
+        "gwen": ("剪刀妹", "關", "格溫", "格温"),
+        "hecarim": ("人馬", "人马"),
+        "heimerdinger": ("大頭", "大头", "砲台", "炮台"),
+        "illaoi": ("觸手媽", "触手妈", "海獸祭司", "海兽祭司"),
+        "irelia": ("刀妹", "伊瑞莉雅", "伊瑞利亞", "伊瑞利亚", "伊瑞莉亞"),
+        "ivern": ("埃爾文", "艾翁", "小樹", "小树"),
+        "janna": ("風女", "风女", "珍娜"),
+        "jarvaniv": ("皇子", "嘉文", "J4", "德瑪西亞皇子", "德玛西亚皇子"),
+        "jax": ("武器", "武器大師", "武器大师", "賈克斯", "贾克斯"),
+        "jayce": ("杰西", "傑斯", "杰斯"),
+        "jhin": ("燼", "烬", "戲命師", "戏命师"),
+        "jinx": ("金克絲", "金克丝"),
+        "kaisa": ("卡莎", "凱莎", "凯莎"),
+        "kalista": ("滑板鞋", "卡莉絲塔", "卡莉丝塔"),
+        "karma": ("卡瑪", "卡玛", "扇子媽", "扇子妈"),
         "karthus": ("死歌", "死哥"),
+        "kassadin": ("卡薩丁", "卡萨丁"),
+        "katarina": ("卡特", "卡特蓮娜", "卡特琳娜"),
+        "kayle": ("天使",),
+        "kennen": ("電老鼠", "电老鼠", "凱南", "凯南"),
+        "khazix": ("螳螂", "卡茲克", "卡兹克"),
+        "kindred": ("千珏", "羊", "羊羊"),
+        "kogmaw": ("大嘴", "克格莫"),
+        "ksante": ("奎桑提", "卡桑帝"),
+        "leblanc": ("LB", "勒布朗", "妖姬", "詭術妖姬", "诡术妖姬"),
+        "leesin": ("李星", "李青", "盲僧", "瞎子"),
+        "leona": ("日女", "雷歐娜", "雷欧娜"),
+        "lillia": ("莉莉婭", "莉莉娅", "小鹿"),
+        "lissandra": ("冰女", "麗珊卓", "丽珊卓"),
+        "lucian": ("路西恩", "盧錫安", "卢锡安"),
+        "lulu": ("露露",),
+        "lux": ("拉克絲", "拉克丝", "光女", "光輝", "光辉"),
+        "malphite": ("石頭人", "石头人", "石頭", "石头"),
+        "malzahar": ("馬爾扎哈", "马尔扎哈", "螞蚱", "蚂蚱"),
+        "maokai": ("大樹", "大树", "茂凱", "茂凯"),
+        "masteryi": ("易大師", "易大师", "劍聖", "剑圣", "易師傅", "易师傅"),
+        "missfortune": ("MF", "好運姐", "好运姐", "女槍", "女枪", "賞金", "赏金"),
+        "monkeyking": ("猴子", "悟空", "孫悟空", "孙悟空", "Wukong"),
+        "mordekaiser": ("魔鬥", "魔斗", "鐵男", "铁男", "金屬大師", "金属大师"),
+        "morgana": ("莫甘娜", "魔甘娜", "模乾那", "魔干娜"),
+        "nami": ("娜美", "人魚", "人鱼"),
+        "nasus": ("狗頭", "狗头"),
+        "nautilus": ("泰坦", "納帝魯斯", "纳帝鲁斯"),
+        "nidalee": ("豹女", "奈德麗", "奈德丽"),
+        "nocturne": ("夜曲", "夢魘", "梦魇", "NOC"),
+        "nunu": ("努努", "努努和威朗普", "雪人"),
+        "olaf": ("歐拉夫", "欧拉夫"),
+        "orianna": ("球女", "發條", "发条"),
+        "pantheon": ("潘森", "斯巴達", "斯巴达"),
+        "poppy": ("波比",),
+        "pyke": ("派克",),
+        "qiyana": ("琪亞娜", "琪亚娜", "奇亞娜", "奇亚娜"),
+        "quinn": ("鳥人", "鸟人", "葵恩"),
+        "rammus": ("龍龜", "龙龟", "烏龜", "乌龟"),
+        "reksai": ("挖掘機", "挖掘机", "雷珂煞"),
+        "rell": ("銳兒", "锐儿", "芮爾", "芮尔"),
+        "renekton": ("鱷魚", "鳄鱼"),
+        "rengar": ("獅子", "狮子", "獅子狗", "狮子狗"),
+        "riven": ("瑞文", "銳雯", "锐雯"),
+        "rumble": ("藍寶", "蓝宝", "蘭博", "兰博"),
+        "ryze": ("光頭", "光头", "瑞茲", "瑞兹"),
+        "sejuani": ("豬女", "猪女", "史瓦妮"),
+        "senna": ("賽娜", "赛娜"),
+        "seraphine": ("瑟拉芬", "瑟菈芬", "歌姬"),
+        "sett": ("腕豪", "賽特", "赛特", "瑟提"),
+        "shaco": ("小丑",),
+        "shen": ("腎", "慎"),
+        "shyvana": ("龍女", "龙女", "希瓦娜"),
+        "singed": ("辛吉德", "煉金", "炼金", "毒男"),
+        "sion": ("賽恩", "赛恩", "塞恩"),
+        "sivir": ("輪子媽", "轮子妈", "希維爾", "希维尔"),
+        "skarner": ("蠍子", "蝎子"),
+        "sona": ("琴女", "索娜"),
+        "soraka": ("奶媽", "奶妈", "星媽", "星妈", "索拉卡"),
+        "swain": ("烏鴉", "乌鸦", "斯溫", "斯温"),
+        "sylas": ("賽勒斯", "赛勒斯", "塞拉斯"),
+        "syndra": ("星朵拉", "辛德拉", "暗黑元首"),
+        "tahmkench": ("塔姆", "蛤蟆", "鯰魚", "鲶鱼", "TK"),
+        "taliyah": ("岩雀", "塔莉雅"),
+        "talon": ("男刀", "塔隆"),
+        "taric": ("寶石", "宝石", "塔里克"),
+        "teemo": ("提摩", "提莫"),
+        "thresh": ("錘石", "锤石", "瑟雷西"),
+        "tristana": ("小砲", "小炮"),
+        "trundle": ("巨魔", "特朗德"),
+        "tryndamere": ("蠻王", "蛮王", "蠻三刀", "蛮三刀"),
+        "twistedfate": ("TF", "卡牌", "逆命"),
+        "twitch": ("老鼠", "圖奇", "图奇"),
+        "udyr": ("烏迪爾", "乌迪尔", "UD"),
+        "urgot": ("螃蟹", "烏爾加特", "乌尔加特"),
+        "varus": ("韋魯斯", "韦鲁斯"),
+        "vayne": ("VN", "汎", "薇恩"),
+        "veigar": ("小法", "小法師", "小法师", "維迦", "维迦"),
+        "velkoz": ("大眼", "大眼怪", "威寇茲", "威寇兹"),
+        "vex": ("薇可絲", "薇可丝", "薇古絲", "薇古丝"),
+        "viego": ("維爾戈", "维尔戈", "破敗王", "破败王"),
+        "viktor": ("三隻手", "三只手", "維克托", "维克托"),
+        "vladimir": ("吸血鬼",),
+        "volibear": ("熊", "狗熊", "雷熊"),
+        "warwick": ("狼人", "沃維克", "沃维克", "WW"),
+        "xayah": ("霞",),
+        "xerath": ("齊勒斯", "泽拉斯", "澤拉斯"),
+        "xinzhao": ("趙信", "赵信", "菊花信"),
+        "yasuo": ("犽宿", "亞索", "亚索", "牙宿"),
+        "yone": ("犽凝", "永恩", "牙凝"),
+        "yorick": ("約瑞科", "约瑞科", "掘墓", "挖墳", "挖坟"),
+        "yuumi": ("貓", "猫", "貓咪", "猫咪"),
+        "zac": ("札克", "扎克", "果凍", "果冻"),
+        "zed": ("劫",),
+        "zeri": ("婕莉", "澤麗", "泽丽"),
+        "ziggs": ("炸彈人", "炸弹人", "希格斯"),
+        "zilean": ("時光", "时光", "時光老頭", "时光老头", "極靈", "极灵"),
+        "zoe": ("柔依", "佐伊"),
+        "zyra": ("枷蘿", "枷萝", "婕拉", "植物人"),
     }
 
     def _champ_search_blob(cid: int, display_name: str, meta: dict, tags: list[str]) -> str:
@@ -3137,7 +3181,8 @@ def render_html(
         if key in trained_composition:
             recommendation_composition[key] = trained_composition[key]
 
-    draft_model = load_draft_composition_lr_payload()
+    draft_model = (shell_payload.get("draftModel") if shell_payload is not None
+                   else load_draft_composition_lr_payload())
     payload = {
         "champs": js_champs,
         "augs": js_augs,
@@ -3163,14 +3208,15 @@ def render_html(
         "team_score": _team_score_for_payload(team_score_bundle),
         "draftModel": draft_model,
         # Full builds can answer advanced augment/item searches immediately.
-        # A shell-only render has no detail rows in js_champs, so leave an empty
-        # marker and let the client load legacy detail shards on demand.
+        # Shell-only builds reuse the published index when the snapshot has one.
         "searchIndex": (
-            {"related": related_search_index}
+            shell_payload.get("searchIndex")
+            if shell_payload is not None and shell_payload.get("searchIndex")
+            else {"related": related_search_index}
             if any(related_search_index.values()) else {}
         ),
     }
-    if js_champs:
+    if js_champs and shell_payload is None:
         if draft_model is None:
             raise click.ClickException(_DRAFT_MODEL_ERROR)
         hydrate_draft_champion_profiles(payload, draft_model)
@@ -3349,15 +3395,6 @@ def render_html(
     REPO_URL = "https://github.com/Lanternko/ARAM-Mayhem-Database"
     short_patch = display_patch if display_patch else "all patches"
     date_str = f"更新於 {build_date}" if build_date else "日期未標"
-    globe_icon = (
-        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<circle cx='12' cy='12' r='10'></circle>"
-        "<path d='M2 12h20'></path>"
-        "<path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path>"
-        "</svg>"
-    )
     gh_icon = (
         "<svg viewBox='0 0 16 16' width='12' height='12' fill='currentColor' "
         "aria-hidden='true'><path d='M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1"
@@ -3371,117 +3408,7 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    # Fixed top header: brand (= home) + primary tabs + theme + language.
-    # 「英雄」 is the home tier-list tab; brand also returns home.
-    # Patch lives in the footer freshness line — not next to the wordmark.
-    # On narrow screens (<=700px) the header wraps: brand + actions on top,
-    # .nav-tabs as a full-bleed scrollable strip underneath.
-    # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
-    # that does not t2s-convert — CN / aramkit call it 海克斯.
-    NAV_TABS = (
-        ("home", "英雄", "Champions", None),
-        ("augments", "增幅", "Augments", "海克斯"),
-        ("draft", "Draft", "Draft", None),
-        ("game", "小遊戲", "Game", "小游戏"),
-        ("changes", "版本變動", "Patch Changes", None),
-        # 專欄 is unpublished; keep its draft source out of the public shell.
-        # ("column", "專欄", "Articles", None),
-    )
-    sun_icon = (
-        "<svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<circle cx='12' cy='12' r='4'></circle>"
-        "<path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"
-        "M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path>"
-        "</svg>"
-    )
-    moon_icon = (
-        "<svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path>"
-        "</svg>"
-    )
-    # data-nosnippet: without it Google's snippet fallback scrapes the nav
-    # tabs / role chips into the search result blurb.
-    parts.append("<header class='site-header' data-nosnippet>")
-    parts.append("<div class='site-header-inner'>")
-    parts.append(
-        "<button class='brand' data-nav-tab='home' type='button' aria-label='arammeta' "
-        "title='主頁'>"
-        # Wordmark only in the header — no icon, no patch chip (favicon stays for the tab).
-        # Weight split on aram/meta; both langs share the Latin mark.
-        "<span class='brand-title' id='site-title' aria-label='arammeta'>"
-        "<span class='brand-aram'>aram</span><span class='brand-meta'>meta</span>"
-        "</span>"
-        "</button>"
-    )
-    parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
-    for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
-        # Home (= 英雄) is active on first paint; brand and this tab both land there.
-        is_home = nav_key == "home"
-        zh_cn_attr = (
-            f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
-        )
-        parts.append(
-            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
-            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
-            f"aria-selected='{'true' if is_home else 'false'}' "
-            f"tabindex='{'0' if is_home else '-1'}' "
-            f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
-        )
-    parts.append("<span class='nav-ind' aria-hidden='true'></span>")
-    parts.append("</nav>")
-    parts.append("<div class='header-actions'>")
-    parts.append(
-        "<details class='mode-menu' id='mode-menu'>"
-        "<summary class='mode-select' aria-label='切換遊戲模式' "
-        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
-        "data-aria-en='Switch game mode'>"
-        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</span>"
-        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
-        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='m4 6 4 4 4-4'></path></svg>"
-        "</summary>"
-        "<div class='mode-options' role='menu'>"
-        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
-        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
-        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</a>"
-        "<a class='mode-option' role='menuitem' href='/classic.html' "
-        "data-mode-target='classic' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
-        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
-        "data-i18n-en='Classic'>經典模式</a>"
-        "</div></details>"
-    )
-    parts.append(
-        "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
-        "type='button' title='切換淺色' aria-label='切換主題'>"
-        f"{sun_icon}{moon_icon}"
-        "</button>"
-    )
-    # Language menu (aramkit-style <details> dropdown): 繁體 / 简体 / English.
-    parts.append(
-        "<details class='lang-menu' id='lang-menu'>"
-        "<summary class='icon-btn lang-toggle' id='lang-toggle' "
-        "title='繁體中文' aria-label='語言: 繁體中文'>"
-        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
-        "</summary>"
-        "<div class='lang-menu-list' role='menu'>"
-        "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
-        "aria-current='true'>繁體中文</button>"
-        "<button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button>"
-        "<button type='button' role='menuitem' data-lang='en'>English</button>"
-        "</div>"
-        "</details>"
-    )
-    parts.append("</div>")  # /header-actions
-    parts.append("</div>")  # /site-header-inner
-    parts.append("</header>")
+    parts.append(_site_header_html())
     parts.append("<main class='site-main'>")
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
@@ -3549,9 +3476,9 @@ def render_html(
         "</button>"
         "<button type='button' class='search-scope-option' "
         "data-search-scope='all' aria-pressed='false' "
-        "aria-label='英雄＋增幅＋裝備：查誰適合某個增幅或出裝'>"
-        "<span data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='Champions + augments + items'>英雄＋增幅＋裝備</span>"
-        "<small data-i18n-zh='查誰適合某個增幅或出裝' data-i18n-en='Find champions for an augment or build'>查誰適合某個增幅或出裝</small>"
+        "aria-label='全部：英雄＋增幅＋裝備'>"
+        "<span data-i18n-zh='全部' data-i18n-en='ALL'>全部</span>"
+        "<small data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='champions + augments + items'>英雄＋增幅＋裝備</small>"
         "</button>"
         "</div>"
         "</details>"
@@ -3731,10 +3658,8 @@ def render_html(
         "data-i18n-en='About'>關於</a>"
         "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
         "data-i18n-en='Privacy'>隱私權</a>"
-        "<a href='/contact/' data-i18n-zh='聯絡' data-i18n-zh-cn='联系' "
-        "data-i18n-en='Contact'>聯絡</a>"
-        "<a href='/feedback/' data-i18n-zh='功能回饋' data-i18n-zh-cn='功能反馈' "
-        "data-i18n-en='Feature feedback'>功能回饋</a>"
+        "<a href='/feedback/' data-href-zh='/feedback/' data-href-zh-cn='/zh-CN/feedback/' data-href-en='/en/feedback/' data-i18n-zh='回饋與聯絡' data-i18n-zh-cn='反馈与联系' "
+        "data-i18n-en='Feedback & contact'>回饋與聯絡</a>"
         "</nav>"
     )
     # Footer open-source control: pill affordance so it reads as clickable,
@@ -3994,6 +3919,7 @@ def render_html(
         "資料載入失敗，請稍後再試。</div>`);\n" \
         "});"
     js = js.replace("__PAYLOAD__", payload_expr)
+    js = js.replace("__AUGMENT_TAXONOMY__", json.dumps(augment_taxonomy_payload(), ensure_ascii=False))
     js = js.replace("__HEADER_TITLE_ZH__", json.dumps(header_title, ensure_ascii=False))
     js = js.replace("__HEADER_TITLE_EN__", json.dumps(header_title_en, ensure_ascii=False))
     js = js.replace("__SHORT_PATCH_ZH__", json.dumps(short_patch, ensure_ascii=False))
@@ -4104,60 +4030,22 @@ def _run_shell_only(
         )
     payload_text = payload_path.read_text(encoding="utf-8")
     payload = json.loads(payload_text)
-    # Stamp snapshot id when an older payload predates Meta Pick leaderboard.
-    if patch_prefix and not payload.get("patch_prefix"):
-        payload["patch_prefix"] = patch_prefix
-    # Always (re)export Draft model on shell-only so migrations
-    # (DeepSets → Composition LR) land without a multi-minute data rebuild.
-    draft_model = load_draft_composition_lr_payload()
-    if draft_model is not None:
-        prev_kind = (payload.get("draftModel") or {}).get("kind")
-        payload["draftModel"] = draft_model
-        if prev_kind and prev_kind != draft_model.get("kind"):
-            click.echo(
-                f"[shell-only] draftModel {prev_kind} → {draft_model.get('kind')} "
-                f"({draft_model.get('source_model')})"
-            )
-    elif not payload.get("draftModel"):
-        click.echo("[shell-only] WARN: Draft Composition LR unavailable; final WR disabled")
+    # The published snapshot belongs to the data lane. Shell builds must never
+    # migrate models, rehydrate profiles, slim JSON, or rewrite detail shards.
     champs = payload.get("champs") or {}
     if not champs:
         raise click.ClickException(f"{payload_path} has no champs; run a full build first.")
-    if draft_model is None:
-        raise click.ClickException(_DRAFT_MODEL_ERROR)
-    hydrate_draft_champion_profiles(payload, draft_model)
     validate_draft_public_payload(payload)
-
-    # Slim oversized payloads left over from older full builds (full ranked
-    # aug/item lists).  Rewrite in place so the next fetch is smaller without a
-    # multi-minute data rebuild.
-    before_bytes = payload_path.stat().st_size
-    slim_stats = slim_site_payload(payload)
+    patch_prefix = payload.get("patch_prefix") or patch_prefix
     if not build_date:
         build_date = _dt.date.today().isoformat()
-    # Shell-only can still replace Draft model weights and hydrated profiles.
-    # Derive the fetch version from the resulting payload so same-day publishes
-    # cannot keep serving a cached pre-update model.
-    payload_ver = payload_content_version(payload)
+    # Keep the published snapshot's existing cache key on a shell-only build.
+    # A frontend deploy must not make the browser fetch the data lane again.
+    payload_version = str(payload.get("detailVersion") or payload_content_version(payload))
     resolved_payload_url = versioned_payload_url(
         payload_url or "api/tier-list.json",
-        payload_ver,
+        payload_version,
     )
-    shard_stats = write_champion_detail_shards(
-        payload,
-        payload_out_path=payload_path,
-        payload_url=resolved_payload_url,
-        version=payload_ver,
-    )
-    slim_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    if slim_json != payload_text or shard_stats["champs"]:
-        payload_path.write_text(slim_json, encoding="utf-8")
-        click.echo(
-            f"[shell-only] slimmed {payload_path.name}: "
-            f"{before_bytes / 1e6:.1f} MB → {len(slim_json.encode('utf-8')) / 1e6:.1f} MB "
-            f"(rows {slim_stats['before_rows']:,} → {slim_stats['after_rows']:,})"
-        )
-    champs = payload.get("champs") or {}
 
     # Reconstruct just what the shell + server grid need straight from the payload
     # (no DB win-rate / affinity compute).  champ_meta carries name / tags /
@@ -4210,6 +4098,7 @@ def _run_shell_only(
         min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        shell_payload=payload,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
@@ -4231,6 +4120,7 @@ def _run_shell_only(
         min_synergy_games=min_synergy_games, site_url=site_url, og_image=og_image,
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
+        shell_payload=payload,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,

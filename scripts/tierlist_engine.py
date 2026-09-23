@@ -34,6 +34,11 @@ import click
 import httpx
 
 from aram_nn import patch_snapshot
+from aram_nn.site.augment_taxonomy import (
+    AUGMENT_CATEGORY_ORDER,
+    AUGMENT_CATEGORY_LABELS,
+    augment_taxonomy_payload,
+)
 
 try:
     from champion_roles import (
@@ -2538,26 +2543,13 @@ def augment_type_infos(meta: dict | None) -> list[dict[str, str]]:
 
 
 # ---- User-facing augment category filter (site chips) -----------------------
-# Nine coarse buckets the tier-list site exposes as filter chips above each
+# Shared detailed categories exposed as filter chips above each
 # champion's augment ranking.  Most are derived from the finer internal type
 # slugs; `cd` and `amp` add dedicated keyword passes (cooldown / damage-amp are
 # folded into broader internal slugs), and `new` is the data-driven "introduced
 # this patch" set.  Buckets intentionally OVERLAP — an AP burn augment is both
 # `ap` and `amp` — because the chips are OR filters, so an augment shows under
 # every chip that fits it.
-AUGMENT_CATEGORY_ORDER = ("ap", "ad", "tank", "support", "gold", "mechanic", "cd", "new", "crit", "amp")
-AUGMENT_CATEGORY_LABELS = {
-    "ap":       {"zh": "AP",   "en": "AP"},
-    "ad":       {"zh": "AD",   "en": "AD"},
-    "tank":     {"zh": "坦度", "en": "Tank"},
-    "support":  {"zh": "輔助", "en": "Support"},
-    "gold":     {"zh": "金錢", "en": "Gold"},
-    "mechanic": {"zh": "機制", "en": "Mechanic"},
-    "cd":       {"zh": "CD",   "en": "CD"},
-    "new":      {"zh": "新",   "en": "New"},
-    "crit":     {"zh": "暴擊", "en": "Crit"},
-    "amp":      {"zh": "增傷", "en": "Amp"},
-}
 # Internal type slug -> user chip.  mobility / utility / official_speed have no
 # dedicated chip (they show only under "全部").
 _TYPE_SLUG_TO_CATEGORY = {

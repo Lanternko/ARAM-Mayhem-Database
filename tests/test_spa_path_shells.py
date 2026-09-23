@@ -209,18 +209,36 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertTrue((root / "about" / "index.html").is_file())
             self.assertTrue((root / "contact" / "index.html").is_file())
             feedback = (root / "feedback" / "index.html").read_text(encoding="utf-8")
-            self.assertIn("功能回饋", feedback)
+            self.assertIn("回饋與聯絡", feedback)
             self.assertIn("https://api.arammeta.com/api/feedback", feedback)
             self.assertIn("data-feedback-form", feedback)
+            self.assertIn("class='site-header'", feedback)
+            self.assertNotIn('class="feedback-language"', feedback)
+            self.assertNotIn('name="category"', feedback)
+            self.assertNotIn('name="impact"', feedback)
+            self.assertNotIn('name="feature"', feedback)
+            self.assertIn('data-consent-row hidden', feedback)
+            contact = (root / "contact" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("content='0;url=/feedback/'", contact)
+            self.assertNotIn('data-feedback-form', contact)
+            for route, lang, prefix in (("feedback", "zh-Hant", ""), ("en/feedback", "en", "/en"), ("zh-CN/feedback", "zh-Hans", "/zh-CN")):
+                page = (root / route / "index.html").read_text(encoding="utf-8")
+                self.assertIn(f"lang='{lang}'", page)
+                self.assertIn(f"href='{prefix}/draft/'", page)
+                self.assertIn(f"href='{prefix}/augments/'", page)
+                self.assertNotIn("aria-controls='view-", page)
+            cn = (root / "zh-CN/feedback/index.html").read_text(encoding="utf-8")
+            self.assertIn('data-locale="zh-CN"', cn)
+
             self.assertIn("hreflang='en'", feedback)
             self.assertTrue((root / "en" / "feedback" / "index.html").is_file())
             self.assertIn(
-                "Feature feedback",
+                "Feedback &amp; contact",
                 (root / "en" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
             self.assertTrue((root / "zh-CN" / "feedback" / "index.html").is_file())
             self.assertIn(
-                "功能反馈",
+                "反馈与联系",
                 (root / "zh-CN" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
             self.assertEqual(

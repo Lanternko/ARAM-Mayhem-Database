@@ -1122,8 +1122,8 @@
             searchScopeHint: '預設只搜尋英雄名稱；展開後可搜尋增幅與裝備',
             searchScopeChampionOption: '只搜英雄',
             searchScopeChampionHint: '中／英文名稱、別名',
-            searchScopeAllOption: '英雄＋增幅＋裝備',
-            searchScopeAllHint: '查誰適合某個增幅或出裝',
+            searchScopeAllOption: '全部',
+            searchScopeAllHint: '英雄＋增幅＋裝備',
             shownUnit: '隻',
             tierUnit: '隻',
             updatesButton: '近期更新',
@@ -1473,8 +1473,8 @@
             searchScopeHint: 'Searches champion names by default; expand for augments and items',
             searchScopeChampionOption: 'Champions only',
             searchScopeChampionHint: 'Chinese / English names and aliases',
-            searchScopeAllOption: 'Champions + augments + items',
-            searchScopeAllHint: 'Find champions for an augment or build',
+            searchScopeAllOption: 'ALL',
+            searchScopeAllHint: 'champions + augments + items',
             shownUnit: 'shown',
             tierUnit: 'shown',
             updatesButton: 'Updates',
@@ -2447,6 +2447,7 @@
 
     let _itemFloatTipEl = null;
     let _itemFloatTipHideTimer = 0;
+    let _itemFloatTipAnchor = null;
     function ensureItemFloatTip() {
         if (_itemFloatTipEl && document.body.contains(_itemFloatTipEl)) return _itemFloatTipEl;
         const el = document.createElement('div');
@@ -2454,6 +2455,8 @@
         el.className = 'item-float-tip';
         el.setAttribute('role', 'tooltip');
         el.hidden = true;
+        el.addEventListener('mouseenter', () => clearTimeout(_itemFloatTipHideTimer));
+        el.addEventListener('mouseleave', scheduleHideItemFloatTip);
         document.body.appendChild(el);
         _itemFloatTipEl = el;
         return el;
@@ -2464,6 +2467,8 @@
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
+        if (_itemFloatTipAnchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        _itemFloatTipAnchor = null;
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
@@ -2528,14 +2533,20 @@
 
     function showItemFloatTip(anchor) {
         if (!anchor) return;
+        const poolId = anchor.getAttribute('data-recommended-pool');
         const src = anchor.querySelector('.item-tip-src');
-        if (!src) return;
+        if (!src && !poolId) return;
+        if (_itemFloatTipAnchor && _itemFloatTipAnchor !== anchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        _itemFloatTipAnchor = anchor;
+        anchor.setAttribute('aria-describedby', 'item-float-tip');
+        if (poolId && !augPools.data) loadAugPools();
         if (_itemFloatTipHideTimer) {
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
         const el = ensureItemFloatTip();
-        el.innerHTML = src.innerHTML;
+        el.classList.toggle('is-pool-tip', Boolean(poolId));
+        el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
         el.hidden = false;
         el.classList.add('is-visible');
         positionItemFloatTip(anchor);
@@ -2592,17 +2603,23 @@
     function searchEditDistanceWithin(a, b, limit) {
         if (Math.abs(a.length - b.length) > limit) return limit + 1;
         let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+        let prevPrev = null;
         for (let i = 1; i <= a.length; i += 1) {
             const next = [i];
             for (let j = 1; j <= b.length; j += 1) {
                 const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-                const value = Math.min(
+                let value = Math.min(
                     next[j - 1] + 1,
                     prev[j] + 1,
                     prev[j - 1] + cost,
                 );
+                // Adjacent mistyped letters count as one edit (ireila → irelia).
+                if (prevPrev && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                    value = Math.min(value, prevPrev[j - 2] + 1);
+                }
                 next.push(value);
             }
+            prevPrev = prev;
             prev = next;
         }
         return prev[b.length];
@@ -2659,6 +2676,11 @@
             }
         }
         return false;
+    }
+
+    function searchHasExactToken(haystack, query) {
+        const queries = searchVariants(String(query || '').trim()).map(compactSearchText).filter(Boolean);
+        return searchVariants(haystack).some(text => searchTokens(text).some(token => queries.includes(token)));
     }
 
     function entrySearchText(entry) {
@@ -2825,7 +2847,7 @@
         const pickHeat = onBoard
             ? pickHeatClass(pickRate, augBoardColorTier)
             : pickHeatClass(pickRate);
-        const cats = (aug && Array.isArray(aug.cats)) ? aug.cats.join(' ') : '';
+        const cats = augmentPurposeTags(aug && aug.cats).join(' ');
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
@@ -3100,8 +3122,13 @@
     // show/hide the matching cards (+ collapse rarity rows that empty out)
     // without re-rendering the whole detail.
     const augCatFilter = new Set();
+    const AUGMENT_TAXONOMY = __AUGMENT_TAXONOMY__;
     function augCatMeta() {
-        return (DATA && DATA.augCategories) || { order: [], labels: {}, newPatch: '' };
+        return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
+    }
+    function augmentPurposeTags(cats) {
+        const tags = (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
+        return tags.some(cat => cat !== 'new' && cat !== 'other') ? tags.filter(cat => cat !== 'other') : [...new Set([...tags, 'other'])];
     }
     function augCatLabel(cat) {
         const lbl = (augCatMeta().labels || {})[cat];
@@ -3412,11 +3439,112 @@
     function loadAugPools() {
         if (augPools.data || augPools.loading) return;
         augPools.loading = true;
+        augPools.failed = false;
         loadSitePayload('api/augment-pools.json')
             .then(d => { augPools.data = d; apoolIndex(d); })
             .catch(() => { augPools.failed = true; })
-            .finally(() => { augPools.loading = false; if (augMode === 'pools') renderAugPools(); });
+            .finally(() => {
+                augPools.loading = false;
+                if (augMode === 'pools') renderAugPools();
+                renderChampionPools();
+                const anchor = _itemFloatTipAnchor;
+                if (anchor && anchor.isConnected && anchor.hasAttribute('data-recommended-pool')) {
+                    const el = ensureItemFloatTip();
+                    el.innerHTML = recommendedPoolTip(anchor.getAttribute('data-recommended-pool'), anchor.textContent.trim());
+                    positionItemFloatTip(anchor);
+                }
+            });
     }
+    function recommendedPoolTip(poolId, fallbackName) {
+        const pool = augPools.byId && augPools.byId[poolId];
+        const ids = pool ? [...new Set(pool.augs || [])] : [];
+        const status = !augPools.data
+            ? (augPools.failed ? pickLang('載入失敗，請再次開啟重試', 'Could not load. Open again to retry.') : pickLang('正在載入增幅池…', 'Loading augment pool…'))
+            : pickLang('找不到此增幅池的內容', 'Pool contents unavailable');
+        return `<div class="item-tip-card"><div class="item-tip-name">${escHtml(pool ? apoolLabel(pool) : fallbackName)}</div>`
+            + (pool ? `<div class="item-tip-sub">${escHtml(pickLang('池內增幅', 'Pool augments'))} · ${ids.length}</div>`
+                + `<ul class="recommended-pool-members">${ids.map(id => {
+                    const aug = apoolAug(id);
+                    return `<li>${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}<span>${escHtml(aug.name)}</span></li>`;
+                }).join('')}</ul>` : `<div class="item-tip-sub" role="status">${escHtml(status)}</div>`)
+            + '</div>';
+    }
+    // Pool groups are the compact view of the same detailed filter taxonomy.
+    function championPoolCategory(cats) {
+        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || 'other';
+        return AUGMENT_TAXONOMY.groups.find(group => group.categories.includes(category)).id;
+    }
+    function championPoolEntries(cid, data, catalogue) {
+        const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
+        const entries = new Map();
+        for (const [pid, rawWeight] of (data.champs || {})[cid] || []) {
+            const pool = pools.get(String(pid));
+            if (!pool) continue;
+            const weight = apoolWeight(rawWeight);
+            for (const aid of new Set((pool.augs || []).map(String))) {
+                if (!entries.has(aid)) entries.set(aid, {
+                    id: aid, weight, category: championPoolCategory((catalogue[aid] || {}).cats || []), sources: [],
+                });
+                const entry = entries.get(aid);
+                entry.weight = Math.max(entry.weight, weight);
+                if (!entry.sources.some(source => source.pool.id === pool.id)) entry.sources.push({pool, weight});
+            }
+        }
+        return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
+    }
+    function championPoolAugHtml(entry) {
+        const aug = apoolAug(entry.id);
+        const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
+        const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
+        const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
+            `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
+        const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
+        const tip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc})
+            .trim().replace(/<\/div>$/, sourceHtml + '</div>');
+        return `<li><button type="button" class="champ-pool-augment has-item-tip" data-pool-augment="${escHtml(entry.id)}">`
+            + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="28" height="28">` : '')
+            + `<span>${escHtml(aug.name)}<small>${escHtml(rarity)}</small></span>${itemTipSource(tip)}</button></li>`;
+    }
+    function championPoolsHtml(cid) {
+        const d = augPools.data;
+        if (!d) return `<p role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
+            + (augPools.failed ? `<button type="button" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
+        const entries = championPoolEntries(cid, d, DATA.augs || {});
+        if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
+        const weights = [...new Set(entries.map(e => e.weight))];
+        const groups = weights.map(weight => {
+            const members = entries.filter(e => e.weight === weight);
+            return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
+                + AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
+                    const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
+                    const list = members.filter(e => e.category === cat).sort((a, b) => {
+                        const left = apoolAug(a.id), right = apoolAug(b.id);
+                        return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
+                            || left.name.localeCompare(right.name);
+                    });
+                    if (!list.length) return '';
+                    return `<div class="champ-pool-category"><h4>${escHtml(pickLang(zh, en))}<small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
+                }).join('') + '</section>';
+        }).join('');
+        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
+            + `<p class="champ-pools-note">${escHtml(pickLang('取來源池最高權重排序，非抽中率。點增幅看來源。', 'Sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
+            + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
+    }
+    function renderChampionPools() {
+        document.querySelectorAll('[data-champ-pools]').forEach(host => {
+            host.innerHTML = championPoolsHtml(host.dataset.champPools);
+        });
+    }
+    document.addEventListener('change', ev => {
+        if (!ev.target.matches('.detail-tab-input[id$="-pools"]')) return;
+        renderChampionPools();
+        loadAugPools();
+    });
+    document.addEventListener('click', ev => {
+        if (!ev.target.closest('[data-champ-pools-retry]')) return;
+        loadAugPools();
+        renderChampionPools();
+    });
     function renderAugPools() {
         const host = document.getElementById('aug-pools-host');
         if (!host) return;
@@ -3444,6 +3572,7 @@
             + `</div>`
             + `<section class="apool-panel" aria-label="${escHtml(pickLang('用英雄查池子', 'Pools by champion'))}">`
             + `<div class="apool-picker">`
+            + `<label class="apool-picker-label" for="apool-search">${escHtml(pickLang("選擇英雄", "Choose a champion"))}</label>`
             + `<input class="apool-search" id="apool-search" type="search" autocomplete="off" `
             + `placeholder="${escHtml(pickLang('搜尋英雄（中 / 英）', 'Search champions'))}" aria-label="${escHtml(searchLbl)}">`
             + apoolRoleBarHtml()
@@ -3546,7 +3675,7 @@
                 + `<button type="button" class="apool-row" data-apool-row="${escHtml(r.p.id)}"${apoolHueAttr(r.p)} aria-expanded="${open}">`
                 + `<span class="apool-row-name">${escHtml(apoolLabel(r.p))}${apoolTag(r.p)}</span>`
                 + `<span class="apool-bar"><span class="apool-fill" style="width:${apoolWeight(r.w) / 2}%"></span></span>`
-                + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}</span>`
+                + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}<span class="apool-chevron" aria-hidden="true">${open ? "−" : "+"}</span></span>`
                 + `</button>`
                 + (open ? apoolAugListHtml(r.p) : '')
                 + `</li>`;
@@ -3557,7 +3686,7 @@
             + `<p class="apool-detail-sub">${escHtml(pickLang(
                 `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`,
                 `${rows.length} pools · up to ${union.size} augments`))}</p></div></div>`
-            + apoolLegendHtml()
+            + `<p class="apool-footnote">${escHtml(pickLang("權重越高，越容易抽到該池；數值不是機率。點選池子查看增幅。", "Higher weights favor a pool; values are not probabilities. Select a pool to see its augments."))}</p>`
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
             + `<ul class="apool-rows">${body}</ul>`
@@ -3625,10 +3754,10 @@
                     ? apoolMatrixHtml(list)
                     : `<div class="apool-pool-list">${list.map(apoolPoolBtnHtml).join('')}</div>`;
                 const open = list.find(p => p.id === augPools.openPool);
-                return `<div class="apool-family">`
-                    + `<div class="apool-family-head"><h4>${escHtml(pickLang(zh, en))}</h4><p>${escHtml(pickLang(dzh, den))}</p></div>`
-                    + inner + (open ? apoolPoolDetailHtml(open) : '')
-                    + `</div>`;
+                return `<details class="apool-family" data-apool-family="${escHtml(fam)}"${open ? " open" : ""}>`
+                    + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang(zh, en))}<span class="apool-family-count">${list.length}</span></span><span class="apool-family-desc">${escHtml(pickLang(dzh, den))}</span></summary>`
+                    + `<div class="apool-family-body">` + inner + (open ? apoolPoolDetailHtml(open) : '')
+                    + `</div></details>`;
             }).join('');
     }
     function apoolDiffHtml(d) {
@@ -3739,7 +3868,11 @@
             const id = pool.getAttribute('data-apool-pool');
             augPools.openPool = augPools.openPool === id ? null : id;
             const all = document.getElementById('apool-all');
-            if (all) all.innerHTML = apoolAllHtml(augPools.data);
+            if (all) {
+                const expanded = new Set([...all.querySelectorAll('details[open]')].map(el => el.dataset.apoolFamily));
+                all.innerHTML = apoolAllHtml(augPools.data);
+                all.querySelectorAll('details').forEach(el => { if (expanded.has(el.dataset.apoolFamily)) el.open = true; });
+            }
             apoolRefocus(`[data-apool-pool="${CSS.escape(id)}"]`);
         }
     });
@@ -4502,7 +4635,7 @@
                         <h3>${title}</h3>
                         ${metaHtml}
                     </div>
-                    ${buildFitList(bestRows, 'good')}
+                    ${options.augmentPools ? `<div class="fit-chip-list">${bestRows.map(entry => `<button type="button" class="fit-chip good has-item-tip recommended-pool-chip" data-recommended-pool="${escHtml(entry.slug || '')}">${escHtml(setEntryName(entry))}</button>`).join('')}</div>` : buildFitList(bestRows, 'good')}
                 </div>
             `;
         };
@@ -4815,7 +4948,7 @@
                     ${topRows}
                 </div>
             </div>
-            ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo)}
+            ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
         `;
         // Champ icon + name live inside the sticky rail with the main tabs so
         // they pin together under the site header (and floating search chip).
@@ -4831,6 +4964,7 @@
             { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
+            { key: 'pools', label: pickLang('增幅池', 'Augment pools'), content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
         ], 'detail-main-tabs', stickyLeadHtml);
         return detailTabs;
@@ -8320,7 +8454,7 @@
     function augDraftCatLabel(aug) {
         const cats = aug && Array.isArray(aug.cats) ? aug.cats : [];
         if (!cats.length) return '';
-        const meta = (DATA && DATA.augCategories && DATA.augCategories.labels) || {};
+        const meta = augCatMeta().labels;
         const row = meta[cats[0]];
         if (!row) return '';
         return currentLang === 'en' ? (row.en || '') : zhUi(row.zh || row.en || '');
@@ -10137,7 +10271,7 @@
             } else val = el.getAttribute('data-i18n-zh');
             if (val != null) el.textContent = val;
         });
-        document.querySelectorAll('.mode-option[data-mode-target]').forEach(el => {
+        document.querySelectorAll('[data-href-zh]').forEach(el => {
             const suffix = currentLang === 'en' ? 'en' : (currentLang === 'zh-CN' ? 'zh-cn' : 'zh');
             const href = el.getAttribute(`data-href-${suffix}`);
             if (href) el.setAttribute('href', href);
@@ -10941,6 +11075,12 @@
         const allSearch = filterState.scope === 'all';
         const relatedMatches = allSearch && q ? relatedSearchMatches(q) : null;
         const hasRelatedIndex = Boolean(activeRelatedSearchIndex());
+        // Prefer an exact nickname over partial/fuzzy hits: 刀妹 is Irelia,
+        // while 剪刀妹 is Gwen. Fall back when no complete name/alias matches.
+        const exactHeroes = new Set();
+        if (q) document.querySelectorAll('.tier-grid > .champ').forEach(c => {
+            if (searchHasExactToken(c.getAttribute('data-champion-search') || '', q)) exactHeroes.add(c);
+        });
         let shown = 0;
         document.querySelectorAll('.tier-block').forEach(block => {
             let tierShown = 0;
@@ -10953,7 +11093,7 @@
                 ].join(' ');
                 const blob = c.getAttribute('data-search') || championBlob;
                 const matchRole = !role || tags.includes(role);
-                const heroMatch = !q || searchMatchesText(championBlob, q);
+                const heroMatch = !q || (exactHeroes.size ? exactHeroes.has(c) : searchMatchesText(championBlob, q));
                 const relatedMatch = Boolean(
                     q
                     && allSearch
@@ -11037,6 +11177,10 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
+            if (_itemFloatTipAnchor && _itemFloatTipAnchor.hasAttribute('data-recommended-pool')) {
+                hideItemFloatTip();
+                return;
+            }
             const modeMenu = document.getElementById('mode-menu');
             if (modeMenu && modeMenu.open) {
                 modeMenu.open = false;
@@ -11096,7 +11240,7 @@
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         const to = ev.relatedTarget;
-        if (to && host.contains(to)) return;
+        if (to && (host.contains(to) || (_itemFloatTipEl && _itemFloatTipEl.contains(to)))) return;
         // Moving between nested hosts (core icon -> head) should not flicker off.
         if (to && to.closest && to.closest('.has-item-tip')) return;
         scheduleHideItemFloatTip();
@@ -11109,11 +11253,20 @@
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         const to = ev.relatedTarget;
-        if (to && host.contains(to)) return;
+        if (to && (host.contains(to) || (_itemFloatTipEl && _itemFloatTipEl.contains(to)))) return;
         if (to && to.closest && to.closest('.has-item-tip')) return;
         scheduleHideItemFloatTip();
     });
-    window.addEventListener('scroll', () => hideItemFloatTip(), { passive: true, capture: true });
+    document.addEventListener('click', ev => {
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool]');
+        if (host) showItemFloatTip(host);
+        else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
+    });
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') hideItemFloatTip(); });
+    window.addEventListener('scroll', ev => {
+        if (_itemFloatTipEl && _itemFloatTipEl.contains(ev.target)) return;
+        hideItemFloatTip();
+    }, { passive: true, capture: true });
     window.addEventListener('resize', () => hideItemFloatTip(), { passive: true });
 
     document.addEventListener('mouseover', (ev) => {

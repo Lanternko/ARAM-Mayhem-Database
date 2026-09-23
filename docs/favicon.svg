@@ -1,20 +1,5 @@
-<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'>
-  <defs>
-    <linearGradient id='die' x1='72' y1='56' x2='196' y2='208' gradientUnits='userSpaceOnUse'>
-      <stop offset='0' stop-color='#f7fbff'/>
-      <stop offset='0.45' stop-color='#d7e8ff'/>
-      <stop offset='1' stop-color='#e8d6ff'/>
-    </linearGradient>
-  </defs>
-  <rect x='8' y='8' width='240' height='240' rx='52' fill='#0b0f1a'/>
-  <rect x='48' y='48' width='160' height='160' rx='36' fill='url(#die)'
-        stroke='rgba(255,255,255,0.55)' stroke-width='6'/>
-  <g fill='#0b0f1a'>
-    <circle cx='96' cy='96' r='14'/>
-    <circle cx='160' cy='96' r='14'/>
-    <circle cx='96' cy='128' r='14'/>
-    <circle cx='160' cy='128' r='14'/>
-    <circle cx='96' cy='160' r='14'/>
-    <circle cx='160' cy='160' r='14'/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect x="3" y="3" width="58" height="58" rx="12" fill="#101114"/>
+  <circle cx="21" cy="21" r="8" fill="#f5c518"/>
+  <circle cx="43" cy="43" r="8" fill="#f5c518"/>
 </svg>

@@ -201,6 +201,10 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 桌面字標為 26px，行動版縮為 22px，line-height 固定為 1，letter-spacing 為 -0.035em。不可使用全大寫 `ARAM META`、斜體電競字、描邊、發光或拆成兩個按鈕。
 
+### Favicon
+
+分頁圖示使用純骰子：炭黑 `#101114` 圓角正方形形成骰面，內部為兩顆大型金色 `#f5c518` 圓點，沿對角線排列；外側透明，不加第二層底框，也不融合字母 A。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`；SVG、PNG 與 ICO 共用同一座標。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
+
 ### Hierarchy
 
 - **Wordmark**，600、26px、1：只用於 global header，內部以 500 與 700 建立 `aram` 和 `meta` 對比。
@@ -290,6 +294,10 @@ Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與
 - **Focus:** Border 切到 accent 並出現 2px focus ring，placeholder 不得變成唯一 label。
 - **States:** Loading、empty、error 與 disabled 均保留同一高度和 layout，避免資料到達時跳動。
 - **Search behavior:** Champion、augment 與跨語系 alias 可被索引，結果更新不應阻塞鍵盤輸入。
+
+### Augment category hierarchy
+
+增幅用途分類由 `src/aram_nn/site/augment_taxonomy.py` 共用。增幅裝置保留 AD、AP、暴擊、增傷、防守、輔助、冷卻、經濟、特殊機制的細分類；英雄增幅池將 AD／AP／暴擊／增傷合併為「輸出」，其餘名稱一致。缺乏用途標籤的項目顯示「未分類」；「本版新增」是獨立狀態篩選，不作用途分類。細分類可多選，池內採固定優先序指定單一主類，以保留跨英雄一致的去重呈現。池內排序依最高來源池權重，再按分類及銀／金／彩稀有度；所有來源權重保留在增幅提示中。
 
 ### Tier tiles and data rows
 

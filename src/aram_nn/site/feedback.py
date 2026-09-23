@@ -171,6 +171,16 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 def ensure_feedback_schema(con: sqlite3.Connection) -> None:
     con.execute(CREATE_FEEDBACK_SQL)
     con.execute(CREATE_FEEDBACK_INDEX_SQL)
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS feedback_discord_outbox (
+            feedback_id INTEGER PRIMARY KEY REFERENCES feedback(id),
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at REAL NOT NULL DEFAULT 0,
+            delivered_at REAL,
+            discord_message_id TEXT,
+            last_error TEXT
+        )
+    """)
     con.commit()
 
 
@@ -200,7 +210,12 @@ def insert_feedback(
                 timestamp,
             ),
         )
+        feedback_id = int(cursor.lastrowid)
+        con.execute(
+            "INSERT INTO feedback_discord_outbox (feedback_id) VALUES (?)",
+            (feedback_id,),
+        )
         con.commit()
-        return int(cursor.lastrowid)
+        return feedback_id
     finally:
         con.close()
