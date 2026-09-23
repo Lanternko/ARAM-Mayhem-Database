@@ -110,7 +110,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260923-1790132297");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260924-1790179765");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -756,8 +756,8 @@
     const HEADER_TITLE_ZH = "arammeta";
     const HEADER_TITLE_EN = "arammeta";
     const SHORT_PATCH_ZH = "26.18";
-    const DATE_STR_ZH = "更新於 2026-09-23";
-    const BUILD_DATE = "2026-09-23";
+    const DATE_STR_ZH = "更新於 2026-09-24";
+    const BUILD_DATE = "2026-09-24";
     const PATCH_LABEL = "patch 26.18";
     const TOTAL_GAMES = "536,935";
     const LANG_KEY = 'aram-mayhem-site-lang';
