@@ -362,6 +362,7 @@ class WriterService:
             sb._register_sql_functions(self.con)
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_RANK_INDEX_SQL)
+            self.con.execute(sb._CREATE_GENERAL_CLAIM_INDEX_SQL)
             # Same one-shot flags as snowball._ensure_schema.  Without these, a
             # DB that first meets the new columns here keeps classic_lambda=0
             # and the score arm silently uses the discovery prior for everyone.
@@ -1365,7 +1366,7 @@ class WriterService:
                 """SELECT q.queue_idx, q.puuid, q.depth, q.source,
                           q.discovered_match_created_ms, q.seed_family,
                           q.discovered_queue_id
-                   FROM crawl_queue q
+                   FROM crawl_queue q INDEXED BY idx_crawl_queue_general_claim
                    WHERE q.status = 'pending'
                      AND q.eligible_at_ms <= ?
                      AND q.classic_affinity_rank = 0
@@ -1373,7 +1374,8 @@ class WriterService:
                            SELECT 1 FROM crawl_seen s
                            WHERE s.puuid = q.puuid AND s.process_count > 0)
                    ORDER BY q.discovered_match_created_ms DESC,
-                            q.priority ASC, q.depth ASC, q.queue_idx ASC
+                            q.priority ASC, q.depth ASC, q.updated_at ASC,
+                            q.queue_idx ASC
                    LIMIT 1""",
                 (now,),
             ).fetchone()
@@ -1383,7 +1385,7 @@ class WriterService:
             row = self.con.execute(
                 """SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
                           seed_family, discovered_queue_id
-                   FROM crawl_queue
+                   FROM crawl_queue INDEXED BY idx_crawl_queue_general_claim
                    WHERE status = 'pending'
                      AND eligible_at_ms <= ?
                      AND classic_affinity_rank = 0

@@ -483,6 +483,11 @@ def test_writer_bootstraps_classic_yield_on_pre_estimator_db(tmp_path: pathlib.P
             "AND name='idx_crawl_queue_classic_rank'"
         ).fetchone()
         assert rank_index is not None
+        general_index = service.con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='index' "
+            "AND name='idx_crawl_queue_general_claim'"
+        ).fetchone()
+        assert general_index is not None
         flag = service.con.execute(
             "SELECT 1 FROM crawl_runtime_state WHERE state_key=?",
             (_CLASSIC_RATE_BOOTSTRAP_FLAG,),

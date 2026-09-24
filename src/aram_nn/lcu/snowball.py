@@ -180,6 +180,19 @@ ON crawl_queue(classic_affinity_rank DESC, eligible_at_ms ASC)
 WHERE status = 'pending' AND classic_affinity_rank > 0;
 """
 
+# Same failure on the general and unvisited lanes: both ORDER BY recency over
+# the ~640k rank-0 pending rows, and through idx_writer_queue_claim that was a
+# full TEMP B-TREE sort per claim (2s general, 11s unvisited live), enough to
+# push producers past the writer RPC timeout into a crash loop.  This partial
+# index matches their ORDER BY exactly, so LIMIT 1 stops at the first eligible
+# row (<10ms); both lanes name it with INDEXED BY for the same planner reason.
+_CREATE_GENERAL_CLAIM_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_general_claim
+ON crawl_queue(discovered_match_created_ms DESC, priority ASC, depth ASC,
+               updated_at ASC, queue_idx ASC)
+WHERE status = 'pending' AND classic_affinity_rank = 0;
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -1113,6 +1126,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_RANK_INDEX_SQL)
+    con.execute(_CREATE_GENERAL_CLAIM_INDEX_SQL)
 
     # Independent from the older backfill flag: production databases have
     # already set that flag, but still need their Classic discovery rows tagged.
@@ -2539,7 +2553,7 @@ def _claim_next_player(
             SELECT q.queue_idx, q.puuid, q.depth, q.source,
                    q.discovered_match_created_ms, q.seed_family,
                    q.discovered_queue_id
-            FROM crawl_queue q
+            FROM crawl_queue q INDEXED BY idx_crawl_queue_general_claim
             WHERE q.status = 'pending'
               AND q.eligible_at_ms <= ?
               AND q.classic_affinity_rank = 0
@@ -2549,6 +2563,7 @@ def _claim_next_player(
             ORDER BY q.discovered_match_created_ms DESC,
                      q.priority ASC,
                      q.depth ASC,
+                     q.updated_at ASC,
                      q.queue_idx ASC
             LIMIT 1
             """
@@ -2560,7 +2575,7 @@ def _claim_next_player(
             """
             SELECT queue_idx, puuid, depth, source, discovered_match_created_ms,
                    seed_family, discovered_queue_id
-            FROM crawl_queue
+            FROM crawl_queue INDEXED BY idx_crawl_queue_general_claim
             WHERE status = 'pending'
               AND eligible_at_ms <= ?
               AND classic_affinity_rank = 0
