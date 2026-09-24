@@ -1354,8 +1354,7 @@
             worst: '最差',
             bestAugments: '最佳增幅裝置',
             worstAugments: '最差增幅裝置',
-            augmentStrengthMeta: '強度綜合參考勝率與選取率',
-            augmentStrengthTip: '排序以勝率提升的保守估計為主，並搭配選取率判斷樣本穩定度；低選取率的高勝率會更保守看待。卡片上的選用率用太陽色階表示熱門度：青→亮黃→枯葉黃→白→灰（越亮越熱門）；綠／紅只表示勝率。',
+            augmentStrengthMeta: '依勝率與選取率綜合排序',
             weak: '偏弱',
             insufficient: '資料不足',
             rarityLabels: { kPrismatic: '彩色', kGold: '金色', kSilver: '銀色' },
@@ -1704,8 +1703,7 @@
             worst: 'Worst',
             bestAugments: 'Best Augments',
             worstAugments: 'Worst Augments',
-            augmentStrengthMeta: 'Strength considers both win rate and pick rate',
-            augmentStrengthTip: 'Ranking is led by conservative win-rate lift, with pick rate used as a stability signal; low-pick high-win results are treated more carefully. Pick-rate uses a solar ladder: cyan → bright yellow → ochre → white → gray (brighter = hotter); green/red are reserved for win rate.',
+            augmentStrengthMeta: 'Ranked by win rate and pick rate combined',
             weak: 'Weak',
             insufficient: 'Not enough data',
             rarityLabels: { kPrismatic: 'Prismatic', kGold: 'Gold', kSilver: 'Silver' },
@@ -4911,16 +4909,13 @@
         const compFitTabContent = buildCompFit(info, cid);
         const augmentTabContent = `
             <div class="detail-section">
-                <span class="section-meta augment-strength-meta">
-                    ${copy.augmentStrengthMeta}
-                    <span class="meta-help-wrap">
-                        <button class="meta-help" type="button" aria-label="${escHtml(copy.augmentStrengthTip)}">?</button>
-                        <span class="meta-help-tip" role="tooltip">${escHtml(copy.augmentStrengthTip)}</span>
-                    </span>
-                </span>
                 <div class="detail-col best">
                     <div class="detail-col-heading">
-                        <h3>${augmentRankTitle}</h3>
+                        <h3 class="augment-rank-title">${augmentRankTitle}</h3>
+                        <span class="meta-help-wrap">
+                            <button class="meta-help" type="button" aria-label="${escHtml(copy.augmentStrengthMeta)}">?</button>
+                            <span class="meta-help-tip meta-help-tip-short" role="tooltip">${escHtml(copy.augmentStrengthMeta)}</span>
+                        </span>
                         ${buildSetSummary(setTop)}
                     </div>
                     ${buildChampAugTable(top)}
