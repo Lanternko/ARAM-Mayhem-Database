@@ -3762,7 +3762,6 @@
             flex-direction: row;
             align-items: center;
             gap: 10px;
-            padding-right: 42px;
             margin-bottom: 8px;
         }
         .detail-avatar {
@@ -9409,11 +9408,30 @@
         height: 44px;
         border-radius: 10px;
     }
+    /* On the champion page only the 概覽/出裝/… tabs stay pinned: the rail
+       sticks at a negative offset equal to its head row (padding-top + head
+       height + margin), so the avatar/name scroll away under the header and
+       the tab strip lands right below it.  The head height is fixed (roles
+       never wrap) so this offset is exact without JS measurement. */
+    .detail-page {
+        --champ-head-h: 44px;
+        --champ-head-gap: 8px;
+    }
+    .detail-page .detail-main-tabs > .detail-tab-rail {
+        top: calc(var(--header-h, 56px) - 10px - var(--champ-head-h) - var(--champ-head-gap));
+    }
+    .detail-page .detail-main-tabs > .detail-tab-rail .detail-head {
+        height: var(--champ-head-h);
+        margin-bottom: var(--champ-head-gap);
+        overflow: hidden;
+    }
+    .detail-page .detail-head .detail-roles { flex-wrap: nowrap; min-width: 0; }
     @media (max-width: 700px) {
         .champ-page-bar { gap: 8px; margin-bottom: 10px; }
         .champ-page-search { flex-basis: 100%; max-width: none; }
         .champ-page-recent { flex-basis: 100%; }
         .detail.detail-page { padding: 12px; }
+        .detail-page { --champ-head-h: 40px; }
         .detail-page .detail-head .cname { font-size: 18px; }
         .detail-page .detail-avatar { width: 40px; height: 40px; }
     }
