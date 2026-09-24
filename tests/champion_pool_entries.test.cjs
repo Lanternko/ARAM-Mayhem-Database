@@ -22,8 +22,10 @@ let champions = 0;
 for (const cid of Object.keys(data.champs)) {
     const rows = context.championPoolEntries(cid, data, catalogue);
     const expected = new Map();
+    const blocked = new Set(((data.observed || {}).blocked || {})[cid] || []);
     for (const [pid, w] of data.champs[cid]) {
         for (const id of pools[pid].augs) {
+            if (blocked.has(id)) continue;
             const key = String(id);
             expected.set(key, Math.max(expected.get(key) || 0, w || 100));
         }
@@ -42,6 +44,10 @@ assert.equal(context.championPoolCategory(['new']), 'other');
 assert.equal(context.championPoolCategory(['crit', 'amp']), 'damage');
 assert.equal(context.championPoolCategory(['ad', 'gold']), 'gold');
 assert.equal(context.championPoolEntries('missing',data,catalogue).length,0);
+{
+    const toy = {pools: [{id: 'p1', augs: [1, 2, 3]}], champs: {'7': [['p1', 150]]}, observed: {blocked: {'7': [2]}}};
+    assert.equal(context.championPoolEntries('7', toy, {}).map(r => r.id).join(), '1,3');
+}
 console.log(`Verified unique membership, max weight, ordering and source provenance for ${champions} champions.`);
 
 for (const group of taxonomy.groups) {

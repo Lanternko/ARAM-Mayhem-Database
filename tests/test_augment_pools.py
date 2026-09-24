@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
+from aram_nn.site.augment_pool_observed import PatchCounts, classify
 from aram_nn.site.augment_pools import (
     AUGS_PATH,
     CHAMPS_PATH,
@@ -110,6 +111,13 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(d["weights"], [{"champ": 13, "pool": "AH", "before": 150, "after": 200}])
         self.assertEqual(d["prev_version"], "prev")
 
+    def test_empty_group_file_fails_loudly(self) -> None:
+        def fetch(version: str, path: str):
+            return {"__linked": []} if path == GROUPS_PATH else fake_fetch("cur", path)
+
+        with self.assertRaisesRegex(ValueError, "no augment pools"):
+            build_payload(fetch, "cur", None)
+
     def test_public_payload_hides_internal_names(self) -> None:
         pub = public_payload(build_payload(fake_fetch, "cur", "prev"))
         text = json.dumps(pub, ensure_ascii=False)
@@ -160,6 +168,52 @@ class AugmentPoolTests(unittest.TestCase):
         self.assertEqual(hues["技能急速"], "cd")
         self.assertEqual(hues["控場"], "function")
         self.assertTrue(set(hues.values()) <= set(POOL_HUES))
+
+
+def _counts(games: dict[int, int], pairs: dict[tuple[int, int], int]) -> PatchCounts:
+    c = PatchCounts()
+    c.games.update(games)
+    c.pairs.update(pairs)
+    return c
+
+
+class ObservedFilterTests(unittest.TestCase):
+    def test_classify_dead_blocked_and_thin_evidence(self) -> None:
+        # Twelve champions get augment 5 at 10%; champion 99 plays as often and never does.
+        games = {c: 1000 for c in range(1, 13)} | {99: 1000, 98: 30}
+        pairs = {(c, 5): 100 for c in range(1, 13)}
+        reach = {c: {5} for c in range(1, 13)} | {99: {5, 6}, 98: {5}}
+        v = classify([(_counts(games, pairs), reach)])
+        self.assertEqual(v["dead"], [6])  # nobody gets 6
+        self.assertEqual(v["blocked"], {99: [5]})  # 98's 30 games expect only 3
+
+    def test_classify_counts_exposure_only_where_reachable(self) -> None:
+        prev = _counts({c: 1000 for c in range(1, 13)},
+                       {(c, 5): 100 for c in range(1, 13)} | {(c, 7): 100 for c in range(2, 13)})
+        cur = _counts({c: 20 for c in range(1, 13)}, {(c, 7): 2 for c in range(2, 13)})
+        # Augment 7 joins champion 1's pools this patch; last patch's 1000 games don't count.
+        v = classify([
+            (cur, {c: {5, 7} for c in range(1, 13)}),
+            (prev, {1: {5}} | {c: {5, 7} for c in range(2, 13)}),
+        ])
+        self.assertEqual(v["blocked"], {})
+
+    def test_build_payload_drops_dead_augments(self) -> None:
+        seen = _counts({13: 1000}, {(13, 101): 300})
+        observed = {"cur": seen, "prev": seen, "patches": ["cur", "prev"], "games": 100}
+        p = build_payload(fake_fetch, "cur", "prev", observed=observed)
+        pools = {x["id"]: x for x in p["pools"]}
+        self.assertEqual(pools["{56299123}"]["augs"], [101])
+        self.assertNotIn("102", p["augs"])
+        self.assertEqual(p["observed"]["dead"], [{"id": 102, "zh": "乙", "en": "Two", "rarity": ""}])
+        self.assertEqual(p["observed"]["blocked"], {})
+        self.assertEqual(p["diff"]["pools"], [])  # stripped from both snapshots: no fake "added"
+        self.assertEqual(public_payload(p)["observed"], p["observed"])
+
+    def test_build_payload_without_observed_is_unchanged(self) -> None:
+        p = build_payload(fake_fetch, "cur", "prev")
+        self.assertIsNone(p["observed"])
+        self.assertIn("102", p["augs"])
 
 
 if __name__ == "__main__":

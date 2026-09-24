@@ -3012,8 +3012,8 @@
             '遊戲檔只存了名稱的 hash，無法還原；中文名稱是依內容推定的。',
             'Only a hash of the name is stored and it could not be recovered; labels describe the contents.'],
         ['norandom', '排除池', 'Excluded from random',
-            '這些增幅不會被隨機給予（質變、潘朵拉的寶盒、封我為王），但一般選用照常出現。',
-            'These augments are never handed out at random (Transmute, Pandora’s Box, Crown Me King); normal selection still offers them.'],
+            '質變、潘朵拉的寶盒、封我為王等隨機給予增幅的效果不會給出這些增幅，但一般選用照常出現。',
+            'Augments that grant others at random (Transmute, Pandora’s Box, Crown Me King) never hand these out; normal selection still offers them.'],
         ['unused', '沒有英雄直接引用', 'Not referenced by champions',
             '池子有增幅，但英雄表沒有直接指向它；裡面的增幅多半也收在其他池子裡。',
             'The pool has augments, but no champion points at it; its augments mostly also sit in other pools.'],
@@ -3220,14 +3220,20 @@
         const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || 'other';
         return AUGMENT_TAXONOMY.groups.find(group => group.categories.includes(category)).id;
     }
+    // Augments this champion's pools hold but games show the server never offers it.
+    function apoolBlocked(data, cid) {
+        return new Set((((data.observed || {}).blocked || {})[cid] || []).map(String));
+    }
     function championPoolEntries(cid, data, catalogue) {
         const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
+        const blocked = apoolBlocked(data, cid);
         const entries = new Map();
         for (const [pid, rawWeight] of (data.champs || {})[cid] || []) {
             const pool = pools.get(String(pid));
             if (!pool) continue;
             const weight = apoolWeight(rawWeight);
             for (const aid of new Set((pool.augs || []).map(String))) {
+                if (blocked.has(aid)) continue;
                 if (!entries.has(aid)) entries.set(aid, {
                     id: aid, weight, category: championPoolCategory((catalogue[aid] || {}).cats || []), sources: [],
                 });
@@ -3315,6 +3321,7 @@
             + `<p class="apool-meta">${escHtml(pickLang(
                 `版本 ${patch} · ${nPools} 個池子 · ${nChamps} 位英雄 · 來源：遊戲資料`,
                 `Patch ${patch} · ${nPools} pools · ${nChamps} champions · Source: game data`))}</p>`
+            + apoolFrozenHtml(d)
             + `</div>`
             + `<section class="apool-panel" aria-label="${escHtml(pickLang('用英雄查池子', 'Pools by champion'))}">`
             + `<div class="apool-picker">`
@@ -3385,12 +3392,13 @@
         const empty = document.getElementById('apool-champ-empty');
         if (empty) empty.hidden = shown > 0;
     }
-    function apoolAugListHtml(p) {
-        if (!p.augs.length) {
+    function apoolAugListHtml(p, blocked) {
+        const augs = blocked ? p.augs.filter(aid => !blocked.has(String(aid))) : p.augs;
+        if (!augs.length) {
             return `<p class="apool-empty">${escHtml(pickLang('這個池子目前沒有任何增幅。', 'This pool has no augments.'))}</p>`;
         }
         const rarityLabels = tr().rarityLabels || {};
-        return `<ul class="apool-augs">` + p.augs.map(aid => {
+        return `<ul class="apool-augs">` + augs.map(aid => {
             const a = apoolAug(aid);
             // Shared float tip (hover, keyboard focus, tap); focusable so the last two work.
             const tip = buildItemTipHtml({
@@ -3410,8 +3418,9 @@
             .map(([pid, w]) => ({ p: augPools.byId[pid], w }))
             .filter(r => r.p);
         rows.sort((a, b) => apoolWeight(b.w) - apoolWeight(a.w) || apoolLabel(a.p).localeCompare(apoolLabel(b.p)));
+        const blocked = apoolBlocked(d, cid);
         const union = new Set();
-        rows.forEach(r => r.p.augs.forEach(a => union.add(String(a))));
+        rows.forEach(r => r.p.augs.forEach(a => { if (!blocked.has(String(a))) union.add(String(a)); }));
         const c = apoolChamp(cid);
         // 175 sits too close to 150/200 to label on a phone; each row prints its value.
         const ticks = [75, 100, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
@@ -3423,15 +3432,17 @@
                 + `<span class="apool-bar"><span class="apool-fill" style="width:${apoolWeight(r.w) / 2}%"></span></span>`
                 + `<span class="apool-w">${escHtml(apoolWeightText(r.w))}<span class="apool-chevron" aria-hidden="true">${open ? "−" : "+"}</span></span>`
                 + `</button>`
-                + (open ? apoolAugListHtml(r.p) : '')
+                + (open ? apoolAugListHtml(r.p, blocked) : '')
                 + `</li>`;
         }).join('');
         return `<div class="apool-detail-head">`
             + (c.image ? `<img src="${escHtml(c.image)}" alt="" width="44" height="44">` : '')
             + `<div><h3 class="apool-detail-name">${escHtml(c.name)}</h3>`
             + `<p class="apool-detail-sub">${escHtml(pickLang(
-                `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`,
-                `${rows.length} pools · up to ${union.size} augments`))}</p></div></div>`
+                `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`
+                    + (blocked.size ? `（已扣除 ${blocked.size} 種伺服器不給的）` : ''),
+                `${rows.length} pools · up to ${union.size} augments`
+                    + (blocked.size ? ` (${blocked.size} the server withholds removed)` : '')))}</p></div></div>`
             + `<p class="apool-footnote">${escHtml(pickLang("權重越高，越容易抽到該池；數值不是機率。點選池子查看增幅。", "Higher weights favor a pool; values are not probabilities. Select a pool to see its augments."))}</p>`
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
@@ -3539,6 +3550,31 @@
                 `本版改動（${df.prev_version} → ${d.patch}）`, `Changes this patch (${df.prev_version} → ${d.patch})`))}</h3>`
             + `<ul class="apool-diff">${items.join('')}</ul></section>`;
     }
+    // Set by build_augment_pools.py when newer patches ship empty pool files.
+    function apoolFrozenHtml(d) {
+        const since = (d.frozen || {}).since;
+        if (!since) return '';
+        return `<p class="apool-frozen">${escHtml(pickLang(
+            `Riot 從 ${since} 版起不再把增幅池和權重放進遊戲檔，改由伺服器決定，所以這頁停在最後一份公開資料（${d.patch} 版）。之後的改動無法從遊戲檔得知，實際抽到的增幅可能已經不同。`,
+            `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`;
+    }
+    function apoolObservedNote(d) {
+        const obs = d.observed;
+        if (!obs) return pickLang(
+            '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行；這份資料尚未用對局扣除，「可能抽到的增幅」可能偏多。',
+            'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them. This data has not been checked against games, so “up to N augments” may be too high.');
+        const sep = pickLang('、', ', ');
+        const dead = (obs.dead || []).map(a => pickLang(a.zh, a.en)).join(sep);
+        const pairs = Object.values(obs.blocked || {}).reduce((n, list) => n + list.length, 0);
+        const patches = (obs.patches || []).join(pickLang('、', ', '));
+        return pickLang(
+            `遊戲檔之外，伺服器還會對個別英雄擋掉某些增幅（例如坦克引擎不給雷茲）。我們用 ${patches} 版約 ${obs.games} 場大亂鬥比對：資料量足以預期出現至少 10 次卻一次都沒出現的組合視為被擋，共 ${pairs} 組，已從各英雄的可抽增幅中扣除。`
+                + (dead ? `另有 ${obs.dead.length} 個增幅仍列在池子檔裡，但早已刪除或改了階級，沒有任何英雄拿到過，已從池子移除：${dead}。` : '')
+                + '資料不足的組合一律保留，所以冷門英雄的清單仍可能偏多。「排除池」沒有扣除：它只擋隨機給予，不影響自選。',
+            `Beyond the game files, the server withholds some augments from specific champions (for example Tank Engine from Ryze). We checked about ${obs.games} Mayhem games from patch ${patches}: a pair with enough games to expect at least 10 appearances but none is treated as blocked. That removes ${pairs} pairs from the champions’ lists.`
+                + (dead ? ` ${obs.dead.length} augments are still listed in the pool file but were removed or recoloured long ago and no champion ever gets them, so they are dropped from the pools: ${dead}.` : '')
+                + ' Pairs without enough games stay in, so lists for rarely played champions may still run long. The excluded pool is not subtracted: it only blocks random grants, never normal selection.');
+    }
     function apoolNotesHtml(d) {
         const notes = [
             [pickLang('權重是什麼', 'What the weight means'), pickLang(
@@ -3547,12 +3583,13 @@
             [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
                 '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
                 'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
-            [pickLang('這裡沒有的規則', 'Rules not shown here'), pickLang(
-                '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行，所以「可能抽到的增幅」尚未扣除這些規則。「排除池」也一樣沒有扣除：它只擋隨機給予，不影響自選。',
-                'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them, so “up to N augments” does not subtract them. The excluded pool is not subtracted either: it only blocks random grants, never normal selection.')],
+            [pickLang('對照實際對局', 'Checked against real games'), apoolObservedNote(d)],
             [pickLang('資料來源', 'Source'), pickLang(
                 `${d.patch || ''} 版 CommunityDragon 遊戲資料：augmentgroups.bin（池子內容）、map12.bin（英雄與權重）、augmentoperators.bin（排除規則）。`,
-                `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)],
+                `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)
+                + ((d.frozen || {}).since ? pickLang(
+                    ` ${d.frozen.since} 版起 augmentgroups.bin 和 augmentoperators.bin 已清空，map12.bin 也拿掉了英雄權重表。`,
+                    ` From patch ${d.frozen.since} augmentgroups.bin and augmentoperators.bin are empty, and map12.bin no longer has the champion weight table.`) : '')],
         ];
         return `<section class="apool-section apool-notes">`
             + notes.map(([h, t]) => `<div><h4>${escHtml(h)}</h4><p>${escHtml(t)}</p></div>`).join('')

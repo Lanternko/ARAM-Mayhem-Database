@@ -22,6 +22,8 @@ build time rather than trusted from this list.
 
 Per-augment champion exclusions announced in patch notes (e.g. Tank Engine
 never offered to Ryze) are NOT in these files; they are applied server-side.
+``augment_pool_observed`` recovers them, and the stale augments the files
+still list, from games.db; ``build_payload(observed=...)`` applies the result.
 """
 from __future__ import annotations
 
@@ -30,6 +32,8 @@ import re
 import urllib.request
 from collections.abc import Callable
 from typing import Any
+
+from aram_nn.site.augment_pool_observed import PatchCounts, classify
 
 CDRAGON_BASE = "https://raw.communitydragon.org"
 GROUPS_PATH = "game/maps/modespecificdata/augmentgroups.bin.json"
@@ -259,8 +263,9 @@ def _pool_meta(raw_id: str, operator_group: bool) -> dict:
     name, h = resolve_pool_name(raw_id)
     if operator_group:
         # 16.18 patch notes: augments in this group are never handed out at random
-        # (Transmute, Pandora's Box, Crown Me King).  Normal selection still offers
-        # them, so do NOT subtract them from a champion's reachable augments.
+        # by augments that grant others (Transmute, Pandora's Box, Crown Me King).
+        # Normal selection still offers them, so do NOT subtract them from a
+        # champion's reachable augments.
         meta = {"name": name, "hash": h, "family": "norandom",
                 "label_zh": "排除池", "label_en": "Excluded from random", "label_source": "operator"}
     elif name in STAT_POOLS:
@@ -289,6 +294,11 @@ def _pool_meta(raw_id: str, operator_group: bool) -> dict:
 
 def _snapshot(fetch: Fetch, version: str, kiwi_ids: dict[str, int] | None = None) -> dict:
     groups = parse_pools(fetch(version, GROUPS_PATH))
+    if not groups:
+        # 16.19 shipped augmentgroups.bin/augmentoperators.bin with zero entries and
+        # dropped the champion table from map12: the pools are no longer client data.
+        raise ValueError(f"CDragon {version} has no augment pools (empty augmentgroups.bin); "
+                         "pass --version of the last patch that still ships them")
     champs = parse_champion_pools(fetch(version, MAP12_PATH))
     ids = kiwi_ids if kiwi_ids is not None else augment_ids(fetch(version, KIWI_PATH))
     key_to_id = {k: g["id"] for k, g in groups.items()}
@@ -300,9 +310,31 @@ def _snapshot(fetch: Fetch, version: str, kiwi_ids: dict[str, int] | None = None
     return {"groups": groups, "key_to_id": key_to_id, "pools": pools, "weights": weights, "ids": ids}
 
 
-def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -> dict:
-    """Assemble the internal payload (pool names and hashes included); publish via ``public_payload``."""
+def _reach(snap: dict, cid_of: Callable[[str], int | None]) -> dict[int, set[int]]:
+    """Champion id -> every augment id in the pools it references."""
+    out: dict[int, set[int]] = {}
+    for alias, pools in snap["weights"].items():
+        cid = cid_of(alias)
+        if cid is not None:
+            out[cid] = {a for pid in pools for a in snap["pools"].get(pid, [])}
+    return out
+
+
+def build_payload(
+    fetch: Fetch,
+    version: str,
+    prev_version: str | None = None,
+    observed: dict[str, Any] | None = None,
+) -> dict:
+    """Assemble the internal payload (pool names and hashes included); publish via ``public_payload``.
+
+    ``observed`` = {"cur": PatchCounts, "prev": PatchCounts | None, "patches": [labels]}
+    from ``augment_pool_observed.count_patch``.  With it, augments no game ever
+    shows are dropped from the pools, and champion-specific blocks are listed
+    under ``observed.blocked`` for the page to subtract.
+    """
     cur = _snapshot(fetch, version)
+    prev = _snapshot(fetch, prev_version, cur["ids"]) if prev_version else None
     try:
         operators = fetch(version, OPERATORS_PATH)
     except Exception:  # file absent before 26.18
@@ -314,6 +346,17 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
 
     def cid_of(alias: str) -> int | None:
         return alias_to_id.get(alias.lower())
+
+    verdict = None
+    if observed:
+        evidence: list[tuple[PatchCounts, dict[int, set[int]]]] = [(observed["cur"], _reach(cur, cid_of))]
+        if observed.get("prev") is not None and prev is not None:
+            evidence.append((observed["prev"], _reach(prev, cid_of)))
+        verdict = classify(evidence)
+        dead = set(verdict["dead"])
+        for snap in (cur, prev):
+            if snap is not None:
+                snap["pools"] = {pid: [a for a in augs if a not in dead] for pid, augs in snap["pools"].items()}
 
     # A pool with no augments can never be offered; drop it everywhere rather
     # than publishing a card that says "0 augments" next to a champion count.
@@ -342,15 +385,17 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
     aug_ids = sorted({a for pid, p in cur["pools"].items() if pid not in empty for a in p})
     zh_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="zh_tw"))}
     en_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="default"))}
-    augs_out = {}
-    for aid in aug_ids:
+
+    def aug_row(aid: int) -> dict:
         zh, en = zh_rows.get(aid, {}), en_rows.get(aid, {})
-        augs_out[str(aid)] = {
+        return {
             "zh": zh.get("nameTRA") or en.get("nameTRA") or str(aid),
             "en": en.get("nameTRA") or zh.get("nameTRA") or str(aid),
             "icon": _icon_url(en.get("augmentSmallIconPath") or zh.get("augmentSmallIconPath")),
             "rarity": en.get("rarity") or zh.get("rarity") or "",
         }
+
+    augs_out = {str(aid): aug_row(aid) for aid in aug_ids}
 
     payload = {
         "version": version,
@@ -359,9 +404,23 @@ def build_payload(fetch: Fetch, version: str, prev_version: str | None = None) -
         "champs": champs_out,
         "augs": augs_out,
         "diff": None,
+        "observed": None,
     }
-    if prev_version:
-        payload["diff"] = diff_snapshots(_snapshot(fetch, prev_version, cur["ids"]), cur, cid_of)
+    if verdict is not None:
+        payload["observed"] = {
+            "patches": list(observed.get("patches") or []),
+            "games": int(observed.get("games") or 0),
+            # Dropped from every pool; names kept so the page can list them.
+            "dead": [{"id": aid, **{k: v for k, v in aug_row(aid).items() if k != "icon"}} for aid in verdict["dead"]],
+            # Champion id -> augment ids its pools hold but the server never offers it.
+            "blocked": {
+                str(c): kept
+                for c, augs in sorted(verdict["blocked"].items())
+                if str(c) in champs_out and (kept := [a for a in augs if str(a) in augs_out])
+            },
+        }
+    if prev is not None:
+        payload["diff"] = diff_snapshots(prev, cur, cid_of)
         payload["diff"]["prev_version"] = prev_version
     return payload
 
