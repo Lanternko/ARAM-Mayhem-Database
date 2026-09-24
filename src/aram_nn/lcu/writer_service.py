@@ -361,6 +361,7 @@ class WriterService:
             sb = _snowball()
             sb._register_sql_functions(self.con)
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
+            self.con.execute(sb._CREATE_CLASSIC_RANK_INDEX_SQL)
             # Same one-shot flags as snowball._ensure_schema.  Without these, a
             # DB that first meets the new columns here keeps classic_lambda=0
             # and the score arm silently uses the discovery prior for everyone.
