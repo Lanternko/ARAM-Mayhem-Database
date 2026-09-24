@@ -4659,7 +4659,7 @@
         // they pin together under the site header (and floating search chip).
         const stickyLeadHtml = `
             <div class="detail-head">
-                ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
+                ${info.image ? `<span class="detail-avatar"><img loading="lazy" src="${info.image}" alt=""></span>` : ''}
                 <h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>
                 ${buildDetailRoleTags(info)}
             </div>
