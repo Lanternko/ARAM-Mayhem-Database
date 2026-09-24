@@ -14,6 +14,8 @@ from tierlist_render import (  # noqa: E402
     _retire_public_column_code,
     _site_base_href,
     _spa_deep_link_stub,
+    champion_page_routes,
+    champion_page_slug,
     champion_detail_base_url,
     payload_content_version,
     render_adsense_verification_tag,
@@ -180,6 +182,50 @@ class SpaPathShellTests(unittest.TestCase):
                 self.assertEqual(pool_html.count("property='og:image'"), 1)
             self.assertIn("/og-image.png?v=old", root_body)
             self.assertIn("/og-image.png?v=old", en_body)
+
+    def test_champion_page_slug_matches_site_js_rule(self) -> None:
+        self.assertEqual(champion_page_slug("MonkeyKing"), "monkeyking")
+        self.assertEqual(champion_page_slug("Kai'Sa"), "kaisa")
+        self.assertEqual(champion_page_slug(""), "")
+        source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
+        self.assertIn(".toLowerCase().replace(/[^a-z0-9]+/g, '')", source)
+
+    def test_champion_page_routes_reject_slug_collisions(self) -> None:
+        meta = {1: {"alias": "Jinx"}, 2: {"alias": "jinx"}}
+        with self.assertRaises(ValueError):
+            champion_page_routes([1, 2], meta)
+
+    def test_write_spa_path_shells_emits_champion_stubs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text(
+                "<!doctype html><html lang='zh-Hant'><head><title>app</title></head>"
+                "<body>FULL_SPA_SHELL</body></html>",
+                encoding="utf-8",
+            )
+            routes = champion_page_routes(
+                [222],
+                {222: {"alias": "Jinx", "name_zh": "吉孃", "name_en": "Jinx"}},
+                names_zh_cn={"222": "金克丝"},
+            )
+            write_spa_path_shells(
+                index, site_url="https://arammeta.com/", champion_routes=routes,
+            )
+            zh = (root / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
+            en = (root / "en" / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
+            cn = (root / "zh-CN" / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
+            # Bounce stubs, not ~0.5MB full shells (repo growth per publish).
+            for body in (zh, en, cn):
+                self.assertNotIn("FULL_SPA_SHELL", body)
+                self.assertIn("location.replace('/')", body)
+                self.assertNotIn("noindex", body)
+            self.assertIn("href='https://arammeta.com/c/jinx/'", zh)
+            self.assertIn("吉孃 增幅與出裝", zh)
+            self.assertIn("'aram-spa-lang','en'", en)
+            self.assertIn("Jinx augments &amp; build", en)
+            self.assertIn("'aram-spa-lang','zh-CN'", cn)
+            self.assertIn("金克丝", cn)
 
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")

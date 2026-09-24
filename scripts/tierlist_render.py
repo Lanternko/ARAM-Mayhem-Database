@@ -2020,11 +2020,96 @@ def _spa_deep_link_stub(
     )
 
 
+_CHAMPION_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def champion_page_slug(alias: str) -> str:
+    """URL slug for /c/<slug>: the Data Dragon alias, lowercased, alnum only.
+
+    site.js ``champPageSlug`` mirrors this rule; keep the two in sync.
+    """
+    return _CHAMPION_SLUG_RE.sub("", str(alias or "").lower())
+
+
+def champion_page_routes(
+    champion_ids,
+    champ_meta: dict,
+    *,
+    names_zh_cn: dict | None = None,
+) -> list[dict[str, str]]:
+    """One entry per published champion for the /c/<slug> route stubs."""
+    cn_names = names_zh_cn or {}
+    routes: list[dict[str, str]] = []
+    seen: dict[str, object] = {}
+    for cid in sorted({int(c) for c in champion_ids}):
+        meta = champ_meta.get(cid) or {}
+        slug = champion_page_slug(meta.get("alias", ""))
+        if not slug:
+            continue
+        if slug in seen:
+            raise ValueError(f"champion page slug collision: {slug!r} ({seen[slug]} vs {cid})")
+        seen[slug] = cid
+        name_zh = str(meta.get("name_zh") or meta.get("name") or meta.get("alias") or cid)
+        name_en = str(meta.get("name_en") or meta.get("alias") or name_zh)
+        cn_row = cn_names.get(str(cid))
+        name_cn = cn_row.get("n") if isinstance(cn_row, dict) else cn_row
+        routes.append({
+            "cid": str(cid),
+            "slug": slug,
+            "name_zh": name_zh,
+            "name_en": name_en,
+            "name_cn": str(name_cn or name_zh),
+        })
+    return routes
+
+
+def load_champion_page_routes(out_dir: Path, champion_ids, champ_meta: dict) -> list[dict[str, str]]:
+    """champion_page_routes with official zh-CN names from the built names file."""
+    names_zh_cn: dict = {}
+    names_path = Path(out_dir) / "api" / "names-zh-cn.json"
+    if names_path.is_file():
+        try:
+            names_zh_cn = json.loads(names_path.read_text(encoding="utf-8")).get("champs") or {}
+        except (OSError, ValueError):
+            names_zh_cn = {}
+    return champion_page_routes(champion_ids, champ_meta, names_zh_cn=names_zh_cn)
+
+
+def _champion_route_specs(root: Path, routes) -> list[tuple[Path, str, str, str, str]]:
+    specs: list[tuple[Path, str, str, str, str]] = []
+    for route in routes:
+        slug = route["slug"]
+        zh, en, cn = route["name_zh"], route["name_en"], route["name_cn"]
+        specs.append((
+            root / "c" / slug / "index.html",
+            f"/c/{slug}/",
+            f"{zh} 增幅與出裝 · arammeta",
+            f"{zh}（{en}）ARAM 大亂鬥增幅排行、出裝與召喚師技能",
+            "zh-Hant",
+        ))
+        specs.append((
+            root / "en" / "c" / slug / "index.html",
+            f"/en/c/{slug}/",
+            f"{en} augments & build · arammeta",
+            f"{en} ARAM Mayhem augment ranking, item build and summoner spells",
+            "en",
+        ))
+        specs.append((
+            root / "zh-CN" / "c" / slug / "index.html",
+            f"/zh-CN/c/{slug}/",
+            f"{cn} 海克斯与出装 · arammeta",
+            f"{cn}（{en}）大乱斗海克斯排行、出装与召唤师技能",
+            "zh-Hans",
+        ))
+    return specs
+
+
 def write_spa_path_shells(
     index_path: Path,
     *,
     site_url: str = "",
     og_image: str = "",
+    champion_routes=(),
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2161,6 +2246,9 @@ def write_spa_path_shells(
             "zh-Hans",
         ),
     ]
+    # Per-champion pages are tiny bounce stubs (not full shells): 173 champions
+    # x 3 locales of the ~0.5MB shell would add ~250MB to every daily publish.
+    route_specs.extend(_champion_route_specs(root, champion_routes))
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -3717,6 +3805,31 @@ def render_html(
     parts.append("</div>")  # /app-shell
     parts.append("</section>")  # /view-home
 
+    # ---- View: 英雄頁 (champ) — one champion's detail at /c/<slug>, rendered by JS ----
+    # Built for the "look up the champion I just got" loop: a persistent search
+    # (type anywhere to jump), recent champions, then the shared detail tabs.
+    parts.append(
+        "<section class='view view-champ' id='view-champ' data-view='champ' "
+        "role='tabpanel' aria-labelledby='tab-home'>"
+        "<div class='champ-page'>"
+        "<div class='champ-page-bar' data-nosnippet>"
+        "<div class='champ-page-search'>"
+        "<label class='search-wrap'>"
+        f"{search_icon}"
+        "<input class='search' id='champ-page-search' type='search' autocomplete='off' "
+        "spellcheck='false' role='combobox' aria-autocomplete='list' aria-expanded='false' "
+        "aria-controls='champ-page-results' placeholder='輸入英雄名稱，Enter 前往' "
+        "aria-label='搜尋英雄'>"
+        "</label>"
+        "<ul class='champ-page-results' id='champ-page-results' role='listbox' hidden></ul>"
+        "</div>"
+        "<nav class='champ-page-recent' id='champ-page-recent' aria-label='最近查看'></nav>"
+        "</div>"
+        "<div class='champ-page-host' id='champ-page-host'></div>"
+        "</div>"
+        "</section>"
+    )
+
     # ---- View: Draft — draftgap-style: ally rail | champion pool | enemy rail ----
     parts.append(
         "<section class='view view-draft' id='view-draft' data-view='draft' "
@@ -4133,7 +4246,14 @@ def _run_shell_only(
         f"[shell-only] wrote hidden player-history shell {hidden_path} "
         f"({hidden_path.stat().st_size:,} bytes)"
     )
-    mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
+    mirrors = write_spa_path_shells(
+        out_path,
+        site_url=site_url,
+        og_image=og_image,
+        champion_routes=load_champion_page_routes(
+            out_path.parent, (r["champion_id"] for r in records), champ_meta,
+        ),
+    )
     info_pages = write_site_info_pages(
         out_path,
         site_url=site_url,

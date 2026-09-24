@@ -225,6 +225,7 @@
                 if (champ) openDetailForChamp(champ, true);
             }
             if (document.querySelector('.view-draft.is-active')) renderDraft();
+            if (document.querySelector('.view-champ.is-active')) renderChampPage(champPageSlugNow, true);
         } catch {}
     };
     const secondaryFetches = [
@@ -764,7 +765,7 @@
     const THEME_KEY = 'aram-mayhem-site-theme';
     const SEARCH_SCOPE_KEY = 'aram-mayhem-site-search-scope';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
-    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
+    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'champ'];
     // Player-history copy is kept separate from the legacy game copy table so
     // the optional panel can fail closed without affecting other views. The
     // zh-CN shell follows the existing Traditional-to-Simplified proxy.
@@ -4196,7 +4197,8 @@
         };
     }
 
-    function renderDetail(cid) {
+    function renderDetail(cid, opts = {}) {
+        const pageMode = Boolean(opts.page);
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
         // background warm pass reached this champ first).
@@ -4840,7 +4842,8 @@
             const name = `detail-${scope}-${cid}`;
             const inputs = tabs.map((tab, idx) => {
                 const inputId = `${name}-${tab.key}`;
-                return `<input class="detail-tab-input" type="radio" id="${inputId}" name="${name}" ${idx === 0 ? 'checked' : ''} aria-label="${escHtml(tab.label)}">`;
+                const wantKey = scope === 'main' && tabs.some(t => t.key === opts.tab) ? opts.tab : tabs[0].key;
+                return `<input class="detail-tab-input" type="radio" id="${inputId}" name="${name}" ${tab.key === wantKey ? 'checked' : ''} aria-label="${escHtml(tab.label)}">`;
             }).join('');
             const labels = tabs.map(tab => {
                 const inputId = `${name}-${tab.key}`;
@@ -4953,11 +4956,16 @@
         // Champ icon + name live inside the sticky rail with the main tabs so
         // they pin together under the site header (and floating search chip).
         const stickyLeadHtml = `
-            <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
+            ${pageMode ? '' : `<button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>`}
             <div class="detail-head">
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
-                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>
+                ${pageMode
+                    ? `<h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>`
+                    : `<span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>`}
                 ${buildDetailRoleTags(info)}
+                ${!pageMode && champPageSlug(info.alias)
+                    ? `<a class="detail-page-link" href="${escHtml(pathForRoute('champ', champPageSlug(info.alias)))}" data-champ-page="${escHtml(champPageSlug(info.alias))}">${escHtml(pickLang('完整頁面', 'Full page'))} →</a>`
+                    : ''}
             </div>
         `;
         const detailTabs = buildDetailTabSet('main', [
@@ -10023,12 +10031,14 @@
     //   /augments/pools    augment pools (zh)
     //   /en/augments       augment tier (en)
     //   /en/augments/pools augment pools (en)
+    //   /c/<slug>          one champion's page (slug = lowercased alias)
     // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix ? prefix + '/' : '/';
         if (view === 'augments' && sub === 'pools') return prefix + '/' + view + '/pools/';
+        if (view === 'champ') return prefix + '/c/' + (sub ? sub + '/' : '');
         return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
@@ -10076,6 +10086,9 @@
         if (segs[0] === 'home' && segs.length === 1) {
             return { view: 'home', sub: '', urlLang, legacyHash: false };
         }
+        if (segs[0] === 'c') {
+            return { view: 'champ', sub: champPageSlug(segs[1] || ''), urlLang, legacyHash: false };
+        }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
         const sub = (view === 'augments' && segs[1] === 'pools') ? 'pools' : '';
@@ -10120,8 +10133,11 @@
         const apply = () => {
             const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
             let activeTab = null;
+            // The champion page has no nav tab of its own; it lives under Home.
+            const navName = name === 'champ' ? 'home' : name;
+            const wasChamp = Boolean(document.querySelector('.view-champ.is-active'));
             tabs.forEach(t => {
-                const on = t.getAttribute('data-nav-tab') === name;
+                const on = t.getAttribute('data-nav-tab') === navName;
                 t.classList.toggle('active', on);
                 t.setAttribute('aria-selected', on ? 'true' : 'false');
                 t.tabIndex = -1;
@@ -10134,12 +10150,19 @@
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
             columnArticle = null;
+            if (name === 'champ') {
+                // Home's inline detail reuses the same radio ids; never keep both.
+                if (detailSelected) closeDetail();
+                renderChampPage(sub || '');
+            } else if (wasChamp) {
+                clearChampPage();
+            }
             if (name === 'augments') {
                 augMode = sub === 'pools' ? 'pools' : 'tier';
                 applyAugModeChrome();
                 document.title = augmentsPageTitle();
                 renderAugmentTier();
-            } else {
+            } else if (name !== 'champ') {
                 document.title = BASE_TITLE;
             }
             if (name === 'draft') {
@@ -10151,10 +10174,13 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            const routeSub = name === 'augments' ? augmentsSub() : '';
+            const routeSub = name === 'augments' ? augmentsSub() : (name === 'champ' ? (sub || '') : '');
             syncUrlToRoute(name, routeSub, historyMode);
             window.scrollTo(0, 0);
             moveTabIndicator();
+            if (name === 'champ' && !champPageSlugNow && matchMedia('(pointer: fine)').matches) {
+                document.getElementById('champ-page-search')?.focus({ preventScroll: true });
+            }
         };
         // Cross-fade the panel via the View Transitions API; root is pinned so the
         // header and the scrollTo above don't animate.  Skip on first paint
@@ -10299,6 +10325,9 @@
         if (document.querySelector('.view-game.is-active')) {
             renderGameView();
         }
+        if (document.querySelector('.view-champ.is-active')) {
+            renderChampPage(champPageSlugNow, true);
+        }
 
         moveTabIndicator();
         updateChampCardCopy();
@@ -10318,7 +10347,7 @@
             let view = (active && active.getAttribute('data-view')) || 'home';
             if (!VIEWS.includes(view)) view = 'home';
             const sub = (view === 'column' && columnArticle) ? columnArticle
-                : (view === 'augments' ? augmentsSub() : '');
+                : (view === 'augments' ? augmentsSub() : (view === 'champ' ? champPageSlugNow : ''));
             syncUrlToRoute(view, sub, historyMode);
             if (view === 'augments') document.title = augmentsPageTitle();
         }
@@ -10450,6 +10479,285 @@
         openDetailForChamp(champ);
         champ.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
+
+    // ---- Champion page (/c/<slug>) ------------------------------------------
+    // Players look up one champion per game ("I got Jinx, what do I take?"), so
+    // each champion has its own shareable URL.  GH Pages serves a tiny bounce
+    // stub at /c/<slug>/ that restores the path on /; this view then reuses
+    // renderDetail in page mode (no close button, remembered tab).
+    const CHAMP_TAB_KEY = 'aram-detail-tab';
+    const RECENT_CHAMPS_KEY = 'aram-recent-champs';
+    const RECENT_CHAMPS_MAX = 8;
+    const CHAMP_PAGE_TABS = ['overview', 'items', 'augments', 'pools', 'compfit'];
+    const CHAMP_SEARCH_LIMIT = 8;
+    let champPageSlugNow = '';
+    let champPageToken = 0;
+    let champSlugMap = null;
+    let champSearchActive = -1;
+
+    // Mirrors tierlist_render.champion_page_slug; keep the two in sync.
+    function champPageSlug(alias) {
+        return String(alias || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    }
+    function cidForChampSlug(slug) {
+        if (!champSlugMap) {
+            champSlugMap = new Map();
+            Object.entries(DATA.champs || {}).forEach(([cid, info]) => {
+                const s = champPageSlug(info && info.alias);
+                if (s && !champSlugMap.has(s)) champSlugMap.set(s, cid);
+            });
+        }
+        return champSlugMap.get(champPageSlug(slug)) || null;
+    }
+    function champSlugForCid(cid) {
+        const info = DATA.champs && DATA.champs[cid];
+        return info ? champPageSlug(info.alias) : '';
+    }
+    function readChampTab() {
+        try {
+            const key = localStorage.getItem(CHAMP_TAB_KEY);
+            return CHAMP_PAGE_TABS.includes(key) ? key : 'overview';
+        } catch { return 'overview'; }
+    }
+    function readRecentChamps() {
+        try {
+            const list = JSON.parse(localStorage.getItem(RECENT_CHAMPS_KEY) || '[]');
+            return Array.isArray(list) ? list.map(String).filter(cid => DATA.champs && DATA.champs[cid]) : [];
+        } catch { return []; }
+    }
+    function pushRecentChamp(cid) {
+        const list = [String(cid), ...readRecentChamps().filter(c => c !== String(cid))].slice(0, RECENT_CHAMPS_MAX);
+        try { localStorage.setItem(RECENT_CHAMPS_KEY, JSON.stringify(list)); } catch {}
+    }
+    function champPageLinkHtml(cid, cls) {
+        const info = DATA.champs[cid];
+        const slug = champSlugForCid(cid);
+        if (!info || !slug) return '';
+        return `<a class="${cls}" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">`
+            + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+            + `<span>${escHtml(champName(info, cid))}</span></a>`;
+    }
+    function renderChampRecent(currentCid) {
+        const nav = document.getElementById('champ-page-recent');
+        if (!nav) return;
+        const recent = readRecentChamps().filter(cid => cid !== String(currentCid));
+        nav.setAttribute('aria-label', pickLang('最近查看', 'Recently viewed'));
+        nav.innerHTML = recent.length
+            ? `<span class="champ-page-recent-label">${escHtml(pickLang('最近', 'Recent'))}</span>`
+                + recent.map(cid => champPageLinkHtml(cid, 'champ-page-chip')).join('')
+            : '';
+        nav.hidden = !recent.length;
+    }
+    function syncChampSearchChrome() {
+        const input = document.getElementById('champ-page-search');
+        if (!input) return;
+        const placeholder = pickLang('輸入英雄名稱，Enter 前往', 'Type a champion, Enter to open');
+        input.placeholder = placeholder;
+        input.setAttribute('aria-label', pickLang('搜尋英雄', 'Search champions'));
+    }
+    function clearChampPage() {
+        champPageToken++;
+        champPageSlugNow = '';
+        const host = document.getElementById('champ-page-host');
+        if (host) host.innerHTML = '';
+        closeChampSearchResults();
+    }
+    function renderChampPage(slug, force = false) {
+        const host = document.getElementById('champ-page-host');
+        if (!host) return;
+        syncChampSearchChrome();
+        const cid = slug ? cidForChampSlug(slug) : null;
+        if (!force && champPageSlugNow === slug && host.firstChild) return;
+        champPageSlugNow = slug || '';
+        const token = ++champPageToken;
+        renderChampRecent(cid);
+        if (!cid) {
+            // Bare /c/ or an unknown slug: search-first landing, not an error wall.
+            document.title = pickLang('英雄查詢', 'Champion lookup') + ' · arammeta';
+            const msg = slug
+                ? pickLang('找不到這位英雄，請用上方搜尋。', 'Champion not found — use the search above.')
+                : pickLang('輸入英雄名稱，直接看增幅與出裝。', 'Search a champion to see its augments and build.');
+            host.innerHTML = `<div class="champ-page-empty">${escHtml(msg)}</div>`;
+            return;
+        }
+        const info = DATA.champs[cid];
+        document.title = `${champName(info, cid)} · arammeta`;
+        host.innerHTML = `<div class="detail detail-page detail-loading"><div class="detail-skeleton" aria-hidden="true"></div></div>`;
+        if (!force) {
+            pushRecentChamp(cid);
+            trackEvent('champion_page_open', { champion_id: cid, champion_name: info.name_en || info.alias || '' });
+        }
+        yieldToMain().then(() => ensureChampDetail(cid)).then(() => {
+            if (token !== champPageToken || !host.isConnected) return;
+            const tab = readChampTab();
+            host.innerHTML = `<div class="detail detail-page">${renderDetail(cid, { page: true, tab })}</div>`;
+            if (augCatFilter.size) applyAugCatFilter(host);
+            applySingleItemFilter(host);
+            if (tab === 'pools') {
+                renderChampionPools();
+                loadAugPools();
+            }
+        }).catch(err => {
+            if (token !== champPageToken) return;
+            console.error('champion page load failed', cid, err);
+            host.innerHTML = `
+                <div class="detail detail-page detail-load-error">
+                    <div class="empty" role="alert">${escHtml(pickLang('英雄詳細資料載入失敗。', 'Champion details could not be loaded.'))}</div>
+                    <button type="button" class="detail-retry" data-champ-page-retry>${escHtml(pickLang('重試', 'Retry'))}</button>
+                </div>`;
+        });
+    }
+    function openChampPage(slug, historyMode = 'push') {
+        if (!slug) return;
+        const input = document.getElementById('champ-page-search');
+        if (input) input.value = '';
+        closeChampSearchResults();
+        const onChamp = Boolean(document.querySelector('.view-champ.is-active'));
+        setActiveView('champ', onChamp, historyMode, slug);
+    }
+
+    // Combobox over the server-rendered champion cards: their
+    // data-champion-search already carries zh/en names + TW nicknames.
+    function champSearchMatches(query) {
+        const q = String(query || '').trim();
+        if (!q) return [];
+        const seen = new Set();
+        const exact = [];
+        const prefix = [];
+        const rest = [];
+        const nq = normalizeSearchText(q);
+        document.querySelectorAll('.tier-grid > .champ[data-cid]').forEach(card => {
+            const cid = card.getAttribute('data-cid');
+            if (seen.has(cid) || !DATA.champs[cid] || !champSlugForCid(cid)) return;
+            const blob = card.getAttribute('data-champion-search') || '';
+            if (!searchMatchesText(blob, q)) return;
+            seen.add(cid);
+            const name = normalizeSearchText(champName(DATA.champs[cid], cid));
+            if (searchHasExactToken(blob, q)) exact.push(cid);
+            else if (name.startsWith(nq)) prefix.push(cid);
+            else rest.push(cid);
+        });
+        return [...exact, ...prefix, ...rest].slice(0, CHAMP_SEARCH_LIMIT);
+    }
+    function closeChampSearchResults() {
+        const list = document.getElementById('champ-page-results');
+        const input = document.getElementById('champ-page-search');
+        champSearchActive = -1;
+        if (list) { list.hidden = true; list.innerHTML = ''; }
+        if (input) {
+            input.setAttribute('aria-expanded', 'false');
+            input.removeAttribute('aria-activedescendant');
+        }
+    }
+    function renderChampSearchResults() {
+        const input = document.getElementById('champ-page-search');
+        const list = document.getElementById('champ-page-results');
+        if (!input || !list) return;
+        const matches = champSearchMatches(input.value);
+        if (!matches.length) {
+            if (input.value.trim()) {
+                list.innerHTML = `<li class="champ-page-noresult" role="presentation">${escHtml(pickLang('沒有符合的英雄', 'No matching champion'))}</li>`;
+                list.hidden = false;
+                input.setAttribute('aria-expanded', 'true');
+            } else {
+                closeChampSearchResults();
+            }
+            champSearchActive = -1;
+            return;
+        }
+        if (champSearchActive >= matches.length) champSearchActive = matches.length - 1;
+        if (champSearchActive < 0) champSearchActive = 0;
+        list.innerHTML = matches.map((cid, i) => {
+            const info = DATA.champs[cid];
+            const slug = champSlugForCid(cid);
+            const alt = currentLang === 'en' ? (info.name_zh || '') : (info.name_en || '');
+            return `<li id="champ-page-opt-${i}" role="option" aria-selected="${i === champSearchActive}" class="champ-page-opt${i === champSearchActive ? ' is-active' : ''}" data-champ-page="${escHtml(slug)}">`
+                + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+                + `<span class="champ-page-opt-name">${escHtml(champName(info, cid))}</span>`
+                + (alt ? `<span class="champ-page-opt-alt">${escHtml(currentLang === 'zh-CN' ? t2s(alt) : alt)}</span>` : '')
+                + '</li>';
+        }).join('');
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', `champ-page-opt-${champSearchActive}`);
+    }
+    document.addEventListener('input', ev => {
+        if (ev.target && ev.target.id === 'champ-page-search') {
+            champSearchActive = 0;
+            renderChampSearchResults();
+        }
+    });
+    document.addEventListener('keydown', ev => {
+        const input = ev.target;
+        if (!input || input.id !== 'champ-page-search') return;
+        if (ev.isComposing || ev.keyCode === 229) return;
+        const list = document.getElementById('champ-page-results');
+        const count = list && !list.hidden ? list.querySelectorAll('[data-champ-page]').length : 0;
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            if (!count) return;
+            ev.preventDefault();
+            const step = ev.key === 'ArrowDown' ? 1 : -1;
+            champSearchActive = (champSearchActive + step + count) % count;
+            renderChampSearchResults();
+        } else if (ev.key === 'Enter') {
+            const opts = list ? list.querySelectorAll('[data-champ-page]') : [];
+            const pick = opts[Math.max(0, champSearchActive)] || opts[0];
+            if (!pick) return;
+            ev.preventDefault();
+            trackEvent('champion_page_search', { query_len: input.value.trim().length });
+            openChampPage(pick.getAttribute('data-champ-page'));
+            input.blur();
+        } else if (ev.key === 'Escape') {
+            input.value = '';
+            closeChampSearchResults();
+        }
+    });
+    document.addEventListener('focusout', ev => {
+        if (!ev.target || ev.target.id !== 'champ-page-search') return;
+        // Let a click on an option land before the list disappears.
+        setTimeout(() => {
+            const wrap = document.querySelector('.champ-page-search');
+            if (wrap && !wrap.contains(document.activeElement)) closeChampSearchResults();
+        }, 150);
+    });
+    // Type-to-search: on the champion page any printable key (incl. IME
+    // composition start) jumps into the search box, so "next game, next
+    // champion" needs no click.
+    document.addEventListener('keydown', ev => {
+        if (!document.querySelector('.view-champ.is-active')) return;
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        const t = ev.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        const printable = ev.key && ev.key.length === 1 && ev.key !== ' ';
+        const ime = ev.key === 'Process' || ev.keyCode === 229;
+        if (!printable && !ime) return;
+        const input = document.getElementById('champ-page-search');
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+    });
+    document.addEventListener('change', ev => {
+        const t = ev.target;
+        if (!t || !t.matches || !t.matches('.detail-page .detail-tab-input[id^="detail-main-"]')) return;
+        const m = /-(overview|items|augments|pools|compfit)$/.exec(t.id);
+        if (!m) return;
+        try { localStorage.setItem(CHAMP_TAB_KEY, m[1]); } catch {}
+    });
+    document.addEventListener('click', ev => {
+        if (ev.target.closest('[data-champ-page-retry]')) {
+            renderChampPage(champPageSlugNow, true);
+            return;
+        }
+        const link = ev.target.closest('[data-champ-page]');
+        if (!link) return;
+        // Let modified clicks open a new tab via the real href.
+        if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+        ev.preventDefault();
+        const from = link.classList.contains('detail-page-link') ? 'detail'
+            : (link.classList.contains('champ-page-chip') ? 'recent' : 'search');
+        trackEvent('champion_page_link', { from });
+        openChampPage(link.getAttribute('data-champ-page'));
+    });
 
     function toggleTeamPick(cid) {
         pickNotice = '';

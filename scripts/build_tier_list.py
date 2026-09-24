@@ -740,7 +740,14 @@ def main(
         f"[tierlist] wrote hidden player-history shell {player_history_path} "
         f"({player_history_path.stat().st_size:,} bytes)"
     )
-    mirrors = write_spa_path_shells(out_path, site_url=site_url, og_image=og_image)
+    mirrors = write_spa_path_shells(
+        out_path,
+        site_url=site_url,
+        og_image=og_image,
+        champion_routes=load_champion_page_routes(
+            out_path.parent, (r["champion_id"] for r in champ_records), champ_meta,
+        ),
+    )
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
     info_pages = write_site_info_pages(

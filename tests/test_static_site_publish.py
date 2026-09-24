@@ -156,6 +156,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 # site whenever a publish leaves them behind.
                 "docs/404.html",
                 "docs/augments",
+                "docs/c",
                 "docs/changes",
                 "docs/draft",
                 "docs/game",
