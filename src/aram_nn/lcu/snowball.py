@@ -169,6 +169,17 @@ ON crawl_queue(
 );
 """
 
+# The Classic lane orders by affinity rank first.  With no index leading on the
+# rank, that ORDER BY sorted every due row of the ~700k frontier per claim (7.6s
+# live, against a 30s writer RPC timeout).  Partial on the lane's own WHERE so it
+# holds only the ~57k rank>0 pending rows; the lane SQL names it with INDEXED BY
+# because the planner otherwise prefers the wider status/eligible_at index.
+_CREATE_CLASSIC_RANK_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_classic_rank
+ON crawl_queue(classic_affinity_rank DESC, eligible_at_ms ASC)
+WHERE status = 'pending' AND classic_affinity_rank > 0;
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -1101,6 +1112,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_SOURCE_PRIORITY_INDEX_SQL)
     con.execute(_CREATE_QUEUE_SOURCE_PRIORITY_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
+    con.execute(_CREATE_CLASSIC_RANK_INDEX_SQL)
 
     # Independent from the older backfill flag: production databases have
     # already set that flag, but still need their Classic discovery rows tagged.
@@ -2379,7 +2391,7 @@ def _requeue_stale_claims(con: sqlite3.Connection, claim_timeout_ms: int) -> int
 _CLASSIC_LANE_SELECT = """
     SELECT q.queue_idx, q.puuid, q.depth, q.source,
            q.discovered_match_created_ms, q.seed_family, q.discovered_queue_id
-    FROM crawl_queue q
+    FROM crawl_queue q INDEXED BY idx_crawl_queue_classic_rank
     WHERE q.status = 'pending'
       AND q.eligible_at_ms <= :now_ms
       AND q.classic_affinity_rank > 0
@@ -2405,10 +2417,16 @@ _CLASSIC_LANE_SQL = {
              q.queue_idx ASC
     LIMIT 1
     """,
-    # The shipped ordering, kept verbatim as the control arm.
+    # Affinity rank first, then most-overdue within a rank.  The original
+    # ``eligible_at_ms ASC, rank DESC`` let millisecond timestamps decide
+    # everything, so rank was a dead tie-break: over 16.18 (10,085 lane visits)
+    # regular/heavy got 8% of visits and produced 72% of the lane's Classic
+    # games (~1,900 / ~5,700 per 1k visits) while dormant rows took 45% and
+    # produced none.  The 10h revisit floor in _classic_revisit_eligible_at_ms is
+    # what stops rank-first from hammering the same ~2,800 players.
     "due": _CLASSIC_LANE_SELECT + """
-    ORDER BY q.eligible_at_ms ASC,
-             q.classic_affinity_rank DESC,
+    ORDER BY q.classic_affinity_rank DESC,
+             q.eligible_at_ms ASC,
              q.discovered_match_created_ms DESC,
              q.priority ASC,
              q.depth ASC,
@@ -2743,8 +2761,9 @@ _LANE_AB_ENABLED = False
 def lane_arm(puuid: str) -> str:
     """Stable 50/50 split for the Classic lane's ordering.
 
-    due    the shipped ordering: most-overdue first, affinity rank as a tie-break
-           that per-millisecond timestamps never actually reach.
+    due    affinity rank first, most-overdue within a rank.  (Until 2026-09 it
+           was most-overdue first with rank as a tie-break per-millisecond
+           timestamps never reached; the analysis below is against that.)
     score  order by expected Classic yield (decayed rate x window saturation).
 
     Split rather than switched because the offline comparison can only argue one
