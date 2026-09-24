@@ -2024,7 +2024,7 @@ _CHAMPION_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def champion_page_slug(alias: str) -> str:
-    """URL slug for /c/<slug>: the Data Dragon alias, lowercased, alnum only.
+    """URL slug for /champions/<slug>: the Data Dragon alias, lowercased, alnum only.
 
     site.js ``champPageSlug`` mirrors this rule; keep the two in sync.
     """
@@ -2037,7 +2037,7 @@ def champion_page_routes(
     *,
     names_zh_cn: dict | None = None,
 ) -> list[dict[str, str]]:
-    """One entry per published champion for the /c/<slug> route stubs."""
+    """One entry per published champion for the /champions/<slug> route stubs."""
     cn_names = names_zh_cn or {}
     routes: list[dict[str, str]] = []
     seen: dict[str, object] = {}
@@ -2081,22 +2081,22 @@ def _champion_route_specs(root: Path, routes) -> list[tuple[Path, str, str, str,
         slug = route["slug"]
         zh, en, cn = route["name_zh"], route["name_en"], route["name_cn"]
         specs.append((
-            root / "c" / slug / "index.html",
-            f"/c/{slug}/",
+            root / "champions" / slug / "index.html",
+            f"/champions/{slug}/",
             f"{zh} 增幅與出裝 · arammeta",
             f"{zh}（{en}）ARAM 大亂鬥增幅排行、出裝與召喚師技能",
             "zh-Hant",
         ))
         specs.append((
-            root / "en" / "c" / slug / "index.html",
-            f"/en/c/{slug}/",
+            root / "en" / "champions" / slug / "index.html",
+            f"/en/champions/{slug}/",
             f"{en} augments & build · arammeta",
             f"{en} ARAM Mayhem augment ranking, item build and summoner spells",
             "en",
         ))
         specs.append((
-            root / "zh-CN" / "c" / slug / "index.html",
-            f"/zh-CN/c/{slug}/",
+            root / "zh-CN" / "champions" / slug / "index.html",
+            f"/zh-CN/champions/{slug}/",
             f"{cn} 海克斯与出装 · arammeta",
             f"{cn}（{en}）大乱斗海克斯排行、出装与召唤师技能",
             "zh-Hans",
@@ -3805,7 +3805,7 @@ def render_html(
     parts.append("</div>")  # /app-shell
     parts.append("</section>")  # /view-home
 
-    # ---- View: 英雄頁 (champ) — one champion's detail at /c/<slug>, rendered by JS ----
+    # ---- View: 英雄頁 (champ) — one champion's detail at /champions/<slug>, rendered by JS ----
     # Built for the "look up the champion I just got" loop: a persistent search
     # (type anywhere to jump), recent champions, then the shared detail tabs.
     parts.append(

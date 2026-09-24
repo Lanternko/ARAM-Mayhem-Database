@@ -9361,7 +9361,7 @@
     .is-pool-tip .item-tip-name { color: var(--text); }
     .is-pool-tip .item-tip-sub { color: var(--text-muted); }
 
-    /* ===== Champion page (/c/<slug>) ===========================================
+    /* ===== Champion page (/champions/<slug>) ===========================================
        One champion per URL for the "look up the champ I just got" flow.  Reuses
        the detail panel (page mode: h1 name, no ×); the bar above it is search-
        first so the next game's lookup is one keystroke away. */

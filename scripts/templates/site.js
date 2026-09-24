@@ -10031,14 +10031,14 @@
     //   /augments/pools    augment pools (zh)
     //   /en/augments       augment tier (en)
     //   /en/augments/pools augment pools (en)
-    //   /c/<slug>          one champion's page (slug = lowercased alias)
+    //   /champions/<slug>  one champion's page (slug = lowercased alias)
     // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix ? prefix + '/' : '/';
         if (view === 'augments' && sub === 'pools') return prefix + '/' + view + '/pools/';
-        if (view === 'champ') return prefix + '/c/' + (sub ? sub + '/' : '');
+        if (view === 'champ') return prefix + '/champions/' + (sub ? sub + '/' : '');
         return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
@@ -10086,7 +10086,7 @@
         if (segs[0] === 'home' && segs.length === 1) {
             return { view: 'home', sub: '', urlLang, legacyHash: false };
         }
-        if (segs[0] === 'c') {
+        if (segs[0] === 'champions') {
             return { view: 'champ', sub: champPageSlug(segs[1] || ''), urlLang, legacyHash: false };
         }
         const view = segs[0];
@@ -10480,10 +10480,10 @@
         champ.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
 
-    // ---- Champion page (/c/<slug>) ------------------------------------------
+    // ---- Champion page (/champions/<slug>) ------------------------------------------
     // Players look up one champion per game ("I got Jinx, what do I take?"), so
     // each champion has its own shareable URL.  GH Pages serves a tiny bounce
-    // stub at /c/<slug>/ that restores the path on /; this view then reuses
+    // stub at /champions/<slug>/ that restores the path on /; this view then reuses
     // renderDetail in page mode (no close button, remembered tab).
     const CHAMP_TAB_KEY = 'aram-detail-tab';
     const RECENT_CHAMPS_KEY = 'aram-recent-champs';
@@ -10572,7 +10572,7 @@
         const token = ++champPageToken;
         renderChampRecent(cid);
         if (!cid) {
-            // Bare /c/ or an unknown slug: search-first landing, not an error wall.
+            // Bare /champions/ or an unknown slug: search-first landing, not an error wall.
             document.title = pickLang('英雄查詢', 'Champion lookup') + ' · arammeta';
             const msg = slug
                 ? pickLang('找不到這位英雄，請用上方搜尋。', 'Champion not found — use the search above.')

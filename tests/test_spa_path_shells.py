@@ -212,15 +212,15 @@ class SpaPathShellTests(unittest.TestCase):
             write_spa_path_shells(
                 index, site_url="https://arammeta.com/", champion_routes=routes,
             )
-            zh = (root / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
-            en = (root / "en" / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
-            cn = (root / "zh-CN" / "c" / "jinx" / "index.html").read_text(encoding="utf-8")
+            zh = (root / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
+            en = (root / "en" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
+            cn = (root / "zh-CN" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
             # Bounce stubs, not ~0.5MB full shells (repo growth per publish).
             for body in (zh, en, cn):
                 self.assertNotIn("FULL_SPA_SHELL", body)
                 self.assertIn("location.replace('/')", body)
                 self.assertNotIn("noindex", body)
-            self.assertIn("href='https://arammeta.com/c/jinx/'", zh)
+            self.assertIn("href='https://arammeta.com/champions/jinx/'", zh)
             self.assertIn("吉孃 增幅與出裝", zh)
             self.assertIn("'aram-spa-lang','en'", en)
             self.assertIn("Jinx augments &amp; build", en)

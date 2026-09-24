@@ -100,7 +100,7 @@ DEFAULT_DOC_PATHS = (
     # here is what keeps the locale pages and share cards current.
     Path("docs/404.html"),
     Path("docs/augments"),
-    Path("docs/c"),
+    Path("docs/champions"),
     Path("docs/changes"),
     Path("docs/draft"),
     Path("docs/game"),
