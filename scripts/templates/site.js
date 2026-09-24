@@ -3446,9 +3446,19 @@
         if (augPools.data || augPools.loading) return;
         augPools.loading = true;
         augPools.failed = false;
-        loadSitePayload('api/augment-pools.json')
+        // One silent retry absorbs transient network/CDN blips before the
+        // user sees the failure state; log the cause so it's diagnosable.
+        const fetchPools = () => loadSitePayload('api/augment-pools.json');
+        fetchPools()
+            .catch(err => {
+                console.warn('[augment-pools] load failed, retrying once:', err);
+                return new Promise(resolve => setTimeout(resolve, 1500)).then(fetchPools);
+            })
             .then(d => { augPools.data = d; apoolIndex(d); })
-            .catch(() => { augPools.failed = true; })
+            .catch(err => {
+                augPools.failed = true;
+                console.error('[augment-pools] load failed:', err);
+            })
             .finally(() => {
                 augPools.loading = false;
                 if (augMode === 'pools') renderAugPools();
@@ -3513,8 +3523,8 @@
     }
     function championPoolsHtml(cid) {
         const d = augPools.data;
-        if (!d) return `<p role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
-            + (augPools.failed ? `<button type="button" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
+        if (!d) return `<p class="champ-pools-status" role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
+            + (augPools.failed ? `<button type="button" class="tool-btn champ-pools-retry" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
         const entries = championPoolEntries(cid, d, DATA.augs || {});
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
         const weights = [...new Set(entries.map(e => e.weight))];

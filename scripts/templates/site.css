@@ -9250,6 +9250,8 @@
 .champ-pools { padding: 16px 0; color: var(--text); }
 .champ-pools-summary { font-weight: 600; margin: 0 0 8px; }
 .champ-pools-note { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.champ-pools-status { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; }
+.champ-pools-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .champ-pool-weight-group { margin-top: 28px; }
 .champ-pool-weight-group > h3 { display: flex; align-items: baseline; gap: 8px; font-size: 14px; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .champ-pool-weight-group > h3 b { font-size: 22px; font-variant-numeric: tabular-nums; }
