@@ -2846,23 +2846,7 @@
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
-        // Shared rich float tip (same card language as items).
-        const tipHtml = buildItemTipHtml({
-            name,
-            icons: icon ? [icon] : [],
-            subtitle: setName
-                ? `${copy.augSetLabel}: ${setName}`
-                : '',
-            desc,
-            wr: pct(entry.wr),
-            pick: pickPct,
-            pickRate,
-            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
-            lift: entry.lift,
-            liftLabel: signed(entry.lift),
-            games: entry.g,
-            note: onBoard ? copy.augChampsHint : '',
-        });
+        const tipHtml = buildAugTipHtml(entry, onBoard);
         // Card: icon → name → WR% → pick% (two bare numbers, stacked). Labels
         // for 勝率 / 選用率 live in the left rarity rail (with sort controls).
         return `
@@ -2884,26 +2868,106 @@
         `;
     }
 
-    /** Reorder .aug cards inside one rarity row by wr or pick (desc). */
-    function sortRarityAugList(row, sortKey) {
-        if (!row) return;
-        const list = row.querySelector('.aug-list');
-        if (!list) return;
-        const attr = sortKey === 'pick' ? 'data-pick' : 'data-wr';
-        const cards = Array.from(list.querySelectorAll('.aug[data-aug-id]'));
-        cards.sort((a, b) => {
-            const av = Number(a.getAttribute(attr) || 0);
-            const bv = Number(b.getAttribute(attr) || 0);
-            if (bv !== av) return bv - av;
-            // Stable-ish tie-break: keep existing DOM order via data-aug-id.
-            return String(a.getAttribute('data-aug-id') || '')
-                .localeCompare(String(b.getAttribute('data-aug-id') || ''), undefined, { numeric: true });
+    // Shared rich float tip (same card language as items).
+    function buildAugTipHtml(entry, onBoard) {
+        const aug = DATA.augs[entry.id];
+        const copy = tr();
+        const setName = augSetName(aug, entry.id);
+        const pickRate = Number(entry.pick || 0);
+        return buildItemTipHtml({
+            name: aug ? augName(aug, entry.id) : '#' + entry.id,
+            icons: aug && aug.icon ? [aug.icon] : [],
+            subtitle: setName ? `${copy.augSetLabel}: ${setName}` : '',
+            desc: augDesc(aug, entry.id),
+            wr: pct(entry.wr),
+            pick: pct(pickRate),
+            pickRate,
+            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
+            lift: entry.lift,
+            liftLabel: signed(entry.lift),
+            games: entry.g,
+            note: onBoard ? copy.augChampsHint : '',
         });
-        cards.forEach(card => list.appendChild(card));
-        row.querySelectorAll('.rlabel-sort').forEach(btn => {
-            const active = btn.getAttribute('data-sort') === sortKey;
-            btn.classList.toggle('is-active', active);
-            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+
+    // ----- Champion page 增幅裝置: one rarity at a time, as a vertical table ---
+    // Rarity + sort persist across champions so the next lookup opens the same way.
+    let champAugRarity = 'kGold';
+    let champAugSort = 'rank';
+    function buildChampAugTable(top) {
+        const copy = tr();
+        const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
+            const r = RARITIES.find(x => x.key === key);
+            const on = key === champAugRarity;
+            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
+        }).join('');
+        const sortBtn = (key, label, cls) => {
+            const on = key === champAugSort;
+            return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
+        };
+        const lists = RARITIES.map(r => {
+            const rows = (top[r.key] || []).map((e, idx) => {
+                const aug = DATA.augs[e.id];
+                const name = aug ? augName(aug, e.id) : '#' + e.id;
+                const icon = aug && aug.icon ? aug.icon : '';
+                const pickRate = Number(e.pick || 0);
+                const games = pickLang(`${fmtInt(e.g)} 場`, `${fmtInt(e.g)} games`);
+                const ariaLabel = copy.augAria(name, pct(e.wr), signed(e.lift), e.g, augDesc(aug, e.id));
+                return `
+                    <li class="aug-tier-row has-item-tip" tabindex="0"
+                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
+                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
+                        aria-label="${escHtml(ariaLabel)}">
+                        <span class="aug-tier-name">
+                            ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<span class="aicon-ph"></span>'}
+                            <span>${escHtml(name)}</span>
+                        </span>
+                        <span class="aug-tier-pick"><b>${pct(pickRate)}</b><small>${escHtml(games)}</small></span>
+                        <span class="aug-tier-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
+                        ${itemTipSource(buildAugTipHtml(e, false))}
+                    </li>`;
+            }).join('');
+            const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
+            return `<ol class="aug-tier-list" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>${body}</ol>`;
+        }).join('');
+        const html = `
+            <div class="aug-tier-table">
+                <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                <div class="aug-tier-head">
+                    ${sortBtn('rank', pickLang('增幅裝置', 'Augment'), 'col-name')}
+                    ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
+                    ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+                </div>
+                ${lists}
+            </div>`;
+        return html;
+    }
+    /** Apply champAugRarity / champAugSort to every champion aug table under root. */
+    function syncChampAugTable(root) {
+        (root || document).querySelectorAll('.aug-tier-table').forEach(table => {
+            table.querySelectorAll('[data-aug-rarity]').forEach(btn => {
+                const on = btn.getAttribute('data-aug-rarity') === champAugRarity;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            table.querySelectorAll('[data-aug-sort]').forEach(btn => {
+                const on = btn.getAttribute('data-aug-sort') === champAugSort;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            const attr = 'data-' + champAugSort;
+            table.querySelectorAll('.aug-tier-list').forEach(list => {
+                list.hidden = list.getAttribute('data-rarity') !== champAugRarity;
+                const rows = Array.from(list.querySelectorAll('.aug-tier-row'));
+                rows.sort((a, b) => {
+                    const av = Number(a.getAttribute(attr) || 0);
+                    const bv = Number(b.getAttribute(attr) || 0);
+                    // Strength rank is ascending (0 = strongest); rates descend.
+                    if (av !== bv) return champAugSort === 'rank' ? av - bv : bv - av;
+                    return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
+                });
+                rows.forEach(row => list.appendChild(row));
+            });
         });
     }
 
@@ -3111,12 +3175,7 @@
         setSingleItemRole(singleItemRole === key ? '' : key);
     });
 
-    // ----- Augment category filter (chips above the per-champion ranking) -----
-    // Multi-select OR filter, persisted across champion switches within a
-    // session.  Each .aug card carries data-cats; chips toggle membership and we
-    // show/hide the matching cards (+ collapse rarity rows that empty out)
-    // without re-rendering the whole detail.
-    const augCatFilter = new Set();
+    // ----- Augment categories (taxonomy labels for tips / 增幅榜 filters) -----
     const AUGMENT_TAXONOMY = __AUGMENT_TAXONOMY__;
     function augCatMeta() {
         return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
@@ -3130,60 +3189,6 @@
         if (!lbl) return cat;
         return currentLang === 'en' ? (lbl.en || lbl.zh || cat) : zhUi(lbl.zh || lbl.en || cat);
     }
-    function buildAugCatChips() {
-        const meta = augCatMeta();
-        const order = Array.isArray(meta.order) ? meta.order : [];
-        if (!order.length) return '';
-        const copy = tr();
-        const allActive = augCatFilter.size === 0;
-        const chips = [
-            `<button type="button" class="aug-cat-chip aug-cat-all${allActive ? ' is-active' : ''}" data-cat="" aria-pressed="${allActive}" title="${escHtml(copy.augFilterAllTip)}">${escHtml(copy.augFilterAll)}</button>`,
-        ];
-        order.forEach(cat => {
-            const active = augCatFilter.has(cat);
-            const tip = (cat === 'new' && meta.newPatch) ? ` title="${escHtml(copy.augFilterNewTip(meta.newPatch))}"` : '';
-            chips.push(`<button type="button" class="aug-cat-chip cat-${cat}${active ? ' is-active' : ''}" data-cat="${cat}" aria-pressed="${active}"${tip}>${escHtml(augCatLabel(cat))}</button>`);
-        });
-        return `<div class="aug-cat-bar" role="group" aria-label="${escHtml(pickLang('增幅分類', 'Augment categories'))}">${chips.join('')}</div>`;
-    }
-    // Re-apply the active filter to every .aug card under `root`, syncing chip
-    // pressed state and collapsing rarity rows that hold cards but match none.
-    function applyAugCatFilter(root) {
-        if (!root) return;
-        const active = augCatFilter;
-        root.querySelectorAll('.aug-cat-chip').forEach(chip => {
-            const cat = chip.getAttribute('data-cat') || '';
-            const on = cat ? active.has(cat) : active.size === 0;
-            chip.classList.toggle('is-active', on);
-            chip.setAttribute('aria-pressed', String(on));
-        });
-        root.querySelectorAll('.rarity-row').forEach(row => {
-            let shown = 0;
-            const cards = row.querySelectorAll('.aug');
-            cards.forEach(card => {
-                const cats = (card.getAttribute('data-cats') || '').split(' ').filter(Boolean);
-                const match = active.size === 0 || cats.some(c => active.has(c));
-                card.classList.toggle('cat-hidden', !match);
-                if (match) shown++;
-            });
-            row.classList.toggle('cat-empty', cards.length > 0 && shown === 0 && active.size > 0);
-        });
-    }
-    function toggleAugCat(cat) {
-        if (!cat) augCatFilter.clear();
-        else if (augCatFilter.has(cat)) augCatFilter.delete(cat);
-        else augCatFilter.add(cat);
-        document.querySelectorAll('.detail').forEach(applyAugCatFilter);
-    }
-    document.addEventListener('click', (ev) => {
-        const chip = ev.target.closest('.aug-cat-chip');
-        // The 增幅榜 tab reuses .aug-cat-chip styling but has its own filter state
-        // and handler (below); don't let the per-champion detail filter grab them.
-        if (!chip || chip.closest('#aug-tier-filters')) return;
-        ev.preventDefault();
-        toggleAugCat(chip.getAttribute('data-cat') || '');
-    });
-
     /* ===== 增幅榜 (global augment tier) =========================================
        Built client-side from DATA.augs (each augment carries wr/g/lift/pick from
        the Python rollup).  Tier = within-rarity percentile of wr, so a strong
@@ -4133,43 +4138,6 @@
         }
     });
 
-    function buildRarityRow(items, kind, r) {
-        const copy = tr();
-        const cards = (items || []).map(e => {
-            const cardKind = kind === 'ranked'
-                ? (Number(e.lift || 0) >= 0 ? 'good' : 'bad')
-                : kind;
-            return buildAugCard(e, cardKind);
-        }).join('');
-        // The left control is a peer of .aug cards inside the same flex row —
-        // same height, same bottom two rows — so 勝率/選用率 line up with the
-        // WR/pick numbers. Structure mirrors a card: head (centered rarity) +
-        // two fixed-height foot rows (sort keys where other cards put stats).
-        const sortWr = escHtml(copy.augSortWr || '勝率');
-        const sortPick = escHtml(copy.augSortPick || '選用率');
-        const rail = `
-            <div class="rlabel-rail rlabel ${r.css}" role="group"
-                 aria-label="${escHtml(copy.rarityLabels[r.key])}">
-                <div class="rlabel-head">
-                    <div class="rlabel-name">${escHtml(copy.rarityLabels[r.key])}</div>
-                </div>
-                <button type="button" class="rlabel-sort is-active" data-sort="wr"
-                        aria-pressed="true"
-                        aria-label="${escHtml(copy.augSortWrAria || sortWr)}">${sortWr}</button>
-                <button type="button" class="rlabel-sort" data-sort="pick"
-                        aria-pressed="false"
-                        aria-label="${escHtml(copy.augSortPickAria || sortPick)}">${sortPick}</button>
-            </div>`;
-        const body = cards
-            ? `${rail}${cards}`
-            : `${rail}<div class="aug-list-empty">${copy.insufficient}</div>`;
-        return `
-            <div class="rarity-row" data-rarity="${escHtml(r.key)}">
-                <div class="aug-list">${body}</div>
-            </div>
-        `;
-    }
-
     let championOverviewRankCache = null;
     function championOverviewStats(cid, info) {
         if (!championOverviewRankCache) {
@@ -4222,7 +4190,6 @@
         const singleItemMeta = pickLang('六格中出過就計入；由強到弱，右滑看更多', 'counts any final-slot item; strongest first, swipe for more');
         const singleItemBadTitle = pickLang('常見但不推薦', 'Common Traps');
         const singleItemBadMeta = pickLang('負 lift 但仍常見；選取率 ≥ 10% 一律列出', 'negative-lift items people still build; pick ≥ 10% always listed');
-        const topRows = RARITIES.map(r => buildRarityRow(top[r.key], 'ranked', r)).join('');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
         const mateTop = pairs.slice(0, mateLimit);
@@ -4946,8 +4913,7 @@
                         <h3>${augmentRankTitle}</h3>
                         ${buildSetSummary(setTop)}
                     </div>
-                    ${buildAugCatChips()}
-                    ${topRows}
+                    ${buildChampAugTable(top)}
                 </div>
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
@@ -10456,7 +10422,7 @@
             if (token !== champPageToken || !host.isConnected) return;
             const tab = readChampTab();
             host.innerHTML = `<div class="detail detail-page">${renderDetail(cid, { page: true, tab })}</div>`;
-            if (augCatFilter.size) applyAugCatFilter(host);
+            if (champAugSort !== 'rank') syncChampAugTable(host);
             applySingleItemFilter(host);
             if (tab === 'pools') {
                 renderChampionPools();
@@ -10756,12 +10722,18 @@
             trackEvent('recommendations_close', { source: 'panel', picks: teamPicks.length });
             return;
         }
-        const augSortBtn = ev.target.closest('.rlabel-sort[data-sort]');
+        const augRarityBtn = ev.target.closest('[data-aug-rarity]');
+        if (augRarityBtn) {
+            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
+            syncChampAugTable();
+            trackEvent('aug_rarity_select', { rarity: champAugRarity });
+            return;
+        }
+        const augSortBtn = ev.target.closest('[data-aug-sort]');
         if (augSortBtn) {
-            const row = augSortBtn.closest('.rarity-row');
-            const key = augSortBtn.getAttribute('data-sort') || 'wr';
-            sortRarityAugList(row, key);
-            trackEvent('aug_rarity_sort', { sort: key, rarity: row && row.getAttribute('data-rarity') });
+            champAugSort = augSortBtn.getAttribute('data-aug-sort') || 'rank';
+            syncChampAugTable();
+            trackEvent('aug_rarity_sort', { sort: champAugSort, rarity: champAugRarity });
             return;
         }
         const changeTab = ev.target.closest('[data-change-tab]');

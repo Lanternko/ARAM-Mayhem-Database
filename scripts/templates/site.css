@@ -9393,10 +9393,122 @@
         text-align: center;
         color: var(--text-muted);
     }
+    /* The champion page IS the page — no floating panel surface around it.
+       The sticky tab rail blends into the page background instead. */
     .detail.detail-page {
         margin: 0;
+        padding: 0;
         animation: none;
+        background: none;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
     }
+    .detail-page .detail-main-tabs > .detail-tab-rail {
+        margin: 0;
+        padding-left: 0;
+        padding-right: 0;
+        background: color-mix(in oklab, var(--bg) 92%, transparent);
+    }
+
+    /* 增幅裝置 on the champion page: rarity segmented control + vertical table. */
+    .aug-tier-table { margin-top: 10px; }
+    .aug-tier-seg {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        padding: 4px;
+        margin-bottom: 10px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-md, 10px);
+        background: var(--surface);
+    }
+    .aug-tier-seg-btn {
+        min-height: 36px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .aug-tier-seg-btn.is-active { color: #111; }
+    .aug-tier-seg-btn.rarity-silver.is-active { background: linear-gradient(180deg, #eef1f5, #b9c0ca); }
+    .aug-tier-seg-btn.rarity-gold.is-active { background: linear-gradient(180deg, #ffe27a, #e0a912); }
+    .aug-tier-seg-btn.rarity-prismatic.is-active { background: linear-gradient(135deg, #f5c6ff, #b8d8ff 55%, #c8ffe8); }
+    .aug-tier-head,
+    .aug-tier-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 84px 72px;
+        align-items: center;
+    }
+    .aug-tier-head { border-bottom: 1px solid var(--border); }
+    .aug-tier-sort {
+        min-height: 36px;
+        padding: 0 8px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: none;
+        color: var(--text-muted);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        text-align: center;
+        cursor: pointer;
+    }
+    .aug-tier-sort.col-name { text-align: left; }
+    .aug-tier-sort.is-active { color: var(--text); border-bottom-color: var(--accent); }
+    .aug-tier-list { list-style: none; margin: 0; padding: 0; }
+    .aug-tier-row {
+        min-height: 56px;
+        border-bottom: 1px solid var(--border);
+        cursor: default;
+    }
+    .aug-tier-row:hover,
+    .aug-tier-row:focus-visible { background: var(--surface); outline: none; }
+    .aug-tier-name {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 6px 8px;
+        font-size: 14px;
+        font-weight: 600;
+    }
+    .aug-tier-name > span:last-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .aug-tier-name img,
+    .aug-tier-name .aicon-ph {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+    }
+    .aug-tier-pick {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-tier-pick b { font-size: 14px; }
+    .aug-tier-pick small { font-size: 11px; color: var(--text-muted); }
+    .aug-tier-wr {
+        text-align: center;
+        font-size: 14px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-tier-wr.wr-5 { color: var(--wr-5); }
+    .aug-tier-wr.wr-4 { color: var(--wr-4); }
+    .aug-tier-wr.wr-3 { color: var(--wr-3); }
+    .aug-tier-wr.wr-2 { color: var(--wr-2); }
+    .aug-tier-wr.wr-1 { color: var(--wr-1); }
     .detail-page .detail-head .cname {
         margin: 0;
         font-size: 22px;
@@ -9430,7 +9542,6 @@
         .champ-page-bar { gap: 8px; margin-bottom: 10px; }
         .champ-page-search { flex-basis: 100%; max-width: none; }
         .champ-page-recent { flex-basis: 100%; }
-        .detail.detail-page { padding: 12px; }
         .detail-page { --champ-head-h: 40px; }
         .detail-page .detail-head .cname { font-size: 18px; }
         .detail-page .detail-avatar { width: 40px; height: 40px; }
