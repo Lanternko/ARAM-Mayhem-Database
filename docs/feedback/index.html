@@ -6359,6 +6359,23 @@
             0 0 0 4px rgba(70, 80, 100, 0.28),
             0 2px 8px rgba(0, 0, 0, 0.28);
     }
+    /* List-size augment icons share the .augch-icon disc: silver and pastel
+       art vanishes on light surfaces without a dark backing. */
+    .champ-pool-augment img,
+    .recommended-pool-members img,
+    .aug-tier-name img,
+    .aug-tier-name .aicon-ph,
+    .aug-draft-icon,
+    .aug-settle-icon {
+        padding: 3px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        object-fit: contain;
+        background:
+            radial-gradient(circle at 50% 42%, #222836 0%, #12151c 62%, #07090d 100%);
+        box-shadow: 0 0 0 1px #2c3444;
+    }
+    .aug-settle-icon { padding: 2px; }
     .augch-name { color: var(--text); font-size: 17px; font-weight: 700; }
     .augch-sub { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
     .augch-stat { margin-top: 2px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -7435,7 +7452,7 @@
     }
     .aug-settle-chip.is-hit { box-shadow: inset 2px 0 0 #4ade80; }
     .aug-settle-n { font-weight: 700; color: var(--text-muted, #9aa0a6); flex: none; }
-    .aug-settle-icon { width: 22px; height: 22px; border-radius: 6px; flex: none; }
+    .aug-settle-icon { width: 22px; height: 22px; flex: none; }
     .aug-settle-name { font-weight: 600; }
     .aug-settle-score {
         margin-left: auto;
@@ -9284,7 +9301,7 @@
 .champ-pool-category h4 small { margin-left: 6px; color: var(--text-muted); font-weight: 400; }
 .champ-pool-category > ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; list-style: none; margin: 0; padding: 0; }
 .champ-pool-augment { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; text-align: left; padding: 6px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
-.champ-pool-augment img { flex: 0 0 28px; border-radius: 4px; }
+.champ-pool-augment img { flex: 0 0 32px; width: 32px; height: 32px; }
 .champ-pool-augment small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 .champ-pool-augment:hover { background: var(--panel-inner); border-color: var(--border); }
 .champ-pool-augment:focus-visible, .champ-pools-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -9305,7 +9322,7 @@
     .item-float-tip.is-pool-tip { pointer-events: auto; }
     .recommended-pool-members { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
     .recommended-pool-members li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .recommended-pool-members img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 28px; }
+    .recommended-pool-members img { width: 28px; height: 28px; flex: 0 0 28px; }
     .item-float-tip.is-pool-tip.is-visible { display: block !important; }
     .item-float-tip.is-pool-tip { filter: none; box-shadow: var(--panel-shadow); }
     .is-pool-tip .item-tip-card { background: var(--surface-raised); color: var(--text); border-color: var(--border-strong); }

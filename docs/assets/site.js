@@ -3248,7 +3248,7 @@
         const tip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc})
             .trim().replace(/<\/div>$/, sourceHtml + '</div>');
         return `<li><button type="button" class="champ-pool-augment has-item-tip" data-pool-augment="${escHtml(entry.id)}">`
-            + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="28" height="28">` : '')
+            + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="32" height="32">` : '')
             + `<span>${escHtml(aug.name)}<small>${escHtml(rarity)}</small></span>${itemTipSource(tip)}</button></li>`;
     }
     function championPoolsHtml(cid) {
