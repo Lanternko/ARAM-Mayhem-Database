@@ -20,10 +20,10 @@
     } catch {}
     // URL locale prefix is authoritative (works for direct History visits too).
     try {
-        let p = location.pathname || '/';
+        let p = (location.pathname || '/').toLowerCase();
         if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1) || '/';
         if (p === '/en' || p.startsWith('/en/')) pendingBootLang = 'en';
-        else if (p === '/zh-CN' || p.startsWith('/zh-CN/')) pendingBootLang = 'zh-CN';
+        else if (p === '/zh-cn' || p.startsWith('/zh-cn/')) pendingBootLang = 'zh-CN';
     } catch {}
     // Flip chrome strings NOW (script is at end of <body>) so /en or /zh-CN shares
     // never flash the wrong shell while payload/init continues.  Full
@@ -110,7 +110,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260925-1790269089");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260925-1790269088");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -220,11 +220,8 @@
         try {
             _compNormCache = null;
             _stageTempoCache = null;
-            if (detailSelected) {
-                const champ = document.querySelector(`.champ[data-cid="${detailSelected}"]`);
-                if (champ) openDetailForChamp(champ, true);
-            }
             if (document.querySelector('.view-draft.is-active')) renderDraft();
+            if (document.querySelector('.view-champ.is-active')) renderChampPage(champPageSlugNow, true);
         } catch {}
     };
     const secondaryFetches = [
@@ -697,7 +694,7 @@
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Fighter"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226668":["Fighter"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Fighter"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773154":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773161":["Fighter"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3097":["Marksman"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -764,7 +761,7 @@
     const THEME_KEY = 'aram-mayhem-site-theme';
     const SEARCH_SCOPE_KEY = 'aram-mayhem-site-search-scope';
     // Primary tabs: home (英雄) / augments / draft / game / changes.
-    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes'];
+    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'champ'];
     // Player-history copy is kept separate from the legacy game copy table so
     // the optional panel can fail closed without affecting other views. The
     // zh-CN shell follows the existing Traditional-to-Simplified proxy.
@@ -1072,7 +1069,6 @@
             augGameRarityP: '彩色',
             augGameTotalLift: '這套增幅的總增益',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
-            detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
             pairSectionMeta: '適配度為主，勝率為輔',
             setSectionTitle: '增幅裝置系列相性',
@@ -1424,7 +1420,6 @@
             augGameRarityP: 'Prismatic',
             augGameTotalLift: 'Total lift of this build',
             detailEmpty: 'No detail data is available for this champion yet.',
-            detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
             pairSectionMeta: 'Fit first, win rate second',
             setSectionTitle: 'Augment Sets',
@@ -1542,7 +1537,7 @@
     // Prefer URL / stub-stashed locale over the zh SSR default.
     const LANG_OPTIONS = [
         { id: 'zh', label: '繁體中文', short: '繁中', htmlLang: 'zh-Hant', prefix: '' },
-        { id: 'zh-CN', label: '简体中文', short: '简中', htmlLang: 'zh-Hans', prefix: '/zh-CN' },
+        { id: 'zh-CN', label: '简体中文', short: '简中', htmlLang: 'zh-Hans', prefix: '/zh-cn' },
         { id: 'en', label: 'English', short: 'EN', htmlLang: 'en', prefix: '/en' },
     ];
     function normalizeLang(lang) {
@@ -2583,23 +2578,7 @@
         // rawWr stays in the payload for sorting/debug, but the card no longer
         // shows a "raw … · n=" line — hover tip already carries WR / pick / games.
         const ariaLabel = copy.augAria(name, pct(entry.wr), signed(entry.lift), entry.g, desc);
-        // Shared rich float tip (same card language as items).
-        const tipHtml = buildItemTipHtml({
-            name,
-            icons: icon ? [icon] : [],
-            subtitle: setName
-                ? `${copy.augSetLabel}: ${setName}`
-                : '',
-            desc,
-            wr: pct(entry.wr),
-            pick: pickPct,
-            pickRate,
-            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
-            lift: entry.lift,
-            liftLabel: signed(entry.lift),
-            games: entry.g,
-            note: onBoard ? copy.augChampsHint : '',
-        });
+        const tipHtml = buildAugTipHtml(entry, onBoard);
         // Card: icon → name → WR% → pick% (two bare numbers, stacked). Labels
         // for 勝率 / 選用率 live in the left rarity rail (with sort controls).
         return `
@@ -2621,26 +2600,106 @@
         `;
     }
 
-    /** Reorder .aug cards inside one rarity row by wr or pick (desc). */
-    function sortRarityAugList(row, sortKey) {
-        if (!row) return;
-        const list = row.querySelector('.aug-list');
-        if (!list) return;
-        const attr = sortKey === 'pick' ? 'data-pick' : 'data-wr';
-        const cards = Array.from(list.querySelectorAll('.aug[data-aug-id]'));
-        cards.sort((a, b) => {
-            const av = Number(a.getAttribute(attr) || 0);
-            const bv = Number(b.getAttribute(attr) || 0);
-            if (bv !== av) return bv - av;
-            // Stable-ish tie-break: keep existing DOM order via data-aug-id.
-            return String(a.getAttribute('data-aug-id') || '')
-                .localeCompare(String(b.getAttribute('data-aug-id') || ''), undefined, { numeric: true });
+    // Shared rich float tip (same card language as items).
+    function buildAugTipHtml(entry, onBoard) {
+        const aug = DATA.augs[entry.id];
+        const copy = tr();
+        const setName = augSetName(aug, entry.id);
+        const pickRate = Number(entry.pick || 0);
+        return buildItemTipHtml({
+            name: aug ? augName(aug, entry.id) : '#' + entry.id,
+            icons: aug && aug.icon ? [aug.icon] : [],
+            subtitle: setName ? `${copy.augSetLabel}: ${setName}` : '',
+            desc: augDesc(aug, entry.id),
+            wr: pct(entry.wr),
+            pick: pct(pickRate),
+            pickRate,
+            colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
+            lift: entry.lift,
+            liftLabel: signed(entry.lift),
+            games: entry.g,
+            note: onBoard ? copy.augChampsHint : '',
         });
-        cards.forEach(card => list.appendChild(card));
-        row.querySelectorAll('.rlabel-sort').forEach(btn => {
-            const active = btn.getAttribute('data-sort') === sortKey;
-            btn.classList.toggle('is-active', active);
-            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+
+    // ----- Champion page 增幅裝置: one rarity at a time, as a vertical table ---
+    // Rarity + sort persist across champions so the next lookup opens the same way.
+    let champAugRarity = 'kGold';
+    let champAugSort = 'rank';
+    function buildChampAugTable(top) {
+        const copy = tr();
+        const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
+            const r = RARITIES.find(x => x.key === key);
+            const on = key === champAugRarity;
+            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
+        }).join('');
+        const sortBtn = (key, label, cls) => {
+            const on = key === champAugSort;
+            return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
+        };
+        const lists = RARITIES.map(r => {
+            const rows = (top[r.key] || []).map((e, idx) => {
+                const aug = DATA.augs[e.id];
+                const name = aug ? augName(aug, e.id) : '#' + e.id;
+                const icon = aug && aug.icon ? aug.icon : '';
+                const pickRate = Number(e.pick || 0);
+                const games = pickLang(`${fmtInt(e.g)} 場`, `${fmtInt(e.g)} games`);
+                const ariaLabel = copy.augAria(name, pct(e.wr), signed(e.lift), e.g, augDesc(aug, e.id));
+                return `
+                    <li class="aug-tier-row has-item-tip" tabindex="0"
+                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
+                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
+                        aria-label="${escHtml(ariaLabel)}">
+                        <span class="aug-tier-name">
+                            ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<span class="aicon-ph"></span>'}
+                            <span>${escHtml(name)}</span>
+                        </span>
+                        <span class="aug-tier-pick"><b>${pct(pickRate)}</b><small>${escHtml(games)}</small></span>
+                        <span class="aug-tier-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
+                        ${itemTipSource(buildAugTipHtml(e, false))}
+                    </li>`;
+            }).join('');
+            const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
+            return `<ol class="aug-tier-list" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>${body}</ol>`;
+        }).join('');
+        const html = `
+            <div class="aug-tier-table">
+                <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                <div class="aug-tier-head">
+                    ${sortBtn('rank', pickLang('增幅裝置', 'Augment'), 'col-name')}
+                    ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
+                    ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+                </div>
+                ${lists}
+            </div>`;
+        return html;
+    }
+    /** Apply champAugRarity / champAugSort to every champion aug table under root. */
+    function syncChampAugTable(root) {
+        (root || document).querySelectorAll('.aug-tier-table').forEach(table => {
+            table.querySelectorAll('[data-aug-rarity]').forEach(btn => {
+                const on = btn.getAttribute('data-aug-rarity') === champAugRarity;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            table.querySelectorAll('[data-aug-sort]').forEach(btn => {
+                const on = btn.getAttribute('data-aug-sort') === champAugSort;
+                btn.classList.toggle('is-active', on);
+                btn.setAttribute('aria-pressed', String(on));
+            });
+            const attr = 'data-' + champAugSort;
+            table.querySelectorAll('.aug-tier-list').forEach(list => {
+                list.hidden = list.getAttribute('data-rarity') !== champAugRarity;
+                const rows = Array.from(list.querySelectorAll('.aug-tier-row'));
+                rows.sort((a, b) => {
+                    const av = Number(a.getAttribute(attr) || 0);
+                    const bv = Number(b.getAttribute(attr) || 0);
+                    // Strength rank is ascending (0 = strongest); rates descend.
+                    if (av !== bv) return champAugSort === 'rank' ? av - bv : bv - av;
+                    return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
+                });
+                rows.forEach(row => list.appendChild(row));
+            });
         });
     }
 
@@ -2848,12 +2907,7 @@
         setSingleItemRole(singleItemRole === key ? '' : key);
     });
 
-    // ----- Augment category filter (chips above the per-champion ranking) -----
-    // Multi-select OR filter, persisted across champion switches within a
-    // session.  Each .aug card carries data-cats; chips toggle membership and we
-    // show/hide the matching cards (+ collapse rarity rows that empty out)
-    // without re-rendering the whole detail.
-    const augCatFilter = new Set();
+    // ----- Augment categories (taxonomy labels for tips / 增幅榜 filters) -----
     const AUGMENT_TAXONOMY = {"groups": [{"id": "damage", "zh": "輸出", "en": "Damage", "categories": ["ad", "ap", "crit", "amp"]}, {"id": "tank", "zh": "防守", "en": "Defense", "categories": ["tank"]}, {"id": "support", "zh": "輔助", "en": "Support", "categories": ["support"]}, {"id": "cd", "zh": "冷卻", "en": "Cooldown", "categories": ["cd"]}, {"id": "gold", "zh": "經濟", "en": "Economy", "categories": ["gold"]}, {"id": "mechanic", "zh": "特殊機制", "en": "Special mechanics", "categories": ["mechanic"]}, {"id": "other", "zh": "未分類", "en": "Unclassified", "categories": ["other"]}], "order": ["ad", "ap", "crit", "amp", "tank", "support", "cd", "gold", "mechanic", "other", "new"], "labels": {"ad": {"zh": "AD", "en": "AD"}, "ap": {"zh": "AP", "en": "AP"}, "crit": {"zh": "暴擊", "en": "Crit"}, "amp": {"zh": "增傷", "en": "Damage amp"}, "tank": {"zh": "防守", "en": "Defense"}, "support": {"zh": "輔助", "en": "Support"}, "cd": {"zh": "冷卻", "en": "Cooldown"}, "gold": {"zh": "經濟", "en": "Economy"}, "mechanic": {"zh": "特殊機制", "en": "Special mechanics"}, "other": {"zh": "未分類", "en": "Unclassified"}, "new": {"zh": "本版新增", "en": "New this patch"}}, "primaryPriority": ["gold", "cd", "support", "tank", "ad", "ap", "crit", "amp", "mechanic"]};
     function augCatMeta() {
         return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
@@ -2867,60 +2921,6 @@
         if (!lbl) return cat;
         return currentLang === 'en' ? (lbl.en || lbl.zh || cat) : zhUi(lbl.zh || lbl.en || cat);
     }
-    function buildAugCatChips() {
-        const meta = augCatMeta();
-        const order = Array.isArray(meta.order) ? meta.order : [];
-        if (!order.length) return '';
-        const copy = tr();
-        const allActive = augCatFilter.size === 0;
-        const chips = [
-            `<button type="button" class="aug-cat-chip aug-cat-all${allActive ? ' is-active' : ''}" data-cat="" aria-pressed="${allActive}" title="${escHtml(copy.augFilterAllTip)}">${escHtml(copy.augFilterAll)}</button>`,
-        ];
-        order.forEach(cat => {
-            const active = augCatFilter.has(cat);
-            const tip = (cat === 'new' && meta.newPatch) ? ` title="${escHtml(copy.augFilterNewTip(meta.newPatch))}"` : '';
-            chips.push(`<button type="button" class="aug-cat-chip cat-${cat}${active ? ' is-active' : ''}" data-cat="${cat}" aria-pressed="${active}"${tip}>${escHtml(augCatLabel(cat))}</button>`);
-        });
-        return `<div class="aug-cat-bar" role="group" aria-label="${escHtml(pickLang('增幅分類', 'Augment categories'))}">${chips.join('')}</div>`;
-    }
-    // Re-apply the active filter to every .aug card under `root`, syncing chip
-    // pressed state and collapsing rarity rows that hold cards but match none.
-    function applyAugCatFilter(root) {
-        if (!root) return;
-        const active = augCatFilter;
-        root.querySelectorAll('.aug-cat-chip').forEach(chip => {
-            const cat = chip.getAttribute('data-cat') || '';
-            const on = cat ? active.has(cat) : active.size === 0;
-            chip.classList.toggle('is-active', on);
-            chip.setAttribute('aria-pressed', String(on));
-        });
-        root.querySelectorAll('.rarity-row').forEach(row => {
-            let shown = 0;
-            const cards = row.querySelectorAll('.aug');
-            cards.forEach(card => {
-                const cats = (card.getAttribute('data-cats') || '').split(' ').filter(Boolean);
-                const match = active.size === 0 || cats.some(c => active.has(c));
-                card.classList.toggle('cat-hidden', !match);
-                if (match) shown++;
-            });
-            row.classList.toggle('cat-empty', cards.length > 0 && shown === 0 && active.size > 0);
-        });
-    }
-    function toggleAugCat(cat) {
-        if (!cat) augCatFilter.clear();
-        else if (augCatFilter.has(cat)) augCatFilter.delete(cat);
-        else augCatFilter.add(cat);
-        document.querySelectorAll('.detail').forEach(applyAugCatFilter);
-    }
-    document.addEventListener('click', (ev) => {
-        const chip = ev.target.closest('.aug-cat-chip');
-        // The 增幅榜 tab reuses .aug-cat-chip styling but has its own filter state
-        // and handler (below); don't let the per-champion detail filter grab them.
-        if (!chip || chip.closest('#aug-tier-filters')) return;
-        ev.preventDefault();
-        toggleAugCat(chip.getAttribute('data-cat') || '');
-    });
-
     /* ===== 增幅榜 (global augment tier) =========================================
        Built client-side from DATA.augs (each augment carries wr/g/lift/pick from
        the Python rollup).  Tier = within-rarity percentile of wr, so a strong
@@ -3052,6 +3052,12 @@
             panel.hidden = panel.getAttribute('data-aug-mode') !== augMode;
         });
         syncAugModeHrefs();
+    }
+    function syncChampCardHrefs() {
+        document.querySelectorAll('a.champ[href][data-cid]').forEach(card => {
+            const slug = champSlugForCid(card.getAttribute('data-cid'));
+            if (slug) card.setAttribute('href', pathForRoute('champ', slug));
+        });
     }
     function syncAugModeHrefs() {
         document.querySelectorAll('.aug-mode-tab[data-aug-mode]').forEach(tab => {
@@ -3846,7 +3852,7 @@
             if (row) {
                 const cid = row.getAttribute('data-cid');
                 closeAugChamps();
-                openDetailByCid(cid);
+                openChampByCid(cid);
                 trackEvent('aug_champs_champ_click', { champion_id: cid });
                 return;
             }
@@ -3863,43 +3869,6 @@
             trackEvent('aug_champs_open', { augment_id: augChampsId });
         }
     });
-
-    function buildRarityRow(items, kind, r) {
-        const copy = tr();
-        const cards = (items || []).map(e => {
-            const cardKind = kind === 'ranked'
-                ? (Number(e.lift || 0) >= 0 ? 'good' : 'bad')
-                : kind;
-            return buildAugCard(e, cardKind);
-        }).join('');
-        // The left control is a peer of .aug cards inside the same flex row —
-        // same height, same bottom two rows — so 勝率/選用率 line up with the
-        // WR/pick numbers. Structure mirrors a card: head (centered rarity) +
-        // two fixed-height foot rows (sort keys where other cards put stats).
-        const sortWr = escHtml(copy.augSortWr || '勝率');
-        const sortPick = escHtml(copy.augSortPick || '選用率');
-        const rail = `
-            <div class="rlabel-rail rlabel ${r.css}" role="group"
-                 aria-label="${escHtml(copy.rarityLabels[r.key])}">
-                <div class="rlabel-head">
-                    <div class="rlabel-name">${escHtml(copy.rarityLabels[r.key])}</div>
-                </div>
-                <button type="button" class="rlabel-sort is-active" data-sort="wr"
-                        aria-pressed="true"
-                        aria-label="${escHtml(copy.augSortWrAria || sortWr)}">${sortWr}</button>
-                <button type="button" class="rlabel-sort" data-sort="pick"
-                        aria-pressed="false"
-                        aria-label="${escHtml(copy.augSortPickAria || sortPick)}">${sortPick}</button>
-            </div>`;
-        const body = cards
-            ? `${rail}${cards}`
-            : `${rail}<div class="aug-list-empty">${copy.insufficient}</div>`;
-        return `
-            <div class="rarity-row" data-rarity="${escHtml(r.key)}">
-                <div class="aug-list">${body}</div>
-            </div>
-        `;
-    }
 
     let championOverviewRankCache = null;
     function championOverviewStats(cid, info) {
@@ -3928,7 +3897,7 @@
         };
     }
 
-    function renderDetail(cid) {
+    function renderDetail(cid, opts = {}) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
         // background warm pass reached this champ first).
@@ -3953,7 +3922,6 @@
         const singleItemMeta = pickLang('六格中出過就計入；由強到弱，右滑看更多', 'counts any final-slot item; strongest first, swipe for more');
         const singleItemBadTitle = pickLang('常見但不推薦', 'Common Traps');
         const singleItemBadMeta = pickLang('負 lift 但仍常見；選取率 ≥ 10% 一律列出', 'negative-lift items people still build; pick ≥ 10% always listed');
-        const topRows = RARITIES.map(r => buildRarityRow(top[r.key], 'ranked', r)).join('');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
         const mateTop = pairs.slice(0, mateLimit);
@@ -4572,7 +4540,8 @@
             const name = `detail-${scope}-${cid}`;
             const inputs = tabs.map((tab, idx) => {
                 const inputId = `${name}-${tab.key}`;
-                return `<input class="detail-tab-input" type="radio" id="${inputId}" name="${name}" ${idx === 0 ? 'checked' : ''} aria-label="${escHtml(tab.label)}">`;
+                const wantKey = scope === 'main' && tabs.some(t => t.key === opts.tab) ? opts.tab : tabs[0].key;
+                return `<input class="detail-tab-input" type="radio" id="${inputId}" name="${name}" ${tab.key === wantKey ? 'checked' : ''} aria-label="${escHtml(tab.label)}">`;
             }).join('');
             const labels = tabs.map(tab => {
                 const inputId = `${name}-${tab.key}`;
@@ -4676,8 +4645,7 @@
                         <h3>${augmentRankTitle}</h3>
                         ${buildSetSummary(setTop)}
                     </div>
-                    ${buildAugCatChips()}
-                    ${topRows}
+                    ${buildChampAugTable(top)}
                 </div>
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
@@ -4685,10 +4653,9 @@
         // Champ icon + name live inside the sticky rail with the main tabs so
         // they pin together under the site header (and floating search chip).
         const stickyLeadHtml = `
-            <button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>
             <div class="detail-head">
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
-                <span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>
+                <h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>
                 ${buildDetailRoleTags(info)}
             </div>
         `;
@@ -4718,7 +4685,6 @@
         { key: 'cc', zh: '控場', en: 'CC' },
     ];
     const TEAM_COMP_DIMS = TEAM_RADAR_AXES;
-    let detailSelected = null;
     let recommendMode = false; // legacy home teammate mode — always off; Draft tab owns picks
     let recModalOpen = false;
     let teamPicks = []; // ally picks (also used by recommendation helpers)
@@ -4731,20 +4697,6 @@
 
     function zFmt(x) {
         return `${x >= 0 ? '+' : ''}${x.toFixed(2)}`;
-    }
-
-    // Find the last .champ in the same visual row as `clicked` (same offsetTop).
-    // Tier-grid is a CSS grid so offsetTop tells us the row reliably across
-    // viewport widths.
-    function lastChampInRow(clicked) {
-        const grid = clicked.parentElement;
-        const topPx = clicked.offsetTop;
-        const champs = grid.querySelectorAll(':scope > .champ');
-        let last = clicked;
-        for (const c of champs) {
-            if (Math.abs(c.offsetTop - topPx) < 2) last = c;
-        }
-        return last;
     }
 
     function syncPickDecorations() {
@@ -9755,12 +9707,14 @@
     //   /augments/pools    augment pools (zh)
     //   /en/augments       augment tier (en)
     //   /en/augments/pools augment pools (en)
+    //   /champions/<slug>  one champion's page (slug = lowercased alias)
     // Legacy '#view' hashes (and old /settings) migrate once
     // on load so old links still open the right panel.
     function pathForRoute(view, sub) {
         const prefix = langMeta(currentLang).prefix;
         if (!view || view === 'home') return prefix ? prefix + '/' : '/';
         if (view === 'augments' && sub === 'pools') return prefix + '/' + view + '/pools/';
+        if (view === 'champ') return prefix + '/champions/' + (sub ? sub + '/' : '');
         return prefix + '/' + view + '/';
     }
     function normalizePathname(pathname) {
@@ -9799,7 +9753,7 @@
         if (segs[0] === 'en') {
             urlLang = 'en';
             segs.shift();
-        } else if (segs[0] === 'zh-CN') {
+        } else if ((segs[0] || '').toLowerCase() === 'zh-cn') {
             urlLang = 'zh-CN';
             segs.shift();
         }
@@ -9807,6 +9761,9 @@
         // Treat /home and /en/home as /
         if (segs[0] === 'home' && segs.length === 1) {
             return { view: 'home', sub: '', urlLang, legacyHash: false };
+        }
+        if (segs[0] === 'champions') {
+            return { view: 'champ', sub: champPageSlug(segs[1] || ''), urlLang, legacyHash: false };
         }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
@@ -9845,6 +9802,7 @@
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
         setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode, sub);
     }
+    let homeScrollY = 0;
     function setActiveView(name, instant, historyMode, sub) {
         // Old /settings bookmarks land on home (settings chrome was removed).
         if (name === 'settings' || !VIEWS.includes(name)) name = 'home';
@@ -9852,8 +9810,14 @@
         const apply = () => {
             const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
             let activeTab = null;
+            // The champion page has no nav tab of its own; it lives under Home.
+            const navName = name === 'champ' ? 'home' : name;
+            const wasChamp = Boolean(document.querySelector('.view-champ.is-active'));
+            // Remember where the tier list was so Back from a champion page
+            // lands on the same card instead of the top.
+            if (name !== 'home' && document.querySelector('.view-home.is-active')) homeScrollY = window.scrollY;
             tabs.forEach(t => {
-                const on = t.getAttribute('data-nav-tab') === name;
+                const on = t.getAttribute('data-nav-tab') === navName;
                 t.classList.toggle('active', on);
                 t.setAttribute('aria-selected', on ? 'true' : 'false');
                 t.tabIndex = -1;
@@ -9866,12 +9830,17 @@
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
             columnArticle = null;
+            if (name === 'champ') {
+                renderChampPage(sub || '');
+            } else if (wasChamp) {
+                clearChampPage();
+            }
             if (name === 'augments') {
                 augMode = sub === 'pools' ? 'pools' : 'tier';
                 applyAugModeChrome();
                 document.title = augmentsPageTitle();
                 renderAugmentTier();
-            } else {
+            } else if (name !== 'champ') {
                 document.title = BASE_TITLE;
             }
             if (name === 'draft') {
@@ -9883,10 +9852,13 @@
             if (name === 'changes') {
                 renderUpdatesPanel();
             }
-            const routeSub = name === 'augments' ? augmentsSub() : '';
+            const routeSub = name === 'augments' ? augmentsSub() : (name === 'champ' ? (sub || '') : '');
             syncUrlToRoute(name, routeSub, historyMode);
-            window.scrollTo(0, 0);
+            window.scrollTo(0, name === 'home' && historyMode === 'none' ? homeScrollY : 0);
             moveTabIndicator();
+            if (name === 'champ' && !champPageSlugNow && matchMedia('(pointer: fine)').matches) {
+                document.getElementById('champ-page-search')?.focus({ preventScroll: true });
+            }
         };
         // Cross-fade the panel via the View Transitions API; root is pinned so the
         // header and the scrollTo above don't animate.  Skip on first paint
@@ -10031,6 +10003,9 @@
         if (document.querySelector('.view-game.is-active')) {
             renderGameView();
         }
+        if (document.querySelector('.view-champ.is-active')) {
+            renderChampPage(champPageSlugNow, true);
+        }
 
         moveTabIndicator();
         updateChampCardCopy();
@@ -10039,18 +10014,15 @@
         setRecommendMode(recommendMode);
         renderSidePanel();
         renderPlayerHistoryState();
-        if (detailSelected) {
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (champ) openDetailForChamp(champ, true);
-        }
         syncAugModeHrefs();
+        syncChampCardHrefs();
         // Keep the path prefix in sync with language so shared links stay bilingual.
         if (historyMode !== 'none') {
             const active = document.querySelector('.view.is-active');
             let view = (active && active.getAttribute('data-view')) || 'home';
             if (!VIEWS.includes(view)) view = 'home';
             const sub = (view === 'column' && columnArticle) ? columnArticle
-                : (view === 'augments' ? augmentsSub() : '');
+                : (view === 'augments' ? augmentsSub() : (view === 'champ' ? champPageSlugNow : ''));
             syncUrlToRoute(view, sub, historyMode);
             if (view === 'augments') document.title = augmentsPageTitle();
         }
@@ -10067,121 +10039,287 @@
         btn.hidden = true;
     }
 
-    function syncDetailModalState() {
-        const open = Boolean(detailSelected);
-        document.body.classList.toggle('detail-modal-open', open && isMobileViewport());
-        // Desktop sticky chrome marker (search overlays right; tabs pin at same top).
-        document.body.classList.toggle('detail-open', open);
-        syncHeaderHeight();
+    function openChampByCid(cid) {
+        openChampPage(champSlugForCid(cid));
     }
 
-    function closeDetail() {
-        document.querySelectorAll('.detail-host').forEach(h => h.innerHTML = '');
-        document.querySelectorAll('.champ.detail-selected').forEach(el => el.classList.remove('detail-selected'));
-        detailSelected = null;
-        syncDetailModalState();
+    // ---- Champion page (/champions/<slug>) ------------------------------------------
+    // Players look up one champion per game ("I got Jinx, what do I take?"), so
+    // each champion has its own shareable URL.  GH Pages serves a tiny bounce
+    // stub at /champions/<slug>/ that restores the path on /; this view then reuses
+    // renderDetail in page mode (no close button, remembered tab).
+    const CHAMP_TAB_KEY = 'aram-detail-tab';
+    const RECENT_CHAMPS_KEY = 'aram-recent-champs';
+    const RECENT_CHAMPS_MAX = 8;
+    const CHAMP_PAGE_TABS = ['overview', 'items', 'augments', 'pools', 'compfit'];
+    const CHAMP_SEARCH_LIMIT = 8;
+    let champPageSlugNow = '';
+    let champPageToken = 0;
+    let champSlugMap = null;
+    let champSearchActive = -1;
+
+    // Mirrors tierlist_render.champion_page_slug; keep the two in sync.
+    function champPageSlug(alias) {
+        return String(alias || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
     }
-
-    // Monotonic token: every open bumps it so a deferred heavy fill can detect
-    // that a newer open (or a close) superseded it and abort, avoiding a stale
-    // panel flashing in after the user already moved on.
-    let detailOpenToken = 0;
-
-    function openDetailForChamp(champ, force = false) {
-        const cid = champ.getAttribute('data-cid');
-        const block = champ.closest('.tier-block');
-        const host  = block.querySelector('.detail-host');
-
-        // Clear any previously selected highlight + detail elsewhere.
-        document.querySelectorAll('.champ.detail-selected').forEach(el => {
-            if (el !== champ) el.classList.remove('detail-selected');
-        });
-        document.querySelectorAll('.detail-host').forEach(el => {
-            if (el !== host) el.innerHTML = '';
-        });
-
-        if (!force && detailSelected === cid && host.firstChild) {
-            closeDetail();
-            return;
-        }
-
-        // Position the detail host right after the last champ in the clicked
-        // row, so the panel always pops up directly under the champion you
-        // tapped — never hidden far below by other champs.
-        const anchor = lastChampInRow(champ);
-        if (anchor.nextSibling !== host) {
-            anchor.after(host);
-        }
-
-        // ---- Two-phase open (INP) --------------------------------------------
-        // Detail open is the most frequent interaction and renderDetail builds a
-        // large HTML string.  Doing it inside the click handler is the second INP
-        // contributor.  Phase 1 (synchronous, cheap): mark selection + paint a
-        // skeleton sized to the panel so there is no CLS jump.  Phase 2 (after a
-        // yield): the heavy renderDetail fill + highlight/filter passes.
-        const token = ++detailOpenToken;
-        const dialogAttrs = isMobileViewport()
-            ? ` role="dialog" aria-modal="true" aria-labelledby="detail-title-${cid}"`
-            : '';
-        host.innerHTML = `<div class="detail detail-loading"${dialogAttrs}><div class="detail-skeleton" aria-hidden="true"></div></div>`;
-        champ.classList.add('detail-selected');
-        detailSelected = cid;
-        syncDetailModalState();
-        if (!force) {
-            trackEvent('champion_detail_open', {
-                champion_id: cid,
-                champion_name: champ.getAttribute('data-name-en') || '',
-                tier: champ.getAttribute('data-tier') || '',
+    function cidForChampSlug(slug) {
+        if (!champSlugMap) {
+            champSlugMap = new Map();
+            Object.entries(DATA.champs || {}).forEach(([cid, info]) => {
+                const s = champPageSlug(info && info.alias);
+                if (s && !champSlugMap.has(s)) champSlugMap.set(s, cid);
             });
         }
-
-        // Phase 2: fetch this champion's detail shard, then fill the panel after
-        // handing the main thread back. Inline/legacy payloads resolve instantly.
+        return champSlugMap.get(champPageSlug(slug)) || null;
+    }
+    function champSlugForCid(cid) {
+        const info = DATA.champs && DATA.champs[cid];
+        return info ? champPageSlug(info.alias) : '';
+    }
+    function readChampTab() {
+        try {
+            const key = localStorage.getItem(CHAMP_TAB_KEY);
+            return CHAMP_PAGE_TABS.includes(key) ? key : 'overview';
+        } catch { return 'overview'; }
+    }
+    function readRecentChamps() {
+        try {
+            const list = JSON.parse(localStorage.getItem(RECENT_CHAMPS_KEY) || '[]');
+            return Array.isArray(list) ? list.map(String).filter(cid => DATA.champs && DATA.champs[cid]) : [];
+        } catch { return []; }
+    }
+    function pushRecentChamp(cid) {
+        const list = [String(cid), ...readRecentChamps().filter(c => c !== String(cid))].slice(0, RECENT_CHAMPS_MAX);
+        try { localStorage.setItem(RECENT_CHAMPS_KEY, JSON.stringify(list)); } catch {}
+    }
+    function champPageLinkHtml(cid, cls) {
+        const info = DATA.champs[cid];
+        const slug = champSlugForCid(cid);
+        if (!info || !slug) return '';
+        return `<a class="${cls}" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">`
+            + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+            + `<span>${escHtml(champName(info, cid))}</span></a>`;
+    }
+    function renderChampRecent(currentCid) {
+        const nav = document.getElementById('champ-page-recent');
+        if (!nav) return;
+        const recent = readRecentChamps().filter(cid => cid !== String(currentCid));
+        nav.setAttribute('aria-label', pickLang('最近查看', 'Recently viewed'));
+        nav.innerHTML = recent.length
+            ? `<span class="champ-page-recent-label">${escHtml(pickLang('最近', 'Recent'))}</span>`
+                + recent.map(cid => champPageLinkHtml(cid, 'champ-page-chip')).join('')
+            : '';
+        nav.hidden = !recent.length;
+    }
+    function syncChampSearchChrome() {
+        const input = document.getElementById('champ-page-search');
+        if (!input) return;
+        const placeholder = pickLang('輸入英雄名稱，Enter 前往', 'Type a champion, Enter to open');
+        input.placeholder = placeholder;
+        input.setAttribute('aria-label', pickLang('搜尋英雄', 'Search champions'));
+    }
+    function clearChampPage() {
+        champPageToken++;
+        champPageSlugNow = '';
+        const host = document.getElementById('champ-page-host');
+        if (host) host.innerHTML = '';
+        closeChampSearchResults();
+    }
+    function renderChampPage(slug, force = false) {
+        const host = document.getElementById('champ-page-host');
+        if (!host) return;
+        syncChampSearchChrome();
+        const cid = slug ? cidForChampSlug(slug) : null;
+        if (!force && champPageSlugNow === slug && host.firstChild) return;
+        champPageSlugNow = slug || '';
+        const token = ++champPageToken;
+        renderChampRecent(cid);
+        if (!cid) {
+            // Bare /champions/ or an unknown slug: search-first landing, not an error wall.
+            document.title = pickLang('英雄查詢', 'Champion lookup') + ' · arammeta';
+            const msg = slug
+                ? pickLang('找不到這位英雄，請用上方搜尋。', 'Champion not found — use the search above.')
+                : pickLang('輸入英雄名稱，直接看增幅與出裝。', 'Search a champion to see its augments and build.');
+            host.innerHTML = `<div class="champ-page-empty">${escHtml(msg)}</div>`;
+            return;
+        }
+        const info = DATA.champs[cid];
+        document.title = `${champName(info, cid)} · arammeta`;
+        host.innerHTML = `<div class="detail detail-page detail-loading"><div class="detail-skeleton" aria-hidden="true"></div></div>`;
+        if (!force) {
+            pushRecentChamp(cid);
+            trackEvent('champion_page_open', { champion_id: cid, champion_name: info.name_en || info.alias || '' });
+        }
         yieldToMain().then(() => ensureChampDetail(cid)).then(() => {
-            // Abort if a newer open or a close superseded this one while we waited.
-            if (token !== detailOpenToken || detailSelected !== cid) return;
-            if (!host.isConnected) return;
-            try {
-                host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
-                // Skip the document-wide highlight / category sweeps when nothing
-                // is active — they walk every card for no effect otherwise.
-                if (filterState.q.trim()) applySearchHighlights(host);
-                if (augCatFilter.size) applyAugCatFilter(host);
-                // Always re-sync chip pressed state (and hide cards if a role /
-                // 常見 filter is sticky from a previous champion).
-                applySingleItemFilter(host);
-            } catch (err) {
-                console.error('detail render failed for champ', cid, err);
-                return;
-            }
-            if (isMobileViewport()) {
-                host.querySelector('.detail-close')?.focus({ preventScroll: true });
+            if (token !== champPageToken || !host.isConnected) return;
+            const tab = readChampTab();
+            host.innerHTML = `<div class="detail detail-page">${renderDetail(cid, { page: true, tab })}</div>`;
+            if (champAugSort !== 'rank') syncChampAugTable(host);
+            applySingleItemFilter(host);
+            if (tab === 'pools') {
+                renderChampionPools();
+                loadAugPools();
             }
         }).catch(err => {
-            if (token !== detailOpenToken || detailSelected !== cid) return;
-            console.error('detail load failed for champ', cid, err);
-            const message = currentLang === 'en'
-                ? 'Champion details could not be loaded.'
-                : '英雄詳細資料載入失敗。';
-            const retry = currentLang === 'en' ? 'Retry' : '重試';
+            if (token !== champPageToken) return;
+            console.error('champion page load failed', cid, err);
             host.innerHTML = `
-                <div class="detail detail-load-error"${dialogAttrs}>
-                    <div class="empty" role="alert">${escHtml(message)}</div>
-                    <button type="button" class="detail-retry" data-detail-retry>${escHtml(retry)}</button>
+                <div class="detail detail-page detail-load-error">
+                    <div class="empty" role="alert">${escHtml(pickLang('英雄詳細資料載入失敗。', 'Champion details could not be loaded.'))}</div>
+                    <button type="button" class="detail-retry" data-champ-page-retry>${escHtml(pickLang('重試', 'Retry'))}</button>
                 </div>`;
         });
     }
-
-    function openDetailByCid(cid) {
-        // The detail host lives inside the home tier grid; callers can fire from
-        // the Settings changelog or a recommend row, so always surface the home
-        // view first or the panel would open in a hidden view (invisible).
-        setActiveView('home', false, 'push');
-        const champ = document.querySelector(`.champ[data-cid="${cid}"]:not(.hidden)`);
-        if (!champ) return;
-        openDetailForChamp(champ);
-        champ.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    function openChampPage(slug, historyMode = 'push') {
+        if (!slug) return;
+        const input = document.getElementById('champ-page-search');
+        if (input) input.value = '';
+        closeChampSearchResults();
+        const onChamp = Boolean(document.querySelector('.view-champ.is-active'));
+        setActiveView('champ', onChamp, historyMode, slug);
     }
+
+    // Combobox over the server-rendered champion cards: their
+    // data-champion-search already carries zh/en names + TW nicknames.
+    function champSearchMatches(query) {
+        const q = String(query || '').trim();
+        if (!q) return [];
+        const seen = new Set();
+        const exact = [];
+        const prefix = [];
+        const rest = [];
+        const nq = normalizeSearchText(q);
+        document.querySelectorAll('.tier-grid > .champ[data-cid]').forEach(card => {
+            const cid = card.getAttribute('data-cid');
+            if (seen.has(cid) || !DATA.champs[cid] || !champSlugForCid(cid)) return;
+            const blob = card.getAttribute('data-champion-search') || '';
+            if (!searchMatchesText(blob, q)) return;
+            seen.add(cid);
+            const name = normalizeSearchText(champName(DATA.champs[cid], cid));
+            if (searchHasExactToken(blob, q)) exact.push(cid);
+            else if (name.startsWith(nq)) prefix.push(cid);
+            else rest.push(cid);
+        });
+        return [...exact, ...prefix, ...rest].slice(0, CHAMP_SEARCH_LIMIT);
+    }
+    function closeChampSearchResults() {
+        const list = document.getElementById('champ-page-results');
+        const input = document.getElementById('champ-page-search');
+        champSearchActive = -1;
+        if (list) { list.hidden = true; list.innerHTML = ''; }
+        if (input) {
+            input.setAttribute('aria-expanded', 'false');
+            input.removeAttribute('aria-activedescendant');
+        }
+    }
+    function renderChampSearchResults() {
+        const input = document.getElementById('champ-page-search');
+        const list = document.getElementById('champ-page-results');
+        if (!input || !list) return;
+        const matches = champSearchMatches(input.value);
+        if (!matches.length) {
+            if (input.value.trim()) {
+                list.innerHTML = `<li class="champ-page-noresult" role="presentation">${escHtml(pickLang('沒有符合的英雄', 'No matching champion'))}</li>`;
+                list.hidden = false;
+                input.setAttribute('aria-expanded', 'true');
+            } else {
+                closeChampSearchResults();
+            }
+            champSearchActive = -1;
+            return;
+        }
+        if (champSearchActive >= matches.length) champSearchActive = matches.length - 1;
+        if (champSearchActive < 0) champSearchActive = 0;
+        list.innerHTML = matches.map((cid, i) => {
+            const info = DATA.champs[cid];
+            const slug = champSlugForCid(cid);
+            const alt = currentLang === 'en' ? (info.name_zh || '') : (info.name_en || '');
+            return `<li id="champ-page-opt-${i}" role="option" aria-selected="${i === champSearchActive}" class="champ-page-opt${i === champSearchActive ? ' is-active' : ''}" data-champ-page="${escHtml(slug)}">`
+                + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+                + `<span class="champ-page-opt-name">${escHtml(champName(info, cid))}</span>`
+                + (alt ? `<span class="champ-page-opt-alt">${escHtml(currentLang === 'zh-CN' ? t2s(alt) : alt)}</span>` : '')
+                + '</li>';
+        }).join('');
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', `champ-page-opt-${champSearchActive}`);
+    }
+    document.addEventListener('input', ev => {
+        if (ev.target && ev.target.id === 'champ-page-search') {
+            champSearchActive = 0;
+            renderChampSearchResults();
+        }
+    });
+    document.addEventListener('keydown', ev => {
+        const input = ev.target;
+        if (!input || input.id !== 'champ-page-search') return;
+        if (ev.isComposing || ev.keyCode === 229) return;
+        const list = document.getElementById('champ-page-results');
+        const count = list && !list.hidden ? list.querySelectorAll('[data-champ-page]').length : 0;
+        if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+            if (!count) return;
+            ev.preventDefault();
+            const step = ev.key === 'ArrowDown' ? 1 : -1;
+            champSearchActive = (champSearchActive + step + count) % count;
+            renderChampSearchResults();
+        } else if (ev.key === 'Enter') {
+            const opts = list ? list.querySelectorAll('[data-champ-page]') : [];
+            const pick = opts[Math.max(0, champSearchActive)] || opts[0];
+            if (!pick) return;
+            ev.preventDefault();
+            trackEvent('champion_page_search', { query_len: input.value.trim().length });
+            openChampPage(pick.getAttribute('data-champ-page'));
+            input.blur();
+        } else if (ev.key === 'Escape') {
+            input.value = '';
+            closeChampSearchResults();
+        }
+    });
+    document.addEventListener('focusout', ev => {
+        if (!ev.target || ev.target.id !== 'champ-page-search') return;
+        // Let a click on an option land before the list disappears.
+        setTimeout(() => {
+            const wrap = document.querySelector('.champ-page-search');
+            if (wrap && !wrap.contains(document.activeElement)) closeChampSearchResults();
+        }, 150);
+    });
+    // Type-to-search: on the champion page any printable key (incl. IME
+    // composition start) jumps into the search box, so "next game, next
+    // champion" needs no click.
+    document.addEventListener('keydown', ev => {
+        if (!document.querySelector('.view-champ.is-active')) return;
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        const t = ev.target;
+        if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        const printable = ev.key && ev.key.length === 1 && ev.key !== ' ';
+        const ime = ev.key === 'Process' || ev.keyCode === 229;
+        if (!printable && !ime) return;
+        const input = document.getElementById('champ-page-search');
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        window.scrollTo(0, 0);
+    });
+    document.addEventListener('change', ev => {
+        const t = ev.target;
+        if (!t || !t.matches || !t.matches('.detail-page .detail-tab-input[id^="detail-main-"]')) return;
+        const m = /-(overview|items|augments|pools|compfit)$/.exec(t.id);
+        if (!m) return;
+        try { localStorage.setItem(CHAMP_TAB_KEY, m[1]); } catch {}
+    });
+    document.addEventListener('click', ev => {
+        if (ev.target.closest('[data-champ-page-retry]')) {
+            renderChampPage(champPageSlugNow, true);
+            return;
+        }
+        const link = ev.target.closest('[data-champ-page]');
+        if (!link) return;
+        // Let modified clicks open a new tab via the real href.
+        if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+        ev.preventDefault();
+        const from = link.classList.contains('champ-page-chip') ? 'recent' : 'search';
+        trackEvent('champion_page_link', { from });
+        openChampPage(link.getAttribute('data-champ-page'));
+    });
 
     function toggleTeamPick(cid) {
         pickNotice = '';
@@ -10248,12 +10386,6 @@
         const modePick = ev.target.closest('.mode-options [data-mode-target]');
         if (modePick) {
             trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
-        }
-        const detailRetry = ev.target.closest('[data-detail-retry]');
-        if (detailRetry) {
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (champ) openDetailForChamp(champ, true);
-            return;
         }
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
@@ -10322,21 +10454,18 @@
             trackEvent('recommendations_close', { source: 'panel', picks: teamPicks.length });
             return;
         }
-        const detailClose = ev.target.closest('.detail-close');
-        if (detailClose) {
-            closeDetail();
+        const augRarityBtn = ev.target.closest('[data-aug-rarity]');
+        if (augRarityBtn) {
+            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
+            syncChampAugTable();
+            trackEvent('aug_rarity_select', { rarity: champAugRarity });
             return;
         }
-        const augSortBtn = ev.target.closest('.rlabel-sort[data-sort]');
+        const augSortBtn = ev.target.closest('[data-aug-sort]');
         if (augSortBtn) {
-            const row = augSortBtn.closest('.rarity-row');
-            const key = augSortBtn.getAttribute('data-sort') || 'wr';
-            sortRarityAugList(row, key);
-            trackEvent('aug_rarity_sort', { sort: key, rarity: row && row.getAttribute('data-rarity') });
-            return;
-        }
-        if (isMobileViewport() && ev.target.classList && ev.target.classList.contains('detail-host')) {
-            closeDetail();
+            champAugSort = augSortBtn.getAttribute('data-aug-sort') || 'rank';
+            syncChampAugTable();
+            trackEvent('aug_rarity_sort', { sort: champAugSort, rarity: champAugRarity });
             return;
         }
         const changeTab = ev.target.closest('[data-change-tab]');
@@ -10348,7 +10477,7 @@
         }
         const changeCid = ev.target.closest('[data-change-cid]');
         if (changeCid) {
-            openDetailByCid(changeCid.getAttribute('data-change-cid'));
+            openChampByCid(changeCid.getAttribute('data-change-cid'));
             trackEvent('patch_change_detail_open', { champion_id: changeCid.getAttribute('data-change-cid') });
             return;
         }
@@ -10506,12 +10635,19 @@
             renderSidePanel();
             const recCid = recRow.getAttribute('data-cid');
             trackEvent('recommendation_click', { champion_id: recCid, picks: teamPicks.length });
-            openDetailByCid(recCid);
+            openChampByCid(recCid);
             return;
         }
         const champ = ev.target.closest('.champ');
         if (!champ) return;
-        openDetailForChamp(champ);
+        const champCid = champ.getAttribute('data-cid');
+        const champSlug = champSlugForCid(champCid);
+        if (!champSlug) return;
+        trackEvent('champion_card_click', { champion_id: champCid });
+        // Cards are real links: modified clicks open a tab via the href.
+        if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+        ev.preventDefault();
+        openChampPage(champSlug);
     });
 
     // Draft search input (debounced like home search).
@@ -10521,9 +10657,6 @@
         window.__draftSearchT = setTimeout(() => renderDraftChampList(), 80);
     });
 
-    // When viewport width changes, the row containing the selected champ
-    // shifts — re-anchor the detail host so it stays directly under that
-    // champ on the new layout.
     let resizeT = null;
     window.addEventListener('resize', () => {
         clearTimeout(resizeT);
@@ -10532,13 +10665,6 @@
             renderSidePanel();
             syncHeaderHeight();  // header is 1 row on desktop, 2 on mobile
             moveTabIndicator();
-            if (!detailSelected) return;
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (!champ) return;
-            const host = champ.closest('.tier-block').querySelector('.detail-host');
-            const anchor = lastChampInRow(champ);
-            if (anchor.nextSibling !== host) anchor.after(host);
-            syncDetailModalState();
         }, 120);
     });
 
@@ -10834,14 +10960,7 @@
                         : searchMatchesText(blob, q))
                 );
                 const matchQ = !q || (allSearch ? (heroMatch || relatedMatch) : heroMatch);
-                // Keep the open detail's champ pinned even when it fails the
-                // active role/search filter, so searching never closes the
-                // panel you're reading.  (Ctrl+F focuses this search box; a
-                // non-matching query used to hide the selected champ, which
-                // closed its detail and looked like the page reset itself.)
-                const isSelected = detailSelected
-                    && c.getAttribute('data-cid') === detailSelected;
-                const hide = !(matchRole && matchQ) && !isSelected;
+                const hide = !(matchRole && matchQ);
                 c.classList.toggle('hidden', hide);
                 c.classList.toggle('search-related-hit', Boolean(relatedMatch && !heroMatch));
                 if (!hide) tierShown++;
@@ -10858,14 +10977,6 @@
         if (shownN) shownN.textContent = shown;
         const empty = document.getElementById('empty-state');
         if (empty) empty.classList.toggle('visible', shown === 0);
-
-        // If the currently-selected champ got hidden, close its detail panel.
-        if (detailSelected) {
-            const sel = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (!sel || sel.classList.contains('hidden')) {
-                closeDetail();
-            }
-        }
         // NOTE: refreshSecondaryRoleBadges() is intentionally NOT called here.
         // The badges depend ONLY on filterState.role, not the query, so running
         // that full 173-card innerHTML walk on every keystroke was pure waste.
@@ -10922,10 +11033,6 @@
             }
             if (augChampsId != null) {
                 closeAugChamps();
-                return;
-            }
-            if (detailSelected && isMobileViewport()) {
-                closeDetail();
                 return;
             }
             if (recModalOpen) {
