@@ -1785,27 +1785,31 @@
     /* ddragon squares bake in a dark ~4% vignette edge; scaling the img
        inside an overflow-clipped frame crops it so the art reaches the rim.
        Frame = gold hairline (League hextech) + inner top highlight, not a
-       flat grey border that doubles up with the baked edge. */
+       flat grey border that doubles up with the baked edge.  The ring is an
+       inset shadow on ::after so it paints OVER the clipped image edge; an
+       outer ring leaves the anti-aliased image corner showing through as a
+       ragged seam.  Crop via oversize+negative margin, not transform, so the
+       rounded clip stays crisp. */
     .detail-avatar {
-        --avatar-ring: color-mix(in srgb, #c8aa6e 55%, transparent);
+        --avatar-ring: #b89a5e;
         position: relative;
         display: block;
         width: 34px;
         height: 34px;
         border-radius: 8px;
         overflow: hidden;
-        background: var(--surface);
-        box-shadow:
-            0 0 0 1px var(--avatar-ring),
-            0 6px 16px -4px rgba(0,0,0,0.45);
+        isolation: isolate;
+        background: var(--avatar-ring);
+        box-shadow: 0 6px 16px -4px rgba(0,0,0,0.45);
         flex: 0 0 auto;
     }
     .detail-avatar img {
         display: block;
-        width: 100%;
-        height: 100%;
+        width: 112%;
+        height: 112%;
+        max-width: none;
+        margin: -6%;
         object-fit: cover;
-        transform: scale(1.12);
     }
     .detail-avatar::after {
         content: "";
@@ -1813,7 +1817,10 @@
         inset: 0;
         border-radius: inherit;
         pointer-events: none;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 14px -10px rgba(0,0,0,0.5);
+        box-shadow:
+            inset 0 0 0 1.5px var(--avatar-ring),
+            inset 0 2px 0 rgba(255,255,255,0.18),
+            inset 0 -10px 14px -10px rgba(0,0,0,0.5);
     }
     .detail-head .cname { font-size: 16px; font-weight: 600; }
     .detail-roles {
@@ -5817,10 +5824,8 @@
         border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
     }
     [data-theme="light"] .detail-avatar {
-        --avatar-ring: color-mix(in srgb, #a07d3a 60%, transparent);
-        box-shadow:
-            0 0 0 1px var(--avatar-ring),
-            0 4px 12px -4px rgba(31, 41, 55, 0.28);
+        --avatar-ring: #b8975a;
+        box-shadow: 0 4px 12px -4px rgba(31, 41, 55, 0.28);
     }
     [data-theme="light"] .detail-role-tag {
         color: var(--text);
