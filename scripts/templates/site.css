@@ -780,7 +780,6 @@
         font-weight: 600;
     }
     .side-close,
-    .detail-close,
     .rec-fab {
         border: 1px solid #30363d;
         background: #1b2030;
@@ -789,8 +788,7 @@
         font-weight: 700;
         cursor: pointer;
     }
-    .side-close,
-    .detail-close {
+    .side-close {
         display: none;
         width: 34px;
         height: 34px;
@@ -1480,6 +1478,9 @@
            via the .tier-block[data-tier="OP"] .champ rule below. */
         border: 2px solid var(--tier-color, #555);
         cursor: pointer;
+        display: block;
+        color: inherit;
+        text-decoration: none;
         transition: transform .08s, box-shadow .08s, filter .08s;
     }
     @media (hover: hover) {
@@ -1490,11 +1491,6 @@
                         0 8px 24px -8px rgba(245, 197, 24, 0.35);
             z-index: 1;
         }
-    }
-    .champ.detail-selected {
-        transform: translateY(-2px);
-        filter: brightness(1.08);
-        box-shadow: 0 0 0 1px #fff, 0 6px 16px rgba(0,0,0,0.6);
     }
     .champ.pick-selected {
         box-shadow:
@@ -1710,12 +1706,6 @@
         transition: opacity .15s;
     }
     .champ:hover .name { opacity: 1; }
-    .detail-host {
-        /* Sits inside .tier-grid; when populated, spans every grid column so
-           it appears as a full-width row right after the clicked champion. */
-        grid-column: 1 / -1;
-    }
-    .detail-host:empty { display: none; }
     /* Visually hidden but kept in the DOM as text — so browser Find on Page
        (Ctrl+F / Cmd+F) can still match English aliases like "Aatrox" while
        only the localized zh-TW name is visually drawn. */
@@ -1781,14 +1771,6 @@
         outline: 2px solid #8bbcff;
         outline-offset: 2px;
     }
-    .detail-close {
-        position: absolute;
-        top: 8px;
-        right: 6px;
-        z-index: 2;
-        font-size: 18px;
-        line-height: 1;
-    }
     @keyframes slideDown {
         from { opacity: 0; transform: translateY(-4px); }
         to { opacity: 1; transform: translateY(0); }
@@ -1798,7 +1780,6 @@
         align-items: center;
         gap: 10px;
         margin-bottom: 8px;
-        padding-right: 36px; /* clear absolute × close */
         min-width: 0;
     }
     .detail-avatar {
@@ -1869,27 +1850,6 @@
         margin: 0 -6px;
         padding: 10px 6px 0;
         border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-    /* Detail open: nudge search down to the avatar/name baseline
-       (matches .detail-tab-rail padding-top: 10px). List mode unchanged. */
-    body.detail-open .search-rail {
-        padding-top: 10px;
-        align-items: flex-start;
-    }
-    /* Desktop detail: clear a right lane so name/× don't sit under the floating search. */
-    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-head {
-        /* Clear lane for floating search only (count is with role chips). */
-        padding-right: max(48px, calc(min(280px, 32vw) + 28px));
-        min-height: 40px;
-        margin-bottom: 6px;
-    }
-    body.detail-open .detail-main-tabs > .detail-tab-rail .detail-close {
-        right: max(12px, calc(min(280px, 32vw) + 18px));
-        top: 12px;
-    }
-    .detail-main-tabs > .detail-tab-rail .detail-close {
-        top: 8px;
-        right: 4px;
     }
     .detail-tab-list {
         display: flex;
@@ -3633,8 +3593,7 @@
        cramped on most phones. */
     @media (max-width: 700px) {
         /* Body padding is 0; .site-main owns content padding (see chrome CSS). */
-        body.rec-modal-open,
-        body.detail-modal-open { overflow: hidden; }
+        body.rec-modal-open { overflow: hidden; }
         h1 { font-size: 18px; }
         .subtitle { font-size: 12px; }
         .title-patch { font-size: 12px; }
@@ -3700,11 +3659,6 @@
             min-width: 0;
         }
         .search-scope-menu { max-width: calc(100vw - 24px); }
-        /* Inside the fixed detail sheet the scroller is .detail-host, so pin
-           main tabs to the sheet top (search rail is hidden on mobile). */
-        .detail-host .detail-main-tabs > .detail-tab-rail {
-            top: 0;
-        }
         .tool-btn { min-height: 36px; }
         .updates-panel {
             margin: 0 0 14px;
@@ -3743,14 +3697,13 @@
         }
         /* The veil must live INSIDE the active view's stacking context: the
            .view carries view-transition-name, which creates a stacking context
-           that traps the fixed side-panel (60) / detail-host (70) z-indexes.
+           that traps the fixed side-panel (60) z-index.
            A body::before veil sits in the ROOT context and paints ABOVE those
            trapped modals — the modal ends up UNDER the veil and every tap
            lands on body, so the page looks frozen (mobile has no Escape).
            Anchored to the view, 55 < 60/70 resolves in the same context and
            the modals correctly sit on top. */
-        body.rec-modal-open .view.is-active::before,
-        body.detail-modal-open .view.is-active::before {
+        body.rec-modal-open .view.is-active::before {
             content: "";
             position: fixed;
             inset: 0;
@@ -3771,28 +3724,6 @@
             gap: 4px 8px;
             white-space: normal;
         }
-        .detail-host {
-            position: fixed;
-            z-index: 70;
-            inset: 0;
-            overflow: auto;
-            /* Clear the sticky site-header.  Uses the JS-measured --header-h, NOT
-               a hardcoded 56px: on mobile the nav wraps to a second row so the
-               header is ~87px tall, and a fixed 56px let the header cover the
-               detail avatar/name row (top of the sheet looked truncated). */
-            padding: calc(var(--header-h) + 10px) 12px 18px;
-            -webkit-overflow-scrolling: touch;
-        }
-        .detail-host .detail {
-            max-width: 680px;
-            min-height: 100%;
-            margin: 0 auto;
-            padding: 14px;
-            border: 1px solid #30363d;
-            border-radius: 14px;
-            box-shadow: 0 22px 60px rgba(0,0,0,0.58);
-        }
-        .detail-close { display: inline-flex; }
         .rec-fab { display: none; }
         .rec-fab:not(.is-hidden) { display: inline-flex; }
         .side-sub { font-size: 11px; }
@@ -4059,7 +3990,6 @@
     .gh-star:focus-visible,
     .tool-btn:focus-visible,
     .side-close:focus-visible,
-    .detail-close:focus-visible,
     .meta-help:focus-visible,
     .rec-fab:focus-visible,
     .pick-chip:focus-visible,
@@ -5581,7 +5511,7 @@
        interpolable, so theme switches always land. */
     .chip, .icon-btn, .gh-star, .tool-btn, .search, .search-scope > summary, .search-scope-option, .change-tab,
     .pick-chip, .meta-help, .detail-tab-label, .rec-fab, .side-close,
-    .detail-close, .nav-tab, .champ, .article-card, .setting-card {
+    .nav-tab, .champ, .article-card, .setting-card {
         transition: background-color var(--dur-2) var(--ease),
                     color var(--dur-2) var(--ease),
                     border-color var(--dur-2) var(--ease),
@@ -5832,14 +5762,12 @@
             rgba(0, 0, 0, 0.04) 70%);
         background-size: 220% 100%;
     }
-    [data-theme="light"] .detail-close,
     [data-theme="light"] .side-close,
     [data-theme="light"] .rec-fab {
         background: var(--surface-2);
         border-color: var(--border-strong);
         color: var(--text);
     }
-    [data-theme="light"] .detail-close:hover,
     [data-theme="light"] .side-close:hover {
         background: var(--chip-bg);
         border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
@@ -9470,7 +9398,6 @@
         margin: 0;
         animation: none;
     }
-    .detail-page .detail-head { padding-right: 0; }
     .detail-page .detail-head .cname {
         margin: 0;
         font-size: 22px;

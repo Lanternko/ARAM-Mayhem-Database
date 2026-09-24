@@ -220,10 +220,6 @@
         try {
             _compNormCache = null;
             _stageTempoCache = null;
-            if (detailSelected) {
-                const champ = document.querySelector(`.champ[data-cid="${detailSelected}"]`);
-                if (champ) openDetailForChamp(champ, true);
-            }
             if (document.querySelector('.view-draft.is-active')) renderDraft();
             if (document.querySelector('.view-champ.is-active')) renderChampPage(champPageSlugNow, true);
         } catch {}
@@ -1341,7 +1337,6 @@
             augGameRarityP: '彩色',
             augGameTotalLift: '這套增幅的總增益',
             detailEmpty: '這個英雄目前沒有可顯示的資料。',
-            detailClose: '關閉詳細資訊',
             pairSectionTitle: '推薦搭檔',
             pairSectionMeta: '適配度為主，勝率為輔',
             setSectionTitle: '增幅裝置系列相性',
@@ -1693,7 +1688,6 @@
             augGameRarityP: 'Prismatic',
             augGameTotalLift: 'Total lift of this build',
             detailEmpty: 'No detail data is available for this champion yet.',
-            detailClose: 'Close details',
             pairSectionTitle: 'Recommended Pairings',
             pairSectionMeta: 'Fit first, win rate second',
             setSectionTitle: 'Augment Sets',
@@ -3322,6 +3316,12 @@
         });
         syncAugModeHrefs();
     }
+    function syncChampCardHrefs() {
+        document.querySelectorAll('a.champ[href][data-cid]').forEach(card => {
+            const slug = champSlugForCid(card.getAttribute('data-cid'));
+            if (slug) card.setAttribute('href', pathForRoute('champ', slug));
+        });
+    }
     function syncAugModeHrefs() {
         document.querySelectorAll('.aug-mode-tab[data-aug-mode]').forEach(tab => {
             const sub = tab.getAttribute('data-aug-mode') === 'pools' ? 'pools' : '';
@@ -4115,7 +4115,7 @@
             if (row) {
                 const cid = row.getAttribute('data-cid');
                 closeAugChamps();
-                openDetailByCid(cid);
+                openChampByCid(cid);
                 trackEvent('aug_champs_champ_click', { champion_id: cid });
                 return;
             }
@@ -4198,7 +4198,6 @@
     }
 
     function renderDetail(cid, opts = {}) {
-        const pageMode = Boolean(opts.page);
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
         // background warm pass reached this champ first).
@@ -4956,12 +4955,9 @@
         // Champ icon + name live inside the sticky rail with the main tabs so
         // they pin together under the site header (and floating search chip).
         const stickyLeadHtml = `
-            ${pageMode ? '' : `<button class="detail-close" type="button" title="${escHtml(copy.detailClose)}" aria-label="${escHtml(copy.detailClose)}">&times;</button>`}
             <div class="detail-head">
                 ${info.image ? `<img class="detail-avatar" loading="lazy" src="${info.image}" alt="">` : ''}
-                ${pageMode
-                    ? `<h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>`
-                    : `<span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>`}
+                <h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>
                 ${buildDetailRoleTags(info)}
             </div>
         `;
@@ -4991,7 +4987,6 @@
         { key: 'cc', zh: '控場', en: 'CC' },
     ];
     const TEAM_COMP_DIMS = TEAM_RADAR_AXES;
-    let detailSelected = null;
     let recommendMode = false; // legacy home teammate mode — always off; Draft tab owns picks
     let recModalOpen = false;
     let teamPicks = []; // ally picks (also used by recommendation helpers)
@@ -5004,20 +4999,6 @@
 
     function zFmt(x) {
         return `${x >= 0 ? '+' : ''}${x.toFixed(2)}`;
-    }
-
-    // Find the last .champ in the same visual row as `clicked` (same offsetTop).
-    // Tier-grid is a CSS grid so offsetTop tells us the row reliably across
-    // viewport widths.
-    function lastChampInRow(clicked) {
-        const grid = clicked.parentElement;
-        const topPx = clicked.offsetTop;
-        const champs = grid.querySelectorAll(':scope > .champ');
-        let last = clicked;
-        for (const c of champs) {
-            if (Math.abs(c.offsetTop - topPx) < 2) last = c;
-        }
-        return last;
     }
 
     function syncPickDecorations() {
@@ -10074,7 +10055,7 @@
         if (segs[0] === 'en') {
             urlLang = 'en';
             segs.shift();
-        } else if (segs[0].toLowerCase() === 'zh-cn') {
+        } else if ((segs[0] || '').toLowerCase() === 'zh-cn') {
             urlLang = 'zh-CN';
             segs.shift();
         }
@@ -10152,8 +10133,6 @@
             });
             columnArticle = null;
             if (name === 'champ') {
-                // Home's inline detail reuses the same radio ids; never keep both.
-                if (detailSelected) closeDetail();
                 renderChampPage(sub || '');
             } else if (wasChamp) {
                 clearChampPage();
@@ -10337,11 +10316,8 @@
         setRecommendMode(recommendMode);
         renderSidePanel();
         renderPlayerHistoryState();
-        if (detailSelected) {
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (champ) openDetailForChamp(champ, true);
-        }
         syncAugModeHrefs();
+        syncChampCardHrefs();
         // Keep the path prefix in sync with language so shared links stay bilingual.
         if (historyMode !== 'none') {
             const active = document.querySelector('.view.is-active');
@@ -10365,121 +10341,8 @@
         btn.hidden = true;
     }
 
-    function syncDetailModalState() {
-        const open = Boolean(detailSelected);
-        document.body.classList.toggle('detail-modal-open', open && isMobileViewport());
-        // Desktop sticky chrome marker (search overlays right; tabs pin at same top).
-        document.body.classList.toggle('detail-open', open);
-        syncHeaderHeight();
-    }
-
-    function closeDetail() {
-        document.querySelectorAll('.detail-host').forEach(h => h.innerHTML = '');
-        document.querySelectorAll('.champ.detail-selected').forEach(el => el.classList.remove('detail-selected'));
-        detailSelected = null;
-        syncDetailModalState();
-    }
-
-    // Monotonic token: every open bumps it so a deferred heavy fill can detect
-    // that a newer open (or a close) superseded it and abort, avoiding a stale
-    // panel flashing in after the user already moved on.
-    let detailOpenToken = 0;
-
-    function openDetailForChamp(champ, force = false) {
-        const cid = champ.getAttribute('data-cid');
-        const block = champ.closest('.tier-block');
-        const host  = block.querySelector('.detail-host');
-
-        // Clear any previously selected highlight + detail elsewhere.
-        document.querySelectorAll('.champ.detail-selected').forEach(el => {
-            if (el !== champ) el.classList.remove('detail-selected');
-        });
-        document.querySelectorAll('.detail-host').forEach(el => {
-            if (el !== host) el.innerHTML = '';
-        });
-
-        if (!force && detailSelected === cid && host.firstChild) {
-            closeDetail();
-            return;
-        }
-
-        // Position the detail host right after the last champ in the clicked
-        // row, so the panel always pops up directly under the champion you
-        // tapped — never hidden far below by other champs.
-        const anchor = lastChampInRow(champ);
-        if (anchor.nextSibling !== host) {
-            anchor.after(host);
-        }
-
-        // ---- Two-phase open (INP) --------------------------------------------
-        // Detail open is the most frequent interaction and renderDetail builds a
-        // large HTML string.  Doing it inside the click handler is the second INP
-        // contributor.  Phase 1 (synchronous, cheap): mark selection + paint a
-        // skeleton sized to the panel so there is no CLS jump.  Phase 2 (after a
-        // yield): the heavy renderDetail fill + highlight/filter passes.
-        const token = ++detailOpenToken;
-        const dialogAttrs = isMobileViewport()
-            ? ` role="dialog" aria-modal="true" aria-labelledby="detail-title-${cid}"`
-            : '';
-        host.innerHTML = `<div class="detail detail-loading"${dialogAttrs}><div class="detail-skeleton" aria-hidden="true"></div></div>`;
-        champ.classList.add('detail-selected');
-        detailSelected = cid;
-        syncDetailModalState();
-        if (!force) {
-            trackEvent('champion_detail_open', {
-                champion_id: cid,
-                champion_name: champ.getAttribute('data-name-en') || '',
-                tier: champ.getAttribute('data-tier') || '',
-            });
-        }
-
-        // Phase 2: fetch this champion's detail shard, then fill the panel after
-        // handing the main thread back. Inline/legacy payloads resolve instantly.
-        yieldToMain().then(() => ensureChampDetail(cid)).then(() => {
-            // Abort if a newer open or a close superseded this one while we waited.
-            if (token !== detailOpenToken || detailSelected !== cid) return;
-            if (!host.isConnected) return;
-            try {
-                host.innerHTML = `<div class="detail"${dialogAttrs}>${renderDetail(cid)}</div>`;
-                // Skip the document-wide highlight / category sweeps when nothing
-                // is active — they walk every card for no effect otherwise.
-                if (filterState.q.trim()) applySearchHighlights(host);
-                if (augCatFilter.size) applyAugCatFilter(host);
-                // Always re-sync chip pressed state (and hide cards if a role /
-                // 常見 filter is sticky from a previous champion).
-                applySingleItemFilter(host);
-            } catch (err) {
-                console.error('detail render failed for champ', cid, err);
-                return;
-            }
-            if (isMobileViewport()) {
-                host.querySelector('.detail-close')?.focus({ preventScroll: true });
-            }
-        }).catch(err => {
-            if (token !== detailOpenToken || detailSelected !== cid) return;
-            console.error('detail load failed for champ', cid, err);
-            const message = currentLang === 'en'
-                ? 'Champion details could not be loaded.'
-                : '英雄詳細資料載入失敗。';
-            const retry = currentLang === 'en' ? 'Retry' : '重試';
-            host.innerHTML = `
-                <div class="detail detail-load-error"${dialogAttrs}>
-                    <div class="empty" role="alert">${escHtml(message)}</div>
-                    <button type="button" class="detail-retry" data-detail-retry>${escHtml(retry)}</button>
-                </div>`;
-        });
-    }
-
-    function openDetailByCid(cid) {
-        // Every champion has its own page; the inline panel is only a fallback
-        // for a champion without a slug.
-        const slug = champSlugForCid(cid);
-        if (slug) { openChampPage(slug); return; }
-        setActiveView('home', false, 'push');
-        const champ = document.querySelector(`.champ[data-cid="${cid}"]:not(.hidden)`);
-        if (!champ) return;
-        openDetailForChamp(champ);
-        champ.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    function openChampByCid(cid) {
+        openChampPage(champSlugForCid(cid));
     }
 
     // ---- Champion page (/champions/<slug>) ------------------------------------------
@@ -10826,12 +10689,6 @@
         if (modePick) {
             trackEvent('mode_switch', { mode: modePick.getAttribute('data-mode-target') });
         }
-        const detailRetry = ev.target.closest('[data-detail-retry]');
-        if (detailRetry) {
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (champ) openDetailForChamp(champ, true);
-            return;
-        }
         const ghStar = ev.target.closest('.gh-star');
         if (ghStar) {
             trackEvent('github_star_click', { location: 'footer' });
@@ -10899,21 +10756,12 @@
             trackEvent('recommendations_close', { source: 'panel', picks: teamPicks.length });
             return;
         }
-        const detailClose = ev.target.closest('.detail-close');
-        if (detailClose) {
-            closeDetail();
-            return;
-        }
         const augSortBtn = ev.target.closest('.rlabel-sort[data-sort]');
         if (augSortBtn) {
             const row = augSortBtn.closest('.rarity-row');
             const key = augSortBtn.getAttribute('data-sort') || 'wr';
             sortRarityAugList(row, key);
             trackEvent('aug_rarity_sort', { sort: key, rarity: row && row.getAttribute('data-rarity') });
-            return;
-        }
-        if (isMobileViewport() && ev.target.classList && ev.target.classList.contains('detail-host')) {
-            closeDetail();
             return;
         }
         const changeTab = ev.target.closest('[data-change-tab]');
@@ -10925,7 +10773,7 @@
         }
         const changeCid = ev.target.closest('[data-change-cid]');
         if (changeCid) {
-            openDetailByCid(changeCid.getAttribute('data-change-cid'));
+            openChampByCid(changeCid.getAttribute('data-change-cid'));
             trackEvent('patch_change_detail_open', { champion_id: changeCid.getAttribute('data-change-cid') });
             return;
         }
@@ -11083,20 +10931,18 @@
             renderSidePanel();
             const recCid = recRow.getAttribute('data-cid');
             trackEvent('recommendation_click', { champion_id: recCid, picks: teamPicks.length });
-            openDetailByCid(recCid);
+            openChampByCid(recCid);
             return;
         }
         const champ = ev.target.closest('.champ');
         if (!champ) return;
         const champCid = champ.getAttribute('data-cid');
         const champSlug = champSlugForCid(champCid);
-        if (!champSlug) { openDetailForChamp(champ); return; }
+        if (!champSlug) return;
         trackEvent('champion_card_click', { champion_id: champCid });
-        // Ctrl/Cmd/Shift-click opens the page in a new tab like a real link.
-        if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
-            window.open(pathForRoute('champ', champSlug), '_blank', 'noopener');
-            return;
-        }
+        // Cards are real links: modified clicks open a tab via the href.
+        if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+        ev.preventDefault();
         openChampPage(champSlug);
     });
 
@@ -11107,9 +10953,6 @@
         window.__draftSearchT = setTimeout(() => renderDraftChampList(), 80);
     });
 
-    // When viewport width changes, the row containing the selected champ
-    // shifts — re-anchor the detail host so it stays directly under that
-    // champ on the new layout.
     let resizeT = null;
     window.addEventListener('resize', () => {
         clearTimeout(resizeT);
@@ -11118,13 +10961,6 @@
             renderSidePanel();
             syncHeaderHeight();  // header is 1 row on desktop, 2 on mobile
             moveTabIndicator();
-            if (!detailSelected) return;
-            const champ = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (!champ) return;
-            const host = champ.closest('.tier-block').querySelector('.detail-host');
-            const anchor = lastChampInRow(champ);
-            if (anchor.nextSibling !== host) anchor.after(host);
-            syncDetailModalState();
         }, 120);
     });
 
@@ -11420,14 +11256,7 @@
                         : searchMatchesText(blob, q))
                 );
                 const matchQ = !q || (allSearch ? (heroMatch || relatedMatch) : heroMatch);
-                // Keep the open detail's champ pinned even when it fails the
-                // active role/search filter, so searching never closes the
-                // panel you're reading.  (Ctrl+F focuses this search box; a
-                // non-matching query used to hide the selected champ, which
-                // closed its detail and looked like the page reset itself.)
-                const isSelected = detailSelected
-                    && c.getAttribute('data-cid') === detailSelected;
-                const hide = !(matchRole && matchQ) && !isSelected;
+                const hide = !(matchRole && matchQ);
                 c.classList.toggle('hidden', hide);
                 c.classList.toggle('search-related-hit', Boolean(relatedMatch && !heroMatch));
                 if (!hide) tierShown++;
@@ -11444,14 +11273,6 @@
         if (shownN) shownN.textContent = shown;
         const empty = document.getElementById('empty-state');
         if (empty) empty.classList.toggle('visible', shown === 0);
-
-        // If the currently-selected champ got hidden, close its detail panel.
-        if (detailSelected) {
-            const sel = document.querySelector(`.champ[data-cid="${detailSelected}"].detail-selected`);
-            if (!sel || sel.classList.contains('hidden')) {
-                closeDetail();
-            }
-        }
         // NOTE: refreshSecondaryRoleBadges() is intentionally NOT called here.
         // The badges depend ONLY on filterState.role, not the query, so running
         // that full 173-card innerHTML walk on every keystroke was pure waste.
@@ -11508,10 +11329,6 @@
             }
             if (augChampsId != null) {
                 closeAugChamps();
-                return;
-            }
-            if (detailSelected && isMobileViewport()) {
-                closeDetail();
                 return;
             }
             if (recModalOpen) {

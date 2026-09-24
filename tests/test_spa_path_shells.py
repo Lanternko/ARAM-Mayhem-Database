@@ -244,6 +244,22 @@ class SpaPathShellTests(unittest.TestCase):
             home_cn = (root / "zh-cn" / "index.html").read_text(encoding="utf-8")
             self.assertNotIn("lp.slice(6)", home_cn)
 
+    def test_localized_home_shells_link_cards_to_their_language(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text(
+                "<!doctype html><html lang='zh-Hant'><head><title>app</title></head>"
+                "<body><a class='champ' href='/champions/jinx/' data-cid='222'></a></body></html>",
+                encoding="utf-8",
+            )
+            write_spa_path_shells(index, site_url="https://arammeta.com/")
+            en = (root / "en" / "index.html").read_text(encoding="utf-8")
+            cn = (root / "zh-cn" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("<a class='champ' href='/en/champions/jinx/'", en)
+            self.assertIn("<a class='champ' href='/zh-cn/champions/jinx/'", cn)
+            self.assertIn("<a class='champ' href='/champions/jinx/'", index.read_text(encoding="utf-8"))
+
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
         self.assertIn("return prefix ? prefix + '/' : '/'", source)

@@ -1846,6 +1846,12 @@ def _localize_full_shell_html(
     canonical = (origin + path) if origin.startswith("http") else path
     out = html_src
     out = re.sub(r"(<html\s+lang=)['\"][^'\"]*['\"]", rf"\1'{html_lang}'", out, count=1, flags=re.I)
+    locale_prefix = next((p for p in ("/en", "/zh-cn") if path.startswith(p + "/")), "")
+    if locale_prefix:
+        # Tier-list cards link to the champion page in the shell's own language.
+        out = out.replace(
+            f"{CHAMP_CARD_OPEN}/champions/", f"{CHAMP_CARD_OPEN}{locale_prefix}/champions/"
+        )
     out = re.sub(
         r"(<link\s+rel=['\"]canonical['\"]\s+href=)['\"][^'\"]*['\"]",
         rf"\1'{html.escape(canonical, quote=True)}'",
@@ -2033,6 +2039,8 @@ def _spa_deep_link_stub(
 
 
 _CHAMPION_SLUG_RE = re.compile(r"[^a-z0-9]+")
+# Opening of every tier-list card; localized shells rewrite the href after it.
+CHAMP_CARD_OPEN = "<a class='champ' href='"
 
 
 def champion_page_slug(alias: str) -> str:
@@ -3697,8 +3705,15 @@ def render_html(
                 f"raw {r['raw_wr']*100:.1f}%{blend_hint}"
             )
             aria_label = f"{r['name']} {alias}，tier {tier}，勝率 {wr_pct}"
+            # A real link to the champion page: middle/ctrl-click opens a tab
+            # and crawlers find every champion from the tier list.
+            card_slug = champion_page_slug(alias)
+            card_open = (
+                f"{CHAMP_CARD_OPEN}/champions/{card_slug}/' " if card_slug
+                else "<a class='champ' "
+            )
             parts.append(
-                f"<div class='champ' data-cid='{r['champion_id']}' "
+                f"{card_open}data-cid='{r['champion_id']}' "
                 f"data-name-zh=\"{html.escape(r['name'])}\" "
                 f"data-name-en=\"{html.escape(meta.get('name_en', alias or r['name']))}\" "
                 f"data-tags='{tag_str}' data-primary-role='{html.escape(primary_role)}' "
@@ -3707,7 +3722,6 @@ def render_html(
                 f"data-search=\"{html.escape(champion_search_blob, quote=True)}\" "
                 f"data-tier='{tier}' data-wr='{wr_pct}' data-games='{r['games']}' "
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
-                f"role='button' tabindex='0' "
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
                 f"<img loading='lazy' src='{r['image']}' alt=''>"
@@ -3720,11 +3734,8 @@ def render_html(
                 f"<span class='sr-only'>{alias}</span>"
                 f"<span class='wr'>{wr_pct}</span>"
                 f"<span class='name'>{r['name']}</span>"
-                f"</div>"
+                f"</a>"
             )
-        # Detail host lives INSIDE .tier-grid so it can grid-span all columns
-        # and be inserted right after the clicked champion's visual row.
-        parts.append(f"<div class='detail-host' data-tier='{tier}'></div>")
         parts.append("</div>")  # /tier-grid
         parts.append("</div>")  # /tier-block
 
