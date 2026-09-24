@@ -4963,9 +4963,6 @@
                     ? `<h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>`
                     : `<span class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</span>`}
                 ${buildDetailRoleTags(info)}
-                ${!pageMode && champPageSlug(info.alias)
-                    ? `<a class="detail-page-link" href="${escHtml(pathForRoute('champ', champPageSlug(info.alias)))}" data-champ-page="${escHtml(champPageSlug(info.alias))}">${escHtml(pickLang('完整頁面', 'Full page'))} →</a>`
-                    : ''}
             </div>
         `;
         const detailTabs = buildDetailTabSet('main', [
@@ -10126,6 +10123,7 @@
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
         setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode, sub);
     }
+    let homeScrollY = 0;
     function setActiveView(name, instant, historyMode, sub) {
         // Old /settings bookmarks land on home (settings chrome was removed).
         if (name === 'settings' || !VIEWS.includes(name)) name = 'home';
@@ -10136,6 +10134,9 @@
             // The champion page has no nav tab of its own; it lives under Home.
             const navName = name === 'champ' ? 'home' : name;
             const wasChamp = Boolean(document.querySelector('.view-champ.is-active'));
+            // Remember where the tier list was so Back from a champion page
+            // lands on the same card instead of the top.
+            if (name !== 'home' && document.querySelector('.view-home.is-active')) homeScrollY = window.scrollY;
             tabs.forEach(t => {
                 const on = t.getAttribute('data-nav-tab') === navName;
                 t.classList.toggle('active', on);
@@ -10176,7 +10177,7 @@
             }
             const routeSub = name === 'augments' ? augmentsSub() : (name === 'champ' ? (sub || '') : '');
             syncUrlToRoute(name, routeSub, historyMode);
-            window.scrollTo(0, 0);
+            window.scrollTo(0, name === 'home' && historyMode === 'none' ? homeScrollY : 0);
             moveTabIndicator();
             if (name === 'champ' && !champPageSlugNow && matchMedia('(pointer: fine)').matches) {
                 document.getElementById('champ-page-search')?.focus({ preventScroll: true });
@@ -10470,9 +10471,10 @@
     }
 
     function openDetailByCid(cid) {
-        // The detail host lives inside the home tier grid; callers can fire from
-        // the Settings changelog or a recommend row, so always surface the home
-        // view first or the panel would open in a hidden view (invisible).
+        // Every champion has its own page; the inline panel is only a fallback
+        // for a champion without a slug.
+        const slug = champSlugForCid(cid);
+        if (slug) { openChampPage(slug); return; }
         setActiveView('home', false, 'push');
         const champ = document.querySelector(`.champ[data-cid="${cid}"]:not(.hidden)`);
         if (!champ) return;
@@ -10753,8 +10755,7 @@
         // Let modified clicks open a new tab via the real href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
-        const from = link.classList.contains('detail-page-link') ? 'detail'
-            : (link.classList.contains('champ-page-chip') ? 'recent' : 'search');
+        const from = link.classList.contains('champ-page-chip') ? 'recent' : 'search';
         trackEvent('champion_page_link', { from });
         openChampPage(link.getAttribute('data-champ-page'));
     });
@@ -11087,7 +11088,16 @@
         }
         const champ = ev.target.closest('.champ');
         if (!champ) return;
-        openDetailForChamp(champ);
+        const champCid = champ.getAttribute('data-cid');
+        const champSlug = champSlugForCid(champCid);
+        if (!champSlug) { openDetailForChamp(champ); return; }
+        trackEvent('champion_card_click', { champion_id: champCid });
+        // Ctrl/Cmd/Shift-click opens the page in a new tab like a real link.
+        if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+            window.open(pathForRoute('champ', champSlug), '_blank', 'noopener');
+            return;
+        }
+        openChampPage(champSlug);
     });
 
     // Draft search input (debounced like home search).
