@@ -1798,38 +1798,57 @@
         align-items: center;
         gap: 6px;
     }
+    /* Role tag, MSI-style "frame tick": matte dark chip, role-colour corner
+       ticks (top-left, bottom-right) and a thin tapered underline. */
     .detail-role-tag {
+        --role-color: #9aa0a6;
+        --role-muted: color-mix(in srgb, var(--role-color) 78%, #2a2c30);
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
         height: 22px;
-        padding: 0 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
+        padding: 0 11px 2px 12px;
+        isolation: isolate;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         line-height: 1;
-        color: #cfd4dc;
-        background: rgba(255,255,255,0.045);
-        border: 1px solid rgba(255,255,255,0.10);
+        color: #f4f4f2;
+        background: #15171a;
         white-space: nowrap;
     }
-    .detail-role-tag::before {
+    .detail-role-tag::before,
+    .detail-role-tag::after {
         content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--role-color, #9aa0a6);
-        box-shadow: 0 0 6px color-mix(in srgb, var(--role-color, #9aa0a6) 55%, transparent);
-        flex: 0 0 auto;
+        position: absolute;
+        z-index: -1;
+        pointer-events: none;
     }
-    .detail-role-tag[data-role="Assassin"] { --role-color: #D94A5F; }
-    .detail-role-tag[data-role="Fighter"]  { --role-color: #D9822B; }
-    .detail-role-tag[data-role="Mage"]     { --role-color: #9B7CF6; }
-    .detail-role-tag[data-role="Marksman"] { --role-color: #4FB06D; }
-    .detail-role-tag[data-role="Support"]  { --role-color: #D96BAA; }
-    .detail-role-tag[data-role="Tank"]     { --role-color: #5B8DEF; }
+    .detail-role-tag::before {
+        inset: 0;
+        background:
+            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 5px 1px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 1px 5px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 5px 1px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 1px 5px no-repeat;
+        opacity: 0.85;
+    }
+    .detail-role-tag::after {
+        left: 11px;
+        right: 11px;
+        bottom: 3px;
+        height: 2px;
+        background: var(--role-muted);
+        clip-path: polygon(0 100%, 100% 0, 100% 100%);
+    }
+    .detail-role-tag[data-role="Assassin"] { --role-color: #E0455C; }
+    .detail-role-tag[data-role="Fighter"]  { --role-color: #F07A1A; }
+    .detail-role-tag[data-role="Mage"]     { --role-color: #8F6BFF; }
+    .detail-role-tag[data-role="Marksman"] { --role-color: #2FBF6B; }
+    .detail-role-tag[data-role="Support"]  { --role-color: #EE5FAE; }
+    .detail-role-tag[data-role="Tank"]     { --role-color: #3D86FF; }
     .detail-tab-input {
         position: absolute;
         width: 1px;
@@ -5779,9 +5798,11 @@
         box-shadow: 0 2px 8px rgba(31, 41, 55, 0.12);
     }
     [data-theme="light"] .detail-role-tag {
-        color: var(--text-muted);
+        color: var(--text);
         background: var(--chip-bg);
-        border-color: var(--border);
+    }
+    [data-theme="light"] .detail-role-tag::after {
+        background: var(--role-color);
     }
     [data-theme="light"] .detail-tab-list {
         border-bottom-color: var(--border);
