@@ -1887,7 +1887,7 @@
         background: rgba(255,255,255,0.03);
     }
     .detail-tab-label:focus-visible {
-        outline: 2px solid rgba(107,209,255,0.45);
+        outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
         outline-offset: -2px;
     }
     .detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
@@ -1896,7 +1896,7 @@
     .detail-tabset > .detail-tab-input:nth-of-type(4):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
     .detail-tabset > .detail-tab-input:nth-of-type(5):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
     .detail-tabset > .detail-tab-input:nth-of-type(6):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
-        outline: 2px solid rgba(107,209,255,0.45);
+        outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
         outline-offset: -2px;
     }
     .detail-tab-panels {
@@ -1924,9 +1924,9 @@
     .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
     .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
     .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
-        color: #7fc8ff;
-        border-bottom-color: #3aa0ff;
-        background: rgba(58,160,255,0.08);
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        background: transparent;
     }
     .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(1),
     .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-panels > .detail-tab-panel:nth-child(2),
@@ -5796,9 +5796,9 @@
     [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
     [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
     [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
-        color: #1565c0;
-        border-bottom-color: #2563eb;
-        background: rgba(37, 99, 235, 0.08);
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        background: transparent;
     }
     [data-theme="light"] .detail-section + .detail-section {
         border-top-color: var(--border);
