@@ -1782,14 +1782,38 @@
         margin-bottom: 8px;
         min-width: 0;
     }
+    /* ddragon squares bake in a dark ~4% vignette edge; scaling the img
+       inside an overflow-clipped frame crops it so the art reaches the rim.
+       Frame = gold hairline (League hextech) + inner top highlight, not a
+       flat grey border that doubles up with the baked edge. */
     .detail-avatar {
+        --avatar-ring: color-mix(in srgb, #c8aa6e 55%, transparent);
+        position: relative;
+        display: block;
         width: 34px;
         height: 34px;
         border-radius: 8px;
-        object-fit: cover;
-        border: 1px solid rgba(255,255,255,0.12);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.24);
+        overflow: hidden;
+        background: var(--surface);
+        box-shadow:
+            0 0 0 1px var(--avatar-ring),
+            0 6px 16px -4px rgba(0,0,0,0.45);
         flex: 0 0 auto;
+    }
+    .detail-avatar img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transform: scale(1.12);
+    }
+    .detail-avatar::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -10px 14px -10px rgba(0,0,0,0.5);
     }
     .detail-head .cname { font-size: 16px; font-weight: 600; }
     .detail-roles {
@@ -1798,38 +1822,57 @@
         align-items: center;
         gap: 6px;
     }
+    /* Role tag, MSI-style "frame tick": matte dark chip, role-colour corner
+       ticks (top-left, bottom-right) and a thin tapered underline. */
     .detail-role-tag {
+        --role-color: #9aa0a6;
+        --role-muted: color-mix(in srgb, var(--role-color) 78%, #2a2c30);
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
         height: 22px;
-        padding: 0 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
+        padding: 0 11px 2px 12px;
+        isolation: isolate;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         line-height: 1;
-        color: #cfd4dc;
-        background: rgba(255,255,255,0.045);
-        border: 1px solid rgba(255,255,255,0.10);
+        color: #f4f4f2;
+        background: #15171a;
         white-space: nowrap;
     }
-    .detail-role-tag::before {
+    .detail-role-tag::before,
+    .detail-role-tag::after {
         content: "";
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--role-color, #9aa0a6);
-        box-shadow: 0 0 6px color-mix(in srgb, var(--role-color, #9aa0a6) 55%, transparent);
-        flex: 0 0 auto;
+        position: absolute;
+        z-index: -1;
+        pointer-events: none;
     }
-    .detail-role-tag[data-role="Assassin"] { --role-color: #D94A5F; }
-    .detail-role-tag[data-role="Fighter"]  { --role-color: #D9822B; }
-    .detail-role-tag[data-role="Mage"]     { --role-color: #9B7CF6; }
-    .detail-role-tag[data-role="Marksman"] { --role-color: #4FB06D; }
-    .detail-role-tag[data-role="Support"]  { --role-color: #D96BAA; }
-    .detail-role-tag[data-role="Tank"]     { --role-color: #5B8DEF; }
+    .detail-role-tag::before {
+        inset: 0;
+        background:
+            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 5px 1px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 1px 5px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 5px 1px no-repeat,
+            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 1px 5px no-repeat;
+        opacity: 0.85;
+    }
+    .detail-role-tag::after {
+        left: 11px;
+        right: 11px;
+        bottom: 3px;
+        height: 2px;
+        background: var(--role-muted);
+        clip-path: polygon(0 100%, 100% 0, 100% 100%);
+    }
+    .detail-role-tag[data-role="Assassin"] { --role-color: #E0455C; }
+    .detail-role-tag[data-role="Fighter"]  { --role-color: #F07A1A; }
+    .detail-role-tag[data-role="Mage"]     { --role-color: #8F6BFF; }
+    .detail-role-tag[data-role="Marksman"] { --role-color: #2FBF6B; }
+    .detail-role-tag[data-role="Support"]  { --role-color: #EE5FAE; }
+    .detail-role-tag[data-role="Tank"]     { --role-color: #3D86FF; }
     .detail-tab-input {
         position: absolute;
         width: 1px;
@@ -4107,7 +4150,7 @@
         align-items: center;
         gap: 7px;
         padding: 6px 11px 6px 13px;
-        border: 1px solid color-mix(in oklab, var(--accent) 68%, var(--border));
+        border: 1px solid var(--accent);
         border-radius: 999px;
         background: var(--accent);
         color: var(--accent-on);
@@ -4117,8 +4160,7 @@
         line-height: 1;
         cursor: pointer;
         user-select: none;
-        box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 24%, transparent),
-                    0 2px 8px color-mix(in srgb, var(--accent) 18%, transparent);
+        box-shadow: none;
         transition: background-color var(--dur-2) var(--ease),
                     border-color var(--dur-2) var(--ease),
                     transform var(--dur-1) var(--ease);
@@ -5775,13 +5817,17 @@
         border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
     }
     [data-theme="light"] .detail-avatar {
-        border-color: var(--border-strong);
-        box-shadow: 0 2px 8px rgba(31, 41, 55, 0.12);
+        --avatar-ring: color-mix(in srgb, #a07d3a 60%, transparent);
+        box-shadow:
+            0 0 0 1px var(--avatar-ring),
+            0 4px 12px -4px rgba(31, 41, 55, 0.28);
     }
     [data-theme="light"] .detail-role-tag {
-        color: var(--text-muted);
+        color: var(--text);
         background: var(--chip-bg);
-        border-color: var(--border);
+    }
+    [data-theme="light"] .detail-role-tag::after {
+        background: var(--role-color);
     }
     [data-theme="light"] .detail-tab-list {
         border-bottom-color: var(--border);
@@ -6339,6 +6385,23 @@
             0 0 0 4px rgba(70, 80, 100, 0.28),
             0 2px 8px rgba(0, 0, 0, 0.28);
     }
+    /* List-size augment icons share the .augch-icon disc: silver and pastel
+       art vanishes on light surfaces without a dark backing. */
+    .champ-pool-augment img,
+    .recommended-pool-members img,
+    .aug-tier-name img,
+    .aug-tier-name .aicon-ph,
+    .aug-draft-icon,
+    .aug-settle-icon {
+        padding: 3px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        object-fit: contain;
+        background:
+            radial-gradient(circle at 50% 42%, #222836 0%, #12151c 62%, #07090d 100%);
+        box-shadow: 0 0 0 1px #2c3444;
+    }
+    .aug-settle-icon { padding: 2px; }
     .augch-name { color: var(--text); font-size: 17px; font-weight: 700; }
     .augch-sub { margin-top: 2px; color: var(--text-muted); font-size: 12px; }
     .augch-stat { margin-top: 2px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -7423,7 +7486,7 @@
     }
     .aug-settle-chip.is-hit { box-shadow: inset 2px 0 0 #4ade80; }
     .aug-settle-n { font-weight: 700; color: var(--text-muted, #9aa0a6); flex: none; }
-    .aug-settle-icon { width: 22px; height: 22px; border-radius: 6px; flex: none; }
+    .aug-settle-icon { width: 22px; height: 22px; flex: none; }
     .aug-settle-name { font-weight: 600; }
     .aug-settle-score {
         margin-left: auto;
@@ -9272,7 +9335,7 @@
 .champ-pool-category h4 small { margin-left: 6px; color: var(--text-muted); font-weight: 400; }
 .champ-pool-category > ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; list-style: none; margin: 0; padding: 0; }
 .champ-pool-augment { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; text-align: left; padding: 6px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
-.champ-pool-augment img { flex: 0 0 28px; border-radius: 4px; }
+.champ-pool-augment img { flex: 0 0 32px; width: 32px; height: 32px; }
 .champ-pool-augment small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 .champ-pool-augment:hover { background: var(--panel-inner); border-color: var(--border); }
 .champ-pool-augment:focus-visible, .champ-pools-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -9293,7 +9356,7 @@
     .item-float-tip.is-pool-tip { pointer-events: auto; }
     .recommended-pool-members { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
     .recommended-pool-members li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .recommended-pool-members img { width: 28px; height: 28px; object-fit: contain; flex: 0 0 28px; }
+    .recommended-pool-members img { width: 28px; height: 28px; flex: 0 0 28px; }
     .item-float-tip.is-pool-tip.is-visible { display: block !important; }
     .item-float-tip.is-pool-tip { filter: none; box-shadow: var(--panel-shadow); }
     .is-pool-tip .item-tip-card { background: var(--surface-raised); color: var(--text); border-color: var(--border-strong); }
@@ -9531,7 +9594,7 @@
     .detail-page .detail-avatar {
         width: 44px;
         height: 44px;
-        border-radius: 10px;
+        border-radius: 12px;
     }
     /* On the champion page only the 概覽/出裝/… tabs stay pinned: the rail
        sticks at a negative offset equal to its head row (padding-top + head

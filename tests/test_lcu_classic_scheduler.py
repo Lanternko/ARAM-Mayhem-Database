@@ -221,7 +221,7 @@ class ClassicClaimTests(unittest.TestCase):
         )
         self.con.commit()
 
-    def test_due_arm_keeps_the_shipped_oldest_first_ordering(self) -> None:
+    def test_due_arm_claims_higher_affinity_rank_before_older_rows(self) -> None:
         self._add_two_classic_players()
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=1), patch(
             "aram_nn.lcu.snowball.lane_arm", return_value="due"
@@ -230,6 +230,25 @@ class ClassicClaimTests(unittest.TestCase):
         ):
             # percent=100 makes every claim a classic slot, so slot 1 is the
             # 'due' arm.
+            claimed = _claim_next_player(self.con, "W01", 300_000, 100)
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed[0], "fresh-high-yield")
+        self.assertEqual(claimed[-1], "classic_due")
+
+    def test_due_arm_falls_back_to_low_rank_when_high_rank_is_not_due(self) -> None:
+        """Rank-first must not starve rank-1 rows: a heavy player still inside
+        the revisit floor is simply not eligible, so the candidate is claimed."""
+        self._add_two_classic_players()
+        self.con.execute(
+            "UPDATE crawl_queue SET eligible_at_ms=? WHERE puuid='fresh-high-yield'",
+            (int(time.time() * 1000) + 10 * HOUR_MS,),
+        )
+        self.con.commit()
+        with patch("aram_nn.lcu.snowball._claim_counter", return_value=1), patch(
+            "aram_nn.lcu.snowball.lane_arm", return_value="due"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="due"
+        ):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertIsNotNone(claimed)
         self.assertEqual(claimed[0], "stale-low-yield")
