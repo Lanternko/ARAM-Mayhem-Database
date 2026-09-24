@@ -20,10 +20,10 @@
     } catch {}
     // URL locale prefix is authoritative (works for direct History visits too).
     try {
-        let p = location.pathname || '/';
+        let p = (location.pathname || '/').toLowerCase();
         if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1) || '/';
         if (p === '/en' || p.startsWith('/en/')) pendingBootLang = 'en';
-        else if (p === '/zh-CN' || p.startsWith('/zh-CN/')) pendingBootLang = 'zh-CN';
+        else if (p === '/zh-cn' || p.startsWith('/zh-cn/')) pendingBootLang = 'zh-CN';
     } catch {}
     // Flip chrome strings NOW (script is at end of <body>) so /en or /zh-CN shares
     // never flash the wrong shell while payload/init continues.  Full
@@ -1811,7 +1811,7 @@
     // Prefer URL / stub-stashed locale over the zh SSR default.
     const LANG_OPTIONS = [
         { id: 'zh', label: '繁體中文', short: '繁中', htmlLang: 'zh-Hant', prefix: '' },
-        { id: 'zh-CN', label: '简体中文', short: '简中', htmlLang: 'zh-Hans', prefix: '/zh-CN' },
+        { id: 'zh-CN', label: '简体中文', short: '简中', htmlLang: 'zh-Hans', prefix: '/zh-cn' },
         { id: 'en', label: 'English', short: 'EN', htmlLang: 'en', prefix: '/en' },
     ];
     function normalizeLang(lang) {
@@ -10077,7 +10077,7 @@
         if (segs[0] === 'en') {
             urlLang = 'en';
             segs.shift();
-        } else if (segs[0] === 'zh-CN') {
+        } else if (segs[0].toLowerCase() === 'zh-cn') {
             urlLang = 'zh-CN';
             segs.shift();
         }

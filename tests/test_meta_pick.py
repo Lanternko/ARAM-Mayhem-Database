@@ -916,7 +916,7 @@ class RenderContractTests(unittest.TestCase):
         self.assertIn("aria-current='page'", html)
         self.assertIn("data-mode-target='mayhem'", html)
         self.assertIn("data-mode-target='classic'", html)
-        self.assertIn("data-href-zh-cn='/zh-CN/classic.html'", html)
+        self.assertIn("data-href-zh-cn='/zh-cn/classic.html'", html)
         self.assertIn("data-href-en='/en/classic.html'", html)
         self.assertIn("data-aria-en='Switch game mode'", html)
         self.assertIn("data-i18n-zh='大亂鬥'", html)

@@ -116,7 +116,7 @@ class ClassicResearchPageTests(unittest.TestCase):
             "data-lang='zh' href='/classic.html' class='is-active' aria-current='page'>繁體中文</a>",
             page,
         )
-        self.assertIn("data-lang='zh-CN' href='/zh-CN/classic.html'>简体中文</a>", page)
+        self.assertIn("data-lang='zh-CN' href='/zh-cn/classic.html'>简体中文</a>", page)
         self.assertIn("data-lang='en' href='/en/classic.html'>English</a>", page)
         self.assertIn("var langMenu=document.getElementById('classic-lang-menu')", page)
         self.assertNotIn("classic-language-links", page)
@@ -134,17 +134,17 @@ class ClassicResearchPageTests(unittest.TestCase):
             heroes, items, 12, {"16.15.800": 12}, 0, locale="zh-Hans"
         )
         self.assertIn("<html lang='zh-Hans'>", simplified)
-        self.assertIn("rel='canonical' href='https://arammeta.com/zh-CN/classic.html'", simplified)
+        self.assertIn("rel='canonical' href='https://arammeta.com/zh-cn/classic.html'", simplified)
         self.assertIn("经典模式英雄胜率", simplified)
         self.assertIn("狂战士胫甲", simplified)
         self.assertIn("data-theme-light-aria='切换成浅色主题'", simplified)
         self.assertIn("aria-label='切换游戏模式'", simplified)
-        self.assertIn("href='/zh-CN/'>大乱斗</a>", simplified)
+        self.assertIn("href='/zh-cn/'>大乱斗</a>", simplified)
         self.assertIn("<span>经典模式</span>", simplified)
         self.assertIn("aria-current='page'>经典模式</a>", simplified)
         self.assertIn("Language / 语言: 简体中文", simplified)
         self.assertIn(
-            "data-lang='zh-CN' href='/zh-CN/classic.html' class='is-active' aria-current='page'>简体中文</a>",
+            "data-lang='zh-CN' href='/zh-cn/classic.html' class='is-active' aria-current='page'>简体中文</a>",
             simplified,
         )
         self.assertIn("hreflang='en' href='https://arammeta.com/en/classic.html'", simplified)

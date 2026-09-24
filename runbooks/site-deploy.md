@@ -53,6 +53,8 @@ Production URL 會自動補 canonical split payload、Meta Pick API 與公開 an
 
 依 `DESIGN.md` 做受影響 viewport、theme、keyboard／touch 與 console QA。若使用者要求 deploy，review 後 commit 明確的 template／renderer source 與相依 shell outputs，再依 `runbooks/git-workflow.md` 整合並 push；這個 deploy scope 已經是 main integration 的授權，不要再問一次。
 
+簡中 URL prefix 是小寫 `/zh-cn`（2026-09 由 `/zh-CN` 改）。Windows 檔案系統不分大小寫，builder 寫 `zh-cn` 會落進既有的 `docs/zh-CN` 目錄、Git index 也保留舊大小寫，所以第一次 deploy 必須在同一個 commit 做 case-only rename：`git mv docs/zh-CN docs/zh-cn-tmp` 再 `git mv docs/zh-cn-tmp docs/zh-cn`，push 前用 `git ls-files docs | Select-String zh-CN` 確認為空。舊的 `/zh-CN/…` 連結由 `404.html` 轉到小寫，不要另建 `docs/zh-CN` redirect stub（Windows 上會和 `docs/zh-cn` 撞成同一個目錄）。
+
 Frontend lane 不得 stage `docs/api/tier-list.json`、champion shards、radar 或 axes。若 shell build 讓 data artifacts 出現實質 diff，停止並調查；不要擴大成 full data deploy 來掩蓋 scope drift。
 
 ## Lane 3 — generator or schema publish
@@ -81,6 +83,6 @@ Routine data：確認 live payload patch／timestamp／row count、主要 JSON 2
 
 Frontend shell：確認 live CSS／JS／HTML change、canonical／OG／analytics metadata、desktop/mobile 與 console；確認公開 payload version 與 data timestamp 沒有因 UI ship 改變。
 
-功能回饋頁屬於 frontend shell 的 static artifact，`docs/feedback`、`docs/en/feedback` 與 `docs/zh-CN/feedback` 必須和 footer link 一起 atomic publish。表單送出依賴 API 的 `POST /api/feedback`；若只發布 Pages 而 API task 尚未更新，頁面會保留 GitHub Issue fallback，不得宣稱私有回饋已成功收件。
+功能回饋頁屬於 frontend shell 的 static artifact，`docs/feedback`、`docs/en/feedback` 與 `docs/zh-cn/feedback` 必須和 footer link 一起 atomic publish。表單送出依賴 API 的 `POST /api/feedback`；若只發布 Pages 而 API task 尚未更新，頁面會保留 GitHub Issue fallback，不得宣稱私有回饋已成功收件。
 
 Pages／CDN 可能短暫延遲，但這是 artifact propagation，不是 website restart。回報時明示本輪是「data publish」或「frontend shell publish」，並說明哪些資料有／沒有重算。

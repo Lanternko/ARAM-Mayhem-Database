@@ -40,7 +40,7 @@
                 }));
                 localStorage.setItem('aram-mayhem-site-lang', lang);
             } catch {}
-            location.assign((lang === 'zh' ? '' : '/' + lang) + '/feedback/');
+            location.assign((lang === 'zh' ? '' : '/' + lang.toLowerCase()) + '/feedback/');
         });
     });
     document.addEventListener('keydown', event => {

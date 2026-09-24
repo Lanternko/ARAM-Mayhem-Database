@@ -2,7 +2,7 @@
 
 **League of Legends ARAM 大亂鬥（Mayhem）資料工具**
 
-[開啟 arammeta](https://arammeta.com/) · [English](https://arammeta.com/en/) · [簡體中文](https://arammeta.com/zh-CN/)
+[開啟 arammeta](https://arammeta.com/) · [English](https://arammeta.com/en/) · [簡體中文](https://arammeta.com/zh-cn/)
 
 arammeta 將實際對局整理成英雄、增幅與陣容資料，協助玩家比較選項。網站顯示的是特定版本與樣本範圍內的歷史統計，不是單場勝負保證。
 

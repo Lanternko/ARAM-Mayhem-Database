@@ -702,12 +702,12 @@ def _site_header_html() -> str:
         "</summary>"
         "<div class='mode-options' role='menu'>"
         "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
-        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-CN' "
+        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' "
         "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
         "data-i18n-en='Mayhem'>大亂鬥</a>"
         "<a class='mode-option' role='menuitem' href='/classic.html' "
         "data-mode-target='classic' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-CN/classic.html' data-href-en='/en/classic.html' "
+        "data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' "
         "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
         "data-i18n-en='Classic'>經典模式</a>"
         "</div></details>"
@@ -746,7 +746,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
     esc = html.escape
     locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
     suffix = {"zh": "zh", "zh-CN": "zh-cn", "en": "en"}[locale]
-    prefix = "" if locale == "zh" else "/" + locale
+    prefix = "" if locale == "zh" else "/" + locale.lower()
     header = _site_header_html()
 
     def nav_link(match: re.Match) -> str:
@@ -891,7 +891,7 @@ _FEEDBACK_COPY = {
     },
     "zh-CN": {
         "html_lang": "zh-Hans",
-        "prefix": "/zh-CN",
+        "prefix": "/zh-cn",
         "title": "反馈与联系",
         "description": "功能建议、问题反馈或站务联系，都可以在这里留言。",
         "message": "想告诉我们什么？",
@@ -945,7 +945,7 @@ def _feedback_head_links(*, site_url: str) -> str:
     origin = base.rstrip("/")
     routes = (
         ("zh-Hant", "/feedback/"),
-        ("zh-Hans", "/zh-CN/feedback/"),
+        ("zh-Hans", "/zh-cn/feedback/"),
         ("en", "/en/feedback/"),
     )
     links = []
@@ -986,7 +986,7 @@ def _feedback_body_html(
         ensure_ascii=False,
     ).replace("</", "<\\/")
     return f"""
-<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc('zh-CN' if copy['prefix'] == '/zh-CN' else copy['html_lang'], quote=True)}">
+<form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc('zh-CN' if copy['prefix'] == '/zh-cn' else copy['html_lang'], quote=True)}">
 <label class="feedback-field"><span class="feedback-label">{esc(copy['message'])}</span>
 <span class="feedback-help" id="feedback-message-help">{esc(copy['message_help'])}</span>
 <textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
@@ -1257,12 +1257,12 @@ SPA_FULL_SHELL_PATHS = frozenset({
     "/en/draft",
     "/en/game",
     "/en/changes",
-    "/zh-CN",
-    "/zh-CN/augments",
-    "/zh-CN/augments/pools",
-    "/zh-CN/draft",
-    "/zh-CN/game",
-    "/zh-CN/changes",
+    "/zh-cn",
+    "/zh-cn/augments",
+    "/zh-cn/augments/pools",
+    "/zh-cn/draft",
+    "/zh-cn/game",
+    "/zh-cn/changes",
 })
 
 # Cap shipped per-champion detail rows.  UI carousels only show a handful;
@@ -1891,7 +1891,7 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
-    if path in {"/augments/pools/", "/en/augments/pools/", "/zh-CN/augments/pools/"}:
+    if path in {"/augments/pools/", "/en/augments/pools/", "/zh-cn/augments/pools/"}:
         # Pools describe draw rules, so the home page's top champion is misleading.
         # Reuse the published brand asset and discard inherited image metadata.
         out = re.sub(
@@ -1933,14 +1933,14 @@ def _inject_locale_alternates(
         path += "/"
     if path == "/en/" or path.startswith("/en/"):
         suffix = path[len("/en") :]
-    elif path == "/zh-CN/" or path.startswith("/zh-CN/"):
-        suffix = path[len("/zh-CN") :]
+    elif path == "/zh-cn/" or path.startswith("/zh-cn/"):
+        suffix = path[len("/zh-cn") :]
     else:
         suffix = path
 
     locale_paths = (
         ("zh-Hant", suffix),
-        ("zh-Hans", "/zh-CN" + suffix),
+        ("zh-Hans", "/zh-cn" + suffix),
         ("en", "/en" + suffix),
         ("x-default", suffix),
     )
@@ -1982,7 +1982,7 @@ def _spa_deep_link_stub(
     lang = html_lang if html_lang else "zh-Hant"
     if path == "/en" or path.startswith("/en/"):
         spa_lang = "en"
-    elif path == "/zh-CN" or path.startswith("/zh-CN/"):
+    elif path == "/zh-cn" or path.startswith("/zh-cn/"):
         spa_lang = "zh-CN"
     else:
         spa_lang = "zh"
@@ -1999,6 +1999,23 @@ def _spa_deep_link_stub(
         og_bits.append(f"<meta property='og:image' content='{esc(og_img, quote=True)}'>")
         og_bits.append(f"<meta name='twitter:image' content='{esc(og_img, quote=True)}'>")
     robots = "<meta name='robots' content='noindex'>" if path == "/" else ""
+    bounce = (
+        "try{"
+        "sessionStorage.setItem('aram-spa-path',"
+        "location.pathname+location.search+location.hash);"
+        f"sessionStorage.setItem('aram-spa-lang','{spa_lang}');"
+        "}catch(e){}"
+        "location.replace('/');"
+    )
+    if path == "/":
+        # 404 shell: Pages paths are case-sensitive, so /zh-CN/… (the pre-2026-09
+        # prefix) and any other casing only land here; send them to /zh-cn/….
+        bounce = (
+            "var lp=location.pathname;"
+            "if(/^\\/zh-cn(\\/|$)/i.test(lp)&&lp.slice(0,6)!=='/zh-cn'){"
+            "location.replace('/zh-cn'+lp.slice(6)+location.search+location.hash);"
+            "}else{" + bounce + "}"
+        )
     return (
         f"<!doctype html><html lang='{esc(lang, quote=True)}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -2007,13 +2024,8 @@ def _spa_deep_link_stub(
         + f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         + "".join(og_bits)
         + "<script>"
-        "try{"
-        "sessionStorage.setItem('aram-spa-path',"
-        "location.pathname+location.search+location.hash);"
-        f"sessionStorage.setItem('aram-spa-lang','{spa_lang}');"
-        "}catch(e){}"
-        "location.replace('/');"
-        "</script>"
+        + bounce
+        + "</script>"
         f"<meta http-equiv='refresh' content='0;url=/'>"
         f"<noscript><a href='/'>arammeta</a></noscript>"
         "</head><body></body></html>\n"
@@ -2095,8 +2107,8 @@ def _champion_route_specs(root: Path, routes) -> list[tuple[Path, str, str, str,
             "en",
         ))
         specs.append((
-            root / "zh-CN" / "champions" / slug / "index.html",
-            f"/zh-CN/champions/{slug}/",
+            root / "zh-cn" / "champions" / slug / "index.html",
+            f"/zh-cn/champions/{slug}/",
             f"{cn} 海克斯与出装 · arammeta",
             f"{cn}（{en}）大乱斗海克斯排行、出装与召唤师技能",
             "zh-Hans",
@@ -2209,38 +2221,38 @@ def write_spa_path_shells(
             "en",
         ),
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
-        (root / "zh-CN" / "index.html", "/zh-CN", "arammeta", "大乱斗强度榜", "zh-Hans"),
+        (root / "zh-cn" / "index.html", "/zh-cn", "arammeta", "大乱斗强度榜", "zh-Hans"),
         (
-            root / "zh-CN" / "augments" / "index.html",
-            "/zh-CN/augments",
+            root / "zh-cn" / "augments" / "index.html",
+            "/zh-cn/augments",
             "海克斯 · arammeta",
             "大乱斗海克斯胜率",
             "zh-Hans",
         ),
         (
-            root / "zh-CN" / "augments" / "pools" / "index.html",
-            "/zh-CN/augments/pools",
+            root / "zh-cn" / "augments" / "pools" / "index.html",
+            "/zh-cn/augments/pools",
             "海克斯池 · arammeta",
             "每位英雄从哪些海克斯池抽卡，以及各池权重",
             "zh-Hans",
         ),
         (
-            root / "zh-CN" / "draft" / "index.html",
-            "/zh-CN/draft",
+            root / "zh-cn" / "draft" / "index.html",
+            "/zh-cn/draft",
             "Draft · arammeta",
             "组队 Draft：估计胜率与队伍特性",
             "zh-Hans",
         ),
         (
-            root / "zh-CN" / "game" / "index.html",
-            "/zh-CN/game",
+            root / "zh-cn" / "game" / "index.html",
+            "/zh-cn/game",
             "Meta Pick · arammeta",
             "挑选最佳阵容：小游戏",
             "zh-Hans",
         ),
         (
-            root / "zh-CN" / "changes" / "index.html",
-            "/zh-CN/changes",
+            root / "zh-cn" / "changes" / "index.html",
+            "/zh-cn/changes",
             "版本变动 · arammeta",
             "版本胜率变动",
             "zh-Hans",
@@ -3746,7 +3758,7 @@ def render_html(
         "data-i18n-en='About'>關於</a>"
         "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
         "data-i18n-en='Privacy'>隱私權</a>"
-        "<a href='/feedback/' data-href-zh='/feedback/' data-href-zh-cn='/zh-CN/feedback/' data-href-en='/en/feedback/' data-i18n-zh='回饋與聯絡' data-i18n-zh-cn='反馈与联系' "
+        "<a href='/feedback/' data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' data-href-en='/en/feedback/' data-i18n-zh='回饋與聯絡' data-i18n-zh-cn='反馈与联系' "
         "data-i18n-en='Feedback & contact'>回饋與聯絡</a>"
         "</nav>"
     )

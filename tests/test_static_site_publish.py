@@ -161,7 +161,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/draft",
                 "docs/game",
                 "docs/en",
-                "docs/zh-CN",
+                "docs/zh-cn",
                 "docs/p/player-history",
                 "docs/og-image.png",
                 "docs/about",
@@ -169,7 +169,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/contact",
                 "docs/feedback",
                 "docs/en/feedback",
-                "docs/zh-CN/feedback",
+                "docs/zh-cn/feedback",
                 "docs/champion-roles.json",
             ],
         )
@@ -231,7 +231,7 @@ class StaticSitePublishTests(unittest.TestCase):
 
         self.assertEqual(result["reason"], "dry run")
         self.assertEqual(result["classic"]["built"], False)
-        pages = ["docs/classic.html", "docs/zh-CN/classic.html", "docs/en/classic.html"]
+        pages = ["docs/classic.html", "docs/zh-cn/classic.html", "docs/en/classic.html"]
         self.assertIn(
             ["git", "checkout", "HEAD", "--", *(str(Path(page)) for page in pages)],
             commands,

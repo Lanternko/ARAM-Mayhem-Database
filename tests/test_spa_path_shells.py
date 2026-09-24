@@ -108,7 +108,7 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertTrue(any(p.name == "404.html" for p in written))
             self.assertFalse((root / "column").exists())
             self.assertFalse((root / "en" / "column").exists())
-            self.assertFalse((root / "zh-CN" / "column").exists())
+            self.assertFalse((root / "zh-cn" / "column").exists())
             body_404 = (root / "404.html").read_text(encoding="utf-8")
             self.assertIn("name='robots' content='noindex'", body_404)
             self.assertIn("aram-spa-path", body_404)
@@ -122,18 +122,18 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("lang='en'", en_body)
             self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
             self.assertIn(
-                "hreflang='zh-Hans' href='https://arammeta.com/zh-CN/'",
+                "hreflang='zh-Hans' href='https://arammeta.com/zh-cn/'",
                 en_body,
             )
             self.assertIn(
                 "hreflang='x-default' href='https://arammeta.com/'",
                 en_body,
             )
-            zh_cn = root / "zh-CN" / "index.html"
+            zh_cn = root / "zh-cn" / "index.html"
             zh_cn_body = zh_cn.read_text(encoding="utf-8")
             self.assertIn("FULL_SPA_SHELL", zh_cn_body)
             self.assertIn(
-                "rel='canonical' href='https://arammeta.com/zh-CN/'",
+                "rel='canonical' href='https://arammeta.com/zh-cn/'",
                 zh_cn_body,
             )
             root_body = index.read_text(encoding="utf-8")
@@ -141,16 +141,16 @@ class SpaPathShellTests(unittest.TestCase):
                 "hreflang='en' href='https://arammeta.com/en/'",
                 root_body,
             )
-            self.assertIn("/zh-CN", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/zh-cn", SPA_FULL_SHELL_PATHS)
             self.assertIn("/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/game", SPA_FULL_SHELL_PATHS)
-            self.assertIn("/zh-CN/game", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/zh-cn/game", SPA_FULL_SHELL_PATHS)
             self.assertIn("/augments/pools", SPA_FULL_SHELL_PATHS)
             self.assertIn("/en/augments/pools", SPA_FULL_SHELL_PATHS)
-            self.assertIn("/zh-CN/augments/pools", SPA_FULL_SHELL_PATHS)
+            self.assertIn("/zh-cn/augments/pools", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/column", SPA_FULL_SHELL_PATHS)
             self.assertNotIn("/en/column", SPA_FULL_SHELL_PATHS)
-            self.assertNotIn("/zh-CN/column", SPA_FULL_SHELL_PATHS)
+            self.assertNotIn("/zh-cn/column", SPA_FULL_SHELL_PATHS)
             pools = root / "augments" / "pools" / "index.html"
             self.assertTrue(pools.is_file())
             pools_body = pools.read_text(encoding="utf-8")
@@ -170,7 +170,7 @@ class SpaPathShellTests(unittest.TestCase):
                 en_pools,
             )
             zh_cn_pools = (
-                root / "zh-CN" / "augments" / "pools" / "index.html"
+                root / "zh-cn" / "augments" / "pools" / "index.html"
             ).read_text(encoding="utf-8")
             self.assertIn("<title>海克斯池 · arammeta</title>", zh_cn_pools)
             for pool_html in (pools_body, en_pools, zh_cn_pools):
@@ -214,7 +214,7 @@ class SpaPathShellTests(unittest.TestCase):
             )
             zh = (root / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
             en = (root / "en" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
-            cn = (root / "zh-CN" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
+            cn = (root / "zh-cn" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
             # Bounce stubs, not ~0.5MB full shells (repo growth per publish).
             for body in (zh, en, cn):
                 self.assertNotIn("FULL_SPA_SHELL", body)
@@ -226,6 +226,23 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("Jinx augments &amp; build", en)
             self.assertIn("'aram-spa-lang','zh-CN'", cn)
             self.assertIn("金克丝", cn)
+
+    def test_404_redirects_legacy_zh_cn_casing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            index = root / "index.html"
+            index.write_text(
+                "<!doctype html><html lang='zh-Hant'><head><title>app</title></head>"
+                "<body></body></html>",
+                encoding="utf-8",
+            )
+            write_spa_path_shells(index, site_url="https://arammeta.com/")
+            not_found = (root / "404.html").read_text(encoding="utf-8")
+            self.assertIn(r"/^\/zh-cn(\/|$)/i.test(lp)", not_found)
+            self.assertIn("location.replace('/zh-cn'+lp.slice(6)", not_found)
+            # Only the 404 shell carries it; real stubs are reached case-exactly.
+            home_cn = (root / "zh-cn" / "index.html").read_text(encoding="utf-8")
+            self.assertNotIn("lp.slice(6)", home_cn)
 
     def test_spa_navigation_emits_only_trailing_slash_directory_routes(self) -> None:
         source = (SCRIPTS / "templates" / "site.js").read_text(encoding="utf-8")
@@ -267,13 +284,13 @@ class SpaPathShellTests(unittest.TestCase):
             contact = (root / "contact" / "index.html").read_text(encoding="utf-8")
             self.assertIn("content='0;url=/feedback/'", contact)
             self.assertNotIn('data-feedback-form', contact)
-            for route, lang, prefix in (("feedback", "zh-Hant", ""), ("en/feedback", "en", "/en"), ("zh-CN/feedback", "zh-Hans", "/zh-CN")):
+            for route, lang, prefix in (("feedback", "zh-Hant", ""), ("en/feedback", "en", "/en"), ("zh-cn/feedback", "zh-Hans", "/zh-cn")):
                 page = (root / route / "index.html").read_text(encoding="utf-8")
                 self.assertIn(f"lang='{lang}'", page)
                 self.assertIn(f"href='{prefix}/draft/'", page)
                 self.assertIn(f"href='{prefix}/augments/'", page)
                 self.assertNotIn("aria-controls='view-", page)
-            cn = (root / "zh-CN/feedback/index.html").read_text(encoding="utf-8")
+            cn = (root / "zh-cn/feedback/index.html").read_text(encoding="utf-8")
             self.assertIn('data-locale="zh-CN"', cn)
 
             self.assertIn("hreflang='en'", feedback)
@@ -282,10 +299,10 @@ class SpaPathShellTests(unittest.TestCase):
                 "Feedback &amp; contact",
                 (root / "en" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
-            self.assertTrue((root / "zh-CN" / "feedback" / "index.html").is_file())
+            self.assertTrue((root / "zh-cn" / "feedback" / "index.html").is_file())
             self.assertIn(
                 "反馈与联系",
-                (root / "zh-CN" / "feedback" / "index.html").read_text(encoding="utf-8"),
+                (root / "zh-cn" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
             self.assertEqual(
                 (root / "ads.txt").read_text(encoding="utf-8"),

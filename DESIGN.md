@@ -260,7 +260,7 @@ Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與
 ### Display modes
 
 - **Theme:** Dark 是預設，Light 透過相同 semantic token 切換。Theme flip 在一個 tick 內停用 transition，避免中途顏色殘留。
-- **Locale:** 繁中使用根路由，英文使用 `/en`，簡中使用 `/zh-CN`。五個主要 view、submode、搜尋索引與 accessible name 一起翻譯。
+- **Locale:** 繁中使用根路由，英文使用 `/en`，簡中使用 `/zh-cn`。五個主要 view、submode、搜尋索引與 accessible name 一起翻譯。
 - **Viewport:** Desktop 使用固定 header 與 1320px rail；Mobile 使用兩列 header、可橫捲 nav、單欄或重排 detail。行動版重排資訊，不能只縮小桌面版。
 - **Content density:** 榜單先顯示 summary grid，英雄 detail、次要證據與大型資料按需開啟。Wide view 可使用 side detail，narrow view 改用單欄 detail flow。
 - **Motion:** Full motion 只用於狀態連續性；Reduced motion 停用 prism、shine、skeleton sweep 與非必要 view transition。

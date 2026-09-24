@@ -108,8 +108,8 @@ CLASSIC_LOCALES = {
         "title_key": "title_zh",
     },
     "zh-Hans": {
-        "path": "docs/zh-CN/classic.html",
-        "url": "https://arammeta.com/zh-CN/classic.html",
+        "path": "docs/zh-cn/classic.html",
+        "url": "https://arammeta.com/zh-cn/classic.html",
         "og_locale": "zh_CN",
         "number_locale": "zh-CN",
         "name_key": "name_zh_cn",
@@ -1809,7 +1809,7 @@ CLASSIC_COPY = {
     "zh-Hans": {
         "title": "经典模式英雄胜率、出装与搭档数据 · classicmeta",
         "description": "经典模式 60 位英雄的胜率、Tier、常见分路、装备、搭档与棘手对手数据。",
-        "main_href": "/zh-CN/",
+        "main_href": "/zh-cn/",
     },
     "en": {
         "title": "Classic Mode champion win rates, builds and synergies · classicmeta",
@@ -2373,7 +2373,7 @@ def main(
     out_path = Path(out)
     locale_paths = {
         "zh-Hant": out_path,
-        "zh-Hans": out_path.parent / "zh-CN" / out_path.name,
+        "zh-Hans": out_path.parent / "zh-cn" / out_path.name,
         "en": out_path.parent / "en" / out_path.name,
     }
     for locale, locale_path in locale_paths.items():
