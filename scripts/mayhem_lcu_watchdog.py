@@ -26,6 +26,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from aram_nn.memory_forensics import MemoryPressureRecorder  # noqa: E402
 from aram_nn.resource_guard import (  # noqa: E402
     ResourceGuard,
     ResourceGuardConfig,
@@ -278,6 +279,14 @@ def resource_guard_for_args(args: argparse.Namespace) -> ResourceGuard:
         guard = ResourceGuard(config)
         setattr(args, "_resource_guard", guard)
     return guard
+
+
+def memory_pressure_recorder_for_args(args: argparse.Namespace) -> MemoryPressureRecorder:
+    recorder = getattr(args, "_memory_pressure_recorder", None)
+    if not isinstance(recorder, MemoryPressureRecorder):
+        recorder = MemoryPressureRecorder(Path(args.state_file).parent / "stall_forensics")
+        setattr(args, "_memory_pressure_recorder", recorder)
+    return recorder
 
 
 # Hysteresis latch for the disk guard; survives across check_once ticks.
@@ -1135,6 +1144,14 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         actions.append(
             {"action": "pause_workers_disk_full", "reason": resource_decision.reason, "disk": disk}
         )
+    try:
+        snapshot = memory_pressure_recorder_for_args(args).maybe_capture(
+            resource_decision.as_dict(), resource_sample.as_dict()
+        )
+    except Exception as exc:  # forensics must never break the watchdog loop
+        snapshot = {"action": "memory_pressure_snapshot", "error": f"{type(exc).__name__}: {exc}"}
+    if snapshot:
+        actions.append(snapshot)
     publisher_action = ensure_static_site_publisher(args)
     if publisher_action:
         actions.append(publisher_action)
