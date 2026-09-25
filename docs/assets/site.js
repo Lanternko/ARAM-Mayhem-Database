@@ -110,7 +110,7 @@
         }
         return await response.json();
     }
-    const DATA = await loadSitePayload("api/tier-list.json?v=20260926-1790353782");
+    const DATA = await loadSitePayload("api/tier-list.json?v=20260926-1790365280");
     const CHAMP_DETAIL_FIELDS = [
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
@@ -756,7 +756,7 @@
     const DATE_STR_ZH = "更新於 2026-09-26";
     const BUILD_DATE = "2026-09-26";
     const PATCH_LABEL = "patch 26.19";
-    const TOTAL_GAMES = "84,433";
+    const TOTAL_GAMES = "93,033";
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     const SEARCH_SCOPE_KEY = 'aram-mayhem-site-search-scope';
