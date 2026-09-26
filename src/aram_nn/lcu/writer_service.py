@@ -363,6 +363,7 @@ class WriterService:
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_RANK_INDEX_SQL)
             self.con.execute(sb._CREATE_GENERAL_CLAIM_INDEX_SQL)
+            self.con.execute(sb._CREATE_CLASSIC_FRESH_INDEX_SQL)
             # Same one-shot flags as snowball._ensure_schema.  Without these, a
             # DB that first meets the new columns here keeps classic_lambda=0
             # and the score arm silently uses the discovery prior for everyone.
@@ -1354,12 +1355,9 @@ class WriterService:
         row = None
         lane = "general"
         if sb._classic_claim_slot(claim_number, classic_percent):
-            arm = sb._classic_lane_arm_for_slot(claim_number, classic_percent)
-            row = self.con.execute(
-                sb._CLASSIC_LANE_SQL[arm], sb._classic_lane_params(now, arm)
-            ).fetchone()
-            if row is not None:
-                lane = f"classic_{arm}"
+            row, lane = sb._claim_classic_slot_row(
+                self.con, claim_number, classic_percent, now
+            )
         take_unvisited = (claim_number % sb._UNVISITED_CLAIM_PERIOD) == 0
         if row is None and take_unvisited:
             row = self.con.execute(

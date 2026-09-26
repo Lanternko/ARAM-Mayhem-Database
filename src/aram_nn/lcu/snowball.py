@@ -193,6 +193,19 @@ ON crawl_queue(discovered_match_created_ms DESC, priority ASC, depth ASC,
 WHERE status = 'pending' AND classic_affinity_rank = 0;
 """
 
+# The fresh half of the Classic lane: rank>0 players (almost all discovered in a
+# Classic game) who have never been visited.  First visits of Classic co-players
+# returned 11-29 Classic games per 100 visits against 0 for dormant revisits, but
+# the rank-first ordering let the rank>=2 revisit backlog take every slot, so from
+# 2026-09-24 to 09-26 the lane made zero first visits while 8,683 waited.  Ordered
+# by discovery recency (someone seen in a Classic game yesterday is likelier still
+# playing); without this index that ORDER BY was a 0.65s TEMP B-TREE per claim.
+_CREATE_CLASSIC_FRESH_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_classic_fresh
+ON crawl_queue(discovered_match_created_ms DESC, queue_idx ASC)
+WHERE status = 'pending' AND classic_affinity_rank > 0;
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -294,6 +307,9 @@ _CLASSIC_QUEUE_ID = 4310
 _CLASSIC_DEFAULT_CLAIM_PERCENT = 10
 _CLASSIC_DEFAULT_REVISIT_MIN_MS = 10 * 3600_000
 _CLASSIC_DEFAULT_REVISIT_MAX_MS = 7 * 24 * 3600_000
+# Dormant players (no Classic in their window) produced 0 Classic games over 917
+# lane visits after 2026-09-24; they stay addressable but wait two weeks.
+_CLASSIC_DORMANT_REVISIT_MS = 14 * 24 * 3600_000
 _CLASSIC_HISTORY_TARGET_GAMES = 20.0
 _CLASSIC_HISTORY_FILL_FRACTION = 0.8
 
@@ -1127,6 +1143,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_RANK_INDEX_SQL)
     con.execute(_CREATE_GENERAL_CLAIM_INDEX_SQL)
+    con.execute(_CREATE_CLASSIC_FRESH_INDEX_SQL)
 
     # Independent from the older backfill flag: production databases have
     # already set that flag, but still need their Classic discovery rows tagged.
@@ -1687,6 +1704,8 @@ def _classic_affinity_profile(
             fill_hours = _CLASSIC_HISTORY_TARGET_GAMES / all_game_rate_per_hour
             estimated_ms = int(fill_hours * _CLASSIC_HISTORY_FILL_FRACTION * 3600_000)
             interval_ms = min(max(estimated_ms, lower_ms), upper_ms)
+    if label == "dormant":
+        interval_ms = max(interval_ms, _CLASSIC_DORMANT_REVISIT_MS)
 
     return ClassicAffinityProfile(
         label=label,
@@ -2450,6 +2469,43 @@ _CLASSIC_LANE_SQL = {
 }
 
 
+_CLASSIC_FRESH_SQL = """
+    SELECT q.queue_idx, q.puuid, q.depth, q.source,
+           q.discovered_match_created_ms, q.seed_family, q.discovered_queue_id
+    FROM crawl_queue q INDEXED BY idx_crawl_queue_classic_fresh
+    WHERE q.status = 'pending'
+      AND q.classic_affinity_rank > 0
+      AND q.eligible_at_ms <= :now_ms
+      AND NOT EXISTS (
+            SELECT 1 FROM crawl_seen s
+            WHERE s.puuid = q.puuid AND s.process_count > 0)
+    ORDER BY q.discovered_match_created_ms DESC, q.queue_idx ASC
+    LIMIT 1
+"""
+
+
+def _classic_slot_is_fresh(claim_number: int, percent: int) -> bool:
+    """Give every other reserved Classic slot to never-visited players.
+
+    Counts slots, not claims, for the reason in _classic_lane_arm_for_slot.
+    """
+    normalized = min(100, max(0, int(percent)))
+    return (int(claim_number) * normalized // 100) % 2 == 1
+
+
+def _claim_classic_slot_row(con, claim_number: int, percent: int, now_ms: int):
+    """Return (row, lane) for a reserved Classic slot; either half falls back to
+    the other before the slot's capacity is returned to the general frontier."""
+    arm = _classic_lane_arm_for_slot(claim_number, percent)
+    due = (_CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm), f"classic_{arm}")
+    fresh = (_CLASSIC_FRESH_SQL, {"now_ms": int(now_ms)}, "classic_fresh")
+    order = (fresh, due) if _classic_slot_is_fresh(claim_number, percent) else (due, fresh)
+    for sql, params, lane in order:
+        row = con.execute(sql, params).fetchone()
+        if row is not None:
+            return row, lane
+    return None, "general"
+
 
 def _classic_lane_arm_for_slot(claim_number: int, percent: int) -> str:
     """Alternate the two lane orderings across reserved slots.
@@ -2527,12 +2583,9 @@ def _claim_next_player(
     # frontier.  Alternating slots between the two lane_arm orderings keeps the
     # A/B halves at equal claim budget; see lane_arm for what is being compared.
     if _classic_claim_slot(claim_number, classic_claim_percent):
-        arm = _classic_lane_arm_for_slot(claim_number, classic_claim_percent)
-        row = con.execute(
-            _CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm)
-        ).fetchone()
-        if row is not None:
-            claim_lane = f"classic_{arm}"
+        row, claim_lane = _claim_classic_slot_row(
+            con, claim_number, classic_claim_percent, now_ms
+        )
     # Reserve a share of claims for players never crawled before.
     #
     # Ordering by discovered_match_created_ms DESC means an active player jumps to
