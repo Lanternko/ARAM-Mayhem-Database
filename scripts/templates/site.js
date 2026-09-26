@@ -2987,7 +2987,7 @@
         const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
             const r = RARITIES.find(x => x.key === key);
             const on = key === champAugRarity;
-            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
+            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}"><span class="aug-tier-seg-text">${escHtml(copy.rarityLabels[key])}</span></button>`;
         }).join('');
         const sortBtn = (key, label, cls) => {
             const on = key === champAugSort;

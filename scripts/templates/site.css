@@ -9515,29 +9515,117 @@
         font-weight: 700;
         cursor: pointer;
     }
-    .aug-tier-seg-btn { --rar: var(--text); transition: background-color .15s, color .15s; }
-    .aug-tier-seg-btn::before {
-        content: "";
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        margin-right: 7px;
-        border-radius: 50%;
-        background: var(--rar);
-        vertical-align: 1px;
+    /* Rarity labels are lettered in their own metal. Idle tabs sit dimmed;
+       the active one becomes a plate of that material with the label
+       engraved. All three plates share one recipe (uneven light pools plus
+       fractal-noise grain, each rarity its own seed) and only the dials
+       escalate: silver quietest, gold warmer, prismatic brightest. */
+    .aug-tier-seg-btn {
+        --rar-ink: linear-gradient(180deg, var(--text), var(--text-muted));
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+        transition: background .25s, box-shadow .25s;
     }
-    .aug-tier-seg-btn.rarity-silver { --rar: #c9d1dc; }
-    .aug-tier-seg-btn.rarity-gold { --rar: #f0c14b; }
-    .aug-tier-seg-btn.rarity-prismatic { --rar: #d7a8ff; }
-    .aug-tier-seg-btn:hover { color: var(--text); }
+    .aug-tier-seg-btn.rarity-silver {
+        --rar-ink: linear-gradient(180deg, #ffffff 0%, #c3ccd8 45%, #8e99a8 100%);
+        --plate:
+            radial-gradient(45% 160% at 18% 20%, #d3dae3 0, transparent 70%),
+            radial-gradient(40% 150% at 62% 90%, #8f9aa8 0, transparent 70%),
+            radial-gradient(35% 140% at 90% 15%, #c6ced8 0, transparent 70%),
+            linear-gradient(90deg, #aab4c0, #a3adb9);
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='60' preserveAspectRatio='none'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.006 0.07' numOctaves='3' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.2 1.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        --grain-alpha: .30;
+        --sheen-at: 30% 10%;
+        --ring: .30;
+        --glow: 0 2px 8px -4px rgba(0, 0, 0, .55);
+        --engrave: #161b22;
+    }
+    .aug-tier-seg-btn.rarity-gold {
+        --rar-ink: linear-gradient(180deg, #fff1b8 0%, #f5c645 45%, #c08a1c 100%);
+        --plate:
+            radial-gradient(45% 160% at 15% 85%, #f7d06a 0, transparent 70%),
+            radial-gradient(40% 150% at 55% 10%, #d49a28 0, transparent 70%),
+            radial-gradient(35% 150% at 88% 80%, #f3c955 0, transparent 70%),
+            linear-gradient(90deg, #eab845, #e0aa36);
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='60' preserveAspectRatio='none'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.008 0.06' numOctaves='3' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.2 1.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        --grain-alpha: .40;
+        --sheen-at: 65% 0%;
+        --ring: .35;
+        --glow: 0 3px 14px -4px rgba(240, 193, 75, .7);
+        --engrave: #1a1408;
+    }
+    .aug-tier-seg-btn.rarity-prismatic {
+        --rar-ink: linear-gradient(100deg, #7fd8ff 0%, #c9a4ff 40%, #ff9ad5 70%, #ffd98a 100%);
+        --plate:
+            radial-gradient(38% 150% at 8% 30%, #8fe6ff 0, transparent 70%),
+            radial-gradient(34% 160% at 30% 95%, #a99bff 0, transparent 70%),
+            radial-gradient(34% 150% at 50% 0%, #e59cf0 0, transparent 70%),
+            radial-gradient(30% 150% at 70% 100%, #ffb8d2 0, transparent 70%),
+            radial-gradient(30% 150% at 86% 10%, #ffe29a 0, transparent 70%),
+            radial-gradient(30% 150% at 100% 85%, #a8f0c8 0, transparent 70%),
+            linear-gradient(90deg, #b9c6ff, #d7b6ff 50%, #c9d4ff);
+        --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='60' preserveAspectRatio='none'%3E%3Cfilter id='n' x='0' y='0' width='1' height='1'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.01 0.05' numOctaves='4' seed='27'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 -2.4 1.3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        --grain-alpha: .55;
+        --sheen-at: 40% 0%;
+        --ring: .45;
+        --glow: 0 3px 16px -4px rgba(190, 140, 255, .75), 0 0 22px -8px rgba(120, 220, 255, .6);
+        --engrave: #2a1245;
+    }
+    .aug-tier-seg-text {
+        background: var(--rar-ink);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        letter-spacing: .08em;
+        opacity: .62;
+        filter: saturate(.8);
+        transition: opacity .2s, filter .2s;
+    }
+    .aug-tier-seg-btn:hover .aug-tier-seg-text { opacity: .8; filter: none; }
     .aug-tier-seg-btn.is-active {
-        color: var(--rar);
-        background: color-mix(in oklab, var(--rar) 14%, transparent);
-        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rar) 40%, transparent);
+        background: var(--plate);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, .45),
+            inset 0 0 0 1px rgba(255, 255, 255, var(--ring)),
+            var(--glow);
     }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-silver { --rar: #5d6b7d; }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-gold { --rar: #a8740a; }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-prismatic { --rar: #8a3fd1; }
+    .aug-tier-seg-btn.is-active::before,
+    .aug-tier-seg-btn.is-active::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+    }
+    .aug-tier-seg-btn.is-active::before {
+        background: var(--grain) center / 100% 100% no-repeat;
+        opacity: var(--grain-alpha);
+        mix-blend-mode: overlay;
+    }
+    .aug-tier-seg-btn.is-active::after {
+        background: radial-gradient(60% 120% at var(--sheen-at), rgba(255, 255, 255, calc(var(--grain-alpha) * .9)), transparent 70%);
+        mix-blend-mode: soft-light;
+    }
+    .aug-tier-seg-btn.is-active .aug-tier-seg-text {
+        background: none;
+        color: var(--engrave);
+        opacity: .92;
+        filter: none;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+    }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-silver {
+        --rar-ink: linear-gradient(180deg, #7b8898 0%, #4c5868 100%);
+        --glow: 0 2px 6px -3px rgba(40, 50, 65, .45);
+    }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-gold {
+        --rar-ink: linear-gradient(180deg, #c99212 0%, #8a5a00 100%);
+        --glow: 0 3px 10px -4px rgba(168, 116, 10, .55);
+    }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-prismatic {
+        --rar-ink: linear-gradient(100deg, #1f8fc9 0%, #8a3fd1 50%, #cc3d8f 100%);
+        --glow: 0 3px 12px -4px rgba(138, 63, 209, .5);
+    }
 
     /* Podium: the three strongest augments as cards above the full list. */
     .aug-pick-cards {
