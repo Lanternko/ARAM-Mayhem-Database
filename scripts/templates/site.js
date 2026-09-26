@@ -2135,9 +2135,64 @@
         return out;
     }
 
+    // Source defects that no generic rule can place: a label whose separator was
+    // a stripped <br> (1308, 1331), a sentence boundary lost the same way (2103,
+    // 2140), a keyword left dangling after the period (1051), a dropped noun
+    // (2157).  Patterns match the raw text and both zh scripts.
+    const AUG_DESC_FIXES = {
+        1051: { zh: [[/。\s*(\{\{\s*item_keyword_onhit\s*\}\})\s*$/i, '（$1）。']] },
+        1308: { zh: [[/^(自動施放|自动施放)\s+/, '$1：']] },
+        1331: { zh: [[/(全神貫注|全神贯注)\s+/, '$1：']], en: [[/\bVigilance\s+Teleport/, 'Vigilance: Teleport']] },
+        2103: { zh: [[/(英雄)\s+(獎勵|奖励)/, '$1。$2']], en: [[/\babilities\s+REWARD/, 'abilities. REWARD']] },
+        2140: { zh: [[/(\[(?:數值|数值)\])\s+(獲得|获得)/, '$1。$2']], en: [[/(\[數值\])\s+Gain\b/, '$1. Gain']] },
+        2157: { en: [[/^Gain (\[數值\])\./, 'Gain $1 Gold.']] },
+    };
+    function augApplyDescFixes(text, aid) {
+        const fixes = aid != null && AUG_DESC_FIXES[aid];
+        const rules = fixes && fixes[currentLang === 'en' ? 'en' : 'zh'];
+        if (!rules) return text;
+        return rules.reduce((s, [re, rep]) => s.replace(re, rep), text);
+    }
+
+    // Typography the source gets inconsistently right, applied to every
+    // description so one augment never reads differently from its neighbour.
+    // zh: a stripped <br> leaves 「。 下一句」, parentheses are half-width in ten
+    // descriptions and full-width in the rest, Latin/digits sit flush against
+    // CJK while X was spaced (「獲得250金錢」 vs 「增加 X 暴擊率」), and a few
+    // descriptions stop without a 「。」.
+    // en: 「seconds .」, 「seconds. (X second Cooldown).」, missing final periods,
+    // and the Autocast keyword run straight into its sentence.
+    const HAN = '\\p{Script=Han}';
+    const ZH_FULLWIDTH_PUNCT = '。！？：；，、（）「」『』“”';
+    const ZH_PAREN_WITH_HAN = new RegExp(`\\(([^()]*${HAN}[^()]*)\\)`, 'gu');
+    const ZH_SPACE_AROUND_PUNCT = new RegExp(`\\s*([${ZH_FULLWIDTH_PUNCT}])\\s*`, 'gu');
+    const ZH_HAN_THEN_LATIN = new RegExp(`(${HAN})([A-Za-z0-9+])`, 'gu');
+    const ZH_LATIN_THEN_HAN = new RegExp(`([A-Za-z0-9%])(${HAN})`, 'gu');
+    const ZH_ENDS_IN_HAN = new RegExp(`${HAN}$`, 'u');
+    // 「……」——普羅牧人 / "…" — Poro Herder: a quote credit takes no period.
+    const AUG_ENDS_IN_ATTRIBUTION = /—[^—。.!?！？」"”]*$/u;
+    function augNormalizeZhDesc(text) {
+        let s = String(text || '').replace(/\s+/g, ' ').trim();
+        s = s.replace(ZH_PAREN_WITH_HAN, '（$1）');
+        s = s.replace(ZH_SPACE_AROUND_PUNCT, '$1');
+        s = s.replace(ZH_HAN_THEN_LATIN, '$1 $2').replace(ZH_LATIN_THEN_HAN, '$1 $2');
+        if (ZH_ENDS_IN_HAN.test(s) && !AUG_ENDS_IN_ATTRIBUTION.test(s)) s += '。';
+        return s;
+    }
+    function augNormalizeEnDesc(text) {
+        let s = String(text || '').replace(/\s+/g, ' ').trim();
+        s = s.replace(/\s+([.,;:!?])/g, '$1');
+        if (/[A-Za-z0-9)]$/.test(s) && !AUG_ENDS_IN_ATTRIBUTION.test(s)) s += '.';
+        s = s.replace(/\.\s*(\([^()]*\))\./g, ' $1.');
+        s = s.replace(/\bAutocast\s+(?=\S)(?!:)/g, 'Autocast: ');
+        return s;
+    }
+
     function augDesc(aug, aid) {
         if (!aug) return '';
-        return augFillNameTokens(augFillValueToken(augDescRaw(aug, aid)));
+        const id = aid != null ? String(aid) : (aug.id != null ? String(aug.id) : null);
+        const text = augFillNameTokens(augFillValueToken(augApplyDescFixes(augDescRaw(aug, aid), id)));
+        return currentLang === 'en' ? augNormalizeEnDesc(text) : augNormalizeZhDesc(text);
     }
 
     function augDescRaw(aug, aid) {
