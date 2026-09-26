@@ -2957,6 +2957,29 @@
     // Rarity + sort persist across champions so the next lookup opens the same way.
     let champAugRarity = 'kGold';
     let champAugSort = 'rank';
+    // Win-rate cell: WR, lift vs the champion's baseline, and a diverging
+    // lift bar (±CHAMP_AUG_LIFT_DOMAIN) whose whisker is the 95% sampling CI.
+    // A whisker that crosses zero marks the lift as indistinguishable from noise.
+    const CHAMP_AUG_LIFT_DOMAIN = 0.06;
+    function buildChampAugWrCell(e, noiseTip) {
+        const wr = Number(e.wr || 0);
+        const g = Number(e.g || 0);
+        const liftRaw = e.lift;
+        const hasLift = liftRaw != null && Number.isFinite(Number(liftRaw));
+        const lift = hasLift ? Number(liftRaw) : 0;
+        const half = g > 0 ? 1.96 * Math.sqrt(Math.max(wr * (1 - wr), 0) / g) : CHAMP_AUG_LIFT_DOMAIN;
+        const noisy = !hasLift || (lift - half <= 0 && lift + half >= 0);
+        const pos = v => (50 + 50 * Math.max(-1, Math.min(1, v / CHAMP_AUG_LIFT_DOMAIN))).toFixed(2);
+        const bar = hasLift ? `
+            <i class="aug-tier-delta${lift < 0 ? ' is-neg' : ''}" aria-hidden="true"
+               style="--l:${pos(lift)}%;--lo:${pos(lift - half)}%;--hi:${pos(lift + half)}%"></i>` : '';
+        return `
+            <span class="aug-tier-wr wr-${wrToneTier(e)}${noisy ? ' is-noisy' : ''}"${noisy ? ` title="${escHtml(noiseTip)}"` : ''}>
+                <b>${pct(wr)}</b>${hasLift ? `<small class="aug-tier-lift">${signed(lift).replace('%', 'pp')}</small>` : ''}
+                ${bar}
+            </span>`;
+    }
+
     function buildChampAugTable(top) {
         const copy = tr();
         const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
@@ -2968,25 +2991,41 @@
             const on = key === champAugSort;
             return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
         };
+        const noiseTip = pickLang(
+            '差距落在 95% 抽樣誤差內，還分不出和平常有沒有差',
+            'Within the 95% sampling noise: not distinguishable from baseline yet',
+        );
         const lists = RARITIES.map(r => {
-            const rows = (top[r.key] || []).map((e, idx) => {
+            const entries = top[r.key] || [];
+            // Pick bars share one scale per rarity so their lengths compare.
+            const maxPick = Math.max(0, ...entries.map(e => Number(e.pick || 0))) || 1;
+            const rows = entries.map((e, idx) => {
                 const aug = DATA.augs[e.id];
                 const name = aug ? augName(aug, e.id) : '#' + e.id;
                 const icon = aug && aug.icon ? aug.icon : '';
+                const desc = augDesc(aug, e.id);
+                const setName = augSetName(aug, e.id);
                 const pickRate = Number(e.pick || 0);
                 const games = pickLang(`${fmtInt(e.g)} 場`, `${fmtInt(e.g)} games`);
-                const ariaLabel = copy.augAria(name, pct(e.wr), signed(e.lift), e.g, augDesc(aug, e.id));
+                const ariaLabel = copy.augAria(name, pct(e.wr), signed(e.lift), e.g, desc);
                 return `
                     <li class="aug-tier-row has-item-tip" tabindex="0"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
+                        <span class="aug-tier-idx" aria-hidden="true"></span>
                         <span class="aug-tier-name">
                             ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<span class="aicon-ph"></span>'}
-                            <span>${escHtml(name)}</span>
+                            <span class="aug-tier-text">
+                                <span class="aug-tier-title">${escHtml(name)}${setName ? `<em class="aug-tier-set">${escHtml(setName)}</em>` : ''}</span>
+                                ${desc ? `<span class="aug-tier-desc">${escHtml(desc)}</span>` : ''}
+                            </span>
                         </span>
-                        <span class="aug-tier-pick"><b>${pct(pickRate)}</b><small>${escHtml(games)}</small></span>
-                        <span class="aug-tier-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
+                        <span class="aug-tier-pick">
+                            <b>${pct(pickRate)}</b><small>${escHtml(games)}</small>
+                            <i class="aug-tier-bar" style="--w:${(pickRate / maxPick).toFixed(4)}" aria-hidden="true"></i>
+                        </span>
+                        ${buildChampAugWrCell(e, noiseTip)}
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;
             }).join('');
@@ -2997,6 +3036,7 @@
             <div class="aug-tier-table">
                 <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
                 <div class="aug-tier-head">
+                    <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
                     ${sortBtn('rank', pickLang('增幅裝置', 'Augment'), 'col-name')}
                     ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
                     ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}

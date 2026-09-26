@@ -9537,14 +9537,17 @@
     }
     .aug-tier-sort.col-name { text-align: left; }
     .aug-tier-sort.is-active { color: var(--text); border-bottom-color: var(--accent); }
-    .aug-tier-list { list-style: none; margin: 0; padding: 0; }
+    .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier; }
     .aug-tier-row {
         min-height: 56px;
         border-bottom: 1px solid var(--border);
         cursor: default;
+        counter-increment: aug-tier;
     }
     .aug-tier-row:hover,
     .aug-tier-row:focus-visible { background: var(--surface); outline: none; }
+    .aug-tier-idx { display: none; }
+    .aug-tier-row .aug-tier-idx::before { content: counter(aug-tier); }
     .aug-tier-name {
         display: flex;
         align-items: center;
@@ -9554,11 +9557,16 @@
         font-size: 14px;
         font-weight: 600;
     }
-    .aug-tier-name > span:last-child {
+    .aug-tier-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .aug-tier-title {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+    .aug-tier-set,
+    .aug-tier-desc,
+    .aug-tier-bar,
+    .aug-tier-delta { display: none; }
     .aug-tier-name img,
     .aug-tier-name .aicon-ph {
         width: 36px;
@@ -9576,16 +9584,128 @@
     .aug-tier-pick b { font-size: 14px; }
     .aug-tier-pick small { font-size: 11px; color: var(--text-muted); }
     .aug-tier-wr {
-        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        line-height: 1.25;
         font-size: 14px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
+    .aug-tier-lift { font-size: 11px; font-weight: 600; opacity: .85; }
     .aug-tier-wr.wr-5 { color: var(--wr-5); }
     .aug-tier-wr.wr-4 { color: var(--wr-4); }
     .aug-tier-wr.wr-3 { color: var(--wr-3); }
     .aug-tier-wr.wr-2 { color: var(--wr-2); }
     .aug-tier-wr.wr-1 { color: var(--wr-1); }
+
+    /* PC: the row has room for what the numbers mean — description, a pick bar
+       on one scale per rarity, and the lift against the champion's baseline
+       with its 95% sampling whisker. */
+    @media (min-width: 900px) {
+        .aug-tier-head,
+        .aug-tier-row {
+            grid-template-columns: 36px minmax(0, 1fr) 150px 190px;
+            column-gap: 12px;
+        }
+        .aug-tier-head { padding: 0 12px; }
+        .aug-tier-row { min-height: 76px; padding: 8px 12px; }
+        .aug-tier-idx {
+            display: block;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+        .aug-tier-head .aug-tier-idx { font-size: 12px; }
+        .aug-tier-row:nth-child(-n + 3) .aug-tier-idx { color: var(--text); }
+        .aug-tier-name { gap: 14px; padding: 0; font-size: 15px; }
+        .aug-tier-name img,
+        .aug-tier-name .aicon-ph { width: 48px; height: 48px; }
+        .aug-tier-title { display: flex; align-items: baseline; gap: 8px; }
+        .aug-tier-set {
+            display: inline-block;
+            flex: 0 0 auto;
+            padding: 1px 7px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-style: normal;
+            font-weight: 600;
+        }
+        .aug-tier-desc {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            overflow: hidden;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 400;
+            line-height: 1.45;
+        }
+        .aug-tier-pick,
+        .aug-tier-wr {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: baseline;
+            column-gap: 8px;
+            row-gap: 6px;
+        }
+        .aug-tier-pick b,
+        .aug-tier-wr b { font-size: 15px; }
+        .aug-tier-pick small,
+        .aug-tier-lift { justify-self: end; font-size: 12px; }
+        .aug-tier-bar,
+        .aug-tier-delta {
+            display: block;
+            grid-column: 1 / -1;
+            position: relative;
+            height: 6px;
+            border-radius: 3px;
+            background: color-mix(in oklab, var(--text-muted) 16%, transparent);
+        }
+        .aug-tier-bar::after {
+            content: "";
+            position: absolute;
+            inset: 0 auto 0 0;
+            width: calc(var(--w) * 100%);
+            border-radius: inherit;
+            background: var(--text-muted);
+        }
+        /* Diverging bar: zero sits at the middle tick, the fill runs to the
+           lift, and the thin whisker spans the 95% CI. */
+        .aug-tier-delta::before {
+            content: "";
+            position: absolute;
+            top: -3px;
+            bottom: -3px;
+            left: 50%;
+            width: 1px;
+            background: var(--text-muted);
+        }
+        .aug-tier-delta::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: min(50%, var(--l));
+            right: calc(100% - max(50%, var(--l)));
+            border-radius: 3px;
+            background: currentColor;
+        }
+        .aug-tier-delta {
+            background:
+                linear-gradient(currentColor, currentColor)
+                    var(--lo) 50% / calc(var(--hi) - var(--lo)) 2px no-repeat,
+                color-mix(in oklab, var(--text-muted) 16%, transparent);
+        }
+        /* Significant lifts get a solid fill; lifts whose CI crosses zero keep
+           a lighter fill so the whisker, not the bar, carries the message. */
+        .aug-tier-wr:not(.is-noisy) .aug-tier-delta::after { box-shadow: 0 0 0 1px currentColor; }
+        .aug-tier-wr.is-noisy .aug-tier-delta::after { opacity: .7; }
+    }
     .detail-page .detail-head .cname {
         margin: 0;
         font-size: 22px;
