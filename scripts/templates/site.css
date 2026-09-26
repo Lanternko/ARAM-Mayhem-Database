@@ -9799,8 +9799,10 @@
         .aug-tier-pick b,
         .aug-tier-wr b { font-size: 15px; }
         .aug-tier-pick small { justify-self: end; font-size: 12px; }
-        .aug-tier-wr { flex-direction: row; justify-content: flex-end; gap: 10px; }
-        .aug-tier-wr .aug-verdict { margin-top: 0; min-width: 40px; justify-content: center; font-size: 11px; }
+        /* Fixed chip slot so the win rate lines up whether or not a row has a verdict. */
+        .aug-tier-wr { display: grid; grid-template-columns: auto 44px; justify-content: end; align-items: center; column-gap: 10px; }
+        .aug-tier-wr b { grid-column: 1; }
+        .aug-tier-wr .aug-verdict { grid-column: 2; margin-top: 0; justify-content: center; font-size: 11px; }
         .aug-tier-bar {
             display: block;
             grid-column: 1 / -1;
