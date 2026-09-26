@@ -633,7 +633,18 @@ ROLE_NEED_CREDITS = {
     "Support": 0.0,
 }
 
-MAYHEM_AUGMENT_SETS = {
+# OUTDATED — DO NOT ATTACH TO CURRENT DATA.
+# Mayhem augment sets existed only in patches 16.10–16.11. They were removed
+# in 16.12 and nothing replaced them. The source of truth is CDragon
+# `game/maps/modespecificdata/kiwi.bin.json`: 16.10/16.11 carry nine
+# `AugmentSet_*` entries, while 16.12 through 16.19 carry none.
+# `load_augment_metadata` reads CDragon `latest`, so attaching this table there
+# put ancient labels on live cards (e.g. "Upgrade: Collector" showed
+# 天降財雨 / 天降財雨). This table is kept only as a historical record of
+# 16.10–16.11. Before using any hardcoded mode data again, re-check kiwi.bin
+# for the patch being rendered.
+LEGACY_MAYHEM_AUGMENT_SETS_LAST_PATCH = "16.11"
+LEGACY_MAYHEM_AUGMENT_SETS = {
     "Archmage": [
         "Buff Buddies",
         "Juiced",
@@ -712,7 +723,8 @@ MAYHEM_AUGMENT_SETS = {
     ],
 }
 
-MAYHEM_AUGMENT_SET_LABELS = {
+# OUTDATED — see LEGACY_MAYHEM_AUGMENT_SETS (16.10–16.11 only).
+LEGACY_MAYHEM_AUGMENT_SET_LABELS = {
     "Archmage": {"zh": "大法師", "en": "Archmage"},
     "Dive Bomb": {"zh": "俯衝轟炸", "en": "Dive Bomb"},
     "Firecracker": {"zh": "爆竹", "en": "Firecracker"},
@@ -730,11 +742,15 @@ def _slugify_set_name(name: str) -> str:
 def _normalize_augment_name(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", name.lower())
 
-def _augment_set_lookup() -> dict[str, list[dict[str, str]]]:
+def _legacy_augment_set_lookup() -> dict[str, list[dict[str, str]]]:
+    """OUTDATED: 16.10–16.11 set membership keyed by normalized English name.
+
+    Not used for live metadata. Only use it when rendering a 16.10/16.11
+    snapshot."""
     lookup: dict[str, list[dict[str, str]]] = {}
-    for set_name, aug_names in MAYHEM_AUGMENT_SETS.items():
+    for set_name, aug_names in LEGACY_MAYHEM_AUGMENT_SETS.items():
         slug = _slugify_set_name(set_name)
-        labels = MAYHEM_AUGMENT_SET_LABELS.get(
+        labels = LEGACY_MAYHEM_AUGMENT_SET_LABELS.get(
             set_name,
             {"zh": set_name, "en": set_name},
         )
@@ -745,12 +761,14 @@ def _augment_set_lookup() -> dict[str, list[dict[str, str]]]:
                 "name_en": labels["en"],
                 "slug": slug,
             }
-            lookup.setdefault(_normalize_augment_name(aug_name), []).append(info)
+            keys = {_normalize_augment_name(aug_name)}
             if aug_name.startswith("Upgrade: "):
-                lookup.setdefault(
-                    _normalize_augment_name(aug_name.replace("Upgrade: ", "Upgrade ")),
-                    [],
-                ).append(info)
+                keys.add(_normalize_augment_name(aug_name.replace("Upgrade: ", "Upgrade ")))
+            # "Upgrade: X" and "Upgrade X" normalize to the same key; one entry per set.
+            for key in keys:
+                bucket = lookup.setdefault(key, [])
+                if all(existing["slug"] != slug for existing in bucket):
+                    bucket.append(info)
     return lookup
 
 def _queue_copy(queue_id: int) -> tuple[str, str]:
@@ -1102,7 +1120,6 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     rows = r.json()
 
     by_id: dict[int, dict] = {}
-    set_by_augment = _augment_set_lookup()
     name_overrides_applied: list[tuple[int, str, str]] = []
     colored_listing_cache: dict[str, set[str]] = {}
     for entry in rows:
@@ -1132,8 +1149,10 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             colored = _augment_colored_icon_url(icon_path, colored_listing_cache)
             if colored:
                 icon_url = colored
-        en_lookup_name = entry.get("nameTRA") or entry.get("name") or entry.get("simpleNameTRA") or ""
-        set_infos = set_by_augment.get(_normalize_augment_name(en_lookup_name), [])
+        # Mayhem augment sets were removed in 16.12 (see LEGACY_MAYHEM_AUGMENT_SETS).
+        # This loader reads CDragon `latest`, so no current augment belongs to a set.
+        # The keys stay empty so the payload shape does not change.
+        set_infos: list[dict[str, str]] = []
         by_id[aug_id] = {
             "name": name or f"#{aug_id}",
             "name_zh": name_zh or name or f"#{aug_id}",
@@ -2476,7 +2495,9 @@ _AUGMENT_TYPE_KEYWORDS: dict[str, tuple[str, ...]] = {
     ),
 }
 
-_SET_TO_AUGMENT_TYPES = {
+# OUTDATED — set slugs from LEGACY_MAYHEM_AUGMENT_SETS (16.10–16.11 only).
+# Live metadata carries no `sets`, so this only matters for legacy snapshots.
+_LEGACY_SET_TO_AUGMENT_TYPES = {
     "archmage": {"spell", "utility"},
     "dive-bomb": {"mobility", "damage"},
     "firecracker": {"damage", "attack", "crit"},
@@ -2522,7 +2543,7 @@ def augment_type_slugs(meta: dict | None) -> set[str]:
     ).lower()
     slugs: set[str] = set()
     for info in meta.get("sets") or []:
-        slugs.update(_SET_TO_AUGMENT_TYPES.get(str(info.get("slug") or ""), set()))
+        slugs.update(_LEGACY_SET_TO_AUGMENT_TYPES.get(str(info.get("slug") or ""), set()))
     for slug, keywords in _AUGMENT_TYPE_KEYWORDS.items():
         if any(keyword in text for keyword in keywords):
             slugs.add(slug)
