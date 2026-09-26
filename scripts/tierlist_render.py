@@ -3874,7 +3874,7 @@ def render_html(
         f"{search_icon}"
         "<input class='search' id='champ-page-search' type='search' autocomplete='off' "
         "spellcheck='false' role='combobox' aria-autocomplete='list' aria-expanded='false' "
-        "aria-controls='champ-page-results' placeholder='輸入英雄名稱，Enter 前往' "
+        "aria-controls='champ-page-results' placeholder='搜尋英雄' "
         "aria-label='搜尋英雄'>"
         "</label>"
         "<ul class='champ-page-results' id='champ-page-results' role='listbox' hidden></ul>"

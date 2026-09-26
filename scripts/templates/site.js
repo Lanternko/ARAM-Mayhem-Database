@@ -2957,30 +2957,32 @@
     // Rarity + sort persist across champions so the next lookup opens the same way.
     let champAugRarity = 'kGold';
     let champAugSort = 'rank';
-    // Win-rate cell: WR, lift vs the champion's baseline, and a diverging
-    // lift bar (±CHAMP_AUG_LIFT_DOMAIN) whose whisker is the 95% sampling CI.
-    // A whisker that crosses zero marks the lift as indistinguishable from noise.
-    const CHAMP_AUG_LIFT_DOMAIN = 0.06;
-    function buildChampAugWrCell(e, noiseTip) {
+    // Plain-language verdict per augment: 推薦 when the lift clears its 80%
+    // sampling interval above zero, 避開 when it clears it below, else no chip.
+    // Casual players read the word; the interval math stays out of sight.
+    function champAugVerdict(e) {
         const wr = Number(e.wr || 0);
         const g = Number(e.g || 0);
         const liftRaw = e.lift;
-        const hasLift = liftRaw != null && Number.isFinite(Number(liftRaw));
-        const lift = hasLift ? Number(liftRaw) : 0;
-        const half = g > 0 ? 1.96 * Math.sqrt(Math.max(wr * (1 - wr), 0) / g) : CHAMP_AUG_LIFT_DOMAIN;
-        const noisy = !hasLift || (lift - half <= 0 && lift + half >= 0);
-        const pos = v => (50 + 50 * Math.max(-1, Math.min(1, v / CHAMP_AUG_LIFT_DOMAIN))).toFixed(2);
-        const bar = hasLift ? `
-            <i class="aug-tier-delta${lift < 0 ? ' is-neg' : ''}" aria-hidden="true"
-               style="--l:${pos(lift)}%;--lo:${pos(lift - half)}%;--hi:${pos(lift + half)}%"></i>` : '';
-        return `
-            <span class="aug-tier-wr wr-${wrToneTier(e)}${noisy ? ' is-noisy' : ''}"${noisy ? ` title="${escHtml(noiseTip)}"` : ''}>
-                <b>${pct(wr)}</b>${hasLift ? `<small class="aug-tier-lift">${signed(lift).replace('%', 'pp')}</small>` : ''}
-                ${bar}
-            </span>`;
+        if (liftRaw == null || !Number.isFinite(Number(liftRaw)) || g <= 0) return 'mid';
+        const lift = Number(liftRaw);
+        const half = 1.28 * Math.sqrt(Math.max(wr * (1 - wr), 0) / g);
+        if (lift - half > 0) return 'good';
+        if (lift + half < 0) return 'bad';
+        return 'mid';
+    }
+    const CHAMP_AUG_VERDICT_WORDS = {
+        good: ['推薦', 'Strong'],
+        mid: ['普通', 'Fine'],
+        bad: ['避開', 'Avoid'],
+    };
+    function champAugBadge(verdict) {
+        if (verdict !== 'good' && verdict !== 'bad') return '';
+        const words = CHAMP_AUG_VERDICT_WORDS[verdict] || CHAMP_AUG_VERDICT_WORDS.mid;
+        return `<span class="aug-verdict is-${verdict}">${escHtml(pickLang(words[0], words[1]))}</span>`;
     }
 
-    function buildChampAugTable(top) {
+    function buildChampAugTable(top, extraHtml = '') {
         const copy = tr();
         const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
             const r = RARITIES.find(x => x.key === key);
@@ -2991,59 +2993,89 @@
             const on = key === champAugSort;
             return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
         };
-        const noiseTip = pickLang(
-            '差距落在 95% 抽樣誤差內，還分不出和平常有沒有差',
-            'Within the 95% sampling noise: not distinguishable from baseline yet',
-        );
-        const lists = RARITIES.map(r => {
+        const games = (g) => pickLang(`${fmtInt(g)} 場`, `${fmtInt(g)} games`);
+        const augView = (e) => {
+            const aug = DATA.augs[e.id];
+            return {
+                name: aug ? augName(aug, e.id) : '#' + e.id,
+                icon: aug && aug.icon ? aug.icon : '',
+                desc: augDesc(aug, e.id),
+                setName: augSetName(aug, e.id),
+            };
+        };
+        const iconHtml = (v) => (v.icon ? `<img loading="lazy" src="${v.icon}" alt="">` : '<span class="aicon-ph"></span>');
+        // Each rarity pane repeats the sort header so it sits right above its list.
+        const head = `
+            <div class="aug-tier-head">
+                <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
+                ${sortBtn('rank', pickLang('推薦順序', 'Recommended'), 'col-name')}
+                ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
+                ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+            </div>`;
+        const panes = RARITIES.map(r => {
             const entries = top[r.key] || [];
             // Pick bars share one scale per rarity so their lengths compare.
             const maxPick = Math.max(0, ...entries.map(e => Number(e.pick || 0))) || 1;
-            const rows = entries.map((e, idx) => {
-                const aug = DATA.augs[e.id];
-                const name = aug ? augName(aug, e.id) : '#' + e.id;
-                const icon = aug && aug.icon ? aug.icon : '';
-                const desc = augDesc(aug, e.id);
-                const setName = augSetName(aug, e.id);
-                const pickRate = Number(e.pick || 0);
-                const games = pickLang(`${fmtInt(e.g)} 場`, `${fmtInt(e.g)} games`);
-                const ariaLabel = copy.augAria(name, pct(e.wr), signed(e.lift), e.g, desc);
+            // Podium: the three strongest picks, as big cards.
+            const podium = entries.slice(0, 3).map((e, idx) => {
+                const v = augView(e);
+                const verdict = champAugVerdict(e);
                 return `
-                    <li class="aug-tier-row has-item-tip" tabindex="0"
+                    <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0"
+                        aria-label="${escHtml(copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc))}">
+                        <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
+                        <span class="aug-pick-icon rarity-${r.css}">${iconHtml(v)}</span>
+                        <span class="aug-pick-name">${escHtml(v.name)}</span>
+                        ${v.desc ? `<span class="aug-pick-desc">${escHtml(v.desc)}</span>` : ''}
+                        <span class="aug-pick-foot">
+                            <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
+                            ${champAugBadge(verdict)}
+                        </span>
+                        ${itemTipSource(buildAugTipHtml(e, false))}
+                    </li>`;
+            }).join('');
+            const rows = entries.map((e, idx) => {
+                const v = augView(e);
+                const pickRate = Number(e.pick || 0);
+                const verdict = champAugVerdict(e);
+                const ariaLabel = copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc);
+                return `
+                    <li class="aug-tier-row has-item-tip is-${verdict}" tabindex="0"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tier-idx" aria-hidden="true"></span>
                         <span class="aug-tier-name">
-                            ${icon ? `<img loading="lazy" src="${icon}" alt="">` : '<span class="aicon-ph"></span>'}
+                            ${iconHtml(v)}
                             <span class="aug-tier-text">
-                                <span class="aug-tier-title">${escHtml(name)}${setName ? `<em class="aug-tier-set">${escHtml(setName)}</em>` : ''}</span>
-                                ${desc ? `<span class="aug-tier-desc">${escHtml(desc)}</span>` : ''}
+                                <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
+                                ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
                             </span>
                         </span>
                         <span class="aug-tier-pick">
-                            <b>${pct(pickRate)}</b><small>${escHtml(games)}</small>
+                            <b>${pct(pickRate)}</b><small>${escHtml(games(e.g))}</small>
                             <i class="aug-tier-bar" style="--w:${(pickRate / maxPick).toFixed(4)}" aria-hidden="true"></i>
                         </span>
-                        ${buildChampAugWrCell(e, noiseTip)}
+                        <span class="aug-tier-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b>${champAugBadge(verdict)}</span>
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;
             }).join('');
             const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
-            return `<ol class="aug-tier-list" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>${body}</ol>`;
+            return `
+                <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
+                    ${podium ? `<ol class="aug-pick-cards">${podium}</ol>` : ''}
+                    ${head}
+                    <ol class="aug-tier-list" data-rarity="${r.key}">${body}</ol>
+                </div>`;
         }).join('');
-        const html = `
+        return `
             <div class="aug-tier-table">
-                <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
-                <div class="aug-tier-head">
-                    <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
-                    ${sortBtn('rank', pickLang('增幅裝置', 'Augment'), 'col-name')}
-                    ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
-                    ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+                <div class="aug-tier-top">
+                    <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                    ${extraHtml}
                 </div>
-                ${lists}
+                ${panes}
             </div>`;
-        return html;
     }
     /** Apply champAugRarity / champAugSort to every champion aug table under root. */
     function syncChampAugTable(root) {
@@ -3059,8 +3091,10 @@
                 btn.setAttribute('aria-pressed', String(on));
             });
             const attr = 'data-' + champAugSort;
+            table.querySelectorAll('.aug-tier-pane').forEach(pane => {
+                pane.hidden = pane.getAttribute('data-rarity') !== champAugRarity;
+            });
             table.querySelectorAll('.aug-tier-list').forEach(list => {
-                list.hidden = list.getAttribute('data-rarity') !== champAugRarity;
                 const rows = Array.from(list.querySelectorAll('.aug-tier-row'));
                 rows.sort((a, b) => {
                     const av = Number(a.getAttribute(attr) || 0);
@@ -4315,6 +4349,69 @@
         };
     }
 
+    // Friendly one-word read of the tier for players who don't speak "T3".
+    const CHAMP_TIER_WORDS = {
+        OP: ['版本強勢', 'Meta pick'],
+        T1: ['強勢', 'Strong'],
+        T2: ['穩定', 'Solid'],
+        T3: ['普通', 'Average'],
+        T4: ['偏弱', 'Weak'],
+        T5: ['弱勢', 'Struggling'],
+    };
+    /** Champion page banner: splash art, name, tier and the three headline numbers. */
+    function buildChampHero(cid, info, overview, copy) {
+        const tier = draftAssignTier(info.wr);
+        const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
+        const tierColor = (tierColors[tier] && tierColors[tier].color) || 'var(--accent)';
+        const words = CHAMP_TIER_WORDS[tier] || ['', ''];
+        const key = String(info.image || '').split('/').pop().replace(/\.png$/i, '');
+        const splash = key ? `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${encodeURIComponent(key)}_0.jpg` : '';
+        const name = champName(info, cid);
+        const alt = currentLang === 'en' ? '' : (info.name_en || '');
+        const rank = (r) => (
+            Number(r) > 0 && Number(overview.rankTotal) > 0
+                ? `<small>${escHtml(copy.overviewRank(Number(r), Number(overview.rankTotal)))}</small>`
+                : ''
+        );
+        const stat = (value, label, r, cls = '') => `
+            <div class="champ-hero-stat${cls}">
+                <dt>${escHtml(label)}</dt>
+                <dd><b>${value}</b>${r || ''}</dd>
+            </div>`;
+        return `
+            <header class="champ-hero" style="--tier-color:${tierColor}">
+                ${splash ? `<div class="champ-hero-art" aria-hidden="true"><img src="${splash}" alt="" decoding="async" fetchpriority="high"></div>` : ''}
+                <div class="champ-hero-body">
+                    ${info.image ? `<img class="champ-hero-avatar" src="${info.image}" alt="">` : ''}
+                    <div class="champ-hero-id">
+                        <div class="champ-hero-kicker">
+                            <span class="champ-hero-tier" title="${escHtml(pickLang('梯隊', 'Tier'))} ${tier}"><b>${tier}</b>${escHtml(pickLang(words[0], words[1]))}</span>
+                            ${buildDetailRoleTags(info)}
+                        </div>
+                        <h1 class="cname" id="detail-title-${cid}">${escHtml(name)}</h1>
+                        ${alt && alt !== name ? `<p class="champ-hero-alt" lang="en">${escHtml(alt)}</p>` : ''}
+                    </div>
+                    <dl class="champ-hero-stats">
+                        ${stat(pct(info.wr), copy.overviewWrLabel, rank(overview.wrRank), ` is-wr wr-${info.wr >= 0.52 ? 'hi' : info.wr < 0.48 ? 'lo' : 'mid'}`)}
+                        ${stat(pct(overview.pickRate), copy.overviewPickLabel, rank(overview.pickRank))}
+                        ${stat(fmtInt(info.g), copy.overviewGamesLabel, '')}
+                    </dl>
+                </div>
+            </header>`;
+    }
+    /** Fade the splash in once decoded; drop it if the CDN has no art for this key. */
+    function wireChampHero(root) {
+        const img = root && root.querySelector('.champ-hero-art img');
+        if (!img) return;
+        const art = img.parentNode;
+        const done = () => art.classList.add('is-loaded');
+        if (img.complete && img.naturalWidth) done();
+        else {
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', () => art.remove(), { once: true });
+        }
+    }
+
     function renderDetail(cid, opts = {}) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
         // rows; ensure they are rehydrated (cheap no-op if already done or if the
@@ -4335,7 +4432,10 @@
         const spellInfo = info.spells || {};
         const itemClusterInfo = info.itemClusters || {};
         const augTypeInfo = info.augTypes || {};
-        const augmentRankTitle = pickLang('增幅裝置排行', 'Augment Ranking');
+        const augRankTip = pickLang(
+            '依勝率與選用率綜合排序，樣本少的會往後排。「推薦／避開」代表明顯高於／低於這隻英雄的平均勝率。',
+            'Ordered by win rate and pick rate together; small samples rank lower. Strong / Avoid mark augments clearly above / below this champion\'s average.'
+        );
         const singleItemTitle = pickLang('單件裝備強度', 'Single Item Strength');
         const singleItemMeta = pickLang('六格中出過就計入；由強到弱，右滑看更多', 'counts any final-slot item; strongest first, swipe for more');
         const singleItemBadTitle = pickLang('常見但不推薦', 'Common Traps');
@@ -4954,7 +5054,7 @@
             }
             return `${goodSection || ''}${badSection || ''}`;
         };
-        const buildDetailTabSet = (scope, tabs, extraClass = '', stickyLeadHtml = '') => {
+        const buildDetailTabSet = (scope, tabs, extraClass = '') => {
             const name = `detail-${scope}-${cid}`;
             const inputs = tabs.map((tab, idx) => {
                 const inputId = `${name}-${tab.key}`;
@@ -4969,14 +5069,13 @@
                 const inputId = `${name}-${tab.key}`;
                 return `<section class="detail-tab-panel" role="tabpanel" aria-labelledby="${inputId}-label">${tab.content}</section>`;
             }).join('');
-            // Outer .detail-tab-rail is the sticky surface (champ head + tabs for
-            // main set).  List keeps overflow-x:auto — overflow on the sticky
+            // Outer .detail-tab-rail is the sticky surface for the main set.
+            // List keeps overflow-x:auto — overflow on the sticky
             // element itself breaks pin in some browsers.
             return `
                 <div class="detail-tabset ${extraClass}">
                     ${inputs}
                     <div class="detail-tab-rail">
-                        ${stickyLeadHtml}
                         <div class="detail-tab-list" role="tablist">${labels}</div>
                     </div>
                     <div class="detail-tab-panels">${panels}</div>
@@ -4990,36 +5089,9 @@
         const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
         const spellRailTitle = pickLang('召喚師技能組合', 'Summoner Spell Pairs');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
-        // \u6982\u89bd: headline win-rate, then a two-column split \u2014 build routes
+        // \u6982\u89bd: the hero carries the headline numbers; this is a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
-        const overviewRank = (rank) => (
-            Number(rank) > 0 && Number(overview.rankTotal) > 0
-                ? `<span class="ovr-rank">${escHtml(copy.overviewRank(Number(rank), Number(overview.rankTotal)))}</span>`
-                : ''
-        );
         const overviewTabContent = `
-            <div class="detail-section detail-overview-head">
-                <div class="ovr-stat ovr-stat-primary">
-                    <div class="ovr-stat-line">
-                        <span class="ovr-value ovr-wr">${pct(info.wr)}</span>
-                        ${overviewRank(overview.wrRank)}
-                    </div>
-                    <span class="ovr-label">${escHtml(copy.overviewWrLabel)}</span>
-                </div>
-                <div class="ovr-stat">
-                    <div class="ovr-stat-line">
-                        <span class="ovr-value">${pct(overview.pickRate)}</span>
-                        ${overviewRank(overview.pickRank)}
-                    </div>
-                    <span class="ovr-label">${escHtml(copy.overviewPickLabel)}</span>
-                </div>
-                <div class="ovr-stat ovr-stat-games">
-                    <div class="ovr-stat-line">
-                        <span class="ovr-value">${fmtInt(info.g)}</span>
-                    </div>
-                    <span class="ovr-label">${escHtml(copy.overviewGamesLabel)}</span>
-                </div>
-            </div>
             <div class="overview-split">
                 <div class="overview-split-main">
                     ${buildCoreGroupSection(
@@ -5052,36 +5124,25 @@
         const augmentTabContent = `
             <div class="detail-section">
                 <div class="detail-col best">
-                    <div class="detail-col-heading">
-                        <h3 class="augment-rank-title">${augmentRankTitle}</h3>
+                    ${buildChampAugTable(top, `
                         <span class="meta-help-wrap">
-                            <button class="meta-help" type="button" aria-label="${escHtml(copy.augmentStrengthMeta)}">?</button>
-                            <span class="meta-help-tip meta-help-tip-short" role="tooltip">${escHtml(copy.augmentStrengthMeta)}</span>
-                        </span>
-                        ${buildSetSummary(setTop)}
-                    </div>
-                    ${buildChampAugTable(top)}
+                            <button class="meta-help" type="button" aria-label="${escHtml(augRankTip)}">?</button>
+                            <span class="meta-help-tip" role="tooltip">${escHtml(augRankTip)}</span>
+                        </span>`)}
+                    ${buildSetSummary(setTop)}
                 </div>
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
         `;
-        // Champ icon + name live inside the sticky rail with the main tabs so
-        // they pin together under the site header (and floating search chip).
-        const stickyLeadHtml = `
-            <div class="detail-head">
-                ${info.image ? `<span class="detail-avatar"><img loading="lazy" src="${info.image}" alt=""></span>` : ''}
-                <h1 class="cname" id="detail-title-${cid}">${escHtml(champName(info, cid))}</h1>
-                ${buildDetailRoleTags(info)}
-            </div>
-        `;
+        const heroHtml = buildChampHero(cid, info, overview, copy);
         const detailTabs = buildDetailTabSet('main', [
             { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
             { key: 'pools', label: pickLang('增幅池', 'Augment pools'), content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
-        ], 'detail-main-tabs', stickyLeadHtml);
-        return detailTabs;
+        ], 'detail-main-tabs');
+        return heroHtml + detailTabs;
     }
 
     const REC_LIST_LIMIT = 12;
@@ -10284,7 +10345,10 @@
         // the snapshots are captured; clear it once the VT settles.
         const root = document.documentElement;
         root.classList.add('vt-running');
-        document.startViewTransition(apply).finished.finally(() => {
+        // A VT skipped (hidden tab, overlapping switch) rejects; that is benign.
+        const vt = document.startViewTransition(apply);
+        vt.ready.catch(() => {});
+        vt.finished.catch(() => {}).finally(() => {
             root.classList.remove('vt-running');
         });
     }
@@ -10529,7 +10593,7 @@
     function syncChampSearchChrome() {
         const input = document.getElementById('champ-page-search');
         if (!input) return;
-        const placeholder = pickLang('輸入英雄名稱，Enter 前往', 'Type a champion, Enter to open');
+        const placeholder = pickLang('搜尋英雄', 'Search champions');
         input.placeholder = placeholder;
         input.setAttribute('aria-label', pickLang('搜尋英雄', 'Search champions'));
     }
@@ -10569,6 +10633,7 @@
             if (token !== champPageToken || !host.isConnected) return;
             const tab = readChampTab();
             host.innerHTML = `<div class="detail detail-page">${renderDetail(cid, { page: true, tab })}</div>`;
+            wireChampHero(host);
             if (champAugSort !== 'rank') syncChampAugTable(host);
             applySingleItemFilter(host);
             if (tab === 'pools') {

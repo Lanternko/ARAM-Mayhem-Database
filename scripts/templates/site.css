@@ -3035,6 +3035,8 @@
     .detail-col-heading h3 { margin: 0; }
     .detail-col.best h3 { color: #6bd16b; }
     .detail-col.worst h3 { color: #ff6b6b; }
+    [data-theme="light"] .detail-col.best h3 { color: #1f7a3a; }
+    [data-theme="light"] .detail-col.worst h3 { color: #b42318; }
     /* Single-item strength filter (出裝 tab): pick-share knob + 6 role chips. */
     .item-role-bar {
         display: flex;
@@ -9490,6 +9492,8 @@
 
     /* 增幅裝置 on the champion page: rarity segmented control + vertical table. */
     .aug-tier-table { margin-top: 10px; }
+    .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .aug-tier-top .aug-tier-seg { flex: 1 1 auto; margin-bottom: 0; }
     .aug-tier-seg {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -9511,10 +9515,150 @@
         font-weight: 700;
         cursor: pointer;
     }
-    .aug-tier-seg-btn.is-active { color: #111; }
-    .aug-tier-seg-btn.rarity-silver.is-active { background: linear-gradient(180deg, #eef1f5, #b9c0ca); }
-    .aug-tier-seg-btn.rarity-gold.is-active { background: linear-gradient(180deg, #ffe27a, #e0a912); }
-    .aug-tier-seg-btn.rarity-prismatic.is-active { background: linear-gradient(135deg, #f5c6ff, #b8d8ff 55%, #c8ffe8); }
+    .aug-tier-seg-btn { --rar: var(--text); transition: background-color .15s, color .15s; }
+    .aug-tier-seg-btn::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 7px;
+        border-radius: 50%;
+        background: var(--rar);
+        vertical-align: 1px;
+    }
+    .aug-tier-seg-btn.rarity-silver { --rar: #c9d1dc; }
+    .aug-tier-seg-btn.rarity-gold { --rar: #f0c14b; }
+    .aug-tier-seg-btn.rarity-prismatic { --rar: #d7a8ff; }
+    .aug-tier-seg-btn:hover { color: var(--text); }
+    .aug-tier-seg-btn.is-active {
+        color: var(--rar);
+        background: color-mix(in oklab, var(--rar) 14%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--rar) 40%, transparent);
+    }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-silver { --rar: #5d6b7d; }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-gold { --rar: #a8740a; }
+    [data-theme="light"] .aug-tier-seg-btn.rarity-prismatic { --rar: #8a3fd1; }
+
+    /* Podium: the three strongest augments as cards above the full list. */
+    .aug-pick-cards {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 4px 0 18px;
+        padding: 0;
+        list-style: none;
+    }
+    .aug-pick-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        padding: 20px 16px 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background:
+            radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, var(--verdict, var(--text-muted)) 12%, transparent), transparent 70%),
+            var(--surface);
+        text-align: center;
+        transition: transform .18s ease, border-color .18s ease;
+    }
+    .aug-pick-card.is-good { --verdict: var(--wr-5); }
+    .aug-pick-card.is-bad { --verdict: var(--wr-1); }
+    .aug-pick-card:hover,
+    .aug-pick-card:focus-visible {
+        transform: translateY(-2px);
+        border-color: color-mix(in oklab, var(--verdict, var(--text-muted)) 45%, var(--border));
+        outline: none;
+    }
+    .aug-pick-rank {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    .aug-pick-card:first-child .aug-pick-rank { color: var(--text); }
+    .aug-pick-icon {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px color-mix(in oklab, var(--rar, var(--border)) 55%, transparent), 0 6px 18px rgba(0, 0, 0, .28);
+    }
+    .aug-pick-icon.rarity-silver { --rar: #c9d1dc; }
+    .aug-pick-icon.rarity-gold { --rar: #f0c14b; }
+    .aug-pick-icon.rarity-prismatic { --rar: #d7a8ff; }
+    .aug-pick-icon img,
+    .aug-pick-icon .aicon-ph { width: 64px; height: 64px; border-radius: 50%; }
+    .aug-pick-name {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .aug-pick-desc {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        min-height: 2.9em;
+        color: var(--text-muted);
+        font-size: 12.5px;
+        line-height: 1.45;
+    }
+    .aug-pick-foot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-top: auto;
+    }
+    .aug-pick-wr { display: flex; align-items: baseline; gap: 5px; font-variant-numeric: tabular-nums; }
+    .aug-pick-wr b { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+    .aug-pick-wr small { color: var(--text-muted); font-size: 11px; font-weight: 600; }
+    .aug-pick-wr.wr-5 b { color: var(--wr-5); }
+    .aug-pick-wr.wr-4 b { color: var(--wr-4); }
+    .aug-pick-wr.wr-3 b { color: var(--wr-3); }
+    .aug-pick-wr.wr-2 b { color: var(--wr-2); }
+    .aug-pick-wr.wr-1 b { color: var(--wr-1); }
+
+    /* Verdict chip: the one word a casual player needs. */
+    .aug-verdict {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.5;
+        white-space: nowrap;
+        color: var(--text-muted);
+        background: color-mix(in oklab, var(--text-muted) 14%, transparent);
+    }
+    .aug-verdict.is-good { color: var(--wr-5); background: color-mix(in oklab, var(--wr-5) 16%, transparent); }
+    .aug-verdict.is-bad { color: var(--wr-1); background: color-mix(in oklab, var(--wr-1) 16%, transparent); }
+    @media (max-width: 700px) {
+        .aug-pick-cards {
+            grid-auto-flow: column;
+            grid-template-columns: none;
+            grid-auto-columns: minmax(200px, 72%);
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            scrollbar-width: none;
+            margin-right: -16px;
+            padding-right: 16px;
+        }
+        .aug-pick-cards::-webkit-scrollbar { display: none; }
+        .aug-pick-card { scroll-snap-align: start; padding: 16px 12px 12px; }
+        .aug-pick-icon, .aug-pick-icon img, .aug-pick-icon .aicon-ph { width: 52px; height: 52px; }
+    }
     .aug-tier-head,
     .aug-tier-row {
         display: grid;
@@ -9536,7 +9680,9 @@
         cursor: pointer;
     }
     .aug-tier-sort.col-name { text-align: left; }
-    .aug-tier-sort.is-active { color: var(--text); border-bottom-color: var(--accent); }
+    .aug-tier-sort.is-active { color: var(--accent); }
+    .aug-tier-sort.is-active::after { content: " \25BE"; font-size: 10px; }
+    [data-theme="light"] .aug-tier-sort.is-active { color: #8a6400; }
     .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier; }
     .aug-tier-row {
         min-height: 56px;
@@ -9565,8 +9711,7 @@
     }
     .aug-tier-set,
     .aug-tier-desc,
-    .aug-tier-bar,
-    .aug-tier-delta { display: none; }
+    .aug-tier-bar { display: none; }
     .aug-tier-name img,
     .aug-tier-name .aicon-ph {
         width: 36px;
@@ -9592,20 +9737,19 @@
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
-    .aug-tier-lift { font-size: 11px; font-weight: 600; opacity: .85; }
+    .aug-tier-wr .aug-verdict { margin-top: 3px; padding: 0 6px; font-size: 10.5px; }
     .aug-tier-wr.wr-5 { color: var(--wr-5); }
     .aug-tier-wr.wr-4 { color: var(--wr-4); }
     .aug-tier-wr.wr-3 { color: var(--wr-3); }
     .aug-tier-wr.wr-2 { color: var(--wr-2); }
     .aug-tier-wr.wr-1 { color: var(--wr-1); }
 
-    /* PC: the row has room for what the numbers mean — description, a pick bar
-       on one scale per rarity, and the lift against the champion's baseline
-       with its 95% sampling whisker. */
+    /* PC: the row has room for a description, a pick bar on one scale per
+       rarity, and the win rate with its plain-word verdict. */
     @media (min-width: 900px) {
         .aug-tier-head,
         .aug-tier-row {
-            grid-template-columns: 36px minmax(0, 1fr) 150px 190px;
+            grid-template-columns: 36px minmax(0, 1fr) 150px 150px;
             column-gap: 12px;
         }
         .aug-tier-head { padding: 0 12px; }
@@ -9645,8 +9789,7 @@
             font-weight: 400;
             line-height: 1.45;
         }
-        .aug-tier-pick,
-        .aug-tier-wr {
+        .aug-tier-pick {
             display: grid;
             grid-template-columns: auto 1fr;
             align-items: baseline;
@@ -9655,14 +9798,14 @@
         }
         .aug-tier-pick b,
         .aug-tier-wr b { font-size: 15px; }
-        .aug-tier-pick small,
-        .aug-tier-lift { justify-self: end; font-size: 12px; }
-        .aug-tier-bar,
-        .aug-tier-delta {
+        .aug-tier-pick small { justify-self: end; font-size: 12px; }
+        .aug-tier-wr { flex-direction: row; justify-content: flex-end; gap: 10px; }
+        .aug-tier-wr .aug-verdict { margin-top: 0; min-width: 40px; justify-content: center; font-size: 11px; }
+        .aug-tier-bar {
             display: block;
             grid-column: 1 / -1;
             position: relative;
-            height: 6px;
+            height: 5px;
             border-radius: 3px;
             background: color-mix(in oklab, var(--text-muted) 16%, transparent);
         }
@@ -9672,75 +9815,188 @@
             inset: 0 auto 0 0;
             width: calc(var(--w) * 100%);
             border-radius: inherit;
-            background: var(--text-muted);
+            background: color-mix(in oklab, var(--text-muted) 70%, transparent);
         }
-        /* Diverging bar: zero sits at the middle tick, the fill runs to the
-           lift, and the thin whisker spans the confidence interval. */
-        .aug-tier-delta::before {
-            content: "";
-            position: absolute;
-            top: -3px;
-            bottom: -3px;
-            left: 50%;
-            width: 1px;
-            background: var(--text-muted);
-        }
-        .aug-tier-delta::after {
-            content: "";
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: min(50%, var(--l));
-            right: calc(100% - max(50%, var(--l)));
-            border-radius: 3px;
-            background: currentColor;
-        }
-        .aug-tier-delta {
-            background:
-                linear-gradient(currentColor, currentColor)
-                    var(--lo) 50% / calc(var(--hi) - var(--lo)) 2px no-repeat,
-                color-mix(in oklab, var(--text-muted) 16%, transparent);
-        }
-        /* Significant lifts get a solid fill; lifts whose CI crosses zero keep
-           a lighter fill so the whisker, not the bar, carries the message. */
-        .aug-tier-wr:not(.is-noisy) .aug-tier-delta::after { box-shadow: 0 0 0 1px currentColor; }
-        .aug-tier-wr.is-noisy .aug-tier-delta::after { opacity: .7; }
     }
-    .detail-page .detail-head .cname {
-        margin: 0;
-        font-size: 22px;
+    .detail-page .detail-main-tabs > .detail-tab-rail { top: calc(var(--header-h, 56px) - 10px); }
+
+    /* Champion hero: splash art fading into the page, name, tier word and the
+       three numbers a player checks first. */
+    .champ-hero {
+        position: relative;
+        isolation: isolate;
+        margin: 0 0 4px;
+        padding: 56px 0 22px;
+    }
+    .champ-hero-art {
+        position: absolute;
+        inset: 0 0 0 18%;
+        z-index: -1;
+        opacity: 0;
+        transition: opacity .5s ease;
+        -webkit-mask-image:
+            linear-gradient(90deg, transparent 0%, #000 35%, #000 82%, transparent 100%),
+            linear-gradient(180deg, transparent 0%, #000 28%, #000 58%, transparent 100%);
+        -webkit-mask-composite: source-in;
+        mask-image:
+            linear-gradient(90deg, transparent 0%, #000 35%, #000 82%, transparent 100%),
+            linear-gradient(180deg, transparent 0%, #000 28%, #000 58%, transparent 100%);
+        mask-composite: intersect;
+    }
+    .champ-hero-art.is-loaded { opacity: 1; }
+    .champ-hero-art img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 70% 22%;
+    }
+    .champ-hero-art::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: color-mix(in oklab, var(--bg) 25%, transparent);
+    }
+    [data-theme="light"] .champ-hero-art::after { background: none; }
+    .champ-hero-body {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: end;
+        gap: 18px 22px;
+    }
+    .champ-hero-avatar {
+        width: 88px;
+        height: 88px;
+        border-radius: 18px;
+        border: 2px solid color-mix(in oklab, var(--tier-color) 70%, transparent);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+        object-fit: cover;
+    }
+    .champ-hero-id { min-width: 0; }
+    .champ-hero-kicker {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+    .champ-hero-tier {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px 3px 4px;
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--tier-color) 18%, transparent);
+        color: var(--tier-color);
+        font-size: 12px;
         font-weight: 700;
-        line-height: 1.2;
     }
-    .detail-page .detail-avatar {
-        width: 44px;
-        height: 44px;
+    .champ-hero-tier b {
+        padding: 1px 7px;
+        border-radius: 999px;
+        background: var(--tier-color);
+        color: #111;
+        font-size: 11px;
+        font-weight: 800;
     }
-    /* On the champion page only the 概覽/出裝/… tabs stay pinned: the rail
-       sticks at a negative offset equal to its head row (padding-top + head
-       height + margin), so the avatar/name scroll away under the header and
-       the tab strip lands right below it.  The head height is fixed (roles
-       never wrap) so this offset is exact without JS measurement. */
-    .detail-page {
-        --champ-head-h: 44px;
-        --champ-head-gap: 8px;
+    .champ-hero .cname {
+        margin: 0;
+        font-size: clamp(30px, 4.2vw, 46px);
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        text-shadow: 0 2px 16px rgba(0, 0, 0, .35);
     }
-    .detail-page .detail-main-tabs > .detail-tab-rail {
-        top: calc(var(--header-h, 56px) - 10px - var(--champ-head-h) - var(--champ-head-gap));
+    .champ-hero-alt {
+        margin: 4px 0 0;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: .04em;
     }
-    .detail-page .detail-main-tabs > .detail-tab-rail .detail-head {
-        height: var(--champ-head-h);
-        margin-bottom: var(--champ-head-gap);
-        overflow: hidden;
+    .champ-hero-stats {
+        display: flex;
+        gap: 6px;
+        margin: 0;
+        padding: 6px;
+        border: 1px solid color-mix(in oklab, var(--text) 10%, transparent);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--bg) 62%, transparent);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
     }
-    .detail-page .detail-head .detail-roles { flex-wrap: nowrap; min-width: 0; }
+    .champ-hero-stat { min-width: 92px; padding: 8px 12px; }
+    .champ-hero-stat + .champ-hero-stat { border-left: 1px solid color-mix(in oklab, var(--text) 10%, transparent); }
+    .champ-hero-stat dt {
+        color: var(--text-muted);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: .04em;
+    }
+    .champ-hero-stat dd {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin: 4px 0 0;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .champ-hero-stat dd b { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+    .champ-hero-stat.is-wr dd b { font-size: 26px; }
+    .champ-hero-stat.wr-hi dd b { color: var(--wr-5); }
+    .champ-hero-stat.wr-lo dd b { color: var(--wr-1); }
+    .champ-hero-stat dd small { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+    [data-theme="light"] .champ-hero-tier { color: color-mix(in oklab, var(--tier-color) 55%, #000); }
+    [data-theme="light"] .champ-hero .cname { text-shadow: none; }
+    [data-theme="light"] .champ-hero-avatar { box-shadow: 0 8px 22px rgba(20, 30, 60, .18); }
+    @media (max-width: 900px) {
+        .champ-hero-body { grid-template-columns: auto minmax(0, 1fr); }
+        .champ-hero-stats { grid-column: 1 / -1; }
+        .champ-hero-stat { flex: 1 1 0; min-width: 0; }
+    }
+    @media (max-width: 700px) {
+        .champ-hero { padding: 40px 0 12px; }
+        .champ-hero-art { left: 25%; }
+        .champ-hero-body { gap: 14px; }
+        .champ-hero-avatar { width: 64px; height: 64px; border-radius: 14px; }
+        .champ-hero .cname { font-size: 28px; }
+        .champ-hero-stat { padding: 6px 8px; }
+        .champ-hero-stat dd b, .champ-hero-stat.is-wr dd b { font-size: 19px; }
+        .champ-hero-stat dd { flex-wrap: wrap; gap: 2px 6px; }
+    }
     @media (max-width: 700px) {
         .champ-page-bar { gap: 8px; margin-bottom: 10px; }
         .champ-page-search { flex-basis: 100%; max-width: none; }
         .champ-page-recent { flex-basis: 100%; }
-        .detail-page { --champ-head-h: 40px; }
-        .detail-page .detail-head .cname { font-size: 18px; }
-        .detail-page .detail-avatar { width: 40px; height: 40px; }
+    }
+
+    /* Light theme: augment icons are pale line art, give them a dark disc. */
+    [data-theme="light"] .aug-pick-icon,
+    [data-theme="light"] .aug-tier-name img { background: #1b2030; }
+
+    /* Champion page tabs follow the site's gold accent, at a readable size. */
+    .detail-page .detail-main-tabs > .detail-tab-rail {
+        background: color-mix(in oklab, var(--bg) 90%, transparent);
+    }
+    .detail-page .detail-tab-label { font-size: 14px; min-height: 40px; }
+    .detail-page .detail-sub-tabs .detail-tab-label { font-size: 13px; min-height: 36px; }
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(3),
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
+    .detail-page .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        background: color-mix(in oklab, var(--accent) 10%, transparent);
+    }
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(3):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(3),
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
+    [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
+        color: #8a6400;
+        border-bottom-color: var(--accent);
     }
 
 /* ===== Player history lookup =====
