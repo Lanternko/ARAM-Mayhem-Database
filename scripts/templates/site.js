@@ -2104,9 +2104,19 @@
     // as "some value" rather than as a broken translation.
     // Both forms: the zh-CN path runs t2s() before this, so by then the token
     // has already been converted to 「[数值]」.
+    // The source spacing around the token is inconsistent (「傷害的[數值]的治療」
+    // vs 「增加 [數值]暴擊率」), so in zh a Latin X next to a CJK character gets
+    // exactly one space on that side, and none next to punctuation or an edge.
     const AUG_VALUE_TOKEN = /\[(?:數值|数值)\]/g;
+    const AUG_VALUE_TOKEN_SPACED = /[ \t]*\[(?:數值|数值)\][ \t]*/g;
+    const AUG_VALUE_PAD_NEIGHBOR = /[\p{L}\p{N}]/u;
     function augFillValueToken(text) {
-        return String(text || '').replace(AUG_VALUE_TOKEN, 'X');
+        const s = String(text || '');
+        if (currentLang === 'en') return s.replace(AUG_VALUE_TOKEN, 'X');
+        return s.replace(AUG_VALUE_TOKEN_SPACED, (match, offset, whole) => {
+            const pad = (ch) => (ch && AUG_VALUE_PAD_NEIGHBOR.test(ch) ? ' ' : '');
+            return pad(whole[offset - 1]) + 'X' + pad(whole[offset + match.length]);
+        });
     }
 
     // CommunityDragon also ships unresolved 「{{key}}」 template keys: the ability
