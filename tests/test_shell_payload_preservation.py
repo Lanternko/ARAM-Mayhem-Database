@@ -30,7 +30,15 @@ class ShellPayloadPreservationTests(unittest.TestCase):
                     ga_measurement_id="", min_pair_games=5, min_synergy_games=5,
                 )
             self.assertEqual(before, {p.relative_to(api): p.read_bytes() for p in api.rglob("*") if p.is_file()})
-            self.assertIn(snapshot["detailVersion"], (out / "assets/site.js").read_text(encoding="utf-8"))
+            index_html = (out / "index.html").read_text(encoding="utf-8")
+            site_js = (out / "assets/site.js").read_text(encoding="utf-8")
+            payload_ref = f"api/tier-list.json?v={snapshot['detailVersion']}"
+            # The preload and the app's fetch must name the same URL, and the
+            # build-varying URL lives in the shell, not the shared script.
+            self.assertIn(f"<link rel='preload' href='{payload_ref}'", index_html)
+            self.assertIn(f'"payload":"{payload_ref}"', index_html)
+            self.assertNotIn(snapshot["detailVersion"], site_js)
+            self.assertNotIn("2026-09-12", site_js)
 
 
 if __name__ == "__main__":

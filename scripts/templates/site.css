@@ -9675,7 +9675,7 @@
             background: var(--text-muted);
         }
         /* Diverging bar: zero sits at the middle tick, the fill runs to the
-           lift, and the thin whisker spans the 95% CI. */
+           lift, and the thin whisker spans the confidence interval. */
         .aug-tier-delta::before {
             content: "";
             position: absolute;

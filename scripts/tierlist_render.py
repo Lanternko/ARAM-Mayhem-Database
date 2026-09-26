@@ -3338,10 +3338,19 @@ def render_html(
         f"{slim_stats['after_rows']:,} across {slim_stats['champs']} champs"
     )
     # Cache-bust both the initial payload and its per-champion detail shards.
-    # A timestamp suffix matters when multiple publishes happen on one day.
+    # The key is derived from payload contents, never wall-clock time: a full
+    # build renders several shells (Home + hidden player-history) and each one
+    # must point its <link rel=preload> at the exact URL the app fetches, or
+    # browsers download the 3 MB payload twice.  Same data ⇒ same URL also lets
+    # a no-op republish keep visitors' cached copy.
     payload_version = ""
     if payload_url and build_date:
-        payload_version = f"{build_date.replace('-', '')}-{int(time.time())}"
+        existing = re.search(r"[?&]v=([^&#]+)", payload_url)
+        payload_version = (
+            existing.group(1)
+            if existing
+            else f"{build_date.replace('-', '')}-{payload_content_version(payload)[:12]}"
+        )
         payload_url = versioned_payload_url(payload_url, payload_version)
 
     shard_stats = {"champs": 0, "bytes": 0}
@@ -3494,7 +3503,31 @@ def render_html(
     # __SITE_JS_PRELOAD_SLOT__ is replaced at the end of this function: when the
     # site script is emitted as an external asset its content hash isn't known
     # yet while the <head> is being assembled.
-    parts.append(f"__SITE_JS_PRELOAD_SLOT__<style>{css}</style></head><body>")
+    # Public shells share one cacheable stylesheet (~60 KB gzip) instead of
+    # re-shipping it inline in every HTML response; HTML is only cached for
+    # minutes, so inline CSS was re-downloaded on nearly every visit.  The
+    # hidden player-history shell keeps its own superset inline.  Content-hash
+    # ?v= mirrors site.js; the filename is stable so a stale shell still gets
+    # styled (the static host ignores the query).
+    if script_assets_dir is not None and payload_url and not player_history_route:
+        script_assets_dir.mkdir(parents=True, exist_ok=True)
+        css_path = script_assets_dir / "site.css"
+        css_path.write_text(css, encoding="utf-8")
+        css_ver = hashlib.sha1(css.encode("utf-8")).hexdigest()[:12]
+        css_href = f"/assets/site.css?v={css_ver}"
+        # Resolved against location.origin like site.js: production shells carry
+        # <base href='https://arammeta.com/'>, which would otherwise make a local
+        # preview of a production build silently style itself with LIVE css.
+        # document.write keeps it a parser-inserted, render-blocking sheet (no
+        # flash of unstyled content); same-origin writes are not intervened.
+        css_tag = (
+            "<script>document.write(\"<link rel='stylesheet' href='\"+location.origin+"
+            f"\"{css_href}'>\")</script>"
+            f"<noscript><link rel='stylesheet' href='{css_href}'></noscript>"
+        )
+    else:
+        css_tag = f"<style>{css}</style>"
+    parts.append(f"__SITE_JS_PRELOAD_SLOT__{css_tag}</head><body>")
     # Header: brand + tab nav + language toggle.  GitHub star lives in the
     # page footer (with tier cutoffs / freshness) so it reads as a quiet
     # open-source credit instead of a header CTA.
@@ -4042,12 +4075,32 @@ def render_html(
 
     js = _read_site_template("site.js")
     js = _retire_public_column_code(js)
+    # Values that change on every data publish travel in a tiny inline
+    # `window.__ARAM_BUILD__` object in each HTML shell instead of being baked
+    # into site.js.  That keeps the external script byte-identical across data
+    # publishes (returning visitors keep ~150 KB gzip cached) and guarantees
+    # every shell's payload preload matches the URL the script fetches.
+    build_config = {
+        "payload": payload_url or "",
+        "headerTitleZh": header_title,
+        "headerTitleEn": header_title_en,
+        "shortPatchZh": short_patch,
+        "dateStrZh": date_str,
+        "buildDate": build_date,
+        "patchLabel": patch_label,
+        "totalGames": f"{total_games:,}",
+    }
+    build_config_script = (
+        "<script>window.__ARAM_BUILD__="
+        + json.dumps(build_config, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+        + "</script>"
+    )
     payload_expr = (
-        f"await loadSitePayload({json.dumps(payload_url, ensure_ascii=False)})"
+        "await loadSitePayload(__BUILD.payload || 'api/tier-list.json')"
         if payload_url
         else payload_json
     )
-    js = "(async () => {\n" + js.strip() + "\n})().catch(err => {\n" \
+    js = "(async () => {\nconst __BUILD = window.__ARAM_BUILD__ || {};\n" + js.strip() + "\n})().catch(err => {\n" \
         "    console.error(err);\n" \
         "    document.body.insertAdjacentHTML('afterbegin', " \
         "`<div style=\"margin:16px;padding:12px 14px;border:1px solid #7f1d1d;" \
@@ -4056,13 +4109,13 @@ def render_html(
         "});"
     js = js.replace("__PAYLOAD__", payload_expr)
     js = js.replace("__AUGMENT_TAXONOMY__", json.dumps(augment_taxonomy_payload(), ensure_ascii=False))
-    js = js.replace("__HEADER_TITLE_ZH__", json.dumps(header_title, ensure_ascii=False))
-    js = js.replace("__HEADER_TITLE_EN__", json.dumps(header_title_en, ensure_ascii=False))
-    js = js.replace("__SHORT_PATCH_ZH__", json.dumps(short_patch, ensure_ascii=False))
-    js = js.replace("__DATE_STR_ZH__", json.dumps(date_str, ensure_ascii=False))
-    js = js.replace("__BUILD_DATE__", json.dumps(build_date, ensure_ascii=False))
-    js = js.replace("__PATCH_LABEL__", json.dumps(patch_label, ensure_ascii=False))
-    js = js.replace("__TOTAL_GAMES__", json.dumps(f"{total_games:,}", ensure_ascii=False))
+    js = js.replace("__HEADER_TITLE_ZH__", "(__BUILD.headerTitleZh || 'arammeta')")
+    js = js.replace("__HEADER_TITLE_EN__", "(__BUILD.headerTitleEn || 'arammeta')")
+    js = js.replace("__SHORT_PATCH_ZH__", "(__BUILD.shortPatchZh || '')")
+    js = js.replace("__DATE_STR_ZH__", "(__BUILD.dateStrZh || '')")
+    js = js.replace("__BUILD_DATE__", "(__BUILD.buildDate || '')")
+    js = js.replace("__PATCH_LABEL__", "(__BUILD.patchLabel || '')")
+    js = js.replace("__TOTAL_GAMES__", "(__BUILD.totalGames || '')")
     # Empty string disables remote Meta Pick submit/leaderboard on the client.
     js = js.replace(
         "__META_PICK_API_BASE__",
@@ -4102,8 +4155,6 @@ def render_html(
     # and the cache busts only when the script actually changes.
     site_js_preload = ""
     if script_assets_dir is not None and payload_url:
-        import hashlib
-
         script_assets_dir.mkdir(parents=True, exist_ok=True)
         script_path = script_assets_dir / "site.js"
         script_path.write_text(js, encoding="utf-8")
@@ -4132,7 +4183,9 @@ def render_html(
     else:
         parts.append(f"<script>{js}</script>")
     parts.append("</body></html>")
-    return "".join(parts).replace("__SITE_JS_PRELOAD_SLOT__", site_js_preload, 1)
+    return "".join(parts).replace(
+        "__SITE_JS_PRELOAD_SLOT__", build_config_script + site_js_preload, 1
+    )
 
 
 def _run_shell_only(

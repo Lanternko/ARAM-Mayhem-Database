@@ -85,6 +85,9 @@ DEFAULT_DOC_PATHS = (
     # omits it the freshly published index.html loads a stale script (or 404s on
     # a first-ever deploy) and the SPA never boots.
     Path("docs/assets/site.js"),
+    # Shared stylesheet for the public shells, same contract as site.js: the
+    # HTML references it by content-hash ?v=, so it must ship in the same commit.
+    Path("docs/assets/site.css"),
     # Classic mode is built separately, but its root page must be staged with
     # the locale copies already covered by docs/en and docs/zh-cn whenever a UI
     # deploy regenerates all three locales.
