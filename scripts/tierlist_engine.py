@@ -1104,6 +1104,19 @@ AUGMENT_DESC_OVERRIDES: dict[int, str] = {
     1151: "你的第三個基礎技能（E）獲得[數值]技能加速。",
 }
 
+# Riot occasionally re-tiers an augment without redrawing its colored art, so
+# the icon contradicts its rarity.  Point those at a hand-made recolor under
+# docs/assets/icons (site-relative, so localize_cdragon_icons leaves it alone).
+#
+# Format: aid -> site-relative icon path.
+AUGMENT_ICON_OVERRIDES: dict[int, str] = {
+    # ARAM_Quest_UrfsChampion is rarity 2 (prismatic) in kiwi.bin but ships
+    # only the gold-pot art shared with Steel Your Heart (gold).  The recolor
+    # takes the pixel-aligned prismatic pot from Wooglet's Witchcap and
+    # shifts the frame from the gold olive-grey to the prismatic violet-grey.
+    1154: "assets/icons/quest_urfschampion_prismatic.png",
+}
+
 def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
     display_tags_by_id = load_augment_display_tags(cache_dir or Path("data/cache"))
     # Try zh-TW first; fall back to default (English) if the field is empty.
@@ -1149,6 +1162,7 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
             colored = _augment_colored_icon_url(icon_path, colored_listing_cache)
             if colored:
                 icon_url = colored
+        icon_url = AUGMENT_ICON_OVERRIDES.get(aug_id, icon_url)
         # Mayhem augment sets were removed in 16.12 (see LEGACY_MAYHEM_AUGMENT_SETS).
         # This loader reads CDragon `latest`, so no current augment belongs to a set.
         # The keys stay empty so the payload shape does not change.
