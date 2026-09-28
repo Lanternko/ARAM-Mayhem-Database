@@ -200,10 +200,15 @@ WHERE status = 'pending' AND classic_affinity_rank = 0;
 # 2026-09-24 to 09-26 the lane made zero first visits while 8,683 waited.  Ordered
 # by discovery recency (someone seen in a Classic game yesterday is likelier still
 # playing); without this index that ORDER BY was a 0.65s TEMP B-TREE per claim.
+# classic_last_crawl_ms = 0 keeps visited players out of the index: re-sighting a
+# known player refreshes discovered_match_created_ms, so 14k visited rows sat in
+# the 48h window and the NOT EXISTS filter cost ~200ms per claim walking them.
+_DROP_OLD_CLASSIC_FRESH_INDEX_SQL = "DROP INDEX IF EXISTS idx_crawl_queue_classic_fresh"
 _CREATE_CLASSIC_FRESH_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_crawl_queue_classic_fresh
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_classic_unvisited
 ON crawl_queue(discovered_match_created_ms DESC, queue_idx ASC)
-WHERE status = 'pending' AND classic_affinity_rank > 0;
+WHERE status = 'pending' AND classic_affinity_rank > 0
+  AND classic_last_crawl_ms = 0;
 """
 
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
@@ -1143,6 +1148,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_RANK_INDEX_SQL)
     con.execute(_CREATE_GENERAL_CLAIM_INDEX_SQL)
+    con.execute(_DROP_OLD_CLASSIC_FRESH_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_FRESH_INDEX_SQL)
 
     # Independent from the older backfill flag: production databases have
@@ -2472,9 +2478,11 @@ _CLASSIC_LANE_SQL = {
 _CLASSIC_FRESH_SQL = """
     SELECT q.queue_idx, q.puuid, q.depth, q.source,
            q.discovered_match_created_ms, q.seed_family, q.discovered_queue_id
-    FROM crawl_queue q INDEXED BY idx_crawl_queue_classic_fresh
+    FROM crawl_queue q INDEXED BY idx_crawl_queue_classic_unvisited
     WHERE q.status = 'pending'
       AND q.classic_affinity_rank > 0
+      AND q.classic_last_crawl_ms = 0
+      AND q.discovered_match_created_ms >= :fresh_since_ms
       AND q.eligible_at_ms <= :now_ms
       AND NOT EXISTS (
             SELECT 1 FROM crawl_seen s
@@ -2482,6 +2490,21 @@ _CLASSIC_FRESH_SQL = """
     ORDER BY q.discovered_match_created_ms DESC, q.queue_idx ASC
     LIMIT 1
 """
+
+
+# Only recent discoveries are worth a first visit.  Measured 2026-09-26..28 on
+# 1,284 fresh visits: discovered <1 day before the visit returned 23.2 Classic
+# games per 100 visits, 1-3 days 1.1, older 0 -- the lane burned ~800 visits a
+# day on month-old discoveries once the recent ones were used up.  An empty
+# window hands the slot to the due arm.
+_CLASSIC_FRESH_WINDOW_MS = 48 * 3600_000
+
+
+def _classic_fresh_params(now_ms: int) -> dict:
+    return {
+        "now_ms": int(now_ms),
+        "fresh_since_ms": int(now_ms) - _CLASSIC_FRESH_WINDOW_MS,
+    }
 
 
 def _classic_slot_is_fresh(claim_number: int, percent: int) -> bool:
@@ -2498,7 +2521,7 @@ def _claim_classic_slot_row(con, claim_number: int, percent: int, now_ms: int):
     the other before the slot's capacity is returned to the general frontier."""
     arm = _classic_lane_arm_for_slot(claim_number, percent)
     due = (_CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm), f"classic_{arm}")
-    fresh = (_CLASSIC_FRESH_SQL, {"now_ms": int(now_ms)}, "classic_fresh")
+    fresh = (_CLASSIC_FRESH_SQL, _classic_fresh_params(now_ms), "classic_fresh")
     order = (fresh, due) if _classic_slot_is_fresh(claim_number, percent) else (due, fresh)
     for sql, params, lane in order:
         row = con.execute(sql, params).fetchone()
