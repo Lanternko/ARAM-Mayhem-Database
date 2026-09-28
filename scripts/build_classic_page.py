@@ -1457,7 +1457,13 @@ line-height:1.2;text-shadow:none;overflow:hidden;text-overflow:ellipsis;white-sp
 .hero-tile.champ[aria-pressed="true"]{transform:translateY(-2px);filter:brightness(1.08);
 box-shadow:0 0 0 2px color-mix(in oklab,var(--tier-color,#68707d) 65%,var(--text)),
 0 8px 18px color-mix(in srgb,var(--tier-color,#68707d) 28%,transparent)}
+/* Classic owns its inline-detail layout: the main tier list dropped these
+   shared rules (c82953371), which left the host as one 76px grid cell. */
+.detail-host{grid-column:1/-1;min-width:0}.detail-host:empty{display:none}
 .detail-host>.hero-detail{grid-column:1/-1;width:100%}
+.hero-detail .detail-tab-rail{position:relative}
+.hero-detail .detail-close{position:absolute;top:8px;right:4px;z-index:2;font-size:18px;line-height:1}
+.hero-detail .detail-head{padding-right:36px}
 .tier-block.has-open-detail{padding-bottom:14px;background:color-mix(in oklab,var(--tier-color,#68707d) 5%,transparent);
 box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--tier-color,#68707d) 18%,transparent)}
 .hero-detail.detail{display:block;margin:8px 0 2px;background:var(--panel-surface);
@@ -1466,7 +1472,7 @@ border-radius:14px;padding:0 18px 18px;box-shadow:0 14px 34px rgba(0,0,0,.22);ov
 .hero-detail .detail-tab-rail{margin:0 -18px;padding:12px 18px 0;background:var(--panel-surface);
 border-bottom:1px solid color-mix(in srgb,var(--tier-color,#68707d) 20%,var(--panel-line))}
 .hero-detail .detail-head{min-height:58px}
-.hero-detail .detail-head .detail-identity{display:flex;align-items:center;gap:8px;min-width:0}
+.hero-detail .detail-head .detail-identity{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
 .hero-detail .detail-head .cname{font-size:16px;font-weight:600}
 .detail-head-rate{display:grid;justify-items:end;gap:1px;margin-left:auto;padding-right:4px;line-height:1}
 .detail-head-rate strong{font-size:18px;font-weight:780;font-variant-numeric:tabular-nums}
