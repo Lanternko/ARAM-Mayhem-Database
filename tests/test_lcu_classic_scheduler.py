@@ -7,12 +7,12 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from aram_nn.lcu.snowball import (
+    _CLASSIC_SEED_SQL,
     ClassicAffinityProfile,
     _classic_affinity_profile,
     _classic_claim_slot,
     _classic_lane_arm_for_slot,
     _classic_revisit_eligible_at_ms,
-    _classic_slot_is_fresh,
     _claim_next_player,
     lane_arm,
     _enqueue_player,
@@ -328,12 +328,74 @@ class ClassicClaimTests(unittest.TestCase):
         self.assertEqual(claimed[0], "fresh-high-yield")
         self.assertEqual(claimed[-1], "classic_due")
 
-    def test_fresh_and_due_halves_alternate_across_slots(self) -> None:
-        for percent in (3, 10, 25):
-            slots = [n for n in range(1000) if _classic_claim_slot(n, percent)]
-            halves = [_classic_slot_is_fresh(n, percent) for n in slots]
-            self.assertEqual(halves.count(True), halves.count(False), percent)
-            self.assertEqual(halves[:4], [False, True, False, True], percent)
+    def _add_seed(self, puuid: str, hours_ago: float, family: str = "apex") -> None:
+        _enqueue_player(
+            self.con,
+            puuid,
+            depth=0,
+            source="opgg",
+            seed_family=family,
+            discovered_match_created_ms=int(time.time() * 1000 - hours_ago * HOUR_MS),
+        )
+
+    def _add_candidate(self, puuid: str) -> None:
+        """A due rank-1 revisit: ~2.4 Classic per 100 visits, the tier seeds beat."""
+        self._add(puuid, 100, classic=True)
+        self.con.execute(
+            "UPDATE crawl_queue SET classic_affinity_rank=1, eligible_at_ms=1, "
+            "classic_lambda=0.05, classic_span_ms=?, classic_last_crawl_ms=? "
+            "WHERE puuid=?",
+            (100 * HOUR_MS, int(time.time() * 1000) - 100 * HOUR_MS, puuid),
+        )
+        self.con.commit()
+
+    def _claim_classic(self):
+        with patch("aram_nn.lcu.snowball._claim_counter", return_value=1), patch(
+            "aram_nn.lcu.snowball.lane_arm", return_value="due"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="due"
+        ):
+            return _claim_next_player(self.con, "W01", 300_000, 100)
+
+    def test_unvisited_seed_goes_ahead_of_rank_one_revisit(self) -> None:
+        """Seeds tie rank-1 revisits on Classic (~2.8 vs ~2.4 per 100 visits)
+        and bring 4.4 games per visit against 1.7."""
+        self._add_candidate("candidate")
+        self._add_seed("seed", 5)
+        claimed = self._claim_classic()
+        self.assertEqual(claimed[0], "seed")
+        self.assertEqual(claimed[-1], "classic_seed")
+
+    def test_rank_two_revisit_goes_ahead_of_seeds(self) -> None:
+        self._add_two_classic_players()
+        self._add_seed("seed", 5)
+        claimed = self._claim_classic()
+        self.assertEqual(claimed[0], "fresh-high-yield")
+        self.assertEqual(claimed[-1], "classic_due")
+
+    def test_seed_tier_prefers_newest_activity_over_rank_tier(self) -> None:
+        self._add_seed("apex-old", 24 * 20, family="apex")
+        self._add_seed("gold-recent", 6, family="gold")
+        claimed = self._claim_classic()
+        self.assertEqual(claimed[0], "gold-recent")
+
+    def test_visited_seed_falls_through_to_rank_one_revisit(self) -> None:
+        self._add_candidate("candidate")
+        self._add_seed("seed", 5)
+        self._mark_visited("seed")
+        claimed = self._claim_classic()
+        self.assertEqual(claimed[0], "candidate")
+        self.assertEqual(claimed[-1], "classic_due")
+
+    def test_seed_arm_uses_its_partial_index(self) -> None:
+        plan = " ".join(
+            str(row[-1])
+            for row in self.con.execute(
+                "EXPLAIN QUERY PLAN " + _CLASSIC_SEED_SQL, {"now_ms": 0}
+            )
+        )
+        self.assertIn("idx_crawl_queue_seed_unvisited", plan)
+        self.assertNotIn("TEMP B-TREE", plan)
 
     def test_score_arm_prefers_expected_yield_over_wait_time(self) -> None:
         self._add_two_classic_players()

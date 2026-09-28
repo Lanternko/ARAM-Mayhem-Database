@@ -211,6 +211,18 @@ WHERE status = 'pending' AND classic_affinity_rank > 0
   AND classic_last_crawl_ms = 0;
 """
 
+# OPGG/apex seeds (depth 0) nobody has visited yet, for the Classic lane's
+# third tier.  Same classic_last_crawl_ms = 0 trick as the fresh index: 23k of
+# the 28k already-visited pending seeds carry a crawl timestamp and so stay out,
+# which keeps the NOT EXISTS walk short (re-sighted visited seeds otherwise
+# crowd the top of the recency order, 1,821 of the first 2,000 rows).
+_CREATE_CLASSIC_SEED_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_seed_unvisited
+ON crawl_queue(discovered_match_created_ms DESC, queue_idx ASC)
+WHERE status = 'pending' AND depth = 0 AND classic_affinity_rank = 0
+  AND classic_last_crawl_ms = 0;
+"""
+
 _CREATE_CRAWL_GAME_CLAIMS_SQL = """
 CREATE TABLE IF NOT EXISTS crawl_game_claims (
     game_id        TEXT PRIMARY KEY,
@@ -1150,6 +1162,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_GENERAL_CLAIM_INDEX_SQL)
     con.execute(_DROP_OLD_CLASSIC_FRESH_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_FRESH_INDEX_SQL)
+    con.execute(_CREATE_CLASSIC_SEED_INDEX_SQL)
 
     # Independent from the older backfill flag: production databases have
     # already set that flag, but still need their Classic discovery rows tagged.
@@ -2434,6 +2447,7 @@ _CLASSIC_LANE_SELECT = """
     WHERE q.status = 'pending'
       AND q.eligible_at_ms <= :now_ms
       AND q.classic_affinity_rank > 0
+      AND q.classic_affinity_rank >= :min_rank
       AND lane_arm(q.puuid) = :arm
 """
 
@@ -2507,23 +2521,55 @@ def _classic_fresh_params(now_ms: int) -> dict:
     }
 
 
-def _classic_slot_is_fresh(claim_number: int, percent: int) -> bool:
-    """Give every other reserved Classic slot to never-visited players.
-
-    Counts slots, not claims, for the reason in _classic_lane_arm_for_slot.
-    """
-    normalized = min(100, max(0, int(percent)))
-    return (int(claim_number) * normalized // 100) % 2 == 1
+_CLASSIC_SEED_SQL = """
+    SELECT q.queue_idx, q.puuid, q.depth, q.source,
+           q.discovered_match_created_ms, q.seed_family, q.discovered_queue_id
+    FROM crawl_queue q INDEXED BY idx_crawl_queue_seed_unvisited
+    WHERE q.status = 'pending'
+      AND q.depth = 0
+      AND q.classic_affinity_rank = 0
+      AND q.classic_last_crawl_ms = 0
+      AND q.eligible_at_ms <= :now_ms
+      AND NOT EXISTS (
+            SELECT 1 FROM crawl_seen s
+            WHERE s.puuid = q.puuid AND s.process_count > 0)
+    ORDER BY q.discovered_match_created_ms DESC, q.queue_idx ASC
+    LIMIT 1
+"""
 
 
 def _claim_classic_slot_row(con, claim_number: int, percent: int, now_ms: int):
-    """Return (row, lane) for a reserved Classic slot; either half falls back to
-    the other before the slot's capacity is returned to the general frontier."""
+    """Return (row, lane) for a reserved Classic slot, walking the tiers in
+    expected-yield order before handing the slot back to the general frontier.
+
+    Measured 2026-09-14..28 (Classic games per 100 visits / all games per visit):
+      rank>=2 due revisits     >100  / ~3
+      fresh (<48h discovery)    23   / ~1  (<1 day old; the window is the cut)
+      unvisited OPGG seeds      2-3.5 / 4.4
+      rank-1 due revisits       ~2.4 / ~1.7 (candidate 4.8, dormant 0)
+    Seeds tie rank-1 on Classic and bring 2.6x the total games, so they go
+    ahead of it.  Seed tier (apex/diamond/emerald/gold) differed by under 2
+    games per 100 on ~60 hits each -- noise -- so seeds order by recency.
+    rank>=2 runs after fresh only because its 10h revisit floor keeps it to a
+    few dozen claims an hour; it cannot starve the tiers below.
+    """
     arm = _classic_lane_arm_for_slot(claim_number, percent)
-    due = (_CLASSIC_LANE_SQL[arm], _classic_lane_params(now_ms, arm), f"classic_{arm}")
+    due_sql = _CLASSIC_LANE_SQL[arm]
     fresh = (_CLASSIC_FRESH_SQL, _classic_fresh_params(now_ms), "classic_fresh")
-    order = (fresh, due) if _classic_slot_is_fresh(claim_number, percent) else (due, fresh)
-    for sql, params, lane in order:
+    seed = (_CLASSIC_SEED_SQL, {"now_ms": int(now_ms)}, "classic_seed")
+    lane = f"classic_{arm}"
+    if arm == "due":
+        tiers = (
+            fresh,
+            (due_sql, _classic_lane_params(now_ms, arm, min_rank=2), lane),
+            seed,
+            (due_sql, _classic_lane_params(now_ms, arm, min_rank=1), lane),
+        )
+    else:
+        # The score arm ranks every rank by expected yield itself; splitting it
+        # at rank 2 would override that ordering.
+        tiers = (fresh, (due_sql, _classic_lane_params(now_ms, arm), lane), seed)
+    for sql, params, lane in tiers:
         row = con.execute(sql, params).fetchone()
         if row is not None:
             return row, lane
@@ -2549,10 +2595,11 @@ def _classic_lane_arm_for_slot(claim_number: int, percent: int) -> str:
     slot_index = int(claim_number) * normalized // 100
     return "score" if slot_index % 2 == 0 else "due"
 
-def _classic_lane_params(now_ms: int, arm: str) -> dict[str, object]:
+def _classic_lane_params(now_ms: int, arm: str, *, min_rank: int = 1) -> dict[str, object]:
     return {
         "now_ms": int(now_ms),
         "arm": arm,
+        "min_rank": int(min_rank),
         "min_span_ms": float(_CLASSIC_DEFAULT_REVISIT_MIN_MS),
         # Rows enqueued but never visited carry classic_lambda = 0.  Shrinkage
         # means a visited player's estimate is never exactly 0, so 0 uniquely
