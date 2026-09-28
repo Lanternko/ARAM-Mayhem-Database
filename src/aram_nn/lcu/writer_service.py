@@ -363,6 +363,7 @@ class WriterService:
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_RANK_INDEX_SQL)
             self.con.execute(sb._CREATE_GENERAL_CLAIM_INDEX_SQL)
+            self.con.execute(sb._DROP_OLD_CLASSIC_FRESH_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_FRESH_INDEX_SQL)
             # Same one-shot flags as snowball._ensure_schema.  Without these, a
             # DB that first meets the new columns here keeps classic_lambda=0

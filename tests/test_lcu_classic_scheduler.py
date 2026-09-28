@@ -256,6 +256,16 @@ class ClassicClaimTests(unittest.TestCase):
         self.assertEqual(claimed[0], "stale-low-yield")
         self.assertEqual(claimed[-1], "classic_due")
 
+    def _discovered_hours_ago(self, puuid: str, hours: float) -> None:
+        """A never-crawled discovery: classic_last_crawl_ms=0 is what keeps a
+        row in the fresh arm's partial index."""
+        self.con.execute(
+            "UPDATE crawl_queue SET discovered_match_created_ms=?, "
+            "classic_last_crawl_ms=0 WHERE puuid=?",
+            (int(time.time() * 1000 - hours * HOUR_MS), puuid),
+        )
+        self.con.commit()
+
     def _mark_visited(self, puuid: str) -> None:
         self.con.execute(
             "UPDATE crawl_seen SET process_count=1 WHERE puuid=?", (puuid,)
@@ -274,6 +284,7 @@ class ClassicClaimTests(unittest.TestCase):
             "WHERE puuid='never-visited-new'"
         )
         self.con.commit()
+        self._discovered_hours_ago("never-visited-new", 2)
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=1):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertIsNotNone(claimed)
@@ -282,10 +293,27 @@ class ClassicClaimTests(unittest.TestCase):
 
     def test_fresh_half_prefers_newest_discovery(self) -> None:
         self._add_two_classic_players()
+        self._discovered_hours_ago("stale-low-yield", 20)
+        self._discovered_hours_ago("fresh-high-yield", 3)
         with patch("aram_nn.lcu.snowball._claim_counter", return_value=1):
             claimed = _claim_next_player(self.con, "W01", 300_000, 100)
         self.assertEqual(claimed[0], "fresh-high-yield")
         self.assertEqual(claimed[-1], "classic_fresh")
+
+    def test_fresh_half_skips_discoveries_older_than_the_window(self) -> None:
+        """Month-old never-visited discoveries returned 0 Classic games per 100
+        visits; the slot must go to the due arm instead."""
+        self._add_two_classic_players()
+        self._discovered_hours_ago("stale-low-yield", 72)
+        self._discovered_hours_ago("fresh-high-yield", 30 * 24)
+        with patch("aram_nn.lcu.snowball._claim_counter", return_value=1), patch(
+            "aram_nn.lcu.snowball.lane_arm", return_value="due"
+        ), patch(
+            "aram_nn.lcu.snowball._classic_lane_arm_for_slot", return_value="due"
+        ):
+            claimed = _claim_next_player(self.con, "W01", 300_000, 100)
+        self.assertEqual(claimed[0], "fresh-high-yield")
+        self.assertEqual(claimed[-1], "classic_due")
 
     def test_fresh_half_falls_back_to_due_when_everyone_was_visited(self) -> None:
         self._add_two_classic_players()
