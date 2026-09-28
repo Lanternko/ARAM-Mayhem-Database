@@ -1608,6 +1608,11 @@ def _adaptive_target_game_ids(
     work, so Classic and Jade no longer ride only on Mayhem discovery. When the
     current patch is known, old-patch rows neither make a player active nor get
     expanded; the crawler's scarce detail bandwidth stays on current data.
+
+    Classic (4310) rows bypass the probe: every current-patch Classic row in
+    the window is fetched.  Occasional Classic players usually have their
+    Classic games at history positions 5-20, and the probe rule dropped ~58%
+    of them while the scarce Classic population was already fully visited.
     """
     normalized_patch = _major_minor_patch(current_patch)
     all_target = _extract_current_patch_target_game_ids(
@@ -1621,11 +1626,18 @@ def _adaptive_target_game_ids(
     )
     if target_count >= max(1, int(full_history_min_mayhem)):
         return all_target
-    if target_count >= 1:
-        return _extract_current_patch_target_game_ids(
-            probe, target_queues, normalized_patch
+    selected = (
+        set(_extract_current_patch_target_game_ids(probe, target_queues, normalized_patch))
+        if target_count >= 1
+        else set()
+    )
+    if _CLASSIC_QUEUE_ID in target_queues:
+        selected.update(
+            _extract_current_patch_target_game_ids(
+                history, {_CLASSIC_QUEUE_ID}, normalized_patch
+            )
         )
-    return []
+    return [game_id for game_id in all_target if game_id in selected]
 
 
 def _latest_target_match_created_ms(history: list[dict], target_queues: set[int]) -> int:

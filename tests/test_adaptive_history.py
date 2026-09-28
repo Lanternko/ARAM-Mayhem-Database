@@ -66,6 +66,22 @@ class AdaptiveHistoryTests(unittest.TestCase):
             ["g0", "g1", "g2", "g5"],
         )
 
+    def test_classic_beyond_probe_is_fetched_without_dense_probe(self):
+        history = _versioned_history(
+            [(420, "16.15.1")] * 4
+            + [(4310, "16.15.1"), (2400, "16.15.1"), (4310, "16.14.9"), (4310, "16.15.2")]
+        )
+        self.assertEqual(
+            _adaptive_target_game_ids(history, {450, 2400, 4310}, current_patch="16.15"),
+            ["g4", "g7"],
+        )
+
+    def test_sparse_probe_keeps_probe_targets_plus_all_classic(self):
+        history = _history([2400, 420, 420, 420, 2400, 4310, 450])
+        self.assertEqual(
+            _adaptive_target_game_ids(history, {450, 2400, 4310}), ["g0", "g5"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
