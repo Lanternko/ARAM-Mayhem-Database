@@ -49,7 +49,7 @@ python scripts/publish_static_site.py --once --force --patch-prefix auto
 python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/"
 ```
 
-Production URL 會自動補 canonical split payload、Meta Pick API 與公開 analytics token。Shell-only 讀取現有 `docs/api/tier-list.json`，重建 HTML route shells、`docs/assets/site.js` 與 `docs/assets/site.css`（兩者都以 content-hash `?v=` 被 HTML 引用，必須與 shells 同一個 commit；已在 publisher `DEFAULT_DOC_PATHS`，改 allowlist 後要重啟 publisher），跳過勝率、augment、item／affinity 等完整資料計算；它不把 collector 新增 rows 偷渡進公開 snapshot。
+Production URL 會自動補 canonical split payload、Meta Pick API 與公開 analytics token。Shell-only 讀取現有 `docs/api/tier-list.json`，重建 HTML route shells、`docs/assets/site.js` 與 `docs/assets/site.css`（兩者都以 content-hash `?v=` 被 HTML 引用，必須與 shells 同一個 commit；已在 publisher `DEFAULT_DOC_PATHS`，改 allowlist 後要重啟 publisher），跳過勝率、augment、item／affinity 等完整資料計算；它不把 collector 新增 rows 偷渡進公開 snapshot。既有 tier-list JSON 與 champion shards 必須逐位元保留；模型匯出、comp hydration、payload slimming 與 shard migration 只能由 data build 執行，shell-only 不依賴本機模型。
 
 依 `DESIGN.md` 做受影響 viewport、theme、keyboard／touch 與 console QA。若使用者要求 deploy，review 後 commit 明確的 template／renderer source 與相依 shell outputs，再依 `runbooks/git-workflow.md` 整合並 push；這個 deploy scope 已經是 main integration 的授權，不要再問一次。
 

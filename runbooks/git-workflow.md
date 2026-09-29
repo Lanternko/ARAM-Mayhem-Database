@@ -14,7 +14,7 @@
 | Task worktree | 一個明確 source／docs／experiment change | 一個 `codex/<task>` branch；工作完成後驗證再清理 | 建立該 task 的 human／agent |
 | Disposable automation worktree | 原子 build／publish | 從 `origin/main` detached 建立；單次結束即移除 | Harness only |
 
-Primary checkout 會被本機 watchdog、scripts 與資料路徑使用；直接在這裡改 source 可能讓 live process 載入未完成程式。一般修改優先放 task worktree，而且 worktree path 必須在 repository 目錄之外，避免 nested repo 被工具或測試掃入。
+Primary checkout 會被本機 watchdog、scripts 與資料路徑使用；直接在這裡改 source 可能讓 live process 載入未完成程式。一般修改優先放 task worktree。所有 task worktree 集中在 primary checkout 之外的 sibling workspace `D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\<task>`：在 repository 內會讓 nested repo 被工具或測試掃入，散在 `D:\Projects\CODING\` 頂層則會把 project root 洗成幾十個近似名稱的目錄。同一個 workspace 另外放 `backups\`（bundle／cutover 快照）與 history-rewrite clone，它們都不屬於 primary checkout 的 Git scope。
 
 ## Non-negotiable safety gates
 
@@ -24,6 +24,7 @@ Primary checkout 會被本機 watchdog、scripts 與資料路徑使用；直接�
 - Stage 明確 review 的 path；本 repo 不用 `git add .` 或 `git add -A`，因為 primary checkout 經常同時有 generated output、local state 與 unrelated WIP。
 - 不使用 `git push --force` 或 `--force-with-lease`。需要改寫已發布歷史時，另開 replacement branch 或取得明確 owner 決策。
 - 不用檔案總管或 `Remove-Item` 手動刪 worktree directory；Git metadata 必須經 `git worktree remove` 與 `git worktree prune` 維持一致。
+- 刪除任何 worktree 內的目錄前先確認它不是 junction／symlink（`Get-Item <path> -Force | Select LinkType,Target`）。要拆連結本身用非遞迴的 `[System.IO.Directory]::Delete($path, $false)`；`Remove-Item -Recurse` 與 `rmdir /s` 會刪穿 junction，清掉 primary checkout 的 `models\` 或 `data\`。
 
 ## Inspect before work
 
@@ -45,7 +46,7 @@ git log --oneline --decorate -5
 ```powershell
 $taskName = "short-task-name"
 $taskBranch = "codex/$taskName"
-$taskWorktree = "D:\Projects\CODING\aram-winrate-nn-$taskName"
+$taskWorktree = "D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\$taskName"
 
 git fetch --prune origin
 git worktree add -b $taskBranch $taskWorktree origin/main
@@ -55,6 +56,8 @@ git -C $taskWorktree status --short --branch
 Branch 已存在時不要加 `-b` 或另造近似名稱；先用 `git worktree list --porcelain` 找到它的 checkout。若 branch 存在但沒有 worktree，確認 ownership 後才用 `git worktree add $taskWorktree $taskBranch` 恢復。
 
 Ignored runtime inputs 不會自動出現在 task worktree。不要因此移動 `games.db`／WAL／SHM；測試使用 fixture、snapshot、明確唯讀路徑，或由對應 harness 提供的 link mechanism。
+
+Task worktree 也不得自行把 `models\` 或 `data\` junction／symlink 到 primary checkout。Windows 的遞迴刪除會穿過 junction 刪到目標本體：2026-09-19 一個 task worktree 連了整層 `models`，接著重建子目錄時把 primary checkout 的 recommender model 清空，site build 連續 16 小時失敗在 `Draft prediction model failed public validation.`。需要 model 或 DB 時用絕對路徑唯讀開啟（多數 CLI 有 `--db`、`--data`、`--model-dir`、`--checkpoint`），要寫入就複製一份到 worktree 內。唯一例外是 publisher 自己的 disposable worktree，它的 link／unlink 由 `static_publish.py` 成對擁有。
 
 ## Choose how to update
 
@@ -114,7 +117,7 @@ Routine data publisher 是直接 push `main` 的 automation exception，但只�
 Worktree cleanup 與 branch deletion 是兩個不同決策。先證明 worktree clean、沒有 live process 使用，而且 HEAD 已可從 `origin/main` 到達：
 
 ```powershell
-$taskWorktree = "D:\Projects\CODING\aram-winrate-nn-short-task-name"
+$taskWorktree = "D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\short-task-name"
 $taskBranch = "codex/short-task-name"
 
 git fetch --prune origin
@@ -126,6 +129,8 @@ git worktree list --porcelain
 ```
 
 `status --short` 必須沒有輸出，且 `merge-base --is-ancestor` 必須 exit 0。任何檢查失敗都保留 worktree 並記錄原因；不得用 `git worktree remove --force` 清掉不明修改。
+
+路徑不在 `aram-winrate-nn-workspace\worktrees\` 的既有 worktree 不要重建或手動搬移；用 `git worktree move <old> <new>` 讓 Git 自己改 metadata，dirty worktree 也可以安全搬（move 不動 working tree 內容），但 worktree 被 live process 使用時要先停掉該 process。
 
 Local／remote branch cleanup 只有在 owner 明確要求，且已確認不再需要 rollback 時才分開執行。不要因為移除 worktree 就順手刪 remote branch。
 

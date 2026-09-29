@@ -366,8 +366,9 @@ def _run_checked(runner: CommandRunner, command: Sequence[str]) -> CommandResult
     result = runner(command)
     if result.returncode != 0:
         rendered = " ".join(command)
-        detail = result.stderr.strip() or result.stdout.strip()
-        raise RuntimeError(f"command failed ({rendered}): {detail}")
+        detail = "\n".join(part for part in (
+            result.stderr.strip(), result.stdout.strip()) if part)
+        raise RuntimeError(f"command failed ({rendered}), exit={result.returncode}: {detail}")
     return result
 
 

@@ -137,3 +137,13 @@ def test_pipeline_passes_the_preflighted_score_csv(env):
     synergy = next(c for c in cmds if "scripts/build_role_synergy.py" in c)
     assert train[train.index("--score-csv") + 1] == str(env["score_csv"])
     assert synergy[synergy.index("--scores-csv") + 1] == str(env["score_csv"])
+
+
+def test_failed_command_retains_exit_code_and_both_output_streams():
+    from aram_nn.site.static_publish import _run_checked
+    with pytest.raises(RuntimeError) as caught:
+        _run_checked(lambda cmd: CommandResult(137, "last completed patch", "allocation failed"), ["python", "export.py"])
+    message = str(caught.value)
+    assert "exit=137" in message
+    assert "last completed patch" in message
+    assert "allocation failed" in message

@@ -2762,7 +2762,6 @@ const __BUILD = window.__ARAM_BUILD__ || {};
                         ${v.desc ? `<span class="aug-pick-desc">${escHtml(v.desc)}</span>` : ''}
                         <span class="aug-pick-foot">
                             <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
-                            ${champAugBadge(verdict)}
                         </span>
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;

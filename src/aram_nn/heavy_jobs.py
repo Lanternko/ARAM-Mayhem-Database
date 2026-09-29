@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 
@@ -32,9 +33,11 @@ class Limits:
     start_commit_free_mb: float = 24576
     stop_available_mb: float = 4096
     stop_commit_percent: float = 85
+    stop_commit_free_mb: float = 0
     poll_sec: float = 1
     retry_sec: float = 30
     healthy_samples: int = 3
+    wait_warn_sec: float = 600
 
 
 def can_start(sample: ResourceSample, limits: Limits) -> bool:
@@ -47,7 +50,33 @@ def can_start(sample: ResourceSample, limits: Limits) -> bool:
 def must_stop(sample: ResourceSample, limits: Limits) -> bool:
     return bool(not sample.complete
                 or sample.available_mb <= limits.stop_available_mb
-                or sample.commit_percent >= limits.stop_commit_percent)
+                or sample.commit_percent >= limits.stop_commit_percent
+                or sample.commit_limit_mb - sample.commit_total_mb <= limits.stop_commit_free_mb)
+
+
+# Defaults remain conservative for unspecified whole-frame workloads. The site
+# profile predates bounded model refresh and stays separate so its established
+# admission policy is not silently changed by a training repair.
+SITE_BUILD_LIMITS = Limits(
+    start_available_mb=6144,
+    start_commit_percent=95,
+    start_commit_free_mb=2048,
+    stop_available_mb=2048,
+    stop_commit_percent=98,
+)
+# The current refresh projects team columns and streams participant batches.
+# Keep 6 GiB admission headroom and stop with 2 GiB still free; validate peak
+# usage from child_sample events rather than assuming the old 24 GiB loader.
+MODEL_REFRESH_LIMITS = Limits(
+    start_available_mb=8192,
+    start_commit_percent=90,
+    start_commit_free_mb=6144,
+    stop_available_mb=3072,
+    stop_commit_percent=96,
+    stop_commit_free_mb=2048,
+)
+JOB_LIMITS = {'publish_static_site_once': SITE_BUILD_LIMITS,
+              'refresh_models_once': MODEL_REFRESH_LIMITS}
 
 
 def guard_directory() -> Path:
@@ -101,18 +130,44 @@ class HeavyJob:
         with (self.directory / 'events.jsonl').open('a', encoding='utf-8') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
 
+    def warn_starved(self, sample: ResourceSample, waited: float):
+        headroom = (None if sample.commit_limit_mb is None or sample.commit_total_mb is None
+                    else sample.commit_limit_mb - sample.commit_total_mb)
+        print(f'[heavy-job] {self.name} has waited {waited / 60:.0f}min for headroom: '
+              f'available={sample.available_mb}MB (need {self.limits.start_available_mb:g}) '
+              f'commit={sample.commit_percent}% (need <={self.limits.start_commit_percent:g}) '
+              f'commit_free={headroom}MB (need {self.limits.start_commit_free_mb:g})',
+              file=sys.stderr, flush=True)
+
     @contextmanager
     def admitted(self):
+        # Poll can_start before taking the lock. A waiter that holds the lock
+        # blocks every other pipeline for as long as headroom stays short.
         while True:
+            healthy = 0
+            waited = 0.0
+            next_warn = self.limits.wait_warn_sec
+            while healthy < self.limits.healthy_samples:
+                sample = sample_resources()
+                healthy = healthy + 1 if can_start(sample, self.limits) else 0
+                self.event('admission_sample', sample=sample.as_dict(), healthy_samples=healthy)
+                if healthy < self.limits.healthy_samples:
+                    # events.jsonl is not the caller's log. Without this line a
+                    # starved gate is indistinguishable from a healthy service:
+                    # the process is alive, its own log silent, its work never run.
+                    if waited >= next_warn:
+                        self.warn_starved(sample, waited)
+                        next_warn += self.limits.wait_warn_sec
+                    time.sleep(self.limits.retry_sec)
+                    waited += self.limits.retry_sec
             with exclusive_lock(self.directory / 'analysis.lock') as acquired:
                 if acquired:
-                    healthy = 0
-                    while healthy < self.limits.healthy_samples:
-                        sample = sample_resources()
-                        healthy = healthy + 1 if can_start(sample, self.limits) else 0
-                        self.event('admission_sample', sample=sample.as_dict(), healthy_samples=healthy)
-                        if healthy < self.limits.healthy_samples:
-                            time.sleep(self.limits.retry_sec)
+                    # Another admitted job may have consumed memory between our
+                    # last healthy sample and acquiring the shared lock.
+                    sample = sample_resources()
+                    if not can_start(sample, self.limits):
+                        self.event('admission_recheck_failed', sample=sample.as_dict())
+                        continue
                     token = _active.set(self)
                     try:
                         self.event('admitted')
@@ -134,7 +189,8 @@ def guarded_pipeline(function):
                 or (function.__name__ == 'refresh_models_once' and kwargs.get('dry_run'))
                 or (runner is not None and runner is not function.__kwdefaults__.get('runner'))):
             return function(*args, **kwargs)
-        with HeavyJob(function.__name__).admitted():
+        limits = JOB_LIMITS.get(function.__name__, Limits())
+        with HeavyJob(function.__name__, limits=limits).admitted():
             return function(*args, **kwargs)
     return wrapped
 

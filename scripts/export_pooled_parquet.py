@@ -19,6 +19,7 @@ from pathlib import Path
 
 import click
 import polars as pl
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 SCHEMA = {
@@ -126,6 +127,7 @@ def main(db, out, patches, cap_oldest, batch_rows):
     tmp = out.with_name(out.name + ".partial")
     tmp.unlink(missing_ok=True)
 
+    arrow_schema = pl.DataFrame([], schema=SCHEMA).to_arrow().schema
     writer = None
     batch: list[dict] = []
     total = 0
@@ -134,7 +136,9 @@ def main(db, out, patches, cap_oldest, batch_rows):
         nonlocal writer, total
         if not batch:
             return
-        table = pl.DataFrame(batch, schema=SCHEMA).to_arrow()
+        # Build Arrow buffers directly. Repeated Polars -> Arrow conversion
+        # retained multi-GiB allocator arenas during a full production export.
+        table = pa.Table.from_pylist(batch, schema=arrow_schema)
         if writer is None:
             writer = pq.ParquetWriter(tmp, table.schema, compression="zstd")
         writer.write_table(table)

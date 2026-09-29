@@ -940,6 +940,58 @@ _FEEDBACK_COPY = {
 }
 
 
+_FEEDBACK_CTA_COPY = {
+    # Placement, not wording, is what starved this page: for its first week the
+    # only entry point was a 12px grey footer link sitting between 關於 and
+    # 隱私權, five screens down on mobile, and /feedback/ never cleared 10 views
+    # while the nav-bar routes pulled hundreds.  These prompts sit where the
+    # doubt actually forms -- at the end of the data the reader just judged.
+    "home": {
+        "zh": "覺得哪個英雄的評級不對，或是數字看起來怪怪的？",
+        "zh_cn": "觉得哪个英雄的评级不对，或是数字看起来怪怪的？",
+        "en": "Think a champion is rated wrong, or a number looks off?",
+    },
+    "augments": {
+        "zh": "增幅的資料對不上你的實戰感受，或想看到別的切法？",
+        "zh_cn": "增强的数据对不上你的实战感受，或想看到别的切法？",
+        "en": "Do the augment numbers not match what you see in game?",
+    },
+    "changes": {
+        "zh": "版本變動跟你的體感不一樣，或有想追蹤的項目？",
+        "zh_cn": "版本变动跟你的体感不一样，或有想追踪的项目？",
+        "en": "Do these shifts not match how the patch feels, or want something tracked?",
+    },
+}
+
+_FEEDBACK_CTA_ACTION = {
+    "zh": "告訴我",
+    "zh_cn": "告诉我",
+    "en": "Tell me",
+}
+
+
+def _feedback_cta_html(placement: str) -> str:
+    """In-content invitation to the feedback page, emitted at the end of a view."""
+    copy = {k: html.escape(v, quote=True) for k, v in _FEEDBACK_CTA_COPY[placement].items()}
+    act = {k: html.escape(v, quote=True) for k, v in _FEEDBACK_CTA_ACTION.items()}
+    copy_id = f"feedback-cta-{placement}-copy"
+    # Plain div, not <aside>: three unlabeled complementary landmarks would
+    # crowd the landmark list.  The link text alone ("告訴我") says nothing out
+    # of context, so it is described by the question it answers.
+    return (
+        f"<div class='feedback-cta' data-feedback-cta='{placement}'>"
+        f"<p class='feedback-cta-copy' id='{copy_id}' "
+        f"data-i18n-zh='{copy['zh']}' data-i18n-zh-cn='{copy['zh_cn']}' "
+        f"data-i18n-en='{copy['en']}'>{copy['zh']}</p>"
+        "<a class='feedback-cta-link' href='/feedback/' "
+        "data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' "
+        f"data-href-en='/en/feedback/' aria-describedby='{copy_id}' "
+        f"data-i18n-zh='{act['zh']}' data-i18n-zh-cn='{act['zh_cn']}' "
+        f"data-i18n-en='{act['en']}'>{act['zh']}</a>"
+        "</div>"
+    )
+
+
 def _feedback_head_links(*, site_url: str) -> str:
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
@@ -1815,7 +1867,7 @@ def payload_content_version(payload: dict) -> str:
     ``detailVersion`` is excluded because it stores this key in the published
     payload.  Excluding it avoids a circular hash while still invalidating the
     URL whenever Draft model weights, hydrated profiles, or other payload data
-    changes during a shell-only publish.
+    changes during a data publish.
     """
     version_basis = dict(payload)
     version_basis.pop("detailVersion", None)
@@ -3780,6 +3832,8 @@ def render_html(
         "</div>"
     )
 
+    parts.append(_feedback_cta_html("home"))
+
     parts.append("<div class='footer'>")
     parts.append(
         "<div class='cutoffs'>"
@@ -3802,9 +3856,26 @@ def render_html(
         "data-i18n-en='About'>關於</a>"
         "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
         "data-i18n-en='Privacy'>隱私權</a>"
-        "<a href='/feedback/' data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' data-href-en='/en/feedback/' data-i18n-zh='回饋與聯絡' data-i18n-zh-cn='反馈与联系' "
-        "data-i18n-en='Feedback & contact'>回饋與聯絡</a>"
         "</nav>"
+    )
+    # Feedback is an invitation, not a legal page: sitting in the 關於/隱私權 row
+    # made it read as boilerplate.  Own affordance, beside the GitHub pill it
+    # shares intent with.
+    # The two pills share one wrapping flex row so the gap survives both the
+    # side-by-side desktop layout and the stacked phone layout.
+    parts.append("<div class='footer-actions'>")
+    parts.append(
+        "<a class='feedback-pill' href='/feedback/' "
+        "data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' "
+        "data-href-en='/en/feedback/'>"
+        "<svg viewBox='0 0 16 16' width='13' height='13' fill='none' "
+        "stroke='currentColor' stroke-width='1.6' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='M14 9.5a1.5 1.5 0 0 1-1.5 1.5H6l-3.5 2.5V4a1.5 1.5 0 0 1 "
+        "1.5-1.5h8.5A1.5 1.5 0 0 1 14 4Z'></path></svg>"
+        "<span data-i18n-zh='給我回饋' data-i18n-zh-cn='给我反馈' "
+        "data-i18n-en='Send feedback'>給我回饋</span>"
+        "</a>"
     )
     # Footer open-source control: pill affordance so it reads as clickable,
     # still sits with freshness meta (not a header CTA).
@@ -3826,6 +3897,7 @@ def render_html(
         "<span data-i18n-zh='Star' data-i18n-en='Star'>Star</span></span>"
         "</a>"
     )
+    parts.append("</div>")  # /footer-actions
     parts.append(
         "<div class='disclaimer'>"
         "This site isn't endorsed by Riot Games and doesn't reflect the views "
@@ -4047,7 +4119,8 @@ def render_html(
         # 增幅池 — rendered entirely by JS from api/augment-pools.json.
         "<div class='aug-mode-panel' id='aug-pools-host' data-aug-mode='pools' "
         "role='tabpanel' aria-labelledby='aug-mode-pools' hidden></div>"
-        "</div>"
+        + _feedback_cta_html("augments")
+        + "</div>"
         "</section>"
     )
 
@@ -4066,7 +4139,8 @@ def render_html(
         "</div></div>"
         "<div class='updates-list' id='updates-list'></div>"
         "</section>"
-        "</div>"
+        + _feedback_cta_html("changes")
+        + "</div>"
         "</section>"
     )
 

@@ -641,13 +641,14 @@ def start_league_client() -> dict[str, Any]:
     # advertised port can refuse connections while fresh launches keep forwarding
     # their app-command to that dead instance. A transport failure proves the
     # existing remoting endpoint is unusable. HTTP 424 means remoting is
-    # reachable but the product launcher cannot launch League; forwarding
+    # reachable but the product launcher cannot launch League. HTTP 423 also
+    # leaves a stale product lock after League has exited; forwarding
     # --launch-product to that same instance does not recover. Recycle every
     # Riot Client process before cold-starting in both cases. Match both
     # "RiotClientServices.exe" and the space-form "Riot Client.exe" (the UX
     # host); stray copies wedge a fresh boot pre-LCU.
     killed_zombie_pids: list[int] = []
-    if status in ("ERR", 424):
+    if status in ("ERR", 423, 424):
         zombies = []
         for proc in iter_processes():
             try:
@@ -701,7 +702,7 @@ def start_league_client() -> dict[str, Any]:
             )
             if remoting_launch_status == 200:
                 break
-            if remoting_launch_status not in ("ERR", 424):
+            if remoting_launch_status not in ("ERR", 423, 424):
                 break
             time.sleep(2)
     return {

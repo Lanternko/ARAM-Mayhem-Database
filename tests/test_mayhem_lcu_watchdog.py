@@ -6,6 +6,8 @@ import sys
 from types import SimpleNamespace
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -545,8 +547,9 @@ def test_start_league_client_clears_unreachable_remoting_zombie(
     ]
 
 
-def test_start_league_client_recycles_424_remoting_zombie(
-    monkeypatch, tmp_path: Path
+@pytest.mark.parametrize("launch_error", [423, 424])
+def test_start_league_client_recycles_locked_remoting_zombie(
+    monkeypatch, tmp_path: Path, launch_error
 ) -> None:
     class FakeProcess:
         pid = 4242
@@ -563,8 +566,8 @@ def test_start_league_client_recycles_424_remoting_zombie(
     launches: list[tuple[list[str], Path]] = []
     remoting_results = iter(
         [
-            (424, "HTTP Error 424: Failed Dependency"),
-            (424, "HTTP Error 424: Failed Dependency"),
+            (launch_error, "product launcher unavailable"),
+            (launch_error, "product launcher unavailable"),
             (200, "launch-session-id"),
         ]
     )
@@ -589,8 +592,8 @@ def test_start_league_client_recycles_424_remoting_zombie(
 
     assert zombie.killed is True
     assert result["killed_zombie_pids"] == [4242]
-    assert result["remoting_status_before_launch"] == 424
-    assert result["remoting_error_before_launch"] == "HTTP Error 424: Failed Dependency"
+    assert result["remoting_status_before_launch"] == launch_error
+    assert result["remoting_error_before_launch"] == "product launcher unavailable"
     assert result["started"] is True
     assert result["remoting_launch_status"] == 200
     assert result["remoting_launch_attempts"] == 2

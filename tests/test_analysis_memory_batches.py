@@ -9,7 +9,7 @@ import polars as pl
 import pytest
 from click.testing import CliRunner
 
-from aram_nn.parquet_batches import SOURCE_ROW, TEAM_COLUMNS, iter_parquet_rows
+from aram_nn.parquet_batches import SOURCE_ROW, TEAM_COLUMNS, iter_parquet_rows, read_team_frame
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -45,6 +45,21 @@ def data(tmp_path):
     path = tmp_path / "games.parquet"
     pl.DataFrame(rows).write_parquet(path, row_group_size=5)
     return path
+
+
+def test_team_frame_keeps_file_offsets_after_column_projection(data):
+    """Production train path projects TEAM_COLUMNS then selects JSON by offset.
+
+    ``pl.read_parquet(..., columns=..., row_index_name=...)`` silently drops
+    the index on Polars 1.40; ``read_team_frame`` is the supported substitute.
+    """
+    frame = read_team_frame(data).filter(pl.col("duration_sec") >= 300)
+    full = pl.read_parquet(data)
+    expected = [i for i, duration in enumerate(full["duration_sec"].to_list()) if duration >= 300]
+    assert frame[SOURCE_ROW].to_list() == expected
+    selected = set(expected)
+    got = list(iter_parquet_rows(data, ["duration_sec"], selected_rows=selected, batch_size=3))
+    assert [row[0] for row in got] == frame["duration_sec"].to_list()
 
 
 def test_batches_select_exact_rows(data):
@@ -90,14 +105,17 @@ def test_axes_artifact_parity(data, tmp_path, monkeypatch, patches):
 
 
 def test_train_only_profiles_parity(data, tmp_path):
-    df = pl.read_parquet(data, row_index_name=SOURCE_ROW).filter(pl.col("duration_sec") >= 300)
+    df = read_team_frame(data).filter(pl.col("duration_sec") >= 300)
     train = df.sort("game_creation_ms").head(7)
+    full = pl.read_parquet(data).with_row_index(SOURCE_ROW).filter(pl.col("duration_sec") >= 300)
+    full_train = full.sort("game_creation_ms").head(7)
     csv = tmp_path / "scores.csv"
     csv.write_text(",".join(["champion_id", "tags", *SCORE_COLUMNS]) + "\n" +
                    "\n".join(",".join([str(c), "", *["1" for _ in SCORE_COLUMNS]]) for c in range(1, 11)))
     kwargs = dict(score_csv=csv, min_games=1, replace_sustain=True)
-    expected = build_champion_profiles(train_df=train, **kwargs)
-    actual = build_champion_profiles(train_df=train.drop("participants_json"), **kwargs,
+    assert train[SOURCE_ROW].to_list() == full_train[SOURCE_ROW].to_list()
+    expected = build_champion_profiles(train_df=full_train, **kwargs)
+    actual = build_champion_profiles(train_df=train, **kwargs,
         empirical_rows=iter_parquet_rows(data, ["blue_wins", "duration_sec", "participants_json"],
                                         selected_rows=set(train[SOURCE_ROW].to_list()), batch_size=2))
     for cid in expected:

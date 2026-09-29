@@ -34,8 +34,29 @@ def test_os_lock_excludes_other_process_and_releases(tmp_path):
     assert subprocess.check_output([sys.executable, '-c', code, str(lock)], text=True).strip() == 'True'
 
 
+def test_waiting_for_headroom_does_not_hold_lock(monkeypatch, tmp_path):
+    n = {'i': 0}
+
+    def sample():
+        n['i'] += 1
+        return PRESSURE if n['i'] < 3 else HEALTHY
+
+    monkeypatch.setattr(jobs, 'sample_resources', sample)
+    lock_free_during_wait = []
+
+    def fake_sleep(_):
+        with jobs.exclusive_lock(tmp_path / 'analysis.lock') as acquired:
+            lock_free_during_wait.append(acquired)
+
+    monkeypatch.setattr(jobs.time, 'sleep', fake_sleep)
+    job = jobs.HeavyJob('test', tmp_path, jobs.Limits(healthy_samples=1))
+    with job.admitted():
+        pass
+    assert lock_free_during_wait and all(lock_free_during_wait)
+
+
 def test_waits_for_consecutive_healthy_samples(monkeypatch, tmp_path):
-    samples = iter([HEALTHY, PRESSURE, HEALTHY, HEALTHY, HEALTHY])
+    samples = iter([HEALTHY, PRESSURE, HEALTHY, HEALTHY, HEALTHY, HEALTHY])
     monkeypatch.setattr(jobs, 'sample_resources', lambda: next(samples))
     monkeypatch.setattr(jobs.time, 'sleep', lambda _: None)
     job = jobs.HeavyJob('test', tmp_path)
@@ -47,7 +68,7 @@ def test_waits_for_consecutive_healthy_samples(monkeypatch, tmp_path):
 
 
 def test_pressure_kills_running_child_and_releases_lock(monkeypatch, tmp_path):
-    samples = iter([HEALTHY, HEALTHY, PRESSURE])
+    samples = iter([HEALTHY, HEALTHY, HEALTHY, PRESSURE])
     monkeypatch.setattr(jobs, 'sample_resources', lambda: next(samples))
     job = jobs.HeavyJob('test', tmp_path, jobs.Limits(healthy_samples=1))
     launched = []
@@ -142,6 +163,57 @@ def test_git_timeout_kills_tree_and_reports(tmp_path):
     assert 'waiting for credentials' in result.stderr
 
 
+def test_site_build_floor_clears_what_the_default_floor_rejects():
+    # A real sample from the publisher host, 2026-09-12 14:30. The default floor
+    # rejected every one of 3,088 such samples, and `must_stop` fired on them too,
+    # so the site build could neither start nor launch a child.
+    host = ResourceSample(12620, 43754, 50648, 86)
+    assert not jobs.can_start(host, jobs.Limits())
+    assert jobs.must_stop(host, jobs.Limits())
+    assert jobs.can_start(host, jobs.SITE_BUILD_LIMITS)
+    assert not jobs.must_stop(host, jobs.SITE_BUILD_LIMITS)
+
+
+def test_publisher_runs_on_the_site_build_floor(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setattr(jobs, 'guard_directory', lambda: tmp_path)
+    monkeypatch.setattr(jobs, 'sample_resources', lambda: ResourceSample(12620, 43754, 50648, 86))
+    # The host sample clears the site-build floor every time, so the gate sleeps
+    # only between the consecutive samples it needs. A gate that fell back to the
+    # default floor would sleep forever instead of waiting a bounded few times.
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) >= jobs.SITE_BUILD_LIMITS.healthy_samples:
+            pytest.fail('gate rejected the host sample')
+
+    monkeypatch.setattr(jobs.time, 'sleep', fake_sleep)
+
+    @jobs.guarded_pipeline
+    def publish_static_site_once(*, runner=lambda command: None):
+        return 'published'
+
+    assert publish_static_site_once() == 'published'
+    admitted = [json.loads(line) for line in (tmp_path / 'events.jsonl').read_text().splitlines()
+                if '"admitted"' in line]
+    assert len(admitted) == 1
+    assert admitted[0]['thresholds']['start_available_mb'] == jobs.SITE_BUILD_LIMITS.start_available_mb
+
+
+def test_starved_gate_warns_on_the_callers_own_log(monkeypatch, tmp_path, capsys):
+    samples = iter([PRESSURE, PRESSURE, PRESSURE, HEALTHY, HEALTHY])
+    monkeypatch.setattr(jobs, 'sample_resources', lambda: next(samples))
+    monkeypatch.setattr(jobs.time, 'sleep', lambda _: None)
+    limits = jobs.Limits(healthy_samples=1, retry_sec=30, wait_warn_sec=60)
+    with jobs.HeavyJob('publish_static_site_once', tmp_path, limits).admitted():
+        pass
+    warnings = [line for line in capsys.readouterr().err.splitlines() if '[heavy-job]' in line]
+    assert len(warnings) == 1
+    assert 'publish_static_site_once has waited 1min' in warnings[0]
+    assert f'available={PRESSURE.available_mb}MB (need 24576)' in warnings[0]
+
+
 def test_git_runs_noninteractive(monkeypatch):
     seen = {}
     original = jobs.subprocess.Popen
@@ -153,3 +225,20 @@ def test_git_runs_noninteractive(monkeypatch):
     assert result.returncode == 0 and result.stdout.strip() == 'ok'
     assert seen['GIT_TERMINAL_PROMPT'] == '0'
     assert seen['GCM_INTERACTIVE'] == 'never'
+
+
+def test_model_refresh_floor_keeps_commit_reserve():
+    limits = jobs.MODEL_REFRESH_LIMITS
+    assert jobs.can_start(ResourceSample(11000, 43000, 50308, 85.5), limits)
+    assert not jobs.can_start(ResourceSample(11000, 45000, 50308, 89.5), limits)
+    assert jobs.must_stop(ResourceSample(10000, 48500, 50308, 96.4), limits)
+    assert jobs.must_stop(ResourceSample(10000, 19000, 20000, 95), limits)
+    assert not jobs.must_stop(ResourceSample(10000, 46000, 50308, 91.4), limits)
+
+
+def test_admission_rechecks_after_lock(monkeypatch, tmp_path):
+    samples = iter([HEALTHY, PRESSURE, HEALTHY, HEALTHY])
+    monkeypatch.setattr(jobs, 'sample_resources', lambda: next(samples))
+    with jobs.HeavyJob('test', tmp_path, jobs.Limits(healthy_samples=1)).admitted():
+        pass
+    assert 'admission_recheck_failed' in (tmp_path / 'events.jsonl').read_text()

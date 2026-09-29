@@ -103,7 +103,7 @@ foreach ($rel in @("srcram_nn\lcu\snowball.py","srcram_nn\lcu\poller.py",
 $root = "D:\Projects\CODING\aram-winrate-nn"
 Set-Location $root
 $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$backup = "D:\Projects\CODING\aram-winrate-nn-backups\single-writer-cutover-$stamp"
+$backup = "D:\Projects\CODING\aram-winrate-nn-workspace\backups\single-writer-cutover-$stamp"
 New-Item -ItemType Directory -Force $backup | Out-Null
 # Persist the path. Steps 3 and Rollback both need it, and a cutover spans long
 # enough that the shell holding this variable may not be the shell that runs

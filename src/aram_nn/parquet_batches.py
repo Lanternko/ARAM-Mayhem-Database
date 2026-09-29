@@ -10,6 +10,16 @@ TEAM_COLUMNS = ["patch", "duration_sec", "game_creation_ms", "blue_champions",
 SOURCE_ROW = "_source_row"
 
 
+def read_team_frame(path: Path) -> pl.DataFrame:
+    """Load team columns with original parquet offsets.
+
+    Polars 1.40 drops ``row_index_name`` when ``columns=`` is set, so the
+    index is attached after the projection. Offsets still match
+    ``iter_parquet_rows`` because both walk the file in order.
+    """
+    return pl.read_parquet(path, columns=TEAM_COLUMNS).with_row_index(SOURCE_ROW)
+
+
 def iter_parquet_rows(path: Path, columns: Sequence[str], *,
                       selected_rows=None, batch_size: int = 256) -> Iterator[tuple]:
     """Decode at most one batch, selecting exact source offsets before Python conversion.

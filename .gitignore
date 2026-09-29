@@ -8,7 +8,7 @@ data/
 # Logs / monitoring
 .codex/
 logs/
-models/
+/models/
 
 # Portable project skill adapters; all other .codex state/worktrees stay local.
 !.codex/
@@ -75,3 +75,7 @@ Thumbs.db
 .claude/worktrees/
 # Agent worktrees (any tool); local checkouts, never stage them
 .worktrees/
+
+# Local design-tool state and visual QA exports
+.impeccable/
+artifacts/

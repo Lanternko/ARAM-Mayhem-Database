@@ -34,7 +34,7 @@ from typing import Any
 import click
 import numpy as np
 import polars as pl
-from aram_nn.parquet_batches import TEAM_COLUMNS, SOURCE_ROW, iter_parquet_rows
+from aram_nn.parquet_batches import SOURCE_ROW, iter_parquet_rows, read_team_frame
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
@@ -126,7 +126,7 @@ def ev(model, x, y, mask=None):
 def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, val_size,
          half_life_days, feature_set, empirical_min_games, mover_min_drift, out, seed):
     np.random.seed(seed)
-    df = pl.read_parquet(data, columns=TEAM_COLUMNS, row_index_name=SOURCE_ROW).filter(pl.col("duration_sec") >= 300)
+    df = read_team_frame(data).filter(pl.col("duration_sec") >= 300)
     df = patch_prefix_col(df).sort("game_creation_ms")
 
     cur = df.filter(pl.col("pp") == current_patch)

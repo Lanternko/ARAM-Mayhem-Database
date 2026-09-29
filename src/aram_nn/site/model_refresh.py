@@ -207,7 +207,7 @@ def pipeline_commands(
     # own defaults) so preflight checks the same path the pipeline will open.
     return [
         [py, "scripts/export_pooled_parquet.py",
-         "--db", str(db), "--out", str(parquet), "--patches", patches_csv],
+         "--db", str(db), "--out", str(parquet), "--patches", patches_csv, "--batch-rows", "2000"],
         [py, "scripts/train_composition_lr_pooled.py",
          "--data", str(parquet), "--current-patch", current, "--prev-patch", prev,
          "--baseline-patch", baseline, "--half-life-days", hl, "--out", str(out_dir),
