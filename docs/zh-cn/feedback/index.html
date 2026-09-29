@@ -9971,7 +9971,7 @@
     .champ-hero-body {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: end;
+        align-items: center;
         gap: 18px 22px;
     }
     .champ-hero-avatar {
@@ -9980,50 +9980,60 @@
         width: 88px;
         height: 88px;
         border-radius: 18px;
-        border: 2px solid color-mix(in oklab, var(--tier-color) 70%, transparent);
-        box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+        border: 1px solid var(--border-strong);
     }
-    .champ-hero-id { min-width: 0; }
+    .champ-hero-id {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+    }
     .champ-hero-kicker {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 6px;
+        gap: 10px;
+        margin-bottom: 0;
     }
     .champ-hero-tier {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 3px 10px 3px 4px;
-        border-radius: 999px;
-        background: color-mix(in oklab, var(--tier-color) 18%, transparent);
-        color: var(--tier-color);
+        padding: 0;
+        color: var(--text-muted);
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
+        line-height: 1;
     }
     .champ-hero-tier b {
-        padding: 1px 7px;
-        border-radius: 999px;
-        background: var(--tier-color);
-        color: #111;
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 7px;
+        border-radius: 5px;
+        background: color-mix(in oklab, var(--tier-color) 12%, var(--bg));
+        color: color-mix(in oklab, var(--tier-color) 70%, var(--text));
         font-size: 11px;
         font-weight: 800;
     }
+    .champ-hero .detail-role-tag {
+        height: 22px;
+        padding: 0;
+        color: var(--text-muted);
+        background: none;
+        font-size: 11px;
+        font-weight: 500;
+        letter-spacing: .06em;
+    }
+    .champ-hero .detail-role-tag::before,
+    .champ-hero .detail-role-tag::after { content: none; }
     .champ-hero .cname {
         margin: 0;
         font-size: clamp(30px, 4.2vw, 46px);
         font-weight: 800;
-        line-height: 1.05;
+        line-height: 1;
         letter-spacing: -0.02em;
-        text-shadow: 0 2px 16px rgba(0, 0, 0, .35);
-    }
-    .champ-hero-alt {
-        margin: 4px 0 0;
-        color: var(--text-muted);
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: .04em;
     }
     .champ-hero-stats {
         display: flex;
@@ -10057,9 +10067,9 @@
     .champ-hero-stat.wr-hi dd b { color: var(--wr-5); }
     .champ-hero-stat.wr-lo dd b { color: var(--wr-1); }
     .champ-hero-stat dd small { color: var(--text-muted); font-size: 11px; font-weight: 700; }
-    [data-theme="light"] .champ-hero-tier { color: color-mix(in oklab, var(--tier-color) 55%, #000); }
-    [data-theme="light"] .champ-hero .cname { text-shadow: none; }
-    [data-theme="light"] .champ-hero-avatar { box-shadow: 0 8px 22px rgba(20, 30, 60, .18); }
+    [data-theme="light"] .champ-hero-tier b {
+        color: color-mix(in oklab, var(--tier-color) 40%, var(--text));
+    }
     @media (max-width: 900px) {
         .champ-hero-body { grid-template-columns: auto minmax(0, 1fr); }
         .champ-hero-stats { grid-column: 1 / -1; }

@@ -4349,25 +4349,14 @@
         };
     }
 
-    // Friendly one-word read of the tier for players who don't speak "T3".
-    const CHAMP_TIER_WORDS = {
-        OP: ['版本強勢', 'Meta pick'],
-        T1: ['強勢', 'Strong'],
-        T2: ['穩定', 'Solid'],
-        T3: ['普通', 'Average'],
-        T4: ['偏弱', 'Weak'],
-        T5: ['弱勢', 'Struggling'],
-    };
     /** Champion page banner: splash art, name, tier and the three headline numbers. */
     function buildChampHero(cid, info, overview, copy) {
         const tier = draftAssignTier(info.wr);
         const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
         const tierColor = (tierColors[tier] && tierColors[tier].color) || 'var(--accent)';
-        const words = CHAMP_TIER_WORDS[tier] || ['', ''];
         const key = String(info.image || '').split('/').pop().replace(/\.png$/i, '');
         const splash = key ? `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${encodeURIComponent(key)}_0.jpg` : '';
         const name = champName(info, cid);
-        const alt = currentLang === 'en' ? '' : (info.name_en || '');
         const rank = (r) => (
             Number(r) > 0 && Number(overview.rankTotal) > 0
                 ? `<small>${escHtml(copy.overviewRank(Number(r), Number(overview.rankTotal)))}</small>`
@@ -4385,11 +4374,10 @@
                     ${info.image ? `<span class="champ-hero-avatar"><img src="${info.image}" alt=""></span>` : ''}
                     <div class="champ-hero-id">
                         <div class="champ-hero-kicker">
-                            <span class="champ-hero-tier" title="${escHtml(pickLang('梯隊', 'Tier'))} ${tier}"><b>${tier}</b>${escHtml(pickLang(words[0], words[1]))}</span>
+                            <span class="champ-hero-tier" title="${escHtml(pickLang('梯隊', 'Tier'))} ${tier}"><b>${tier}</b></span>
                             ${buildDetailRoleTags(info)}
                         </div>
                         <h1 class="cname" id="detail-title-${cid}">${escHtml(name)}</h1>
-                        ${alt && alt !== name ? `<p class="champ-hero-alt" lang="en">${escHtml(alt)}</p>` : ''}
                     </div>
                     <dl class="champ-hero-stats">
                         ${stat(pct(info.wr), copy.overviewWrLabel, rank(overview.wrRank), ` is-wr wr-${info.wr >= 0.52 ? 'hi' : info.wr < 0.48 ? 'lo' : 'mid'}`)}
