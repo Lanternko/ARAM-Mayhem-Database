@@ -3757,7 +3757,7 @@ def render_html(
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
-                f"<img loading='lazy' src='{r['image']}' alt=''>"
+                f"<span class='champ-portrait'><img loading='lazy' src='{r['image']}' alt=''></span>"
                 f"<span class='alt-role-badge' data-alt-role='{html.escape(primary_role)}' "
                 "title='' aria-label='' hidden></span>"
                 # The English alias is rendered as screen-reader-only text so

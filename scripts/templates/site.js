@@ -4382,7 +4382,7 @@
             <header class="champ-hero" style="--tier-color:${tierColor}">
                 ${splash ? `<div class="champ-hero-art" aria-hidden="true"><img src="${splash}" alt="" decoding="async" fetchpriority="high"></div>` : ''}
                 <div class="champ-hero-body">
-                    ${info.image ? `<img class="champ-hero-avatar" src="${info.image}" alt="">` : ''}
+                    ${info.image ? `<span class="champ-hero-avatar"><img src="${info.image}" alt=""></span>` : ''}
                     <div class="champ-hero-id">
                         <div class="champ-hero-kicker">
                             <span class="champ-hero-tier" title="${escHtml(pickLang('梯隊', 'Tier'))} ${tier}"><b>${tier}</b>${escHtml(pickLang(words[0], words[1]))}</span>
@@ -6186,7 +6186,7 @@
                 + `data-tier="${tier}" style="--tier-color:${tierColor}" role="option" `
                 + `aria-selected="${onAlly || onEnemy ? 'true' : 'false'}" `
                 + `title="${escHtml(row.name)} · ${tier} · ${wrTxt}">`
-                + (image ? `<img loading="lazy" src="${image}" alt="">` : '<span class="draft-champ-ph"></span>')
+                + (image ? `<span class="champ-portrait"><img loading="lazy" src="${image}" alt=""></span>` : '<span class="draft-champ-ph"></span>')
                 + `<span class="wr">${wrTxt}</span>`
                 + `<span class="name">${escHtml(row.name)}</span>`
                 + `</button>`

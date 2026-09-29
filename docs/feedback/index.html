@@ -1550,12 +1550,33 @@
         animation: prismShift 9s ease-in-out infinite;
         box-shadow: 0 0 6px rgba(255,90,60,0.42);
     }
-    .champ img {
+    /* Classic's independent renderer still emits an unwrapped image. */
+    .champ > img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         display: block;
         border-radius: 6px;
+    }
+    /* Clip only the portrait so role tooltips and the tier frame remain visible.
+       DDragon squares include a dark rim; the approved 114% crop removes it. */
+    .champ-portrait {
+        position: absolute;
+        inset: 0;
+        display: block;
+        overflow: hidden;
+        border-radius: 6px;
+    }
+    .champ .champ-portrait img,
+    .draft-champ .champ-portrait img,
+    .champ-hero-avatar img {
+        width: 114%;
+        height: 114%;
+        max-width: none;
+        margin: -7%;
+        object-fit: cover;
+        display: block;
+        border-radius: 0;
     }
     .alt-role-badge {
         --badge-color: #f5d780;
@@ -9954,12 +9975,13 @@
         gap: 18px 22px;
     }
     .champ-hero-avatar {
+        display: block;
+        overflow: hidden;
         width: 88px;
         height: 88px;
         border-radius: 18px;
         border: 2px solid color-mix(in oklab, var(--tier-color) 70%, transparent);
         box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
-        object-fit: cover;
     }
     .champ-hero-id { min-width: 0; }
     .champ-hero-kicker {
