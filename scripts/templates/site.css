@@ -9660,13 +9660,20 @@
     .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
     .aug-tier-top .aug-tier-seg { flex: 1 1 auto; margin-bottom: 0; }
     /* Even an invisible centered tooltip can widen the viewport. */
-    .aug-tier-top .meta-help-tip {
-        left: auto;
-        right: 0;
+    .aug-tier-rank-head .meta-help-tip {
+        left: 0;
         transform: none;
         max-width: calc(100vw - 24px);
     }
-    .aug-tier-top .meta-help-tip::after { left: auto; right: 3px; }
+    .aug-tier-rank-head .meta-help-tip::after { display: none; }
+    .aug-tier-rank-head {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 4px;
+    }
+    .aug-tier-rank-head .meta-help-wrap { position: static; flex: 0 0 auto; }
     .aug-tier-seg {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
