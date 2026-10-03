@@ -3666,17 +3666,18 @@
         border-radius: 50%;
         border: 1px solid var(--border-strong);
         background: var(--surface-raised);
-        color: var(--accent-soft);
+        color: var(--accent);
         box-shadow: var(--panel-shadow);
         text-decoration: none;
         transition: color var(--dur-2) var(--ease),
                     border-color var(--dur-2) var(--ease),
                     background-color var(--dur-2) var(--ease);
     }
+    .feedback-fab > svg { transform: translate(-1px, 1px); }
     body.rec-modal-open .feedback-fab { visibility: hidden; }
     .feedback-fab:hover {
-        color: var(--text);
-        border-color: var(--accent-soft);
+        color: var(--accent);
+        border-color: var(--accent);
         background: var(--surface-2);
     }
     .feedback-fab:focus-visible {
@@ -5727,12 +5728,6 @@
         background: var(--surface-2);
         border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
     }
-    /* Light --accent is a fill tone (2.3:1 as text on its own tint); the
-       feedback icon takes the text-only soft gold, deepened to clear 4.5:1. */
-    [data-theme="light"] .feedback-fab {
-        color: color-mix(in srgb, var(--accent-soft) 75%, var(--text));
-    }
-    [data-theme="light"] .feedback-fab:hover { color: var(--text); }
     [data-theme="light"] .empty-state { color: var(--text-muted); }
     [data-theme="light"] .empty-state strong { color: var(--text); }
 
