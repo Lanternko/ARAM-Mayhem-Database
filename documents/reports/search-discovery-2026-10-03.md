@@ -31,6 +31,8 @@
 - Sitemap 提交已受理，但第一輪報表顯示「無法擷取」。依 Google 官方診斷流程檢查 Sitemap 的即時測試（18:43），顯示擷取成功與允許檢索；未要求把 XML 本身建立搜尋索引。已在成功擷取後重新提交，報表仍顯示「無法擷取」與 0 discovered pages；不可宣稱已處理成功。Google 官方說明會在後續幾天重試，尚待外部處理結果。人工判決處罰報表顯示「未偵測到任何問題」。
 - 截圖證據保存於 primary checkout 的 `outputs/design/google-sitemap-submitted.png`、`google-sitemap-live-test.png`、`google-hero-live-test.png`、`google-hero-index-request.png`、`google-sitemap-resubmitted.png`。
 
+- 自動 publisher 已於 18:54 重新載入，PID `18300` → `15516`，watchdog parent 與 production argv 均未改變（10% growth／12 小時）。過期 isolated build 的來源 `3de7ba1bd` 已落後正式站，原本也會被 discard；取消該 builder 後，publisher 自行清理 input links／temporary worktree，再由 watchdog 恢復。操作證據為 private `data/site/seo_publisher_reload.jsonl`。collector 與 API 未重啟。
+
 ## 後續以證據決策
 
 Search Console 資料可用後，以查詢／landing page 的曝光、點擊、CTR 和平均排名找缺口；優先處理有曝光但低 CTR 的頁面、未收錄英雄與 canonical 錯配。不要僅因總點擊增加就宣稱 SEO 改動有效，需考慮時間範圍、版本、內容更新與 Threads 導流。Sitemap 提交與 live test 成功代表可發現與可編入索引，不代表所有頁面已收錄，也不保證排名。
