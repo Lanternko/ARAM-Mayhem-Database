@@ -33,6 +33,8 @@
         --panel-surface: oklch(0.235 0.012 255);
         --panel-inner: oklch(0.195 0.012 255);
         --panel-quiet: oklch(0.175 0.01 255);
+        /* Augment artwork needs a dark backing in either theme. */
+        --augment-icon-surface: oklch(0.24 0.02 255);
         --panel-line: color-mix(in oklab, var(--text) 11%, transparent);
         --panel-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
         --wr-positive: oklch(0.78 0.055 155);
@@ -9538,7 +9540,7 @@
 .item-tip-card.champ-pool-tip { background: var(--panel-surface); border-color: var(--panel-line); color: var(--text); box-shadow: var(--panel-shadow); padding: 14px 16px; }
 .champ-pool-tip::after { background: var(--panel-surface); border-color: var(--panel-line); }
 .champ-pool-tip .item-tip-name { color: var(--accent-soft); font-size: 14px; }
-.champ-pool-tip .item-tip-icon { background: var(--panel-inner); border-color: var(--border); box-shadow: none; }
+.champ-pool-tip .item-tip-icon { background: var(--augment-icon-surface); border-color: var(--border); box-shadow: none; }
 .champ-pool-tip .item-tip-sub { color: var(--text-muted); font-size: 11px; }
 .champ-pool-tip-stats { margin: 12px 0; padding: 12px 0; border-top: 1px solid var(--panel-line); border-bottom: 1px solid var(--panel-line); }
 .champ-pool-tip-context { color: var(--text-muted); font-size: 11px; margin-bottom: 8px; }
