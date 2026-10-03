@@ -139,6 +139,8 @@ class StaticSitePublishTests(unittest.TestCase):
             result["changed_paths"],
             [
                 "docs/index.html",
+                "docs/sitemap.xml",
+                "docs/robots.txt",
                 "docs/api/tier-list.json",
                 "docs/api/augment-pools.json",
                 "docs/api/champions",
@@ -150,6 +152,8 @@ class StaticSitePublishTests(unittest.TestCase):
                 # ?v=, so it must ship in the same publish as index.html.
                 "docs/assets/site.js",
                 "docs/assets/site.css",
+                "docs/assets/app-shell.html",
+                "docs/assets/champion-shell.js",
                 "docs/classic.html",
                 # Clean-path deep-link shells, locale mirrors, share thumbnail and
                 # the static info pages: each embeds the current game count / patch
@@ -239,6 +243,8 @@ class StaticSitePublishTests(unittest.TestCase):
         )
 
     def test_player_history_allowlist_is_exact_and_build_passes_api_only_for_hidden_shell(self) -> None:
+        self.assertIn(Path("docs/sitemap.xml"), DEFAULT_DOC_PATHS)
+        self.assertIn(Path("docs/robots.txt"), DEFAULT_DOC_PATHS)
         self.assertIn(Path("docs/p/player-history"), DEFAULT_DOC_PATHS)
         self.assertNotIn(Path("docs/p"), DEFAULT_DOC_PATHS)
         self.assertEqual(DEFAULT_PLAYER_HISTORY_API_URL, "https://api.arammeta.com")

@@ -4822,7 +4822,9 @@ def build_champ_augment_picks(
                 key=lambda r: (r["rank_score"], r["lcb_lift"], r["games"], r["augment_id"]),
             )
             bot[rarity] = _take_ranked(bot_rows, bot_n)
-        out[cid] = {"top": top, "bot": bot}
+        # Pool tooltips need every eligible pair, including the middle of the
+        # ranking. The renderer keeps these small stats in the lazy shard.
+        out[cid] = {"top": top, "bot": bot, "all": [row for rows in buckets.values() for row in rows]}
     return out
 
 def build_champ_set_affinity(

@@ -54,3 +54,18 @@ for (const group of taxonomy.groups) {
     for (const cat of group.categories) assert.equal(context.championPoolCategory([cat]), group.id);
 }
 assert.equal(context.championPoolCategory(['ap', 'ad']), 'damage');
+
+// Complexity uses the same unique, available membership and ascending competition ranks.
+const counts = Object.keys(data.champs).map(cid => context.championPoolEntries(cid, data, catalogue).length).filter(n => n > 0);
+for (const cid of ['14', Object.keys(data.champs)[0], Object.keys(data.champs).at(-1)]) {
+    const result = context.championPoolComplexity(cid, data, catalogue);
+    assert.equal(result.count, context.championPoolEntries(cid, data, catalogue).length);
+    assert.equal(result.rank, counts.filter(n => n < result.count).length + 1);
+    assert.equal(result.total, counts.length);
+    assert.equal(result.min, Math.min(...counts));
+    assert.equal(result.max, Math.max(...counts));
+}
+const tied = {pools: [{id:'p', augs:[1]}, {id:'q', augs:[2,3]}], champs: {a:[['p',100]], b:[['p',200]], c:[['q',100]]}};
+assert.equal(context.championPoolComplexity('a', tied, {}).rank, 1);
+assert.equal(context.championPoolComplexity('b', tied, {}).rank, 1);
+assert.equal(context.championPoolComplexity('c', tied, {}).rank, 3);

@@ -122,6 +122,7 @@
     }
     const DATA = __PAYLOAD__;
     const CHAMP_DETAIL_FIELDS = [
+        'poolAugments',
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
     ];
@@ -3662,49 +3663,115 @@
         }
         return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
     }
-    function championPoolAugHtml(entry) {
+    function championPoolComplexity(cid, data, catalogue) {
+        const count = championPoolEntries(cid, data, catalogue).length;
+        const counts = Object.keys(data.champs || {}).map(id => championPoolEntries(id, data, catalogue).length).filter(n => n > 0);
+        return {count, rank: 1 + counts.filter(n => n < count).length, total: counts.length, min: counts.length ? Math.min(...counts) : 0, max: counts.length ? Math.max(...counts) : 0};
+    }
+    function championPoolAugHtml(entry, cid, statsById) {
         const aug = apoolAug(entry.id);
+        const stats = statsById.get(String(entry.id));
+        const info = (DATA.champs || {})[cid] || {};
+        const context = [champName(info, cid), DATA.patch_prefix, stats ? pickLang(`${fmtInt(stats.g)} 場`, `${fmtInt(stats.g)} games`) : pickLang('尚無統計', 'No stats available')].filter(Boolean).join(' · ');
+        const statHtml = `<div class="champ-pool-tip-stats"><div class="champ-pool-tip-context">${escHtml(context)}</div><dl>`
+            + [[pickLang('勝率', 'Win rate'), stats && stats.wr], [pickLang('選取率', 'Pick rate'), stats && stats.pick]]
+                .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
+            + '</dl></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
         const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
         const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
-        const tip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc})
-            .trim().replace(/<\/div>$/, sourceHtml + '</div>');
+        const baseTip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc}).trim();
+        const tip = baseTip.replace('class="item-tip-card"', 'class="item-tip-card champ-pool-tip"')
+            .replace('<div class="item-tip-desc">', statHtml + '<div class="item-tip-desc">')
+            .replace(/<\/div>$/, (baseTip.includes('class="item-tip-desc"') ? '' : statHtml) + sourceHtml + '</div>');
         return `<li><button type="button" class="champ-pool-augment has-item-tip" data-pool-augment="${escHtml(entry.id)}">`
             + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="32" height="32">` : '')
-            + `<span>${escHtml(aug.name)}<small>${escHtml(rarity)}</small></span>${itemTipSource(tip)}</button></li>`;
+            + `<span>${escHtml(aug.name)}</span>${itemTipSource(tip)}</button></li>`;
     }
-    function championPoolsHtml(cid) {
+    const championPoolRarity = new Map();
+    function championPoolFrequencyHtml() {
+        // Simplified descriptive ratios from 21,462 grants in 16.18 / 16.19.
+        // Rounded display values are not the exact fitted estimates. Their
+        // game-cluster 95% intervals fit inside a conservative ±10% envelope.
+        const observations = [[75, 0.67], [100, 1], [150, 1.33], [175, 1.67], [200, 2]];
+        const relative = (weight, ratio) => pickLang(`${weight === 100 ? '' : '約 '}${ratio} 倍`, `${weight === 100 ? '' : '≈ '}${ratio}×`);
+        const description = observations.map(([weight, ratio]) => `${weight}: ${relative(weight, ratio)}`).join('; ');
+        return `<details class="champ-pools-help champ-pools-frequency"><summary>${escHtml(pickLang('權重的發放比例', 'Weight and grant frequency'))}</summary>`
+            + `<div class="champ-pool-frequency-body"><div class="champ-pool-frequency-heading"><span>${escHtml(pickLang('權重', 'Weight'))}</span><span>${escHtml(pickLang('預估相對頻率，100 為基準', 'Estimated frequency, relative to weight 100'))}</span></div>`
+            + `<div class="champ-pool-frequency-chart" role="img" aria-label="${escHtml(description)}">`
+            + `<div class="champ-pool-frequency-labels">${observations.map(([weight]) => `<span>${weight}</span>`).join('')}</div>`
+            + `<div class="champ-pool-frequency-bars">${observations.map(([weight, ratio]) => `<span><i${weight === 100 ? ' class="is-baseline"' : ''} style="width:${ratio / 2 * 100}%"></i></span>`).join('')}</div>`
+            + `<div class="champ-pool-frequency-values">${observations.map(([weight, ratio]) => `<span>${escHtml(relative(weight, ratio))}</span>`).join('')}</div></div>`
+            + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
+            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本・約 ±10% 抽樣誤差', '21,462 samples · Approx. ±10% sampling uncertainty'))}</p></div></details>`;
+    }
+    function championPoolsHtml(cid, rarity = '') {
         const d = augPools.data;
         if (!d) return `<p class="champ-pools-status" role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
             + (augPools.failed ? `<button type="button" class="tool-btn champ-pools-retry" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
         const entries = championPoolEntries(cid, d, DATA.augs || {});
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
-        const weights = [...new Set(entries.map(e => e.weight))];
-        const groups = weights.map(weight => {
-            const members = entries.filter(e => e.weight === weight);
-            return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
-                + AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
+        const visibleEntries = rarity ? entries.filter(e => apoolAug(e.id).rarity === rarity) : entries;
+        const info = (DATA.champs || {})[cid] || {};
+        const statsById = new Map([
+            ...Object.values(info.bot || {}).flat(), ...Object.values(info.top || {}).flat(), ...(info.poolAugments || []),
+        ].map(row => [String(row.id), row]));
+        const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
+            .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
+        const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
+            const members = visibleEntries.filter(e => e.category === cat);
+            if (!members.length) return '';
+            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => b - a);
+            return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
+                + weights.map(weight => {
                     const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
-                    const list = members.filter(e => e.category === cat).sort((a, b) => {
+                    const list = members.filter(e => e.weight === weight).sort((a, b) => {
                         const left = apoolAug(a.id), right = apoolAug(b.id);
                         return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
                             || left.name.localeCompare(right.name);
                     });
-                    if (!list.length) return '';
-                    return `<div class="champ-pool-category"><h4>${escHtml(pickLang(zh, en))}<small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
+                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
-        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
-            + `<p class="champ-pools-note">${escHtml(pickLang('取來源池最高權重排序，非抽中率。點增幅看來源。', 'Sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
-            + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
+        const complexity = championPoolComplexity(cid, d, DATA.augs || {});
+        const rankLabel = pickLang(`增幅池複雜度第 ${complexity.rank} 名，共 ${complexity.total} 位英雄`, `Pool complexity rank ${complexity.rank} of ${complexity.total} champions`);
+        const marker = complexity.max > complexity.min
+            ? (complexity.count - complexity.min) / (complexity.max - complexity.min) * 100 : 50;
+        const quantity = n => pickLang(`${n} 種`, `${n} augments`);
+        const rankTip = `<div class="item-tip-card champ-pool-complexity-tip">
+            <div class="champ-pool-complexity-head"><span>${escHtml(pickLang('增幅池複雜度', 'Pool complexity'))}</span><b>#${complexity.rank}<small>/${complexity.total}</small></b></div>
+            <div class="champ-pool-complexity-scale" role="img" aria-label="${escHtml(pickLang(`第一名 ${complexity.min} 種；目前 ${complexity.count} 種；最後一名 ${complexity.max} 種`, `First: ${complexity.min} augments; current: ${complexity.count}; last: ${complexity.max}`))}">
+                <div class="champ-pool-complexity-chart" style="--pool-position:${marker}%;--pool-label-position:${Math.max(14, Math.min(86, marker))}%">
+                    <div class="champ-pool-complexity-current"><b>${complexity.count}</b><span>${escHtml(pickLang('種', 'augs'))}</span></div>
+                    <div class="champ-pool-complexity-track"><i class="champ-pool-complexity-fill"></i>${[0,25,50,75,100].map(tick => `<i class="champ-pool-complexity-tick" style="left:${tick}%"></i>`).join('')}<span class="champ-pool-complexity-dot"></span></div>
+                </div>
+                <div class="champ-pool-complexity-ends"><span>${escHtml(pickLang('第一名', 'First'))}<b>${escHtml(quantity(complexity.min))}</b></span><span>${escHtml(pickLang('最後一名', 'Last'))}<b>${escHtml(quantity(complexity.max))}</b></span></div>
+            </div>
+        </div>`;
+        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}/${complexity.total}${itemTipSource(rankTip)}</button></p>`
+            + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
+            + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此稀有度沒有可用增幅。', 'No available augments of this rarity.'))}</p>`)
+            + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
+            + championPoolFrequencyHtml()
+            + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d, true)}</details>`;
     }
     function renderChampionPools() {
         document.querySelectorAll('[data-champ-pools]').forEach(host => {
-            host.innerHTML = championPoolsHtml(host.dataset.champPools);
+            host.innerHTML = championPoolsHtml(host.dataset.champPools, championPoolRarity.get(host.dataset.champPools) || '');
         });
     }
+    document.addEventListener('click', ev => {
+        const button = ev.target.closest('[data-champ-pool-rarity]');
+        if (!button) return;
+        const host = button.closest('[data-champ-pools]');
+        if (!host) return;
+        const rarity = button.dataset.champPoolRarity;
+        championPoolRarity.set(host.dataset.champPools, rarity);
+        host.innerHTML = championPoolsHtml(host.dataset.champPools, rarity);
+        host.querySelector(`[data-champ-pool-rarity="${rarity}"]`).focus({preventScroll: true});
+    });
     document.addEventListener('change', ev => {
         if (!ev.target.matches('.detail-tab-input[id$="-pools"]')) return;
         renderChampionPools();
@@ -3976,42 +4043,47 @@
             `Riot 從 ${since} 版起不再把增幅池和權重放進遊戲檔，改由伺服器決定，所以這頁停在最後一份公開資料（${d.patch} 版）。之後的改動無法從遊戲檔得知，實際抽到的增幅可能已經不同。`,
             `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`;
     }
-    function apoolObservedNote(d) {
+    function apoolNotesHtml(d, champion = false) {
+        // All interpolated data is escaped before adding emphasis.
+        const strong = value => `<strong>${escHtml(value)}</strong>`;
+        const text = (zh, en) => escHtml(pickLang(zh, en));
+        const since = (d.frozen || {}).since;
         const obs = d.observed;
-        if (!obs) return pickLang(
-            '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行；這份資料尚未用對局扣除，「可能抽到的增幅」可能偏多。',
-            'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them. This data has not been checked against games, so “up to N augments” may be too high.');
-        const sep = pickLang('、', ', ');
-        const dead = (obs.dead || []).map(a => pickLang(a.zh, a.en)).join(sep);
-        const pairs = Object.values(obs.blocked || {}).reduce((n, list) => n + list.length, 0);
-        const patches = (obs.patches || []).join(pickLang('、', ', '));
-        return pickLang(
-            `遊戲檔之外，伺服器還會對個別英雄擋掉某些增幅（例如坦克引擎不給雷茲）。我們用 ${patches} 版約 ${obs.games} 場大亂鬥比對：資料量足以預期出現至少 10 次卻一次都沒出現的組合視為被擋，共 ${pairs} 組，已從各英雄的可抽增幅中扣除。`
-                + (dead ? `另有 ${obs.dead.length} 個增幅仍列在池子檔裡，但早已刪除或改了階級，沒有任何英雄拿到過，已從池子移除：${dead}。` : '')
-                + '資料不足的組合一律保留，所以冷門英雄的清單仍可能偏多。「排除池」沒有扣除：它只擋隨機給予，不影響自選。',
-            `Beyond the game files, the server withholds some augments from specific champions (for example Tank Engine from Ryze). We checked about ${obs.games} Mayhem games from patch ${patches}: a pair with enough games to expect at least 10 appearances but none is treated as blocked. That removes ${pairs} pairs from the champions’ lists.`
-                + (dead ? ` ${obs.dead.length} augments are still listed in the pool file but were removed or recoloured long ago and no champion ever gets them, so they are dropped from the pools: ${dead}.` : '')
-                + ' Pairs without enough games stay in, so lists for rarely played champions may still run long. The excluded pool is not subtracted: it only blocks random grants, never normal selection.');
-    }
-    function apoolNotesHtml(d) {
-        const notes = [
-            [pickLang('權重是什麼', 'What the weight means'), pickLang(
-                '每位英雄的每個池子都有權重：75、100、150、175、200。遊戲檔沒寫 WEIGHT 的就是 100（檔裡沒有任何一筆明確寫 100）。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
-                'Each of a champion’s pools carries a weight: 75, 100, 150, 175, or 200. A missing WEIGHT in the files is 100 — no row writes 100 explicitly. A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
-            [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
-                '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
-                'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
-            [pickLang('對照實際對局', 'Checked against real games'), apoolObservedNote(d)],
-            [pickLang('資料來源', 'Source'), pickLang(
-                `${d.patch || ''} 版 CommunityDragon 遊戲資料：augmentgroups.bin（池子內容）、map12.bin（英雄與權重）、augmentoperators.bin（排除規則）。`,
-                `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)
-                + ((d.frozen || {}).since ? pickLang(
-                    ` ${d.frozen.since} 版起 augmentgroups.bin 和 augmentoperators.bin 已清空，map12.bin 也拿掉了英雄權重表。`,
-                    ` From patch ${d.frozen.since} augmentgroups.bin and augmentoperators.bin are empty, and map12.bin no longer has the champion weight table.`) : '')],
-        ];
-        return `<section class="apool-section apool-notes">`
-            + notes.map(([h, t]) => `<div><h4>${escHtml(h)}</h4><p>${escHtml(t)}</p></div>`).join('')
-            + `</section>`;
+        const notes = [[pickLang('資料版本', 'Data version'),
+            `CommunityDragon ${strong(d.patch || '')}` + (since ? text('；', '; ')
+                + strong(pickLang(`${since} 起池表不再公開`, `pool tables unavailable since ${since}`)) + text('。', '.') : '')]];
+        if (!champion) notes.push([pickLang('權重', 'Weight'), text(
+            '未標權重＝100；越高通常越常發放，精確抽選公式未公開。',
+            'Unspecified weight = 100. Higher weights usually mean more grants; the exact draw formula is unpublished.')]);
+        if (obs) {
+            const pairs = Object.values(obs.blocked || {}).reduce((n, list) => n + list.length, 0);
+            const patches = (obs.patches || []).slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(' / ');
+            const dead = (obs.dead || []).length;
+            notes.push([pickLang('對局比對', 'Match checks'),
+                `${escHtml(patches)} · ${strong(Number(obs.games || 0).toLocaleString())}`
+                + text(' 場 Mayhem；排除 ', ' Mayhem matches; excluded ')
+                + strong(Number(pairs).toLocaleString()) + text(' 組疑似受限搭配', ' likely restricted pairs')
+                + (dead ? text('、', ' and ') + strong(dead) + text(' 個失效增幅。', ' obsolete augments.') : text('。', '.'))]);
+        }
+        notes.push([pickLang('清單限制', 'List limits'), text(obs
+            ? '樣本不足的搭配仍保留，冷門英雄的清單可能偏多。'
+            : '尚未比對實際對局，伺服器可能另有限制，清單可能偏多。', obs
+            ? 'Pairs with too few samples remain; rarely played champions may have longer lists.'
+            : 'Not yet checked against matches. Server restrictions may make these lists too long.')]);
+        notes.push([pickLang('排除池', 'Excluded pool'),
+            strong(pickLang('只擋隨機發放', 'Random grants only'))
+                + text('，不影響自選。', '; normal selection is unaffected.')]);
+        notes.push([pickLang('名稱標記', 'Name labels'),
+            text('無標記＝已驗證；', 'Unmarked = verified; ')
+            + strong(pickLang('推定名稱', 'Inferred name')) + text('＝依內容推測；', ' = inferred from contents; ')
+            + strong(pickLang('公告名稱', 'Patch-note name')) + text('＝來自更新公告。', ' = from patch notes.')]);
+        if (champion) notes.push([pickLang('倍率限制', 'Ratio limits'),
+            text('16.18–16.19 隨機發放的約數，', 'Approximate random-grant ratios for 16.18–16.19; ')
+            + strong(pickLang('不代表三選一出現率', 'not three-choice offer rates'))
+            + text('。±10% 為 95% 抽樣範圍，不含版本與稀有度差異。', '. ±10% is a 95% sampling range, excluding patch and rarity differences.')]);
+        return `<dl class="apool-section apool-notes">`
+            + notes.map(([label, body]) => `<div><dt>${escHtml(label)}</dt><dd>${body}</dd></div>`).join('')
+            + `</dl>`;
     }
     function apoolRefocus(selector) {
         const el = document.querySelector(selector);
@@ -11576,7 +11648,7 @@
         scheduleHideItemFloatTip();
     });
     document.addEventListener('click', ev => {
-        const host = ev.target.closest && ev.target.closest('[data-recommended-pool]');
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank');
         if (host) showItemFloatTip(host);
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });

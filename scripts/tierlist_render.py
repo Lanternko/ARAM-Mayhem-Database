@@ -316,7 +316,8 @@ def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) ->
         "apple-touch-icon.png": 180,
     }.items():
         target = out_dir / name
-        icon_image(size).save(target, "PNG", optimize=True)
+        icon_image(size, circular=name == "mayhem-single-die-icon.png").save(
+            target, "PNG", optimize=True)
         outputs.append(target)
     ico_path = out_dir / "favicon.ico"
     icon_image(256).save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
@@ -1301,6 +1302,7 @@ PAYLOAD_SINGLE_ITEM_ROWS = 24  # raised with the 1% pick floor (avg 17.4 rows/ch
 # Draft, and recommendation data.  These fields are only needed after a user
 # opens one champion, so ship them as one small JSON shard per champion.
 CHAMPION_DETAIL_FIELDS = (
+    "poolAugments",
     "bot",
     "sets",
     "items",
@@ -1909,10 +1911,8 @@ def _localize_full_shell_html(
     if description:
         out = re.sub(
             r"(name=['\"]description['\"]\s+content=)[\"'][^\"']*[\"']",
-            lambda match: match.group(1) + '"' + html.escape(description, quote=True) + '"',
-            out,
-            count=1,
-            flags=re.I,
+            lambda match: match[1] + '"' + html.escape(description, quote=True) + '"',
+            out, count=1, flags=re.I,
         )
         out = re.sub(
             r"(property=['\"]og:description['\"]\s+content=)[\"'][^\"']*[\"']",
@@ -2164,6 +2164,7 @@ def write_spa_path_shells(
     champion_routes=(),
     total_games: int | None = None,
     patch_prefix: str | None = None,
+    champion_records=(),
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2323,13 +2324,28 @@ def write_spa_path_shells(
             "zh-Hans",
         ),
     ]
-    # Per-champion pages are tiny bounce stubs (not full shells): 173 champions
-    # x 3 locales of the ~0.5MB shell would add ~250MB to every daily publish.
+    # Champion pages keep their URL and snapshot text, while loading one shared
+    # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
+    routes_by_slug = {route["slug"]: route for route in champion_routes}
+    records_by_cid = {str(record["champion_id"]): record for record in champion_records}
+    if champion_routes:
+        assets = root / "assets"
+        assets.mkdir(parents=True, exist_ok=True)
+        shell_body = re.search(r"<body\b[^>]*>(.*?)</body>", full_shell, flags=re.S | re.I)
+        app_body = shell_body[1] if shell_body else ""
+        shell_path = assets / "app-shell.html"
+        shell_path.write_text("<!doctype html><html><head><meta name='robots' content='noindex'></head><body>" + app_body + "</body></html>", encoding="utf-8")
+        loader_path = assets / "champion-shell.js"
+        loader_path.write_text(_read_site_template("champion-shell.js"), encoding="utf-8")
+        shell_url = "assets/app-shell.html?v=" + hashlib.sha256(shell_path.read_bytes()).hexdigest()[:12]
+        loader_url = "assets/champion-shell.js?v=" + hashlib.sha256(loader_path.read_bytes()).hexdigest()[:12]
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if cpath in SPA_FULL_SHELL_PATHS:
+        slug = cpath.rstrip("/").split("/")[-1]
+        is_champion = "/champions/" in cpath and slug in routes_by_slug
+        if cpath in SPA_FULL_SHELL_PATHS or is_champion:
             body = _localize_full_shell_html(
                 full_shell,
                 site_url=site_url,
@@ -2338,6 +2354,13 @@ def write_spa_path_shells(
                 title=title,
                 description=desc,
             )
+            if is_champion:
+                from aram_nn.site.champion_shell import champion_shell_html
+                route = routes_by_slug[slug]
+                body = champion_shell_html(
+                    body, route=route, record=records_by_cid.get(route["cid"], {}),
+                    language=html_lang, shell_url=shell_url, loader_url=loader_url,
+                )
         else:
             body = _spa_deep_link_stub(
                 site_url=site_url,
@@ -2349,6 +2372,8 @@ def write_spa_path_shells(
             )
         dest.write_text(body, encoding="utf-8")
         written.append(dest)
+    if champion_routes:
+        written.extend([shell_path, loader_path])
     return written
 
 
@@ -3226,6 +3251,10 @@ def render_html(
             "tags": meta.get("tags") or [],
             "top": top_buckets,
             "bot": bot_buckets,
+            "poolAugments": [
+                {key: value for key, value in _pack(row).items() if key in ("id", "g", "wr", "pick")}
+                for row in picks.get("all", [])
+            ],
             "sets": {
                 "top": [_pack_set(r) for r in champ_sets.get(cid, {}).get("top", [])],
                 "bot": [_pack_set(r) for r in champ_sets.get(cid, {}).get("bot", [])],
@@ -3433,7 +3462,6 @@ def render_html(
     # The header remains the brand; search titles explain the player's task.
     patch_title = f"（{display_patch}）" if display_patch else ""
     page_title = f"隨機單中：大混戰（大亂鬥）強度排行{patch_title} | {header_title}"
-    seo_alternate = f"隨機單中：大混戰（大亂鬥）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
         f"基於 {total_games:,} 場台服實戰對局，"
         "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
@@ -3449,7 +3477,12 @@ def render_html(
     meta_lines.append(f"<title>{html.escape(page_title)}</title>")
     favicon_version = favicon_asset_version()
     meta_lines.append(
-        f"<link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v={favicon_version}'>"
+        f"<link rel='icon' type='image/png' sizes='180x180' href='mayhem-single-die-icon.png?v={favicon_version}'>"
+    )
+    # Browsers prefer the final scalable die. Keep a raster search candidate:
+    # Google documents raster favicon formats, with no search-only rel attribute.
+    meta_lines.append(
+        f"<link rel='icon' type='image/svg+xml' sizes='any' href='favicon.svg?v={favicon_version}'>"
     )
     meta_lines.append(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
@@ -3493,7 +3526,7 @@ def render_html(
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": header_title,
-            "alternateName": seo_alternate,
+            "alternateName": ["AramMeta", "ARAM Meta"],
             "url": canonical_url,
             "description": seo_desc,
             "inLanguage": "zh-Hant",
@@ -4353,6 +4386,9 @@ def _run_shell_only(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
 
+    # Keep the icon bytes in sync with the version advertised by rebuilt heads.
+    write_favicon_assets(out_path.parent)
+
     hidden_path = out_path.parent / "p" / "player-history" / "index.html"
     hidden_html = render_html(
         records, champ_meta,
@@ -4387,12 +4423,19 @@ def _run_shell_only(
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in records), champ_meta,
         ),
+        champion_records=records,
     )
     info_pages = write_site_info_pages(
         out_path,
         site_url=site_url,
         build_date=build_date,
     )
+    from aram_nn.site.search_discovery import write_search_discovery
+    discovery = write_search_discovery(
+        out_path.parent, [out_path, *mirrors, *info_pages], site_url=site_url,
+    )
+    if discovery:
+        click.echo("[shell-only] wrote sitemap.xml and robots.txt")
     full_n = sum(1 for p in mirrors if p.stat().st_size > 50_000)
     click.echo(
         f"[shell-only] wrote {out_path} ({len(html):,} chars) in {time.time() - t0:.2f}s — "

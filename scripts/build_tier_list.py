@@ -749,6 +749,7 @@ def main(
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in champ_records), champ_meta,
         ),
+        champion_records=champ_records,
     )
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")
@@ -759,6 +760,13 @@ def main(
     )
     if info_pages:
         click.echo(f"[tierlist] wrote {len(info_pages)} site information file(s)")
+
+    from aram_nn.site.search_discovery import write_search_discovery
+    discovery = write_search_discovery(
+        out_path.parent, [out_path, *mirrors, *info_pages], site_url=site_url,
+    )
+    for artifact in discovery:
+        click.echo(f"[tierlist] wrote {artifact}")
 
     # Hand-made article cover banners live (committed) under docs/assets/covers
     # and are referenced as assets/covers/<file>.  Mirror them into the build
