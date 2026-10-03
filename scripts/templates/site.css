@@ -7036,14 +7036,20 @@
     .apool-diff { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
     .apool-diff b { font-weight: 600; }
     .apool-notes {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 16px 24px;
-        padding-top: 20px;
+        gap: 14px;
+        margin: 0;
+        padding-top: 16px;
         border-top: 1px solid var(--border);
+        font-size: 13px;
+        line-height: 1.7;
     }
-    .apool-notes h4 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
-    .apool-notes p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+    .apool-notes > div { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 16px; }
+    .apool-notes dt { font-weight: 600; color: var(--text); }
+    .apool-notes dd { margin: 0; max-width: 75ch; color: var(--text-muted); }
+    .apool-notes strong { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    @media (max-width: 560px) {
+        .apool-notes > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    }
     @media (max-width: 760px) {
         .apool-panel { grid-template-columns: minmax(0, 1fr); }
         .apool-picker { border-right: 0; border-bottom: 1px solid var(--panel-line); }

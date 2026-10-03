@@ -3731,7 +3731,7 @@
             + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此稀有度沒有可用增幅。', 'No available augments of this rarity.'))}</p>`)
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + championPoolFrequencyHtml()
-            + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary><p>${escHtml(pickLang('發放倍率為 16.18–16.19 Mayhem 隨機發放的整體約數；±10% 是保守的 95% 抽樣範圍，未涵蓋版本與稀有度差異。', 'Grant ratios summarize Mayhem random grants in 16.18–16.19. ±10% is a conservative 95% sampling range, excluding patch and rarity differences.'))}</p>${apoolNotesHtml(d)}</details>`;
+            + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d, true)}</details>`;
     }
     function renderChampionPools() {
         document.querySelectorAll('[data-champ-pools]').forEach(host => {
@@ -4019,42 +4019,47 @@
             `Riot 從 ${since} 版起不再把增幅池和權重放進遊戲檔，改由伺服器決定，所以這頁停在最後一份公開資料（${d.patch} 版）。之後的改動無法從遊戲檔得知，實際抽到的增幅可能已經不同。`,
             `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`;
     }
-    function apoolObservedNote(d) {
+    function apoolNotesHtml(d, champion = false) {
+        // All interpolated data is escaped before adding emphasis.
+        const strong = value => `<strong>${escHtml(value)}</strong>`;
+        const text = (zh, en) => escHtml(pickLang(zh, en));
+        const since = (d.frozen || {}).since;
         const obs = d.observed;
-        if (!obs) return pickLang(
-            '公告中「某個增幅不給某些英雄」的規則（例如坦克引擎不給雷茲）不在遊戲檔裡，由伺服器執行；這份資料尚未用對局扣除，「可能抽到的增幅」可能偏多。',
-            'Patch-note rules that withhold one augment from specific champions (for example Tank Engine from Ryze) are not in the game files; the server applies them. This data has not been checked against games, so “up to N augments” may be too high.');
-        const sep = pickLang('、', ', ');
-        const dead = (obs.dead || []).map(a => pickLang(a.zh, a.en)).join(sep);
-        const pairs = Object.values(obs.blocked || {}).reduce((n, list) => n + list.length, 0);
-        const patches = (obs.patches || []).join(pickLang('、', ', '));
-        return pickLang(
-            `遊戲檔之外，伺服器還會對個別英雄擋掉某些增幅（例如坦克引擎不給雷茲）。我們用 ${patches} 版約 ${obs.games} 場大亂鬥比對：資料量足以預期出現至少 10 次卻一次都沒出現的組合視為被擋，共 ${pairs} 組，已從各英雄的可抽增幅中扣除。`
-                + (dead ? `另有 ${obs.dead.length} 個增幅仍列在池子檔裡，但早已刪除或改了階級，沒有任何英雄拿到過，已從池子移除：${dead}。` : '')
-                + '資料不足的組合一律保留，所以冷門英雄的清單仍可能偏多。「排除池」沒有扣除：它只擋隨機給予，不影響自選。',
-            `Beyond the game files, the server withholds some augments from specific champions (for example Tank Engine from Ryze). We checked about ${obs.games} Mayhem games from patch ${patches}: a pair with enough games to expect at least 10 appearances but none is treated as blocked. That removes ${pairs} pairs from the champions’ lists.`
-                + (dead ? ` ${obs.dead.length} augments are still listed in the pool file but were removed or recoloured long ago and no champion ever gets them, so they are dropped from the pools: ${dead}.` : '')
-                + ' Pairs without enough games stay in, so lists for rarely played champions may still run long. The excluded pool is not subtracted: it only blocks random grants, never normal selection.');
-    }
-    function apoolNotesHtml(d) {
-        const notes = [
-            [pickLang('權重是什麼', 'What the weight means'), pickLang(
-                '每位英雄的每個池子都有權重：75、100、150、175、200。遊戲檔沒寫 WEIGHT 的就是 100（檔裡沒有任何一筆明確寫 100）。數字越大，這個池子越常被抽到；但遊戲檔沒有寫明抽選公式，所以 200 不一定正好是 100 的兩倍機率，而且同一個增幅可能同時在好幾個池子裡。',
-                'Each of a champion’s pools carries a weight: 75, 100, 150, 175, or 200. A missing WEIGHT in the files is 100 — no row writes 100 explicitly. A higher weight means that pool is drawn more often, but the files do not state the draw formula, so 200 is not necessarily exactly twice as likely as 100, and one augment can sit in several pools.')],
-            [pickLang('名稱是否確定', 'How certain the names are'), pickLang(
-                '遊戲檔把多數池子名稱存成 hash。沒有標記的池子，內部名稱已重新計算 hash 並完全吻合，所以是確定的；標「推定名稱」的池子無法還原，名稱依內容推定；標「公告名稱」的取自更新公告。',
-                'Most pool names are stored as hashes. Unmarked pools had their internal name confirmed by re-hashing it and matching exactly. Pools marked “Inferred name” could not be recovered, so their labels describe the contents; “Patch-note name” labels come from the patch notes.')],
-            [pickLang('對照實際對局', 'Checked against real games'), apoolObservedNote(d)],
-            [pickLang('資料來源', 'Source'), pickLang(
-                `${d.patch || ''} 版 CommunityDragon 遊戲資料：augmentgroups.bin（池子內容）、map12.bin（英雄與權重）、augmentoperators.bin（排除規則）。`,
-                `CommunityDragon game data for patch ${d.patch || ''}: augmentgroups.bin (pools), map12.bin (champions and weights), augmentoperators.bin (exclusion rules).`)
-                + ((d.frozen || {}).since ? pickLang(
-                    ` ${d.frozen.since} 版起 augmentgroups.bin 和 augmentoperators.bin 已清空，map12.bin 也拿掉了英雄權重表。`,
-                    ` From patch ${d.frozen.since} augmentgroups.bin and augmentoperators.bin are empty, and map12.bin no longer has the champion weight table.`) : '')],
-        ];
-        return `<section class="apool-section apool-notes">`
-            + notes.map(([h, t]) => `<div><h4>${escHtml(h)}</h4><p>${escHtml(t)}</p></div>`).join('')
-            + `</section>`;
+        const notes = [[pickLang('資料版本', 'Data version'),
+            `CommunityDragon ${strong(d.patch || '')}` + (since ? text('；', '; ')
+                + strong(pickLang(`${since} 起池表不再公開`, `pool tables unavailable since ${since}`)) + text('。', '.') : '')]];
+        if (!champion) notes.push([pickLang('權重', 'Weight'), text(
+            '未標權重＝100；越高通常越常發放，精確抽選公式未公開。',
+            'Unspecified weight = 100. Higher weights usually mean more grants; the exact draw formula is unpublished.')]);
+        if (obs) {
+            const pairs = Object.values(obs.blocked || {}).reduce((n, list) => n + list.length, 0);
+            const patches = (obs.patches || []).slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(' / ');
+            const dead = (obs.dead || []).length;
+            notes.push([pickLang('對局比對', 'Match checks'),
+                `${escHtml(patches)} · ${strong(Number(obs.games || 0).toLocaleString())}`
+                + text(' 場 Mayhem；排除 ', ' Mayhem matches; excluded ')
+                + strong(Number(pairs).toLocaleString()) + text(' 組疑似受限搭配', ' likely restricted pairs')
+                + (dead ? text('、', ' and ') + strong(dead) + text(' 個失效增幅。', ' obsolete augments.') : text('。', '.'))]);
+        }
+        notes.push([pickLang('清單限制', 'List limits'), text(obs
+            ? '樣本不足的搭配仍保留，冷門英雄的清單可能偏多。'
+            : '尚未比對實際對局，伺服器可能另有限制，清單可能偏多。', obs
+            ? 'Pairs with too few samples remain; rarely played champions may have longer lists.'
+            : 'Not yet checked against matches. Server restrictions may make these lists too long.')]);
+        notes.push([pickLang('排除池', 'Excluded pool'),
+            strong(pickLang('只擋隨機發放', 'Random grants only'))
+                + text('，不影響自選。', '; normal selection is unaffected.')]);
+        notes.push([pickLang('名稱標記', 'Name labels'),
+            text('無標記＝已驗證；', 'Unmarked = verified; ')
+            + strong(pickLang('推定名稱', 'Inferred name')) + text('＝依內容推測；', ' = inferred from contents; ')
+            + strong(pickLang('公告名稱', 'Patch-note name')) + text('＝來自更新公告。', ' = from patch notes.')]);
+        if (champion) notes.push([pickLang('倍率限制', 'Ratio limits'),
+            text('16.18–16.19 隨機發放的約數，', 'Approximate random-grant ratios for 16.18–16.19; ')
+            + strong(pickLang('不代表三選一出現率', 'not three-choice offer rates'))
+            + text('。±10% 為 95% 抽樣範圍，不含版本與稀有度差異。', '. ±10% is a 95% sampling range, excluding patch and rarity differences.')]);
+        return `<dl class="apool-section apool-notes">`
+            + notes.map(([label, body]) => `<div><dt>${escHtml(label)}</dt><dd>${body}</dd></div>`).join('')
+            + `</dl>`;
     }
     function apoolRefocus(selector) {
         const el = document.querySelector(selector);
