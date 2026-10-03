@@ -391,6 +391,7 @@ class SpaPathShellTests(unittest.TestCase):
                     "bot": {"kGold": [{"id": 11}]},
                     "items": {"top": [{"id": 1001}]},
                     "singleItems": {"top": [{"id": 1002}]},
+                    "poolAugments": [{"id": 12, "wr": 0.55, "pick": 0.1, "g": 100}],
                 }
             }
         }
@@ -402,6 +403,8 @@ class SpaPathShellTests(unittest.TestCase):
         self.assertIn("comp", champ)
         self.assertNotIn("bot", champ)
         self.assertNotIn("items", champ)
+        self.assertNotIn("poolAugments", champ)
+        self.assertEqual(details["1"]["poolAugments"][0]["id"], 12)
         self.assertEqual(details["1"]["items"]["top"][0]["id"], 1001)
         self.assertEqual(split_champion_detail_payloads(payload), {})
 
