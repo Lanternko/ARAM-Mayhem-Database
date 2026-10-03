@@ -3685,8 +3685,7 @@
             + `<div class="champ-pool-frequency-bars">${observations.map(([weight, ratio]) => `<span><i${weight === 100 ? ' class="is-baseline"' : ''} style="width:${ratio / 2 * 100}%"></i></span>`).join('')}</div>`
             + `<div class="champ-pool-frequency-values">${observations.map(([weight, ratio]) => `<span>${escHtml(relative(weight, ratio))}</span>`).join('')}</div></div>`
             + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
-            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本下的預估相對頻率，抽樣誤差約 ±10%（95% 信賴範圍）。', 'Estimated relative frequency from 21,462 samples, with approximately ±10% sampling uncertainty (95% confidence range).'))}</p>`
-            + `<p class="champ-pool-frequency-source">${escHtml(pickLang('16.18–16.19 · Mayhem · 整體簡化倍率，誤差不含版本與稀有度差異。', '16.18–16.19 · Mayhem · Simplified overall ratios; uncertainty excludes patch and rarity differences.'))}</p></div></details>`;
+            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本・約 ±10% 抽樣誤差', '21,462 samples · Approx. ±10% sampling uncertainty'))}</p></div></details>`;
     }
     function championPoolsHtml(cid, rarity = '') {
         const d = augPools.data;
@@ -3732,7 +3731,7 @@
             + championPoolFrequencyHtml()
             + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
             + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此稀有度沒有可用增幅。', 'No available augments of this rarity.'))}</p>`)
-            + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
+            + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary><p>${escHtml(pickLang('發放倍率為 16.18–16.19 Mayhem 隨機發放的整體約數；±10% 是保守的 95% 抽樣範圍，未涵蓋版本與稀有度差異。', 'Grant ratios summarize Mayhem random grants in 16.18–16.19. ±10% is a conservative 95% sampling range, excluding patch and rarity differences.'))}</p>${apoolNotesHtml(d)}</details>`;
     }
     function renderChampionPools() {
         document.querySelectorAll('[data-champ-pools]').forEach(host => {

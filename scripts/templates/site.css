@@ -9489,7 +9489,6 @@
 .champ-pool-frequency-axis { position: relative; display: flex; justify-content: space-between; margin: 10px 88px 0 56px; color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .champ-pool-frequency-axis > span:nth-child(2) { position: absolute; left: 50%; transform: translateX(-50%); }
 .champ-pool-frequency-body > p { margin: 18px 0 0; max-width: 70ch; }
-.champ-pool-frequency-body > .champ-pool-frequency-source { margin-top: 6px; font-size: 11px; }
 .champ-pools-status { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; }
 .champ-pools-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Pool-complexity tooltip: a compact quantity instrument. */
