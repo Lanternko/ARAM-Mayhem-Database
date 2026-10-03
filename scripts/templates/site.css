@@ -9470,17 +9470,28 @@
 .champ-pools-help > p { margin: 8px 0 0; max-width: 70ch; }
 .champ-pools-status { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; }
 .champ-pools-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-/* Pool-complexity tooltip: quantity range and the current champion. */
-.champ-pool-complexity-tip { padding: 16px; }
-.champ-pool-complexity-current { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
-.champ-pool-complexity-current > span { color: var(--text-muted); font-size: 13px; }
-.champ-pool-complexity-scale { margin-top: 20px; }
-.champ-pool-complexity-track { position: relative; height: 4px; margin: 0 5px; border-radius: 99px; background: var(--border); }
-.champ-pool-complexity-track > span { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); }
-.champ-pool-complexity-ends { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; color: var(--text-muted); font-size: 11px; }
+/* Pool-complexity tooltip: a compact quantity instrument. */
+.item-float-tip:has(.champ-pool-complexity-tip) { filter: none; }
+.item-float-tip.is-visible:has(.champ-pool-complexity-tip) { display: block !important; }
+.item-float-tip .item-tip-card.champ-pool-complexity-tip { padding: 16px 18px 14px; border-radius: var(--r-md); background: var(--panel-surface); border-color: var(--panel-line); color: var(--text); box-shadow: var(--panel-shadow); }
+.item-float-tip .item-tip-card.champ-pool-complexity-tip::after { background: var(--panel-surface); border-color: var(--panel-line); }
+.champ-pool-complexity-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--text-muted); }
+.champ-pool-complexity-head > b { color: var(--text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.champ-pool-complexity-head small { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+.champ-pool-complexity-scale { margin-top: 14px; }
+.champ-pool-complexity-chart { position: relative; padding: 40px 4px 0; }
+.champ-pool-complexity-current { position: absolute; top: 0; left: var(--pool-label-position); transform: translateX(-50%); display: flex; align-items: baseline; gap: 4px; color: var(--accent-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.champ-pool-complexity-current > b { font-size: 22px; line-height: 1; font-weight: 600; }
+.champ-pool-complexity-current > span { font-size: 11px; font-weight: 400; }
+.champ-pool-complexity-track { position: relative; height: 3px; border-radius: 99px; background: var(--panel-line); }
+.champ-pool-complexity-fill { position: absolute; inset: 0 auto 0 0; width: var(--pool-position); border-radius: inherit; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.champ-pool-complexity-tick { position: absolute; top: -3px; width: 1px; height: 9px; background: var(--panel-line); }
+.champ-pool-complexity-dot { position: absolute; left: var(--pool-position); top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 0 3px var(--panel-surface); }
+.champ-pool-complexity-dot::before { content: ""; position: absolute; bottom: 13px; left: 3.5px; width: 1px; height: 7px; background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.champ-pool-complexity-ends { display: flex; justify-content: space-between; gap: 16px; margin-top: 13px; color: var(--text-muted); font-size: 10px; }
 .champ-pool-complexity-ends > span:last-child { text-align: right; }
-.champ-pool-complexity-ends b { display: block; margin-top: 2px; color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.champ-pool-complexity-tip > p { margin: 14px 0 0; color: var(--text-muted); font-size: 12px; }
+.champ-pool-complexity-ends b { display: block; margin-top: 3px; color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.champ-pool-complexity-tip > p { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--panel-line); color: var(--text-muted); font-size: 12px; }
 
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
 .champ-pools-filters > button { min-height: 40px; }

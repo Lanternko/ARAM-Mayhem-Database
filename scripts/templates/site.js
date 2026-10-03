@@ -3701,9 +3701,12 @@
             ? (complexity.count - complexity.min) / (complexity.max - complexity.min) * 100 : 50;
         const quantity = n => pickLang(`${n} 種`, `${n} augments`);
         const rankTip = `<div class="item-tip-card champ-pool-complexity-tip">
-            <div class="champ-pool-complexity-current">${escHtml(quantity(complexity.count))} <span>· #${complexity.rank}</span></div>
+            <div class="champ-pool-complexity-head"><span>${escHtml(pickLang('增幅池複雜度', 'Pool complexity'))}</span><b>#${complexity.rank}<small> / ${complexity.total}</small></b></div>
             <div class="champ-pool-complexity-scale" role="img" aria-label="${escHtml(pickLang(`第一名 ${complexity.min} 種；目前 ${complexity.count} 種；最後一名 ${complexity.max} 種`, `First: ${complexity.min} augments; current: ${complexity.count}; last: ${complexity.max}`))}">
-                <div class="champ-pool-complexity-track"><span style="left:${marker}%"></span></div>
+                <div class="champ-pool-complexity-chart" style="--pool-position:${marker}%;--pool-label-position:${Math.max(14, Math.min(86, marker))}%">
+                    <div class="champ-pool-complexity-current"><b>${complexity.count}</b><span>${escHtml(pickLang('種', 'augs'))}</span></div>
+                    <div class="champ-pool-complexity-track"><i class="champ-pool-complexity-fill"></i>${[0,25,50,75,100].map(tick => `<i class="champ-pool-complexity-tick" style="left:${tick}%"></i>`).join('')}<span class="champ-pool-complexity-dot"></span></div>
+                </div>
                 <div class="champ-pool-complexity-ends"><span>${escHtml(pickLang('第一名', 'First'))}<b>${escHtml(quantity(complexity.min))}</b></span><span>${escHtml(pickLang('最後一名', 'Last'))}<b>${escHtml(quantity(complexity.max))}</b></span></div>
             </div>
             <p>${escHtml(pickLang('增幅越多，越複雜。', 'More augments, more complexity.'))}</p>
