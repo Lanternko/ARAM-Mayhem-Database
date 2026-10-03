@@ -9472,7 +9472,7 @@
 .champ-pools-rank { padding: 4px 2px; border: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: help; margin-left: 6px; color: var(--text-muted); }
 .champ-pools-rank:hover { color: var(--text); }
 .champ-pools-rank:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.champ-pools-help { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.champ-pools-help { margin-top: 24px; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
 .champ-pools-help > summary { cursor: pointer; width: fit-content; padding: 6px 0; }
 .champ-pools-help > p { margin: 8px 0 0; max-width: 70ch; }
 .champ-pools-frequency { margin-top: 2px; }
