@@ -3432,8 +3432,8 @@ def render_html(
 
     # The header remains the brand; search titles explain the player's task.
     patch_title = f"（{display_patch}）" if display_patch else ""
-    page_title = f"大亂鬥 Mayhem 強度排行{patch_title} | {header_title}"
-    seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
+    page_title = f"隨機單中：大混戰（大亂鬥）強度排行{patch_title} | {header_title}"
+    seo_alternate = f"隨機單中：大混戰（大亂鬥）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
         f"基於 {total_games:,} 場台服實戰對局，"
         "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
