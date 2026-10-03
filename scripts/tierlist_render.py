@@ -2162,6 +2162,8 @@ def write_spa_path_shells(
     site_url: str = "",
     og_image: str = "",
     champion_routes=(),
+    total_games: int | None = None,
+    patch_prefix: str | None = None,
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2184,6 +2186,18 @@ def write_spa_path_shells(
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
         og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
+
+    display_patch = display_patch_prefix(patch_prefix)
+    en_scope = f" Patch {display_patch}." if display_patch else ""
+    cn_scope = f" 版本 {display_patch}。" if display_patch else ""
+    en_evidence = (
+        f"{total_games:,} Taiwan server matches" if total_games is not None
+        else "real Taiwan server match data"
+    )
+    cn_evidence = (
+        f"{total_games:,} 场台服实战对局" if total_games is not None
+        else "台服实战数据"
+    )
 
     # (dest, canonical_path, title, description, html_lang)
     route_specs: list[tuple[Path, str, str, str, str]] = [
@@ -2226,9 +2240,10 @@ def write_spa_path_shells(
         # English locale prefix mirrors (shareable /en… links).
         (
             root / "en" / "index.html", "/en",
-            "ARAM Mayhem Tier List, Augments & Builds | arammeta",
-            "Compare ARAM Mayhem champion tiers, champion-specific augments, builds and team compositions. "
-            "Explore Taiwan server match data with win rates, sample sizes and patch details to guide your picks.",
+            "Data-Driven ARAM Mayhem Tier List | arammeta",
+            f"ARAM Mayhem tier list built on {en_evidence}, with sample-adjusted win rates. "
+            "Compare champion and augment rankings, item win rates, augment pick frequency and pool weights. "
+            "See full win-rate and sample-size data." + en_scope,
             "en",
         ),
         (
@@ -2269,9 +2284,10 @@ def write_spa_path_shells(
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
         (
             root / "zh-cn" / "index.html", "/zh-cn",
-            "大乱斗 Mayhem 英雄排行、海克斯与出装推荐 | arammeta",
-            "掌握大乱斗 Mayhem 版本强势英雄、海克斯搭配与出装。arammeta 整合台服实战数据，"
-            "提供英雄强度排行与阵容分析，并列出胜率、样本数与版本，让每次选择都有依据。",
+            "大乱斗 Mayhem 强度排行与实战数据 | arammeta",
+            f"arammeta 基于 {cn_evidence}，提供大乱斗 Mayhem 专业数据分析："
+            "英雄与海克斯强度排行、装备胜率、海克斯实战出现频率与抽选权重。"
+            "完整呈现胜率、样本量与版本信息，让出装与海克斯搭配有据可查。" + cn_scope,
             "zh-Hans",
         ),
         (
@@ -3419,12 +3435,12 @@ def render_html(
 
     # The header remains the brand; search titles explain the player's task.
     patch_zh = f"版本 {display_patch}" if display_patch else "全版本"
-    page_title = f"大亂鬥 Mayhem 英雄排行、增幅與出裝推薦 | {header_title}"
+    page_title = f"台服大亂鬥 Mayhem 強度排行、裝備與增幅數據 | {header_title}"
     seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
-        f"掌握大亂鬥 Mayhem 版本強勢英雄、增幅搭配與出裝。{header_title} 整合台服實戰資料，"
-        "提供英雄強度排行與陣容分析，並列出勝率、樣本數與版本，讓每次選擇都有依據。"
-        f"{patch_zh}，收錄 {total_games:,} 場對局。"
+        f"{header_title} 收錄 {total_games:,} 場台服大亂鬥 Mayhem 實戰對局，"
+        "提供英雄與增幅裝置強度排行、裝備勝率、增幅實戰出現頻率與抽選權重。"
+        f"完整呈現勝率、樣本數與版本資料，讓選角、出裝與增幅搭配都有數據依據。{patch_zh}。"
     )
     og_title = page_title
     og_desc = seo_desc
@@ -4370,6 +4386,8 @@ def _run_shell_only(
         out_path,
         site_url=site_url,
         og_image=og_image,
+        total_games=total_games,
+        patch_prefix=patch_prefix,
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in records), champ_meta,
         ),

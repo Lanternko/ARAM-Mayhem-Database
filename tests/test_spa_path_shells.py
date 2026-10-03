@@ -126,6 +126,7 @@ class SpaPathShellTests(unittest.TestCase):
             index.write_text(
                 "<!doctype html><html lang='zh-Hant'><head>"
                 "<title>app</title>"
+                "<meta name='description' content='original summary'>"
                 "<link rel='canonical' href='https://arammeta.com/'>"
                 "<meta property='og:url' content='https://arammeta.com/'>"
                 "<meta property='og:image' content='https://arammeta.com/og-image.png?v=old'>"
@@ -139,6 +140,8 @@ class SpaPathShellTests(unittest.TestCase):
                 index,
                 site_url="https://arammeta.com/",
                 og_image="https://arammeta.com/og-image.png",
+                total_games=1234567,
+                patch_prefix="16.19",
             )
             self.assertTrue(any(p.name == "404.html" for p in written))
             self.assertFalse((root / "column").exists())
@@ -155,6 +158,10 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", en_body)
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
+            self.assertIn("1,234,567 Taiwan server matches", en_body)
+            self.assertIn("Patch 26.19.", en_body)
+            self.assertIn("sample-adjusted win rates", en_body)
+            self.assertNotIn("original summary", en_body)
             self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
             self.assertIn(
                 "hreflang='zh-Hans' href='https://arammeta.com/zh-cn/'",
@@ -167,6 +174,10 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn = root / "zh-cn" / "index.html"
             zh_cn_body = zh_cn.read_text(encoding="utf-8")
             self.assertIn("FULL_SPA_SHELL", zh_cn_body)
+            self.assertIn("1,234,567 场台服实战对局", zh_cn_body)
+            self.assertIn("版本 26.19", zh_cn_body)
+            self.assertIn("装备胜率", zh_cn_body)
+            self.assertNotIn("original summary", zh_cn_body)
             self.assertIn(
                 "rel='canonical' href='https://arammeta.com/zh-cn/'",
                 zh_cn_body,

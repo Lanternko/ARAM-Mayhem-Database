@@ -744,6 +744,8 @@ def main(
         out_path,
         site_url=site_url,
         og_image=og_image,
+        total_games=total_games,
+        patch_prefix=patch_prefix,
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in champ_records), champ_meta,
         ),
