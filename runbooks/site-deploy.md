@@ -57,6 +57,10 @@ Production URL 會自動補 canonical split payload、Meta Pick API 與公開 an
 
 Frontend lane 不得 stage `docs/api/tier-list.json`、champion shards、radar 或 axes。若 shell build 讓 data artifacts 出現實質 diff，停止並調查；不要擴大成 full data deploy 來掩蓋 scope drift。
 
+搜尋 discovery 也是 shell 產物：兩條 build 路徑都由 `src/aram_nn/site/search_discovery.py` 從本輪明確生成的 HTML 產生 `sitemap.xml` 與 `robots.txt`，排除 noindex、轉址、非 self-canonical 與未列入本輪的舊檔，語系 alternate 只列存在且互相對應的頁面。不要用 shell build 日期假造 Sitemap `lastmod`，也不要手改生成清單。
+
+英雄網址直接回傳有英雄名稱、Bayesian 勝率、樣本與資料範圍的 HTML，由 `scripts/templates/champion-shell.js` 原地載入一份共用 `docs/assets/app-shell.html`，保留英雄 canonical 與三語 alternate。這兩個共用檔、英雄 HTML 和 Sitemap 必須 atomic publish；共用 body 檔標記 noindex，不獨立收錄。驗證直接開啟英雄網址不跳首頁、互動詳情可用，以及 `/en/`、`/zh-cn/` 的語言與 canonical。
+
 ## Lane 3 — generator or schema publish
 
 只有 public payload schema、統計計算、sharding、artifact dependency 或 builder contract 改變才走這條 lane。先 review source、跑相關 tests，再整合 source；接著用 lane 1 做完整 atomic build，使 generated artifacts 與新 code 同版。

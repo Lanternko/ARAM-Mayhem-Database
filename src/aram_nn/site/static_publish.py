@@ -55,6 +55,9 @@ COMP_FIT_PARQUET_CANDIDATES = (
 
 DEFAULT_DOC_PATHS = (
     Path("docs/index.html"),
+    # Search discovery must travel with the exact public routes it describes.
+    Path("docs/sitemap.xml"),
+    Path("docs/robots.txt"),
     Path("docs/api/tier-list.json"),
     # Mayhem augment pools (/augments/pools/), fetched on demand.  Built once
     # per patch by scripts/build_augment_pools.py from game data, not by this
@@ -88,6 +91,8 @@ DEFAULT_DOC_PATHS = (
     # Shared stylesheet for the public shells, same contract as site.js: the
     # HTML references it by content-hash ?v=, so it must ship in the same commit.
     Path("docs/assets/site.css"),
+    Path("docs/assets/app-shell.html"),
+    Path("docs/assets/champion-shell.js"),
     # Classic mode is built separately, but its root page must be staged with
     # the locale copies already covered by docs/en and docs/zh-cn whenever a UI
     # deploy regenerates all three locales.
