@@ -3671,23 +3671,23 @@
             + (augPools.failed ? `<button type="button" class="tool-btn champ-pools-retry" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
         const entries = championPoolEntries(cid, d, DATA.augs || {});
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
-        const weights = [...new Set(entries.map(e => e.weight))];
-        const groups = weights.map(weight => {
-            const members = entries.filter(e => e.weight === weight);
-            return `<section class="champ-pool-weight-group"><h3>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
-                + AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
+        const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
+            const members = entries.filter(e => e.category === cat);
+            if (!members.length) return '';
+            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => b - a);
+            return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
+                + weights.map(weight => {
                     const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
-                    const list = members.filter(e => e.category === cat).sort((a, b) => {
+                    const list = members.filter(e => e.weight === weight).sort((a, b) => {
                         const left = apoolAug(a.id), right = apoolAug(b.id);
                         return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
                             || left.name.localeCompare(right.name);
                     });
-                    if (!list.length) return '';
-                    return `<div class="champ-pool-category"><h4>${escHtml(pickLang(zh, en))}<small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
+                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
-            + `<p class="champ-pools-note">${escHtml(pickLang('取來源池最高權重排序，非抽中率。點增幅看來源。', 'Sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
+            + `<p class="champ-pools-note">${escHtml(pickLang('依分類分組，各分類內按來源池最高權重排序，非抽中率。點增幅看來源。', 'Grouped by category, then sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
             + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
     }
     function renderChampionPools() {
