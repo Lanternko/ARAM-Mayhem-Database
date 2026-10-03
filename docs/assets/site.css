@@ -9659,6 +9659,21 @@
     .aug-tier-table { margin-top: 10px; }
     .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
     .aug-tier-top .aug-tier-seg { flex: 1 1 auto; margin-bottom: 0; }
+    /* Even an invisible centered tooltip can widen the viewport. */
+    .aug-tier-rank-head .meta-help-tip {
+        left: 0;
+        transform: none;
+        max-width: calc(100vw - 24px);
+    }
+    .aug-tier-rank-head .meta-help-tip::after { display: none; }
+    .aug-tier-rank-head {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 4px;
+    }
+    .aug-tier-rank-head .meta-help-wrap { position: static; flex: 0 0 auto; }
     .aug-tier-seg {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -9899,17 +9914,28 @@
     .aug-verdict.is-bad { color: var(--wr-1); background: color-mix(in oklab, var(--wr-1) 16%, transparent); }
     @media (max-width: 700px) {
         .aug-pick-cards {
-            grid-auto-flow: column;
-            grid-template-columns: none;
-            grid-auto-columns: minmax(200px, 72%);
-            overflow-x: auto;
-            scroll-snap-type: x mandatory;
-            scrollbar-width: none;
-            margin-right: -16px;
-            padding-right: 16px;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 8px;
         }
-        .aug-pick-cards::-webkit-scrollbar { display: none; }
-        .aug-pick-card { scroll-snap-align: start; padding: 16px 12px 12px; }
+        .aug-pick-card {
+            display: grid;
+            grid-template-columns: 52px minmax(0, 1fr) auto;
+            column-gap: 12px;
+            row-gap: 4px;
+            padding: 16px 12px 12px;
+            text-align: left;
+        }
+        .aug-pick-rank { top: 4px; left: 6px; font-size: 11px; }
+        .aug-pick-icon { grid-column: 1; grid-row: 1 / 3; }
+        .aug-pick-name {
+            grid-column: 2;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            font-size: 14px;
+        }
+        .aug-pick-desc { grid-column: 2 / -1; min-height: 0; }
+        .aug-pick-foot { grid-column: 3; grid-row: 1; margin-top: 0; }
+        .aug-pick-wr b { font-size: 18px; }
         .aug-pick-icon, .aug-pick-icon img, .aug-pick-icon .aicon-ph { width: 52px; height: 52px; }
     }
     .aug-tier-head,
