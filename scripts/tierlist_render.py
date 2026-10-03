@@ -941,7 +941,7 @@ _FEEDBACK_COPY = {
 
 
 def _feedback_fab_html() -> str:
-    """One persistent feedback entry point shared by all product views."""
+    """One feedback entry point at the bottom of the home view."""
     copy = {
         "zh": "許願新功能，或是回報網站的bug",
         "zh_cn": "许愿新功能，或是反馈网站的bug",
@@ -949,7 +949,7 @@ def _feedback_fab_html() -> str:
     }
     copy = {k: html.escape(v, quote=True) for k, v in copy.items()}
     return (
-        "<a class='feedback-fab' href='/feedback/' "
+        "<a class='feedback-fab' href='/feedback/' hidden "
         "data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' "
         "data-href-en='/en/feedback/' aria-labelledby='feedback-fab-tip'>"
         "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' "
@@ -3828,25 +3828,7 @@ def render_html(
         "data-i18n-en='Privacy'>隱私權</a>"
         "</nav>"
     )
-    # Feedback is an invitation, not a legal page: sitting in the 關於/隱私權 row
-    # made it read as boilerplate.  Own affordance, beside the GitHub pill it
-    # shares intent with.
-    # The two pills share one wrapping flex row so the gap survives both the
-    # side-by-side desktop layout and the stacked phone layout.
     parts.append("<div class='footer-actions'>")
-    parts.append(
-        "<a class='feedback-pill' href='/feedback/' "
-        "data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' "
-        "data-href-en='/en/feedback/'>"
-        "<svg viewBox='0 0 16 16' width='13' height='13' fill='none' "
-        "stroke='currentColor' stroke-width='1.6' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='M14 9.5a1.5 1.5 0 0 1-1.5 1.5H6l-3.5 2.5V4a1.5 1.5 0 0 1 "
-        "1.5-1.5h8.5A1.5 1.5 0 0 1 14 4Z'></path></svg>"
-        "<span data-i18n-zh='給我回饋' data-i18n-zh-cn='给我反馈' "
-        "data-i18n-en='Send feedback'>給我回饋</span>"
-        "</a>"
-    )
     # Footer open-source control: pill affordance so it reads as clickable,
     # still sits with freshness meta (not a header CTA).
     star_glyph = (
@@ -3901,6 +3883,7 @@ def render_html(
         "<button class='rec-fab is-hidden' id='rec-fab' type='button'>看推薦組合</button>"
     )
     parts.append("</div>")  # /app-shell
+    parts.append("<div class='feedback-anchor' aria-hidden='true'></div>")
     parts.append(_feedback_fab_html())
     parts.append("</section>")  # /view-home
 

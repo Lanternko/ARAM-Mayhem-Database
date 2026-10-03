@@ -1,5 +1,22 @@
     const feedbackFab = document.querySelector('.feedback-fab');
-    if (feedbackFab) {
+    const feedbackAnchor = document.querySelector('.feedback-anchor');
+    if (feedbackFab && feedbackAnchor) {
+        const syncFeedbackVisibility = () => {
+            const rect = feedbackAnchor.getBoundingClientRect();
+            feedbackFab.hidden = rect.height === 0 || rect.bottom <= 0 || rect.top >= window.innerHeight;
+        };
+        if ('IntersectionObserver' in window) {
+            new IntersectionObserver(entries => {
+                feedbackFab.hidden = !entries[0].isIntersecting;
+            }).observe(feedbackAnchor);
+        } else {
+            window.addEventListener('scroll', syncFeedbackVisibility, { passive: true });
+            window.addEventListener('resize', syncFeedbackVisibility);
+            new MutationObserver(syncFeedbackVisibility).observe(
+                document.getElementById('view-home'), { attributes: true, attributeFilter: ['class'] }
+            );
+            syncFeedbackVisibility();
+        }
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') feedbackFab.classList.add('tip-dismissed');
         });

@@ -3641,8 +3641,7 @@
     .footer .gh-star:hover .gh-star-cta {
         color: var(--accent, #48b868);
     }
-    /* Feedback + GitHub pills share one wrapping row; the gap lives on the
-       row so neither pill needs a side margin that breaks when they stack. */
+    /* Footer open-source action. */
     .footer .footer-actions {
         display: flex;
         flex-wrap: wrap;
@@ -3651,47 +3650,9 @@
         gap: 8px;
         margin-top: 14px;
     }
-    .footer .footer-actions > .gh-star,
-    .footer .footer-actions > .feedback-pill { margin-top: 0; }
-    /* Feedback pill: pulled out of the 關於/隱私權 row, where it read as
-       boilerplate and never cleared 10 views in its first week.  Same pill
-       affordance as the GitHub star it now sits beside. */
-    .footer .feedback-pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 7px;
-        min-height: 34px;
-        padding: 0 14px;
-        background: color-mix(in srgb, var(--accent, #48b868) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent, #48b868) 38%, transparent);
-        border-radius: 999px;
-        color: color-mix(in srgb, var(--accent, #48b868) 82%, var(--text, #e6e8eb));
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.01em;
-        text-decoration: none;
-        white-space: nowrap;
-        cursor: pointer;
-        transition: color var(--dur-2) var(--ease),
-                    background-color var(--dur-2) var(--ease),
-                    border-color var(--dur-2) var(--ease),
-                    transform var(--dur-1) var(--ease),
-                    box-shadow var(--dur-2) var(--ease);
-    }
-    .footer .feedback-pill:hover {
-        color: var(--text, #e6e8eb);
-        background: color-mix(in srgb, var(--accent, #48b868) 22%, transparent);
-        border-color: color-mix(in srgb, var(--accent, #48b868) 62%, transparent);
-        box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.55);
-    }
-    .footer .feedback-pill:active { transform: scale(0.97); }
-    .footer .feedback-pill:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--accent, #48b868) 60%, transparent);
-        outline-offset: 3px;
-    }
-    .footer .feedback-pill svg { flex-shrink: 0; opacity: 0.95; }
-    /* Persistent feedback control, below navigation and detail overlays. */
+    .footer .footer-actions > .gh-star { margin-top: 0; }
+    /* Fixed feedback control appears only when the home footer reaches view. */
+    .feedback-anchor { height: 1px; margin-top: 24px; }
     .feedback-fab {
         position: fixed;
         right: calc(24px + env(safe-area-inset-right, 0px));
@@ -3711,7 +3672,7 @@
                     border-color var(--dur-2) var(--ease),
                     background-color var(--dur-2) var(--ease);
     }
-    body.rec-modal-open .feedback-fab { display: none; }
+    .feedback-fab[hidden], body.rec-modal-open .feedback-fab { display: none; }
     .feedback-fab:hover {
         color: var(--text);
         border-color: var(--accent-soft);
@@ -3750,13 +3711,11 @@
         visibility: visible;
         opacity: 1;
     }
-    @media (max-width: 640px) {
+    @media (max-width: 700px) {
         .feedback-fab {
             right: calc(16px + env(safe-area-inset-right, 0px));
             bottom: calc(16px + env(safe-area-inset-bottom, 0px));
         }
-    }
-    @media (max-width: 700px) {
         body.rec-fab-visible .feedback-fab {
             bottom: calc(80px + env(safe-area-inset-bottom, 0px));
         }
@@ -5771,12 +5730,10 @@
         border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
     }
     /* Light --accent is a fill tone (2.3:1 as text on its own tint); the
-       feedback pills take the text-only soft gold, deepened to clear 4.5:1. */
-    [data-theme="light"] .footer .feedback-pill,
+       feedback icon takes the text-only soft gold, deepened to clear 4.5:1. */
     [data-theme="light"] .feedback-fab {
         color: color-mix(in srgb, var(--accent-soft) 75%, var(--text));
     }
-    [data-theme="light"] .footer .feedback-pill:hover,
     [data-theme="light"] .feedback-fab:hover { color: var(--text); }
     [data-theme="light"] .empty-state { color: var(--text-muted); }
     [data-theme="light"] .empty-state strong { color: var(--text); }

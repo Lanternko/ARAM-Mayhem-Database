@@ -68,18 +68,14 @@ class FeedbackEntryPointTests(unittest.TestCase):
         self.assertNotIn("class='feedback-fab'", shell[home_end:])
         self.assertIn("許願新功能，或是回報網站的bug", shell)
 
-    def test_footer_feedback_pill_shares_a_row_with_the_github_pill(self) -> None:
+    def test_duplicate_feedback_pill_is_removed(self) -> None:
         shell = render_shell()
+        self.assertNotIn("feedback-pill", shell)
+        self.assertNotIn("給我回饋", shell)
         row = re.search(r"<div class='footer-actions'>(.*?)</div>", shell, re.S)
         self.assertIsNotNone(row)
         assert row is not None
-        self.assertIn("class='feedback-pill'", row.group(1))
         self.assertIn("class='gh-star'", row.group(1))
-        self.assertLess(row.group(1).index("feedback-pill"), row.group(1).index("gh-star"))
-        # Feedback left the legal-links row, where it read as boilerplate.
-        site_links = re.search(r"<nav class='site-links'.*?</nav>", shell, re.S)
-        assert site_links is not None
-        self.assertNotIn("feedback", site_links.group(0))
 
     def test_floating_link_keeps_icon_and_localized_accessible_name(self) -> None:
         tags = self._parse(_feedback_fab_html())
