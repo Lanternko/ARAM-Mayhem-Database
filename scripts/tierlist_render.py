@@ -2058,6 +2058,7 @@ def _spa_deep_link_stub(
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         + robots
         + f"<title>{esc(title)}</title>"
+        + f"<meta name='description' content=\"{esc(desc, quote=True)}\">"
         + f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         + "".join(og_bits)
         + "<script>"
@@ -2161,6 +2162,8 @@ def write_spa_path_shells(
     site_url: str = "",
     og_image: str = "",
     champion_routes=(),
+    total_games: int | None = None,
+    patch_prefix: str | None = None,
     champion_records=(),
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
@@ -2184,6 +2187,18 @@ def write_spa_path_shells(
     # Best-effort OG image from the main shell when caller did not pass one.
     if not og_image and site_url:
         og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
+
+    display_patch = display_patch_prefix(patch_prefix)
+    en_patch_title = f" (Patch {display_patch})" if display_patch else ""
+    cn_patch_title = f"（{display_patch}）" if display_patch else ""
+    en_evidence = (
+        f"{total_games:,} real matches" if total_games is not None
+        else "real match data"
+    )
+    cn_evidence = (
+        f"{total_games:,} 场实战对局" if total_games is not None
+        else "实战数据"
+    )
 
     # (dest, canonical_path, title, description, html_lang)
     route_specs: list[tuple[Path, str, str, str, str]] = [
@@ -2224,7 +2239,13 @@ def write_spa_path_shells(
             "zh-Hant",
         ),
         # English locale prefix mirrors (shareable /en… links).
-        (root / "en" / "index.html", "/en", "arammeta", "ARAM Mayhem tier list", "en"),
+        (
+            root / "en" / "index.html", "/en",
+            f"ARAM Mayhem Tier List{en_patch_title} | arammeta",
+            f"Reliable win-rate stats from {en_evidence}. "
+            "Compare champion and augment tiers, item win rates and augment pick rates.",
+            "en",
+        ),
         (
             root / "en" / "augments" / "index.html",
             "/en/augments",
@@ -2261,7 +2282,12 @@ def write_spa_path_shells(
             "en",
         ),
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
-        (root / "zh-cn" / "index.html", "/zh-cn", "arammeta", "大乱斗强度榜", "zh-Hans"),
+        (
+            root / "zh-cn" / "index.html", "/zh-cn",
+            f"海克斯大乱斗强度排行{cn_patch_title} | arammeta",
+            f"基于 {cn_evidence}，查询英雄与海克斯强度排行、装备胜率及海克斯出现频率，完整胜率数据一站掌握。",
+            "zh-Hans",
+        ),
         (
             root / "zh-cn" / "augments" / "index.html",
             "/zh-cn/augments",
@@ -3433,17 +3459,15 @@ def render_html(
             encoding="utf-8",
         )
 
-    og_patch_label = f"patch {display_patch}" if display_patch else "all patches"
-    og_title = header_title  # share-card title = the brand
-    og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
-    # Browser tab / brand title is just "arammeta". SEO keywords live in
-    # <meta description> (not the tab chrome or the website's brand name).
-    patch_zh = f"版本 {display_patch} " if display_patch else ""
-    page_title = header_title  # always "arammeta"
+    # The header remains the brand; search titles explain the player's task.
+    patch_title = f"（{display_patch}）" if display_patch else ""
+    page_title = f"隨機單中：大混戰（大亂鬥）強度排行{patch_title} | {header_title}"
     seo_desc = (
-        f"基於 {total_games:,} 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、"
-        f"增幅勝率、出裝與組隊推薦，{patch_zh}持續更新。"
+        f"基於 {total_games:,} 場台服實戰對局，"
+        "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
     )
+    og_title = page_title
+    og_desc = seo_desc
 
     meta_lines: list[str] = []
     meta_lines.append("<meta charset='utf-8'>")
@@ -3846,7 +3870,7 @@ def render_html(
 
     parts.append("<div class='footer'>")
     parts.append(
-        "<div class='cutoffs'>"
+        "<div class='cutoffs' data-nosnippet>"
         "Tier (Bayes WR): "
         "<b>OP</b>≥55% · "
         "<b>T1</b>≥52% · "
@@ -4394,6 +4418,8 @@ def _run_shell_only(
         out_path,
         site_url=site_url,
         og_image=og_image,
+        total_games=total_games,
+        patch_prefix=patch_prefix,
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in records), champ_meta,
         ),

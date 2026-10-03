@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from html.parser import HTMLParser
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
 from tierlist_render import (  # noqa: E402
     _retire_public_column_code,
     _site_base_href,
+    _localize_full_shell_html,
     _spa_deep_link_stub,
     champion_page_routes,
     champion_page_slug,
@@ -30,6 +32,39 @@ from tierlist_render import (  # noqa: E402
 
 
 class SpaPathShellTests(unittest.TestCase):
+    def test_localized_search_description_matches_share_metadata(self) -> None:
+        class Metadata(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.values: dict[str, str] = {}
+
+            def handle_starttag(self, tag, attrs) -> None:
+                data = dict(attrs)
+                if tag == "meta":
+                    self.values[data.get("name", data.get("property", ""))] = data.get("content", "")
+
+        source = (
+            "<html lang='zh-Hant'><head><title>app</title>"
+            "<meta name='description' content='舊摘要'>"
+            "<meta property='og:description' content='舊摘要'>"
+            "<meta name='twitter:description' content='舊摘要'>"
+            "</head><body></body></html>"
+        )
+        for lang, path, desc in (
+            ("en", "/en/", 'Compare builds & champion\'s augments: "Mayhem"'),
+            ("zh-Hans", "/zh-cn/", "比较英雄、海克斯与出装"),
+        ):
+            with self.subTest(lang=lang):
+                result = _localize_full_shell_html(
+                    source, site_url="https://arammeta.com/", canonical_path=path,
+                    html_lang=lang, title="Mayhem | arammeta", description=desc,
+                )
+                metadata = Metadata()
+                metadata.feed(result)
+                for key in ("description", "og:description", "twitter:description"):
+                    self.assertEqual(metadata.values[key], desc)
+                self.assertNotIn("舊摘要", result)
+
     def test_retire_public_column_code_removes_unpublished_article_data(self) -> None:
         source = (
             "const ARTICLES = [\n"
@@ -91,7 +126,7 @@ class SpaPathShellTests(unittest.TestCase):
             index.write_text(
                 "<!doctype html><html lang='zh-Hant'><head>"
                 "<title>app</title>"
-                "<meta name='description' content='Home description'>"
+                "<meta name='description' content='original summary'>"
                 "<link rel='canonical' href='https://arammeta.com/'>"
                 "<meta property='og:url' content='https://arammeta.com/'>"
                 "<meta property='og:image' content='https://arammeta.com/og-image.png?v=old'>"
@@ -105,6 +140,8 @@ class SpaPathShellTests(unittest.TestCase):
                 index,
                 site_url="https://arammeta.com/",
                 og_image="https://arammeta.com/og-image.png",
+                total_games=1234567,
+                patch_prefix="16.19",
             )
             self.assertTrue(any(p.name == "404.html" for p in written))
             self.assertFalse((root / "column").exists())
@@ -121,6 +158,12 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", en_body)
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
+            self.assertIn("1,234,567 real matches", en_body)
+            self.assertIn("<title>ARAM Mayhem Tier List (Patch 26.19) | arammeta</title>", en_body)
+            self.assertIn("Reliable win-rate stats", en_body)
+            self.assertNotIn("Taiwan server", en_body)
+            self.assertNotIn("sample-adjusted win rates", en_body)
+            self.assertNotIn("original summary", en_body)
             self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
             self.assertIn(
                 "hreflang='zh-Hans' href='https://arammeta.com/zh-cn/'",
@@ -133,6 +176,11 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn = root / "zh-cn" / "index.html"
             zh_cn_body = zh_cn.read_text(encoding="utf-8")
             self.assertIn("FULL_SPA_SHELL", zh_cn_body)
+            self.assertIn("1,234,567 场实战对局", zh_cn_body)
+            self.assertNotIn("台服实战对局", zh_cn_body)
+            self.assertIn("<title>海克斯大乱斗强度排行（26.19） | arammeta</title>", zh_cn_body)
+            self.assertIn("装备胜率", zh_cn_body)
+            self.assertNotIn("original summary", zh_cn_body)
             self.assertIn(
                 "rel='canonical' href='https://arammeta.com/zh-cn/'",
                 zh_cn_body,
