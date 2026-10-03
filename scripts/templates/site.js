@@ -1,22 +1,5 @@
     const feedbackFab = document.querySelector('.feedback-fab');
-    const feedbackAnchor = document.querySelector('.feedback-anchor');
-    if (feedbackFab && feedbackAnchor) {
-        const syncFeedbackVisibility = () => {
-            const rect = feedbackAnchor.getBoundingClientRect();
-            feedbackFab.hidden = rect.height === 0 || rect.bottom <= 0 || rect.top >= window.innerHeight;
-        };
-        if ('IntersectionObserver' in window) {
-            new IntersectionObserver(entries => {
-                feedbackFab.hidden = !entries[0].isIntersecting;
-            }).observe(feedbackAnchor);
-        } else {
-            window.addEventListener('scroll', syncFeedbackVisibility, { passive: true });
-            window.addEventListener('resize', syncFeedbackVisibility);
-            new MutationObserver(syncFeedbackVisibility).observe(
-                document.getElementById('view-home'), { attributes: true, attributeFilter: ['class'] }
-            );
-            syncFeedbackVisibility();
-        }
+    if (feedbackFab) {
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') feedbackFab.classList.add('tip-dismissed');
         });
@@ -9466,7 +9449,6 @@
         if (!showPanel || !isMobile) recModalOpen = false;
         shell.classList.toggle('with-side-panel', showPanel && !isMobile);
         document.body.classList.toggle('rec-modal-open', showPanel && isMobile && recModalOpen);
-        document.body.classList.toggle('rec-fab-visible', showPanel && isMobile && !recModalOpen);
         panel.classList.toggle('is-modal-open', showPanel && isMobile && recModalOpen);
         panel.classList.toggle('is-hidden', !showPanel || (isMobile && !recModalOpen));
         panel.classList.toggle('is-full-team', showPanel && isFullTeam);

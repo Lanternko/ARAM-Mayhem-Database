@@ -76,6 +76,8 @@ class FeedbackEntryPointTests(unittest.TestCase):
         self.assertIsNotNone(row)
         assert row is not None
         self.assertIn("class='gh-star'", row.group(1))
+        self.assertIn("class='feedback-fab'", row.group(1))
+        self.assertNotIn("feedback-anchor", shell)
 
     def test_floating_link_keeps_icon_and_localized_accessible_name(self) -> None:
         tags = self._parse(_feedback_fab_html())

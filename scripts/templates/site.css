@@ -3643,6 +3643,8 @@
     }
     /* Footer open-source action. */
     .footer .footer-actions {
+        position: relative;
+        min-height: 48px;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -3651,13 +3653,12 @@
         margin-top: 14px;
     }
     .footer .footer-actions > .gh-star { margin-top: 0; }
-    /* Fixed feedback control appears only when the home footer reaches view. */
-    .feedback-anchor { height: 1px; margin-top: 24px; }
+    /* Feedback occupies the right end of the home footer action row. */
     .feedback-fab {
-        position: fixed;
-        right: calc(24px + env(safe-area-inset-right, 0px));
-        bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-        z-index: 30;
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
         display: grid;
         place-items: center;
         width: 48px;
@@ -3672,7 +3673,7 @@
                     border-color var(--dur-2) var(--ease),
                     background-color var(--dur-2) var(--ease);
     }
-    .feedback-fab[hidden], body.rec-modal-open .feedback-fab { display: none; }
+    body.rec-modal-open .feedback-fab { visibility: hidden; }
     .feedback-fab:hover {
         color: var(--text);
         border-color: var(--accent-soft);
@@ -3711,14 +3712,11 @@
         visibility: visible;
         opacity: 1;
     }
-    @media (max-width: 700px) {
-        .feedback-fab {
-            right: calc(16px + env(safe-area-inset-right, 0px));
-            bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-        }
-        body.rec-fab-visible .feedback-fab {
-            bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-        }
+    @media (max-width: 600px) {
+        .footer .footer-actions { justify-content: space-between; gap: 12px; }
+        .footer .footer-actions > .gh-star { max-width: calc(100% - 60px); }
+        .footer .gh-star-label { white-space: normal; }
+        .feedback-fab { position: relative; top: auto; transform: none; flex-shrink: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
         .feedback-fab, .feedback-fab-tip { transition: none; }

@@ -949,7 +949,7 @@ def _feedback_fab_html() -> str:
     }
     copy = {k: html.escape(v, quote=True) for k, v in copy.items()}
     return (
-        "<a class='feedback-fab' href='/feedback/' hidden "
+        "<a class='feedback-fab' href='/feedback/' "
         "data-href-zh='/feedback/' data-href-zh-cn='/zh-cn/feedback/' "
         "data-href-en='/en/feedback/' aria-labelledby='feedback-fab-tip'>"
         "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' "
@@ -3849,6 +3849,7 @@ def render_html(
         "<span data-i18n-zh='Star' data-i18n-en='Star'>Star</span></span>"
         "</a>"
     )
+    parts.append(_feedback_fab_html())
     parts.append("</div>")  # /footer-actions
     parts.append(
         "<div class='disclaimer'>"
@@ -3883,8 +3884,6 @@ def render_html(
         "<button class='rec-fab is-hidden' id='rec-fab' type='button'>看推薦組合</button>"
     )
     parts.append("</div>")  # /app-shell
-    parts.append("<div class='feedback-anchor' aria-hidden='true'></div>")
-    parts.append(_feedback_fab_html())
     parts.append("</section>")  # /view-home
 
     # ---- View: 英雄頁 (champ) — one champion's detail at /champions/<slug>, rendered by JS ----
