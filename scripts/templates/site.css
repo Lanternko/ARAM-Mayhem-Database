@@ -9473,7 +9473,7 @@
     }
 
     /* Unique augments grouped by primary purpose, then highest source-pool weight. */
-.champ-pools { padding: 16px 0; color: var(--text); }
+.champ-pools { padding: 0 0 16px; color: var(--text); }
 .champ-pools-summary { font-weight: 600; margin: 0 0 8px; }
 .champ-pools-rank { padding: 4px 2px; border: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: help; margin-left: 6px; color: var(--text-muted); }
 .champ-pools-rank:hover { color: var(--text); }
