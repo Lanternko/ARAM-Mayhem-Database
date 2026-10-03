@@ -9463,7 +9463,8 @@
     /* Unique augments grouped by primary purpose, then highest source-pool weight. */
 .champ-pools { padding: 16px 0; color: var(--text); }
 .champ-pools-summary { font-weight: 600; margin: 0 0 8px; }
-.champ-pools-rank { padding: 4px 2px; border: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: help; text-decoration: underline dotted; text-underline-offset: 4px; }
+.champ-pools-rank { padding: 4px 2px; border: 0; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: help; margin-left: 6px; color: var(--text-muted); }
+.champ-pools-rank:hover { color: var(--text); }
 .champ-pools-rank:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .champ-pools-help { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
 .champ-pools-help > summary { cursor: pointer; width: fit-content; padding: 6px 0; }
@@ -9491,7 +9492,6 @@
 .champ-pool-complexity-ends { display: flex; justify-content: space-between; gap: 16px; margin-top: 13px; color: var(--text-muted); font-size: 10px; }
 .champ-pool-complexity-ends > span:last-child { text-align: right; }
 .champ-pool-complexity-ends b { display: block; margin-top: 3px; color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.champ-pool-complexity-tip > p { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--panel-line); color: var(--text-muted); font-size: 12px; }
 
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
 .champ-pools-filters > button { min-height: 40px; }
