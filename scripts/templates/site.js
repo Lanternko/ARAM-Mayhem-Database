@@ -3652,6 +3652,11 @@
         }
         return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
     }
+    function championPoolComplexity(cid, data, catalogue) {
+        const count = championPoolEntries(cid, data, catalogue).length;
+        const counts = Object.keys(data.champs || {}).map(id => championPoolEntries(id, data, catalogue).length).filter(n => n > 0);
+        return {count, rank: 1 + counts.filter(n => n < count).length, total: counts.length};
+    }
     function championPoolAugHtml(entry) {
         const aug = apoolAug(entry.id);
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
@@ -3686,7 +3691,15 @@
                     return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
-        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
+        const complexity = championPoolComplexity(cid, d, DATA.augs || {});
+        const rankLabel = pickLang(`增幅池複雜度第 ${complexity.rank} 名，共 ${complexity.total} 位英雄`, `Pool complexity rank ${complexity.rank} of ${complexity.total} champions`);
+        const rankTip = buildItemTipHtml({
+            name: pickLang('增幅池複雜度', 'Augment pool complexity'),
+            subtitle: rankLabel,
+            desc: pickLang(`依各英雄去重後的增幅數量，由少到多排名。${entries.length} 種增幅，排名第 ${complexity.rank}／${complexity.total}。增幅越多，選項越複雜，名次越後面；數量相同則並列。已排除已知不會出現的增幅。此排名只反映增幅池的選項數，不代表英雄操作難度或強度。`,
+                `Champions are ranked by their number of unique augments, from fewest to most. ${entries.length} augments, rank ${complexity.rank} of ${complexity.total}. More augments mean more options and a later rank; equal counts share a rank. Known unavailable augments are excluded. This measures pool options, not champion difficulty or strength.`),
+        });
+        return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} · <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}${itemTipSource(rankTip)}</button></p>`
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
     }
@@ -11566,7 +11579,7 @@
         scheduleHideItemFloatTip();
     });
     document.addEventListener('click', ev => {
-        const host = ev.target.closest && ev.target.closest('[data-recommended-pool]');
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], .champ-pools-rank');
         if (host) showItemFloatTip(host);
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
