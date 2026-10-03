@@ -158,9 +158,11 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", en_body)
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
-            self.assertIn("1,234,567 Taiwan server matches", en_body)
+            self.assertIn("1,234,567 real matches", en_body)
             self.assertIn("Patch 26.19.", en_body)
-            self.assertIn("sample-adjusted win rates", en_body)
+            self.assertIn("reliable win-rate stats", en_body)
+            self.assertNotIn("Taiwan server", en_body)
+            self.assertNotIn("sample-adjusted win rates", en_body)
             self.assertNotIn("original summary", en_body)
             self.assertIn("rel='canonical' href='https://arammeta.com/en/'", en_body)
             self.assertIn(
@@ -174,7 +176,8 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn = root / "zh-cn" / "index.html"
             zh_cn_body = zh_cn.read_text(encoding="utf-8")
             self.assertIn("FULL_SPA_SHELL", zh_cn_body)
-            self.assertIn("1,234,567 场台服实战对局", zh_cn_body)
+            self.assertIn("1,234,567 场实战对局", zh_cn_body)
+            self.assertNotIn("台服实战对局", zh_cn_body)
             self.assertIn("版本 26.19", zh_cn_body)
             self.assertIn("装备胜率", zh_cn_body)
             self.assertNotIn("original summary", zh_cn_body)

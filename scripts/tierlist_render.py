@@ -2191,12 +2191,12 @@ def write_spa_path_shells(
     en_scope = f" Patch {display_patch}." if display_patch else ""
     cn_scope = f" 版本 {display_patch}。" if display_patch else ""
     en_evidence = (
-        f"{total_games:,} Taiwan server matches" if total_games is not None
-        else "real Taiwan server match data"
+        f"{total_games:,} real matches" if total_games is not None
+        else "real match data"
     )
     cn_evidence = (
-        f"{total_games:,} 场台服实战对局" if total_games is not None
-        else "台服实战数据"
+        f"{total_games:,} 场实战对局" if total_games is not None
+        else "实战数据"
     )
 
     # (dest, canonical_path, title, description, html_lang)
@@ -2241,7 +2241,7 @@ def write_spa_path_shells(
         (
             root / "en" / "index.html", "/en",
             "Data-Driven ARAM Mayhem Tier List | arammeta",
-            f"ARAM Mayhem tier list built on {en_evidence}, with sample-adjusted win rates. "
+            f"ARAM Mayhem tier list with reliable win-rate stats from {en_evidence}. "
             "Compare champion and augment rankings, item win rates, augment pick frequency and pool weights. "
             "See full win-rate and sample-size data." + en_scope,
             "en",
