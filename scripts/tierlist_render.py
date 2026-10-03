@@ -316,7 +316,8 @@ def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) ->
         "apple-touch-icon.png": 180,
     }.items():
         target = out_dir / name
-        icon_image(size).save(target, "PNG", optimize=True)
+        icon_image(size, circular=name == "mayhem-single-die-icon.png").save(
+            target, "PNG", optimize=True)
         outputs.append(target)
     ico_path = out_dir / "favicon.ico"
     icon_image(256).save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
@@ -3452,7 +3453,12 @@ def render_html(
     meta_lines.append(f"<title>{html.escape(page_title)}</title>")
     favicon_version = favicon_asset_version()
     meta_lines.append(
-        f"<link rel='icon' type='image/png' href='mayhem-single-die-icon.png?v={favicon_version}'>"
+        f"<link rel='icon' type='image/png' sizes='180x180' href='mayhem-single-die-icon.png?v={favicon_version}'>"
+    )
+    # Browsers prefer the final scalable die. Keep a raster search candidate:
+    # Google documents raster favicon formats, with no search-only rel attribute.
+    meta_lines.append(
+        f"<link rel='icon' type='image/svg+xml' sizes='any' href='favicon.svg?v={favicon_version}'>"
     )
     meta_lines.append(
         f"<link rel='apple-touch-icon' href='apple-touch-icon.png?v={favicon_version}'>"
@@ -4355,6 +4361,9 @@ def _run_shell_only(
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
+
+    # Keep the icon bytes in sync with the version advertised by rebuilt heads.
+    write_favicon_assets(out_path.parent)
 
     hidden_path = out_path.parent / "p" / "player-history" / "index.html"
     hidden_html = render_html(

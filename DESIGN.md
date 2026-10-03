@@ -203,7 +203,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 ### Favicon
 
-分頁與搜尋結果圖示使用圓形雙點標記：炭黑 `#101114` 圓底填滿正方形畫布的內接圓，內部為兩顆大型金色 `#f5c518` 圓點，沿對角線排列並向中心收攏，避免圓形裁切時貼邊；圓外透明，不加第二層底框，也不融合字母 A。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`；SVG、PNG 與 ICO 共用同一座標。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
+分頁使用骰子狀圓角方形：炭黑 `#101114` 底、金色 `#f5c518` 雙點沿對角線排列，64px 畫布上方形為 `(3,3)` 到 `(61,61)`、圓角 12px，點中心為 `(21,21)` 與 `(43,43)`。`favicon.svg`、tab PNG、ICO 與 touch icon 使用此形狀；首頁先列圓形 PNG 搜尋候選，再列 `sizes=any` 的 SVG 分頁圖示。搜尋候選 `mayhem-single-die-icon.png` 保留填滿畫布的圓底與 `(23,23)`／`(41,41)` 向內收攏的雙點，圓外透明。Google 沒有搜尋專用 favicon 設定，最終選用仍由 Google 決定，不保證兩個平台一定使用不同圖示。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
 
 ### Hierarchy
 
