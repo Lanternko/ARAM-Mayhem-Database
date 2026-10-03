@@ -1329,6 +1329,7 @@ PAYLOAD_SINGLE_ITEM_ROWS = 24  # raised with the 1% pick floor (avg 17.4 rows/ch
 # Draft, and recommendation data.  These fields are only needed after a user
 # opens one champion, so ship them as one small JSON shard per champion.
 CHAMPION_DETAIL_FIELDS = (
+    "poolAugments",
     "bot",
     "sets",
     "items",
@@ -3221,6 +3222,10 @@ def render_html(
             "tags": meta.get("tags") or [],
             "top": top_buckets,
             "bot": bot_buckets,
+            "poolAugments": [
+                {key: value for key, value in _pack(row).items() if key in ("id", "g", "wr", "pick")}
+                for row in picks.get("all", [])
+            ],
             "sets": {
                 "top": [_pack_set(r) for r in champ_sets.get(cid, {}).get("top", [])],
                 "bot": [_pack_set(r) for r in champ_sets.get(cid, {}).get("bot", [])],

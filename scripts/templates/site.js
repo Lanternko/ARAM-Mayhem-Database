@@ -112,6 +112,7 @@
     }
     const DATA = __PAYLOAD__;
     const CHAMP_DETAIL_FIELDS = [
+        'poolAugments',
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
         'itemClusters', 'augTypes',
     ];
@@ -3657,15 +3658,24 @@
         const counts = Object.keys(data.champs || {}).map(id => championPoolEntries(id, data, catalogue).length).filter(n => n > 0);
         return {count, rank: 1 + counts.filter(n => n < count).length, total: counts.length, min: counts.length ? Math.min(...counts) : 0, max: counts.length ? Math.max(...counts) : 0};
     }
-    function championPoolAugHtml(entry) {
+    function championPoolAugHtml(entry, cid, statsById) {
         const aug = apoolAug(entry.id);
+        const stats = statsById.get(String(entry.id));
+        const info = (DATA.champs || {})[cid] || {};
+        const context = [champName(info, cid), DATA.patch_prefix, stats ? pickLang(`${fmtInt(stats.g)} 場`, `${fmtInt(stats.g)} games`) : pickLang('尚無統計', 'No stats available')].filter(Boolean).join(' · ');
+        const statHtml = `<div class="champ-pool-tip-stats"><div class="champ-pool-tip-context">${escHtml(context)}</div><dl>`
+            + [[pickLang('勝率', 'Win rate'), stats && stats.wr], [pickLang('選取率', 'Pick rate'), stats && stats.pick]]
+                .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
+            + '</dl></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
         const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
         const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
-        const tip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc})
-            .trim().replace(/<\/div>$/, sourceHtml + '</div>');
+        const baseTip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc}).trim();
+        const tip = baseTip.replace('class="item-tip-card"', 'class="item-tip-card champ-pool-tip"')
+            .replace('<div class="item-tip-desc">', statHtml + '<div class="item-tip-desc">')
+            .replace(/<\/div>$/, (baseTip.includes('class="item-tip-desc"') ? '' : statHtml) + sourceHtml + '</div>');
         return `<li><button type="button" class="champ-pool-augment has-item-tip" data-pool-augment="${escHtml(entry.id)}">`
             + (aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy" width="32" height="32">` : '')
             + `<span>${escHtml(aug.name)}</span>${itemTipSource(tip)}</button></li>`;
@@ -3694,6 +3704,10 @@
         const entries = championPoolEntries(cid, d, DATA.augs || {});
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
         const visibleEntries = rarity ? entries.filter(e => apoolAug(e.id).rarity === rarity) : entries;
+        const info = (DATA.champs || {})[cid] || {};
+        const statsById = new Map([
+            ...Object.values(info.bot || {}).flat(), ...Object.values(info.top || {}).flat(), ...(info.poolAugments || []),
+        ].map(row => [String(row.id), row]));
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
             .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
@@ -3708,7 +3722,7 @@
                         return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
                             || left.name.localeCompare(right.name);
                     });
-                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
+                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         const complexity = championPoolComplexity(cid, d, DATA.augs || {});
@@ -11624,7 +11638,7 @@
         scheduleHideItemFloatTip();
     });
     document.addEventListener('click', ev => {
-        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], .champ-pools-rank');
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank');
         if (host) showItemFloatTip(host);
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
