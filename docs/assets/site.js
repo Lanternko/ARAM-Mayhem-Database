@@ -1075,7 +1075,7 @@ const __BUILD = window.__ARAM_BUILD__ || {};
             setSectionTitle: '增幅裝置系列相性',
             setSectionMeta: '保守分數；負值代表相對較好，但未達正訊號',
             itemSectionTitle: '最強前兩件出裝',
-            itemSectionMeta: '不含鞋子；選取 ≥1% · 最多 8 組 · 強度為主並保留最高出場',
+            itemSectionMeta: '選取 >= 1% 的最高勝率兩件套',
             itemClusterSectionTitle: '',
             // Empty on purpose: core / 搭配裝備 / 常見後續 labels + per-item WR·pick
             // already carry the structure; the long methodology caption was noise.
@@ -1425,7 +1425,7 @@ const __BUILD = window.__ARAM_BUILD__ || {};
             setSectionTitle: 'Augment Sets',
             setSectionMeta: 'Conservative score; negative can still be relative-best',
             itemSectionTitle: 'Best First Two Items',
-            itemSectionMeta: 'boots excluded; pick ≥1% · up to 8 · strength first, keep top pick',
+            itemSectionMeta: 'Highest-win-rate two-item builds with pick rate >= 1%',
             itemClusterSectionTitle: '',
             // Empty on purpose — see zh itemClusterSectionMeta note.
             itemClusterSectionMeta: '',
@@ -4159,9 +4159,9 @@ const __BUILD = window.__ARAM_BUILD__ || {};
             'Ordered by win rate and pick rate together; small samples rank lower. Strong / Avoid mark augments clearly above / below this champion\'s average.'
         );
         const singleItemTitle = pickLang('單件裝備強度', 'Single Item Strength');
-        const singleItemMeta = pickLang('六格中出過就計入；由強到弱，右滑看更多', 'counts any final-slot item; strongest first, swipe for more');
+        const singleItemMeta = pickLang('排名綜合參考強度和選取率', 'Rankings consider both strength and pick rate');
         const singleItemBadTitle = pickLang('常見但不推薦', 'Common Traps');
-        const singleItemBadMeta = pickLang('負 lift 但仍常見；選取率 ≥ 10% 一律列出', 'negative-lift items people still build; pick ≥ 10% always listed');
+        const singleItemBadMeta = pickLang('高選用率，但是會大幅降低勝率', 'Frequently picked, but substantially lowers win rate');
         const pairs = info.pairs || [];
         const mateLimit = isMobileViewport() ? MATE_LIST_LIMIT_MOBILE : MATE_LIST_LIMIT_DESKTOP;
         const mateTop = pairs.slice(0, mateLimit);
@@ -4537,8 +4537,8 @@ const __BUILD = window.__ARAM_BUILD__ || {};
                 if (options.itemPairGrid) rows = selectItemPairRows(payload);
                 if (!rows.length) return '';
                 const pairMeta = pickLang(
-                    '不含鞋子；選取 ≥1% · 最多 8 組 · 強度為主並保留最高出場',
-                    'boots excluded; pick ≥1% · up to 8 · strength first, keep top pick',
+                    '選取 >= 1% 的最高勝率兩件套',
+                    'Highest-win-rate two-item builds with pick rate >= 1%',
                 );
                 const itemMeta = pickLang('不含鞋子；勝率分數由高到低，右滑看更多', 'boots excluded; strongest first, swipe for more');
                 const displayMeta = options.itemPairGrid
