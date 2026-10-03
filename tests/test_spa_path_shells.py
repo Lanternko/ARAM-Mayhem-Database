@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from html.parser import HTMLParser
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
 from tierlist_render import (  # noqa: E402
     _retire_public_column_code,
     _site_base_href,
+    _localize_full_shell_html,
     _spa_deep_link_stub,
     champion_page_routes,
     champion_page_slug,
@@ -30,6 +32,39 @@ from tierlist_render import (  # noqa: E402
 
 
 class SpaPathShellTests(unittest.TestCase):
+    def test_localized_search_description_matches_share_metadata(self) -> None:
+        class Metadata(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self.values: dict[str, str] = {}
+
+            def handle_starttag(self, tag, attrs) -> None:
+                data = dict(attrs)
+                if tag == "meta":
+                    self.values[data.get("name", data.get("property", ""))] = data.get("content", "")
+
+        source = (
+            "<html lang='zh-Hant'><head><title>app</title>"
+            "<meta name='description' content='舊摘要'>"
+            "<meta property='og:description' content='舊摘要'>"
+            "<meta name='twitter:description' content='舊摘要'>"
+            "</head><body></body></html>"
+        )
+        for lang, path, desc in (
+            ("en", "/en/", 'Compare builds & champion\'s augments: "Mayhem"'),
+            ("zh-Hans", "/zh-cn/", "比较英雄、海克斯与出装"),
+        ):
+            with self.subTest(lang=lang):
+                result = _localize_full_shell_html(
+                    source, site_url="https://arammeta.com/", canonical_path=path,
+                    html_lang=lang, title="Mayhem | arammeta", description=desc,
+                )
+                metadata = Metadata()
+                metadata.feed(result)
+                for key in ("description", "og:description", "twitter:description"):
+                    self.assertEqual(metadata.values[key], desc)
+                self.assertNotIn("舊摘要", result)
+
     def test_retire_public_column_code_removes_unpublished_article_data(self) -> None:
         source = (
             "const ARTICLES = [\n"

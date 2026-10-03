@@ -1908,6 +1908,13 @@ def _localize_full_shell_html(
         )
     if description:
         out = re.sub(
+            r"(name=['\"]description['\"]\s+content=)[\"'][^\"']*[\"']",
+            lambda match: match.group(1) + '"' + html.escape(description, quote=True) + '"',
+            out,
+            count=1,
+            flags=re.I,
+        )
+        out = re.sub(
             r"(property=['\"]og:description['\"]\s+content=)[\"'][^\"']*[\"']",
             rf'\1"{html.escape(description, quote=True)}"',
             out,
@@ -2051,6 +2058,7 @@ def _spa_deep_link_stub(
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         + robots
         + f"<title>{esc(title)}</title>"
+        + f"<meta name='description' content=\"{esc(desc, quote=True)}\">"
         + f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         + "".join(og_bits)
         + "<script>"
@@ -2216,7 +2224,13 @@ def write_spa_path_shells(
             "zh-Hant",
         ),
         # English locale prefix mirrors (shareable /en… links).
-        (root / "en" / "index.html", "/en", "arammeta", "ARAM Mayhem tier list", "en"),
+        (
+            root / "en" / "index.html", "/en",
+            "ARAM Mayhem Tier List, Augments & Builds | arammeta",
+            "Compare ARAM Mayhem champion tiers, champion-specific augments, builds and team compositions. "
+            "Explore Taiwan server match data with win rates, sample sizes and patch details to guide your picks.",
+            "en",
+        ),
         (
             root / "en" / "augments" / "index.html",
             "/en/augments",
@@ -2253,7 +2267,13 @@ def write_spa_path_shells(
             "en",
         ),
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
-        (root / "zh-cn" / "index.html", "/zh-cn", "arammeta", "大乱斗强度榜", "zh-Hans"),
+        (
+            root / "zh-cn" / "index.html", "/zh-cn",
+            "大乱斗 Mayhem 英雄排行、海克斯与出装推荐 | arammeta",
+            "掌握大乱斗 Mayhem 版本强势英雄、海克斯搭配与出装。arammeta 整合台服实战数据，"
+            "提供英雄强度排行与阵容分析，并列出胜率、样本数与版本，让每次选择都有依据。",
+            "zh-Hans",
+        ),
         (
             root / "zh-cn" / "augments" / "index.html",
             "/zh-cn/augments",
@@ -3397,18 +3417,17 @@ def render_html(
             encoding="utf-8",
         )
 
-    og_patch_label = f"patch {display_patch}" if display_patch else "all patches"
-    og_title = header_title  # share-card title = the brand
-    og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
-    # Browser tab / brand title is just "arammeta". SEO keywords live in
-    # <meta description> + JSON-LD alternateName (not the tab chrome).
-    patch_zh = f"版本 {display_patch} " if display_patch else ""
-    page_title = header_title  # always "arammeta"
+    # The header remains the brand; search titles explain the player's task.
+    patch_zh = f"版本 {display_patch}" if display_patch else "全版本"
+    page_title = f"大亂鬥 Mayhem 英雄排行、增幅與出裝推薦 | {header_title}"
     seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
-        f"基於 {total_games:,} 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、"
-        f"增幅勝率、出裝與組隊推薦，{patch_zh}持續更新。"
+        f"掌握大亂鬥 Mayhem 版本強勢英雄、增幅搭配與出裝。{header_title} 整合台服實戰資料，"
+        "提供英雄強度排行與陣容分析，並列出勝率、樣本數與版本，讓每次選擇都有依據。"
+        f"{patch_zh}，收錄 {total_games:,} 場對局。"
     )
+    og_title = page_title
+    og_desc = seo_desc
 
     meta_lines: list[str] = []
     meta_lines.append("<meta charset='utf-8'>")
@@ -3806,7 +3825,7 @@ def render_html(
 
     parts.append("<div class='footer'>")
     parts.append(
-        "<div class='cutoffs'>"
+        "<div class='cutoffs' data-nosnippet>"
         "Tier (Bayes WR): "
         "<b>OP</b>≥55% · "
         "<b>T1</b>≥52% · "
