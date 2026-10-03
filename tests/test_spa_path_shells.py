@@ -91,6 +91,7 @@ class SpaPathShellTests(unittest.TestCase):
             index.write_text(
                 "<!doctype html><html lang='zh-Hant'><head>"
                 "<title>app</title>"
+                "<meta name='description' content='Home description'>"
                 "<link rel='canonical' href='https://arammeta.com/'>"
                 "<meta property='og:url' content='https://arammeta.com/'>"
                 "<meta property='og:image' content='https://arammeta.com/og-image.png?v=old'>"
@@ -161,6 +162,7 @@ class SpaPathShellTests(unittest.TestCase):
                 pools_body,
             )
             self.assertIn("<title>增幅池 · arammeta</title>", pools_body)
+            self.assertIn('name=\'description\' content="每位英雄從哪些增幅池抽卡，以及各池權重"', pools_body)
             en_pools = (root / "en" / "augments" / "pools" / "index.html").read_text(
                 encoding="utf-8"
             )
@@ -195,12 +197,13 @@ class SpaPathShellTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             champion_page_routes([1, 2], meta)
 
-    def test_write_spa_path_shells_emits_champion_stubs(self) -> None:
+    def test_champion_pages_keep_their_url_and_share_one_interactive_shell(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             index = root / "index.html"
             index.write_text(
-                "<!doctype html><html lang='zh-Hant'><head><title>app</title></head>"
+                "<!doctype html><html lang='zh-Hant'><head><title>app</title>"
+                "<link rel='canonical' href='https://arammeta.com/'></head>"
                 "<body>FULL_SPA_SHELL</body></html>",
                 encoding="utf-8",
             )
@@ -211,21 +214,29 @@ class SpaPathShellTests(unittest.TestCase):
             )
             write_spa_path_shells(
                 index, site_url="https://arammeta.com/", champion_routes=routes,
+                champion_records=[{"champion_id": 222, "bayes_wr": .53, "games": 2000, "prev_mix": .2}],
             )
             zh = (root / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
             en = (root / "en" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
             cn = (root / "zh-cn" / "champions" / "jinx" / "index.html").read_text(encoding="utf-8")
-            # Bounce stubs, not ~0.5MB full shells (repo growth per publish).
+            # Indexable snapshot text; no redirect and no repeated full app body.
             for body in (zh, en, cn):
                 self.assertNotIn("FULL_SPA_SHELL", body)
-                self.assertIn("location.replace('/')", body)
+                self.assertNotIn("location.replace", body)
+                self.assertNotIn("http-equiv='refresh'", body)
                 self.assertNotIn("noindex", body)
+                self.assertIn("champion-shell.js?v=", body)
+                self.assertIn("53.0%", body)
+                self.assertIn("2,000", body)
+                self.assertIn("20%", body)
+                self.assertIn("hreflang='en'", body)
             self.assertIn("href='https://arammeta.com/champions/jinx/'", zh)
             self.assertIn("吉孃 增幅與出裝", zh)
-            self.assertIn("'aram-spa-lang','en'", en)
+            self.assertIn("lang='en'", en)
             self.assertIn("Jinx augments &amp; build", en)
-            self.assertIn("'aram-spa-lang','zh-CN'", cn)
+            self.assertIn("lang='zh-Hans'", cn)
             self.assertIn("金克丝", cn)
+            self.assertIn("FULL_SPA_SHELL", (root / "assets/app-shell.html").read_text())
 
     def test_404_redirects_legacy_zh_cn_casing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

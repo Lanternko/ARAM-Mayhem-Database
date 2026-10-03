@@ -1908,6 +1908,11 @@ def _localize_full_shell_html(
         )
     if description:
         out = re.sub(
+            r"(name=['\"]description['\"]\s+content=)[\"'][^\"']*[\"']",
+            lambda match: match[1] + '"' + html.escape(description, quote=True) + '"',
+            out, count=1, flags=re.I,
+        )
+        out = re.sub(
             r"(property=['\"]og:description['\"]\s+content=)[\"'][^\"']*[\"']",
             rf'\1"{html.escape(description, quote=True)}"',
             out,
@@ -2154,6 +2159,7 @@ def write_spa_path_shells(
     site_url: str = "",
     og_image: str = "",
     champion_routes=(),
+    champion_records=(),
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2290,13 +2296,28 @@ def write_spa_path_shells(
             "zh-Hans",
         ),
     ]
-    # Per-champion pages are tiny bounce stubs (not full shells): 173 champions
-    # x 3 locales of the ~0.5MB shell would add ~250MB to every daily publish.
+    # Champion pages keep their URL and snapshot text, while loading one shared
+    # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
+    routes_by_slug = {route["slug"]: route for route in champion_routes}
+    records_by_cid = {str(record["champion_id"]): record for record in champion_records}
+    if champion_routes:
+        assets = root / "assets"
+        assets.mkdir(parents=True, exist_ok=True)
+        shell_body = re.search(r"<body\b[^>]*>(.*?)</body>", full_shell, flags=re.S | re.I)
+        app_body = shell_body[1] if shell_body else ""
+        shell_path = assets / "app-shell.html"
+        shell_path.write_text("<!doctype html><html><head><meta name='robots' content='noindex'></head><body>" + app_body + "</body></html>", encoding="utf-8")
+        loader_path = assets / "champion-shell.js"
+        loader_path.write_text(_read_site_template("champion-shell.js"), encoding="utf-8")
+        shell_url = "assets/app-shell.html?v=" + hashlib.sha256(shell_path.read_bytes()).hexdigest()[:12]
+        loader_url = "assets/champion-shell.js?v=" + hashlib.sha256(loader_path.read_bytes()).hexdigest()[:12]
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
-        if cpath in SPA_FULL_SHELL_PATHS:
+        slug = cpath.rstrip("/").split("/")[-1]
+        is_champion = "/champions/" in cpath and slug in routes_by_slug
+        if cpath in SPA_FULL_SHELL_PATHS or is_champion:
             body = _localize_full_shell_html(
                 full_shell,
                 site_url=site_url,
@@ -2305,6 +2326,13 @@ def write_spa_path_shells(
                 title=title,
                 description=desc,
             )
+            if is_champion:
+                from aram_nn.site.champion_shell import champion_shell_html
+                route = routes_by_slug[slug]
+                body = champion_shell_html(
+                    body, route=route, record=records_by_cid.get(route["cid"], {}),
+                    language=html_lang, shell_url=shell_url, loader_url=loader_url,
+                )
         else:
             body = _spa_deep_link_stub(
                 site_url=site_url,
@@ -2316,6 +2344,8 @@ def write_spa_path_shells(
             )
         dest.write_text(body, encoding="utf-8")
         written.append(dest)
+    if champion_routes:
+        written.extend([shell_path, loader_path])
     return written
 
 
@@ -3401,10 +3431,9 @@ def render_html(
     og_title = header_title  # share-card title = the brand
     og_desc = f"{og_patch_label}｜【英雄 x 增幅裝置勝率 · 組隊推薦】&#10;by 路燈"
     # Browser tab / brand title is just "arammeta". SEO keywords live in
-    # <meta description> + JSON-LD alternateName (not the tab chrome).
+    # <meta description> (not the tab chrome or the website's brand name).
     patch_zh = f"版本 {display_patch} " if display_patch else ""
     page_title = header_title  # always "arammeta"
-    seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
         f"基於 {total_games:,} 場台服 ARAM 大亂鬥（Mayhem）實戰對局的英雄勝率排行、"
         f"增幅勝率、出裝與組隊推薦，{patch_zh}持續更新。"
@@ -3462,7 +3491,7 @@ def render_html(
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": header_title,
-            "alternateName": seo_alternate,
+            "alternateName": ["AramMeta", "ARAM Meta"],
             "url": canonical_url,
             "description": seo_desc,
             "inLanguage": "zh-Hant",
@@ -4354,12 +4383,19 @@ def _run_shell_only(
         champion_routes=load_champion_page_routes(
             out_path.parent, (r["champion_id"] for r in records), champ_meta,
         ),
+        champion_records=records,
     )
     info_pages = write_site_info_pages(
         out_path,
         site_url=site_url,
         build_date=build_date,
     )
+    from aram_nn.site.search_discovery import write_search_discovery
+    discovery = write_search_discovery(
+        out_path.parent, [out_path, *mirrors, *info_pages], site_url=site_url,
+    )
+    if discovery:
+        click.echo("[shell-only] wrote sitemap.xml and robots.txt")
     full_n = sum(1 for p in mirrors if p.stat().st_size > 50_000)
     click.echo(
         f"[shell-only] wrote {out_path} ({len(html):,} chars) in {time.time() - t0:.2f}s — "

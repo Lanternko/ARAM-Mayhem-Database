@@ -30,6 +30,15 @@ class ShellPayloadPreservationTests(unittest.TestCase):
                     ga_measurement_id="", min_pair_games=5, min_synergy_games=5,
                 )
             self.assertEqual(before, {p.relative_to(api): p.read_bytes() for p in api.rglob("*") if p.is_file()})
+            from xml.etree import ElementTree as ET
+            from aram_nn.site.search_discovery import SITEMAP_NS
+            locations = {
+                node.text for node in ET.parse(out / "sitemap.xml").findall(f".//{{{SITEMAP_NS}}}loc")
+            }
+            self.assertIn("https://arammeta.com/augments/pools/", locations)
+            self.assertIn("https://arammeta.com/champions/ahri/", locations)
+            self.assertNotIn("https://arammeta.com/p/player-history/", locations)
+            self.assertTrue((out / "robots.txt").exists())
             index_html = (out / "index.html").read_text(encoding="utf-8")
             site_js = (out / "assets/site.js").read_text(encoding="utf-8")
             payload_ref = f"api/tier-list.json?v={snapshot['detailVersion']}"
