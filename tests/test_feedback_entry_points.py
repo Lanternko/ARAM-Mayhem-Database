@@ -11,8 +11,7 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-import tierlist_render  # noqa: E402
-from tierlist_render import _feedback_cta_html, render_html  # noqa: E402
+from tierlist_render import _feedback_fab_html, render_html  # noqa: E402
 
 
 def render_shell() -> str:
@@ -52,49 +51,42 @@ class _AttrCollector(HTMLParser):
 
 
 class FeedbackEntryPointTests(unittest.TestCase):
-    def test_every_data_view_ends_with_a_localized_feedback_prompt(self) -> None:
+    def test_one_localized_floating_link_replaces_view_banners(self) -> None:
         shell = render_shell()
-        for placement, view in (("home", "home"), ("augments", "augments"), ("changes", "changes")):
-            start = shell.index(f"data-view='{view}'")
-            end = shell.find("<section class='view ", start + 1)
-            section = shell[start:end if end != -1 else len(shell)]
-            self.assertIn(f"data-feedback-cta='{placement}'", section, placement)
+        self.assertNotIn("feedback-cta", shell)
+        self.assertNotIn("覺得哪個英雄的評級不對", shell)
+        links = [a for tag, a in self._parse(shell) if tag == "a" and a.get("class") == "feedback-fab"]
+        self.assertEqual(len(links), 1)
+        link = links[0]
+        self.assertEqual(link["href"], "/feedback/")
+        self.assertEqual(link["data-href-zh-cn"], "/zh-cn/feedback/")
+        self.assertEqual(link["data-href-en"], "/en/feedback/")
+        self.assertIn(f"id='{link['aria-labelledby']}'", shell)
+        home_start = shell.index("data-view='home'")
+        home_end = shell.index("</section>", home_start)
+        self.assertIn("class='feedback-fab'", shell[home_start:home_end])
+        self.assertNotIn("class='feedback-fab'", shell[home_end:])
+        self.assertIn("許願新功能，或是回報網站的bug", shell)
 
-        links = [a for tag, a in self._parse(shell) if tag == "a" and "feedback-cta-link" in (a.get("class") or "")]
-        self.assertEqual(len(links), 3)
-        for link in links:
-            # Lowercase zh-cn: Pages is case-sensitive and /zh-CN/feedback/ 404s.
-            self.assertEqual(link["href"], "/feedback/")
-            self.assertEqual(link["data-href-zh-cn"], "/zh-cn/feedback/")
-            self.assertEqual(link["data-href-en"], "/en/feedback/")
-            self.assertTrue(link.get("data-i18n-en"))
-            self.assertIn(f"id='{link['aria-describedby']}'", shell)
-
-    def test_footer_feedback_pill_shares_a_row_with_the_github_pill(self) -> None:
+    def test_duplicate_feedback_pill_is_removed(self) -> None:
         shell = render_shell()
+        self.assertNotIn("feedback-pill", shell)
+        self.assertNotIn("給我回饋", shell)
         row = re.search(r"<div class='footer-actions'>(.*?)</div>", shell, re.S)
         self.assertIsNotNone(row)
         assert row is not None
-        self.assertIn("class='feedback-pill'", row.group(1))
         self.assertIn("class='gh-star'", row.group(1))
-        self.assertLess(row.group(1).index("feedback-pill"), row.group(1).index("gh-star"))
-        # Feedback left the legal-links row, where it read as boilerplate.
-        site_links = re.search(r"<nav class='site-links'.*?</nav>", shell, re.S)
-        assert site_links is not None
-        self.assertNotIn("feedback", site_links.group(0))
+        self.assertIn("class='feedback-fab'", row.group(1))
+        self.assertNotIn("feedback-anchor", shell)
 
-    def test_cta_copy_is_attribute_escaped(self) -> None:
-        original = tierlist_render._FEEDBACK_CTA_COPY
-        tierlist_render._FEEDBACK_CTA_COPY = {
-            "probe": {"zh": "它's <b>", "zh_cn": "它's", "en": "Isn't it 'odd' & \"off\"?"},
-        }
-        try:
-            markup = _feedback_cta_html("probe")
-        finally:
-            tierlist_render._FEEDBACK_CTA_COPY = original
-        attrs = dict(self._parse(markup)[1][1])
-        self.assertEqual(attrs["data-i18n-en"], "Isn't it 'odd' & \"off\"?")
-        self.assertNotIn("<b>", markup)
+    def test_floating_link_keeps_icon_and_localized_accessible_name(self) -> None:
+        tags = self._parse(_feedback_fab_html())
+        icon = next(attrs for tag, attrs in tags if tag == "svg")
+        self.assertEqual(icon["aria-hidden"], "true")
+        tip = next(attrs for tag, attrs in tags if tag == "span")
+        self.assertEqual(tip["data-i18n-zh"], "許願新功能，或是回報網站的bug")
+        self.assertTrue(tip["data-i18n-zh-cn"])
+        self.assertTrue(tip["data-i18n-en"])
 
     @staticmethod
     def _parse(markup: str) -> list[tuple[str, dict[str, str | None]]]:

@@ -3641,9 +3641,10 @@
     .footer .gh-star:hover .gh-star-cta {
         color: var(--accent, #48b868);
     }
-    /* Feedback + GitHub pills share one wrapping row; the gap lives on the
-       row so neither pill needs a side margin that breaks when they stack. */
+    /* Footer open-source action. */
     .footer .footer-actions {
+        position: relative;
+        min-height: 48px;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -3651,103 +3652,75 @@
         gap: 8px;
         margin-top: 14px;
     }
-    .footer .footer-actions > .gh-star,
-    .footer .footer-actions > .feedback-pill { margin-top: 0; }
-    /* Feedback pill: pulled out of the 關於/隱私權 row, where it read as
-       boilerplate and never cleared 10 views in its first week.  Same pill
-       affordance as the GitHub star it now sits beside. */
-    .footer .feedback-pill {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 7px;
-        min-height: 34px;
-        padding: 0 14px;
-        background: color-mix(in srgb, var(--accent, #48b868) 12%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent, #48b868) 38%, transparent);
-        border-radius: 999px;
-        color: color-mix(in srgb, var(--accent, #48b868) 82%, var(--text, #e6e8eb));
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.01em;
+    .footer .footer-actions > .gh-star { margin-top: 0; }
+    /* Feedback occupies the right end of the home footer action row. */
+    .feedback-fab {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 1px solid var(--border-strong);
+        background: var(--surface-raised);
+        color: var(--accent);
+        box-shadow: var(--panel-shadow);
         text-decoration: none;
-        white-space: nowrap;
-        cursor: pointer;
         transition: color var(--dur-2) var(--ease),
-                    background-color var(--dur-2) var(--ease),
                     border-color var(--dur-2) var(--ease),
-                    transform var(--dur-1) var(--ease),
-                    box-shadow var(--dur-2) var(--ease);
+                    background-color var(--dur-2) var(--ease);
     }
-    .footer .feedback-pill:hover {
-        color: var(--text, #e6e8eb);
-        background: color-mix(in srgb, var(--accent, #48b868) 22%, transparent);
-        border-color: color-mix(in srgb, var(--accent, #48b868) 62%, transparent);
-        box-shadow: 0 6px 16px -10px rgba(0, 0, 0, 0.55);
+    .feedback-fab > svg { transform: translate(-1px, 1px); }
+    body.rec-modal-open .feedback-fab { visibility: hidden; }
+    .feedback-fab:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: var(--surface-2);
     }
-    .footer .feedback-pill:active { transform: scale(0.97); }
-    .footer .feedback-pill:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--accent, #48b868) 60%, transparent);
+    .feedback-fab:focus-visible {
+        outline: 2px solid var(--accent);
         outline-offset: 3px;
     }
-    .footer .feedback-pill svg { flex-shrink: 0; opacity: 0.95; }
-    /* In-content invitation, emitted at the end of a view: the doubt forms
-       where the data ends, so the prompt lives there rather than five screens
-       further down in the footer. */
-    .feedback-cta {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 8px 14px;
-        max-width: 760px;
-        margin: 28px auto 4px;
-        padding: 14px 18px;
-        background: color-mix(in srgb, var(--surface-2, #21262d) 55%, transparent);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 12px;
-    }
-    .feedback-cta .feedback-cta-copy {
-        margin: 0;
-        color: var(--text-muted, #8d96a0);
+    .feedback-fab-tip {
+        position: absolute;
+        right: 0;
+        bottom: calc(100% + 10px);
+        width: max-content;
+        max-width: calc(100vw - 48px - env(safe-area-inset-right, 0px));
+        padding: 10px 14px;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-sm);
+        background: var(--surface-raised);
+        color: var(--text);
+        box-shadow: var(--panel-shadow);
         font-size: 13px;
         line-height: 1.5;
+        visibility: hidden;
+        opacity: 0;
+        transition: opacity var(--dur-1) var(--ease);
     }
-    .feedback-cta .feedback-cta-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 32px;
-        padding: 0 14px;
-        background: color-mix(in srgb, var(--accent, #48b868) 16%, transparent);
-        border: 1px solid color-mix(in srgb, var(--accent, #48b868) 45%, transparent);
-        border-radius: 999px;
-        color: color-mix(in srgb, var(--accent, #48b868) 85%, var(--text, #e6e8eb));
-        font-size: 12px;
-        font-weight: 700;
-        text-decoration: none;
-        white-space: nowrap;
-        transition: color var(--dur-2) var(--ease),
-                    background-color var(--dur-2) var(--ease),
-                    border-color var(--dur-2) var(--ease),
-                    transform var(--dur-1) var(--ease);
+    /* Bridge the gap so the tooltip remains visible when hovered. */
+    .feedback-fab-tip::after {
+        content: "";
+        position: absolute;
+        inset: 100% 0 auto;
+        height: 11px;
     }
-    .feedback-cta .feedback-cta-link:hover {
-        color: var(--text, #e6e8eb);
-        background: color-mix(in srgb, var(--accent, #48b868) 28%, transparent);
-        border-color: color-mix(in srgb, var(--accent, #48b868) 70%, transparent);
+    .feedback-fab:is(:hover, :focus-visible):not(.tip-dismissed) .feedback-fab-tip {
+        visibility: visible;
+        opacity: 1;
     }
-    .feedback-cta .feedback-cta-link:active { transform: scale(0.97); }
-    .feedback-cta .feedback-cta-link:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--accent, #48b868) 60%, transparent);
-        outline-offset: 3px;
+    @media (max-width: 600px) {
+        .footer .footer-actions { justify-content: space-between; gap: 12px; }
+        .footer .footer-actions > .gh-star { max-width: calc(100% - 60px); }
+        .footer .gh-star-label { white-space: normal; }
+        .feedback-fab { position: relative; top: auto; transform: none; flex-shrink: 0; }
     }
-    @media (max-width: 640px) {
-        .feedback-cta {
-            flex-direction: column;
-            text-align: center;
-            margin: 22px 0 4px;
-            padding: 14px;
-        }
+    @media (prefers-reduced-motion: reduce) {
+        .feedback-fab, .feedback-fab-tip { transition: none; }
     }
     .footer .disclaimer {
         max-width: 760px;
@@ -5755,14 +5728,6 @@
         background: var(--surface-2);
         border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
     }
-    /* Light --accent is a fill tone (2.3:1 as text on its own tint); the
-       feedback pills take the text-only soft gold, deepened to clear 4.5:1. */
-    [data-theme="light"] .footer .feedback-pill,
-    [data-theme="light"] .feedback-cta .feedback-cta-link {
-        color: color-mix(in srgb, var(--accent-soft) 75%, var(--text));
-    }
-    [data-theme="light"] .footer .feedback-pill:hover,
-    [data-theme="light"] .feedback-cta .feedback-cta-link:hover { color: var(--text); }
     [data-theme="light"] .empty-state { color: var(--text-muted); }
     [data-theme="light"] .empty-state strong { color: var(--text); }
 

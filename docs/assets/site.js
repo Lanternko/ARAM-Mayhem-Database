@@ -1,6 +1,17 @@
 (async () => {
 const __BUILD = window.__ARAM_BUILD__ || {};
-// GitHub Pages deep-link bootstrap: lightweight path shells (and 404.html)
+const feedbackFab = document.querySelector('.feedback-fab');
+    if (feedbackFab) {
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') feedbackFab.classList.add('tip-dismissed');
+        });
+        ['mouseenter', 'focus', 'mouseleave', 'blur'].forEach(type => {
+            feedbackFab.addEventListener(type, () => feedbackFab.classList.remove('tip-dismissed'));
+        });
+    }
+
+
+    // GitHub Pages deep-link bootstrap: lightweight path shells (and 404.html)
     // stash the intended URL then bounce to /.  Restore before any route read
     // so shareable paths like /column/sprees-not-snowball open the right view.
     // Also restore locale: stubs set aram-spa-lang so /en… survives the bounce
