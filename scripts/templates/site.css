@@ -9470,6 +9470,18 @@
 .champ-pools-help > p { margin: 8px 0 0; max-width: 70ch; }
 .champ-pools-status { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; }
 .champ-pools-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Pool-complexity tooltip: quantity range and the current champion. */
+.champ-pool-complexity-tip { padding: 16px; }
+.champ-pool-complexity-current { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.champ-pool-complexity-current > span { color: var(--text-muted); font-size: 13px; }
+.champ-pool-complexity-scale { margin-top: 20px; }
+.champ-pool-complexity-track { position: relative; height: 4px; margin: 0 5px; border-radius: 99px; background: var(--border); }
+.champ-pool-complexity-track > span { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); }
+.champ-pool-complexity-ends { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; color: var(--text-muted); font-size: 11px; }
+.champ-pool-complexity-ends > span:last-child { text-align: right; }
+.champ-pool-complexity-ends b { display: block; margin-top: 2px; color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.champ-pool-complexity-tip > p { margin: 14px 0 0; color: var(--text-muted); font-size: 12px; }
+
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
 .champ-pools-filters > button { min-height: 40px; }
 .champ-pool-category { margin-top: 28px; }
