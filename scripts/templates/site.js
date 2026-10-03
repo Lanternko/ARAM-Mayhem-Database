@@ -3672,20 +3672,21 @@
     }
     const championPoolRarity = new Map();
     function championPoolFrequencyHtml() {
-        // Historical 16.18 random-grant observations, normalized to weight 100.
-        // These are approximate frequencies, not a confirmed offer-probability formula.
-        const observations = [[75, 0.66], [100, 1], [150, 1.37], [175, 1.71], [200, 2]];
+        // Simplified descriptive ratios from 21,462 grants in 16.18 / 16.19.
+        // Rounded display values are not the exact fitted estimates. Their
+        // game-cluster 95% intervals fit inside a conservative ±10% envelope.
+        const observations = [[75, 0.67], [100, 1], [150, 1.33], [175, 1.67], [200, 2]];
         const relative = (weight, ratio) => pickLang(`${weight === 100 ? '' : '約 '}${ratio} 倍`, `${weight === 100 ? '' : '≈ '}${ratio}×`);
         const description = observations.map(([weight, ratio]) => `${weight}: ${relative(weight, ratio)}`).join('; ');
         return `<details class="champ-pools-help champ-pools-frequency"><summary>${escHtml(pickLang('權重的發放比例', 'Weight and grant frequency'))}</summary>`
-            + `<div class="champ-pool-frequency-body"><div class="champ-pool-frequency-heading"><span>${escHtml(pickLang('權重', 'Weight'))}</span><span>${escHtml(pickLang('實測相對頻率，100 為基準', 'Observed frequency, relative to weight 100'))}</span></div>`
+            + `<div class="champ-pool-frequency-body"><div class="champ-pool-frequency-heading"><span>${escHtml(pickLang('權重', 'Weight'))}</span><span>${escHtml(pickLang('預估相對頻率，100 為基準', 'Estimated frequency, relative to weight 100'))}</span></div>`
             + `<div class="champ-pool-frequency-chart" role="img" aria-label="${escHtml(description)}">`
             + `<div class="champ-pool-frequency-labels">${observations.map(([weight]) => `<span>${weight}</span>`).join('')}</div>`
             + `<div class="champ-pool-frequency-bars">${observations.map(([weight, ratio]) => `<span><i${weight === 100 ? ' class="is-baseline"' : ''} style="width:${ratio / 2 * 100}%"></i></span>`).join('')}</div>`
             + `<div class="champ-pool-frequency-values">${observations.map(([weight, ratio]) => `<span>${escHtml(relative(weight, ratio))}</span>`).join('')}</div></div>`
             + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
-            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('歷史實測近似值，尚未證實精確公式，也不代表一般三選一選項的出現率。', 'Historical approximations, not a confirmed formula or the chance of appearing among the usual three offers.'))}</p>`
-            + `<p class="champ-pool-frequency-source">${escHtml(pickLang('16.18 · Mayhem · 本機 LCU · 9,539 次隨機發放', '16.18 · Mayhem · Local LCU · 9,539 random grants'))}</p></div></details>`;
+            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本下的預估相對頻率，抽樣誤差約 ±10%（95% 信賴範圍）。', 'Estimated relative frequency from 21,462 samples, with approximately ±10% sampling uncertainty (95% confidence range).'))}</p>`
+            + `<p class="champ-pool-frequency-source">${escHtml(pickLang('16.18–16.19 · Mayhem · 整體簡化倍率，誤差不含版本與稀有度差異。', '16.18–16.19 · Mayhem · Simplified overall ratios; uncertainty excludes patch and rarity differences.'))}</p></div></details>`;
     }
     function championPoolsHtml(cid, rarity = '') {
         const d = augPools.data;
