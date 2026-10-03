@@ -3066,6 +3066,7 @@
         margin: 0 0 12px;
     }
     .item-role-chip,
+    .champ-pool-rarity-chip,
     .item-scope-chip {
         padding: 4px 11px;
         background: #1f2530;
@@ -3081,14 +3082,17 @@
         --role-color: #9aa0a6;
     }
     .item-role-chip:hover,
+    .champ-pool-rarity-chip:hover,
     .item-scope-chip:hover { background: #2a3142; border-color: #3a4252; }
     .item-role-chip.is-active,
+    .champ-pool-rarity-chip.is-active,
     .item-scope-chip.is-active {
         background: var(--role-color);
         color: #0e1116;
         border-color: var(--role-color);
     }
     .item-role-chip:focus-visible,
+    .champ-pool-rarity-chip:focus-visible,
     .item-scope-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
     /* Cycling pick-share knob: dots say how many states there are and where
        you are, so a label that silently changes on click still reads as one
@@ -5905,6 +5909,7 @@
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
     [data-theme="light"] .item-role-chip:not(.is-active),
+    [data-theme="light"] .champ-pool-rarity-chip:not(.is-active),
     [data-theme="light"] .item-scope-chip:not(.is-active),
     [data-theme="light"] .apool-role-chip:not(.is-active) {
         background: var(--chip-bg);
@@ -5913,6 +5918,7 @@
     }
     [data-theme="light"] .aug-cat-chip:not(.is-active):hover,
     [data-theme="light"] .item-role-chip:not(.is-active):hover,
+    [data-theme="light"] .champ-pool-rarity-chip:not(.is-active):hover,
     [data-theme="light"] .item-scope-chip:not(.is-active):hover,
     [data-theme="light"] .apool-role-chip:not(.is-active):hover {
         background: #e2e6ee;
@@ -9494,7 +9500,7 @@
 .champ-pool-complexity-ends b { display: block; margin-top: 3px; color: var(--text); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
 
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
-.champ-pools-filters > button { min-height: 40px; }
+.champ-pool-rarity-chip { --role-color: var(--accent); }
 .champ-pool-category { margin-top: 28px; }
 .champ-pool-category > h3 { display: flex; align-items: baseline; gap: 12px; font-size: 20px; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .champ-pool-category > h3 small { margin-left: auto; color: var(--text-muted); font-weight: 400; font-size: 12px; }

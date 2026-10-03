@@ -3679,7 +3679,7 @@
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
         const visibleEntries = rarity ? entries.filter(e => apoolAug(e.id).rarity === rarity) : entries;
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
-            .map(([key, zh, en]) => `<button type="button" class="aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
+            .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
             const members = visibleEntries.filter(e => e.category === cat);
             if (!members.length) return '';
