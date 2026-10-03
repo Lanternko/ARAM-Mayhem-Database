@@ -1,11 +1,11 @@
-"""Approved two-pip die geometry shared by SVG and raster exports."""
+"""Circular two-pip brand geometry shared by SVG and raster exports."""
 from __future__ import annotations
 
 from hashlib import sha256
 
 BACKGROUND = "#101114"
 FOREGROUND = "#f5c518"
-PIPS = ((21, 21), (43, 43))
+PIPS = ((23, 23), (41, 41))
 PIP_RADIUS = 8
 
 
@@ -16,7 +16,7 @@ def icon_svg() -> str:
     )
     return (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\n'
-        f'  <rect x="3" y="3" width="58" height="58" rx="12" fill="{BACKGROUND}"/>\n'
+        f'  <circle cx="32" cy="32" r="32" fill="{BACKGROUND}"/>\n'
         + pips + '</svg>\n'
     )
 
@@ -26,15 +26,14 @@ def icon_version() -> str:
 
 
 def icon_image(size: int):
-    """Supersample the dark die with transparent padding and two gold pips."""
+    """Supersample the full circular dark face and two inset gold pips."""
     from PIL import Image, ImageDraw
 
     scale = max(4, (size * 4 + 63) // 64)
     side = 64 * scale
     image = Image.new("RGBA", (side, side))
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((3 * scale, 3 * scale, 61 * scale, 61 * scale),
-                           radius=12 * scale, fill=BACKGROUND)
+    draw.ellipse((0, 0, side, side), fill=BACKGROUND)
     for x, y in PIPS:
         draw.ellipse(((x - PIP_RADIUS) * scale, (y - PIP_RADIUS) * scale,
                       (x + PIP_RADIUS) * scale, (y + PIP_RADIUS) * scale),
