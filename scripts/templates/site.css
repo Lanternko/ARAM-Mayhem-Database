@@ -3711,6 +3711,7 @@
                     border-color var(--dur-2) var(--ease),
                     background-color var(--dur-2) var(--ease);
     }
+    body.rec-modal-open .feedback-fab { display: none; }
     .feedback-fab:hover {
         color: var(--text);
         border-color: var(--accent-soft);
@@ -3753,6 +3754,11 @@
         .feedback-fab {
             right: calc(16px + env(safe-area-inset-right, 0px));
             bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+        }
+    }
+    @media (max-width: 700px) {
+        body.rec-fab-visible .feedback-fab {
+            bottom: calc(80px + env(safe-area-inset-bottom, 0px));
         }
     }
     @media (prefers-reduced-motion: reduce) {

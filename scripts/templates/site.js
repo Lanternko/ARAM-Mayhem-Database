@@ -9449,6 +9449,7 @@
         if (!showPanel || !isMobile) recModalOpen = false;
         shell.classList.toggle('with-side-panel', showPanel && !isMobile);
         document.body.classList.toggle('rec-modal-open', showPanel && isMobile && recModalOpen);
+        document.body.classList.toggle('rec-fab-visible', showPanel && isMobile && !recModalOpen);
         panel.classList.toggle('is-modal-open', showPanel && isMobile && recModalOpen);
         panel.classList.toggle('is-hidden', !showPanel || (isMobile && !recModalOpen));
         panel.classList.toggle('is-full-team', showPanel && isFullTeam);

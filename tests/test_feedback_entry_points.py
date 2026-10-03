@@ -62,7 +62,10 @@ class FeedbackEntryPointTests(unittest.TestCase):
         self.assertEqual(link["data-href-zh-cn"], "/zh-cn/feedback/")
         self.assertEqual(link["data-href-en"], "/en/feedback/")
         self.assertIn(f"id='{link['aria-labelledby']}'", shell)
-        self.assertGreater(shell.index("class='feedback-fab'"), shell.index("</main>"))
+        home_start = shell.index("data-view='home'")
+        home_end = shell.index("</section>", home_start)
+        self.assertIn("class='feedback-fab'", shell[home_start:home_end])
+        self.assertNotIn("class='feedback-fab'", shell[home_end:])
         self.assertIn("許願新功能，或是回報網站的bug", shell)
 
     def test_footer_feedback_pill_shares_a_row_with_the_github_pill(self) -> None:

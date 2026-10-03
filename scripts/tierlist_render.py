@@ -3901,6 +3901,7 @@ def render_html(
         "<button class='rec-fab is-hidden' id='rec-fab' type='button'>看推薦組合</button>"
     )
     parts.append("</div>")  # /app-shell
+    parts.append(_feedback_fab_html())
     parts.append("</section>")  # /view-home
 
     # ---- View: 英雄頁 (champ) — one champion's detail at /champions/<slug>, rendered by JS ----
@@ -4114,7 +4115,6 @@ def render_html(
 
     # Theme + language live in the header; about / source sit in the home footer.
     parts.append("</main>")
-    parts.append(_feedback_fab_html())
 
     js = _read_site_template("site.js")
     js = _retire_public_column_code(js)
