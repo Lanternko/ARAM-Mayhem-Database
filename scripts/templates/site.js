@@ -3008,7 +3008,10 @@
         const head = `
             <div class="aug-tier-head">
                 <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
-                ${sortBtn('rank', pickLang('推薦順序', 'Recommended'), 'col-name')}
+                <div class="aug-tier-rank-head">
+                    ${sortBtn('rank', pickLang('推薦順序', 'Recommended'), 'col-name')}
+                    ${extraHtml}
+                </div>
                 ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
                 ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
             </div>`;
@@ -3071,7 +3074,6 @@
             <div class="aug-tier-table">
                 <div class="aug-tier-top">
                     <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
-                    ${extraHtml}
                 </div>
                 ${panes}
             </div>`;
