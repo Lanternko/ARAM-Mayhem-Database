@@ -3671,6 +3671,22 @@
             + `<span>${escHtml(aug.name)}</span>${itemTipSource(tip)}</button></li>`;
     }
     const championPoolRarity = new Map();
+    function championPoolFrequencyHtml() {
+        // Historical 16.18 random-grant observations, normalized to weight 100.
+        // These are approximate frequencies, not a confirmed offer-probability formula.
+        const observations = [[75, 0.66], [100, 1], [150, 1.37], [175, 1.71], [200, 2]];
+        const relative = (weight, ratio) => pickLang(`${weight === 100 ? '' : '約 '}${ratio} 倍`, `${weight === 100 ? '' : '≈ '}${ratio}×`);
+        const description = observations.map(([weight, ratio]) => `${weight}: ${relative(weight, ratio)}`).join('; ');
+        return `<details class="champ-pools-help champ-pools-frequency"><summary>${escHtml(pickLang('權重的發放比例', 'Weight and grant frequency'))}</summary>`
+            + `<div class="champ-pool-frequency-body"><div class="champ-pool-frequency-heading"><span>${escHtml(pickLang('權重', 'Weight'))}</span><span>${escHtml(pickLang('實測相對頻率，100 為基準', 'Observed frequency, relative to weight 100'))}</span></div>`
+            + `<div class="champ-pool-frequency-chart" role="img" aria-label="${escHtml(description)}">`
+            + `<div class="champ-pool-frequency-labels">${observations.map(([weight]) => `<span>${weight}</span>`).join('')}</div>`
+            + `<div class="champ-pool-frequency-bars">${observations.map(([weight, ratio]) => `<span><i${weight === 100 ? ' class="is-baseline"' : ''} style="width:${ratio / 2 * 100}%"></i></span>`).join('')}</div>`
+            + `<div class="champ-pool-frequency-values">${observations.map(([weight, ratio]) => `<span>${escHtml(relative(weight, ratio))}</span>`).join('')}</div></div>`
+            + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
+            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('歷史實測近似值，尚未證實精確公式，也不代表一般三選一選項的出現率。', 'Historical approximations, not a confirmed formula or the chance of appearing among the usual three offers.'))}</p>`
+            + `<p class="champ-pool-frequency-source">${escHtml(pickLang('16.18 · Mayhem · 本機 LCU · 9,539 次隨機發放', '16.18 · Mayhem · Local LCU · 9,539 random grants'))}</p></div></details>`;
+    }
     function championPoolsHtml(cid, rarity = '') {
         const d = augPools.data;
         if (!d) return `<p class="champ-pools-status" role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
@@ -3712,6 +3728,7 @@
         </div>`;
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}/${complexity.total}${itemTipSource(rankTip)}</button></p>`
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
+            + championPoolFrequencyHtml()
             + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
             + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此稀有度沒有可用增幅。', 'No available augments of this rarity.'))}</p>`)
             + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
