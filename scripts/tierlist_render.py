@@ -2188,8 +2188,8 @@ def write_spa_path_shells(
         og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
 
     display_patch = display_patch_prefix(patch_prefix)
-    en_scope = f" Patch {display_patch}." if display_patch else ""
-    cn_scope = f" 版本 {display_patch}。" if display_patch else ""
+    en_patch_title = f" (Patch {display_patch})" if display_patch else ""
+    cn_patch_title = f"（{display_patch}）" if display_patch else ""
     en_evidence = (
         f"{total_games:,} real matches" if total_games is not None
         else "real match data"
@@ -2240,10 +2240,9 @@ def write_spa_path_shells(
         # English locale prefix mirrors (shareable /en… links).
         (
             root / "en" / "index.html", "/en",
-            "Data-Driven ARAM Mayhem Tier List | arammeta",
-            f"ARAM Mayhem tier list with reliable win-rate stats from {en_evidence}. "
-            "Compare champion and augment rankings, item win rates, augment pick frequency and pool weights. "
-            "See full win-rate and sample-size data." + en_scope,
+            f"ARAM Mayhem Tier List{en_patch_title} | arammeta",
+            f"Reliable win-rate stats from {en_evidence}. "
+            "Compare champion and augment tiers, item win rates and augment pick rates.",
             "en",
         ),
         (
@@ -2284,10 +2283,8 @@ def write_spa_path_shells(
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
         (
             root / "zh-cn" / "index.html", "/zh-cn",
-            "大乱斗 Mayhem 强度排行与实战数据 | arammeta",
-            f"arammeta 基于 {cn_evidence}，提供大乱斗 Mayhem 专业数据分析："
-            "英雄与海克斯强度排行、装备胜率、海克斯实战出现频率与抽选权重。"
-            "完整呈现胜率、样本量与版本信息，让出装与海克斯搭配有据可查。" + cn_scope,
+            f"海克斯大乱斗强度排行{cn_patch_title} | arammeta",
+            f"基于 {cn_evidence}，查询英雄与海克斯强度排行、装备胜率及海克斯出现频率，完整胜率数据一站掌握。",
             "zh-Hans",
         ),
         (
@@ -3434,13 +3431,12 @@ def render_html(
         )
 
     # The header remains the brand; search titles explain the player's task.
-    patch_zh = f"版本 {display_patch}" if display_patch else "全版本"
-    page_title = f"台服大亂鬥 Mayhem 強度排行、裝備與增幅數據 | {header_title}"
+    patch_title = f"（{display_patch}）" if display_patch else ""
+    page_title = f"大亂鬥 Mayhem 強度排行{patch_title} | {header_title}"
     seo_alternate = f"ARAM 大亂鬥（Mayhem）英雄勝率 Tier List・增幅與裝備數據｜{header_title}"
     seo_desc = (
-        f"{header_title} 收錄 {total_games:,} 場台服大亂鬥 Mayhem 實戰對局，"
-        "提供英雄與增幅裝置強度排行、裝備勝率、增幅實戰出現頻率與抽選權重。"
-        f"完整呈現勝率、樣本數與版本資料，讓選角、出裝與增幅搭配都有數據依據。{patch_zh}。"
+        f"基於 {total_games:,} 場台服實戰對局，"
+        "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
     )
     og_title = page_title
     og_desc = seo_desc
