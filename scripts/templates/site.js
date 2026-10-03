@@ -3683,11 +3683,11 @@
                         return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
                             || left.name.localeCompare(right.name);
                     });
-                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('最高池權重', 'Highest pool weight'))} <b>${weight}</b><small>${list.length}</small></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
+                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(championPoolAugHtml).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅 · 已去重`, `${entries.length} unique augments`))}</p>`
-            + `<p class="champ-pools-note">${escHtml(pickLang('依分類分組，各分類內按來源池最高權重排序，非抽中率。點增幅看來源。', 'Grouped by category, then sorted by highest source-pool weight, not draw probability. Select an augment for sources.'))}</p>`
+            + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + groups + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d)}</details>`;
     }
     function renderChampionPools() {

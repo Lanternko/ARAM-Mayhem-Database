@@ -9463,7 +9463,9 @@
     /* Unique augments grouped by primary purpose, then highest source-pool weight. */
 .champ-pools { padding: 16px 0; color: var(--text); }
 .champ-pools-summary { font-weight: 600; margin: 0 0 8px; }
-.champ-pools-note { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.champ-pools-help { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.champ-pools-help > summary { cursor: pointer; width: fit-content; padding: 6px 0; }
+.champ-pools-help > p { margin: 8px 0 0; max-width: 70ch; }
 .champ-pools-status { margin: 0 0 12px; color: var(--text-muted); font-size: 14px; }
 .champ-pools-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .champ-pool-category { margin-top: 28px; }
@@ -9472,13 +9474,12 @@
 .champ-pool-weight-group { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .champ-pool-weight-group > h4 { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
 .champ-pool-weight-group > h4 b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
-.champ-pool-weight-group > h4 small { margin-left: 6px; font-weight: 400; }
 .champ-pool-weight-group > ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; list-style: none; margin: 0; padding: 0; }
 .champ-pool-augment { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; text-align: left; padding: 6px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
 .champ-pool-augment img { flex: 0 0 32px; width: 32px; height: 32px; }
 .champ-pool-augment small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 .champ-pool-augment:hover { background: var(--panel-inner); border-color: var(--border); }
-.champ-pool-augment:focus-visible, .champ-pools-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.champ-pool-augment:focus-visible, .champ-pools-help > summary:focus-visible, .champ-pools-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .champ-pool-tip-sources { padding: 12px; font-size: 12px; border-top: 1px solid var(--border); }
 .champ-pool-tip-sources ul { padding: 0; margin: 8px 0 0; list-style: none; }
 .champ-pool-tip-sources li { display: flex; justify-content: space-between; gap: 12px; margin-top: 5px; }
