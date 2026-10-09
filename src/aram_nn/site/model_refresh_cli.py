@@ -39,6 +39,20 @@ def _failure_streak(state_path: Path) -> int:
         return 0
 
 
+def _publish_desktop_data(*, out_dir: Path, parquet: Path, tag: str, region: str) -> None:
+    from aram_nn.desktop.release import publish_refreshed_models
+
+    try:
+        published = publish_refreshed_models(
+            model_dir=out_dir, parquet=parquet, tag=tag,
+            region=region, output=Path("outputs/desktop-publish"),
+            names=Path("data/cache/champion_abilities.json"), tier=Path("docs/api/tier-list.json"))
+        if published:
+            click.echo("[desktop-publish] published latest verified model data")
+    except Exception as publish_error:
+        click.echo(f"[desktop-publish] ERROR will retry next cycle: {publish_error}", err=True)
+
+
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"), show_default=True)
 @click.option("--state", "state_path", type=click.Path(path_type=Path), default=DEFAULT_STATE_PATH, show_default=True)
@@ -96,6 +110,11 @@ def main(
     """Growth-gated, per-patch refresh of the local recommender models."""
     while True:
         try:
+            # Shipping a completed model needs no training memory. The guarded
+            # refresh can wait hours for admission; publish before entering it.
+            if desktop_release_tag and not (check_only or dry_run):
+                _publish_desktop_data(out_dir=out_dir, parquet=parquet,
+                                      tag=desktop_release_tag, region=desktop_region)
             result = refresh_models_once(
                 db=db, state_path=state_path, out_dir=out_dir, parquet=parquet,
                 score_csv=score_csv, threshold=threshold, growth_ratio=growth_ratio, force=force,
@@ -149,17 +168,9 @@ def main(
                 # chance to restore the file before the next refresh is due.
                 for item in result.get("missing_inputs") or []:
                     click.echo(f"[model-refresh] WARNING missing input {item}")
-            if desktop_release_tag and not (check_only or dry_run or result.get("blocked")):
-                from aram_nn.desktop.release import publish_refreshed_models
-                try:
-                    published = publish_refreshed_models(
-                        model_dir=out_dir, parquet=parquet, tag=desktop_release_tag,
-                        region=desktop_region, output=Path("outputs/desktop-publish"),
-                        names=Path("data/cache/champion_abilities.json"), tier=Path("docs/api/tier-list.json"))
-                    if published:
-                        click.echo("[desktop-publish] published latest verified model data")
-                except Exception as publish_error:
-                    click.echo(f"[desktop-publish] ERROR will retry next cycle: {publish_error}", err=True)
+            if desktop_release_tag and result.get("refreshed") and not (check_only or dry_run):
+                _publish_desktop_data(out_dir=out_dir, parquet=parquet,
+                                      tag=desktop_release_tag, region=desktop_region)
         except Exception as exc:  # keep the watch daemon alive across transient failures
             streak = _failure_streak(state_path)
             line = (
