@@ -364,3 +364,6 @@ Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與
 - **Don't** 在 CSS、JavaScript 或文案內重新發明勝率門檻；統計語意只由 engine 輸出。
 - **Don't** 新增第六個主要 tab，除非產品決策同時更新 `PRODUCT.md`、本文件、renderer、三語路由與測試。
 - **Don't** 讓 mobile 只是縮小 desktop，也不要讓可水平捲動的 nav 隱藏目前 active item。
+
+
+增幅圖示的透明圖案在所有主題都必須使用黑底 `--augment-icon-surface`（`#0b0e13`）。此規則涵蓋 Champions 推薦圖示、增幅前三名、清單、增幅池、Draft 與浮動說明；淺色主題只改周圍介面，不把增幅圖示底色改成白色。新增增幅圖示元件必須接共用 token，並驗證深／淺色主題。
