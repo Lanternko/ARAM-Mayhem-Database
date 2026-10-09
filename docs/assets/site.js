@@ -3402,6 +3402,18 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const counts = Object.keys(data.champs || {}).map(id => championPoolEntries(id, data, catalogue).length).filter(n => n > 0);
         return {count, rank: 1 + counts.filter(n => n < count).length, total: counts.length, min: counts.length ? Math.min(...counts) : 0, max: counts.length ? Math.max(...counts) : 0};
     }
+    function championPoolSort(a, b, statsById) {
+        const left = apoolAug(a.id), right = apoolAug(b.id);
+        const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
+        const pick = id => {
+            const value = statsById.get(String(id))?.pick;
+            return value != null && Number.isFinite(Number(value)) ? Number(value) : -1;
+        };
+        return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
+            || pick(b.id) - pick(a.id)
+            || left.name.localeCompare(right.name)
+            || Number(a.id) - Number(b.id);
+    }
     function championPoolAugHtml(entry, cid, statsById) {
         const aug = apoolAug(entry.id);
         const stats = statsById.get(String(entry.id));
@@ -3425,6 +3437,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `<span>${escHtml(aug.name)}</span>${itemTipSource(tip)}</button></li>`;
     }
     const championPoolRarity = new Map();
+    const championPoolPurpose = new Map();
     function championPoolFrequencyHtml() {
         // Simplified descriptive ratios from 21,462 grants in 16.18 / 16.19.
         // Rounded display values are not the exact fitted estimates. Their
@@ -3441,31 +3454,28 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
             + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本・約 ±10% 抽樣誤差', '21,462 samples · Approx. ±10% sampling uncertainty'))}</p></div></details>`;
     }
-    function championPoolsHtml(cid, rarity = '') {
+    function championPoolsHtml(cid, rarity = '', purpose = '') {
         const d = augPools.data;
         if (!d) return `<p class="champ-pools-status" role="status">${escHtml(pickLang(augPools.failed ? '增幅池載入失敗。' : '正在載入增幅池…', augPools.failed ? 'Could not load augment pools.' : 'Loading augment pools…'))}</p>`
             + (augPools.failed ? `<button type="button" class="tool-btn champ-pools-retry" data-champ-pools-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : '');
         const entries = championPoolEntries(cid, d, DATA.augs || {});
         if (!entries.length) return `<p>${escHtml(pickLang('目前沒有這位英雄的增幅池資料。', 'No pool data for this champion yet.'))}</p>`;
-        const visibleEntries = rarity ? entries.filter(e => apoolAug(e.id).rarity === rarity) : entries;
+        const visibleEntries = entries.filter(e => (!rarity || apoolAug(e.id).rarity === rarity) && (!purpose || e.category === purpose));
         const info = (DATA.champs || {})[cid] || {};
         const statsById = new Map([
             ...Object.values(info.bot || {}).flat(), ...Object.values(info.top || {}).flat(), ...(info.poolAugments || []),
         ].map(row => [String(row.id), row]));
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
             .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
+        const purposeFilters = [{id: '', zh: '全部', en: 'All'}, ...AUGMENT_TAXONOMY.groups.filter(group => entries.some(e => e.category === group.id))]
+            .map(({id, zh, en}) => `<button type="button" class="champ-pool-rarity-chip${id === purpose ? ' is-active' : ''}" data-champ-pool-purpose="${id}" aria-pressed="${id === purpose}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
             const members = visibleEntries.filter(e => e.category === cat);
             if (!members.length) return '';
             const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => b - a);
             return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
                 + weights.map(weight => {
-                    const rarityOrder = {kSilver: 0, kGold: 1, kPrismatic: 2};
-                    const list = members.filter(e => e.weight === weight).sort((a, b) => {
-                        const left = apoolAug(a.id), right = apoolAug(b.id);
-                        return (rarityOrder[left.rarity] ?? 3) - (rarityOrder[right.rarity] ?? 3)
-                            || left.name.localeCompare(right.name);
-                    });
+                    const list = members.filter(e => e.weight === weight).sort((a, b) => championPoolSort(a, b, statsById));
                     return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
@@ -3486,25 +3496,29 @@ const feedbackFab = document.querySelector('.feedback-fab');
         </div>`;
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}/${complexity.total}${itemTipSource(rankTip)}</button></p>`
             + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
-            + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此稀有度沒有可用增幅。', 'No available augments of this rarity.'))}</p>`)
+            + `<div class="champ-pools-filters champ-pools-purpose-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅用途', 'Filter augment purpose'))}">${purposeFilters}</div>`
+            + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此篩選組合沒有可用增幅，請切換稀有度或用途。', 'No augments match. Try another rarity or purpose.'))}</p>`)
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + championPoolFrequencyHtml()
             + `<details class="champ-pools-source"><summary>${escHtml(pickLang('資料來源與限制', 'Source and limitations'))}</summary>${apoolNotesHtml(d, true)}</details>`;
     }
     function renderChampionPools() {
         document.querySelectorAll('[data-champ-pools]').forEach(host => {
-            host.innerHTML = championPoolsHtml(host.dataset.champPools, championPoolRarity.get(host.dataset.champPools) || '');
+            host.innerHTML = championPoolsHtml(host.dataset.champPools, championPoolRarity.get(host.dataset.champPools) || '', championPoolPurpose.get(host.dataset.champPools) || '');
         });
     }
     document.addEventListener('click', ev => {
-        const button = ev.target.closest('[data-champ-pool-rarity]');
+        const button = ev.target.closest('[data-champ-pool-rarity], [data-champ-pool-purpose]');
         if (!button) return;
         const host = button.closest('[data-champ-pools]');
         if (!host) return;
-        const rarity = button.dataset.champPoolRarity;
-        championPoolRarity.set(host.dataset.champPools, rarity);
-        host.innerHTML = championPoolsHtml(host.dataset.champPools, rarity);
-        host.querySelector(`[data-champ-pool-rarity="${rarity}"]`).focus({preventScroll: true});
+        const cid = host.dataset.champPools;
+        const isRarity = button.hasAttribute('data-champ-pool-rarity');
+        const attr = isRarity ? 'data-champ-pool-rarity' : 'data-champ-pool-purpose';
+        const value = button.getAttribute(attr);
+        (isRarity ? championPoolRarity : championPoolPurpose).set(cid, value);
+        host.innerHTML = championPoolsHtml(cid, championPoolRarity.get(cid) || '', championPoolPurpose.get(cid) || '');
+        host.querySelector(`[${attr}="${value}"]`)?.focus({preventScroll: true});
     });
     document.addEventListener('change', ev => {
         if (!ev.target.matches('.detail-tab-input[id$="-pools"]')) return;

@@ -69,3 +69,10 @@ const tied = {pools: [{id:'p', augs:[1]}, {id:'q', augs:[2,3]}], champs: {a:[['p
 assert.equal(context.championPoolComplexity('a', tied, {}).rank, 1);
 assert.equal(context.championPoolComplexity('b', tied, {}).rank, 1);
 assert.equal(context.championPoolComplexity('c', tied, {}).rank, 3);
+// Pick ordering is champion-specific, within rarity; missing values follow observed zero.
+context.apoolAug = id => ({rarity: id === 'gold' ? 'kGold' : 'kSilver', name: id});
+const sortStats = new Map([['a', {pick: 0.02}], ['z', {pick: 0.4}], ['zero', {pick: 0}], ['invalid', {pick: 'bad'}], ['gold', {pick: 0.9}]]);
+const sorted = ['gold','missing','a','z','zero','invalid'].map(id => ({id})).sort((a,b) => context.championPoolSort(a,b,sortStats));
+assert.equal(sorted.map(r => r.id).join(), 'z,a,zero,invalid,missing,gold');
+assert.equal(context.championPoolSort({id:'a'}, {id:'z'}, new Map([['a',{pick:0.2}],['z',{pick:0.2}]])) < 0, true);
+console.log('Verified pick-rate ordering, rarity boundaries, ties and missing statistics.');
