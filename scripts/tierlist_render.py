@@ -746,6 +746,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
     """Use the product's header and CSS without loading its statistics runtime."""
     esc = html.escape
     locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
+    font_region = "SC" if html_lang == "zh-Hans" else "TC"
     suffix = {"zh": "zh", "zh-CN": "zh-cn", "en": "en"}[locale]
     prefix = "" if locale == "zh" else "/" + locale.lower()
     header = _site_header_html()
@@ -794,7 +795,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
         f"<title>{esc(title)} | arammeta</title><meta name='description' content='{esc(description, quote=True)}'>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>{head_extra_html}"
         "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
-        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'>"
+        f"<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+{font_region}:wght@400;500;600;700&amp;display=swap'>"
         "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
         f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
         f"<main class='site-main feedback-main'><h1>{esc(title)}</h1>"
@@ -3609,8 +3610,8 @@ def render_html(
             f"<link rel='preload' href='{html.escape(preload_href, quote=True)}' "
             "as='fetch' crossorigin='anonymous'>"
         )
-    # Webfonts: Outfit = Latin brand wordmark only; Noto Sans TC = UI body;
-    # Noto Serif TC = a few footnote captions (subtitle / panel meta / aug lift).
+    # Webfonts: Outfit = Latin wordmark; regional Noto Sans = UI body;
+    # regional Noto Serif = footnote captions. Only used faces fetch glyphs.
     # `display=swap` lets system fallback paint immediately.  The stylesheet is
     # loaded async (preload → flip to stylesheet onload): a render-blocking
     # cross-origin CSS fetch held first paint hostage to fonts.googleapis.com
@@ -3619,7 +3620,9 @@ def render_html(
         "https://fonts.googleapis.com/css2"
         "?family=Outfit:wght@500;600;700"
         "&family=Noto+Sans+TC:wght@400;500;600;700"
+        "&family=Noto+Sans+SC:wght@400;500;600;700"
         "&family=Noto+Serif+TC:wght@400;500"
+        "&family=Noto+Serif+SC:wght@400;500"
         "&display=swap"
     )
     parts.append(
