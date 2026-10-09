@@ -244,7 +244,8 @@ def test_stale_manifest_does_not_downgrade_cached_app(tmp_path):
     assert read_json(root / "app-active.json") == newer
 
 
-def test_new_data_schema_does_not_block_required_app_upgrade(tmp_path):
+def test_new_data_schema_does_not_block_required_app_upgrade(tmp_path, monkeypatch):
+    import importlib
     import struct
     _, info = bundle(tmp_path)
     body = bytearray(70)
@@ -260,7 +261,11 @@ def test_new_data_schema_does_not_block_required_app_upgrade(tmp_path):
     def downloader(item, *_):
         calls.append(item)
         return path
-    result = update(root, "2026.10.09.1", manifest_loader=lambda: info, downloader=downloader)
+    # Exercise the real manifest reader too. Bypassing it hid an early schema
+    # rejection that prevented the new executable from ever being downloaded.
+    module = importlib.import_module("aram_nn.desktop.update")
+    monkeypatch.setattr(module, "open_url", lambda *_: Response(json.dumps(info).encode()))
+    result = update(root, "2026.10.09.1", downloader=downloader)
     assert result.app_path and result.app_path.is_file()
     assert calls == [info["app"]]
     assert result.data_dir is None
