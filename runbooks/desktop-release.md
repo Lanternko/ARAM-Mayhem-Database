@@ -17,7 +17,7 @@ Work in a task worktree. Read ignored inputs via `--input-root`, never link a mo
 
 ```powershell
 $env:PYTHONPATH = Join-Path (Get-Location) 'src'
-python scripts/build_recommender_exe.py --version 2026.10.09.1 --input-root D:/Projects/CODING/aram-winrate-nn --region TW --time-cutoff '2026-10-08T21:26:28.219000+00:00'
+python scripts/build_recommender_exe.py --version 2026.10.09.2 --input-root D:/Projects/CODING/aram-winrate-nn --region TW --time-cutoff '2026-10-08T21:26:28.219000+00:00'
 ```
 
 This validates the existing held-out model, snapshots whitelisted public JSON, builds a Windows x64 single-file executable, creates its convenience ZIP and data archive, and writes the matching manifest. Never upload a manifest referring to an incomplete asset set. Create the release as a draft, upload all four assets, then publish it as latest only after local portable smoke tests pass. Tag the exact source commit used for the build; preserve old release history.
@@ -29,10 +29,10 @@ Required verification: updater tests (resume/restart/digest/corrupt file/schema/
 `publish_recommender_data.py` exports JSON from a completed local model, uploads a content-addressed ZIP to the existing app release, then replaces the small manifest. Older data assets stay available. Manifest replacement can briefly return 404; clients keep their prior complete model and retry next launch.
 
 ```powershell
-python scripts/publish_recommender_data.py --input-root D:/Projects/CODING/aram-winrate-nn --tag recommender-v2026.10.09.1 --region TW --time-cutoff '<actual training cutoff with timezone>'
+python scripts/publish_recommender_data.py --input-root D:/Projects/CODING/aram-winrate-nn --tag recommender-v2026.10.09.2 --region TW --time-cutoff '<actual training cutoff with timezone>'
 ```
 
-The existing refresher supports opt-in `--desktop-release-tag recommender-v2026.10.09.1 --desktop-region TW`. It derives the cutoff from the matching parquet, compares source fingerprints, and retries public publishing independently on each watch cycle. This flag requires the repository owner's GitHub credentials on the publisher machine, never on users' computers. No publication occurs under `--dry-run` or `--check-only`.
+The existing refresher supports opt-in `--desktop-release-tag recommender-v2026.10.09.2 --desktop-region TW`. It derives the cutoff from the matching parquet, compares source fingerprints, and retries public publishing independently on each watch cycle. This flag requires the repository owner's GitHub credentials on the publisher machine, never on users' computers. No publication occurs under `--dry-run` or `--check-only`.
 
 Opt-in source support does not enable a running production process. Deploy the reviewed source, preserve the production wrapper's existing argv, add these two flags to the refresher child, and verify its next `[desktop-publish]` log before claiming future model refreshes publish automatically. Changing the desktop release tag requires updating this publisher target too.
 

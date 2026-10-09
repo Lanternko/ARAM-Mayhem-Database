@@ -142,7 +142,12 @@ def publish_data(model_dir: Path, names: Path, tier: Path, output: Path, *, regi
         return manifest
     manifest["data"] = {**info, "version": info["sha256"][:16], "schema_version": SCHEMA,
                         "queue_id": 2400, "current_patch": metadata["current_patch"], "time_cutoff": time_cutoff}
-    subprocess.run(["gh", "release", "upload", tag, str(archive), "--repo", REPO], check=True)
+    existing = next((a for a in assets if a["name"] == archive.name), None)
+    if existing:
+        if existing.get("digest") != f"sha256:{info['sha256']}" or existing.get("size") != info["size"]:
+            raise ValueError("An immutable data asset with different content already exists")
+    else:
+        subprocess.run(["gh", "release", "upload", tag, str(archive), "--repo", REPO], check=True)
     atomic_json(output / "recommender-manifest.json", manifest)
     subprocess.run(["gh", "release", "upload", tag, str(output / "recommender-manifest.json"),
                     "--repo", REPO, "--clobber"], check=True)
@@ -167,7 +172,8 @@ def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
     identity = digest.hexdigest()
     state_path = output / "publish-state.json"
     try:
-        if read_json(state_path).get("source_hash") == identity:
+        previous = read_json(state_path)
+        if previous.get("source_hash") == identity and previous.get("tag") == tag:
             return False
     except (OSError, ValueError):
         pass
