@@ -59,10 +59,10 @@ def run_updates(version: str) -> UpdateResult:
     return result[0]
 
 
-def launch_updated(executable: Path) -> None:
+def launch_updated(executable: Path):
     import os
     import subprocess
     env = os.environ.copy()
     # PyInstaller onefile children must unpack their own runtime independently.
     env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-    subprocess.Popen([str(executable), *sys.argv[1:]], env=env)
+    return subprocess.Popen([str(executable), *sys.argv[1:]], env=env)

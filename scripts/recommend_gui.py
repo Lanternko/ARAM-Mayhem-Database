@@ -1865,7 +1865,9 @@ def main(
             updated = run_updates(version)
             if updated.app_path:
                 try:
-                    launch_updated(updated.app_path)
+                    child = launch_updated(updated.app_path)
+                    if self_test:
+                        raise SystemExit(child.wait(timeout=240))
                     return
                 except OSError:
                     updated.message = "新程式啟動失敗，保留目前可用版本"

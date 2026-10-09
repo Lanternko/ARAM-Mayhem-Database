@@ -223,6 +223,29 @@ def test_stale_manifest_does_not_downgrade_cached_app(tmp_path):
     assert read_json(root / "app-active.json") == newer
 
 
+def test_new_data_schema_does_not_block_required_app_upgrade(tmp_path):
+    import struct
+    _, info = bundle(tmp_path)
+    body = bytearray(70)
+    body[:2] = b"MZ"
+    struct.pack_into("<I", body, 60, 64)
+    body[64:] = b"PE\0\0\x64\x86"
+    path = tmp_path / "new-app.exe"
+    path.write_bytes(body)
+    info["app"] = {**asset(bytes(body), "ARAMRecommender.exe"), "version": "2026.10.09.2"}
+    info["data"]["schema_version"] = 2
+    root = tmp_path / "cache"
+    calls = []
+    def downloader(item, *_):
+        calls.append(item)
+        return path
+    result = update(root, "2026.10.09.1", manifest_loader=lambda: info, downloader=downloader)
+    assert result.app_path and result.app_path.is_file()
+    assert calls == [info["app"]]
+    assert result.data_dir is None
+    assert not (root / "active.json").exists()
+
+
 def test_concurrent_updater_preserves_existing_data(tmp_path):
     archive, info = bundle(tmp_path)
     root = tmp_path / "cache"

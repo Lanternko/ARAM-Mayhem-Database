@@ -85,9 +85,10 @@ def open_url(url: str, headers: dict | None = None):
     return urllib.request.build_opener(_HTTPSRedirect()).open(request, timeout=20)
 
 
-def validate_manifest(value: dict) -> dict:
+def validate_manifest(value: dict, *, require_data_schema: bool = True) -> dict:
     from datetime import datetime
-    if value.get("schema_version") != SCHEMA or value.get("platform") != "windows-x64":
+    # Manifest protocol remains version 1 even when an app's data schema evolves.
+    if value.get("schema_version") != 1 or value.get("platform") != "windows-x64":
         raise UpdateError("This release requires a different updater or platform")
     for kind in ("app", "data"):
         asset = value.get(kind, {})
@@ -101,7 +102,8 @@ def validate_manifest(value: dict) -> dict:
             raise UpdateError("Invalid asset size")
     version_key(value["app"].get("version", ""))
     data = value["data"]
-    if data.get("schema_version") != SCHEMA or data.get("queue_id") != 2400:
+    if (type(data.get("schema_version")) is not int or data["schema_version"] < 1
+            or (require_data_schema and data["schema_version"] != SCHEMA) or data.get("queue_id") != 2400):
         raise UpdateError("Incompatible recommendation data")
     if not re.fullmatch(r"[0-9a-f]{16}", str(data.get("version", ""))):
         raise UpdateError("Invalid data version")
@@ -309,12 +311,17 @@ def _update(root: Path, current_version: str, progress: Progress = lambda _: Non
         pass
     try:
         progress("檢查最新 Windows 程式與 Mayhem 資料…")
-        manifest = validate_manifest(manifest_loader())
+        manifest = validate_manifest(manifest_loader(), require_data_schema=False)
         if version_key(manifest["app"]["version"]) > newest_app:
             progress("下載最新程式…")
             app = downloader(manifest["app"], root / "downloads", progress)
             result.app_path = install_app(app, root, manifest["app"])
             atomic_json(root / "app-active.json", manifest["app"])
+        if manifest["data"]["schema_version"] != SCHEMA:
+            if result.app_path:
+                result.message = "啟動新版程式以更新推薦資料"
+                return result
+            raise UpdateError("New data requires a newer application")
         from datetime import datetime
         if saved and datetime.fromisoformat(manifest["data"]["time_cutoff"]) < datetime.fromisoformat(saved["data"]["time_cutoff"]):
             result.message = "目前資料比發布端更新，保留目前版本"
