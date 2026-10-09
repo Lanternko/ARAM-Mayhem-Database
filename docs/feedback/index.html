@@ -1,4 +1,4 @@
-<!doctype html><html lang='zh-Hant' data-feedback-locale='zh'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>回饋與聯絡 | arammeta</title><meta name='description' content='功能建議、問題回報或站務聯絡，都可以在這裡留言。'><link rel='canonical' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/feedback/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/feedback/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'><script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+<!doctype html><html lang='zh-Hant' data-feedback-locale='zh'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>意見回饋 | arammeta</title><meta name='description' content='功能建議、問題回報或站務聯絡，都可以在這裡留言。'><link rel='canonical' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/feedback/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/feedback/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'><script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
     /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
        the palette.  New chrome (header, nav, views, settings, column) is
        authored entirely against these vars so both themes are correct.  The
@@ -20,6 +20,8 @@
         --text: #e8eaed;
         --text-muted: #9aa0a6;
         --text-dim: #6b7280;
+        --font-ui: "Noto Sans TC", -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+        --font-caption: "Noto Serif TC", "Source Han Serif TC", "PingFang TC", "PMingLiU", "Songti TC", serif;
         /* Translucent-white borders read as a top-lit edge and auto-adapt to
            every elevation + the light theme (premium-dark technique). */
         --border: rgba(255, 255, 255, 0.09);
@@ -107,6 +109,10 @@
         --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
+    :root:lang(zh-Hans), :root:lang(zh-CN) {
+        --font-ui: "Noto Sans SC", "Noto Sans TC", "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+        --font-caption: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+    }
     * { box-sizing: border-box; }
     /* During a theme flip, kill every transition for one tick so var()-driven
        backgrounds snap to the new palette instead of getting stuck mid-
@@ -116,11 +122,10 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        /* Body = Noto Sans TC (modern sans, readable in dense UI).  Serif
+        /* Body = locale-specific Noto Sans (readable in dense UI).  Serif
            is reserved for small captions — see `.subtitle`,
            `.aug .alift`. */
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         padding: 0;
     }
     /* Soft vertical wash: pure near-black most of the way, then a faint cool
@@ -135,13 +140,11 @@
        and augment card's lift/games row. */
     .subtitle,
     .aug .alift {
-        font-family: "Noto Serif TC", "Source Han Serif TC",
-                     "PingFang TC", "PMingLiU", "Songti TC", serif;
+        font-family: var(--font-caption);
     }
     .subtitle { color: var(--text-muted); font-size: 13px; }
     .title-patch {
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         font-size: 14px;
         font-weight: 500;
         line-height: 1;
@@ -1293,7 +1296,7 @@
         padding: 24px;
         text-align: center;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-size: 14px;
         font-style: italic;
         line-height: 1.6;
@@ -2092,7 +2095,7 @@
     .section-meta {
         color: #9aa0a6;
         font-size: 11px;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .cf-skill {
         margin-left: auto;
@@ -2504,7 +2507,7 @@
     }
     .comp-advice-item .ca-desc {
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .comp-fit-empty {
         color: #6b7280;
@@ -2558,7 +2561,7 @@
         background: #0b0e13;
         color: #d4dae4;
         box-shadow: 0 6px 18px rgba(0,0,0,0.55);
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: var(--font-ui);
         font-size: 11px;
         line-height: 1.5;
         text-align: left;
@@ -3604,7 +3607,7 @@
         margin-top: 2px;
         font-size: 10px;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-variant-numeric: tabular-nums;
         line-height: 1.35;
     }
@@ -4290,7 +4293,7 @@
     /* Latin brand face only — Outfit reads as a product mark, not body UI.
        Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
-        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: "Outfit", var(--font-ui);
         font-size: 26px;
         font-weight: 600;
         letter-spacing: -0.035em;
@@ -6328,19 +6331,19 @@
         transform: translateY(0);
     }
     .item-float-tip[hidden] { display: none !important; }
-    .item-float-tip.is-champion-table-tip.is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
-    .is-champion-table-tip .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
-    .is-champion-table-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
-    .is-champion-table-tip .item-tip-name,
-    .is-champion-table-tip .item-tip-part-name,
-    .is-champion-table-tip .item-tip-desc .item-tip-line:first-child,
-    .is-champion-table-tip .item-tip-row > b { color: var(--text); }
-    .is-champion-table-tip .item-tip-desc,
-    .is-champion-table-tip .item-tip-sub,
-    .is-champion-table-tip .item-tip-row > span,
-    .is-champion-table-tip .item-tip-note { color: var(--text-muted); }
-    .is-champion-table-tip .item-tip-gold { color: var(--accent-soft); }
-    .is-champion-table-tip .item-tip-stats { border-color: var(--border); }
+    .item-float-tip:is(.is-champion-table-tip, .is-item-family-tip).is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-part-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc .item-tip-line:first-child,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > b { color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-sub,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > span,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-note { color: var(--text-muted); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-gold { color: var(--accent-soft); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-stats { border-color: var(--border); }
     .item-tip-card {
         position: relative;
         padding: 10px 12px 11px;
@@ -10416,6 +10419,41 @@
     background: var(--augment-icon-surface);
 }
 
+    /* Stacked mana items share one statistic; the inset identifies the base item. */
+    .item-family-icon {
+        display: inline-block;
+        position: relative;
+        flex-shrink: 0;
+        vertical-align: middle;
+        overflow: visible;
+    }
+    .item-family-icon > .item-family-main {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: inherit;
+    }
+    .item-family-icon > .item-family-base {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 46%;
+        height: 46%;
+        box-sizing: border-box;
+        margin: 0;
+        box-shadow: none;
+        object-fit: contain;
+        border: 2px solid var(--surface);
+        border-radius: 3px;
+    }
+    .champion-table-item-icon { width: 32px; height: 32px; }
+    .item-pair-image { width: 100%; height: 100%; }
+    .change-duo .change-item-icon { width: 34px; height: 34px; margin-left: -9px; border-radius: 6px; }
+    @media (max-width: 640px) {
+        .change-duo .change-item-icon { width: 30px; height: 30px; }
+    }
+
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and
        hairline section rules, with no nested cards or decorative gradients. */
@@ -10660,8 +10698,7 @@
 /* Feedback is an information page within the same product shell. */
 .feedback-page .brand, .feedback-page .nav-tab { text-decoration: none; }
 .feedback-main { max-width: 720px; padding-top: 48px; }
-.feedback-main h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; }
-.feedback-intro { margin: 0 0 28px; color: var(--text-muted); line-height: 1.7; }
+.feedback-main h1 { margin: 0 0 28px; font-size: 28px; font-weight: 600; }
 .feedback-form { display: flex; flex-direction: column; gap: 20px; }
 .feedback-field { display: flex; flex-direction: column; gap: 8px; }
 .feedback-label { color: var(--text); font-size: 14px; font-weight: 600; }
@@ -10672,9 +10709,10 @@
 }
 .feedback-field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
 .feedback-field input { max-width: 420px; }
+.feedback-field :is(input, textarea)::placeholder { color: var(--text-muted); opacity: 1; }
 .feedback-page :is(input, textarea, button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .feedback-check { display: flex; align-items: start; gap: 8px; margin-top: -8px; }
-.feedback-check[hidden], .feedback-status[hidden] { display: none; }
+.feedback-check[hidden], .feedback-status[hidden], .feedback-fallback[hidden] { display: none; }
 .feedback-check input { accent-color: var(--accent); margin-top: 4px; }
 .feedback-privacy { margin: 0; max-width: 68ch; }
 .feedback-submit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
@@ -10686,28 +10724,26 @@
 .feedback-fallback { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
 .feedback-fallback a { color: var(--accent-soft); }
 .feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.feedback-footer { max-width: 720px; margin: 0 auto; padding: 0 24px 32px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }
 @media (max-width: 700px) {
     .feedback-main { padding-top: 28px; }
     .feedback-main h1 { font-size: 24px; }
-    .feedback-footer { padding-inline: 12px; }
 }
-</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='Draft' data-i18n-en='Draft' href='/draft/'>Draft</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/game/'>小遊戲</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><details class='mode-menu' id='mode-menu'><summary class='mode-select' aria-label='切換遊戲模式' data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' data-aria-en='Switch game mode'><span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大亂鬥</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m4 6 4 4 4-4'></path></svg></summary><div class='mode-options' role='menu'><a class='mode-option' role='menuitem' href='/' aria-current='page' data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大亂鬥</a><a class='mode-option' role='menuitem' href='/classic.html' data-mode-target='classic' data-href-zh='/classic.html' data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' data-i18n-en='Classic'>經典模式</a></div></details><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='繁體中文' aria-label='Language: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label'>繁體中文</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>回饋與聯絡</h1><p class='feedback-intro'>功能建議、問題回報或站務聯絡，都可以在這裡留言。</p>
+</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='Draft' data-i18n-en='Draft' href='/draft/'>Draft</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/game/'>小遊戲</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><details class='mode-menu' id='mode-menu'><summary class='mode-select' aria-label='切換遊戲模式' data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' data-aria-en='Switch game mode'><span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大亂鬥</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m4 6 4 4 4-4'></path></svg></summary><div class='mode-options' role='menu'><a class='mode-option' role='menuitem' href='/' aria-current='page' data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大亂鬥</a><a class='mode-option' role='menuitem' href='/classic.html' data-mode-target='classic' data-href-zh='/classic.html' data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' data-i18n-en='Classic'>經典模式</a></div></details><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='繁體中文' aria-label='Language: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label'>繁體中文</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>意見回饋</h1>
 <form class="feedback-form" data-feedback-form data-endpoint="https://api.arammeta.com/api/feedback" data-locale="zh-Hant">
-<label class="feedback-field"><span class="feedback-label">想告訴我們什麼？</span>
-<span class="feedback-help" id="feedback-message-help">只需填寫這一欄，至少 5 個字。</span>
-<textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="例如：我想比較兩個陣容，但目前看不到足夠的比較依據……"></textarea></label>
+<label class="feedback-field"><span class="feedback-label">內容</span>
+<textarea name="message" minlength="5" maxlength="3000" required placeholder="例如：
+• 新功能提議
+• 界面和操作問題
+• bug回饋"></textarea></label>
 <label class="feedback-field"><span class="feedback-label">Email（選填）</span>
-<input name="contact_email" type="email" maxlength="254" autocomplete="email">
-<span class="feedback-help">若需要回覆，請留下 Email。</span>
+<input name="contact_email" type="email" maxlength="254" autocomplete="email" placeholder="若想收到回覆，請留下 Email。">
 </label>
 <label class="feedback-check" data-consent-row hidden><input name="contact_consent" type="checkbox"><span>我同意 arammeta 僅為回覆這份回饋而使用此 Email。</span></label>
 <div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
-<p class="feedback-privacy">留言將私下轉送至站方 Discord 收件頻道。請勿附上 Riot ID、密碼或其他敏感資料。</p>
-<div class="feedback-submit-row"><button class="action" type="submit">送出回饋</button>
+<div class="feedback-submit-row"><button class="action" type="submit">送出</button>
 <p class="feedback-status" data-feedback-status role="status" aria-live="polite" tabindex="-1" hidden></p></div>
 </form>
-<p class="feedback-fallback">也可以透過 GitHub 公開回報，請勿附上個資。 <a href="https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new" target="_blank" rel="noopener">建立 GitHub Issue</a></p>
+<p class="feedback-fallback" data-feedback-fallback hidden>也可以透過 GitHub 公開回報，請勿附上個資。 <a href="https://github.com/Lanternko/ARAM-Mayhem-Database/issues/new" target="_blank" rel="noopener">建立 GitHub Issue</a></p>
 <script>
 (() => {
   const form = document.querySelector('[data-feedback-form]');
@@ -10715,7 +10751,8 @@
   const endpoint = String(form.dataset.endpoint || '').trim();
   const status = form.querySelector('[data-feedback-status]');
   const submit = form.querySelector('button[type="submit"]');
-  const copy = {"sending": "送出中……", "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。", "offline": "目前表單尚未連上收件服務，請改用下方 GitHub Issue。", "network": "送出失敗，請檢查網路後再試。", "rate": "送出次數過於頻繁，請稍後再試。", "server": "目前無法收件，請稍後再試或改用 GitHub Issue。", "consent_error": "若填寫 Email，請先勾選同意回覆。", "reference": "參考編號"};
+  const copy = {"sending": "送出中……", "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。", "offline": "目前表單尚未連上收件服務，請改用下方 GitHub Issue。", "network": "送出失敗，請檢查網路後再試。", "rate": "送出次數過於頻繁，請稍後再試。", "server": "目前無法收件，請稍後再試或改用 GitHub Issue。", "consent_error": "若填寫 Email，請先勾選同意回覆。", "message_error": "請填寫至少 5 個字的內容。", "reference": "參考編號"};
+  const message = form.elements.namedItem('message');
   const email = form.elements.namedItem('contact_email');
   const consent = form.elements.namedItem('contact_consent');
   const getText = (name) => {
@@ -10726,6 +10763,7 @@
     status.textContent = message;
     status.className = `feedback-status is-${kind}`;
     status.hidden = false;
+    document.querySelector('[data-feedback-fallback]').hidden = kind !== 'error';
     status.focus?.();
   };
   const syncContext = () => {
@@ -10745,13 +10783,19 @@
     form.querySelector('[data-consent-row]').hidden = !email.value.trim();
     if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
   };
+  const syncMessageValidity = () => {
+    message.setCustomValidity(Array.from(message.value.trim()).length < 5 ? copy.message_error : '');
+  };
+  message.addEventListener('input', syncMessageValidity);
   email?.addEventListener('input', syncConsentValidity);
   consent?.addEventListener('change', syncConsentValidity);
   syncContext();
+  syncMessageValidity();
   window.addEventListener('resize', syncContext, { passive: true });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (submit.disabled) return;
+    syncMessageValidity();
     syncConsentValidity();
     if (!form.reportValidity()) return;
     if (!endpoint) { setStatus(copy.offline, 'error'); return; }
@@ -10780,6 +10824,7 @@
       if (body.ok !== true) throw new Error(copy.server);
       const reference = body.reference ? ` ${copy.reference}: ${body.reference}` : '';
       form.reset();
+      syncMessageValidity();
       syncConsentValidity();
       syncContext();
       form.classList.add('is-submitted');
@@ -10789,12 +10834,12 @@
       setStatus(message, 'error');
     } finally {
       submit.disabled = false;
-      submit.textContent = "送出回饋";
+      submit.textContent = "送出";
     }
   });
 })();
 </script>
-</main><footer class='feedback-footer'><p>arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。</p></footer><script>(() => {
+</main><script>(() => {
     const root = document.documentElement;
     const locale = root.dataset.feedbackLocale;
     const form = document.querySelector('[data-feedback-form]');
@@ -10818,6 +10863,7 @@
         const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
         if (draft) {
             form.elements.message.value = draft.message || '';
+            form.elements.message.dispatchEvent(new Event('input'));
             form.elements.contact_email.value = draft.email || '';
             form.elements.contact_consent.checked = draft.consent === true;
             form.elements.contact_email.dispatchEvent(new Event('input'));

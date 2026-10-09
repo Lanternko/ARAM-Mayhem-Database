@@ -20,6 +20,8 @@
         --text: #e8eaed;
         --text-muted: #9aa0a6;
         --text-dim: #6b7280;
+        --font-ui: "Noto Sans TC", -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+        --font-caption: "Noto Serif TC", "Source Han Serif TC", "PingFang TC", "PMingLiU", "Songti TC", serif;
         /* Translucent-white borders read as a top-lit edge and auto-adapt to
            every elevation + the light theme (premium-dark technique). */
         --border: rgba(255, 255, 255, 0.09);
@@ -107,6 +109,10 @@
         --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
+    :root:lang(zh-Hans), :root:lang(zh-CN) {
+        --font-ui: "Noto Sans SC", "Noto Sans TC", "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+        --font-caption: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+    }
     * { box-sizing: border-box; }
     /* During a theme flip, kill every transition for one tick so var()-driven
        backgrounds snap to the new palette instead of getting stuck mid-
@@ -116,11 +122,10 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        /* Body = Noto Sans TC (modern sans, readable in dense UI).  Serif
+        /* Body = locale-specific Noto Sans (readable in dense UI).  Serif
            is reserved for small captions — see `.subtitle`,
            `.aug .alift`. */
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         padding: 0;
     }
     /* Soft vertical wash: pure near-black most of the way, then a faint cool
@@ -135,13 +140,11 @@
        and augment card's lift/games row. */
     .subtitle,
     .aug .alift {
-        font-family: "Noto Serif TC", "Source Han Serif TC",
-                     "PingFang TC", "PMingLiU", "Songti TC", serif;
+        font-family: var(--font-caption);
     }
     .subtitle { color: var(--text-muted); font-size: 13px; }
     .title-patch {
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         font-size: 14px;
         font-weight: 500;
         line-height: 1;
@@ -1293,7 +1296,7 @@
         padding: 24px;
         text-align: center;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-size: 14px;
         font-style: italic;
         line-height: 1.6;
@@ -2092,7 +2095,7 @@
     .section-meta {
         color: #9aa0a6;
         font-size: 11px;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .cf-skill {
         margin-left: auto;
@@ -2504,7 +2507,7 @@
     }
     .comp-advice-item .ca-desc {
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .comp-fit-empty {
         color: #6b7280;
@@ -2558,7 +2561,7 @@
         background: #0b0e13;
         color: #d4dae4;
         box-shadow: 0 6px 18px rgba(0,0,0,0.55);
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: var(--font-ui);
         font-size: 11px;
         line-height: 1.5;
         text-align: left;
@@ -3604,7 +3607,7 @@
         margin-top: 2px;
         font-size: 10px;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-variant-numeric: tabular-nums;
         line-height: 1.35;
     }
@@ -4290,7 +4293,7 @@
     /* Latin brand face only — Outfit reads as a product mark, not body UI.
        Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
-        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: "Outfit", var(--font-ui);
         font-size: 26px;
         font-weight: 600;
         letter-spacing: -0.035em;
@@ -6328,19 +6331,19 @@
         transform: translateY(0);
     }
     .item-float-tip[hidden] { display: none !important; }
-    .item-float-tip.is-champion-table-tip.is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
-    .is-champion-table-tip .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
-    .is-champion-table-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
-    .is-champion-table-tip .item-tip-name,
-    .is-champion-table-tip .item-tip-part-name,
-    .is-champion-table-tip .item-tip-desc .item-tip-line:first-child,
-    .is-champion-table-tip .item-tip-row > b { color: var(--text); }
-    .is-champion-table-tip .item-tip-desc,
-    .is-champion-table-tip .item-tip-sub,
-    .is-champion-table-tip .item-tip-row > span,
-    .is-champion-table-tip .item-tip-note { color: var(--text-muted); }
-    .is-champion-table-tip .item-tip-gold { color: var(--accent-soft); }
-    .is-champion-table-tip .item-tip-stats { border-color: var(--border); }
+    .item-float-tip:is(.is-champion-table-tip, .is-item-family-tip).is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-part-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc .item-tip-line:first-child,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > b { color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-sub,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > span,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-note { color: var(--text-muted); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-gold { color: var(--accent-soft); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-stats { border-color: var(--border); }
     .item-tip-card {
         position: relative;
         padding: 10px 12px 11px;
@@ -10415,3 +10418,38 @@
     .recommended-pool-members img) {
     background: var(--augment-icon-surface);
 }
+
+    /* Stacked mana items share one statistic; the inset identifies the base item. */
+    .item-family-icon {
+        display: inline-block;
+        position: relative;
+        flex-shrink: 0;
+        vertical-align: middle;
+        overflow: visible;
+    }
+    .item-family-icon > .item-family-main {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: inherit;
+    }
+    .item-family-icon > .item-family-base {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 46%;
+        height: 46%;
+        box-sizing: border-box;
+        margin: 0;
+        box-shadow: none;
+        object-fit: contain;
+        border: 2px solid var(--surface);
+        border-radius: 3px;
+    }
+    .champion-table-item-icon { width: 32px; height: 32px; }
+    .item-pair-image { width: 100%; height: 100%; }
+    .change-duo .change-item-icon { width: 34px; height: 34px; margin-left: -9px; border-radius: 6px; }
+    @media (max-width: 640px) {
+        .change-duo .change-item-icon { width: 30px; height: 30px; }
+    }
