@@ -119,7 +119,10 @@ def fetch_manifest() -> dict:
         body = response.read(512_001)
     if len(body) > 512_000:
         raise UpdateError("Manifest is too large")
-    return validate_manifest(json.loads(body))
+    # New data may require the very app upgrade described by this manifest.
+    # Validate the protocol and assets here; gate data installation only after
+    # _update has had the chance to install and launch that newer application.
+    return validate_manifest(json.loads(body), require_data_schema=False)
 
 
 def verified(path: Path, asset: dict) -> bool:
