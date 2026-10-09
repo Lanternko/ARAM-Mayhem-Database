@@ -1,6 +1,7 @@
 name: Windows desktop download smoke
 
 on:
+  workflow_call:
   pull_request:
     paths:
       - '.github/workflows/recommender-smoke.yml'
@@ -12,7 +13,7 @@ on:
       tag:
         description: Desktop release tag
         required: true
-        default: recommender-v2026.10.09.2
+        default: latest
 
 permissions:
   contents: read
@@ -29,11 +30,12 @@ jobs:
       - name: Download public release and verify binary
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ inputs.tag || 'recommender-v2026.10.09.2' }}
+          RELEASE_TAG: ${{ inputs.tag || 'latest' }}
         run: |
           $testRoot = Join-Path $env:RUNNER_TEMP '中文 空白使用者'
           New-Item -ItemType Directory -Path $testRoot | Out-Null
           $base = "https://github.com/Lanternko/ARAM-Mayhem-Database/releases/download/$env:RELEASE_TAG"
+          if ($env:RELEASE_TAG -eq 'latest') { $base = 'https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download' }
           curl.exe -fLsS --retry 6 --retry-all-errors --retry-delay 10 --max-time 180 -o "$testRoot/ARAMRecommender.exe" "$base/ARAMRecommender.exe"
           if ($LASTEXITCODE) { throw 'Executable download failed' }
           curl.exe -fLsS --retry 6 --retry-all-errors --retry-delay 10 --max-time 60 -o "$testRoot/manifest.json" "$base/recommender-manifest.json"
@@ -67,6 +69,9 @@ jobs:
           $testRoot = Join-Path $env:RUNNER_TEMP '舊版 自動升級測試'
           New-Item -ItemType Directory -Path $testRoot | Out-Null
           $env:LOCALAPPDATA = $testRoot
+          curl.exe -fLsS --retry 3 --max-time 60 -o "$testRoot/latest.json" 'https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/recommender-manifest.json'
+          if ($LASTEXITCODE) { throw 'Latest manifest download failed' }
+          $expected = (Get-Content "$testRoot/latest.json" -Raw | ConvertFrom-Json).app.version
           curl.exe -fLsS --retry 3 --max-time 180 -o "$testRoot/old.exe" 'https://github.com/Lanternko/ARAM-Mayhem-Database/releases/download/recommender-v2026.10.09.1/ARAMRecommender.exe'
           if ($LASTEXITCODE) { throw 'Previous version download failed' }
           $env:PYTHONPATH = ''
@@ -79,7 +84,7 @@ jobs:
           $deadline = (Get-Date).AddSeconds(90)
           while (-not (Test-Path $report) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
           $diagnostics = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $diagnostics.ok -or $diagnostics.app_version -ne '2026.10.09.2') { throw 'New executable did not start' }
+          if (-not $diagnostics.ok -or $diagnostics.app_version -ne $expected) { throw 'New executable did not start' }
           if (-not (Test-Path "$testRoot/ARAMRecommender/app-active.json")) { throw 'App update pointer missing' }
           $diagnostics | ConvertTo-Json
       - name: Preserve smoke diagnostics

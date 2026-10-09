@@ -186,6 +186,27 @@ def _watchdog_args(monkeypatch, tmp_path: Path, *, restart_client: bool) -> obje
     return args
 
 
+def test_model_refresher_receives_production_desktop_channel(monkeypatch, tmp_path):
+    args = _watchdog_args(monkeypatch, tmp_path, restart_client=False)
+    args.once = False
+    args.model_refresher = True
+    args.model_refresh_log_dir = tmp_path / "logs"
+    args.desktop_release_tag = "latest"
+    args.desktop_region = "TW"
+    monkeypatch.setattr(WATCHDOG, "model_refreshers", lambda: [])
+    commands = []
+    def start(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(pid=123)
+    monkeypatch.setattr(WATCHDOG.subprocess, "Popen", start)
+    result = WATCHDOG.ensure_model_refresher(args)
+    assert result["pid"] == 123
+    assert commands[0][-4:] == ["--desktop-release-tag", "latest", "--desktop-region", "TW"]
+    args.desktop_release_tag = None
+    WATCHDOG.ensure_model_refresher(args)
+    assert "--desktop-release-tag" not in commands[1]
+
+
 def _resource_sample(*, commit_percent: float, available_mb: float = 8192.0):
     return WATCHDOG.ResourceSample(
         available_mb=available_mb,

@@ -6,6 +6,14 @@
 
 arammeta 將實際對局整理成英雄、增幅與陣容資料，協助玩家比較選項。網站顯示的是特定版本與樣本範圍內的歷史統計，不是單場勝負保證。
 
+## Windows 桌面推薦工具
+
+[下載最新 EXE](https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/ARAMRecommender.exe) · [下載 ZIP](https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/ARAMRecommender-windows.zip) · [版本與 SHA-256](https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest)
+
+Windows 10／11 x64，不需安裝 Python。直接開啟 EXE，或先解壓縮 ZIP 再執行其中的 EXE；每次啟動會聯網下載已發布的最新程式與資料，失敗時保留上次完整資料。程式內顯示資料版本、範圍與截止時間。
+
+目前尚未簽章。如果 SmartScreen 顯示「Windows 已保護您的電腦」，先確認檔案來自上方本專案 GitHub 連結；願意執行時選「其他資訊 → 仍要執行」。受管理的電腦可能禁止未簽章程式。[三語下載說明](https://arammeta.com/about/#desktop-download)。
+
 ## 網站怎麼用
 
 - [英雄榜](https://arammeta.com/)：搜尋或篩選英雄，查看 Tier、調整後勝率、樣本數、推薦增幅與裝備。

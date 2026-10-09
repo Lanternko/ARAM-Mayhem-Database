@@ -13,6 +13,12 @@
 
 ## Build and publish
 
+Normal app releases are automated by `.github/workflows/recommender-release.yml`. A push to `main` touching desktop application sources starts a Windows x64 build; pull requests run the same candidate build and tests without publication. `workflow_dispatch` on `main` can retry a failed release. Site-only edits and model data uploads do not rebuild the EXE.
+
+Clean runners download and validate the current public JSON dataset, not the private DB or pickled models. Versions increase relative to the current manifest. The candidate ZIP and EXE must pass SHA-256, extraction, Tk and inference checks on both `windows-2022` and `windows-2025` without Python paths. Only then can a job with `contents: write` create a draft at the exact source SHA, upload and verify four assets, and promote it to latest. Newest verified data is read again before upload; if the stable channel changes during upload, publication stops rather than rolling it back. A failed publish leaves the old latest intact; inspect the Actions error and rerun the workflow. Public download and old-EXE upgrade tests run in the same workflow after publication because releases created with `GITHUB_TOKEN` do not trigger another release workflow.
+
+The manual build below remains available for an initial release, model/schema migration or recovery.
+
 Work in a task worktree. Read ignored inputs via `--input-root`, never link a model directory or move live DB files. First obtain the actual `game_creation_ms` maximum from the pooled parquet used to fit the shipped model and check its row count against `summary.json`.
 
 ```powershell
@@ -29,11 +35,13 @@ Required verification: updater tests (resume/restart/digest/corrupt file/schema/
 `publish_recommender_data.py` exports JSON from a completed local model, uploads a content-addressed ZIP to the existing app release, then replaces the small manifest. Older data assets stay available. Manifest replacement can briefly return 404; clients keep their prior complete model and retry next launch.
 
 ```powershell
-python scripts/publish_recommender_data.py --input-root D:/Projects/CODING/aram-winrate-nn --tag recommender-v2026.10.09.2 --region TW --time-cutoff '<actual training cutoff with timezone>'
+python scripts/publish_recommender_data.py --input-root D:/Projects/CODING/aram-winrate-nn --tag latest --region TW --time-cutoff '<actual training cutoff with timezone>'
 ```
 
-The existing refresher supports opt-in `--desktop-release-tag recommender-v2026.10.09.2 --desktop-region TW`. It derives the cutoff from the matching parquet, compares source fingerprints, and retries public publishing independently on each watch cycle. This flag requires the repository owner's GitHub credentials on the publisher machine, never on users' computers. No publication occurs under `--dry-run` or `--check-only`.
+The refresher supports `--desktop-release-tag latest --desktop-region TW`. It resolves the same stable release as clients on every watch cycle, derives the cutoff from the matching parquet, compares source fingerprints plus the resolved tag, and retries publishing independently of the training growth gate. New app releases receive the current verified model even if it has not been retrained. Unrelated, draft or incomplete latest releases are rejected. This flag requires the repository owner's GitHub credentials on the publisher machine, never on users' computers. No publication occurs under `--dry-run` or `--check-only`.
 
-Opt-in source support does not enable a running production process. Deploy the reviewed source, preserve the production wrapper's existing argv, add these two flags to the refresher child, and verify its next `[desktop-publish]` log before claiming future model refreshes publish automatically. Changing the desktop release tag requires updating this publisher target too.
+The tracked production `watchdog_keepalive.ps1` forwards these two flags through the watchdog to the refresher child. Source integration does not change an already-running daemon's argv. For this rollout, the user requested confirmation before restart: first integrate and verify the release workflow and website, then obtain approval for the concrete cutover. When the refresher is idle (no training descendants), replace only the watchdog parent and refresher daemon; retain collector workers and static publisher. Keepalive starts the new parent, which adopts those existing children. Verify parent and refresher argv, unchanged worker PIDs, `[desktop-publish] published`, `outputs/desktop-publish/publish-state.json` resolved tag, public manifest and EXE startup. Never kill an in-progress training pipeline or move SQLite files.
+
+A game patch does not create a trustworthy model immediately. The current production gate still requires at least 15,000 games on the new patch and successful held-out validation. Until then the app displays the previous verified patch and cutoff; automatic publication does not bypass these evidence gates. Signing and managed-PC SmartScreen policies remain separate from packaging automation.
 
 An old May-2026 EXE has no updater. Existing users must download this new updater-capable EXE once; subsequent app and data updates are automatic at startup.

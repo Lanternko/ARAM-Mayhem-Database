@@ -8,7 +8,7 @@ from .release import publish_data
 
 @click.command()
 @click.option("--input-root", type=click.Path(path_type=Path), default=Path("."))
-@click.option("--tag", required=True, help="Existing desktop application release tag")
+@click.option("--tag", default="latest", show_default=True, help="Latest stable desktop release or an explicit tag")
 @click.option("--region", required=True)
 @click.option("--time-cutoff", required=True)
 @click.option("--output", type=click.Path(path_type=Path), default=Path("outputs/desktop-publish"))

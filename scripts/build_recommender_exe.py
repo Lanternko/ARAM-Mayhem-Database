@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import struct
 import subprocess
 import sys
@@ -9,7 +10,7 @@ import zipfile
 from pathlib import Path
 
 from aram_nn.desktop.release import create_manifest, export_data, zip_data
-from aram_nn.desktop.update import atomic_json, validate_manifest, version_key
+from aram_nn.desktop.update import DATA_FILES, atomic_json, validate_data, validate_manifest, version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_NAME = "ARAMRecommender"
@@ -17,17 +18,27 @@ EXCLUDE_MODULES = ["torch", "sklearn", "scipy", "pandas", "polars", "pyarrow",
                    "fastapi", "uvicorn", "matplotlib", "pytest"]
 
 
-def build(*, version: str, input_root: Path, region: str, time_cutoff: str) -> Path:
+def build(*, version: str, input_root: Path, region: str | None, time_cutoff: str | None,
+          data_dir: Path | None = None) -> Path:
     if sys.platform != "win32" or struct.calcsize("P") != 8:
         raise SystemExit("Build this release with 64-bit Python on Windows")
     version_key(version)
     tag = f"recommender-v{version}"
     dist = ROOT / "dist" / version
     resources = ROOT / "build" / "desktop-data"
-    metadata = export_data(input_root / "models/composition_lr_pooled_recency_7d",
-                           input_root / "data/cache/champion_abilities.json",
-                           input_root / "docs/api/tier-list.json", resources,
-                           region=region, time_cutoff=time_cutoff)
+    if data_dir:
+        metadata = validate_data(data_dir)
+        resources.mkdir(parents=True, exist_ok=True)
+        for name in DATA_FILES:
+            shutil.copyfile(data_dir / name, resources / name)
+        validate_data(resources)
+    else:
+        if not region or not time_cutoff:
+            raise ValueError("Local model export requires region and actual training cutoff")
+        metadata = export_data(input_root / "models/composition_lr_pooled_recency_7d",
+                               input_root / "data/cache/champion_abilities.json",
+                               input_root / "docs/api/tier-list.json", resources,
+                               region=region, time_cutoff=time_cutoff)
     atomic_json(resources / "app.json", {"version": version})
     icon = input_root / "docs/recommender-app-icon.ico"
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--windowed", "--onefile",
@@ -62,11 +73,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="Release version, e.g. 2026.10.09.1")
     parser.add_argument("--input-root", type=Path, default=ROOT)
-    parser.add_argument("--region", required=True)
-    parser.add_argument("--time-cutoff", required=True, help="Actual training dataset cutoff, with timezone")
+    parser.add_argument("--data-dir", type=Path, help="Verified public JSON dataset for a clean CI build")
+    parser.add_argument("--region")
+    parser.add_argument("--time-cutoff", help="Actual training dataset cutoff, with timezone")
     parser.add_argument("--onefile", action="store_true", help="Compatibility flag; releases are single-file")
     args = parser.parse_args()
-    print(build(version=args.version, input_root=args.input_root, region=args.region, time_cutoff=args.time_cutoff))
+    print(build(version=args.version, input_root=args.input_root, region=args.region,
+                time_cutoff=args.time_cutoff, data_dir=args.data_dir))
 
 
 if __name__ == "__main__":

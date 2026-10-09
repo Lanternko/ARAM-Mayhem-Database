@@ -53,6 +53,42 @@ def test_mismatched_training_rows_never_publish(tmp_path, monkeypatch):
         release.publish_refreshed_models(**options, tag="release-1")
 
 
+def test_latest_channel_follows_new_app_even_without_model_change(tmp_path, monkeypatch):
+    options = inputs(tmp_path)
+    latest = ["recommender-v2026.10.09.2"]
+    monkeypatch.setattr(release, "resolve_release_tag", lambda tag: latest[0] if tag == "latest" else tag)
+    published = []
+    monkeypatch.setattr(release, "publish_data", lambda *a, **k: published.append(k["tag"]))
+    assert release.publish_refreshed_models(**options, tag="latest")
+    assert not release.publish_refreshed_models(**options, tag="latest")
+    latest[0] = "recommender-v2026.10.10.1"
+    assert release.publish_refreshed_models(**options, tag="latest")
+    assert published == ["recommender-v2026.10.09.2", "recommender-v2026.10.10.1"]
+
+
+def test_release_rollover_during_publish_does_not_advance_watermark(tmp_path, monkeypatch):
+    options = inputs(tmp_path)
+    tags = iter(["recommender-v2026.10.09.2", "recommender-v2026.10.10.1"])
+    monkeypatch.setattr(release, "resolve_release_tag", lambda tag: next(tags))
+    monkeypatch.setattr(release, "publish_data", lambda *a, **k: None)
+    with pytest.raises(ValueError, match="changed during publication"):
+        release.publish_refreshed_models(**options, tag="latest")
+    assert not (options["output"] / "publish-state.json").exists()
+
+
+@pytest.mark.parametrize("bad", [{"draft": True}, {"prerelease": True}, {"tag_name": "unrelated-v1"}, {"assets": []}])
+def test_latest_rejects_incomplete_or_unrelated_releases(monkeypatch, bad):
+    import json
+    from types import SimpleNamespace
+    payload = {"tag_name": "recommender-v2026.10.09.2", "draft": False, "prerelease": False,
+               "assets": [{"name": name} for name in ("ARAMRecommender.exe", "ARAMRecommender-windows.zip", "recommender-manifest.json")]}
+    monkeypatch.setattr(release.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=json.dumps(payload)))
+    assert release.resolve_release_tag("latest") == payload["tag_name"]
+    payload.update(bad)
+    with pytest.raises(ValueError, match="complete stable"):
+        release.resolve_release_tag("latest")
+
+
 def test_retry_after_asset_upload_reuses_immutable_archive(tmp_path, monkeypatch):
     import hashlib
     import json

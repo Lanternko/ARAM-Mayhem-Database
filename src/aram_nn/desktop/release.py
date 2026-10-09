@@ -11,6 +11,21 @@ from pathlib import Path
 from .update import DATA_FILES, REPO, SCHEMA, atomic_json, read_json, validate_data
 
 
+def resolve_release_tag(tag: str) -> str:
+    """Use the same latest channel as installed clients, excluding incomplete releases."""
+    if tag != "latest":
+        return tag
+    result = subprocess.run(["gh", "api", f"repos/{REPO}/releases/latest"],
+                            capture_output=True, text=True, encoding="utf-8", check=True)
+    release = json.loads(result.stdout)
+    required = {"ARAMRecommender.exe", "ARAMRecommender-windows.zip", "recommender-manifest.json"}
+    if (release.get("draft") or release.get("prerelease")
+            or not release.get("tag_name", "").startswith("recommender-v")
+            or not required <= {a["name"] for a in release.get("assets", [])}):
+        raise ValueError("Latest release is not a complete stable desktop application")
+    return release["tag_name"]
+
+
 def _write(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
 
@@ -121,8 +136,10 @@ def publish_data(model_dir: Path, names: Path, tier: Path, output: Path, *, regi
     The release already owns a built application. A failed data upload cannot
     invalidate its previous data manifest. Old data assets remain available.
     """
+    channel = tag
+    tag = resolve_release_tag(tag)
     result = subprocess.run(["gh", "release", "view", tag, "--repo", REPO, "--json", "assets"],
-                            capture_output=True, text=True, check=True)
+                            capture_output=True, text=True, encoding="utf-8", check=True)
     assets = json.loads(result.stdout)["assets"]
     if not any(a["name"] == "recommender-manifest.json" for a in assets):
         raise ValueError("Publish a complete desktop release before updating data")
@@ -148,6 +165,8 @@ def publish_data(model_dir: Path, names: Path, tier: Path, output: Path, *, regi
             raise ValueError("An immutable data asset with different content already exists")
     else:
         subprocess.run(["gh", "release", "upload", tag, str(archive), "--repo", REPO], check=True)
+    if channel == "latest" and resolve_release_tag(channel) != tag:
+        raise ValueError("Latest application changed during data upload; retry next cycle")
     atomic_json(output / "recommender-manifest.json", manifest)
     subprocess.run(["gh", "release", "upload", tag, str(output / "recommender-manifest.json"),
                     "--repo", REPO, "--clobber"], check=True)
@@ -162,6 +181,8 @@ def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
     The publish watermark moves only after the manifest is uploaded.
     """
     import pyarrow.parquet as pq
+    channel = tag
+    tag = resolve_release_tag(tag)
     inputs = [model_dir / name for name in ("model.pkl", "summary.json", "lr_weights.json", "champ_to_idx.json",
                                             "role_synergy.json", "single_team_calibration.json")]
     inputs.extend([names, tier])
@@ -190,5 +211,7 @@ def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
         maxima.append(statistics.max)
     cutoff = datetime.fromtimestamp(max(maxima) / 1000, timezone.utc).isoformat()
     publish_data(model_dir, names, tier, output, region=region, time_cutoff=cutoff, tag=tag)
+    if channel == "latest" and resolve_release_tag(channel) != tag:
+        raise ValueError("Latest application changed during publication; retry next cycle")
     atomic_json(state_path, {"source_hash": identity, "time_cutoff": cutoff, "tag": tag})
     return True

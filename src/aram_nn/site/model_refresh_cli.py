@@ -69,7 +69,7 @@ def _failure_streak(state_path: Path) -> int:
 @click.option("--watch/--once", default=False, show_default=True)
 @click.option("--interval-sec", type=int, default=300, show_default=True)
 @click.option("--desktop-release-tag", default=None,
-              help="Opt in: publish verified JSON data to this existing desktop release after refresh.")
+              help="Opt in: publish verified JSON data; use latest to follow new app releases automatically.")
 @click.option("--desktop-region", default="TW", show_default=True)
 def main(
     db: Path,
