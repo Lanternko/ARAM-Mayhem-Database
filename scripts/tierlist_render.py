@@ -3683,8 +3683,13 @@ def render_html(
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
     parts.append("<div class='champion-list-intro' data-nosnippet>"
+                 "<div class='champion-list-heading'>"
                  "<h1 id='champion-list-title'>英雄快速查詢</h1>"
-                 "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p></div>")
+                 "<div class='champion-layout-toggle' id='champion-layout-toggle' role='group' aria-label='英雄佈局' hidden>"
+                 "<button type='button' data-champion-layout='grid' aria-pressed='false'>頭像</button>"
+                 "<button type='button' data-champion-layout='table' aria-pressed='true'>條列</button></div></div>"
+                 "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p>"
+                 "<p class='champion-layout-note' id='champion-layout-note' hidden>點上方 arammeta 標題，可回到舊版頭像佈局。</p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail
     # scroll.  CSS pulls the rail up into the same visual row as the chips.

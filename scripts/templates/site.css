@@ -1744,8 +1744,17 @@
     .champion-list-intro { margin: 0 0 20px; }
     .champion-list-intro h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
     .champion-list-intro p { margin: 0; font-size: 13px; color: var(--text-muted); }
-    .view-home[data-view="champions"] .tier-block,
-    .view-home[data-view="champions"] .cutoffs { display: none; }
+    .champion-list-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 6px; }
+    .champion-list-heading h1 { margin: 0; }
+    .champion-layout-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; }
+    .champion-layout-toggle[hidden], .champion-layout-note[hidden] { display: none; }
+    .champion-layout-toggle button { min-height: 40px; padding: 8px 14px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer; }
+    .champion-layout-toggle button:hover { color: var(--text); background: var(--surface-2); }
+    .champion-layout-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
+    .champion-layout-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .champion-list-intro .champion-layout-note { margin-top: 6px; font-size: 12px; }
+    .view-home[data-view="champions"][data-champion-layout="table"] .tier-block,
+    .view-home[data-view="champions"][data-champion-layout="table"] .cutoffs { display: none; }
     .champion-table-wrap { overflow-x: auto; margin-top: 20px; }
     .champion-table-wrap[hidden] { display: none; }
     .champion-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums; }

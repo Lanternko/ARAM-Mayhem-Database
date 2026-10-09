@@ -270,6 +270,8 @@ Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與
 
 ### Display modes
 
+Champions 提供「頭像／條列」切換，初次使用預設條列，之後記住瀏覽器內的選擇。頭像模式沿用 tier 分組，點選英雄仍進入完整分析；切換保留搜尋、角色篩選與表格排序。佈局控制旁的說明指出點上方 arammeta 標題可回到舊版頭像首頁，三語、雙主題與手機都保持同樣操作。
+
 - **Theme:** Dark 是預設，Light 透過相同 semantic token 切換。Theme flip 在一個 tick 內停用 transition，避免中途顏色殘留。
 - **Locale:** 繁中使用根路由，英文使用 `/en`，簡中使用 `/zh-cn`。五個主要 view、submode、搜尋索引與 accessible name 一起翻譯。
 - **Viewport:** Desktop 使用固定 header 與 1320px rail；Mobile 使用兩列 header、可橫捲 nav、單欄或重排 detail。行動版重排資訊，不能只縮小桌面版。
