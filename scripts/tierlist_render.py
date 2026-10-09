@@ -2188,9 +2188,6 @@ def write_spa_path_shells(
     if not og_image and site_url:
         og_image = _site_base_href(site_url).rstrip("/") + "/og-image.png"
 
-    display_patch = display_patch_prefix(patch_prefix)
-    en_patch_title = f" (Patch {display_patch})" if display_patch else ""
-    cn_patch_title = f"（{display_patch}）" if display_patch else ""
     en_evidence = (
         f"{total_games:,} real matches" if total_games is not None
         else "real match data"
@@ -2241,7 +2238,7 @@ def write_spa_path_shells(
         # English locale prefix mirrors (shareable /en… links).
         (
             root / "en" / "index.html", "/en",
-            f"ARAM Mayhem Tier List{en_patch_title} | arammeta",
+            "ARAM Meta",
             f"Reliable win-rate stats from {en_evidence}. "
             "Compare champion and augment tiers, item win rates and augment pick rates.",
             "en",
@@ -2284,7 +2281,7 @@ def write_spa_path_shells(
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
         (
             root / "zh-cn" / "index.html", "/zh-cn",
-            f"海克斯大乱斗强度排行{cn_patch_title} | arammeta",
+            "ARAM Meta",
             f"基于 {cn_evidence}，查询英雄与海克斯强度排行、装备胜率及海克斯出现频率，完整胜率数据一站掌握。",
             "zh-Hans",
         ),
@@ -3459,9 +3456,8 @@ def render_html(
             encoding="utf-8",
         )
 
-    # The header remains the brand; search titles explain the player's task.
-    patch_title = f"（{display_patch}）" if display_patch else ""
-    page_title = f"隨機單中：大混戰（大亂鬥）強度排行{patch_title} | {header_title}"
+    # Keep the Home tab and share title short; descriptions carry the detail.
+    page_title = "ARAM Meta"
     seo_desc = (
         f"基於 {total_games:,} 場台服實戰對局，"
         "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
