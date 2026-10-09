@@ -371,6 +371,8 @@ class SpaPathShellTests(unittest.TestCase):
             for route, lang, prefix in (("feedback", "zh-Hant", ""), ("en/feedback", "en", "/en"), ("zh-cn/feedback", "zh-Hans", "/zh-cn")):
                 page = (root / route / "index.html").read_text(encoding="utf-8")
                 self.assertIn(f"lang='{lang}'", page)
+                self.assertNotIn("Riot Games", page)
+                self.assertNotIn("feedback-footer", page)
                 font_region = "SC" if lang == "zh-Hans" else "TC"
                 self.assertIn(f"family=Noto+Sans+{font_region}:wght@400;500;600;700", page)
                 self.assertIn(f"href='{prefix}/draft/'", page)

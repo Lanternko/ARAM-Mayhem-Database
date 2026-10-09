@@ -742,7 +742,7 @@ def _site_header_html() -> str:
 
 def _feedback_page_html(*, title: str, description: str, body_html: str,
                         site_url: str, html_lang: str, canonical_path: str,
-                        head_extra_html: str, footer_disclaimer: str) -> str:
+                        head_extra_html: str) -> str:
     """Use the product's header and CSS without loading its statistics runtime."""
     esc = html.escape
     locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
@@ -799,7 +799,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
         "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
         f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
         f"<main class='site-main feedback-main'><h1>{esc(title)}</h1>"
-        f"{body_html}</main><footer class='feedback-footer'><p>{esc(footer_disclaimer)}</p></footer>"
+        f"{body_html}</main>"
         f"<script>{page_js}</script></body></html>\n")
 
 
@@ -1228,11 +1228,6 @@ def write_site_info_pages(
     feedback_endpoint = (
         f"{feedback_api_base.rstrip('/')}/api/feedback" if feedback_api_base else ""
     )
-    feedback_footer_disclaimers = {
-        "zh": "arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。",
-        "zh-CN": "arammeta 未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 及其相关资产是 Riot Games, Inc. 的商标或注册商标。",
-        "en": "arammeta is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
-    }
     for locale, copy in _FEEDBACK_COPY.items():
         prefix = str(copy["prefix"]).strip("/")
         relative_dir = Path(prefix) if prefix else Path()
@@ -1253,7 +1248,6 @@ def write_site_info_pages(
                 html_lang=copy["html_lang"],
                 canonical_path=canonical_path,
                 head_extra_html=_feedback_head_links(site_url=site_url),
-                footer_disclaimer=feedback_footer_disclaimers[locale],
             ),
             encoding="utf-8",
         )

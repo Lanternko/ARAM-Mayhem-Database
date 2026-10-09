@@ -10724,10 +10724,7 @@
 .feedback-fallback { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
 .feedback-fallback a { color: var(--accent-soft); }
 .feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.feedback-footer { max-width: 720px; margin: 0 auto; padding: 0 24px 32px; color: color-mix(in srgb, var(--text-muted) 80%, var(--bg)); font-size: 12px; line-height: 1.7; }
-[data-theme="light"] .feedback-footer { color: color-mix(in srgb, var(--text-muted) 95%, var(--bg)); }
 @media (max-width: 700px) {
     .feedback-main { padding-top: 28px; }
     .feedback-main h1 { font-size: 24px; }
-    .feedback-footer { padding-inline: 12px; }
 }
