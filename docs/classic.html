@@ -10797,14 +10797,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .classic-header-actions{min-width:0}
 .classic-mode-menu{position:relative;display:inline-flex;margin-left:auto}
 .classic-mode-menu>summary{list-style:none}.classic-mode-menu>summary::-webkit-details-marker{display:none}
-.classic-mode-select{display:inline-flex;min-height:30px;align-items:center;gap:7px;padding:5px 11px 5px 13px;
-border:1px solid color-mix(in oklab,var(--accent) 68%,var(--border));border-radius:999px;
-background:var(--accent);color:var(--accent-on,#17130a);font-size:11px;font-weight:800;
-letter-spacing:.02em;line-height:1;cursor:pointer;user-select:none;
-box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 28%,transparent),0 2px 8px color-mix(in srgb,var(--accent) 18%,transparent)}
+.classic-mode-select{display:inline-flex;min-height:32px;align-items:center;gap:6px;padding:6px 9px;
+border:1px solid var(--border);border-radius:var(--r-sm);
+background:transparent;color:var(--text-muted);font-size:12px;font-weight:600;
+line-height:1;cursor:pointer;user-select:none;box-shadow:none;
+transition:background-color var(--dur-2) var(--ease),color var(--dur-2) var(--ease),border-color var(--dur-2) var(--ease)}
+@media(max-width:700px){.classic-mode-select{min-height:30px;padding:5px 8px;font-size:11px}}
 .classic-mode-select svg{transition:transform .16s cubic-bezier(.22,1,.36,1)}
 .classic-mode-menu[open] .classic-mode-select svg{transform:rotate(180deg)}
-.classic-mode-select:hover{background:color-mix(in oklab,var(--accent) 90%,var(--text));border-color:var(--accent)}
+.classic-mode-select:hover,.classic-mode-menu[open] .classic-mode-select{background:var(--surface-2);color:var(--text);border-color:var(--border-strong)}
 .classic-mode-select:focus-visible{outline:2px solid color-mix(in oklab,var(--accent) 58%,var(--text));outline-offset:2px}
 .classic-mode-options{position:absolute;top:calc(100% + 7px);right:0;z-index:80;display:grid;min-width:144px;
 padding:5px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);
@@ -10914,7 +10915,6 @@ color:var(--text-dim);font-size:12px}
 :root[data-theme="light"] .hero-tile.champ{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 12%,transparent),
 0 3px 9px color-mix(in srgb,var(--tier-color,#68707d) 16%,transparent)}
 :root[data-theme="light"] .hero-tile.champ[aria-pressed="true"]{box-shadow:0 0 0 2px color-mix(in oklab,var(--tier-color,#68707d) 72%,var(--text)),0 7px 16px rgba(31,41,55,.18)}
-:root[data-theme="light"] .classic-mode-select{color:#17130a}
 </style></head><body>
 <a class='skip-link' href='#main-content'>跳至主要內容</a>
 <header class='site-header'><div class='site-header-inner'>
