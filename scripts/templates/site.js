@@ -10782,7 +10782,9 @@
             layoutToggle.querySelectorAll('[data-champion-layout]').forEach(button => {
                 const layout = button.getAttribute('data-champion-layout');
                 button.setAttribute('aria-pressed', String(layout === championLayout));
-                button.textContent = layout === 'grid' ? pickLang('頭像', 'Portraits') : pickLang('條列', 'List');
+                const label = layout === 'grid' ? pickLang('頭像佈局', 'Portrait layout') : pickLang('條列佈局', 'List layout');
+                button.setAttribute('aria-label', label);
+                button.title = label;
             });
         }
         const layoutNote = document.getElementById('champion-layout-note');
@@ -10795,8 +10797,12 @@
         list.setAttribute('aria-label', title);
         if (home) list.removeAttribute('aria-labelledby');
         else list.setAttribute('aria-labelledby', 'tab-champions');
-        document.getElementById('champion-list-title').textContent = title;
-        document.getElementById('champion-list-hint').textContent = pickLang(
+        const titleEl = document.getElementById('champion-list-title');
+        titleEl.textContent = title;
+        titleEl.classList.toggle('sr-only', !home);
+        const hintEl = document.getElementById('champion-list-hint');
+        hintEl.hidden = !home;
+        hintEl.textContent = pickLang(
             home ? '點選英雄，在此展開增幅與出裝。' : '點選英雄，查看完整數據與分析。',
             home ? 'Select a champion to expand augments and builds here.' : 'Select a champion for full stats and analysis.');
         list.querySelectorAll('.champ').forEach(card => {
