@@ -130,7 +130,8 @@ python scripts/prune_stale_db_snapshots.py
 - `recommend_gui.py` — Tk GUI champ-select 推薦器（桌面捷徑「ARAM Recommender (source)」pin 此路徑，永遠跑 source）
 - `pick_advisor.py` — 指定 4 人隊，對候選第 5 位算單體強度 + 隊友 synergy 排名
 - `refresh_recommender_models.py` — watchdog 用的 model 自動 refresh CLI（wraps `aram_nn.site.model_refresh_cli`）
-- `build_recommender_exe.py` — 打包 PyInstaller Windows exe（**已棄用路徑**，recommender 現在永遠跑 source，不要重建）
+- `build_recommender_exe.py` — 打包可自動更新的 Windows x64 單檔 EXE、ZIP 與資料 manifest；使用 `--input-root` 唯讀取得本機模型。SOP：`runbooks/desktop-release.md`。
+- `publish_recommender_data.py` — 發布純 JSON 推薦資料包，不需重建 EXE；model refresher 可用 `--desktop-release-tag` 明確啟用。
 
 ## 9. Rank / skill 解析（外部 SR rank 橋接）
 - `extract_participants.py` — 從 LCU DB 抽全量 participant 表（items/augments/spells/riotId）

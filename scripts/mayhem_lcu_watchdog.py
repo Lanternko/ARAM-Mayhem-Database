@@ -935,6 +935,8 @@ def ensure_model_refresher(args: argparse.Namespace) -> dict[str, Any] | None:
         "--state",
         str(args.model_refresh_state),
     ]
+    if args.desktop_release_tag:
+        cmd.extend(["--desktop-release-tag", args.desktop_release_tag, "--desktop-region", args.desktop_region])
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     with out_path.open("ab") as out, err_path.open("ab") as err:
         proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=out, stderr=err, creationflags=creationflags)
@@ -1441,6 +1443,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-refresh-min-current-games", type=int, default=15000)
     parser.add_argument("--model-refresh-state", type=Path, default=DEFAULT_MODEL_REFRESH_STATE)
     parser.add_argument("--model-refresh-log-dir", type=Path, default=DEFAULT_MODEL_REFRESH_LOG_DIR)
+    parser.add_argument("--desktop-release-tag", default=None,
+                        help="Publish model refreshes to desktop releases; latest follows the stable app channel")
+    parser.add_argument("--desktop-region", default="TW")
     return parser.parse_args()
 
 

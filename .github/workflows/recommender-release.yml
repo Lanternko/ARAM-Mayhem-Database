@@ -1,0 +1,134 @@
+name: Windows desktop build and release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recommender-release.yml'
+      - 'scripts/build_recommender_exe.py'
+      - 'scripts/recommend_gui.py'
+      - 'src/aram_nn/desktop/**'
+      - 'src/aram_nn/recommend.py'
+      - 'src/aram_nn/icons.py'
+      - 'src/aram_nn/lcu/**'
+      - 'src/aram_nn/pair_synergy.py'
+      - 'src/aram_nn/role_synergy.py'
+      - 'docs/recommender-app-icon.ico'
+  pull_request:
+    paths:
+      - '.github/workflows/recommender-release.yml'
+      - 'scripts/build_recommender_exe.py'
+      - 'scripts/recommend_gui.py'
+      - 'src/aram_nn/desktop/**'
+      - 'src/aram_nn/recommend.py'
+      - 'src/aram_nn/icons.py'
+      - 'src/aram_nn/lcu/**'
+      - 'src/aram_nn/pair_synergy.py'
+      - 'src/aram_nn/role_synergy.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.event_name == 'pull_request' && github.ref || 'stable' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.prepare.outputs.version }}
+    env:
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Install desktop build dependencies
+        run: python -m pip install numpy==2.2.6 click==8.1.8 httpx==0.28.1 psutil==7.0.0 Pillow==11.2.1 pyinstaller==6.20.0
+      - name: Verify public model and choose a newer version
+        id: prepare
+        run: python -m aram_nn.desktop.ci_release prepare --output ci-input --run-number ${{ github.run_number }}
+      - name: Build a self-contained executable
+        env:
+          APP_VERSION: ${{ steps.prepare.outputs.version }}
+        run: python scripts/build_recommender_exe.py --version $env:APP_VERSION --data-dir ci-input/public-data
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-candidate
+          path: dist/${{ steps.prepare.outputs.version }}/*
+          if-no-files-found: error
+
+  candidate-smoke:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-candidate
+          path: candidate
+      - name: Verify EXE and ZIP in a clean Chinese-and-space user directory
+        shell: pwsh
+        env:
+          EXPECTED_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP '乾淨 使用者'
+          New-Item -ItemType Directory -Path $root | Out-Null
+          Expand-Archive candidate/ARAMRecommender-windows.zip $root
+          $exe = Join-Path $root 'ARAMRecommender/ARAMRecommender.exe'
+          $manifest = Get-Content candidate/recommender-manifest.json -Raw | ConvertFrom-Json
+          if ((Get-FileHash $exe).Hash.ToLower() -ne $manifest.app.sha256) { throw 'ZIP executable digest differs' }
+          if ((Get-FileHash candidate/ARAMRecommender.exe).Hash.ToLower() -ne $manifest.app.sha256) { throw 'EXE digest differs' }
+          $env:LOCALAPPDATA = Join-Path $root 'local'
+          $env:PYTHONPATH = ''
+          $env:PYTHONHOME = ''
+          $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
+          $proc = Start-Process -FilePath $exe -ArgumentList '--self-test --no-update' -WorkingDirectory $root -WindowStyle Hidden -PassThru
+          if (-not $proc.WaitForExit(120000)) { throw 'Candidate startup timed out' }
+          if ($proc.ExitCode) { throw "Candidate failed: $($proc.ExitCode)" }
+          $report = Get-Content "$env:LOCALAPPDATA/ARAMRecommender/diagnostics.json" -Raw | ConvertFrom-Json
+          if (-not $report.ok -or $report.app_version -ne $env:EXPECTED_VERSION) { throw 'Candidate inference or Tk failed' }
+          $report | ConvertTo-Json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-smoke-${{ matrix.os }}
+          path: ${{ runner.temp }}/乾淨 使用者/local/ARAMRecommender/*.json
+
+  publish:
+    needs: [build, candidate-smoke]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: windows-2022
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      PYTHONPATH: src
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install numpy==2.2.6
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-candidate
+          path: candidate
+      - name: Upload all assets to a draft, verify, then promote to latest
+        env:
+          RELEASE_SOURCE: ${{ github.sha }}
+        run: python -m aram_nn.desktop.ci_release publish --dist candidate --source $env:RELEASE_SOURCE
+
+  public-smoke:
+    needs: publish
+    uses: ./.github/workflows/recommender-smoke.yml

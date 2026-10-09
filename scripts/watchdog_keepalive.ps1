@@ -95,7 +95,10 @@ $argsList = @(
     # champions carry synergy at 2.12pp RMSE, versus 4.92pp for the old raw build at
     # 120,000 games.  Keep this in sync with SITE_PATCH_MIN_GAMES in aram_nn/site/db.py.
     "--static-publish-patch-prefix", "auto",
-    "--static-publish-auto-patch-min-games", "10000"
+    "--static-publish-auto-patch-min-games", "10000",
+    # Follow the same stable release as desktop clients; no tag edits on app upgrades.
+    "--desktop-release-tag", "latest",
+    "--desktop-region", "TW"
 )
 
 $pythonw = Join-Path (Split-Path (Get-Command python).Source -Parent) "pythonw.exe"

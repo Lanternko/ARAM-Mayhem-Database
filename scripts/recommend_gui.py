@@ -67,6 +67,13 @@ DEFAULT_COMPOSITION_MODEL = Path("models/composition_lr_pooled_recency_7d/model.
 DEFAULT_CHAMPION_NAMES = Path("data/cache/champion_abilities.json")
 DEFAULT_TIER_PAYLOAD = Path("docs/api/tier-list.json")
 DEFAULT_APP_ICON = Path("docs/recommender-app-icon.ico")
+DESKTOP_DATA_DIR: Path | None = None
+DESKTOP_STATUS = ""
+_DESKTOP_PATHS = {
+    str(DEFAULT_LR_MODEL): "lr_weights.json", str(DEFAULT_VOCAB): "champ_to_idx.json",
+    str(DEFAULT_SYNERGY_STATS): "role_synergy.json", str(DEFAULT_COMPOSITION_MODEL): "composition.json",
+    str(DEFAULT_CHAMPION_NAMES): "champion_names.json", str(DEFAULT_TIER_PAYLOAD): "tier-list.json",
+}
 LIVE_CLIENT_ALL_GAME_DATA_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
 OVERWOLF_AUGMENT_EVENT = Path("data/overwolf/latest_augments.json")
 OVERWOLF_AUGMENT_LOG = Path("data/overwolf/augment_events.jsonl")
@@ -79,7 +86,10 @@ def _project_root() -> Path:
 def _resource_path(relative: Path | str) -> Path:
     rel = Path(relative)
     if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent)) / rel
+        root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+        if str(rel) in _DESKTOP_PATHS:
+            return (DESKTOP_DATA_DIR or root / "desktop-data") / _DESKTOP_PATHS[str(rel)]
+        return root / rel
 
     cwd_candidate = Path.cwd() / rel
     if cwd_candidate.exists():
@@ -1019,6 +1029,9 @@ class RecommenderApp:
             anchor="w", padx=12,
         )
         self.subheader.pack(fill="x", pady=(0, 8))
+        if DESKTOP_STATUS:
+            tk.Label(root, text=DESKTOP_STATUS, bg=BG, fg=DIM,
+                     font=self._font(FONT_SUB), anchor="w", padx=12, wraplength=800).pack(fill="x", pady=(0, 8))
 
         # Thin divider between header and the dynamic body - replaces what
         # a bottom border on the header would do, without violating the
@@ -1826,6 +1839,8 @@ class RecommenderApp:
 @click.option("--verbose", is_flag=True, default=False,
               help="Print per-poll status (phase + session presence) to stdout. "
                    "Useful for diagnosing why a champ-select isn't being detected.")
+@click.option("--no-update", is_flag=True, help="Skip online updates for this launch.")
+@click.option("--self-test", is_flag=True, help="Check packaged models and Tk; save diagnostics and exit.")
 def main(
     lr_model: Path | None,
     vocab: Path | None,
@@ -1834,10 +1849,36 @@ def main(
     poll_interval: float,
     fake: bool,
     verbose: bool,
+    no_update: bool,
+    self_test: bool,
 ) -> None:
     """Tk GUI for the ARAM champ-select recommender."""
     _enable_windows_dpi_awareness()
     _set_app_user_model_id()
+    global DESKTOP_DATA_DIR, DESKTOP_STATUS
+    if getattr(sys, "frozen", False):
+        from aram_nn.desktop.startup import bundled_version, launch_updated, run_updates
+        from aram_nn.desktop.update import read_json, validate_data
+        resource_root = Path(sys._MEIPASS)
+        version = bundled_version(resource_root)
+        if not no_update:
+            updated = run_updates(version)
+            if updated.app_path:
+                try:
+                    child = launch_updated(updated.app_path)
+                    if self_test:
+                        raise SystemExit(child.wait(timeout=240))
+                    return
+                except OSError:
+                    updated.message = "新程式啟動失敗，保留目前可用版本"
+            DESKTOP_DATA_DIR = updated.data_dir
+            DESKTOP_STATUS = updated.message
+        metadata = validate_data(DESKTOP_DATA_DIR or resource_root / "desktop-data")
+        cutoff = datetime.fromisoformat(metadata['time_cutoff']).astimezone().strftime("%Y-%m-%d %H:%M %Z")
+        DESKTOP_STATUS = (f"Mayhem · {metadata['region']} · patch {metadata['current_patch']} · "
+                          f"模型涵蓋 {','.join(metadata['patches'])} · {metadata['row_count']:,} 場 · "
+                          f"資料截止 {cutoff} · "
+                          f"{DESKTOP_STATUS or '使用內附資料'}")
 
     lr_model = _resolve_resource(lr_model, DEFAULT_LR_MODEL)
     vocab = _resolve_resource(vocab, DEFAULT_VOCAB)
@@ -1872,6 +1913,23 @@ def main(
             )
     else:
         print(f"[gui] WARN: synergy stats not found at {pair_stats}; old blend fallback will use LR only")
+
+    if self_test:
+        from aram_nn.desktop.update import atomic_json, cache_root
+        probe = tk.Tk()
+        probe.withdraw()
+        probe.update()
+        sample = sorted(comp_model.champ_to_idx)[:5] if comp_model else []
+        probability, unknown = comp_model.predict_team_prob(sample) if comp_model else (None, [])
+        atomic_json(cache_root() / "diagnostics.json", {
+            "ok": bool(comp_model and pair_model and not unknown and math.isfinite(probability)),
+            "app_version": version if getattr(sys, "frozen", False) else "source",
+            "python": sys.version.split()[0], "tk": probe.tk.call("info", "patchlevel"),
+            "champions": model.n_champs, "data_status": DESKTOP_STATUS,
+            "sample_probability": probability,
+        })
+        probe.destroy()
+        return
 
     q: queue.Queue = queue.Queue()
     stop_event = threading.Event()

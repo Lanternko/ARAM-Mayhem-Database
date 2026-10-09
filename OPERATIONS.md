@@ -31,7 +31,9 @@ Crawler 通知（Task Scheduler）
 └─ ArammetaCrawlerStatusDiscord：每 6 小時送狀態摘要
 ```
 
-本機 GUI「ARAM Recommender (source)」直接啟動 `pythonw scripts/recommend_gui.py`，不屬於上述常駐鏈；舊 exe build 路徑已棄用。
+本機 GUI「ARAM Recommender (source)」直接啟動 `pythonw scripts/recommend_gui.py`，不屬於上述常駐鏈。公開 Windows 單檔版的更新與發布依 `runbooks/desktop-release.md`；它不會啟動 crawler。Refresher 的桌面資料發布需明確加入 `--desktop-release-tag`，source 支援不代表既有 daemon 已啟用。
+
+桌面資料發布的 production wrapper 設定為 `--desktop-release-tag latest --desktop-region TW`，由 watchdog 傳給 refresher；每輪解析最新正式桌面 release，無需隨 EXE 改版手改 tag。2026-10-09 rollout 需在使用者確認後切換既有 daemon，並核對 argv 與 `[desktop-publish]` 成功紀錄，才能稱為已啟用。EXE source 進 main 後由 GitHub Actions 自動建置／驗證／發版，網站下載入口與手動恢復流程見桌面 runbook。
 
 ## 2. 設定所有權
 
