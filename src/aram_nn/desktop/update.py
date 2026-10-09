@@ -141,7 +141,10 @@ def download(asset: dict, directory: Path, progress: Progress = lambda _: None,
     path = directory / (asset["sha256"] + ".download")
     if verified(path, asset):
         return path
-    deadline = time.monotonic() + 180
+    # A 28 MB release takes over six minutes on a 70 KB/s connection. Keep
+    # socket idle timeouts at 20 seconds, but let a progressing transfer finish
+    # in one launch instead of requiring users to repeatedly reopen the app.
+    deadline = time.monotonic() + 900
     last_error: Exception = UpdateError("Download did not complete")
     for _ in range(attempts):
         try:
