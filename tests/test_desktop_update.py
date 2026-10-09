@@ -103,6 +103,27 @@ def test_corrupt_download_is_not_installed(tmp_path):
     assert not (tmp_path / (item["sha256"] + ".download")).exists()
 
 
+def test_slow_transfer_finishes_without_relaunch_after_three_minutes(tmp_path, monkeypatch):
+    import importlib
+    module = importlib.import_module("aram_nn.desktop.update")
+    clock = iter([0.0, 240.0, 300.0, 360.0])
+    monkeypatch.setattr(module.time, "monotonic", lambda: next(clock))
+    body = b"x" * 70_000
+    assert download(asset(body), tmp_path, opener=lambda *_: Response(body)).read_bytes() == body
+
+
+def test_transfer_deadline_preserves_partial_bytes_for_resume(tmp_path, monkeypatch):
+    import importlib
+    module = importlib.import_module("aram_nn.desktop.update")
+    clock = iter([0.0, 1.0, 901.0, 902.0])
+    monkeypatch.setattr(module.time, "monotonic", lambda: next(clock))
+    body = b"x" * 70_000
+    item = asset(body)
+    with pytest.raises(UpdateError, match="timed out"):
+        download(item, tmp_path, opener=lambda *_: Response(body), attempts=1)
+    assert (tmp_path / (item["sha256"] + ".download")).read_bytes() == body[:65_536]
+
+
 def test_wrong_range_is_rejected(tmp_path):
     item = asset(b"complete")
     (tmp_path / (item["sha256"] + ".download")).write_bytes(b"com")
