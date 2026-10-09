@@ -4314,20 +4314,20 @@
         display: inline-flex;
         min-height: 32px;
         align-items: center;
-        gap: 7px;
-        padding: 6px 11px 6px 13px;
-        border: 1px solid var(--accent);
-        border-radius: 999px;
-        background: var(--accent);
-        color: var(--accent-on);
+        gap: 6px;
+        padding: 6px 9px;
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm);
+        background: transparent;
+        color: var(--text-muted);
         font-size: 12px;
-        font-weight: 800;
-        letter-spacing: .02em;
+        font-weight: 600;
         line-height: 1;
         cursor: pointer;
         user-select: none;
         box-shadow: none;
         transition: background-color var(--dur-2) var(--ease),
+                    color var(--dur-2) var(--ease),
                     border-color var(--dur-2) var(--ease),
                     transform var(--dur-1) var(--ease);
     }
@@ -4336,9 +4336,11 @@
         transition: transform var(--dur-2) var(--ease);
     }
     .site-header .mode-menu[open] .mode-select svg { transform: rotate(180deg); }
-    .site-header .mode-select:hover {
-        background: color-mix(in oklab, var(--accent) 90%, var(--text));
-        border-color: var(--accent);
+    .site-header .mode-select:hover,
+    .site-header .mode-menu[open] .mode-select {
+        background: var(--surface-2);
+        color: var(--text);
+        border-color: var(--border-strong);
     }
     .site-header .mode-select:active { transform: scale(0.97); }
     .site-header .mode-select:focus-visible {
@@ -5697,7 +5699,7 @@
         .header-actions { margin-left: auto; gap: 6px; }
         .site-header .mode-select {
             min-height: 30px;
-            padding: 5px 9px 5px 11px;
+            padding: 5px 8px;
             font-size: 11px;
         }
         .site-header .theme-toggle,
