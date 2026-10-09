@@ -20,6 +20,8 @@
         --text: #e8eaed;
         --text-muted: #9aa0a6;
         --text-dim: #6b7280;
+        --font-ui: "Noto Sans TC", -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+        --font-caption: "Noto Serif TC", "Source Han Serif TC", "PingFang TC", "PMingLiU", "Songti TC", serif;
         /* Translucent-white borders read as a top-lit edge and auto-adapt to
            every elevation + the light theme (premium-dark technique). */
         --border: rgba(255, 255, 255, 0.09);
@@ -113,6 +115,10 @@
         --radar-compare-dot: rgba(70, 80, 94, 0.92);
         --shadow: 0 18px 50px rgba(31,41,55,0.16);
     }
+    :root:lang(zh-Hans), :root:lang(zh-CN) {
+        --font-ui: "Noto Sans SC", "Noto Sans TC", "Microsoft YaHei", "PingFang SC", -apple-system, "Segoe UI", sans-serif;
+        --font-caption: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+    }
     * { box-sizing: border-box; }
     /* During a theme flip, kill every transition for one tick so var()-driven
        backgrounds snap to the new palette instead of getting stuck mid-
@@ -122,11 +128,10 @@
         margin: 0;
         background: var(--bg);
         color: var(--text);
-        /* Body = Noto Sans TC (modern sans, readable in dense UI).  Serif
+        /* Body = locale-specific Noto Sans (readable in dense UI).  Serif
            is reserved for small captions — see `.subtitle`,
            `.aug .alift`. */
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         padding: 0;
     }
     /* Soft vertical wash: pure near-black most of the way, then a faint cool
@@ -141,13 +146,11 @@
        and augment card's lift/games row. */
     .subtitle,
     .aug .alift {
-        font-family: "Noto Serif TC", "Source Han Serif TC",
-                     "PingFang TC", "PMingLiU", "Songti TC", serif;
+        font-family: var(--font-caption);
     }
     .subtitle { color: var(--text-muted); font-size: 13px; }
     .title-patch {
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI",
-                     "Microsoft JhengHei", "PingFang TC", sans-serif;
+        font-family: var(--font-ui);
         font-size: 14px;
         font-weight: 500;
         line-height: 1;
@@ -1299,7 +1302,7 @@
         padding: 24px;
         text-align: center;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-size: 14px;
         font-style: italic;
         line-height: 1.6;
@@ -2103,7 +2106,7 @@
     .section-meta {
         color: #9aa0a6;
         font-size: 11px;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .cf-skill {
         margin-left: auto;
@@ -2515,7 +2518,7 @@
     }
     .comp-advice-item .ca-desc {
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
     }
     .comp-fit-empty {
         color: #6b7280;
@@ -2569,7 +2572,7 @@
         background: #0b0e13;
         color: #d4dae4;
         box-shadow: 0 6px 18px rgba(0,0,0,0.55);
-        font-family: "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: var(--font-ui);
         font-size: 11px;
         line-height: 1.5;
         text-align: left;
@@ -3615,7 +3618,7 @@
         margin-top: 2px;
         font-size: 10px;
         color: #9aa0a6;
-        font-family: "Noto Serif TC", "Source Han Serif TC", serif;
+        font-family: var(--font-caption);
         font-variant-numeric: tabular-nums;
         line-height: 1.35;
     }
@@ -4301,7 +4304,7 @@
     /* Latin brand face only — Outfit reads as a product mark, not body UI.
        Header is wordmark-only (no logo tile, no patch chip). */
     .brand-title {
-        font-family: "Outfit", "Noto Sans TC", -apple-system, "Segoe UI", sans-serif;
+        font-family: "Outfit", var(--font-ui);
         font-size: 26px;
         font-weight: 600;
         letter-spacing: -0.035em;
@@ -10700,8 +10703,7 @@
 /* Feedback is an information page within the same product shell. */
 .feedback-page .brand, .feedback-page .nav-tab { text-decoration: none; }
 .feedback-main { max-width: 720px; padding-top: 48px; }
-.feedback-main h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; }
-.feedback-intro { margin: 0 0 28px; color: var(--text-muted); line-height: 1.7; }
+.feedback-main h1 { margin: 0 0 28px; font-size: 28px; font-weight: 600; }
 .feedback-form { display: flex; flex-direction: column; gap: 20px; }
 .feedback-field { display: flex; flex-direction: column; gap: 8px; }
 .feedback-label { color: var(--text); font-size: 14px; font-weight: 600; }
@@ -10712,9 +10714,10 @@
 }
 .feedback-field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
 .feedback-field input { max-width: 420px; }
+.feedback-field :is(input, textarea)::placeholder { color: var(--text-muted); opacity: 1; }
 .feedback-page :is(input, textarea, button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .feedback-check { display: flex; align-items: start; gap: 8px; margin-top: -8px; }
-.feedback-check[hidden], .feedback-status[hidden] { display: none; }
+.feedback-check[hidden], .feedback-status[hidden], .feedback-fallback[hidden] { display: none; }
 .feedback-check input { accent-color: var(--accent); margin-top: 4px; }
 .feedback-privacy { margin: 0; max-width: 68ch; }
 .feedback-submit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
@@ -10726,9 +10729,7 @@
 .feedback-fallback { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
 .feedback-fallback a { color: var(--accent-soft); }
 .feedback-honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
-.feedback-footer { max-width: 720px; margin: 0 auto; padding: 0 24px 32px; color: var(--text-muted); font-size: 12px; line-height: 1.7; }
 @media (max-width: 700px) {
     .feedback-main { padding-top: 28px; }
     .feedback-main h1 { font-size: 24px; }
-    .feedback-footer { padding-inline: 12px; }
 }

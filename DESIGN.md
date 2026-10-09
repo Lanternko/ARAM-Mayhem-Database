@@ -189,11 +189,11 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 **Display Font:** Outfit，fallback 為 Noto Sans TC 與 sans-serif
 
-**Body Font:** Noto Sans TC，fallback 為 Segoe UI、Microsoft JhengHei、PingFang TC 與 sans-serif
+**Body Font:** 繁中與英文使用 Noto Sans TC；簡中使用 Noto Sans SC，fallback 為 Microsoft YaHei、PingFang SC 與系統 sans-serif。共用 `--font-ui` 隨 HTML 語言切換，避免簡體字落入繁中字庫後混用字形。
 
-**Caption Font:** Noto Serif TC，fallback 為 Source Han Serif TC、PMingLiU 與 serif
+**Caption Font:** Noto Serif TC，簡中使用 Noto Serif SC；共用 `--font-caption` 切換對應的 Source Han Serif、系統字型與 serif fallback。
 
-**Character:** Outfit 只賦予 arammeta 字標乾淨、幾何且略微收斂的輪廓。Noto Sans TC 承擔所有高密度 UI 與多語內容。Noto Serif TC 只在少量 subtitle、細節副標與 metadata caption 提供閱讀節奏，不能進入控制項或大面積正文。
+**Character:** Outfit 只賦予 arammeta 字標乾淨、幾何且略微收斂的輪廓。Noto Sans TC／SC 承擔所有高密度 UI 與多語內容。Noto Serif TC／SC 只在少量 subtitle、細節副標與 metadata caption 提供閱讀節奏，不能進入控制項或大面積正文。
 
 ### Wordmark
 
@@ -214,7 +214,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 - **Caption**，400、13px、1.45：僅限 subtitle、detail 小標與 augment lift 或 games 列。
 - **Data**，700、12px、1.2：勝率、lift、games、rank 與 tier 數值，必須啟用 tabular figures。
 
-Google Fonts 以非阻塞方式載入 Outfit 500、600、700，Noto Sans TC 400、500、600、700，以及 Noto Serif TC 400、500。字型未完成下載時，fallback 仍須保持內容可讀與 layout 穩定。
+Google Fonts 以非阻塞方式載入 Outfit 500、600、700，Noto Sans TC／SC 400、500、600、700，以及 Noto Serif TC／SC 400、500；瀏覽器只下載實際使用的字型檔。回饋頁只請求對應語言的 Sans 字庫。字型未完成下載時，fallback 仍須保持內容可讀與 layout 穩定。
 
 **The UI Sans Rule.** 任何會被點擊、篩選、排序或快速比較的文字一律使用 sans；serif 只提供少量閱讀停頓。
 
@@ -328,7 +328,7 @@ Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金�
 - `scripts/templates/site.js` 管理 routing、theme、locale、filter、lazy detail、a11y state 與 View Transitions fallback。
 - `scripts/tierlist_render.py` 定義 HTML topology、五個主要 view、locale shell、payload assembly 與 champion shards。
 - `scripts/tierlist_engine.py` 定義 tier、Bayesian ranking、rarity percentile 與統計語意。
-- Google Fonts 提供 Outfit、Noto Sans TC、Noto Serif TC；圖示使用 inline SVG，不引入 icon package。
+- Google Fonts 提供 Outfit、Noto Sans TC／SC、Noto Serif TC／SC；圖示使用 inline SVG，不引入 icon package。
 - Data Dragon 與 CommunityDragon 提供英雄圖像與遊戲資料；瀏覽器端使用 Fetch API、ResizeObserver、View Transitions API、requestIdleCallback、localStorage 與 sessionStorage，所有進階 API 必須有 fallback。
 - GitHub Pages 承載生成後 static site。Google Analytics、Cloudflare Analytics 與 AdSense 是可選服務，不是設計系統依賴。
 
