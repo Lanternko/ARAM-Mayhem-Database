@@ -1,4 +1,4 @@
-<!-- lines: 116 -->
+<!-- lines: 117 -->
 # aram-winrate-nn — Mayhem 資料、勝率推估、推薦與公開產品，Python / PyTorch
 
 ## Why
@@ -58,6 +58,7 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 - 保持高資訊密度，但避免 card-in-card。大型面板偏好單一平面＋hairline section；留白用來分組，不用更多陰影、漸層與彩色框製造層級。
 - 色彩必須有語義且節制：金色代表品牌／主要互動，正負勝率色只標關鍵差異，角色／tier／rarity 色限定在對應 encoding；不可把每列做成 traffic light。
 - Typography 以 `Noto Sans TC`／系統 sans 支撐密集繁中 UI，數字使用 tabular figures；serif 只在少數 editorial／metadata caption 使用，不當主要介面字體。
+- 增幅圖示在深、淺色主題都固定使用黑底 `--augment-icon-surface`，包括新表格、推薦、增幅池與說明；透明圖案依賴黑底辨識，不能繼承白色卡片底色。
 - Dark／light theme 必須走 token，而不是元件散落硬編色；新元件兩個 theme 同時完成。動效只解釋狀態與空間關係，遵守 duration/easing scale 與 `prefers-reduced-motion`。
 - Desktop、mobile、鍵盤與 touch 是同一產品，不是縮小版補丁。互動元件必須有語義 HTML、focus state、ARIA 狀態與可達的 mobile layout。
 - 效能屬於設計品質：首屏 payload 保持精簡，champion detail 按需 shard，shared JS 可 cache 並以 content hash bust；UI-only 改動不可強迫重跑昂貴統計。
