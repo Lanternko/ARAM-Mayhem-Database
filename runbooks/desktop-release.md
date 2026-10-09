@@ -46,3 +46,15 @@ The tracked production `watchdog_keepalive.ps1` forwards these two flags through
 A game patch does not create a trustworthy model immediately. The current production gate still requires at least 15,000 games on the new patch and successful held-out validation. Until then the app displays the previous verified patch and cutoff; automatic publication does not bypass these evidence gates. Signing and managed-PC SmartScreen policies remain separate from packaging automation.
 
 An old May-2026 EXE has no updater. Existing users must download this new updater-capable EXE once; subsequent app and data updates are automatic at startup.
+
+## Download trust (SmartScreen / antivirus)
+
+Browsers warn because an unsigned EXE gets reputation per file hash, and every automatic release resets that hash. Packaging already reduces heuristic false positives: the build embeds a Windows version resource (`--version-file`, company/product/version) and disables UPX (`--noupx`).
+
+The durable fix is code signing, so that reputation accrues to the publisher and not to each hash:
+
+1. Owner applies to SignPath Foundation (free for OSI-licensed open source; repo carries an MIT `LICENSE`). Account creation and approval are owner-only steps.
+2. After approval, add a signing job between `build` and `candidate-smoke` in `.github/workflows/recommender-release.yml`. Sign `ARAMRecommender.exe` **before** `recommender-manifest.json` and `ARAMRecommender-windows.zip` are produced. The manifest SHA-256 must describe the signed bytes, or the updater rejects the download. Gate the job on repo secrets so forks and PRs still build unsigned.
+3. Remove the "未簽章" line from the ZIP README in `scripts/build_recommender_exe.py` once releases are signed.
+
+Until signing exists, when an antivirus vendor flags a release, the owner submits the EXE as a false positive (Microsoft: https://www.microsoft.com/wdsi/filesubmission, requires owner sign-in). Never ask users to disable Defender or SmartScreen.
