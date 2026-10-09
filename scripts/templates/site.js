@@ -3684,8 +3684,43 @@
     // prismatic grants in 16.19 (silver/gold cannot be measured; assumed equal).
     const APOOL_GRANT_RATIO = {75: 0.8, 100: 1, 150: 1.32, 175: 1.58, 200: 1.76};
     function apoolGrantRatio(weight) { return APOOL_GRANT_RATIO[weight] ?? (weight / 100) ** 0.8; }
-    // Chance each augment is among the 3 cards of one offer of its rarity,
-    // drawn by effective weight without replacement; rerolls are not counted.
+    const apoolEncounterCache = new Map();
+    // Exact weighted sampling without replacement. Cards of the same weight
+    // are exchangeable, so track counts drawn from each weight group instead
+    // of enumerating individual cards. Exposure carries across all rounds.
+    function apoolExposureByDrawCount(weights, counts, drawCounts) {
+        const size = counts.reduce((sum, n) => sum + n, 0);
+        const result = new Map([[0, weights.map(() => 0)]]);
+        const pending = new Set(drawCounts.filter(n => n > 0 && n < size));
+        drawCounts.filter(n => n >= size && n > 0).forEach(n => result.set(n, weights.map(() => 1)));
+        if (!pending.size) return result;
+        const maxDraws = Math.max(...pending), base = maxDraws + 1;
+        const strides = weights.map((_, i) => base ** i);
+        const seen = weights.map(() => 0);
+        let states = new Map([[0, 1]]);
+        for (let draw = 1; draw <= maxDraws; draw++) {
+            const next = new Map();
+            for (const [key, probability] of states) {
+                const remaining = counts.map((n, i) => n - Math.floor(key / strides[i]) % base);
+                const rest = remaining.reduce((sum, n, i) => sum + n * weights[i], 0);
+                remaining.forEach((n, i) => {
+                    if (!n) return;
+                    const flow = probability * n * weights[i] / rest;
+                    seen[i] += flow;
+                    const nextKey = key + strides[i];
+                    next.set(nextKey, (next.get(nextKey) || 0) + flow);
+                });
+            }
+            states = next;
+            if (pending.has(draw)) result.set(draw, seen.map((n, i) => Math.min(1, n / counts[i])));
+        }
+        return result;
+    }
+    // Whole-match upper bound: complete all four rounds, see the initial
+    // three cards and each card's one reroll, and never show a seen card again.
+    // Average over the full measured JOINT colour distribution, not independent
+    // slot marginals or an unweighted average of possible ladders. Since rarity
+    // pools are disjoint, only the number of rounds of each rarity matters here.
     function championPoolOfferRates(entries, data) {
         const dead = new Set((((data || {}).observed || {}).dead || []).map(x => String(x.id)));
         const byRarity = new Map();
@@ -3696,24 +3731,33 @@
             byRarity.get(rarity).push(entry);
         }
         const rates = new Map();
-        for (const list of byRarity.values()) {
-            const v = list.map(e => apoolGrantRatio(e.weight));
-            const n = v.length, total = v.reduce((a, b) => a + b, 0);
-            if (n <= 3) { list.forEach(e => rates.set(e.id, 1)); continue; }
-            // Second and third draws: accumulate the shared factor, then
-            // subtract the cards already drawn.
-            let second = 0, third = 0;
-            const own2 = new Array(n).fill(0), own3 = new Array(n).fill(0);
-            for (let b = 0; b < n; b++) {
-                const pb = v[b] / total, rest = total - v[b];
-                second += pb / rest; own2[b] += pb / rest;
-                for (let c = 0; c < n; c++) {
-                    if (c === b) continue;
-                    const pbc = pb * v[c] / rest / (rest - v[c]);
-                    third += pbc; own3[b] += pbc; own3[c] += pbc;
-                }
+        const ladders = Object.entries(AUGMENT_LADDER);
+        const ladderTotal = ladders.reduce((sum, [, count]) => sum + count, 0);
+        for (const [rarity, list] of byRarity) {
+            const drawFrequency = new Map();
+            for (const [sequence, frequency] of ladders) {
+                const rounds = [...sequence].filter(code => AUG_RARITY_OF_CODE[code] === rarity).length;
+                const draws = rounds * AUG_DRAFT_OFFER * 2;
+                drawFrequency.set(draws, (drawFrequency.get(draws) || 0) + frequency / ladderTotal);
             }
-            list.forEach((e, a) => rates.set(e.id, Math.min(1, v[a] / total + v[a] * (second - own2[a]) + v[a] * (third - own3[a]))));
+            const grouped = new Map();
+            list.forEach(e => {
+                const weight = apoolGrantRatio(e.weight);
+                grouped.set(weight, (grouped.get(weight) || 0) + 1);
+            });
+            const groups = [...grouped].sort((a, b) => a[0] - b[0]);
+            const cacheKey = JSON.stringify([groups, [...drawFrequency]]);
+            let byWeight = apoolEncounterCache.get(cacheKey);
+            if (!byWeight) {
+                const weights = groups.map(([weight]) => weight), counts = groups.map(([, count]) => count);
+                const exposure = apoolExposureByDrawCount(weights, counts, [...drawFrequency.keys()]);
+                byWeight = new Map(weights.map((weight, i) => [weight,
+                    [...drawFrequency].reduce((sum, [draws, p]) => sum + p * exposure.get(draws)[i], 0)]));
+                // Bound retained memory when many champions are inspected.
+                if (apoolEncounterCache.size >= 128) apoolEncounterCache.delete(apoolEncounterCache.keys().next().value);
+                apoolEncounterCache.set(cacheKey, byWeight);
+            }
+            list.forEach(e => rates.set(e.id, byWeight.get(apoolGrantRatio(e.weight))));
         }
         return rates;
     }
@@ -3724,9 +3768,9 @@
         const context = [champName(info, cid), DATA.patch_prefix, stats ? pickLang(`${fmtInt(stats.g)} 場`, `${fmtInt(stats.g)} games`) : pickLang('尚無統計', 'No stats available')].filter(Boolean).join(' · ');
         const statHtml = `<div class="champ-pool-tip-stats"><div class="champ-pool-tip-context">${escHtml(context)}</div><dl>`
             + [[pickLang('勝率', 'Win rate'), stats && stats.wr], [pickLang('選取率', 'Pick rate'), stats && stats.pick],
-                [pickLang('預估出現率', 'Est. offer rate'), offerRates && offerRates.get(entry.id)]]
+                [pickLang('整場出現上界', 'Encounter cap'), offerRates && offerRates.get(entry.id)]]
                 .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
-            + '</dl><p class="champ-pool-tip-note">' + escHtml(pickLang('預估出現率：同稀有度回合的 3 張選項中出現的機率，不含重抽', 'Est. offer rate: chance to appear among the 3 cards of a same-rarity offer, before rerolls')) + '</p></div>';
+            + '</dl><p class="champ-pool-tip-note">' + escHtml(pickLang('預估上界：完成 4 輪、每輪看滿 6 張，排除所有已看過選項，依色彩組合機率加權。', 'Estimated upper bound: complete all 4 rounds and see 6 cards per round, excluding every previously seen option; weighted by colour-sequence probabilities.')) + '</p></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
         const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
@@ -4131,8 +4175,10 @@
             + strong(pickLang('公告名稱', 'Patch-note name')) + text('＝來自更新公告。', ' = from patch notes.')]);
         if (champion) notes.push([pickLang('倍率限制', 'Ratio limits'),
             text('倍率來自 16.19 封我為王的稜彩發放，銀金沿用同一倍率；', 'Ratios come from 16.19 King Me prismatic grants and are reused for silver and gold; ')
-            + strong(pickLang('預估出現率', 'estimated offer rates'))
-            + text('由倍率換算 3 張選項的機率，重抽會讓實際看到的次數約多一倍。', ' convert them into 3-card odds; rerolls roughly double how often you actually see a card.')]);
+            + text('用於估計自選出牌，尚未獨立驗證。', ' their use for normal offers has not been independently validated.')]);
+        if (champion) notes.push([pickLang('出現上界', 'Encounter bound'),
+            text('假設完成 4 輪、每輪看滿 6 張，所有輪次已看過的選項都排除；', 'Assumes all 4 rounds complete, 6 cards seen per round, and all previously seen options excluded across rounds; ')
+            + text('依 16.14 的 157,915 場 Mayhem 色彩組合分佈加權平均，不含質變或其他隨機發放。', ' weighted by the colour-sequence distribution of 157,915 Mayhem games in 16.14, excluding Transmute and other random grants.')]);
         return `<dl class="apool-section apool-notes">`
             + notes.map(([label, body]) => `<div><dt>${escHtml(label)}</dt><dd>${body}</dd></div>`).join('')
             + `</dl>`;
