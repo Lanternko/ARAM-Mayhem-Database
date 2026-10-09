@@ -6328,19 +6328,19 @@
         transform: translateY(0);
     }
     .item-float-tip[hidden] { display: none !important; }
-    .item-float-tip.is-champion-table-tip.is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
-    .is-champion-table-tip .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
-    .is-champion-table-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
-    .is-champion-table-tip .item-tip-name,
-    .is-champion-table-tip .item-tip-part-name,
-    .is-champion-table-tip .item-tip-desc .item-tip-line:first-child,
-    .is-champion-table-tip .item-tip-row > b { color: var(--text); }
-    .is-champion-table-tip .item-tip-desc,
-    .is-champion-table-tip .item-tip-sub,
-    .is-champion-table-tip .item-tip-row > span,
-    .is-champion-table-tip .item-tip-note { color: var(--text-muted); }
-    .is-champion-table-tip .item-tip-gold { color: var(--accent-soft); }
-    .is-champion-table-tip .item-tip-stats { border-color: var(--border); }
+    .item-float-tip:is(.is-champion-table-tip, .is-item-family-tip).is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-part-name,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc .item-tip-line:first-child,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > b { color: var(--text); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-sub,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > span,
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-note { color: var(--text-muted); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-gold { color: var(--accent-soft); }
+    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-stats { border-color: var(--border); }
     .item-tip-card {
         position: relative;
         padding: 10px 12px 11px;
@@ -10415,6 +10415,41 @@
     .recommended-pool-members img) {
     background: var(--augment-icon-surface);
 }
+
+    /* Stacked mana items share one statistic; the inset identifies the base item. */
+    .item-family-icon {
+        display: inline-block;
+        position: relative;
+        flex-shrink: 0;
+        vertical-align: middle;
+        overflow: visible;
+    }
+    .item-family-icon > .item-family-main {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: inherit;
+    }
+    .item-family-icon > .item-family-base {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 46%;
+        height: 46%;
+        box-sizing: border-box;
+        margin: 0;
+        box-shadow: none;
+        object-fit: contain;
+        border: 2px solid var(--surface);
+        border-radius: 3px;
+    }
+    .champion-table-item-icon { width: 32px; height: 32px; }
+    .item-pair-image { width: 100%; height: 100%; }
+    .change-duo .change-item-icon { width: 34px; height: 34px; margin-left: -9px; border-radius: 6px; }
+    @media (max-width: 640px) {
+        .change-duo .change-item-icon { width: 30px; height: 30px; }
+    }
 
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and

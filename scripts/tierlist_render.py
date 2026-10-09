@@ -2465,6 +2465,7 @@ def _dedupe_item_objects(payload: dict) -> None:
             )
         except Exception:
             item_meta = {}
+        payload["itemFamilies"] = item_families_payload(item_meta)
         for iid, entry in lut.items():
             try:
                 meta = item_meta.get(int(iid)) or {}

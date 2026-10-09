@@ -34,6 +34,7 @@ import click
 import httpx
 
 from aram_nn import patch_snapshot
+from aram_nn.site.item_families import canonical_item_id, item_families_payload
 from aram_nn.site.augment_taxonomy import (
     AUGMENT_CATEGORY_ORDER,
     AUGMENT_CATEGORY_LABELS,
@@ -2395,7 +2396,7 @@ def _participant_core_item_ids(item_ids: list[int], item_meta: dict[int, dict]) 
     seen: set[int] = set()
     for raw_id in item_ids:
         try:
-            item_id = int(raw_id)
+            item_id = canonical_item_id(int(raw_id), item_meta)
         except (TypeError, ValueError):
             continue
         if item_id <= 0 or item_id in seen:
@@ -2413,7 +2414,7 @@ def _participant_recommendable_item_ids(item_ids: list[int], item_meta: dict[int
     seen: set[int] = set()
     for raw_id in item_ids:
         try:
-            item_id = int(raw_id)
+            item_id = canonical_item_id(int(raw_id), item_meta)
         except (TypeError, ValueError):
             continue
         if item_id <= 0 or item_id in seen:
@@ -2429,7 +2430,7 @@ def _participant_route_item_ids(item_ids: list[int], item_meta: dict[int, dict])
     seen: set[int] = set()
     for raw_id in item_ids:
         try:
-            item_id = int(raw_id)
+            item_id = canonical_item_id(int(raw_id), item_meta)
         except (TypeError, ValueError):
             continue
         if item_id <= 0 or item_id in seen:
@@ -3823,6 +3824,9 @@ def _scan_core_item_counters(
                     if item_id <= 0 or item_id in seen_ids:
                         continue
                     observed_item_ids.add(item_id)
+                    item_id = canonical_item_id(item_id, item_meta)
+                    if item_id in seen_ids:
+                        continue
                     if not _is_recommendable_core_item(item_meta.get(item_id)):
                         continue
                     selected_ids.append(item_id)
@@ -3851,12 +3855,19 @@ def _scan_core_item_counters(
 def _core_item_fingerprint(observed_item_ids, item_meta: dict[int, dict]) -> str:
     """Identity of the core-item FILTER as applied to one patch's observed items.
 
+    The fingerprint also includes transformed identities, so snapshots made
+    before family grouping are rebuilt from participants (not summed buckets).
     A snapshot must be rebuilt when _is_recommendable_core_item starts including
     or excluding an item that patch actually had -- but not when a later Data
     Dragon adds items that never appeared in it.  Hashing the filter's verdict
     over the snapshot's own observed ids gives exactly that.
     """
-    core = [int(i) for i in sorted(observed_item_ids) if _is_recommendable_core_item(item_meta.get(int(i)))]
+    core = [
+        (int(i), canonical_item_id(int(i), item_meta))
+        if canonical_item_id(int(i), item_meta) != int(i) else int(i)
+        for i in sorted(observed_item_ids)
+        if _is_recommendable_core_item(item_meta.get(canonical_item_id(int(i), item_meta)))
+    ]
     digest = hashlib.sha1(json.dumps(core, separators=(",", ":")).encode("utf-8"))
     return digest.hexdigest()[:16]
 
