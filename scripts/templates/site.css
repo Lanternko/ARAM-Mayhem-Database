@@ -10695,8 +10695,7 @@
 /* Feedback is an information page within the same product shell. */
 .feedback-page .brand, .feedback-page .nav-tab { text-decoration: none; }
 .feedback-main { max-width: 720px; padding-top: 48px; }
-.feedback-main h1 { margin: 0 0 12px; font-size: 28px; font-weight: 600; }
-.feedback-intro { margin: 0 0 28px; color: var(--text-muted); line-height: 1.7; }
+.feedback-main h1 { margin: 0 0 28px; font-size: 28px; font-weight: 600; }
 .feedback-form { display: flex; flex-direction: column; gap: 20px; }
 .feedback-field { display: flex; flex-direction: column; gap: 8px; }
 .feedback-label { color: var(--text); font-size: 14px; font-weight: 600; }
@@ -10707,9 +10706,10 @@
 }
 .feedback-field textarea { min-height: 160px; resize: vertical; line-height: 1.6; }
 .feedback-field input { max-width: 420px; }
+.feedback-field :is(input, textarea)::placeholder { color: var(--text-muted); opacity: 1; }
 .feedback-page :is(input, textarea, button, a, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .feedback-check { display: flex; align-items: start; gap: 8px; margin-top: -8px; }
-.feedback-check[hidden], .feedback-status[hidden] { display: none; }
+.feedback-check[hidden], .feedback-status[hidden], .feedback-fallback[hidden] { display: none; }
 .feedback-check input { accent-color: var(--accent); margin-top: 4px; }
 .feedback-privacy { margin: 0; max-width: 68ch; }
 .feedback-submit-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }

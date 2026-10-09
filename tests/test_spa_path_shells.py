@@ -356,7 +356,7 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertTrue((root / "about" / "index.html").is_file())
             self.assertTrue((root / "contact" / "index.html").is_file())
             feedback = (root / "feedback" / "index.html").read_text(encoding="utf-8")
-            self.assertIn("回饋與聯絡", feedback)
+            self.assertIn("<h1>意見回饋</h1>", feedback)
             self.assertIn("https://api.arammeta.com/api/feedback", feedback)
             self.assertIn("data-feedback-form", feedback)
             self.assertIn("class='site-header'", feedback)
@@ -380,12 +380,12 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("hreflang='en'", feedback)
             self.assertTrue((root / "en" / "feedback" / "index.html").is_file())
             self.assertIn(
-                "Feedback &amp; contact",
+                "<h1>Feedback</h1>",
                 (root / "en" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
             self.assertTrue((root / "zh-cn" / "feedback" / "index.html").is_file())
             self.assertIn(
-                "反馈与联系",
+                "<h1>意见反馈</h1>",
                 (root / "zh-cn" / "feedback" / "index.html").read_text(encoding="utf-8"),
             )
             self.assertEqual(

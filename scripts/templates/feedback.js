@@ -22,6 +22,7 @@
         const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null');
         if (draft) {
             form.elements.message.value = draft.message || '';
+            form.elements.message.dispatchEvent(new Event('input'));
             form.elements.contact_email.value = draft.email || '';
             form.elements.contact_consent.checked = draft.consent === true;
             form.elements.contact_email.dispatchEvent(new Event('input'));
