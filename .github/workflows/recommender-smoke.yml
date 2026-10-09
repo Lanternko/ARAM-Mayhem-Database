@@ -1,0 +1,69 @@
+name: Windows desktop download smoke
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/recommender-smoke.yml'
+      - 'src/aram_nn/desktop/**'
+      - 'scripts/recommend_gui.py'
+      - 'scripts/build_recommender_exe.py'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Desktop release tag
+        required: true
+        default: recommender-v2026.10.09.1
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Download public release and verify binary
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || 'recommender-v2026.10.09.1' }}
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP '中文 空白使用者'
+          New-Item -ItemType Directory -Path $testRoot | Out-Null
+          $base = "https://github.com/Lanternko/ARAM-Mayhem-Database/releases/download/$env:RELEASE_TAG"
+          curl.exe -fLsS --retry 3 --max-time 180 -o "$testRoot/ARAMRecommender.exe" "$base/ARAMRecommender.exe"
+          if ($LASTEXITCODE) { throw 'Executable download failed' }
+          curl.exe -fLsS --retry 3 --max-time 60 -o "$testRoot/manifest.json" "$base/recommender-manifest.json"
+          if ($LASTEXITCODE) { throw 'Manifest download failed' }
+          $manifest = Get-Content "$testRoot/manifest.json" -Raw | ConvertFrom-Json
+          $digest = (Get-FileHash "$testRoot/ARAMRecommender.exe" -Algorithm SHA256).Hash.ToLower()
+          if ($digest -ne $manifest.app.sha256) { throw 'Binary SHA-256 differs' }
+      - name: Run with no Python paths or developer environment
+        shell: pwsh
+        run: |
+          $testRoot = Join-Path $env:RUNNER_TEMP '中文 空白使用者'
+          $env:LOCALAPPDATA = $testRoot
+          $env:PYTHONPATH = ''
+          $env:PYTHONHOME = ''
+          $env:PATH = "$env:SystemRoot/System32;$env:SystemRoot"
+          $exe = "$testRoot/ARAMRecommender.exe"
+          foreach ($arguments in @('--self-test --no-update', '--self-test')) {
+            $proc = Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $testRoot -WindowStyle Hidden -PassThru
+            if (-not $proc.WaitForExit(240000)) { throw 'Application timed out' }
+            if ($proc.ExitCode -ne 0) { throw "Application exit code $($proc.ExitCode)" }
+            $diagnostics = Get-Content "$testRoot/ARAMRecommender/diagnostics.json" -Raw | ConvertFrom-Json
+            if (-not $diagnostics.ok) { throw 'Models or Tk failed' }
+            if ($arguments -eq '--self-test' -and $diagnostics.data_status -notmatch '已更新|已是最新') {
+              throw "Online update did not succeed: $($diagnostics.data_status)"
+            }
+            $diagnostics | ConvertTo-Json
+          }
+      - name: Preserve smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-${{ matrix.os }}
+          path: ${{ runner.temp }}/中文 空白使用者/ARAMRecommender/*.json

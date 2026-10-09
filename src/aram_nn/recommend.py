@@ -357,12 +357,19 @@ def load_composition_lr(path: Path) -> CompositionLRModel:
     model_dir = path if path.is_dir() else path.parent
     if path.is_dir():
         path = path / "model.pkl"
-    with path.open("rb") as f:
-        payload = _NoSklearnUnpickler(f).load()
-
-    model = payload["model"]
-    coef = np.asarray(model.coef_, dtype=np.float64).reshape(-1)
-    intercept = float(np.asarray(model.intercept_, dtype=np.float64).reshape(-1)[0])
+    if path.suffix == ".json":
+        # Public desktop updates contain data only, never downloaded pickle.
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != 1:
+            raise ValueError("Unsupported composition JSON schema")
+        coef = np.asarray(payload["coef"], dtype=np.float64).reshape(-1)
+        intercept = float(payload["intercept"])
+    else:
+        with path.open("rb") as f:
+            payload = _NoSklearnUnpickler(f).load()
+        model = payload["model"]
+        coef = np.asarray(model.coef_, dtype=np.float64).reshape(-1)
+        intercept = float(np.asarray(model.intercept_, dtype=np.float64).reshape(-1)[0])
     feature_names = [str(name) for name in payload["feature_names"]]
     if coef.shape[0] != len(feature_names):
         raise ValueError(

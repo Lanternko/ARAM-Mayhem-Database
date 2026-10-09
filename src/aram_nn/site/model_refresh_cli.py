@@ -68,6 +68,9 @@ def _failure_streak(state_path: Path) -> int:
               help="Print the pipeline commands instead of running them.")
 @click.option("--watch/--once", default=False, show_default=True)
 @click.option("--interval-sec", type=int, default=300, show_default=True)
+@click.option("--desktop-release-tag", default=None,
+              help="Opt in: publish verified JSON data to this existing desktop release after refresh.")
+@click.option("--desktop-region", default="TW", show_default=True)
 def main(
     db: Path,
     state_path: Path,
@@ -87,6 +90,8 @@ def main(
     dry_run: bool,
     watch: bool,
     interval_sec: int,
+    desktop_release_tag: str | None,
+    desktop_region: str,
 ) -> None:
     """Growth-gated, per-patch refresh of the local recommender models."""
     while True:
@@ -144,6 +149,17 @@ def main(
                 # chance to restore the file before the next refresh is due.
                 for item in result.get("missing_inputs") or []:
                     click.echo(f"[model-refresh] WARNING missing input {item}")
+            if desktop_release_tag and not (check_only or dry_run or result.get("blocked")):
+                from aram_nn.desktop.release import publish_refreshed_models
+                try:
+                    published = publish_refreshed_models(
+                        model_dir=out_dir, parquet=parquet, tag=desktop_release_tag,
+                        region=desktop_region, output=Path("outputs/desktop-publish"),
+                        names=Path("data/cache/champion_abilities.json"), tier=Path("docs/api/tier-list.json"))
+                    if published:
+                        click.echo("[desktop-publish] published latest verified model data")
+                except Exception as publish_error:
+                    click.echo(f"[desktop-publish] ERROR will retry next cycle: {publish_error}", err=True)
         except Exception as exc:  # keep the watch daemon alive across transient failures
             streak = _failure_streak(state_path)
             line = (
