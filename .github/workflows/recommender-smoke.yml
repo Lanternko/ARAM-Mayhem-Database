@@ -84,6 +84,9 @@ jobs:
           $deadline = (Get-Date).AddSeconds(90)
           while (-not (Test-Path $report) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
           $diagnostics = Get-Content $report -Raw | ConvertFrom-Json
+          $diagnostics | ConvertTo-Json
+          $failure = "$testRoot/ARAMRecommender/last-update.json"
+          if (Test-Path $failure) { Get-Content $failure -Raw }
           if (-not $diagnostics.ok -or $diagnostics.app_version -ne $expected) { throw 'New executable did not start' }
           if (-not (Test-Path "$testRoot/ARAMRecommender/app-active.json")) { throw 'App update pointer missing' }
           $diagnostics | ConvertTo-Json
@@ -92,4 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: desktop-smoke-${{ matrix.os }}
-          path: ${{ runner.temp }}/中文 空白使用者/ARAMRecommender/*.json
+          # Preserve actual upgrade failures, not only the fresh-install result.
+          path: |
+            ${{ runner.temp }}/中文 空白使用者/ARAMRecommender/*.json
+            ${{ runner.temp }}/舊版 自動升級測試/ARAMRecommender/*.json
