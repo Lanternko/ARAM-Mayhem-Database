@@ -2386,6 +2386,33 @@
         return cat ? (cat.icon || '') : '';
     }
 
+    function itemFamilyBase(item) {
+        return item && (DATA.itemFamilies || {})[String(item.id)] || null;
+    }
+
+    function itemFamilyNote(item) {
+        const base = itemFamilyBase(item);
+        if (!base) return '';
+        const names = `${itemDisplayName(base)} / ${itemDisplayName(item)}`;
+        if (currentLang === 'en') return `${names}: combined pre-stack and fully stacked stats.`;
+        if (currentLang === 'zh-CN') return `${names}：叠满前后合并统计。`;
+        return `${names}：疊滿前後合併統計。`;
+    }
+
+    function itemIconHtml(item, cls = '', alt = '') {
+        const src = itemIconUrl(item);
+        if (!src) return `<span class="${escHtml(cls)}"></span>`;
+        const base = itemFamilyBase(item);
+        if (!base || !itemIconUrl(base)) {
+            return `<img class="${escHtml(cls)}" src="${escHtml(src)}" alt="${escHtml(alt)}" loading="lazy">`;
+        }
+        const note = escHtml(itemFamilyNote(item));
+        return `<span class="item-family-icon ${escHtml(cls)}" role="img" aria-label="${note}" title="${note}">
+            <img class="item-family-main" src="${escHtml(src)}" alt="" loading="lazy">
+            <img class="item-family-base" src="${escHtml(itemIconUrl(base))}" alt="" loading="lazy">
+        </span>`;
+    }
+
     function liftToneClass(lift) {
         const v = Number(lift || 0);
         if (v > 0.005) return 'is-good';
@@ -2413,10 +2440,13 @@
             ? opts.icons
             : items.map(itemIconUrl).filter(Boolean);
         const iconsHtml = iconUrls.length
-            ? `<div class="item-tip-icons">${iconUrls.map(src => (
-                `<img class="item-tip-icon" src="${escHtml(src)}" alt="" loading="lazy">`
-            )).join('')}</div>`
+            ? `<div class="item-tip-icons">${!(opts.icons && opts.icons.length) && items.length
+                ? items.map(item => itemIconHtml(item, 'item-tip-icon')).join('')
+                : iconUrls.map(src => `<img class="item-tip-icon" src="${escHtml(src)}" alt="" loading="lazy">`).join('')
+            }</div>`
             : '';
+        const familyNotesHtml = items.map(itemFamilyNote).filter(Boolean)
+            .map(note => `<div class="item-tip-note">${escHtml(note)}</div>`).join('');
 
         // Single-item gold; multi-item builds skip a combined price (ambiguous).
         let goldHtml = '';
@@ -2503,6 +2533,7 @@
                     </div>
                 </div>
                 ${bodyHtml}
+                ${familyNotesHtml}
                 ${statsHtml}
                 ${noteHtml}
             </div>
@@ -2616,6 +2647,7 @@
         const el = ensureItemFloatTip();
         el.classList.toggle('is-pool-tip', Boolean(poolId));
         el.classList.toggle('is-champion-table-tip', anchor.classList.contains('champion-table-icon'));
+        el.classList.toggle('is-item-family-tip', Boolean(anchor.querySelector('.item-family-icon')));
         el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
         el.hidden = false;
         el.classList.add('is-visible');
@@ -4666,7 +4698,7 @@
             const itemIcons = pairItems.length
                 ? `<span class="item-pair-icons">${pairItems.map(item => `
                     <span class="item-pair-icon-wrap">
-                        ${item.icon ? `<img src="${escHtml(item.icon)}" alt="" loading="lazy">` : ''}
+                        ${itemIconHtml(item, 'item-pair-image')}
                     </span>
                 `).join('')}</span>`
                 : '';
@@ -4742,7 +4774,7 @@
                     const item = pairItems[i];
                     const flexClass = item && item.core === false ? ' is-flex' : '';
                     if (item && item.icon) {
-                        return `<img class="item-build-icon${flexClass}" src="${escHtml(item.icon)}" alt="" loading="lazy">`;
+                        return itemIconHtml(item, `item-build-icon${flexClass}`);
                     }
                     return `<span class="item-build-icon${flexClass}"></span>`;
                 }).join('');
@@ -4784,11 +4816,7 @@
                 liftLabel: signed(liftValue),
                 games: entry.g || 0,
             });
-            const icons = tipItems.map(item => (
-                item.icon
-                    ? `<img class="item-build-icon" src="${escHtml(item.icon)}" alt="" loading="lazy">`
-                    : '<span class="item-build-icon"></span>'
-            )).join('');
+            const icons = tipItems.map(item => itemIconHtml(item, 'item-build-icon')).join('');
             const placeholderCount = options.singleItem ? 1 : 2;
             const paddedIcons = icons || Array.from(
                 { length: placeholderCount },
@@ -5039,12 +5067,7 @@
             const groups = (info && info.groups) || [];
             if (!groups.length) return emptyDetailSection(title, meta);
             const laneLabels = copy.itemClusterLanes || {};
-            const iconImg = (item, cls) => {
-                const nm = escHtml(itemDisplayName(item));
-                return (item && itemIconUrl(item))
-                    ? `<img class="${cls}" src="${escHtml(itemIconUrl(item))}" alt="${nm}" loading="lazy">`
-                    : `<span class="${cls}"></span>`;
-            };
+            const iconImg = (item, cls) => itemIconHtml(item, cls, itemDisplayName(item));
             const blocks = groups.map(grp => {
                 const core = Array.isArray(grp.core) ? grp.core : [];
                 const coreIcons = core.map(it => {
@@ -9852,7 +9875,7 @@
         const meta = `${pct(row.baseline_wr || 0)} -> ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
         return `
             <div class="change-row" title="${escHtml(title)}">
-                <img class="change-icon" src="${escHtml(row.icon || '')}" alt="">
+                ${itemIconHtml(row, 'change-icon')}
                 <span>
                     <span class="change-name">${escHtml(name)}</span>
                     <span class="change-meta">${escHtml(meta)}</span>
@@ -9874,7 +9897,7 @@
             <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
                 <span class="change-duo">
                     <img src="${escHtml(champ.image || '')}" alt="">
-                    <img src="${escHtml(item.icon || '')}" alt="">
+                    ${itemIconHtml(item, 'change-item-icon')}
                 </span>
                 <span>
                     <span class="change-name">${escHtml(champName)} + ${escHtml(itemName)}</span>
@@ -10752,7 +10775,7 @@
             return ids.map(id => {
                 const item = { id }, name = itemDisplayName(item), icon = itemIconUrl(item);
                 const tip = buildItemTipHtml({ name, items: [item] });
-                return `<button type="button" class="champion-table-icon has-item-tip" aria-label="${escHtml(name)}">${icon ? `<img src="${escHtml(icon)}" alt="" loading="lazy">` : escHtml(name)}${itemTipSource(tip)}</button>`;
+                return `<button type="button" class="champion-table-icon has-item-tip" aria-label="${escHtml(name)}">${icon ? itemIconHtml(item, 'champion-table-item-icon') : escHtml(name)}${itemTipSource(tip)}</button>`;
             }).join('') || '<span aria-label="'+escHtml(tr().insufficient)+'">—</span>';
         };
         const augmentIcons = row => {
@@ -11975,7 +11998,9 @@
         scheduleHideItemFloatTip();
     });
     document.addEventListener('click', ev => {
-        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon');
+        const familyHost = ev.target.closest && ev.target.closest('.has-item-tip');
+        const host = (ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon'))
+            || (familyHost && familyHost.querySelector('.item-family-icon') ? familyHost : null);
         if (host) showItemFloatTip(host);
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
