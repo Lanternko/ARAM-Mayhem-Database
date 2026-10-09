@@ -10700,12 +10700,17 @@
     let homeDetailScrollY = 0;
     let championTableSort = 'pick';
     let championTableDirection = 'desc';
+    const CHAMPION_LAYOUT_KEY = 'aram-champion-layout';
+    let championLayout = 'table';
+    try {
+        if (localStorage.getItem(CHAMPION_LAYOUT_KEY) === 'grid') championLayout = 'grid';
+    } catch {}
 
     function renderChampionTable() {
         const list = document.getElementById('view-home');
         const wrap = document.getElementById('champion-table-wrap');
         if (!list || !wrap) return;
-        wrap.hidden = list.getAttribute('data-view') !== 'champions';
+        wrap.hidden = list.getAttribute('data-view') !== 'champions' || championLayout !== 'table';
         if (wrap.hidden) return;
         const columns = [
             ['name', pickLang('英雄', 'Champion')],
@@ -10769,13 +10774,30 @@
         const list = document.getElementById('view-home');
         if (!list) return;
         const home = list.getAttribute('data-view') === 'home';
+        list.setAttribute('data-champion-layout', home ? 'grid' : championLayout);
+        const layoutToggle = document.getElementById('champion-layout-toggle');
+        if (layoutToggle) {
+            layoutToggle.hidden = home;
+            layoutToggle.setAttribute('aria-label', pickLang('英雄佈局', 'Champion layout'));
+            layoutToggle.querySelectorAll('[data-champion-layout]').forEach(button => {
+                const layout = button.getAttribute('data-champion-layout');
+                button.setAttribute('aria-pressed', String(layout === championLayout));
+                const label = layout === 'grid' ? pickLang('頭像佈局', 'Portrait layout') : pickLang('條列佈局', 'List layout');
+                button.setAttribute('aria-label', label);
+                button.title = label;
+            });
+        }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');
         list.setAttribute('role', home ? 'region' : 'tabpanel');
         list.setAttribute('aria-label', title);
         if (home) list.removeAttribute('aria-labelledby');
         else list.setAttribute('aria-labelledby', 'tab-champions');
-        document.getElementById('champion-list-title').textContent = title;
-        document.getElementById('champion-list-hint').textContent = pickLang(
+        const titleEl = document.getElementById('champion-list-title');
+        titleEl.textContent = title;
+        titleEl.classList.toggle('sr-only', !home);
+        const hintEl = document.getElementById('champion-list-hint');
+        hintEl.hidden = !home;
+        hintEl.textContent = pickLang(
             home ? '點選英雄，在此展開增幅與出裝。' : '點選英雄，查看完整數據與分析。',
             home ? 'Select a champion to expand augments and builds here.' : 'Select a champion for full stats and analysis.');
         list.querySelectorAll('.champ').forEach(card => {
@@ -11205,6 +11227,13 @@
 
     document.addEventListener('click', (ev) => {
         const modeMenu = document.getElementById('mode-menu');
+        const layoutButton = ev.target.closest('[data-champion-layout]');
+        if (layoutButton && layoutButton.tagName === 'BUTTON') {
+            championLayout = layoutButton.getAttribute('data-champion-layout') === 'grid' ? 'grid' : 'table';
+            try { localStorage.setItem(CHAMPION_LAYOUT_KEY, championLayout); } catch {}
+            syncChampionListChrome();
+            return;
+        }
         const championSort = ev.target.closest('[data-champion-sort]');
         if (championSort) {
             const key = championSort.getAttribute('data-champion-sort');

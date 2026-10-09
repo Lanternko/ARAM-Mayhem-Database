@@ -3683,7 +3683,17 @@ def render_html(
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
     parts.append("<div class='champion-list-intro' data-nosnippet>"
+                 "<div class='champion-list-heading'>"
                  "<h1 id='champion-list-title'>英雄快速查詢</h1>"
+                 "<div class='champion-layout-toggle' id='champion-layout-toggle' role='group' aria-label='英雄佈局' hidden>"
+                 "<button type='button' data-champion-layout='grid' aria-pressed='false' aria-label='頭像佈局' title='頭像佈局'>"
+                 "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' aria-hidden='true'>"
+                 "<rect x='3' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='3' width='7' height='7' rx='1.5'/>"
+                 "<rect x='3' y='14' width='7' height='7' rx='1.5'/><rect x='14' y='14' width='7' height='7' rx='1.5'/></svg></button>"
+                 "<button type='button' data-champion-layout='table' aria-pressed='true' aria-label='條列佈局' title='條列佈局'>"
+                 "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' aria-hidden='true'>"
+                 "<rect x='3' y='3' width='4' height='4' rx='1'/><rect x='3' y='10' width='4' height='4' rx='1'/>"
+                 "<rect x='3' y='17' width='4' height='4' rx='1'/><path d='M11 5h10M11 12h10M11 19h10'/></svg></button></div></div>"
                  "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail
