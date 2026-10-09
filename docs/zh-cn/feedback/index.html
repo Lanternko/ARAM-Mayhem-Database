@@ -1741,6 +1741,92 @@
         white-space: nowrap;
         border: 0;
     }
+    .champion-list-intro { margin: 0 0 20px; }
+    .champion-list-intro h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+    .champion-list-intro p { margin: 0; font-size: 13px; color: var(--text-muted); }
+    .view-home[data-view="champions"] .tier-block,
+    .view-home[data-view="champions"] .cutoffs { display: none; }
+    .champion-table-wrap { overflow-x: auto; margin-top: 20px; }
+    .champion-table-wrap[hidden] { display: none; }
+    .champion-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+    .champion-table th,
+    .champion-table td { padding: 12px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; text-align: right; }
+    .champion-table thead th { padding: 0; font-weight: 500; color: var(--text-muted); border-bottom-color: var(--border-strong); }
+    .champion-table thead button { display: block; width: 100%; min-height: 44px; padding: 12px 18px; background: none; border: 0; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+    .champion-table thead [aria-sort] { color: var(--text); }
+    .champion-table thead button:hover { color: var(--accent-soft); }
+    .champion-table th:first-child,
+    .champion-table th:nth-child(n+5),
+    .champion-table td:nth-child(n+5) { text-align: left; }
+    .champion-table-heading { display: block; padding: 12px 18px; }
+    .champion-table-icons { display: flex; align-items: center; gap: 8px; }
+    .champion-table-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 3px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-muted); cursor: pointer; }
+    .champion-table-icon img { width: 32px; height: 32px; object-fit: contain; border-radius: 3px; }
+    .champion-table-augment { border-radius: 50%; }
+    .champion-table-icon:hover { border-color: var(--border-strong); background: var(--surface-2); }
+    .champion-table th:first-child { width: 20%; }
+    .champion-table tbody th { font-weight: 600; }
+    .champion-table tbody tr:hover > * { background: var(--surface-2); }
+    .champion-table td { color: var(--text-muted); }
+    .champion-table .champion-table-wr { color: var(--text); font-weight: 600; }
+    .champion-table-link { display: flex; align-items: center; gap: 12px; min-height: 40px; color: var(--text); text-decoration: none; }
+    .champion-table-link:hover { color: var(--accent-soft); }
+    .champion-table-avatar { display: block; width: 36px; height: 36px; border-radius: 6px; overflow: hidden; flex: 0 0 auto; }
+    .champion-table-avatar img { width: 125%; height: 125%; margin: -12.5%; max-width: none; object-fit: cover; }
+    .champion-table :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
+    @media (max-width: 700px) {
+        .champion-table th,
+        .champion-table td { padding: 10px 12px; }
+        .champion-table thead th { padding: 0; }
+        .champion-table thead button { padding: 12px; }
+        .champion-table-heading { padding: 12px; }
+        .champion-table tr > :first-child { position: sticky; left: 0; z-index: 1; background: var(--bg); }
+        .champion-table-link { gap: 9px; min-width: 130px; }
+    }
+    .detail-host { grid-column: 1 / -1; min-width: 0; }
+    .tier-block .champ.detail-selected {
+        border-color: var(--accent);
+        background: var(--surface);
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+        box-shadow: none;
+        animation: none;
+    }
+    .detail.detail-inline { background: var(--surface-raised); border: 1px solid var(--border-strong); }
+    /* Inline head = one row: identity left, quiet actions right.  The link is
+       secondary navigation and the close is a compact chevron, so neither
+       competes with the champion name. */
+    .inline-detail-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-left: auto; flex: 0 0 auto; }
+    .detail-inline > .inline-detail-actions { margin-bottom: 10px; }
+    .inline-detail-actions a { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 8px; border-radius: 6px; color: var(--accent-soft); font-size: 13px; text-decoration: none; white-space: nowrap; }
+    .inline-detail-actions a:hover { background: var(--surface-2); }
+    /* Close is a circled-X badge straddling the card's top-right corner, so the
+       full-analysis link can take the real top-right of the header row. */
+    .inline-detail-close { position: absolute; top: -12px; right: -12px; z-index: 2; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 50%; color: var(--text-muted); cursor: pointer; box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
+    .inline-detail-close::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+    .inline-detail-close:hover { background: var(--surface-2); color: var(--text); }
+    .inline-detail-actions :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (pointer: coarse) { .inline-detail-actions a { min-height: 40px; } }
+    @media (pointer: coarse) and (max-width: 600px) { .inline-detail-actions a { width: 40px; } }
+    .detail-inline .detail-head { flex-wrap: wrap; row-gap: 4px; margin-bottom: 4px; }
+    .detail-inline .detail-head .inline-detail-actions { align-self: flex-start; margin-top: -6px; }
+    /* Two rows: name + role, then win rate + sample size. */
+    .inline-champ-id { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+    .inline-champ-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+    .detail-inline .cname { margin: 0; font-size: 18px; line-height: 1.25; }
+    .inline-champ-stats { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+    .inline-champ-stats b { font-weight: 600; color: var(--text); }
+    /* Phone: both actions collapse to icons on the identity row. */
+    @media (max-width: 600px) {
+        .detail-inline .detail-head { flex-wrap: nowrap; align-items: center; }
+        .detail-inline .detail-head .inline-champ-id { flex: 1 1 auto; }
+        .inline-detail-link-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        /* Pin to the top-right corner (name row), not the vertical middle;
+           the negative margins cancel the hit-area padding so glyphs sit on the card edge. */
+        .detail-inline .detail-head .inline-detail-actions { gap: 0; align-self: flex-start; margin: -6px -4px 0 auto; }
+        .inline-detail-actions a { justify-content: center; width: 32px; padding: 0; }
+    }
+    .detail-inline .detail-main-tabs > .detail-tab-rail { position: static; }
     .detail {
         margin: 6px 0 4px;
         background: #1b2030;
@@ -1849,57 +1935,23 @@
         align-items: center;
         gap: 6px;
     }
-    /* Role tag, MSI-style "frame tick": matte dark chip, role-colour corner
-       ticks (top-left, bottom-right) and a thin tapered underline. */
+    /* Roles are metadata: neutral text, without decorative colour or corners. */
     .detail-role-tag {
-        --role-color: #9aa0a6;
-        --role-muted: color-mix(in srgb, var(--role-color) 78%, #2a2c30);
-        position: relative;
         display: inline-flex;
         align-items: center;
-        justify-content: center;
         height: 22px;
-        padding: 0 11px 2px 12px;
-        isolation: isolate;
+        padding: 0;
         font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
+        font-weight: 500;
         line-height: 1;
-        color: #f4f4f2;
-        background: #15171a;
+        color: var(--text-muted);
+        background: none;
         white-space: nowrap;
     }
     .detail-role-tag::before,
     .detail-role-tag::after {
-        content: "";
-        position: absolute;
-        z-index: -1;
-        pointer-events: none;
+        content: none;
     }
-    .detail-role-tag::before {
-        inset: 0;
-        background:
-            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 5px 1px no-repeat,
-            linear-gradient(var(--role-color), var(--role-color)) 0 0 / 1px 5px no-repeat,
-            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 5px 1px no-repeat,
-            linear-gradient(var(--role-color), var(--role-color)) 100% 100% / 1px 5px no-repeat;
-        opacity: 0.85;
-    }
-    .detail-role-tag::after {
-        left: 11px;
-        right: 11px;
-        bottom: 3px;
-        height: 2px;
-        background: var(--role-muted);
-        clip-path: polygon(0 100%, 100% 0, 100% 100%);
-    }
-    .detail-role-tag[data-role="Assassin"] { --role-color: #E0455C; }
-    .detail-role-tag[data-role="Fighter"]  { --role-color: #F07A1A; }
-    .detail-role-tag[data-role="Mage"]     { --role-color: #8F6BFF; }
-    .detail-role-tag[data-role="Marksman"] { --role-color: #2FBF6B; }
-    .detail-role-tag[data-role="Support"]  { --role-color: #EE5FAE; }
-    .detail-role-tag[data-role="Tank"]     { --role-color: #3D86FF; }
     .detail-tab-input {
         position: absolute;
         width: 1px;
@@ -5761,6 +5813,11 @@
         background-size: auto, 220% 220%;
         box-shadow: 0 0 6px rgba(255, 90, 60, 0.28);
     }
+    [data-theme="light"] .tier-block .champ.detail-selected {
+        border-color: var(--accent);
+        background: var(--surface);
+        box-shadow: none;
+    }
     /* Draft pool mirrors home tier frames under light theme. */
     [data-theme="light"] .draft-champ {
         background: var(--surface);
@@ -5936,11 +5993,8 @@
         box-shadow: 0 2px 8px rgba(31, 41, 55, 0.10);
     }
     [data-theme="light"] .detail-role-tag {
-        color: var(--text);
-        background: var(--chip-bg);
-    }
-    [data-theme="light"] .detail-role-tag::after {
-        background: var(--role-color);
+        color: var(--text-muted);
+        background: none;
     }
     [data-theme="light"] .detail-tab-list {
         border-bottom-color: var(--border);
@@ -6264,6 +6318,19 @@
         transform: translateY(0);
     }
     .item-float-tip[hidden] { display: none !important; }
+    .item-float-tip.is-champion-table-tip.is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
+    .is-champion-table-tip .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
+    .is-champion-table-tip .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
+    .is-champion-table-tip .item-tip-name,
+    .is-champion-table-tip .item-tip-part-name,
+    .is-champion-table-tip .item-tip-desc .item-tip-line:first-child,
+    .is-champion-table-tip .item-tip-row > b { color: var(--text); }
+    .is-champion-table-tip .item-tip-desc,
+    .is-champion-table-tip .item-tip-sub,
+    .is-champion-table-tip .item-tip-row > span,
+    .is-champion-table-tip .item-tip-note { color: var(--text-muted); }
+    .is-champion-table-tip .item-tip-gold { color: var(--accent-soft); }
+    .is-champion-table-tip .item-tip-stats { border-color: var(--border); }
     .item-tip-card {
         position: relative;
         padding: 10px 12px 11px;
@@ -9997,7 +10064,7 @@
     .aug-tier-sort.is-active { color: var(--accent); }
     .aug-tier-sort.is-active::after { content: " \25BE"; font-size: 10px; }
     [data-theme="light"] .aug-tier-sort.is-active { color: #8a6400; }
-    .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier; }
+    .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier 3; }
     .aug-tier-row {
         min-height: 56px;
         border-bottom: 1px solid var(--border);
@@ -10602,7 +10669,7 @@
     .feedback-main h1 { font-size: 24px; }
     .feedback-footer { padding-inline: 12px; }
 }
-</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/zh-cn/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分页'><a class='nav-tab' id='tab-home' data-nav-tab='home' data-i18n-zh='英雄' data-i18n-en='Champions' href='/zh-cn/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/zh-cn/augments/'>海克斯</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='Draft' data-i18n-en='Draft' href='/zh-cn/draft/'>Draft</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/zh-cn/game/'>小游戏</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/zh-cn/changes/'>版本变动</a></nav><div class='header-actions'><details class='mode-menu' id='mode-menu'><summary class='mode-select' aria-label='切换游戏模式' data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' data-aria-en='Switch game mode'><span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大乱斗</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m4 6 4 4 4-4'></path></svg></summary><div class='mode-options' role='menu'><a class='mode-option' role='menuitem' href='/zh-cn' aria-current='page' data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大乱斗</a><a class='mode-option' role='menuitem' href='/zh-cn/classic.html' data-mode-target='classic' data-href-zh='/classic.html' data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' data-i18n-en='Classic'>经典模式</a></div></details><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='简体中文' aria-label='Language: 简体中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label'>简体中文</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN' class='is-active' aria-current='true'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>反馈与联系</h1><p class='feedback-intro'>功能建议、问题反馈或站务联系，都可以在这里留言。</p>
+</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/zh-cn/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分页'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/zh-cn/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/zh-cn/augments/'>海克斯</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='Draft' data-i18n-en='Draft' href='/zh-cn/draft/'>Draft</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/zh-cn/game/'>小游戏</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/zh-cn/changes/'>版本变动</a></nav><div class='header-actions'><details class='mode-menu' id='mode-menu'><summary class='mode-select' aria-label='切换游戏模式' data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' data-aria-en='Switch game mode'><span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大乱斗</span><svg viewBox='0 0 16 16' width='12' height='12' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m4 6 4 4 4-4'></path></svg></summary><div class='mode-options' role='menu'><a class='mode-option' role='menuitem' href='/zh-cn' aria-current='page' data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' data-i18n-en='Mayhem'>大乱斗</a><a class='mode-option' role='menuitem' href='/zh-cn/classic.html' data-mode-target='classic' data-href-zh='/classic.html' data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' data-i18n-en='Classic'>经典模式</a></div></details><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='简体中文' aria-label='Language: 简体中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label'>简体中文</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN' class='is-active' aria-current='true'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>反馈与联系</h1><p class='feedback-intro'>功能建议、问题反馈或站务联系，都可以在这里留言。</p>
 <form class="feedback-form" data-feedback-form data-endpoint="https://api.arammeta.com/api/feedback" data-locale="zh-CN">
 <label class="feedback-field"><span class="feedback-label">想告诉我们什么？</span>
 <span class="feedback-help" id="feedback-message-help">只需填写这一栏，至少 5 个字。</span>

@@ -25,6 +25,13 @@
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
   </url>
   <url>
+    <loc>https://arammeta.com/champions/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/champions/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/champions/" />
+  </url>
+  <url>
     <loc>https://arammeta.com/champions/aatrox/</loc>
     <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/champions/aatrox/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/champions/aatrox/" />
@@ -1269,6 +1276,13 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/champions/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/champions/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/champions/" />
   </url>
   <url>
     <loc>https://arammeta.com/en/champions/aatrox/</loc>
@@ -2546,6 +2560,13 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/champions/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/champions/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/champions/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/champions/" />
   </url>
   <url>
     <loc>https://arammeta.com/zh-cn/champions/aatrox/</loc>
