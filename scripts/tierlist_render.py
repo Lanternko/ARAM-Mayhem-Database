@@ -742,10 +742,11 @@ def _site_header_html() -> str:
 
 def _feedback_page_html(*, title: str, description: str, body_html: str,
                         site_url: str, html_lang: str, canonical_path: str,
-                        head_extra_html: str, footer_disclaimer: str) -> str:
+                        head_extra_html: str) -> str:
     """Use the product's header and CSS without loading its statistics runtime."""
     esc = html.escape
     locale = {"zh-Hant": "zh", "zh-Hans": "zh-CN", "en": "en"}[html_lang]
+    font_region = "SC" if html_lang == "zh-Hans" else "TC"
     suffix = {"zh": "zh", "zh-CN": "zh-cn", "en": "en"}[locale]
     prefix = "" if locale == "zh" else "/" + locale.lower()
     header = _site_header_html()
@@ -794,11 +795,11 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
         f"<title>{esc(title)} | arammeta</title><meta name='description' content='{esc(description, quote=True)}'>"
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>{head_extra_html}"
         "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
-        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'>"
+        f"<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+{font_region}:wght@400;500;600;700&amp;display=swap'>"
         "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
         f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
-        f"<main class='site-main feedback-main'><h1>{esc(title)}</h1><p class='feedback-intro'>{esc(description)}</p>"
-        f"{body_html}</main><footer class='feedback-footer'><p>{esc(footer_disclaimer)}</p></footer>"
+        f"<main class='site-main feedback-main'><h1>{esc(title)}</h1>"
+        f"{body_html}</main>"
         f"<script>{page_js}</script></body></html>\n")
 
 
@@ -869,16 +870,15 @@ _FEEDBACK_COPY = {
     "zh": {
         "html_lang": "zh-Hant",
         "prefix": "",
-        "title": "回饋與聯絡",
+        "title": "意見回饋",
         "description": "功能建議、問題回報或站務聯絡，都可以在這裡留言。",
-        "message": "想告訴我們什麼？",
-        "message_help": "只需填寫這一欄，至少 5 個字。",
-        "message_placeholder": "例如：我想比較兩個陣容，但目前看不到足夠的比較依據……",
+        "message": "內容",
+        "message_placeholder": "例如：\n• 新功能提議\n• 界面和操作問題\n• bug回饋",
+        "message_error": "請填寫至少 5 個字的內容。",
         "email": "Email（選填）",
-        "email_help": "若需要回覆，請留下 Email。",
+        "email_help": "若想收到回覆，請留下 Email。",
         "consent": "我同意 arammeta 僅為回覆這份回饋而使用此 Email。",
-        "privacy": "留言將私下轉送至站方 Discord 收件頻道。請勿附上 Riot ID、密碼或其他敏感資料。",
-        "submit": "送出回饋",
+        "submit": "送出",
         "sending": "送出中……",
         "success": "已收到。謝謝你幫忙讓 arammeta 更容易做判斷。",
         "offline": "目前表單尚未連上收件服務，請改用下方 GitHub Issue。",
@@ -893,16 +893,15 @@ _FEEDBACK_COPY = {
     "zh-CN": {
         "html_lang": "zh-Hans",
         "prefix": "/zh-cn",
-        "title": "反馈与联系",
+        "title": "意见反馈",
         "description": "功能建议、问题反馈或站务联系，都可以在这里留言。",
-        "message": "想告诉我们什么？",
-        "message_help": "只需填写这一栏，至少 5 个字。",
-        "message_placeholder": "例如：我想比较两个阵容，但目前看不到足够的比较依据……",
+        "message": "内容",
+        "message_placeholder": "例如：\n• 新功能提议\n• 界面和操作问题\n• bug反馈",
+        "message_error": "请填写至少 5 个字的内容。",
         "email": "Email（选填）",
-        "email_help": "如需回复，请留下 Email。",
+        "email_help": "若想收到回复，请留下 Email。",
         "consent": "我同意 arammeta 仅为回复这份反馈而使用此 Email。",
-        "privacy": "留言将私下转发至站方 Discord 收件频道。请勿附上 Riot ID、密码或其他敏感资料。",
-        "submit": "提交反馈",
+        "submit": "提交",
         "sending": "提交中……",
         "success": "已收到。谢谢你帮助 arammeta 更容易做判断。",
         "offline": "当前表单尚未连接收件服务，请改用下方 GitHub Issue。",
@@ -917,16 +916,15 @@ _FEEDBACK_COPY = {
     "en": {
         "html_lang": "en",
         "prefix": "/en",
-        "title": "Feedback & contact",
+        "title": "Feedback",
         "description": "Share an idea, report a problem, or get in touch.",
-        "message": "Your message",
-        "message_help": "This is the only required field. At least 5 characters.",
-        "message_placeholder": "For example: I want to compare two team comps, but I cannot find enough evidence to compare them…",
+        "message": "Message",
+        "message_placeholder": "For example:\n• Feature suggestions\n• Interface and usability issues\n• Bug reports",
+        "message_error": "Please enter at least 5 characters.",
         "email": "Email (optional)",
         "email_help": "Leave your email only if you would like a reply.",
         "consent": "I agree that arammeta may use this Email only to reply to this feedback.",
-        "privacy": "Your message is forwarded to our private Discord inbox. Please leave out Riot IDs, passwords, and other sensitive information.",
-        "submit": "Send feedback",
+        "submit": "Send",
         "sending": "Sending…",
         "success": "Received. Thanks for helping make arammeta easier to use for decisions.",
         "offline": "This form is not connected to a receiving service yet. Please use the GitHub Issue below.",
@@ -1005,6 +1003,7 @@ def _feedback_body_html(
                 "rate",
                 "server",
                 "consent_error",
+                "message_error",
                 "reference",
             )
         },
@@ -1013,19 +1012,16 @@ def _feedback_body_html(
     return f"""
 <form class="feedback-form" data-feedback-form data-endpoint="{esc(api_endpoint, quote=True)}" data-locale="{esc('zh-CN' if copy['prefix'] == '/zh-cn' else copy['html_lang'], quote=True)}">
 <label class="feedback-field"><span class="feedback-label">{esc(copy['message'])}</span>
-<span class="feedback-help" id="feedback-message-help">{esc(copy['message_help'])}</span>
-<textarea name="message" minlength="5" maxlength="3000" required aria-describedby="feedback-message-help" placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
+<textarea name="message" minlength="5" maxlength="3000" required placeholder="{esc(copy['message_placeholder'], quote=True)}"></textarea></label>
 <label class="feedback-field"><span class="feedback-label">{esc(copy['email'])}</span>
-<input name="contact_email" type="email" maxlength="254" autocomplete="email">
-<span class="feedback-help">{esc(copy['email_help'])}</span>
+<input name="contact_email" type="email" maxlength="254" autocomplete="email" placeholder="{esc(copy['email_help'], quote=True)}">
 </label>
 <label class="feedback-check" data-consent-row hidden><input name="contact_consent" type="checkbox"><span>{esc(copy['consent'])}</span></label>
 <div class="feedback-honeypot" aria-hidden="true"><label>Website<input name="website" tabindex="-1" autocomplete="off"></label></div>
-<p class="feedback-privacy">{esc(copy['privacy'])}</p>
 <div class="feedback-submit-row"><button class="action" type="submit">{esc(copy['submit'])}</button>
 <p class="feedback-status" data-feedback-status role="status" aria-live="polite" tabindex="-1" hidden></p></div>
 </form>
-<p class="feedback-fallback">{esc(copy['fallback'])} <a href="{esc(issues_url, quote=True)}" target="_blank" rel="noopener">{esc(copy['issue'])}</a></p>
+<p class="feedback-fallback" data-feedback-fallback hidden>{esc(copy['fallback'])} <a href="{esc(issues_url, quote=True)}" target="_blank" rel="noopener">{esc(copy['issue'])}</a></p>
 <script>
 (() => {{
   const form = document.querySelector('[data-feedback-form]');
@@ -1034,6 +1030,7 @@ def _feedback_body_html(
   const status = form.querySelector('[data-feedback-status]');
   const submit = form.querySelector('button[type="submit"]');
   const copy = {copy_json};
+  const message = form.elements.namedItem('message');
   const email = form.elements.namedItem('contact_email');
   const consent = form.elements.namedItem('contact_consent');
   const getText = (name) => {{
@@ -1044,6 +1041,7 @@ def _feedback_body_html(
     status.textContent = message;
     status.className = `feedback-status is-${{kind}}`;
     status.hidden = false;
+    document.querySelector('[data-feedback-fallback]').hidden = kind !== 'error';
     status.focus?.();
   }};
   const syncContext = () => {{
@@ -1063,13 +1061,19 @@ def _feedback_body_html(
     form.querySelector('[data-consent-row]').hidden = !email.value.trim();
     if (email && consent) consent.setCustomValidity(email.value.trim() && !consent.checked ? copy.consent_error : '');
   }};
+  const syncMessageValidity = () => {{
+    message.setCustomValidity(Array.from(message.value.trim()).length < 5 ? copy.message_error : '');
+  }};
+  message.addEventListener('input', syncMessageValidity);
   email?.addEventListener('input', syncConsentValidity);
   consent?.addEventListener('change', syncConsentValidity);
   syncContext();
+  syncMessageValidity();
   window.addEventListener('resize', syncContext, {{ passive: true }});
   form.addEventListener('submit', async (event) => {{
     event.preventDefault();
     if (submit.disabled) return;
+    syncMessageValidity();
     syncConsentValidity();
     if (!form.reportValidity()) return;
     if (!endpoint) {{ setStatus(copy.offline, 'error'); return; }}
@@ -1098,6 +1102,7 @@ def _feedback_body_html(
       if (body.ok !== true) throw new Error(copy.server);
       const reference = body.reference ? ` ${{copy.reference}}: ${{body.reference}}` : '';
       form.reset();
+      syncMessageValidity();
       syncConsentValidity();
       syncContext();
       form.classList.add('is-submitted');
@@ -1223,11 +1228,6 @@ def write_site_info_pages(
     feedback_endpoint = (
         f"{feedback_api_base.rstrip('/')}/api/feedback" if feedback_api_base else ""
     )
-    feedback_footer_disclaimers = {
-        "zh": "arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。",
-        "zh-CN": "arammeta 未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 及其相关资产是 Riot Games, Inc. 的商标或注册商标。",
-        "en": "arammeta is not endorsed by Riot Games and does not reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc.",
-    }
     for locale, copy in _FEEDBACK_COPY.items():
         prefix = str(copy["prefix"]).strip("/")
         relative_dir = Path(prefix) if prefix else Path()
@@ -1248,7 +1248,6 @@ def write_site_info_pages(
                 html_lang=copy["html_lang"],
                 canonical_path=canonical_path,
                 head_extra_html=_feedback_head_links(site_url=site_url),
-                footer_disclaimer=feedback_footer_disclaimers[locale],
             ),
             encoding="utf-8",
         )
@@ -3605,8 +3604,8 @@ def render_html(
             f"<link rel='preload' href='{html.escape(preload_href, quote=True)}' "
             "as='fetch' crossorigin='anonymous'>"
         )
-    # Webfonts: Outfit = Latin brand wordmark only; Noto Sans TC = UI body;
-    # Noto Serif TC = a few footnote captions (subtitle / panel meta / aug lift).
+    # Webfonts: Outfit = Latin wordmark; regional Noto Sans = UI body;
+    # regional Noto Serif = footnote captions. Only used faces fetch glyphs.
     # `display=swap` lets system fallback paint immediately.  The stylesheet is
     # loaded async (preload → flip to stylesheet onload): a render-blocking
     # cross-origin CSS fetch held first paint hostage to fonts.googleapis.com
@@ -3615,7 +3614,9 @@ def render_html(
         "https://fonts.googleapis.com/css2"
         "?family=Outfit:wght@500;600;700"
         "&family=Noto+Sans+TC:wght@400;500;600;700"
+        "&family=Noto+Sans+SC:wght@400;500;600;700"
         "&family=Noto+Serif+TC:wght@400;500"
+        "&family=Noto+Serif+SC:wght@400;500"
         "&display=swap"
     )
     parts.append(
