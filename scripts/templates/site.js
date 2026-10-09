@@ -10737,8 +10737,8 @@
         if (wrap.hidden) return;
         const columns = [
             ['name', pickLang('英雄', 'Champion')],
-            ['pick', pickLang('出場率', 'Pick rate')],
             ['rawWr', pickLang('勝率', 'Win rate')],
+            ['pick', pickLang('出場率', 'Pick rate')],
             ['g', pickLang('場數', 'Games')],
             ['cores', pickLang('推薦核心裝', 'Core build')],
             ['augments', pickLang('推薦增幅', 'Recommended augments')],
@@ -10756,6 +10756,8 @@
             const info = DATA.champs[cid];
             return {
                 cid, info, name: champName(info, cid),
+                tier: card.getAttribute('data-tier') || '',
+                tierColor: card.closest('.tier-block').style.getPropertyValue('--tier-color'),
                 pick: totalMatches ? Number(info.g || 0) / totalMatches : null,
                 wr: Number(info.wr), rawWr: Number(info.rawWr), g: Number(info.g || 0),
             };
@@ -10775,7 +10777,7 @@
             return ids.map(id => {
                 const item = { id }, name = itemDisplayName(item), icon = itemIconUrl(item);
                 const tip = buildItemTipHtml({ name, items: [item] });
-                return `<button type="button" class="champion-table-icon has-item-tip" aria-label="${escHtml(name)}">${icon ? itemIconHtml(item, 'champion-table-item-icon') : escHtml(name)}${itemTipSource(tip)}</button>`;
+                return `<button type="button" class="champion-table-icon champion-table-item has-item-tip" aria-label="${escHtml(name)}">${icon ? itemIconHtml(item, 'champion-table-item-icon') : escHtml(name)}${itemTipSource(tip)}</button>`;
             }).join('') || '<span aria-label="'+escHtml(tr().insufficient)+'">—</span>';
         };
         const augmentIcons = row => {
@@ -10789,7 +10791,7 @@
         };
         document.getElementById('champion-table-body').innerHTML = rows.map(row => {
             const slug = champSlugForCid(row.cid);
-            return `<tr data-champion-row="${escHtml(row.cid)}"><th scope="row"><a class="champion-table-link" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">${row.info.image ? `<span class="champion-table-avatar"><img src="${escHtml(row.info.image)}" alt="" loading="lazy"></span>` : ''}<span>${escHtml(row.name)}</span></a></th><td>${rate(row.pick)}</td><td class="champion-table-wr">${rate(row.rawWr)}</td><td>${fmtInt(row.g)}</td><td><div class="champion-table-icons">${coreIcons(row)}</div></td><td><div class="champion-table-icons">${augmentIcons(row)}</div></td></tr>`;
+            return `<tr data-champion-row="${escHtml(row.cid)}" data-tier="${escHtml(row.tier)}" style="--tier-color:${escHtml(row.tierColor)}"><th scope="row"><a class="champion-table-link" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">${row.info.image ? `<span class="champion-table-avatar" title="${escHtml(row.tier)}"><img src="${escHtml(row.info.image)}" alt="" loading="lazy"></span>` : ''}<span>${escHtml(row.name)}<span class="sr-only"> · ${escHtml(row.tier)}</span></span></a></th><td class="champion-table-wr">${rate(row.rawWr)}</td><td>${rate(row.pick)}</td><td>${fmtInt(row.g)}</td><td><div class="champion-table-icons">${coreIcons(row)}</div></td><td><div class="champion-table-icons">${augmentIcons(row)}</div></td></tr>`;
         }).join('');
     }
 

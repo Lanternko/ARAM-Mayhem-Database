@@ -262,7 +262,7 @@ Panel 使用 8px、12px、16px 三級圓角。8px 屬於 button、input、tile �
 
 遊戲模式使用 header 右側的次級下拉選單，顯示目前模式並提供 Mayhem／Classic 切換，不計入第六個主要分頁。切換器與 theme、language 同層級：透明底、中性文字、hairline 邊框與 8px 圓角，hover／展開才提高對比；金色只保留給選單內目前模式的小標記及鍵盤 focus，不作常態黃底。Home、About、Privacy、Contact 不加入產品 tab。尚未發布的 Articles / 專欄不計入頁數，也不能預留空白 tab。
 
-Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、出裝與增幅池，收合後保留搜尋、篩選與捲動位置。選取金框貼齊頭像原框，角色標籤使用中性文字。展開區提供「查看完整英雄分析」入口。Champions（`/champions/`）使用可排序的英雄表格，欄位為英雄、出場率、勝率（實際對局未校正值）、場數、兩件推薦核心裝與兩個推薦增幅圖示，預設按出場率排序；搜尋和角色篩選與首頁一致。核心裝沿用詳細頁第一組核心，增幅沿用既有推薦分數，圖示支援 hover、鍵盤與點擊說明。核心裝 ID 以精簡 shell 設定帶入，不額外下載所有英雄 detail shards。點頭像或名稱進入獨立詳細頁（`/champions/<slug>/`），提供完整概覽、出裝、增幅、增幅池與能力分析。首頁不選取產品 tab，表格與詳細頁選取 Champions；三語路由、桌面與手機使用相同規則。英雄增幅前三名只顯示在大卡片區，下方清單從第四名開始，切換排序亦不重複前三名。
+Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、出裝與增幅池，收合後保留搜尋、篩選與捲動位置。選取金框貼齊頭像原框，角色標籤使用中性文字。展開區提供「查看完整英雄分析」入口。Champions（`/champions/`）使用可排序的英雄表格，欄位為英雄、勝率（實際對局未校正值）、出場率、場數、兩件推薦核心裝與兩個推薦增幅圖示，預設按出場率排序；搜尋和角色篩選與首頁一致。核心裝沿用詳細頁第一組核心，增幅沿用既有推薦分數，圖示支援 hover、鍵盤與點擊說明。核心裝 ID 以精簡 shell 設定帶入，不額外下載所有英雄 detail shards。點頭像或名稱進入獨立詳細頁（`/champions/<slug>/`），提供完整概覽、出裝、增幅、增幅池與能力分析。首頁不選取產品 tab，表格與詳細頁選取 Champions；三語路由、桌面與手機使用相同規則。英雄增幅前三名只顯示在大卡片區，下方清單從第四名開始，切換排序亦不重複前三名。
 
 Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。增幅內含 增幅榜（`/augments/`）與 增幅池（`/augments/pools/`）。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
 
@@ -315,10 +315,10 @@ Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金�
 ### Tier tiles and data rows
 
 - **Tier group:** 依 OP 到 T5 固定排序，每組同時顯示 tier label、顏色與門檻或描述。
-- **Champion tile:** 圖像是主要辨識物，tier color 只作 2px frame 或小型 pill；名稱與勝率分開對齊。
+- **Champion tile:** 圖像是主要辨識物，tier color 只作 2px frame 或小型 pill；名稱與勝率分開對齊。條列頭像沿用 renderer 的 tier 與 2px 外框，核心裝圖示無外框、維持 40px 點擊範圍。
 - **Selected tile:** 以 accent outline、brightness 與 detail state 共同表示，不以放大動畫移動 grid。
 - **Data row:** 主要數值靠同一軸對齊，lift、games、patch 與不確定性按「答案、證據、可信度」排列。
-- **OP treatment:** 稜彩只能出現在 OP frame 或 tier label，reduced motion 下保持靜態。
+- **OP treatment:** 稜彩只能出現在 OP frame 或 tier label，reduced motion 下保持靜態。外框使用共用 `--tier-op-frame` token，深色為淺稜彩、淺色為深紫／藍／玫紅，避免白邊融入淺色底。
 
 ### Implementation boundary and packages
 

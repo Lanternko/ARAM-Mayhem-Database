@@ -37,6 +37,9 @@
         --panel-quiet: oklch(0.175 0.01 255);
         /* Augment artwork needs a dark backing in either theme. */
         --augment-icon-surface: #0b0e13;
+        --tier-op-frame: linear-gradient(135deg,
+            #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
+            #ffd5ec 58%, #fff1c8 78%, #ffffff 100%);
         --panel-line: color-mix(in oklab, var(--text) 11%, transparent);
         --panel-shadow: 0 14px 36px rgba(0, 0, 0, 0.22);
         --wr-positive: oklch(0.78 0.055 155);
@@ -92,6 +95,9 @@
         --panel-quiet: oklch(0.95 0.008 250);
         --panel-line: color-mix(in oklab, var(--text) 14%, transparent);
         --panel-shadow: 0 10px 32px rgba(31, 41, 55, 0.10);
+        --tier-op-frame: linear-gradient(135deg,
+            oklch(0.52 0.18 295) 0%, oklch(0.58 0.16 260) 36%,
+            oklch(0.55 0.17 335) 68%, oklch(0.52 0.18 295) 100%);
         --wr-positive: oklch(0.53 0.09 155);
         --wr-negative: oklch(0.56 0.09 18);
         --wr-neutral: var(--text-muted);
@@ -1530,9 +1536,7 @@
         border-color: transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
-            linear-gradient(135deg,
-                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
-                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+            var(--tier-op-frame) border-box;
         background-size: auto, 220% 220%;
         animation: prismShift 6s ease-in-out infinite;
         box-shadow: 0 0 8px rgba(220,180,255,0.45);
@@ -1775,6 +1779,8 @@
     .champion-table-icon img { width: 32px; height: 32px; object-fit: contain; border-radius: 3px; }
     .champion-table-augment { border-radius: 50%; }
     .champion-table-icon:hover { border-color: var(--border-strong); background: var(--surface-2); }
+    .champion-table-item,
+    .champion-table-item:hover { padding: 4px; border: 0; background: transparent; }
     .champion-table th:first-child { width: 20%; }
     .champion-table tbody th { font-weight: 600; }
     .champion-table tbody tr:hover > * { background: var(--surface-2); }
@@ -1782,7 +1788,12 @@
     .champion-table .champion-table-wr { color: var(--text); font-weight: 600; }
     .champion-table-link { display: flex; align-items: center; gap: 12px; min-height: 40px; color: var(--text); text-decoration: none; }
     .champion-table-link:hover { color: var(--accent-soft); }
-    .champion-table-avatar { display: block; width: 36px; height: 36px; border-radius: 6px; overflow: hidden; flex: 0 0 auto; }
+    .champion-table-avatar { display: block; width: 36px; height: 36px; border: 2px solid var(--tier-color); border-radius: 6px; overflow: hidden; flex: 0 0 auto; }
+    .champion-table [data-tier="OP"] .champion-table-avatar {
+        border-color: transparent;
+        background: linear-gradient(var(--surface), var(--surface)) padding-box,
+            var(--tier-op-frame) border-box;
+    }
     .champion-table-avatar img { width: 125%; height: 125%; margin: -12.5%; max-width: none; object-fit: cover; }
     .champion-table :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
     @media (max-width: 700px) {
@@ -5119,9 +5130,7 @@
         border-color: transparent;
         background:
             linear-gradient(#1f2530, #1f2530) padding-box,
-            linear-gradient(135deg,
-                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
-                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+            var(--tier-op-frame) border-box;
         background-size: auto, 220% 220%;
         animation: prismShift 6s ease-in-out infinite;
         box-shadow: 0 0 8px rgba(220,180,255,0.45);
@@ -5809,9 +5818,7 @@
     [data-theme="light"] .tier-block[data-tier="OP"] .champ {
         background:
             linear-gradient(#ffffff, #ffffff) padding-box,
-            linear-gradient(135deg,
-                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
-                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+            var(--tier-op-frame) border-box;
         background-size: auto, 220% 220%;
         box-shadow: 0 0 8px rgba(180, 140, 230, 0.35);
     }
@@ -5838,9 +5845,7 @@
     [data-theme="light"] .draft-champ[data-tier="OP"] {
         background:
             linear-gradient(#ffffff, #ffffff) padding-box,
-            linear-gradient(135deg,
-                #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
-                #ffd5ec 58%, #fff1c8 78%, #ffffff 100%) border-box;
+            var(--tier-op-frame) border-box;
         background-size: auto, 220% 220%;
         box-shadow: 0 0 8px rgba(180, 140, 230, 0.35);
     }
