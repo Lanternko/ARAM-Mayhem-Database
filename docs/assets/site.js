@@ -3414,15 +3414,53 @@ const feedbackFab = document.querySelector('.feedback-fab');
             || left.name.localeCompare(right.name)
             || Number(a.id) - Number(b.id);
     }
-    function championPoolAugHtml(entry, cid, statsById) {
+    // Effective draw multiplier per pool weight, measured from 13,893 King Me
+    // prismatic grants in 16.19 (silver/gold cannot be measured; assumed equal).
+    const APOOL_GRANT_RATIO = {75: 0.8, 100: 1, 150: 1.32, 175: 1.58, 200: 1.76};
+    function apoolGrantRatio(weight) { return APOOL_GRANT_RATIO[weight] ?? (weight / 100) ** 0.8; }
+    // Chance each augment is among the 3 cards of one offer of its rarity,
+    // drawn by effective weight without replacement; rerolls are not counted.
+    function championPoolOfferRates(entries, data) {
+        const dead = new Set((((data || {}).observed || {}).dead || []).map(x => String(x.id)));
+        const byRarity = new Map();
+        for (const entry of entries) {
+            if (dead.has(String(entry.id))) continue;
+            const rarity = apoolAug(entry.id).rarity;
+            if (!byRarity.has(rarity)) byRarity.set(rarity, []);
+            byRarity.get(rarity).push(entry);
+        }
+        const rates = new Map();
+        for (const list of byRarity.values()) {
+            const v = list.map(e => apoolGrantRatio(e.weight));
+            const n = v.length, total = v.reduce((a, b) => a + b, 0);
+            if (n <= 3) { list.forEach(e => rates.set(e.id, 1)); continue; }
+            // Second and third draws: accumulate the shared factor, then
+            // subtract the cards already drawn.
+            let second = 0, third = 0;
+            const own2 = new Array(n).fill(0), own3 = new Array(n).fill(0);
+            for (let b = 0; b < n; b++) {
+                const pb = v[b] / total, rest = total - v[b];
+                second += pb / rest; own2[b] += pb / rest;
+                for (let c = 0; c < n; c++) {
+                    if (c === b) continue;
+                    const pbc = pb * v[c] / rest / (rest - v[c]);
+                    third += pbc; own3[b] += pbc; own3[c] += pbc;
+                }
+            }
+            list.forEach((e, a) => rates.set(e.id, Math.min(1, v[a] / total + v[a] * (second - own2[a]) + v[a] * (third - own3[a]))));
+        }
+        return rates;
+    }
+    function championPoolAugHtml(entry, cid, statsById, offerRates) {
         const aug = apoolAug(entry.id);
         const stats = statsById.get(String(entry.id));
         const info = (DATA.champs || {})[cid] || {};
         const context = [champName(info, cid), DATA.patch_prefix, stats ? pickLang(`${fmtInt(stats.g)} 場`, `${fmtInt(stats.g)} games`) : pickLang('尚無統計', 'No stats available')].filter(Boolean).join(' · ');
         const statHtml = `<div class="champ-pool-tip-stats"><div class="champ-pool-tip-context">${escHtml(context)}</div><dl>`
-            + [[pickLang('勝率', 'Win rate'), stats && stats.wr], [pickLang('選取率', 'Pick rate'), stats && stats.pick]]
+            + [[pickLang('勝率', 'Win rate'), stats && stats.wr], [pickLang('選取率', 'Pick rate'), stats && stats.pick],
+                [pickLang('預估出現率', 'Est. offer rate'), offerRates && offerRates.get(entry.id)]]
                 .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
-            + '</dl></div>';
+            + '</dl><p class="champ-pool-tip-note">' + escHtml(pickLang('預估出現率：同稀有度回合的 3 張選項中出現的機率，不含重抽', 'Est. offer rate: chance to appear among the 3 cards of a same-rarity offer, before rerolls')) + '</p></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
         const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
@@ -3439,10 +3477,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
     const championPoolRarity = new Map();
     const championPoolPurpose = new Map();
     function championPoolFrequencyHtml() {
-        // Simplified descriptive ratios from 21,462 grants in 16.18 / 16.19.
-        // Rounded display values are not the exact fitted estimates. Their
-        // game-cluster 95% intervals fit inside a conservative ±10% envelope.
-        const observations = [[75, 0.67], [100, 1], [150, 1.33], [175, 1.67], [200, 2]];
+        // Conditional-logit fit on 13,893 King Me prismatic grants in 16.19;
+        // each 95% interval is within about ±9% of its estimate.
+        const observations = Object.entries(APOOL_GRANT_RATIO).map(([w, r]) => [Number(w), r]);
         const relative = (weight, ratio) => pickLang(`${weight === 100 ? '' : '約 '}${ratio} 倍`, `${weight === 100 ? '' : '≈ '}${ratio}×`);
         const description = observations.map(([weight, ratio]) => `${weight}: ${relative(weight, ratio)}`).join('; ');
         return `<details class="champ-pools-help champ-pools-frequency"><summary>${escHtml(pickLang('權重的發放比例', 'Weight and grant frequency'))}</summary>`
@@ -3452,7 +3489,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `<div class="champ-pool-frequency-bars">${observations.map(([weight, ratio]) => `<span><i${weight === 100 ? ' class="is-baseline"' : ''} style="width:${ratio / 2 * 100}%"></i></span>`).join('')}</div>`
             + `<div class="champ-pool-frequency-values">${observations.map(([weight, ratio]) => `<span>${escHtml(relative(weight, ratio))}</span>`).join('')}</div></div>`
             + `<div class="champ-pool-frequency-axis" aria-hidden="true"><span>0</span><span>${escHtml(pickLang('1 倍', '1×'))}</span><span>${escHtml(pickLang('2 倍', '2×'))}</span></div>`
-            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('21,462 次樣本・約 ±10% 抽樣誤差', '21,462 samples · Approx. ±10% sampling uncertainty'))}</p></div></details>`;
+            + `<p class="champ-pool-frequency-note">${escHtml(pickLang('16.19 封我為王 13,893 次稜彩發放・95% 區間約 ±9%・銀金無法測量', '13,893 King Me prismatic grants in 16.19 · 95% interval ≈ ±9% · silver/gold not measurable'))}</p></div></details>`;
     }
     function championPoolsHtml(cid, rarity = '', purpose = '') {
         const d = augPools.data;
@@ -3465,6 +3502,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const statsById = new Map([
             ...Object.values(info.bot || {}).flat(), ...Object.values(info.top || {}).flat(), ...(info.poolAugments || []),
         ].map(row => [String(row.id), row]));
+        const offerRates = championPoolOfferRates(entries, d);
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
             .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const purposeFilters = [{id: '', zh: '全部', en: 'All'}, ...AUGMENT_TAXONOMY.groups.filter(group => entries.some(e => e.category === group.id))]
@@ -3476,7 +3514,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
                 + weights.map(weight => {
                     const list = members.filter(e => e.weight === weight).sort((a, b) => championPoolSort(a, b, statsById));
-                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById)).join('')}</ul></div>`;
+                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById, offerRates)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         const complexity = championPoolComplexity(cid, d, DATA.augs || {});
@@ -3826,9 +3864,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + strong(pickLang('推定名稱', 'Inferred name')) + text('＝依內容推測；', ' = inferred from contents; ')
             + strong(pickLang('公告名稱', 'Patch-note name')) + text('＝來自更新公告。', ' = from patch notes.')]);
         if (champion) notes.push([pickLang('倍率限制', 'Ratio limits'),
-            text('16.18–16.19 隨機發放的約數，', 'Approximate random-grant ratios for 16.18–16.19; ')
-            + strong(pickLang('不代表三選一出現率', 'not three-choice offer rates'))
-            + text('。±10% 為 95% 抽樣範圍，不含版本與稀有度差異。', '. ±10% is a 95% sampling range, excluding patch and rarity differences.')]);
+            text('倍率來自 16.19 封我為王的稜彩發放，銀金沿用同一倍率；', 'Ratios come from 16.19 King Me prismatic grants and are reused for silver and gold; ')
+            + strong(pickLang('預估出現率', 'estimated offer rates'))
+            + text('由倍率換算 3 張選項的機率，重抽會讓實際看到的次數約多一倍。', ' convert them into 3-card odds; rerolls roughly double how often you actually see a card.')]);
         return `<dl class="apool-section apool-notes">`
             + notes.map(([label, body]) => `<div><dt>${escHtml(label)}</dt><dd>${body}</dd></div>`).join('')
             + `</dl>`;

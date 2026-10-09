@@ -9577,8 +9577,9 @@
 .champ-pool-tip .item-tip-sub { color: var(--text-muted); font-size: 11px; }
 .champ-pool-tip-stats { margin: 12px 0; padding: 12px 0; border-top: 1px solid var(--panel-line); border-bottom: 1px solid var(--panel-line); }
 .champ-pool-tip-context { color: var(--text-muted); font-size: 11px; margin-bottom: 8px; }
-.champ-pool-tip-stats dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.champ-pool-tip-stats dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 0; }
 .champ-pool-tip-stats dt { color: var(--text-muted); font-size: 11px; margin-bottom: 2px; }
+.champ-pool-tip-note { margin: 8px 0 0; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
 .champ-pool-tip-stats dd { margin: 0; color: var(--text); font-size: 22px; line-height: 1.25; font-weight: 700; font-variant-numeric: tabular-nums; }
 .champ-pool-tip .item-tip-desc, .champ-pool-tip .item-tip-desc .item-tip-line { color: color-mix(in srgb, var(--text) 72%, var(--text-muted)); font-size: 12px; line-height: 1.6; }
 .champ-pool-tip-sources { padding: 12px 0 0; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--panel-line); }
