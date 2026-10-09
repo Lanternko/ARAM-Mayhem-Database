@@ -2238,7 +2238,7 @@ def write_spa_path_shells(
         # English locale prefix mirrors (shareable /en… links).
         (
             root / "en" / "index.html", "/en",
-            "ARAM Meta",
+            "arammeta",
             f"Reliable win-rate stats from {en_evidence}. "
             "Compare champion and augment tiers, item win rates and augment pick rates.",
             "en",
@@ -2281,7 +2281,7 @@ def write_spa_path_shells(
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
         (
             root / "zh-cn" / "index.html", "/zh-cn",
-            "ARAM Meta",
+            "arammeta",
             f"基于 {cn_evidence}，查询英雄与海克斯强度排行、装备胜率及海克斯出现频率，完整胜率数据一站掌握。",
             "zh-Hans",
         ),
@@ -3457,7 +3457,7 @@ def render_html(
         )
 
     # Keep the Home tab and share title short; descriptions carry the detail.
-    page_title = "ARAM Meta"
+    page_title = "arammeta"
     seo_desc = (
         f"基於 {total_games:,} 場台服實戰對局，"
         "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
