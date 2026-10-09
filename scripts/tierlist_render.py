@@ -627,14 +627,14 @@ def _site_header_html() -> str:
         "</svg>"
     )
     # Fixed top header: brand (= home) + primary tabs + theme + language.
-    # 「英雄」 is the home tier-list tab; brand also returns home.
+    # Brand returns to inline lookup; Champions opens the dedicated list.
     # Patch lives in the footer freshness line — not next to the wordmark.
     # On narrow screens (<=700px) the header wraps: brand + actions on top,
     # .nav-tabs as a full-bleed scrollable strip underneath.
     # (key, zh-TW, en, optional zh-CN override). Bare 增幅 is a product term
     # that does not t2s-convert — CN / aramkit call it 海克斯.
     NAV_TABS = (
-        ("home", "英雄", "Champions", None),
+        ("champions", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
         ("draft", "Draft", "Draft", None),
         ("game", "小遊戲", "Game", "小游戏"),
@@ -674,16 +674,16 @@ def _site_header_html() -> str:
     )
     parts.append("<nav class='nav-tabs' role='tablist' aria-label='主要分頁'>")
     for i, (nav_key, nav_zh, nav_en, nav_zh_cn) in enumerate(NAV_TABS):
-        # Home (= 英雄) is active on first paint; brand and this tab both land there.
-        is_home = nav_key == "home"
+        # Home is reached through the brand, so no product tab starts selected.
+        panel_key = "home" if nav_key == "champions" else nav_key
         zh_cn_attr = (
             f" data-i18n-zh-cn='{html.escape(nav_zh_cn)}'" if nav_zh_cn else ""
         )
         parts.append(
-            f"<button class='nav-tab{' active' if is_home else ''}' id='tab-{nav_key}' "
-            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{nav_key}' "
-            f"aria-selected='{'true' if is_home else 'false'}' "
-            f"tabindex='{'0' if is_home else '-1'}' "
+            f"<button class='nav-tab' id='tab-{nav_key}' "
+            f"data-nav-tab='{nav_key}' role='tab' aria-controls='view-{panel_key}' "
+            "aria-selected='false' "
+            f"tabindex='{'0' if i == 0 else '-1'}' "
             f"data-i18n-zh='{nav_zh}'{zh_cn_attr} data-i18n-en='{html.escape(nav_en)}'>{nav_zh}</button>"
         )
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
@@ -1271,6 +1271,9 @@ def write_site_info_pages(
 # High-traffic History routes get a full copy of index.html (no bounce).
 # Retired /column routes are deliberately not emitted into the public site.
 SPA_FULL_SHELL_PATHS = frozenset({
+    "/champions",
+    "/en/champions",
+    "/zh-cn/champions",
     "/augments",
     "/augments/pools",
     "/draft",
@@ -1768,6 +1771,26 @@ def slim_site_payload(payload: dict) -> dict:
                     if row.get("peerScope") == "global":
                         row.pop("peerScope", None)
     return {"before_rows": before_rows, "after_rows": after_rows, "champs": len(champs)}
+
+
+def champion_table_core_items(payload: dict, detail_dir: Path | None = None) -> dict[str, list[int]]:
+    """Read two core IDs for the shell without changing the public data snapshot."""
+    result = {}
+    for cid, info in (payload.get("champs") or {}).items():
+        detail = info
+        if "itemClusters" not in detail and detail_dir is not None and str(cid).isdigit():
+            path = detail_dir / f"{cid}.json"
+            if path.exists():
+                detail = json.loads(path.read_text(encoding="utf-8"))
+        groups = (detail.get("itemClusters") or {}).get("groups") or []
+        cores = groups[0].get("core", []) if groups else []
+        if not cores:
+            pairs = (detail.get("items") or {}).get("top") or []
+            cores = pairs[0].get("items", []) if pairs else []
+        ids = [int(item["id"]) for item in cores[:2] if item.get("id")]
+        if ids:
+            result[str(cid)] = ids
+    return result
 
 
 def split_champion_detail_payloads(payload: dict) -> dict[str, dict]:
@@ -2321,6 +2344,14 @@ def write_spa_path_shells(
             "zh-Hans",
         ),
     ]
+    for prefix, language, label, description in (
+        ("", "zh-Hant", "英雄", "英雄列表、勝率與完整英雄分析"),
+        ("en", "en", "Champions", "Champion rankings, win rates and detailed analysis"),
+        ("zh-cn", "zh-Hans", "英雄", "英雄列表、胜率与完整英雄分析"),
+    ):
+        route_specs.append((root / prefix / "champions" / "index.html",
+                            f"/{prefix + '/' if prefix else ''}champions",
+                            f"{label} · arammeta", description, language))
     # Champion pages keep their URL and snapshot text, while loading one shared
     # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
@@ -2701,6 +2732,7 @@ def render_html(
     cloudflare_analytics_token: str = "",
     ga_measurement_id: str = "",
     shell_payload: dict | None = None,
+    table_core_items: dict[str, list[int]] | None = None,
     payload_out_path: Path | None = None,
     payload_url: str = "",
     icon_assets_dir: Path | None = None,
@@ -3436,6 +3468,8 @@ def render_html(
         )
         payload_url = versioned_payload_url(payload_url, payload_version)
 
+    if table_core_items is None:
+        table_core_items = champion_table_core_items(payload)
     shard_stats = {"champs": 0, "bytes": 0}
     if payload_out_path is not None and payload_url:
         shard_stats = write_champion_detail_shards(
@@ -3638,11 +3672,13 @@ def render_html(
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
         "<section class='view view-home is-active' id='view-home' "
-        "data-view='home' role='tabpanel' aria-labelledby='tab-home' "
-        "aria-label='英雄'>"
+        "data-view='home' role='region' aria-label='英雄快速查詢'>"
     )
     parts.append("<div class='app-shell'>")
     parts.append("<div class='main-col'>")
+    parts.append("<div class='champion-list-intro' data-nosnippet>"
+                 "<h1 id='champion-list-title'>英雄快速查詢</h1>"
+                 "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail
     # scroll.  CSS pulls the rail up into the same visual row as the chips.
@@ -3856,6 +3892,10 @@ def render_html(
         parts.append("</div>")  # /tier-grid
         parts.append("</div>")  # /tier-block
 
+    parts.append("<div class='champion-table-wrap' id='champion-table-wrap' hidden>"
+                 "<table class='champion-table' aria-labelledby='champion-list-title'>"
+                 "<thead id='champion-table-head'></thead>"
+                 "<tbody id='champion-table-body'></tbody></table></div>")
     # Empty state — toggled by JS when all tiers are filtered out.
     parts.append(
         "<div class='empty-state' id='empty-state'>"
@@ -3951,7 +3991,7 @@ def render_html(
     # (type anywhere to jump), recent champions, then the shared detail tabs.
     parts.append(
         "<section class='view view-champ' id='view-champ' data-view='champ' "
-        "role='tabpanel' aria-labelledby='tab-home'>"
+        "role='tabpanel' aria-labelledby='tab-champions'>"
         "<div class='champ-page'>"
         "<div class='champ-page-bar' data-nosnippet>"
         "<div class='champ-page-search'>"
@@ -4174,6 +4214,7 @@ def render_html(
         "buildDate": build_date,
         "patchLabel": patch_label,
         "totalGames": f"{total_games:,}",
+        "championCores": table_core_items,
     }
     build_config_script = (
         "<script>window.__ARAM_BUILD__="
@@ -4373,6 +4414,7 @@ def _run_shell_only(
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
         shell_payload=payload,
+        table_core_items=champion_table_core_items(payload, payload_path.parent / "champions"),
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,

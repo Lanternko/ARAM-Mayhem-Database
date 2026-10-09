@@ -147,6 +147,15 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertFalse((root / "column").exists())
             self.assertFalse((root / "en" / "column").exists())
             self.assertFalse((root / "zh-cn" / "column").exists())
+            for prefix, language in (("", "zh-Hant"), ("en", "en"), ("zh-cn", "zh-Hans")):
+                listing = root / prefix / "champions" / "index.html"
+                body = listing.read_text(encoding="utf-8")
+                url_path = f"/{prefix + '/' if prefix else ''}champions/"
+                self.assertIn(listing, written)
+                self.assertIn("FULL_SPA_SHELL", body)
+                self.assertIn(f"lang='{language}'", body)
+                self.assertIn(f"rel='canonical' href='https://arammeta.com{url_path}'", body)
+                self.assertNotIn("location.replace", body)
             body_404 = (root / "404.html").read_text(encoding="utf-8")
             self.assertIn("name='robots' content='noindex'", body_404)
             self.assertIn("aram-spa-path", body_404)

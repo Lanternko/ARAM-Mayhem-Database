@@ -12,6 +12,24 @@ import tierlist_render as render
 
 
 class ShellPayloadPreservationTests(unittest.TestCase):
+    def test_table_core_summary_reuses_primary_build_without_mutating_snapshot(self):
+        payload = {"champs": {
+            "1": {"itemClusters": {"groups": [{"core": [{"id": 3161}, {"id": 3042}, {"id": 6333}]}]}},
+            "2": {"items": {"top": [{"items": [{"id": 3074}, {"id": 2517}]}]}},
+            "3": {}, "4": {},
+        }}
+        before = json.dumps(payload)
+        with tempfile.TemporaryDirectory() as tmp:
+            detail_dir = Path(tmp)
+            shard = detail_dir / "3.json"
+            shard.write_text('{"itemClusters":{"groups":[{"core":[{"id":3089},{"id":3137}]}]}}')
+            shard_before = shard.read_bytes()
+            self.assertEqual(render.champion_table_core_items(payload, detail_dir), {
+                "1": [3161, 3042], "2": [3074, 2517], "3": [3089, 3137],
+            })
+            self.assertEqual(shard.read_bytes(), shard_before)
+        self.assertEqual(json.dumps(payload), before)
+
     def test_shell_build_does_not_read_model_or_rewrite_payload(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)

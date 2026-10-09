@@ -771,8 +771,8 @@
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
     const SEARCH_SCOPE_KEY = 'aram-mayhem-site-search-scope';
-    // Primary tabs: home (英雄) / augments / draft / game / changes.
-    const VIEWS = ['home', 'augments', 'draft', 'game', 'changes', 'champ'];
+    // Home is reached through the brand; Champions owns list/detail navigation.
+    const VIEWS = ['home', 'champions', 'augments', 'draft', 'game', 'changes', 'champ'];
     // Player-history copy is kept separate from the legacy game copy table so
     // the optional panel can fail closed without affecting other views. The
     // zh-CN shell follows the existing Traditional-to-Simplified proxy.
@@ -2615,6 +2615,7 @@
         }
         const el = ensureItemFloatTip();
         el.classList.toggle('is-pool-tip', Boolean(poolId));
+        el.classList.toggle('is-champion-table-tip', anchor.classList.contains('champion-table-icon'));
         el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
         el.hidden = false;
         el.classList.add('is-visible');
@@ -3035,7 +3036,7 @@
                 const v = augView(e);
                 const verdict = champAugVerdict(e);
                 return `
-                    <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0"
+                    <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0" data-aug-id="${escHtml(String(e.id))}"
                         aria-label="${escHtml(copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc))}">
                         <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
                         <span class="aug-pick-icon rarity-${r.css}">${iconHtml(v)}</span>
@@ -3047,14 +3048,14 @@
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;
             }).join('');
-            const rows = entries.map((e, idx) => {
+            const rows = entries.slice(3).map((e, idx) => {
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
                 const ariaLabel = copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc);
                 return `
                     <li class="aug-tier-row has-item-tip is-${verdict}" tabindex="0"
-                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
+                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx + 3}"
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tier-idx" aria-hidden="true"></span>
@@ -3077,8 +3078,7 @@
             return `
                 <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
                     ${podium ? `<ol class="aug-pick-cards">${podium}</ol>` : ''}
-                    ${head}
-                    <ol class="aug-tier-list" data-rarity="${r.key}">${body}</ol>
+                    ${rows || !entries.length ? `${head}<ol class="aug-tier-list" start="4" data-rarity="${r.key}">${body}</ol>` : ''}
                 </div>`;
         }).join('');
         return `
@@ -5205,14 +5205,16 @@
             </div>
             ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
         `;
-        const heroHtml = buildChampHero(cid, info, overview, copy);
+        const heroHtml = opts.inline
+            ? `<div class="detail-head">${info.image ? `<span class="detail-avatar"><img src="${info.image}" alt=""></span>` : ''}<div class="inline-champ-id"><div class="inline-champ-title"><h2 class="cname">${escHtml(champName(info, cid))}</h2>${buildDetailRoleTags(info)}</div><span class="inline-champ-stats"><b>${pct(info.wr)}</b> · ${Number(info.g || 0).toLocaleString()} ${escHtml(pickLang('場', 'games'))}</span></div>${opts.actions || ''}</div>`
+            : buildChampHero(cid, info, overview, copy);
         const detailTabs = buildDetailTabSet('main', [
             { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
             { key: 'pools', label: pickLang('增幅池', 'Augment pools'), content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
-        ], 'detail-main-tabs');
+        ].filter(tab => !opts.inline || ['overview', 'items', 'augments', 'pools'].includes(tab.key)), 'detail-main-tabs');
         return heroHtml + detailTabs;
     }
 
@@ -10310,7 +10312,7 @@
             return { view: 'home', sub: '', urlLang, legacyHash: false };
         }
         if (segs[0] === 'champions') {
-            return { view: 'champ', sub: champPageSlug(segs[1] || ''), urlLang, legacyHash: false };
+            return { view: segs[1] ? 'champ' : 'champions', sub: champPageSlug(segs[1] || ''), urlLang, legacyHash: false };
         }
         const view = segs[0];
         if (!VIEWS.includes(view)) return { view: 'home', sub: '', urlLang, legacyHash: false };
@@ -10349,7 +10351,7 @@
         const mode = legacyHash ? 'replace' : (historyMode || 'replace');
         setActiveView(VIEWS.includes(view) ? view : 'home', instant, mode, sub);
     }
-    let homeScrollY = 0;
+    const listScrollY = { home: 0, champions: 0 };
     function setActiveView(name, instant, historyMode, sub) {
         // Old /settings bookmarks land on home (settings chrome was removed).
         if (name === 'settings' || !VIEWS.includes(name)) name = 'home';
@@ -10357,12 +10359,14 @@
         const apply = () => {
             const tabs = [...document.querySelectorAll('.nav-tab[data-nav-tab]')];
             let activeTab = null;
-            // The champion page has no nav tab of its own; it lives under Home.
-            const navName = name === 'champ' ? 'home' : name;
+            const navName = name === 'champ' ? 'champions' : name;
             const wasChamp = Boolean(document.querySelector('.view-champ.is-active'));
-            // Remember where the tier list was so Back from a champion page
-            // lands on the same card instead of the top.
-            if (name !== 'home' && document.querySelector('.view-home.is-active')) homeScrollY = window.scrollY;
+            const list = document.getElementById('view-home');
+            const previousListMode = list?.getAttribute('data-view');
+            const isList = name === 'home' || name === 'champions';
+            if (list?.classList.contains('is-active')) listScrollY[previousListMode] = window.scrollY;
+            if (name !== 'home') closeHomeDetail();
+            if (isList && list) list.setAttribute('data-view', name);
             tabs.forEach(t => {
                 const on = t.getAttribute('data-nav-tab') === navName;
                 t.classList.toggle('active', on);
@@ -10376,6 +10380,7 @@
             document.querySelectorAll('.view[data-view]').forEach(v => {
                 v.classList.toggle('is-active', v.getAttribute('data-view') === name);
             });
+            if (isList) syncChampionListChrome();
             columnArticle = null;
             if (name === 'champ') {
                 renderChampPage(sub || '');
@@ -10401,7 +10406,7 @@
             }
             const routeSub = name === 'augments' ? augmentsSub() : (name === 'champ' ? (sub || '') : '');
             syncUrlToRoute(name, routeSub, historyMode);
-            window.scrollTo(0, name === 'home' && historyMode === 'none' ? homeScrollY : 0);
+            window.scrollTo(0, isList ? listScrollY[name] : 0);
             moveTabIndicator();
             if (name === 'champ' && !champPageSlugNow && matchMedia('(pointer: fine)').matches) {
                 document.getElementById('champ-page-search')?.focus({ preventScroll: true });
@@ -10566,6 +10571,8 @@
         renderPlayerHistoryState();
         syncAugModeHrefs();
         syncChampCardHrefs();
+        syncChampionListChrome();
+        if (homeDetailCard) openHomeDetail(homeDetailCard, true);
         // Keep the path prefix in sync with language so shared links stay bilingual.
         if (historyMode !== 'none') {
             const active = document.querySelector('.view.is-active');
@@ -10589,15 +10596,182 @@
         btn.hidden = true;
     }
 
+    let homeDetailCard = null;
+    let homeDetailHost = null;
+    let homeDetailToken = 0;
+    let homeDetailScrollY = 0;
+    let championTableSort = 'pick';
+    let championTableDirection = 'desc';
+
+    function renderChampionTable() {
+        const list = document.getElementById('view-home');
+        const wrap = document.getElementById('champion-table-wrap');
+        if (!list || !wrap) return;
+        wrap.hidden = list.getAttribute('data-view') !== 'champions';
+        if (wrap.hidden) return;
+        const columns = [
+            ['name', pickLang('英雄', 'Champion')],
+            ['pick', pickLang('出場率', 'Pick rate')],
+            ['rawWr', pickLang('勝率', 'Win rate')],
+            ['g', pickLang('場數', 'Games')],
+            ['cores', pickLang('推薦核心裝', 'Core build')],
+            ['augments', pickLang('推薦增幅', 'Recommended augments')],
+        ];
+        document.getElementById('champion-table-head').innerHTML = `<tr>${columns.map(([key, label]) => {
+            const on = key === championTableSort;
+            const direction = championTableDirection === 'asc' ? 'ascending' : 'descending';
+            const sortable = !['cores', 'augments'].includes(key);
+            const hint = key === 'rawWr' ? pickLang('實際對局勝率，未經校正', 'Observed match win rate, without adjustment') : '';
+            return `<th scope="col"${on ? ` aria-sort="${direction}"` : ''}${hint ? ` title="${escHtml(hint)}"` : ''}>${sortable ? `<button type="button" data-champion-sort="${key}">${escHtml(label)}${on ? `<span aria-hidden="true"> ${championTableDirection === 'asc' ? '↑' : '↓'}</span>` : ''}</button>` : `<span class="champion-table-heading">${escHtml(label)}</span>`}</th>`;
+        }).join('')}</tr>`;
+        const totalMatches = Number(String(TOTAL_GAMES || '').replace(/[^\d]/g, '')) || 0;
+        const rows = [...list.querySelectorAll('.tier-grid > .champ:not(.hidden)')].map(card => {
+            const cid = card.getAttribute('data-cid');
+            const info = DATA.champs[cid];
+            return {
+                cid, info, name: champName(info, cid),
+                pick: totalMatches ? Number(info.g || 0) / totalMatches : null,
+                wr: Number(info.wr), rawWr: Number(info.rawWr), g: Number(info.g || 0),
+            };
+        });
+        rows.sort((a, b) => {
+            let delta;
+            if (championTableSort === 'name') {
+                delta = a[championTableSort].localeCompare(b[championTableSort], currentLang === 'en' ? 'en' : 'zh-Hant');
+            } else {
+                delta = (a[championTableSort] || 0) - (b[championTableSort] || 0);
+            }
+            return (championTableDirection === 'asc' ? delta : -delta) || b.wr - a.wr || Number(a.cid) - Number(b.cid);
+        });
+        const rate = value => Number.isFinite(value) ? pct(value) : '—';
+        const coreIcons = row => {
+            const ids = (__BUILD.championCores || {})[row.cid] || [];
+            return ids.map(id => {
+                const item = { id }, name = itemDisplayName(item), icon = itemIconUrl(item);
+                const tip = buildItemTipHtml({ name, items: [item] });
+                return `<button type="button" class="champion-table-icon has-item-tip" aria-label="${escHtml(name)}">${icon ? `<img src="${escHtml(icon)}" alt="" loading="lazy">` : escHtml(name)}${itemTipSource(tip)}</button>`;
+            }).join('') || '<span aria-label="'+escHtml(tr().insufficient)+'">—</span>';
+        };
+        const augmentIcons = row => {
+            // Reuse the published confidence-aware recommendation score across rarities.
+            const entries = Object.values(row.info.top || {}).flat().filter(e => DATA.augs[e.id]);
+            entries.sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || Number(b.g || 0) - Number(a.g || 0));
+            return entries.slice(0, 2).map(entry => {
+                const aug = DATA.augs[entry.id], name = augName(aug, entry.id);
+                return `<button type="button" class="champion-table-icon champion-table-augment has-item-tip" aria-label="${escHtml(name)}">${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : escHtml(name)}${itemTipSource(buildAugTipHtml(entry, false))}</button>`;
+            }).join('') || '<span aria-label="'+escHtml(tr().insufficient)+'">—</span>';
+        };
+        document.getElementById('champion-table-body').innerHTML = rows.map(row => {
+            const slug = champSlugForCid(row.cid);
+            return `<tr data-champion-row="${escHtml(row.cid)}"><th scope="row"><a class="champion-table-link" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">${row.info.image ? `<span class="champion-table-avatar"><img src="${escHtml(row.info.image)}" alt="" loading="lazy"></span>` : ''}<span>${escHtml(row.name)}</span></a></th><td>${rate(row.pick)}</td><td class="champion-table-wr">${rate(row.rawWr)}</td><td>${fmtInt(row.g)}</td><td><div class="champion-table-icons">${coreIcons(row)}</div></td><td><div class="champion-table-icons">${augmentIcons(row)}</div></td></tr>`;
+        }).join('');
+    }
+
+    function syncChampionListChrome() {
+        const list = document.getElementById('view-home');
+        if (!list) return;
+        const home = list.getAttribute('data-view') === 'home';
+        const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');
+        list.setAttribute('role', home ? 'region' : 'tabpanel');
+        list.setAttribute('aria-label', title);
+        if (home) list.removeAttribute('aria-labelledby');
+        else list.setAttribute('aria-labelledby', 'tab-champions');
+        document.getElementById('champion-list-title').textContent = title;
+        document.getElementById('champion-list-hint').textContent = pickLang(
+            home ? '點選英雄，在此展開增幅與出裝。' : '點選英雄，查看完整數據與分析。',
+            home ? 'Select a champion to expand augments and builds here.' : 'Select a champion for full stats and analysis.');
+        list.querySelectorAll('.champ').forEach(card => {
+            if (home) {
+                card.setAttribute('role', 'button');
+                card.setAttribute('aria-expanded', card === homeDetailCard ? 'true' : 'false');
+            } else {
+                card.removeAttribute('role');
+                card.removeAttribute('aria-expanded');
+                card.removeAttribute('aria-controls');
+            }
+        });
+        renderChampionTable();
+    }
+
+    function closeHomeDetail(restore = false) {
+        homeDetailToken++;
+        const card = homeDetailCard;
+        homeDetailHost?.remove();
+        homeDetailHost = null;
+        homeDetailCard = null;
+        if (card) {
+            card.classList.remove('detail-selected');
+            card.setAttribute('aria-expanded', 'false');
+            card.removeAttribute('aria-controls');
+            if (restore) {
+                window.scrollTo(0, homeDetailScrollY);
+                card.focus({ preventScroll: true });
+            }
+        }
+    }
+
+    function positionHomeDetail() {
+        if (!homeDetailCard || !homeDetailHost) return;
+        // Remove the full-width row before measuring, so it cannot distort the
+        // row positions when switching champions or resizing the grid.
+        homeDetailHost.remove();
+        const top = homeDetailCard.offsetTop;
+        let anchor = homeDetailCard;
+        homeDetailCard.parentElement.querySelectorAll(':scope > .champ:not(.hidden)').forEach(card => {
+            if (Math.abs(card.offsetTop - top) < 2) anchor = card;
+        });
+        anchor.after(homeDetailHost);
+    }
+
+    function openHomeDetail(card, force = false) {
+        if (!force && card === homeDetailCard) { closeHomeDetail(true); return; }
+        const savedScroll = force ? homeDetailScrollY : window.scrollY;
+        const tab = force ? homeDetailHost?.querySelector('.detail-main-tabs > input:checked')?.id.split('-').pop() : 'augments';
+        closeHomeDetail();
+        homeDetailCard = card;
+        homeDetailScrollY = savedScroll;
+        const cid = card.getAttribute('data-cid');
+        const host = document.createElement('div');
+        homeDetailHost = host;
+        host.className = 'detail-host';
+        host.id = `home-detail-${cid}`;
+        host.setAttribute('role', 'region');
+        host.setAttribute('aria-label', champName(DATA.champs[cid], cid));
+        host.setAttribute('aria-busy', 'true');
+        card.classList.add('detail-selected');
+        card.setAttribute('aria-expanded', 'true');
+        card.setAttribute('aria-controls', host.id);
+        const actions = `<div class="inline-detail-actions"><a href="${escHtml(pathForRoute('champ', champSlugForCid(cid)))}" data-champ-page="${escHtml(champSlugForCid(cid))}" aria-label="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}" title="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}"><span class="inline-detail-link-text">${escHtml(pickLang('完整分析', 'Full analysis'))}</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></a><button class="inline-detail-close" type="button" data-home-detail-close aria-label="${escHtml(pickLang('收合', 'Collapse'))}" title="${escHtml(pickLang('收合', 'Collapse'))}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>`;
+        host.innerHTML = `<div class="detail detail-inline">${actions}<div class="detail-skeleton" aria-hidden="true"></div></div>`;
+        positionHomeDetail();
+        const token = ++homeDetailToken;
+        if (!force) trackEvent('champion_detail_open', { champion_id: cid, source: 'home' });
+        yieldToMain().then(() => ensureChampDetail(cid)).then(() => {
+            if (token !== homeDetailToken || !host.isConnected) return;
+            host.innerHTML = `<div class="detail detail-inline">${renderDetail(cid, { inline: true, tab, actions })}</div>`;
+            host.setAttribute('aria-busy', 'false');
+            syncChampAugTable(host);
+            applySingleItemFilter(host);
+            if (tab === 'pools') {
+                renderChampionPools();
+                loadAugPools();
+            }
+            if (filterState.q.trim()) applySearchHighlights(host);
+        }).catch(err => {
+            if (token !== homeDetailToken) return;
+            console.error('home champion detail load failed', cid, err);
+            host.setAttribute('aria-busy', 'false');
+            host.innerHTML = `<div class="detail detail-inline detail-load-error">${actions}<p role="alert">${escHtml(pickLang('英雄資料載入失敗。', 'Champion details could not be loaded.'))}</p><button class="detail-retry" type="button" data-home-detail-retry>${escHtml(pickLang('重試', 'Retry'))}</button></div>`;
+        });
+    }
+
     function openChampByCid(cid) {
         openChampPage(champSlugForCid(cid));
     }
 
     // ---- Champion page (/champions/<slug>) ------------------------------------------
-    // Players look up one champion per game ("I got Jinx, what do I take?"), so
-    // each champion has its own shareable URL.  GH Pages serves a tiny bounce
-    // stub at /champions/<slug>/ that restores the path on /; this view then reuses
-    // renderDetail in page mode (no close button, remembered tab).
+    // Each champion has a shareable URL. The static route hydrates the shared
+    // app shell in place; this view renders full detail with a remembered tab.
     const CHAMP_TAB_KEY = 'aram-detail-tab';
     const RECENT_CHAMPS_KEY = 'aram-recent-champs';
     const RECENT_CHAMPS_MAX = 8;
@@ -10867,7 +11041,7 @@
         // Let modified clicks open a new tab via the real href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
-        const from = link.classList.contains('champ-page-chip') ? 'recent' : 'search';
+        const from = link.closest('.detail-inline') ? 'home_detail' : (link.closest('.champion-table') ? 'champions_table' : (link.classList.contains('champ-page-chip') ? 'recent' : 'search'));
         trackEvent('champion_page_link', { from });
         openChampPage(link.getAttribute('data-champ-page'));
     });
@@ -10933,6 +11107,22 @@
 
     document.addEventListener('click', (ev) => {
         const modeMenu = document.getElementById('mode-menu');
+        const championSort = ev.target.closest('[data-champion-sort]');
+        if (championSort) {
+            const key = championSort.getAttribute('data-champion-sort');
+            championTableDirection = key === championTableSort
+                ? (championTableDirection === 'asc' ? 'desc' : 'asc')
+                : (key === 'name' ? 'asc' : 'desc');
+            championTableSort = key;
+            renderChampionTable();
+            document.querySelector(`[data-champion-sort="${key}"]`)?.focus({ preventScroll: true });
+            return;
+        }
+        if (ev.target.closest('[data-home-detail-close]')) { closeHomeDetail(true); return; }
+        if (ev.target.closest('[data-home-detail-retry]')) {
+            if (homeDetailCard) openHomeDetail(homeDetailCard, true);
+            return;
+        }
         if (modeMenu && !modeMenu.contains(ev.target)) modeMenu.open = false;
         const modePick = ev.target.closest('.mode-options [data-mode-target]');
         if (modePick) {
@@ -11198,7 +11388,8 @@
         // Cards are real links: modified clicks open a tab via the href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
-        openChampPage(champSlug);
+        if (champ.closest('.view-home[data-view="home"]')) openHomeDetail(champ);
+        else openChampPage(champSlug);
     });
 
     // Draft search input (debounced like home search).
@@ -11216,6 +11407,7 @@
             renderSidePanel();
             syncHeaderHeight();  // header is 1 row on desktop, 2 on mobile
             moveTabIndicator();
+            positionHomeDetail();
         }, 120);
     });
 
@@ -11528,6 +11720,9 @@
         if (shownN) shownN.textContent = shown;
         const empty = document.getElementById('empty-state');
         if (empty) empty.classList.toggle('visible', shown === 0);
+        if (homeDetailCard?.classList.contains('hidden')) closeHomeDetail();
+        else positionHomeDetail();
+        renderChampionTable();
         // NOTE: refreshSecondaryRoleBadges() is intentionally NOT called here.
         // The badges depend ONLY on filterState.role, not the query, so running
         // that full 173-card innerHTML walk on every keystroke was pure waste.
@@ -11586,6 +11781,10 @@
                 closeAugChamps();
                 return;
             }
+            if (homeDetailCard && document.querySelector('.view-home[data-view="home"].is-active')) {
+                closeHomeDetail(true);
+                return;
+            }
             if (recModalOpen) {
                 recModalOpen = false;
                 renderSidePanel();
@@ -11600,6 +11799,7 @@
         if (ev.key !== 'Enter' && ev.key !== ' ') return;
         const t = ev.target;
         if (!t || !t.classList) return;
+        if (t.matches('a.champ') && (t.getAttribute('role') !== 'button' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey)) return;
         if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card')) {
             ev.preventDefault();
             t.click();
@@ -11648,7 +11848,7 @@
         scheduleHideItemFloatTip();
     });
     document.addEventListener('click', ev => {
-        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank');
+        const host = ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon');
         if (host) showItemFloatTip(host);
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
