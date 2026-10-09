@@ -10787,11 +10787,6 @@
                 button.title = label;
             });
         }
-        const layoutNote = document.getElementById('champion-layout-note');
-        if (layoutNote) {
-            layoutNote.hidden = home;
-            layoutNote.textContent = pickLang('點上方 arammeta 標題，可回到舊版頭像佈局。', 'Click the arammeta title above to return to the original portrait layout.');
-        }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');
         list.setAttribute('role', home ? 'region' : 'tabpanel');
         list.setAttribute('aria-label', title);

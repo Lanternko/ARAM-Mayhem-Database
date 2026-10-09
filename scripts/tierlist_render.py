@@ -3694,8 +3694,7 @@ def render_html(
                  "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' aria-hidden='true'>"
                  "<rect x='3' y='3' width='4' height='4' rx='1'/><rect x='3' y='10' width='4' height='4' rx='1'/>"
                  "<rect x='3' y='17' width='4' height='4' rx='1'/><path d='M11 5h10M11 12h10M11 19h10'/></svg></button></div></div>"
-                 "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p>"
-                 "<p class='champion-layout-note' id='champion-layout-note' hidden>點上方 arammeta 標題，可回到舊版頭像佈局。</p></div>")
+                 "<p id='champion-list-hint'>點選英雄，在此展開增幅與出裝。</p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail
     # scroll.  CSS pulls the rail up into the same visual row as the chips.
