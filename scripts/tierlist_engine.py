@@ -4380,8 +4380,9 @@ def compute_champ_item_build_clusters(
     each group we then surface every item built afterwards — not just the single
     3rd-earliest one — that clears a pick-rate OR win-rate bar, each scored on
     its own conditional win/pick rate.  The core-2 pick/win rate carries orders
-    of magnitude more support than any exact 6-item route, and a real observed
-    6-item completion is kept only as a confirmation badge (``exact_games``).
+    of magnitude more support than any exact 6-item route. A real observed
+    completion supplies the quick overview's six slots without inheriting the
+    core group's win rate; ``exact_games`` confirms individual follow-ups.
     Per champion we curate up to ``top_n`` core-2 groups: 1 popular (highest
     pick), up to 2 winrate (highest lower-confidence-bound lift on a stable
     sample), then the rest by a blended score.  ``bot`` stays empty for
@@ -4409,7 +4410,7 @@ def compute_champ_item_build_clusters(
         )
 
     champ_total: Counter[int] = Counter()
-    champ_builds: dict[int, list[tuple[tuple[int, ...], int, int]]] = defaultdict(list)
+    champ_builds: dict[int, list[tuple[tuple[int, ...], int, int, bool]]] = defaultdict(list)
     try:
         for blue_wins, participants_json in sql_rows:
             if not participants_json:
@@ -4420,10 +4421,10 @@ def compute_champ_item_build_clusters(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                route_ids = _participant_route_item_ids(
-                    participant.get("items") or participant.get("itemSlots") or [],
-                    item_meta,
-                )
+                inventory = participant.get("items") or participant.get("itemSlots") or []
+                route_ids = _participant_route_item_ids(inventory, item_meta)
+                occupied = sum(1 for item_id in inventory if str(item_id).isdigit() and int(item_id) > 0)
+                complete_inventory = occupied == max_items and len(route_ids) == max_items
                 champ_total[cid] += 1
                 if not route_ids:
                     continue
@@ -4437,7 +4438,7 @@ def compute_champ_item_build_clusters(
                 # signal even though they cannot form a 3-item core themselves.
                 boots = [item_id for item_id in route_ids if _is_boot_item(item_meta.get(item_id))]
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won))
+                champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won, complete_inventory))
     finally:
         con.close()
 
@@ -4451,7 +4452,7 @@ def compute_champ_item_build_clusters(
 
         item_games: Counter[int] = Counter()
         item_size_sum: Counter[int] = Counter()
-        for build_core, _boot, _won in builds:
+        for build_core, _boot, _won, _complete in builds:
             size = len(build_core)
             for item_id in build_core:
                 item_games[item_id] += 1
@@ -4483,7 +4484,8 @@ def compute_champ_item_build_clusters(
         option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
-        for build_core, boot, won in builds:
+        completion_games: dict[tuple[int, int], Counter[tuple[int, ...]]] = defaultdict(Counter)
+        for build_core, boot, won, complete_inventory in builds:
             if len(build_core) < 2:
                 continue
             ranked_core = sorted(build_core, key=earliness_key)  # earliest built first
@@ -4495,6 +4497,12 @@ def compute_champ_item_build_clusters(
             # latest-dropped items never become options.
             route_ranked = ranked_core[:full_core_len] if boot else ranked_core[:max_items]
             is_full = len(route_ranked) + (1 if boot else 0) == max_items
+            # Only an actual six-slot inventory is eligible. Never create a
+            # completion by combining independently popular option marginals,
+            # or by truncating an invalid inventory with more than six items.
+            if complete_inventory and len(build_core) + bool(boot) == max_items:
+                completion = tuple(route_ranked + ([boot] if boot else []))
+                completion_games[core_pair][completion] += 1
             for follow in route_ranked[option_index:]:
                 option_games[core_pair][follow] += 1
                 option_wins[core_pair][follow] += won
@@ -4576,6 +4584,13 @@ def compute_champ_item_build_clusters(
                 and og >= ITEM_CORE_BUILD_OPTION_MIN_GAMES
             ][:ITEM_CORE_BUILD_TAIL_N]
             names = _item_cluster_names(core_ordered + [o["id"] for o in options[:1]], item_meta)
+            completions = completion_games.get(core_pair) or Counter()
+            completion, observed = max(
+                completions.items(), key=lambda entry: (entry[1], entry[0]),
+                default=((), 0),
+            )
+            if observed < min_confirm_games:
+                completion, observed = (), 0
             groups_out.append({
                 **names,
                 "slug": "coregroup:" + "+".join(str(i) for i in core_ordered),
@@ -4596,6 +4611,9 @@ def compute_champ_item_build_clusters(
                     if _item_pair_payload([opt["id"]], item_meta)
                 ],
                 "tail_items": _item_pair_payload(tail_ids, item_meta),
+                "completion_items": _item_pair_payload(list(completion), item_meta),
+                "completion_games": observed,
+                "completion_boot": next((i for i in completion if _is_boot_item(item_meta.get(i))), 0),
             })
 
         if not groups_out:

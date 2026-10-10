@@ -230,6 +230,11 @@ class ItemBuildScoringTests(unittest.TestCase):
         # popular/winrate lanes stay reserved for genuine 3rd-item picks.
         self.assertIn(201, opt_by_id)
         self.assertEqual(opt_by_id[201]["lane"], "")
+        # A completion must be one observed inventory, not the union of the
+        # popular option 103 and higher-win-rate alternative 104.
+        self.assertEqual({i["id"] for i in grp["completion_items"]}, {101, 102, 103, 201, 202, 301})
+        self.assertEqual(grp["completion_games"], 25)
+        self.assertEqual(grp["completion_boot"], 301)
 
     def test_core_build_keyed_on_core2_rush_without_completion(self) -> None:
         item_meta = {
@@ -260,6 +265,8 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertTrue(groups)
         self.assertEqual(groups[0]["core_ids"], (101, 102))
         self.assertIn(103, {int(o["id"]) for o in groups[0]["options"]})
+        self.assertEqual(groups[0]["completion_items"], [])
+        self.assertEqual(groups[0]["completion_games"], 0)
 
     def test_core_build_drops_oversized_item_beyond_six_slots(self) -> None:
         item_meta = {
@@ -304,6 +311,7 @@ class ItemBuildScoringTests(unittest.TestCase):
             shown_ids.update(int(o["id"]) for o in grp["options"])
             shown_ids.update(int(it["id"]) for it in grp["tail_items"])
         self.assertNotIn(223069, shown_ids)  # oversized item dropped beyond the 6-slot cap
+        self.assertTrue(all(not grp["completion_items"] for grp in groups))
 
     def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
         item_meta = {

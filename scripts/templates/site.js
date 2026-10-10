@@ -162,6 +162,49 @@
         champDetailLoads.set(key, request);
         return request;
     }
+    let fullAugmentStatsReady = !DATA.augmentStatsUrl;
+    let fullAugmentStatsLoad = null;
+    let fullAugmentStatsFailed = false;
+    function ensureFullAugmentStats() {
+        if (fullAugmentStatsReady) return Promise.resolve();
+        if (fullAugmentStatsLoad) return fullAugmentStatsLoad;
+        const version = DATA.detailVersion ? `?v=${encodeURIComponent(DATA.detailVersion)}` : '';
+        fullAugmentStatsLoad = loadSitePayload(`${DATA.augmentStatsUrl}${version}`).then(stats => {
+            for (const cid of Object.keys(DATA.champs || {})) {
+                const buckets = stats && stats[cid];
+                if (!buckets || typeof buckets !== 'object' || Array.isArray(buckets)
+                    || Object.values(buckets).some(rows => !Array.isArray(rows))
+                    || Object.entries(DATA.champs[cid].top || {}).some(([rarity, rows]) =>
+                        !Array.isArray(buckets[rarity]) || rows.some(row =>
+                            !buckets[rarity].some(full => String(full.id) === String(row.id))))) {
+                    throw new Error('Invalid full augment rankings');
+                }
+            }
+            Object.entries(stats).forEach(([cid, top]) => {
+                if (DATA.champs[cid]) DATA.champs[cid].top = top;
+            });
+            _augChampIdx = null;
+            fullAugmentStatsReady = true;
+            fullAugmentStatsFailed = false;
+        }).catch(err => {
+            fullAugmentStatsFailed = true;
+            throw err;
+        }).finally(() => { fullAugmentStatsLoad = null; });
+        return fullAugmentStatsLoad;
+    }
+    function waitForFullAugmentStats(host, resume) {
+        if (fullAugmentStatsReady) return false;
+        const text = fullAugmentStatsFailed
+            ? pickLang('增幅資料載入失敗。', 'Could not load augment data.')
+            : pickLang('正在載入增幅資料…', 'Loading augment data…');
+        const content = `<p role="status">${escHtml(text)}</p>${fullAugmentStatsFailed
+            ? `<button type="button" class="tool-btn" data-augment-stats-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : ''}`;
+        host.innerHTML = host.id === 'augch-host'
+            ? `<div class="augch-card" role="dialog" aria-modal="true" aria-label="${escHtml(pickLang('增幅推薦英雄', 'Champions for this augment'))}"><button type="button" class="augch-close" id="augch-close" aria-label="${escHtml(pickLang('關閉', 'Close'))}">×</button>${content}</div>`
+            : content;
+        if (!fullAugmentStatsFailed) ensureFullAugmentStats().then(resume).catch(resume);
+        return true;
+    }
     // Empirical secondary artifacts: fetch in parallel (not waterfall).  Names
     // for zh-CN are optional for first paint (t2s fallback works); load them
     // after the main payload without blocking the dual-API path when unused.
@@ -4467,6 +4510,7 @@
             view.appendChild(host);
         }
         const copy = tr();
+        if (waitForFullAugmentStats(host, renderAugChamps)) return;
         const rows = augChampIndex().get(Number(augChampsId)) || [];
         const byLift = rows.slice().sort((a, b) => (b.score - a.score) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
         const byPick = rows.slice().sort((a, b) => (b.pick - a.pick) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
@@ -4612,6 +4656,76 @@
             img.addEventListener('error', () => art.remove(), { once: true });
         }
     }
+
+    const OVERVIEW_MODE_KEY = 'aram-overview-mode';
+    const quickOverviewRoutes = new Map();
+    function readOverviewMode() {
+        try { return localStorage.getItem(OVERVIEW_MODE_KEY) === 'compare' ? 'compare' : 'quick'; }
+        catch { return 'quick'; }
+    }
+    function quickOverviewItem(item) {
+        const name = itemDisplayName(item);
+        return `<button type="button" class="quick-item has-item-tip" aria-label="${escHtml(name)}">${itemIconHtml(item, 'quick-item-icon', name)}<span>${escHtml(name)}</span>${itemTipSource(buildItemTipHtml({name, items: [item]}))}</button>`;
+    }
+    function buildQuickOverview(cid, info) {
+        const groups = info.itemClusters?.groups || [];
+        const selected = Math.min(quickOverviewRoutes.get(String(cid)) || 0, Math.max(0, groups.length - 1));
+        const group = groups[selected];
+        const completion = group?.completion || [];
+        const complete = completion.length === 6 && Number(group.completionGames) >= 3;
+        const items = complete ? completion : (group?.core || info.items?.top?.[0]?.items || []);
+        const boot = complete && group.completionBoot
+            ? completion.find(item => Number(item.id) === Number(group.completionBoot))
+            : info.boots?.top?.[0]?.items?.[0];
+        const spell = info.spells?.top?.[0];
+        const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
+        const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}">${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</button>`).join('')}</div>` : '';
+        const buildNote = complete
+            ? pickLang(`常見完整套裝 · ${fmtInt(group.completionGames)} 場；依對局調整。`, `Observed full build · ${fmtInt(group.completionGames)} games; adapt to the match.`)
+            : pickLang('完整套裝樣本不足，先參考核心裝。', 'Not enough full-build samples; start with the core items.');
+        const rarities = [['kSilver', 'silver', '銀色', 'Silver'], ['kGold', 'gold', '金色', 'Gold'], ['kPrismatic', 'prismatic', '彩色', 'Prismatic']];
+        const augments = rarities.map(([key, css, zh, en]) => {
+            const rows = (info.top?.[key] || []).slice(0, 3);
+            return `<section class="quick-rarity rarity-${css}"><h3>${escHtml(pickLang(zh, en))}<small>TOP 3</small></h3><ol>${rows.map(row => {
+                const aug = DATA.augs[row.id];
+                if (!aug) return '';
+                const name = augName(aug, row.id);
+                return `<li><button type="button" class="quick-augment has-item-tip" data-aug-id="${escHtml(String(row.id))}" aria-label="${escHtml(`${name} · ${pct(row.wr)}`)}"><span class="quick-augment-icon">${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}</span><span class="quick-augment-name">${escHtml(name)}</span><b class="wr-${wrToneTier(row)}">${pct(row.wr)}</b>${itemTipSource(buildAugTipHtml(row, false))}</button></li>`;
+            }).join('')}</ol>${rows.length ? '' : missing}</section>`;
+        }).join('');
+        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '六格成裝參考' : '推薦核心裝', complete ? 'Full build reference' : 'Recommended core'))}</h3>${choices}<div class="quick-items">${items.map(quickOverviewItem).join('') || missing}</div><p class="quick-note">${escHtml(buildNote)}</p></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('鞋子', 'Boots'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div></section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(quickOverviewItem).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>`;
+    }
+    function buildOverviewModes(cid, info, comparison) {
+        const mode = readOverviewMode();
+        return `<div class="champ-overview" data-overview-cid="${escHtml(String(cid))}"><div class="overview-mode-switch" role="group" aria-label="${escHtml(pickLang('概覽模式', 'Overview mode'))}">${[['quick', '快速推薦', 'Quick picks'], ['compare', '詳細比較', 'Compare builds']].map(([key, zh, en]) => `<button type="button" data-overview-mode="${key}" aria-pressed="${mode === key}">${escHtml(pickLang(zh, en))}</button>`).join('')}</div><div class="quick-overview"${mode === 'quick' ? '' : ' hidden'}>${buildQuickOverview(cid, info)}</div><div class="compare-overview"${mode === 'compare' ? '' : ' hidden'}>${comparison}</div></div>`;
+    }
+    document.addEventListener('click', event => {
+        const retry = event.target.closest('[data-augment-stats-retry]');
+        if (retry) {
+            fullAugmentStatsFailed = false;
+            if (retry.closest('#augch-host')) renderAugChamps();
+            else renderAugDraft();
+            return;
+        }
+        const modeButton = event.target.closest('[data-overview-mode]');
+        if (modeButton) {
+            const mode = modeButton.dataset.overviewMode;
+            try { localStorage.setItem(OVERVIEW_MODE_KEY, mode); } catch {}
+            document.querySelectorAll('.champ-overview').forEach(host => {
+                host.querySelector('.quick-overview').hidden = mode !== 'quick';
+                host.querySelector('.compare-overview').hidden = mode !== 'compare';
+                host.querySelectorAll('[data-overview-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.overviewMode === mode)));
+            });
+            return;
+        }
+        const route = event.target.closest('[data-quick-route]');
+        if (route) {
+            const host = route.closest('.champ-overview'), cid = host.dataset.overviewCid;
+            quickOverviewRoutes.set(cid, Number(route.dataset.quickRoute));
+            host.querySelector('.quick-overview').innerHTML = buildQuickOverview(cid, DATA.champs[cid]);
+            host.querySelector(`[data-quick-route="${route.dataset.quickRoute}"]`)?.focus({preventScroll: true});
+        }
+    });
 
     function renderDetail(cid, opts = {}) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
@@ -5283,7 +5397,7 @@
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: the hero carries the headline numbers; this is a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
-        const overviewTabContent = `
+        const overviewTabContent = buildOverviewModes(cid, info, `
             <div class="overview-split">
                 <div class="overview-split-main">
                     ${buildCoreGroupSection(
@@ -5301,7 +5415,7 @@
                     })}
                 </div>
             </div>
-        `;
+        `);
         // \u51fa\u88dd: single items + first-two items stacked (no sub-tabs).
         const itemTabContent = `
             ${buildSingleItemPanel(singleItemTitle, singleItemMeta, singleItemInfo)}
@@ -9133,6 +9247,7 @@
     function renderAugDraft() {
         const host = document.getElementById('aug-draft-host');
         if (!host) return;
+        if (waitForFullAugmentStats(host, renderAugDraft)) return;
         const copy = tr();
         if (!DATA || !DATA.champs || !DATA.augs) {
             host.innerHTML = `<p class="game-board-empty">${escHtml(copy.augGameNoData || '')}</p>`;
@@ -10871,7 +10986,7 @@
     function openHomeDetail(card, force = false) {
         if (!force && card === homeDetailCard) { closeHomeDetail(true); return; }
         const savedScroll = force ? homeDetailScrollY : window.scrollY;
-        const tab = force ? homeDetailHost?.querySelector('.detail-main-tabs > input:checked')?.id.split('-').pop() : 'augments';
+        const tab = force ? homeDetailHost?.querySelector('.detail-main-tabs > input:checked')?.id.split('-').pop() : 'overview';
         closeHomeDetail();
         homeDetailCard = card;
         homeDetailScrollY = savedScroll;
@@ -10886,7 +11001,7 @@
         card.classList.add('detail-selected');
         card.setAttribute('aria-expanded', 'true');
         card.setAttribute('aria-controls', host.id);
-        const actions = `<div class="inline-detail-actions"><a href="${escHtml(pathForRoute('champ', champSlugForCid(cid)))}" data-champ-page="${escHtml(champSlugForCid(cid))}" aria-label="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}" title="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}"><span class="inline-detail-link-text">${escHtml(pickLang('完整分析', 'Full analysis'))}</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></a><button class="inline-detail-close" type="button" data-home-detail-close aria-label="${escHtml(pickLang('收合', 'Collapse'))}" title="${escHtml(pickLang('收合', 'Collapse'))}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>`;
+        const actions = `<div class="inline-detail-actions"><a href="${escHtml(pathForRoute('champ', champSlugForCid(cid)))}" target="_blank" rel="noopener" data-champ-page="${escHtml(champSlugForCid(cid))}" aria-label="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}" title="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}"><span class="inline-detail-link-text">${escHtml(pickLang('完整分析', 'Full analysis'))}</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></a><button class="inline-detail-close" type="button" data-home-detail-close aria-label="${escHtml(pickLang('收合', 'Collapse'))}" title="${escHtml(pickLang('收合', 'Collapse'))}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>`;
         host.innerHTML = `<div class="detail detail-inline">${actions}<div class="detail-skeleton" aria-hidden="true"></div></div>`;
         positionHomeDetail();
         const token = ++homeDetailToken;
@@ -11183,6 +11298,7 @@
         }
         const link = ev.target.closest('[data-champ-page]');
         if (!link) return;
+        if (link.matches('a[target]') && link.target.toLowerCase() !== '_self') return;
         // Let modified clicks open a new tab via the real href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();

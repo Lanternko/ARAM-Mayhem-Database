@@ -1814,6 +1814,16 @@ def split_champion_detail_payloads(payload: dict) -> dict[str, dict]:
             if key in info
         }
         if detail:
+            # Keep only the podium needed by the champion list in the initial
+            # payload. Full rankings (including slot evidence) remain lossless.
+            if isinstance(info.get("top"), dict):
+                detail["top"] = info["top"]
+                info["top"] = {
+                    rarity: [{k: v for k, v in row.items()
+                              if k in {"id", "g", "wr", "lift", "score", "pick"}}
+                             for row in rows[:3]]
+                    for rarity, rows in detail["top"].items()
+                }
             details[str(cid)] = detail
     return details
 
@@ -1841,6 +1851,15 @@ def write_champion_detail_shards(
 
     detail_dir = payload_out_path.parent / "champions"
     detail_dir.mkdir(parents=True, exist_ok=True)
+    # Augment-to-champion lookup and Augment Draft require every champion's
+    # complete rankings. One deferred request avoids fetching 173 detail shards.
+    augment_stats = {cid: detail["top"] for cid, detail in details.items() if "top" in detail}
+    if augment_stats:
+        (detail_dir / "augment-stats.json").write_text(
+            json.dumps(augment_stats, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        payload["augmentStatsUrl"] = f"{payload['detailBase']}/augment-stats.json"
     total_bytes = 0
     for cid, detail in details.items():
         out = detail_dir / f"{cid}.json"
@@ -2892,6 +2911,9 @@ def render_html(
             "pick": round(float(grp.get("pick_rate", 0.0) or 0.0), 4),
             "options": [_pack_option(o) for o in grp.get("options", [])],
             "tail": grp.get("tail_items", []),
+            "completion": grp.get("completion_items", []),
+            "completionGames": int(grp.get("completion_games", 0) or 0),
+            "completionBoot": int(grp.get("completion_boot", 0) or 0),
         }
 
     def _pack_comp(profile: dict[str, object]) -> dict:
