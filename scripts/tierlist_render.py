@@ -2914,6 +2914,12 @@ def render_html(
             "completion": grp.get("completion_items", []),
             "completionGames": int(grp.get("completion_games", 0) or 0),
             "completionBoot": int(grp.get("completion_boot", 0) or 0),
+            "quickCore": {
+                "items": (grp.get("quick_core") or {}).get("items", []),
+                "g": int((grp.get("quick_core") or {}).get("games", 0)),
+                "wr": round(float((grp.get("quick_core") or {}).get("smoothed_wr", 0)), 4),
+            },
+            "routeBoot": _pack_option(grp["route_boot"]) if grp.get("route_boot") else None,
         }
 
     def _pack_comp(profile: dict[str, object]) -> dict:

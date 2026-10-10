@@ -4485,6 +4485,8 @@ def compute_champ_item_build_clusters(
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         completion_games: dict[tuple[int, int], Counter[tuple[int, ...]]] = defaultdict(Counter)
+        route_boot_games: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
+        route_boot_wins: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
         for build_core, boot, won, complete_inventory in builds:
             if len(build_core) < 2:
                 continue
@@ -4492,6 +4494,9 @@ def compute_champ_item_build_clusters(
             core_pair = (ranked_core[0], ranked_core[1])
             group_games[core_pair] += 1
             group_wins[core_pair] += won
+            if boot:
+                route_boot_games[(core_pair, 0)][boot] += 1
+                route_boot_wins[(core_pair, 0)][boot] += won
             # Canonical 6-item completion: keep the earliest items up to the 6
             # inventory slots (+ boot), dropping whatever is built latest, so the
             # latest-dropped items never become options.
@@ -4506,6 +4511,9 @@ def compute_champ_item_build_clusters(
             for follow in route_ranked[option_index:]:
                 option_games[core_pair][follow] += 1
                 option_wins[core_pair][follow] += won
+                if boot:
+                    route_boot_games[(core_pair, follow)][boot] += 1
+                    route_boot_wins[(core_pair, follow)][boot] += won
                 if is_full:
                     option_full_games[core_pair][follow] += 1
 
@@ -4584,13 +4592,42 @@ def compute_champ_item_build_clusters(
                 and og >= ITEM_CORE_BUILD_OPTION_MIN_GAMES
             ][:ITEM_CORE_BUILD_TAIL_N]
             names = _item_cluster_names(core_ordered + [o["id"] for o in options[:1]], item_meta)
+            # The third core is a supported co-occurring item, not whichever
+            # happens to be third in a rare full inventory. Purchase order is
+            # inferred for the rush pair only; this is a three-item combination.
+            third = max(
+                (o for o in options if o["games"] >= max(core_min_games, ITEM_CORE_BUILD_OPTION_MIN_GAMES)),
+                key=lambda o: (o["games"], o["core_lcb"], -o["id"]), default=None,
+            )
+            quick_ids = core_ordered + ([third["id"]] if third else [])
+            quick_games = third["games"] if third else gg
+            quick_wr = third["smoothed_wr"] if third else g_smoothed
+            boot_key = (core_pair, third["id"] if third else 0)
+            boot_candidates = []
+            for boot_id, bg in route_boot_games[boot_key].items():
+                if bg < ITEM_CORE_BUILD_OPTION_MIN_GAMES:
+                    continue
+                bw = route_boot_wins[boot_key][boot_id]
+                bwr = (bw + quick_wr * ITEM_CORE_BUILD_PRIOR_GAMES) / (bg + ITEM_CORE_BUILD_PRIOR_GAMES)
+                lcb = bwr - ITEM_CORE_BUILD_LCB_Z * math.sqrt(max(bwr * (1 - bwr), 1e-6) / bg)
+                pick = bg / quick_games
+                credit = min(ITEM_CORE_BUILD_PICK_CREDIT_CAP, ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT
+                             * math.log1p(pick / ITEM_CORE_BUILD_PICK_RATE_REF))
+                boot_candidates.append(dict(id=boot_id, games=bg, smoothed_wr=bwr,
+                                            pick_rate=pick, rank_score=lcb + credit))
+            route_boot = max(boot_candidates, key=lambda b: (b["rank_score"], b["games"], -b["id"]), default=None)
             completions = completion_games.get(core_pair) or Counter()
             completion, observed = max(
-                completions.items(), key=lambda entry: (entry[1], entry[0]),
+                ((items, count) for items, count in completions.items()
+                 if set(quick_ids).issubset(items)
+                 and route_boot and route_boot["id"] in items),
+                key=lambda entry: (entry[1], entry[0]),
                 default=((), 0),
             )
             if observed < min_confirm_games:
                 completion, observed = (), 0
+            if completion:
+                completion = tuple(quick_ids + [i for i in completion if i not in quick_ids])
             groups_out.append({
                 **names,
                 "slug": "coregroup:" + "+".join(str(i) for i in core_ordered),
@@ -4614,6 +4651,10 @@ def compute_champ_item_build_clusters(
                 "completion_items": _item_pair_payload(list(completion), item_meta),
                 "completion_games": observed,
                 "completion_boot": next((i for i in completion if _is_boot_item(item_meta.get(i))), 0),
+                "quick_core": {"items": _item_pair_payload(quick_ids, item_meta),
+                               "games": quick_games, "smoothed_wr": quick_wr},
+                "route_boot": ({**route_boot, "item": _item_pair_payload([route_boot["id"]], item_meta)[0]}
+                               if route_boot else None),
             })
 
         if not groups_out:

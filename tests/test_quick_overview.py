@@ -71,14 +71,19 @@ def test_quick_ui_uses_one_observed_completion_and_all_three_rarities():
     const itemTipSource=s=>`<template>${s}</template>`, buildItemTipHtml=()=>'', buildAugTipHtml=()=>'';
     const augName=a=>a.name, wrToneTier=()=>3;
     const six=Array.from({length:6},(_,i)=>({id:i+10,name:'Item'+i}));
-    const info={itemClusters:{groups:[{core:six.slice(0,2),completion:six,completionGames:25,completionBoot:15,options:[{id:999}]}]},top:{kSilver:[{id:1,wr:.6}],kGold:[{id:1,wr:.6}],kPrismatic:[{id:1,wr:.6}]}};
+    const info={itemClusters:{groups:[{core:six.slice(0,2),quickCore:{items:six.slice(0,3),g:500,wr:.58},routeBoot:{...six[5],g:300,wr:.57,pick:.6},completion:six,completionGames:25,completionBoot:15,options:[{id:999}]}]},top:{kSilver:[{id:1,wr:.6}],kGold:[{id:1,wr:.6}],kPrismatic:[{id:1,wr:.6}]}};
     let html=buildQuickOverview('1', info);
     assert.equal((html.match(/class="quick-rarity /g)||[]).length,3);
     assert(html.includes('25')); assert(!html.includes('i999.png')); assert(html.includes('增幅&lt;測試>'));
     assert(html.includes('i14.png'));
+    assert(html.includes('58.0%')); assert(html.includes('核心三件')); assert(html.includes('500'));
+    assert.equal((html.match(/class="quick-core-label"/g)||[]).length,3);
+    info.itemClusters.groups[0].routeBoot.id=999;
+    assert(!buildQuickOverview('1',info).includes('i14.png')); // never mismatch example boots
+    info.itemClusters.groups[0].routeBoot.id=15;
     info.itemClusters.groups[0].completionGames=2;
-    html=buildQuickOverview('1',info); assert(!html.includes('i14.png')); assert(html.includes('樣本不足'));
-    currentLang='en'; assert(buildQuickOverview('1',info).includes('Not enough full-build samples'));
+    html=buildQuickOverview('1',info); assert(!html.includes('i14.png')); assert(html.includes('先參考核心組合'));
+    currentLang='en'; assert(buildQuickOverview('1',info).includes('No full-build example'));
     assert(buildOverviewModes('1',info,'COMPARE').includes('data-overview-mode="compare"'));
     '''
     subprocess.run(['node', '-e', functions + script], check=True, capture_output=True, text=True, encoding='utf8')

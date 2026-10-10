@@ -4663,26 +4663,32 @@
         try { return localStorage.getItem(OVERVIEW_MODE_KEY) === 'compare' ? 'compare' : 'quick'; }
         catch { return 'quick'; }
     }
-    function quickOverviewItem(item) {
+    function quickOverviewItem(item, core = false) {
         const name = itemDisplayName(item);
-        return `<button type="button" class="quick-item has-item-tip" aria-label="${escHtml(name)}">${itemIconHtml(item, 'quick-item-icon', name)}<span>${escHtml(name)}</span>${itemTipSource(buildItemTipHtml({name, items: [item]}))}</button>`;
+        return `<button type="button" class="quick-item has-item-tip${core ? ' is-core' : ''}" aria-label="${escHtml(name)}">${itemIconHtml(item, 'quick-item-icon', name)}<span>${escHtml(name)}</span>${core ? `<small class="quick-core-label">${escHtml(pickLang('核心', 'Core'))}</small>` : ''}${itemTipSource(buildItemTipHtml({name, items: [item]}))}</button>`;
     }
     function buildQuickOverview(cid, info) {
         const groups = info.itemClusters?.groups || [];
         const selected = Math.min(quickOverviewRoutes.get(String(cid)) || 0, Math.max(0, groups.length - 1));
         const group = groups[selected];
         const completion = group?.completion || [];
-        const complete = completion.length === 6 && Number(group.completionGames) >= 3;
-        const items = complete ? completion : (group?.core || info.items?.top?.[0]?.items || []);
-        const boot = complete && group.completionBoot
-            ? completion.find(item => Number(item.id) === Number(group.completionBoot))
-            : info.boots?.top?.[0]?.items?.[0];
+        const core = group?.quickCore?.items?.length ? group.quickCore : {items: group?.core || [], g: group?.g, wr: group?.wr};
+        const coreIds = new Set(core.items.map(item => Number(item.id)));
+        const boot = group?.routeBoot;
+        const complete = completion.length === 6 && Number(group.completionGames) >= 3
+            && core.items.every(item => completion.some(i => Number(i.id) === Number(item.id)))
+            && boot && completion.some(item => Number(item.id) === Number(boot.id));
+        const items = complete ? completion : core.items;
         const spell = info.spells?.top?.[0];
         const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
         const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}">${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</button>`).join('')}</div>` : '';
         const buildNote = complete
-            ? pickLang(`常見完整套裝 · ${fmtInt(group.completionGames)} 場；依對局調整。`, `Observed full build · ${fmtInt(group.completionGames)} games; adapt to the match.`)
-            : pickLang('完整套裝樣本不足，先參考核心裝。', 'Not enough full-build samples; start with the core items.');
+            ? pickLang(`成裝範例 · 完整背包觀察 ${fmtInt(group.completionGames)} 場；後續裝備依對局調整。`, `Build example · ${fmtInt(group.completionGames)} full inventories observed; adapt later items to the match.`)
+            : pickLang('目前沒有符合核心與鞋子的成裝範例，先參考核心組合。', 'No full-build example matching this core and boots yet; use the core combination.');
+        const basis = core.items.length === 3 ? pickLang('核心三件', 'Three-item core') : pickLang('核心兩件', 'Two-item core');
+        const rate = Number(core.g) > 0 && Number.isFinite(core.wr)
+            ? `<div class="quick-build-rate" title="${escHtml(pickLang('依核心組合歷史勝率平滑估計；後續裝備與鞋子不計入此數字，並非單場勝負預測。', 'Smoothed historical win rate of this core combination; excludes later items and boots, not a prediction of a single match.'))}"><span>${escHtml(pickLang('預估勝率', 'Estimated win rate'))}</span><strong>${pct(core.wr)}</strong><small>${escHtml(basis)} · ${fmtInt(core.g)} ${escHtml(pickLang('場', 'games'))}</small></div>` : '';
+        const bootNote = boot ? `<p class="quick-note">${escHtml(basis)} · ${fmtInt(boot.g)} ${escHtml(pickLang('場', 'games'))}<br>${escHtml(pickLang('選用', 'Pick'))} ${pct(boot.pick)} · ${escHtml(pickLang('勝率', 'WR'))} ${pct(boot.wr)}</p>` : `<p class="quick-note">${escHtml(pickLang('這條路線的鞋子樣本不足。', 'Not enough boot samples for this build.'))}</p>`;
         const rarities = [['kSilver', 'silver', '銀色', 'Silver'], ['kGold', 'gold', '金色', 'Gold'], ['kPrismatic', 'prismatic', '彩色', 'Prismatic']];
         const augments = rarities.map(([key, css, zh, en]) => {
             const rows = (info.top?.[key] || []).slice(0, 3);
@@ -4693,7 +4699,7 @@
                 return `<li><button type="button" class="quick-augment has-item-tip" data-aug-id="${escHtml(String(row.id))}" aria-label="${escHtml(`${name} · ${pct(row.wr)}`)}"><span class="quick-augment-icon">${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}</span><span class="quick-augment-name">${escHtml(name)}</span><b class="wr-${wrToneTier(row)}">${pct(row.wr)}</b>${itemTipSource(buildAugTipHtml(row, false))}</button></li>`;
             }).join('')}</ol>${rows.length ? '' : missing}</section>`;
         }).join('');
-        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '六格成裝參考' : '推薦核心裝', complete ? 'Full build reference' : 'Recommended core'))}</h3>${choices}<div class="quick-items">${items.map(quickOverviewItem).join('') || missing}</div><p class="quick-note">${escHtml(buildNote)}</p></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('鞋子', 'Boots'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div></section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(quickOverviewItem).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>`;
+        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '成裝範例' : '推薦核心組合', complete ? 'Build example' : 'Recommended core combination'))}</h3>${choices}<div class="quick-build-line"><div class="quick-items">${items.map(item => quickOverviewItem(item, coreIds.has(Number(item.id)))).join('') || missing}</div>${rate}</div><p class="quick-note">${escHtml(buildNote)}</p></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('這條路線的鞋子', 'Boots for this build'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div>${bootNote}</section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(item => quickOverviewItem(item)).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>`;
     }
     function buildOverviewModes(cid, info, comparison) {
         const mode = readOverviewMode();
