@@ -164,6 +164,49 @@ const feedbackFab = document.querySelector('.feedback-fab');
         champDetailLoads.set(key, request);
         return request;
     }
+    let fullAugmentStatsReady = !DATA.augmentStatsUrl;
+    let fullAugmentStatsLoad = null;
+    let fullAugmentStatsFailed = false;
+    function ensureFullAugmentStats() {
+        if (fullAugmentStatsReady) return Promise.resolve();
+        if (fullAugmentStatsLoad) return fullAugmentStatsLoad;
+        const version = DATA.detailVersion ? `?v=${encodeURIComponent(DATA.detailVersion)}` : '';
+        fullAugmentStatsLoad = loadSitePayload(`${DATA.augmentStatsUrl}${version}`).then(stats => {
+            for (const cid of Object.keys(DATA.champs || {})) {
+                const buckets = stats && stats[cid];
+                if (!buckets || typeof buckets !== 'object' || Array.isArray(buckets)
+                    || Object.values(buckets).some(rows => !Array.isArray(rows))
+                    || Object.entries(DATA.champs[cid].top || {}).some(([rarity, rows]) =>
+                        !Array.isArray(buckets[rarity]) || rows.some(row =>
+                            !buckets[rarity].some(full => String(full.id) === String(row.id))))) {
+                    throw new Error('Invalid full augment rankings');
+                }
+            }
+            Object.entries(stats).forEach(([cid, top]) => {
+                if (DATA.champs[cid]) DATA.champs[cid].top = top;
+            });
+            _augChampIdx = null;
+            fullAugmentStatsReady = true;
+            fullAugmentStatsFailed = false;
+        }).catch(err => {
+            fullAugmentStatsFailed = true;
+            throw err;
+        }).finally(() => { fullAugmentStatsLoad = null; });
+        return fullAugmentStatsLoad;
+    }
+    function waitForFullAugmentStats(host, resume) {
+        if (fullAugmentStatsReady) return false;
+        const text = fullAugmentStatsFailed
+            ? pickLang('增幅資料載入失敗。', 'Could not load augment data.')
+            : pickLang('正在載入增幅資料…', 'Loading augment data…');
+        const content = `<p role="status">${escHtml(text)}</p>${fullAugmentStatsFailed
+            ? `<button type="button" class="tool-btn" data-augment-stats-retry>${escHtml(pickLang('重試', 'Retry'))}</button>` : ''}`;
+        host.innerHTML = host.id === 'augch-host'
+            ? `<div class="augch-card" role="dialog" aria-modal="true" aria-label="${escHtml(pickLang('增幅推薦英雄', 'Champions for this augment'))}"><button type="button" class="augch-close" id="augch-close" aria-label="${escHtml(pickLang('關閉', 'Close'))}">×</button>${content}</div>`
+            : content;
+        if (!fullAugmentStatsFailed) ensureFullAugmentStats().then(resume).catch(resume);
+        return true;
+    }
     // Empirical secondary artifacts: fetch in parallel (not waterfall).  Names
     // for zh-CN are optional for first paint (t2s fallback works); load them
     // after the main payload without blocking the dual-API path when unused.
@@ -707,7 +750,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226668":["Fighter"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Tank"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773154":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773161":["Fighter"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3097":["Marksman"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Fighter"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -4201,6 +4244,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             view.appendChild(host);
         }
         const copy = tr();
+        if (waitForFullAugmentStats(host, renderAugChamps)) return;
         const rows = augChampIndex().get(Number(augChampsId)) || [];
         const byLift = rows.slice().sort((a, b) => (b.score - a.score) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
         const byPick = rows.slice().sort((a, b) => (b.pick - a.pick) || (b.g - a.g)).slice(0, AUG_CHAMP_LIST_LIMIT);
@@ -4346,6 +4390,93 @@ const feedbackFab = document.querySelector('.feedback-fab');
             img.addEventListener('error', () => art.remove(), { once: true });
         }
     }
+
+    const OVERVIEW_MODE_KEY = 'aram-overview-mode';
+    const quickOverviewRoutes = new Map();
+    function readOverviewMode() {
+        try { return localStorage.getItem(OVERVIEW_MODE_KEY) === 'compare' ? 'compare' : 'quick'; }
+        catch { return 'quick'; }
+    }
+    function quickOverviewItem(item, core = false) {
+        const name = itemDisplayName(item);
+        return `<button type="button" class="quick-item has-item-tip${core ? ' is-core' : ''}" aria-label="${escHtml(name)}">${itemIconHtml(item, 'quick-item-icon', name)}<span>${escHtml(name)}</span>${core ? `<small class="quick-core-label">${escHtml(pickLang('核心', 'Core'))}</small>` : ''}${itemTipSource(buildItemTipHtml({name, items: [item]}))}</button>`;
+    }
+    function buildQuickOverview(cid, info) {
+        const groups = info.itemClusters?.groups || [];
+        const selected = Math.min(quickOverviewRoutes.get(String(cid)) || 0, Math.max(0, groups.length - 1));
+        const group = groups[selected];
+        const completion = group?.completion || [];
+        const core = group?.quickCore?.items?.length ? group.quickCore : {items: group?.core || [], g: group?.g, wr: group?.wr};
+        const coreIds = new Set(core.items.map(item => Number(item.id)));
+        const boot = group?.routeBoot;
+        // The engine only emits a completion whose every step cleared its support floor,
+        // so the UI checks shape (extends this core, ends in this route's boots), not sample size.
+        const complete = completion.length > core.items.length + 1 && Number(group.completionGames) > 0
+            && core.items.every(item => completion.some(i => Number(i.id) === Number(item.id)))
+            && boot && completion.some(item => Number(item.id) === Number(boot.id));
+        const items = complete ? completion : core.items;
+        const spell = info.spells?.top?.[0];
+        const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
+        const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}"><span>${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</span>${Number(g.pick) > 0 ? `<small>${escHtml(pickLang('選用', 'Pick'))} ${pct(g.pick)}</small>` : ''}</button>`).join('')}</div>` : '';
+        const buildNote = complete
+            ? pickLang(`核心後為常見搭配 · ${fmtInt(group.completionGames)} 場`, `Later items are common pairings · ${fmtInt(group.completionGames)} games`)
+            : pickLang('樣本不足，僅顯示核心', 'Not enough games for a full build; core only');
+        const buildNoteTip = complete
+            ? pickLang('核心之後依序取最常一起出的裝備；場數為同時持有這幾件（不含鞋子）的對局。後段請依對局調整。', 'After the core, each next item is the one most often built alongside; the count is games holding all of these (boots aside). Adapt the later items to the match.')
+            : '';
+        const basis = core.items.length === 3 ? pickLang('核心三件', 'Three-item core') : pickLang('核心兩件', 'Two-item core');
+        const rate = Number(core.g) > 0 && Number.isFinite(core.wr)
+            ? `<div class="quick-build-rate" title="${escHtml(pickLang('依核心組合歷史勝率平滑估計；後續裝備與鞋子不計入此數字，並非單場勝負預測。', 'Smoothed historical win rate of this core combination; excludes later items and boots, not a prediction of a single match.'))}"><span>${escHtml(pickLang('預估勝率', 'Estimated win rate'))}</span><strong>${pct(core.wr)}</strong><small>${escHtml(basis)} · ${fmtInt(core.g)} ${escHtml(pickLang('場', 'games'))}</small></div>` : '';
+        const bootNote = boot ? `<p class="quick-note">${escHtml(pickLang('勝率', 'WR'))} ${pct(boot.wr)} · ${fmtInt(boot.g)} ${escHtml(pickLang('場', 'games'))}</p>` : `<p class="quick-note">${escHtml(pickLang('樣本不足', 'Not enough games'))}</p>`;
+        const rarities = [['kSilver', 'silver', '銀色', 'Silver'], ['kGold', 'gold', '金色', 'Gold'], ['kPrismatic', 'prismatic', '彩色', 'Prismatic']];
+        const augments = rarities.map(([key, css, zh, en]) => {
+            const rows = (info.top?.[key] || []).slice(0, 3);
+            return `<section class="quick-rarity rarity-${css}"><h3>${escHtml(pickLang(zh, en))}<small>TOP 3</small></h3><ol>${rows.map(row => {
+                const aug = DATA.augs[row.id];
+                if (!aug) return '';
+                const name = augName(aug, row.id);
+                return `<li><button type="button" class="quick-augment has-item-tip" data-aug-id="${escHtml(String(row.id))}" aria-label="${escHtml(`${name} · ${pct(row.wr)}`)}"><span class="quick-augment-icon">${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}</span><span class="quick-augment-name">${escHtml(name)}</span><b class="wr-${wrToneTier(row)}">${pct(row.wr)}</b>${itemTipSource(buildAugTipHtml(row, false))}</button></li>`;
+            }).join('')}</ol>${rows.length ? '' : missing}</section>`;
+        }).join('');
+        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '推薦出裝' : '推薦核心', complete ? 'Recommended build' : 'Recommended core'))}</h3>${choices}<div class="quick-build-line"><div class="quick-items">${items.map(item => quickOverviewItem(item, coreIds.has(Number(item.id)))).join('') || missing}</div>${rate}</div><p class="quick-note"${buildNoteTip ? ` title="${escHtml(buildNoteTip)}"` : ''}>${escHtml(buildNote)}</p></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('鞋子', 'Boots'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div>${bootNote}</section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(item => quickOverviewItem(item)).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>${groups.length ? `<p class="quick-more"><button type="button" data-overview-mode="compare">${escHtml(groups.length > 1 ? pickLang(`比較全部 ${groups.length} 條路線`, `Compare all ${groups.length} build paths`) : pickLang('查看完整數據', 'See full stats'))}<span aria-hidden="true"> →</span></button></p>` : ''}`;
+    }
+    function buildOverviewModes(cid, info, comparison) {
+        const mode = readOverviewMode();
+        return `<div class="champ-overview" data-overview-cid="${escHtml(String(cid))}"><div class="overview-mode-switch" role="group" aria-label="${escHtml(pickLang('概覽模式', 'Overview mode'))}">${[['quick', '快速推薦', 'Quick picks'], ['compare', '詳細比較', 'Compare builds']].map(([key, zh, en]) => `<button type="button" data-overview-mode="${key}" aria-pressed="${mode === key}">${escHtml(pickLang(zh, en))}</button>`).join('')}</div><div class="quick-overview"${mode === 'quick' ? '' : ' hidden'}>${buildQuickOverview(cid, info)}</div><div class="compare-overview"${mode === 'compare' ? '' : ' hidden'}>${comparison}</div></div>`;
+    }
+    document.addEventListener('click', event => {
+        const retry = event.target.closest('[data-augment-stats-retry]');
+        if (retry) {
+            fullAugmentStatsFailed = false;
+            if (retry.closest('#augch-host')) renderAugChamps();
+            else renderAugDraft();
+            return;
+        }
+        const modeButton = event.target.closest('[data-overview-mode]');
+        if (modeButton) {
+            const mode = modeButton.dataset.overviewMode;
+            try { localStorage.setItem(OVERVIEW_MODE_KEY, mode); } catch {}
+            document.querySelectorAll('.champ-overview').forEach(host => {
+                host.querySelector('.quick-overview').hidden = mode !== 'quick';
+                host.querySelector('.compare-overview').hidden = mode !== 'compare';
+                host.querySelectorAll('.overview-mode-switch [data-overview-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.overviewMode === mode)));
+            });
+            // A link inside the panel it just hid would drop focus; hand it to the switch.
+            if (!modeButton.closest('.overview-mode-switch')) {
+                const host = modeButton.closest('.champ-overview');
+                host.querySelector('.overview-mode-switch [aria-pressed="true"]')?.focus({preventScroll: true});
+                host.scrollIntoView({block: 'start'});
+            }
+            return;
+        }
+        const route = event.target.closest('[data-quick-route]');
+        if (route) {
+            const host = route.closest('.champ-overview'), cid = host.dataset.overviewCid;
+            quickOverviewRoutes.set(cid, Number(route.dataset.quickRoute));
+            host.querySelector('.quick-overview').innerHTML = buildQuickOverview(cid, DATA.champs[cid]);
+            host.querySelector(`[data-quick-route="${route.dataset.quickRoute}"]`)?.focus({preventScroll: true});
+        }
+    });
 
     function renderDetail(cid, opts = {}) {
         // renderDetail reads item name/icon off DATA.champs[cid]'s stripped item
@@ -5017,7 +5148,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
         // \u6982\u89bd: the hero carries the headline numbers; this is a two-column split \u2014 build routes
         // on the left, a compact boots rail filling the space on the right.
-        const overviewTabContent = `
+        const overviewTabContent = buildOverviewModes(cid, info, `
             <div class="overview-split">
                 <div class="overview-split-main">
                     ${buildCoreGroupSection(
@@ -5035,7 +5166,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                     })}
                 </div>
             </div>
-        `;
+        `);
         // \u51fa\u88dd: single items + first-two items stacked (no sub-tabs).
         const itemTabContent = `
             ${buildSingleItemPanel(singleItemTitle, singleItemMeta, singleItemInfo)}
@@ -8867,6 +8998,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     function renderAugDraft() {
         const host = document.getElementById('aug-draft-host');
         if (!host) return;
+        if (waitForFullAugmentStats(host, renderAugDraft)) return;
         const copy = tr();
         if (!DATA || !DATA.champs || !DATA.augs) {
             host.innerHTML = `<p class="game-board-empty">${escHtml(copy.augGameNoData || '')}</p>`;
@@ -10605,7 +10737,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     function openHomeDetail(card, force = false) {
         if (!force && card === homeDetailCard) { closeHomeDetail(true); return; }
         const savedScroll = force ? homeDetailScrollY : window.scrollY;
-        const tab = force ? homeDetailHost?.querySelector('.detail-main-tabs > input:checked')?.id.split('-').pop() : 'augments';
+        const tab = force ? homeDetailHost?.querySelector('.detail-main-tabs > input:checked')?.id.split('-').pop() : 'overview';
         closeHomeDetail();
         homeDetailCard = card;
         homeDetailScrollY = savedScroll;
@@ -10620,7 +10752,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         card.classList.add('detail-selected');
         card.setAttribute('aria-expanded', 'true');
         card.setAttribute('aria-controls', host.id);
-        const actions = `<div class="inline-detail-actions"><a href="${escHtml(pathForRoute('champ', champSlugForCid(cid)))}" data-champ-page="${escHtml(champSlugForCid(cid))}" aria-label="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}" title="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}"><span class="inline-detail-link-text">${escHtml(pickLang('完整分析', 'Full analysis'))}</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></a><button class="inline-detail-close" type="button" data-home-detail-close aria-label="${escHtml(pickLang('收合', 'Collapse'))}" title="${escHtml(pickLang('收合', 'Collapse'))}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>`;
+        const actions = `<div class="inline-detail-actions"><a href="${escHtml(pathForRoute('champ', champSlugForCid(cid)))}" target="_blank" rel="noopener" data-champ-page="${escHtml(champSlugForCid(cid))}" aria-label="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}" title="${escHtml(pickLang('查看完整英雄分析', 'View full champion analysis'))}"><span class="inline-detail-link-text">${escHtml(pickLang('完整分析', 'Full analysis'))}</span><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></a><button class="inline-detail-close" type="button" data-home-detail-close aria-label="${escHtml(pickLang('收合', 'Collapse'))}" title="${escHtml(pickLang('收合', 'Collapse'))}"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>`;
         host.innerHTML = `<div class="detail detail-inline">${actions}<div class="detail-skeleton" aria-hidden="true"></div></div>`;
         positionHomeDetail();
         const token = ++homeDetailToken;
@@ -10917,6 +11049,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         }
         const link = ev.target.closest('[data-champ-page]');
         if (!link) return;
+        if (link.matches('a[target]') && link.target.toLowerCase() !== '_self') return;
         // Let modified clicks open a new tab via the real href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
