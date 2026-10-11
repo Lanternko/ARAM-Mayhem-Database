@@ -430,7 +430,7 @@
             : '';
         const dataPts = axes.map((a, i) => at(i, R * frac(a)));
         const dataPoly = dataPts.map(p => p.map(v => v.toFixed(1)).join(',')).join(' ');
-        const dotCol = a => signed ? ((a.delta || 0) >= 0 ? '#3aa0ff' : '#e2574b') : '#3aa0ff';
+        const dotCol = a => signed ? ((a.delta || 0) >= 0 ? '#3aa0ff' : '#e2574b') : (opts.stroke || '#3aa0ff');
         const dots = dataPts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.2" fill="${dotCol(axes[i])}"/>`).join('');
         const fontSize = 15;
         const labels = axes.map((a, i) => {
@@ -440,7 +440,7 @@
             let [lx, ly] = at(i, labelR);
             const anchor = Math.abs(lx - cx) < 1 ? 'middle' : (lx > cx ? 'start' : 'end');
             const valTxt = signed ? ((a.delta || 0) >= 0 ? '+' : '') + (a.delta || 0).toFixed(1) : String(Math.round((a.pct || 0) * 100));
-            const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : '#7fc8ff';
+            const valCol = signed ? ((a.delta || 0) >= 0 ? '#7fc8ff' : '#f0998a') : (opts.valueColor || '#7fc8ff');
             const lines = radarLabelLines(a.label);
             const longest = lines.reduce((m, L) => Math.max(m, L.length), 0);
             const estW = Math.max(32, (longest + String(valTxt).length + 1) * 8.6);
@@ -458,8 +458,8 @@
                     + `<tspan x="${lx.toFixed(1)}" dy="${(fontSize * 1.15).toFixed(1)}">${escHtml(lines[lines.length - 1])}</tspan>${val}`;
             return `<text x="${lx.toFixed(1)}" y="${y0.toFixed(1)}" font-size="${fontSize}" font-weight="600" text-anchor="${anchor}" fill="var(--radar-label)">${bodyWithVal}</text>`;
         }).join('');
-        const fillCol = signed ? 'rgba(120,130,140,0.16)' : 'rgba(58,160,255,0.18)';
-        const strokeCol = signed ? 'rgba(160,170,180,0.85)' : '#3aa0ff';
+        const fillCol = signed ? 'rgba(120,130,140,0.16)' : (opts.fill || 'rgba(58,160,255,0.18)');
+        const strokeCol = signed ? 'rgba(160,170,180,0.85)' : (opts.stroke || '#3aa0ff');
         return `<svg class="comp-radar" viewBox="0 0 ${RADAR_VB_W} ${RADAR_VB_H}" width="100%" role="img" aria-label="${escHtml(ariaLabel)}">${grid}${baseline}${spokes}<polygon points="${dataPoly}" fill="${fillCol}" stroke="${strokeCol}" stroke-width="2"/>${dots}${labels}</svg>`;
     }
 
@@ -605,7 +605,11 @@
             label: pickLang(a.zh, a.en),
             pct: cap[a.key] || 0,
         }));
-        const radar = compRadarSvg(abilityAxes, copy.compFitTitle);
+        const radar = compRadarSvg(abilityAxes, copy.compFitTitle, {
+            stroke: 'var(--accent)',
+            fill: 'color-mix(in oklab, var(--accent) 18%, transparent)',
+            valueColor: 'var(--accent-soft)',
+        });
 
         // Skill-scaling ("operation coefficient"): WR(high-skill) − WR(low-skill).
         const ss = info && info.skillScaling;
