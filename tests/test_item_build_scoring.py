@@ -230,8 +230,9 @@ class ItemBuildScoringTests(unittest.TestCase):
         # popular/winrate lanes stay reserved for genuine 3rd-item picks.
         self.assertIn(201, opt_by_id)
         self.assertEqual(opt_by_id[201]["lane"], "")
-        # A completion must be one observed inventory, not the union of the
-        # popular option 103 and higher-win-rate alternative 104.
+        # The example extends the quick core with the items most often held
+        # alongside it; it never mixes in the alternative third item 104, and
+        # its count is the games holding every non-boot item shown.
         self.assertEqual({i["id"] for i in grp["completion_items"]}, {101, 102, 103, 201, 202, 301})
         self.assertEqual(grp["completion_games"], 25)
         self.assertEqual(grp["completion_boot"], 301)
@@ -263,8 +264,10 @@ class ItemBuildScoringTests(unittest.TestCase):
         # Both are insufficient reasons to replace the supported route boot.
         self.assertEqual(group['route_boot']['id'], 301)
         self.assertEqual(group['route_boot']['games'], 95)
-        self.assertEqual([i['id'] for i in group['completion_items']][:3], [101, 102, 103])
-        self.assertEqual(group['completion_boot'], 301)
+        # Only 15 games carry 201/202 with this core: below the 30-game floor,
+        # so no build example is shown rather than a thinly supported one.
+        self.assertEqual(group['completion_items'], [])
+        self.assertEqual(group['completion_games'], 0)
 
     def test_core_build_keyed_on_core2_rush_without_completion(self) -> None:
         item_meta = {
@@ -341,7 +344,9 @@ class ItemBuildScoringTests(unittest.TestCase):
             shown_ids.update(int(o["id"]) for o in grp["options"])
             shown_ids.update(int(it["id"]) for it in grp["tail_items"])
         self.assertNotIn(223069, shown_ids)  # oversized item dropped beyond the 6-slot cap
-        self.assertTrue(all(not grp["completion_items"] for grp in groups))
+        for grp in groups:
+            self.assertNotIn(223069, {int(it["id"]) for it in grp["completion_items"]})
+            self.assertLessEqual(len(grp["completion_items"]), 6)
 
     def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
         item_meta = {

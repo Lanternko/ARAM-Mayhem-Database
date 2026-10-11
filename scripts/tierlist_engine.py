@@ -239,7 +239,7 @@ ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD = 0.80
 ITEM_CORE_BUILD_PRIOR_GAMES = 20.0          # smoothing pseudo-games toward champ baseline
 ITEM_CORE_BUILD_EARLY_PRIOR = 20.0          # shrinkage for the build-order (earliness) signal
 ITEM_CORE_BUILD_MIN_GAMES = 80              # a core triple must be observed >= this often
-ITEM_CORE_BUILD_MIN_CONFIRM = 3            # a real 6-item completion must exist >= this often
+ITEM_CORE_BUILD_MIN_CONFIRM = 30           # every item added to the build example must co-occur >= this often
 ITEM_CORE_BUILD_WINRATE_MIN_GAMES = 80      # stricter sample floor for the winrate lane
 ITEM_CORE_BUILD_WINRATE_MIN_LCB = 0.0       # winrate lane must be confidently above baseline
 ITEM_CORE_BUILD_LCB_Z = 1.65                # small-sample penalty (lower confidence bound)
@@ -4380,9 +4380,10 @@ def compute_champ_item_build_clusters(
     each group we then surface every item built afterwards — not just the single
     3rd-earliest one — that clears a pick-rate OR win-rate bar, each scored on
     its own conditional win/pick rate.  The core-2 pick/win rate carries orders
-    of magnitude more support than any exact 6-item route. A real observed
-    completion supplies the quick overview's six slots without inheriting the
-    core group's win rate; ``exact_games`` confirms individual follow-ups.
+    of magnitude more support than any exact 6-item route. The quick overview's
+    build example extends the core one co-occurring item at a time (each step
+    conditioned on everything already chosen) without inheriting the core
+    group's win rate; ``exact_games`` confirms individual follow-ups.
     Per champion we curate up to ``top_n`` core-2 groups: 1 popular (highest
     pick), up to 2 winrate (highest lower-confidence-bound lift on a stable
     sample), then the rest by a blended score.  ``bot`` stays empty for
@@ -4410,7 +4411,7 @@ def compute_champ_item_build_clusters(
         )
 
     champ_total: Counter[int] = Counter()
-    champ_builds: dict[int, list[tuple[tuple[int, ...], int, int, bool]]] = defaultdict(list)
+    champ_builds: dict[int, list[tuple[tuple[int, ...], int, int]]] = defaultdict(list)
     try:
         for blue_wins, participants_json in sql_rows:
             if not participants_json:
@@ -4423,8 +4424,6 @@ def compute_champ_item_build_clusters(
                     continue
                 inventory = participant.get("items") or participant.get("itemSlots") or []
                 route_ids = _participant_route_item_ids(inventory, item_meta)
-                occupied = sum(1 for item_id in inventory if str(item_id).isdigit() and int(item_id) > 0)
-                complete_inventory = occupied == max_items and len(route_ids) == max_items
                 champ_total[cid] += 1
                 if not route_ids:
                     continue
@@ -4438,7 +4437,7 @@ def compute_champ_item_build_clusters(
                 # signal even though they cannot form a 3-item core themselves.
                 boots = [item_id for item_id in route_ids if _is_boot_item(item_meta.get(item_id))]
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won, complete_inventory))
+                champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won))
     finally:
         con.close()
 
@@ -4452,7 +4451,7 @@ def compute_champ_item_build_clusters(
 
         item_games: Counter[int] = Counter()
         item_size_sum: Counter[int] = Counter()
-        for build_core, _boot, _won, _complete in builds:
+        for build_core, _boot, _won in builds:
             size = len(build_core)
             for item_id in build_core:
                 item_games[item_id] += 1
@@ -4484,10 +4483,10 @@ def compute_champ_item_build_clusters(
         option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
-        completion_games: dict[tuple[int, int], Counter[tuple[int, ...]]] = defaultdict(Counter)
+        route_builds: dict[tuple[int, int], list[frozenset[int]]] = defaultdict(list)
         route_boot_games: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
         route_boot_wins: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
-        for build_core, boot, won, complete_inventory in builds:
+        for build_core, boot, won in builds:
             if len(build_core) < 2:
                 continue
             ranked_core = sorted(build_core, key=earliness_key)  # earliest built first
@@ -4502,12 +4501,11 @@ def compute_champ_item_build_clusters(
             # latest-dropped items never become options.
             route_ranked = ranked_core[:full_core_len] if boot else ranked_core[:max_items]
             is_full = len(route_ranked) + (1 if boot else 0) == max_items
-            # Only an actual six-slot inventory is eligible. Never create a
-            # completion by combining independently popular option marginals,
-            # or by truncating an invalid inventory with more than six items.
-            if complete_inventory and len(build_core) + bool(boot) == max_items:
-                completion = tuple(route_ranked + ([boot] if boot else []))
-                completion_games[core_pair][completion] += 1
+            # Inventories that fit the six slots feed the build example. An
+            # invalid inventory with more than six items is never truncated
+            # into one.
+            if len(build_core) + bool(boot) <= max_items:
+                route_builds[core_pair].append(frozenset(build_core))
             for follow in route_ranked[option_index:]:
                 option_games[core_pair][follow] += 1
                 option_wins[core_pair][follow] += won
@@ -4616,18 +4614,26 @@ def compute_champ_item_build_clusters(
                 boot_candidates.append(dict(id=boot_id, games=bg, smoothed_wr=bwr,
                                             pick_rate=pick, rank_score=lcb + credit))
             route_boot = max(boot_candidates, key=lambda b: (b["rank_score"], b["games"], -b["id"]), default=None)
-            completions = completion_games.get(core_pair) or Counter()
-            completion, observed = max(
-                ((items, count) for items, count in completions.items()
-                 if set(quick_ids).issubset(items)
-                 and route_boot and route_boot["id"] in items),
-                key=lambda entry: (entry[1], entry[0]),
-                default=((), 0),
-            )
-            if observed < min_confirm_games:
-                completion, observed = (), 0
-            if completion:
-                completion = tuple(quick_ids + [i for i in completion if i not in quick_ids])
+            # Build example: extend the core one item at a time, each step
+            # taking the item most often held together with EVERYTHING already
+            # chosen. Every step is a real co-occurrence, so the set is
+            # compatible in game, unlike a union of independently popular
+            # options; and each step keeps >= min_confirm_games of support,
+            # unlike the single most frequent exact six-slot inventory, which
+            # is usually a handful of games. It stops early rather than pad.
+            chain = list(quick_ids)
+            observed = 0
+            if third and route_boot:
+                pool = [b for b in route_builds[core_pair] if third["id"] in b]
+                while len(chain) < max_items - 1:
+                    follow_games = Counter(i for b in pool for i in b if i not in chain)
+                    follow, fg = max(follow_games.items(), key=lambda e: (e[1], -e[0]), default=(0, 0))
+                    if fg < min_confirm_games:
+                        break
+                    chain.append(follow)
+                    observed = fg
+                    pool = [b for b in pool if follow in b]
+            completion = tuple(chain + [route_boot["id"]]) if observed else ()
             groups_out.append({
                 **names,
                 "slug": "coregroup:" + "+".join(str(i) for i in core_ordered),

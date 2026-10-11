@@ -57,7 +57,7 @@ def test_full_rankings_loader_dedupes_validates_and_retries():
                    check=True, capture_output=True, text=True, encoding='utf8')
 
 
-def test_quick_ui_uses_one_observed_completion_and_all_three_rarities():
+def test_quick_ui_uses_one_supported_completion_and_all_three_rarities():
     js = (ROOT / 'scripts/templates/site.js').read_text(encoding='utf8')
     functions = js[js.index("    const OVERVIEW_MODE_KEY"):js.index("    document.addEventListener('click', event => {", js.index('    const OVERVIEW_MODE_KEY'))]
     script = r'''
@@ -81,9 +81,15 @@ def test_quick_ui_uses_one_observed_completion_and_all_three_rarities():
     info.itemClusters.groups[0].routeBoot.id=999;
     assert(!buildQuickOverview('1',info).includes('i14.png')); // never mismatch example boots
     info.itemClusters.groups[0].routeBoot.id=15;
-    info.itemClusters.groups[0].completionGames=2;
-    html=buildQuickOverview('1',info); assert(!html.includes('i14.png')); assert(html.includes('先參考核心組合'));
-    currentLang='en'; assert(buildQuickOverview('1',info).includes('No full-build example'));
-    assert(buildOverviewModes('1',info,'COMPARE').includes('data-overview-mode="compare"'));
+    // A chain that stopped one item short is still a valid example.
+    info.itemClusters.groups[0].completion=[...six.slice(0,4),six[5]];
+    html=buildQuickOverview('1',info); assert(html.includes('i13.png')); assert(html.includes('i15.png')); assert(!html.includes('i14.png'));
+    // Core plus boots alone adds nothing beyond the core row.
+    info.itemClusters.groups[0].completion=[...six.slice(0,3),six[5]];
+    html=buildQuickOverview('1',info); assert(html.includes('僅顯示核心'));
+    currentLang='en'; assert(buildQuickOverview('1',info).includes('core only'));
+    html=buildOverviewModes('1',info,'COMPARE');
+    assert.equal((html.match(/class="overview-mode-switch"[^]*?<\/div>/)[0].match(/data-overview-mode=/g)||[]).length,2);
+    assert(html.includes('class="quick-more"'));
     '''
     subprocess.run(['node', '-e', functions + script], check=True, capture_output=True, text=True, encoding='utf8')
