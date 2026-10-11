@@ -25,6 +25,7 @@ import ssl
 import sys
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,7 @@ from aram_nn.recommend import (
     load_synergy, parse_session, session_state_hash, suggest_for_cell,
 )
 from aram_nn.pair_synergy import PairSynergyStats
+from aram_nn.quick_picks import QuickPickSource
 from aram_nn.role_synergy import RoleSynergyStats
 
 
@@ -115,6 +117,22 @@ def _icon_cache_dir() -> Path:
         base = Path(local_appdata) if local_appdata else Path.home() / "AppData" / "Local"
         return base / APP_NAME / "icons"
     return _resource_path("data/icons")
+
+
+def _quick_pick_source(payload: dict, payload_path: Path) -> QuickPickSource | None:
+    """In-game quick picks read the site's generated champion shards.
+
+    From source those sit next to the tier payload under docs/; the frozen app
+    ships only the tier payload, so it fetches shards from the public site.
+    """
+    if not payload:
+        return None
+    frozen = getattr(sys, "frozen", False)
+    return QuickPickSource(
+        payload,
+        _icon_cache_dir().parent / "quick-picks",
+        local_root=None if frozen else payload_path.parent.parent,
+    )
 
 
 def _log_gui_exception(context: str) -> None:
@@ -224,6 +242,7 @@ class AugmentAdvisor:
 
     def __init__(self, payload_path: Path | None = None) -> None:
         self.payload_path = _resolve_resource(payload_path, DEFAULT_TIER_PAYLOAD)
+        self.payload: dict = {}
         self.augments: dict[int, dict] = {}
         self.champs: dict[int, dict] = {}
         self.name_to_id: dict[str, int] = {}
@@ -236,6 +255,7 @@ class AugmentAdvisor:
             payload = json.loads(self.payload_path.read_text(encoding="utf-8"))
         except Exception:
             return
+        self.payload = payload
 
         raw_augs = payload.get("augs") or payload.get("augments") or {}
         raw_champs = payload.get("champs") or payload.get("champions") or {}
@@ -797,6 +817,7 @@ def fake_poll_loop(
     pair_stats: PairSynergyStats | RoleSynergyStats | None,
     composition_model,
     interval: float = 3.0,
+    ingame: bool = False,
 ) -> None:
     """Synthetic poll loop for --fake mode.
 
@@ -808,12 +829,34 @@ def fake_poll_loop(
     Bench size is randomized between 5 and 10 each tick to exercise the
     GUI's vertical scrolling and to match the bench sizes a real ARAM
     queue produces once teammates start rerolling.
+
+    With `ingame`, emits one random 5v5 in-game state instead (the real loop
+    also sends that view once per game, not once per poll).
     """
     import random
 
-    q.put(("static", load_fallback_champion_names()))
+    names = load_fallback_champion_names()
+    q.put(("static", names))
     all_ids = sorted(model.champ_to_idx.keys())
     cell_id = 2
+
+    if ingame:
+        sample = random.sample(all_ids, 10)
+        my_team, enemy_team = sample[:5], sample[5:]
+        snapshot = {
+            "my_team_ids": my_team,
+            "enemy_team_ids": enemy_team,
+            "active_champion_id": my_team[cell_id],
+            "names": {cid: names[cid] for cid in sample if cid in names},
+            "matchup_prob": predict_matchup_prob(my_team, enemy_team, model, composition_model),
+        }
+        q.put((
+            "ingame", snapshot,
+            describe_team_combo(my_team, model, composition_model),
+            describe_team_combo(enemy_team, model, composition_model),
+        ))
+        stop_event.wait()
+        return
 
     while not stop_event.is_set():
         bench_size = random.randint(5, 10)
@@ -984,6 +1027,13 @@ class RecommenderApp:
         self._last_render_args: tuple | None = None
         self.active_champion_id: int | None = None
         self.augment_advisor = AugmentAdvisor()
+        self.quick_source = _quick_pick_source(
+            self.augment_advisor.payload, self.augment_advisor.payload_path,
+        )
+        self._quick_state: dict[int, str] = {}  # champion id -> loading | ready | failed
+        self._quick_route: dict[int, int] = {}
+        self._asset_photos: dict[tuple[str, int], tk.PhotoImage] = {}
+        self._last_ingame_args: tuple | None = None
         self.latest_augment_event: dict | None = None
         self._last_augment_signature: tuple | None = None
 
@@ -1096,6 +1146,8 @@ class RecommenderApp:
         # self._render_augment_panel()  # augment panel disabled (Overwolf offline)
         if self._last_render_args is not None:
             self._render(*self._last_render_args)
+        elif self._last_ingame_args is not None:
+            self._render_ingame(*self._last_ingame_args)
 
     def _drain(self) -> None:
         try:
@@ -1234,6 +1286,8 @@ class RecommenderApp:
 
     def _handle(self, msg: tuple) -> None:
         kind = msg[0]
+        if kind not in ("ingame", "quickpicks", "static"):
+            self._last_ingame_args = None
         if kind == "static":
             self.id_to_name = msg[1]
             self.header.config(text="Waiting for champ select", fg=FG)
@@ -1264,8 +1318,15 @@ class RecommenderApp:
             _, snapshot, current_combo, enemy_combo = msg
             active = snapshot.get("active_champion_id")
             self.active_champion_id = int(active) if active else None
+            if self._quick_state.get(self.active_champion_id) == "failed":
+                del self._quick_state[self.active_champion_id]  # new game, try again
             self._render_ingame(snapshot, current_combo, enemy_combo)
             self._render_augment_panel()
+        elif kind == "quickpicks":
+            _, champion_id, ok = msg
+            self._quick_state[champion_id] = "ready" if ok else "failed"
+            if self._last_ingame_args is not None and self.active_champion_id == champion_id:
+                self._render_ingame(*self._last_ingame_args)
 
     # ----- Rendering -----
 
@@ -1306,11 +1367,16 @@ class RecommenderApp:
 
     def _render_ingame(self, snapshot: dict, current_combo=None, enemy_combo=None) -> None:
         self._last_render_args = None
+        self._last_ingame_args = (snapshot, current_combo, enemy_combo)
         self.id_to_name.update(snapshot.get("names") or {})
 
         self.header.config(text="In-game · 10 champions detected", fg=FG)
         self.subheader.config(text="Champ-select bench is gone; showing current 5v5 only.")
         self._clear_body()
+
+        active = snapshot.get("active_champion_id")
+        if active and self.quick_source is not None:
+            self._render_quick_picks(self.body, int(active))
 
         matchup_prob = float(snapshot.get("matchup_prob", float("nan")))
         current_prob = matchup_prob
@@ -1356,6 +1422,256 @@ class RecommenderApp:
             "Enemy team",
             snapshot.get("enemy_team_ids") or [],
         )
+        self._grow_to_fit()
+
+    def _grow_to_fit(self) -> None:
+        """Make the window taller when the in-game view no longer fits."""
+        self.root.update_idletasks()
+        room = self.root.winfo_screenheight() - self.root.winfo_rooty() - 60  # keep clear of the taskbar
+        needed = min(self.root.winfo_reqheight(), room)
+        if needed > self.root.winfo_height():
+            self.root.geometry(f"{self.root.winfo_width()}x{needed}")
+
+    # ----- In-game quick picks (same content as the site's quick overview) -----
+
+    def _request_quick_picks(self, champion_id: int) -> None:
+        """Load the champion's shard and icons off the Tk thread."""
+        if champion_id in self._quick_state:
+            return
+        self._quick_state[champion_id] = "loading"
+        source, q = self.quick_source, self.q
+
+        def work() -> None:
+            try:
+                ok = source.warm(champion_id)
+            except Exception:
+                ok = False
+            q.put(("quickpicks", champion_id, ok))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _asset_photo(self, ref: str, target_px: int) -> tk.PhotoImage | None:
+        """PhotoImage for an already-downloaded icon; never touches the network."""
+        key = (ref, target_px)
+        if key in self._asset_photos:
+            return self._asset_photos[key]
+        path = self.quick_source.icon_path(ref, fetch=False) if ref else None
+        if path is None:
+            return None
+        try:
+            photo = tk.PhotoImage(file=str(path))
+            factor = max(1, round(photo.width() / target_px))
+            if factor > 1:
+                photo = photo.subsample(factor, factor)
+        except tk.TclError:
+            return None
+        self._asset_photos[key] = photo
+        return photo
+
+    def _asset_icon(
+        self, parent: tk.Frame, ref: str, target_px: int, bg: str, ring: str | None = None,
+    ) -> tk.Frame:
+        """Icon in a fixed square; `ring` draws the 2px outline core items get."""
+        side = target_px + 4
+        holder = tk.Frame(parent, bg=ring or bg, width=side, height=side)
+        holder.pack_propagate(False)
+        photo = self._asset_photo(ref, target_px)
+        lbl = tk.Label(holder, bg=bg, bd=0)
+        if photo is not None:
+            lbl.config(image=photo)
+            lbl.image = photo  # type: ignore[attr-defined]
+        lbl.pack(fill="both", expand=True, padx=2, pady=2)
+        return holder
+
+    def _select_quick_route(self, champion_id: int, route: int) -> None:
+        self._quick_route[champion_id] = route
+        if self._last_ingame_args is not None:
+            self._render_ingame(*self._last_ingame_args)
+
+    def _render_quick_picks(self, parent: tk.Frame, champion_id: int) -> None:
+        self._request_quick_picks(champion_id)
+        small = (FONT_SUB[0], 8)
+
+        panel = tk.Frame(parent, bg=SURFACE)
+        panel.pack(fill="x", pady=(0, 10))
+        inner = tk.Frame(panel, bg=SURFACE)
+        inner.pack(fill="x", padx=12, pady=(8, 10))
+
+        champ = (self.quick_source.payload.get("champs") or {}).get(str(champion_id)) or {}
+        name = self.id_to_name.get(champion_id) or champ.get("name_zh") or f"#{champion_id}"
+        tk.Label(
+            inner, text=f"快速推薦 · {name}", bg=SURFACE, fg=GOLD,
+            font=self._font(FONT_NAME_B), anchor="w",
+        ).pack(fill="x")
+
+        def message(text: str) -> None:
+            tk.Label(
+                inner, text=text, bg=SURFACE, fg=DIM, font=self._font(FONT_SUB), anchor="w",
+            ).pack(fill="x", pady=(4, 0))
+
+        state = self._quick_state.get(champion_id)
+        if state == "loading":
+            message("載入快速推薦…")
+            return
+        route = self._quick_route.get(champion_id, 0)
+        overview = self.quick_source.overview(champion_id, route) if state == "ready" else None
+        if overview is None or not overview.items:
+            message("暫時拿不到這隻英雄的快速推薦資料。")
+            return
+
+        def section(host: tk.Frame, text: str) -> None:
+            tk.Label(
+                host, text=text, bg=SURFACE, fg=DIM, font=self._font(FONT_SECTION), anchor="w",
+            ).pack(fill="x", pady=(0, 4))
+
+        if len(overview.routes) > 1:
+            # Tk has no flow layout: start a new line when the next button
+            # would run past the panel edge instead of letting it clip.
+            self.root.update_idletasks()
+            room = max(parent.winfo_width(), self.root.winfo_width(), 400) - 48
+            measure = tkfont.Font(font=self._font(FONT_SUB)).measure
+            line, used = None, 0
+            for index, option in enumerate(overview.routes):
+                selected = index == overview.route
+                text = option.label
+                if option.pick and option.pick > 0:
+                    text += f"  選用 {option.pick:.0%}"
+                width = measure(text) + 28  # button padding + gap
+                if line is None or used + width > room:
+                    gap = 6 if line is None else 4
+                    line = tk.Frame(inner, bg=SURFACE)
+                    line.pack(fill="x", pady=(gap, 0))
+                    used = 0
+                used += width
+                tk.Button(
+                    line, text=text,
+                    command=lambda r=index: self._select_quick_route(champion_id, r),
+                    bg=DIVIDER if selected else ROW,
+                    fg=FG if selected else DIM,
+                    activebackground=DIVIDER, activeforeground=FG,
+                    relief="flat", bd=0, padx=8, pady=3, cursor="hand2",
+                    font=self._font(FONT_SUB),
+                ).pack(side="left", padx=(0, 6))
+
+        loadout = tk.Frame(inner, bg=SURFACE)
+        loadout.pack(fill="x", pady=(10, 0))
+        loadout.grid_columnconfigure(0, weight=1)
+
+        build = tk.Frame(loadout, bg=SURFACE)
+        build.grid(row=0, column=0, sticky="nw")
+        section(build, "推薦出裝" if overview.complete else "推薦核心")
+        build_row = tk.Frame(build, bg=SURFACE)
+        build_row.pack(fill="x")
+        items = tk.Frame(build_row, bg=SURFACE)
+        items.pack(side="left", anchor="n")
+        for column, item in enumerate(overview.items):
+            items.grid_columnconfigure(column, minsize=72)
+            cell = tk.Frame(items, bg=SURFACE)
+            cell.grid(row=0, column=column, sticky="n")
+            ring = GOLD if item.is_core else None
+            self._asset_icon(cell, item.icon, 32, SURFACE, ring=ring).pack()
+            tk.Label(
+                cell, text=item.name, bg=SURFACE, fg=FG, font=self._font(small),
+                wraplength=68, justify="center",
+            ).pack()
+            if item.is_core:
+                tk.Label(cell, text="核心", bg=SURFACE, fg=GOLD, font=self._font(small)).pack()
+
+        if overview.core_wr is not None:
+            rate = tk.Frame(build_row, bg=SURFACE)
+            rate.pack(side="left", anchor="n", padx=(14, 0))
+            tk.Label(
+                rate, text="預估勝率", bg=SURFACE, fg=DIM, font=self._font(small), anchor="w",
+            ).pack(fill="x")
+            tk.Label(
+                rate, text=f"{overview.core_wr:.1%}", bg=SURFACE, fg=FG,
+                font=self._font(FONT_SCORE), anchor="w",
+            ).pack(fill="x")
+            basis = "核心三件" if overview.core_size == 3 else "核心兩件"
+            tk.Label(
+                rate, text=f"{basis} · {overview.core_games:,} 場", bg=SURFACE, fg=DIM,
+                font=self._font(small), anchor="w",
+            ).pack(fill="x")
+
+        note = (
+            f"核心後為常見搭配 · {overview.completion_games:,} 場"
+            if overview.complete else "樣本不足，僅顯示核心"
+        )
+        tk.Label(
+            build, text=note, bg=SURFACE, fg=MUTED, font=self._font(small), anchor="w",
+        ).pack(fill="x", pady=(4, 0))
+
+        utilities = tk.Frame(loadout, bg=SURFACE)
+        utilities.grid(row=0, column=1, sticky="ne", padx=(16, 0))
+        section(utilities, "鞋子")
+        boot_row = tk.Frame(utilities, bg=SURFACE)
+        boot_row.pack(fill="x")
+        if overview.boot is not None:
+            self._asset_icon(boot_row, overview.boot.icon, 32, SURFACE).pack(side="left")
+            boot_text = tk.Frame(boot_row, bg=SURFACE)
+            boot_text.pack(side="left", padx=(6, 0))
+            tk.Label(
+                boot_text, text=overview.boot.name, bg=SURFACE, fg=FG,
+                font=self._font(FONT_SUB), anchor="w",
+            ).pack(fill="x")
+            if overview.boot_wr is not None and overview.boot_games > 0:
+                tk.Label(
+                    boot_text,
+                    text=f"勝率 {overview.boot_wr:.1%} · {overview.boot_games:,} 場",
+                    bg=SURFACE, fg=DIM, font=self._font(small), anchor="w",
+                ).pack(fill="x")
+        else:
+            tk.Label(
+                boot_row, text="樣本不足", bg=SURFACE, fg=MUTED, font=self._font(small), anchor="w",
+            ).pack(fill="x")
+
+        if overview.spells:
+            tk.Frame(utilities, bg=SURFACE, height=8).pack()
+            section(utilities, "召喚師技能")
+            spell_row = tk.Frame(utilities, bg=SURFACE)
+            spell_row.pack(fill="x")
+            for spell in overview.spells:
+                self._asset_icon(spell_row, spell.icon, 32, SURFACE).pack(side="left", padx=(0, 4))
+            tk.Label(
+                spell_row, text=" + ".join(spell.name for spell in overview.spells),
+                bg=SURFACE, fg=FG, font=self._font(FONT_SUB), anchor="w",
+            ).pack(side="left", padx=(2, 0))
+
+        augments = tk.Frame(inner, bg=SURFACE)
+        augments.pack(fill="x", pady=(12, 0))
+        tiers = (
+            ("kSilver", "銀色", "#c3ccd6"),
+            ("kGold", "金色", GOLD),
+            ("kPrismatic", "彩色", "#c79bff"),
+        )
+        for column, (rarity, label, color) in enumerate(tiers):
+            augments.grid_columnconfigure(column, weight=1, uniform="quick-aug")
+            host = tk.Frame(augments, bg=SURFACE)
+            host.grid(row=0, column=column, sticky="new", padx=(0 if column == 0 else 12, 0))
+            head = tk.Frame(host, bg=SURFACE)
+            head.pack(fill="x", pady=(0, 4))
+            tk.Label(
+                head, text=label, bg=SURFACE, fg=color, font=self._font(FONT_SECTION),
+            ).pack(side="left")
+            tk.Label(
+                head, text="TOP 3", bg=SURFACE, fg=MUTED, font=self._font(FONT_SECTION),
+            ).pack(side="right")
+            rows = overview.augments.get(rarity) or ()
+            if not rows:
+                tk.Label(
+                    host, text="樣本不足", bg=SURFACE, fg=MUTED, font=self._font(small), anchor="w",
+                ).pack(fill="x")
+            for aug in rows:
+                row = tk.Frame(host, bg=ROW)
+                row.pack(fill="x", pady=1)
+                # Augment art is drawn for a black tile; other surfaces wash it out.
+                self._asset_icon(row, aug.icon, 36, "#000000").pack(side="left")
+                tk.Label(
+                    row, text=f"{aug.wr:.1%}", bg=ROW, fg=FG, font=self._font(FONT_NUM_B),
+                ).pack(side="right", padx=(4, 8))
+                tk.Label(
+                    row, text=aug.name, bg=ROW, fg=FG, font=self._font(FONT_SUB), anchor="w",
+                ).pack(side="left", fill="x", expand=True, padx=(8, 0))
 
     def _render_live_team(
         self,
@@ -1836,6 +2152,8 @@ class RecommenderApp:
 @click.option("--fake", is_flag=True, default=False,
               help="Demo mode: skip LCU, generate random champ-select states every 3s. "
                    "Useful to verify the GUI works without launching League.")
+@click.option("--fake-ingame", is_flag=True, default=False,
+              help="With --fake: show one random in-game 5v5 state instead of champ select.")
 @click.option("--verbose", is_flag=True, default=False,
               help="Print per-poll status (phase + session presence) to stdout. "
                    "Useful for diagnosing why a champ-select isn't being detected.")
@@ -1848,6 +2166,7 @@ def main(
     composition_model: Path | None,
     poll_interval: float,
     fake: bool,
+    fake_ingame: bool,
     verbose: bool,
     no_update: bool,
     self_test: bool,
@@ -1945,7 +2264,8 @@ def main(
     if fake:
         print("[gui] --fake: synthesizing champ-select states every 3s, no LCU needed")
         thread = threading.Thread(
-            target=fake_poll_loop, args=(stop_event, q, model, pair_model, comp_model), daemon=True,
+            target=fake_poll_loop, args=(stop_event, q, model, pair_model, comp_model),
+            kwargs={"ingame": fake_ingame}, daemon=True,
         )
     else:
         creds = creds_for_icons  # reuse - same credentials work for both
