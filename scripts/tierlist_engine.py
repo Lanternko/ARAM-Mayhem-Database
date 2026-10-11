@@ -239,7 +239,7 @@ ITEM_CLUSTER_DIVERSITY_HARD_MAX_JACCARD = 0.80
 ITEM_CORE_BUILD_PRIOR_GAMES = 20.0          # smoothing pseudo-games toward champ baseline
 ITEM_CORE_BUILD_EARLY_PRIOR = 20.0          # shrinkage for the build-order (earliness) signal
 ITEM_CORE_BUILD_MIN_GAMES = 80              # a core triple must be observed >= this often
-ITEM_CORE_BUILD_MIN_CONFIRM = 3            # a real 6-item completion must exist >= this often
+ITEM_CORE_BUILD_MIN_CONFIRM = 30           # every item added to the build example must co-occur >= this often
 ITEM_CORE_BUILD_WINRATE_MIN_GAMES = 80      # stricter sample floor for the winrate lane
 ITEM_CORE_BUILD_WINRATE_MIN_LCB = 0.0       # winrate lane must be confidently above baseline
 ITEM_CORE_BUILD_LCB_Z = 1.65                # small-sample penalty (lower confidence bound)
@@ -4380,8 +4380,10 @@ def compute_champ_item_build_clusters(
     each group we then surface every item built afterwards — not just the single
     3rd-earliest one — that clears a pick-rate OR win-rate bar, each scored on
     its own conditional win/pick rate.  The core-2 pick/win rate carries orders
-    of magnitude more support than any exact 6-item route, and a real observed
-    6-item completion is kept only as a confirmation badge (``exact_games``).
+    of magnitude more support than any exact 6-item route. The quick overview's
+    build example extends the core one co-occurring item at a time (each step
+    conditioned on everything already chosen) without inheriting the core
+    group's win rate; ``exact_games`` confirms individual follow-ups.
     Per champion we curate up to ``top_n`` core-2 groups: 1 popular (highest
     pick), up to 2 winrate (highest lower-confidence-bound lift on a stable
     sample), then the rest by a blended score.  ``bot`` stays empty for
@@ -4420,10 +4422,8 @@ def compute_champ_item_build_clusters(
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
                     continue
-                route_ids = _participant_route_item_ids(
-                    participant.get("items") or participant.get("itemSlots") or [],
-                    item_meta,
-                )
+                inventory = participant.get("items") or participant.get("itemSlots") or []
+                route_ids = _participant_route_item_ids(inventory, item_meta)
                 champ_total[cid] += 1
                 if not route_ids:
                     continue
@@ -4483,6 +4483,9 @@ def compute_champ_item_build_clusters(
         option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
+        route_builds: dict[tuple[int, int], list[frozenset[int]]] = defaultdict(list)
+        route_boot_games: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
+        route_boot_wins: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
         for build_core, boot, won in builds:
             if len(build_core) < 2:
                 continue
@@ -4490,14 +4493,25 @@ def compute_champ_item_build_clusters(
             core_pair = (ranked_core[0], ranked_core[1])
             group_games[core_pair] += 1
             group_wins[core_pair] += won
+            if boot:
+                route_boot_games[(core_pair, 0)][boot] += 1
+                route_boot_wins[(core_pair, 0)][boot] += won
             # Canonical 6-item completion: keep the earliest items up to the 6
             # inventory slots (+ boot), dropping whatever is built latest, so the
             # latest-dropped items never become options.
             route_ranked = ranked_core[:full_core_len] if boot else ranked_core[:max_items]
             is_full = len(route_ranked) + (1 if boot else 0) == max_items
+            # Inventories that fit the six slots feed the build example. An
+            # invalid inventory with more than six items is never truncated
+            # into one.
+            if len(build_core) + bool(boot) <= max_items:
+                route_builds[core_pair].append(frozenset(build_core))
             for follow in route_ranked[option_index:]:
                 option_games[core_pair][follow] += 1
                 option_wins[core_pair][follow] += won
+                if boot:
+                    route_boot_games[(core_pair, follow)][boot] += 1
+                    route_boot_wins[(core_pair, follow)][boot] += won
                 if is_full:
                     option_full_games[core_pair][follow] += 1
 
@@ -4576,6 +4590,50 @@ def compute_champ_item_build_clusters(
                 and og >= ITEM_CORE_BUILD_OPTION_MIN_GAMES
             ][:ITEM_CORE_BUILD_TAIL_N]
             names = _item_cluster_names(core_ordered + [o["id"] for o in options[:1]], item_meta)
+            # The third core is a supported co-occurring item, not whichever
+            # happens to be third in a rare full inventory. Purchase order is
+            # inferred for the rush pair only; this is a three-item combination.
+            third = max(
+                (o for o in options if o["games"] >= max(core_min_games, ITEM_CORE_BUILD_OPTION_MIN_GAMES)),
+                key=lambda o: (o["games"], o["core_lcb"], -o["id"]), default=None,
+            )
+            quick_ids = core_ordered + ([third["id"]] if third else [])
+            quick_games = third["games"] if third else gg
+            quick_wr = third["smoothed_wr"] if third else g_smoothed
+            boot_key = (core_pair, third["id"] if third else 0)
+            boot_candidates = []
+            for boot_id, bg in route_boot_games[boot_key].items():
+                if bg < ITEM_CORE_BUILD_OPTION_MIN_GAMES:
+                    continue
+                bw = route_boot_wins[boot_key][boot_id]
+                bwr = (bw + quick_wr * ITEM_CORE_BUILD_PRIOR_GAMES) / (bg + ITEM_CORE_BUILD_PRIOR_GAMES)
+                lcb = bwr - ITEM_CORE_BUILD_LCB_Z * math.sqrt(max(bwr * (1 - bwr), 1e-6) / bg)
+                pick = bg / quick_games
+                credit = min(ITEM_CORE_BUILD_PICK_CREDIT_CAP, ITEM_CORE_BUILD_PICK_CREDIT_WEIGHT
+                             * math.log1p(pick / ITEM_CORE_BUILD_PICK_RATE_REF))
+                boot_candidates.append(dict(id=boot_id, games=bg, smoothed_wr=bwr,
+                                            pick_rate=pick, rank_score=lcb + credit))
+            route_boot = max(boot_candidates, key=lambda b: (b["rank_score"], b["games"], -b["id"]), default=None)
+            # Build example: extend the core one item at a time, each step
+            # taking the item most often held together with EVERYTHING already
+            # chosen. Every step is a real co-occurrence, so the set is
+            # compatible in game, unlike a union of independently popular
+            # options; and each step keeps >= min_confirm_games of support,
+            # unlike the single most frequent exact six-slot inventory, which
+            # is usually a handful of games. It stops early rather than pad.
+            chain = list(quick_ids)
+            observed = 0
+            if third and route_boot:
+                pool = [b for b in route_builds[core_pair] if third["id"] in b]
+                while len(chain) < max_items - 1:
+                    follow_games = Counter(i for b in pool for i in b if i not in chain)
+                    follow, fg = max(follow_games.items(), key=lambda e: (e[1], -e[0]), default=(0, 0))
+                    if fg < min_confirm_games:
+                        break
+                    chain.append(follow)
+                    observed = fg
+                    pool = [b for b in pool if follow in b]
+            completion = tuple(chain + [route_boot["id"]]) if observed else ()
             groups_out.append({
                 **names,
                 "slug": "coregroup:" + "+".join(str(i) for i in core_ordered),
@@ -4596,6 +4654,13 @@ def compute_champ_item_build_clusters(
                     if _item_pair_payload([opt["id"]], item_meta)
                 ],
                 "tail_items": _item_pair_payload(tail_ids, item_meta),
+                "completion_items": _item_pair_payload(list(completion), item_meta),
+                "completion_games": observed,
+                "completion_boot": next((i for i in completion if _is_boot_item(item_meta.get(i))), 0),
+                "quick_core": {"items": _item_pair_payload(quick_ids, item_meta),
+                               "games": quick_games, "smoothed_wr": quick_wr},
+                "route_boot": ({**route_boot, "item": _item_pair_payload([route_boot["id"]], item_meta)[0]}
+                               if route_boot else None),
             })
 
         if not groups_out:

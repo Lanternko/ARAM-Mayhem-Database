@@ -230,6 +230,44 @@ class ItemBuildScoringTests(unittest.TestCase):
         # popular/winrate lanes stay reserved for genuine 3rd-item picks.
         self.assertIn(201, opt_by_id)
         self.assertEqual(opt_by_id[201]["lane"], "")
+        # The example extends the quick core with the items most often held
+        # alongside it; it never mixes in the alternative third item 104, and
+        # its count is the games holding every non-boot item shown.
+        self.assertEqual({i["id"] for i in grp["completion_items"]}, {101, 102, 103, 201, 202, 301})
+        self.assertEqual(grp["completion_games"], 25)
+        self.assertEqual(grp["completion_boot"], 301)
+        self.assertEqual([i["id"] for i in grp["quick_core"]["items"]], [101, 102, 103])
+        self.assertEqual(grp["quick_core"]["games"], 55)
+        self.assertAlmostEqual(grp["quick_core"]["smoothed_wr"], (27 + .5 * 20) / (55 + 20))
+        self.assertEqual(grp["route_boot"]["id"], 301)
+
+    def test_quick_core_boots_are_conditioned_on_this_build(self) -> None:
+        item_meta = {i: dict(id=i, name=f"Item {i}", categories=["Damage"], price_total=3000)
+                     for i in (101, 102, 103, 104, 105, 106, 201, 202)}
+        item_meta.update({i: dict(id=i, name=f"Boot {i}", categories=["Boots"], price_total=1100)
+                          for i in (301, 302)})
+        builds = [([101, 102, 301], 30, 15), ([101, 102, 103, 301], 80, 48),
+                  ([101, 102, 103, 302], 3, 3),
+                  ([101, 102, 103, 201, 202, 301], 15, 9),
+                  ([104, 105, 302], 40, 20), ([104, 105, 106, 302], 300, 200)]
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / 'games.db'
+            self._build_games_db(db, builds)
+            result = tier_list.compute_champ_item_build_clusters(
+                db, 2400, '16.10', item_meta, [{'champion_id': 1, 'raw_wr': .5}], {},
+                core_min_games=20, min_games=10,
+            )
+        group = next(g for g in result[1]['groups'] if set(g['core_ids']) == {101, 102})
+        self.assertEqual([i['id'] for i in group['quick_core']['items']], [101, 102, 103])
+        self.assertEqual(group['quick_core']['games'], 98)
+        # 302 dominates the champion-wide sample and wins 3/3 in this route.
+        # Both are insufficient reasons to replace the supported route boot.
+        self.assertEqual(group['route_boot']['id'], 301)
+        self.assertEqual(group['route_boot']['games'], 95)
+        # Only 15 games carry 201/202 with this core: below the 30-game floor,
+        # so no build example is shown rather than a thinly supported one.
+        self.assertEqual(group['completion_items'], [])
+        self.assertEqual(group['completion_games'], 0)
 
     def test_core_build_keyed_on_core2_rush_without_completion(self) -> None:
         item_meta = {
@@ -260,6 +298,8 @@ class ItemBuildScoringTests(unittest.TestCase):
         self.assertTrue(groups)
         self.assertEqual(groups[0]["core_ids"], (101, 102))
         self.assertIn(103, {int(o["id"]) for o in groups[0]["options"]})
+        self.assertEqual(groups[0]["completion_items"], [])
+        self.assertEqual(groups[0]["completion_games"], 0)
 
     def test_core_build_drops_oversized_item_beyond_six_slots(self) -> None:
         item_meta = {
@@ -304,6 +344,9 @@ class ItemBuildScoringTests(unittest.TestCase):
             shown_ids.update(int(o["id"]) for o in grp["options"])
             shown_ids.update(int(it["id"]) for it in grp["tail_items"])
         self.assertNotIn(223069, shown_ids)  # oversized item dropped beyond the 6-slot cap
+        for grp in groups:
+            self.assertNotIn(223069, {int(it["id"]) for it in grp["completion_items"]})
+            self.assertLessEqual(len(grp["completion_items"]), 6)
 
     def test_item_build_cluster_selection_prefers_distinct_routes(self) -> None:
         item_meta = {
