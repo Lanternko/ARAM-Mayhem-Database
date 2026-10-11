@@ -33,18 +33,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Right after a promotion, releases/latest/download can still answer
-          # with the previous release on some requests. The updater reads that
-          # URL, so wait until it agrees with the API several times in a row.
-          $url = 'https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/recommender-manifest.json'
-          $deadline = (Get-Date).AddMinutes(5)
+          # with the previous release. GitHub caches that redirect per Accept /
+          # Accept-Encoding, and publish reads it with the updater's request
+          # just before promoting, so probe with that same request (urllib, as
+          # in aram_nn.desktop.update.open_url), not curl.
+          $probe = Join-Path $env:RUNNER_TEMP 'latest_app_url.py'
+          Set-Content -Path $probe -Encoding utf8 -Value @'
+          import json, urllib.request
+          url = "https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/recommender-manifest.json"
+          request = urllib.request.Request(url, headers={"User-Agent": "ARAMRecommender/1", "Cache-Control": "no-cache"})
+          print(json.load(urllib.request.urlopen(request, timeout=20))["app"]["url"])
+          '@
+          $deadline = (Get-Date).AddMinutes(8)
           $agreed = 0
           while ($agreed -lt 5) {
             if ((Get-Date) -gt $deadline) { throw "Latest manifest still disagrees with release $tag" }
             Start-Sleep -Seconds 3
             $tag = gh api repos/Lanternko/ARAM-Mayhem-Database/releases/latest --jq .tag_name
-            $body = curl.exe -fLsS --max-time 30 $url
+            $appUrl = python $probe
             if ($LASTEXITCODE -or -not $tag) { $agreed = 0; continue }
-            $appUrl = ($body | ConvertFrom-Json).app.url
             if ($appUrl -like "*/$tag/*") { $agreed++ } else { $agreed = 0; "latest serves $appUrl, waiting for $tag" }
           }
           "latest download URL serves $tag"
