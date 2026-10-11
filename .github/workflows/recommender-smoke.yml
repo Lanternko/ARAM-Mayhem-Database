@@ -27,6 +27,27 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
+      - name: Wait for the latest-release download URL to settle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Right after a promotion, releases/latest/download can still answer
+          # with the previous release on some requests. The updater reads that
+          # URL, so wait until it agrees with the API several times in a row.
+          $url = 'https://github.com/Lanternko/ARAM-Mayhem-Database/releases/latest/download/recommender-manifest.json'
+          $deadline = (Get-Date).AddMinutes(5)
+          $agreed = 0
+          while ($agreed -lt 5) {
+            if ((Get-Date) -gt $deadline) { throw "Latest manifest still disagrees with release $tag" }
+            Start-Sleep -Seconds 3
+            $tag = gh api repos/Lanternko/ARAM-Mayhem-Database/releases/latest --jq .tag_name
+            $body = curl.exe -fLsS --max-time 30 $url
+            if ($LASTEXITCODE -or -not $tag) { $agreed = 0; continue }
+            $appUrl = ($body | ConvertFrom-Json).app.url
+            if ($appUrl -like "*/$tag/*") { $agreed++ } else { $agreed = 0; "latest serves $appUrl, waiting for $tag" }
+          }
+          "latest download URL serves $tag"
       - name: Download public release and verify binary
         shell: pwsh
         env:

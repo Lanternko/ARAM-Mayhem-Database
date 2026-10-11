@@ -12,6 +12,7 @@ on:
       - 'src/aram_nn/icons.py'
       - 'src/aram_nn/lcu/**'
       - 'src/aram_nn/pair_synergy.py'
+      - 'src/aram_nn/quick_picks.py'
       - 'src/aram_nn/role_synergy.py'
       - 'docs/recommender-app-icon.ico'
   pull_request:
@@ -24,6 +25,7 @@ on:
       - 'src/aram_nn/icons.py'
       - 'src/aram_nn/lcu/**'
       - 'src/aram_nn/pair_synergy.py'
+      - 'src/aram_nn/quick_picks.py'
       - 'src/aram_nn/role_synergy.py'
   workflow_dispatch:
 
