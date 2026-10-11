@@ -1017,11 +1017,53 @@ def append_state(path: Path, record: dict[str, Any]) -> None:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+_BLOCKED_CLIENT_STATE: dict[str, float | None] = {"since_monotonic": None}
+
+
+def game_client_running() -> bool:
+    """True while the in-game process exists, i.e. a match is actually being played."""
+    for proc in psutil.process_iter(["name"]):
+        try:
+            if (proc.info.get("name") or "").lower() == "league of legends.exe":
+                return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return False
+
+
+def blocked_client_idle_min(
+    args: argparse.Namespace,
+    health: dict[str, Any],
+    main_mb: float,
+    now: float | None = None,
+) -> float | None:
+    """Minutes the client has sat in an unsafe phase, too big to crawl, with no game.
+
+    Returns None (and resets the clock) as soon as any of the three stops being
+    true, so only an unbroken run counts.
+    """
+    phase = health.get("phase") or "None"
+    blocked = (
+        phase not in args.safe_restart_phase
+        and main_mb > args.worker_start_max_client_mb
+        and not game_client_running()
+    )
+    if not blocked:
+        _BLOCKED_CLIENT_STATE["since_monotonic"] = None
+        return None
+    now = time.monotonic() if now is None else now
+    since = _BLOCKED_CLIENT_STATE["since_monotonic"]
+    if since is None:
+        _BLOCKED_CLIENT_STATE["since_monotonic"] = since = now
+    return (now - since) / 60.0
+
+
 def should_restart_client(
     args: argparse.Namespace,
     health: dict[str, Any],
     main_mb: float,
     latest_capture_age_min: float | None = None,
+    blocked_idle_min: float | None = None,
 ) -> tuple[bool, str]:
     # When LCU is down, gameflow has no phase; treat that like the idle "None" phase.
     phase = health.get("phase") or "None"
@@ -1044,6 +1086,25 @@ def should_restart_client(
             return True, (
                 f"phase {phase!r} unsafe but no captures for {age:.0f}min "
                 f"(>= {args.unsafe_phase_restart_after_min:.0f}min): client is stuck"
+            )
+        # The drought rule above is deliberately blind while the resource guard
+        # suppresses capture age, because a pause is not a stuck client.  That
+        # blindness re-armed the same trap on 2026-10-11: the leaking client was
+        # itself the pressure source (12.4GB at PreEndOfGame, commit 97%), so
+        # the guard paused the fleet, hid the drought, and nothing could ever
+        # bring the client back under the worker start limit.  This rule needs
+        # no capture age: no game process means no game to interrupt, and a
+        # client above the start limit cannot crawl until it is restarted.
+        if (
+            args.unsafe_phase_idle_restart_after_min > 0
+            and blocked_idle_min is not None
+            and blocked_idle_min >= args.unsafe_phase_idle_restart_after_min
+        ):
+            return True, (
+                f"phase {phase!r} unsafe but no game process and LeagueClient "
+                f"{main_mb:.1f}MB > worker start max {args.worker_start_max_client_mb:.1f}MB "
+                f"for {blocked_idle_min:.0f}min "
+                f"(>= {args.unsafe_phase_idle_restart_after_min:.0f}min): client is stuck"
             )
         return False, f"phase {phase!r} is not safe to restart"
     if main_mb >= args.client_restart_mb:
@@ -1224,6 +1285,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         health,
         main_mb,
         None if resource_decision.capture_suppressed else latest_age,
+        blocked_client_idle_min(args, health, main_mb),
     )
     if not restart and stall_force_client_restart:
         phase = health.get("phase") or "None"
@@ -1409,6 +1471,10 @@ def parse_args() -> argparse.Namespace:
     # played.  Matches the stall alert's 45min threshold so the two agree about
     # when the crawler counts as down.
     parser.add_argument("--unsafe-phase-restart-after-min", type=float, default=45.0)
+    # Second escape hatch, independent of capture age: an unsafe phase with no
+    # game process and a client above --worker-start-max-client-mb for this
+    # long is stuck, not busy.  Longer than any champ select; 0 disables.
+    parser.add_argument("--unsafe-phase-idle-restart-after-min", type=float, default=15.0)
     parser.add_argument("--target-games", type=int, default=50000)
     parser.add_argument("--max-players", type=int, default=50000)
     parser.add_argument("--history-window", type=int, default=20)

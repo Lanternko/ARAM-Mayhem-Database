@@ -252,6 +252,8 @@ def _stub_check_once(monkeypatch, tmp_path: Path, *, restart_client: bool, worke
         },
     )
     monkeypatch.setattr(WATCHDOG, "lcu_health", lambda: {"ok": True, "phase": "InProgress"})
+    monkeypatch.setattr(WATCHDOG, "game_client_running", lambda: True)
+    monkeypatch.setitem(WATCHDOG._BLOCKED_CLIENT_STATE, "since_monotonic", None)
     monkeypatch.setattr(WATCHDOG, "latest_capture_age_min", lambda db: 226.0)
     monkeypatch.setattr(WATCHDOG, "sample_resources", lambda: sample)
     monkeypatch.setattr(WATCHDOG, "disk_free_sample", lambda path: {"path": "D:\\", "free_mb": 500_000.0})
@@ -638,6 +640,8 @@ def _restart_args(**overrides: object) -> object:
         "safe_restart_phase": ["None", "EndOfGame"],
         "client_restart_mb": 5800.0,
         "unsafe_phase_restart_after_min": 45.0,
+        "unsafe_phase_idle_restart_after_min": 15.0,
+        "worker_start_max_client_mb": 6500.0,
     }
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -686,6 +690,102 @@ def test_missing_capture_age_never_forces_a_restart() -> None:
     health = {"ok": True, "phase": "PreEndOfGame"}
 
     assert WATCHDOG.should_restart_client(args, health, 11706.9)[0] is False
+
+
+def test_blocked_idle_restarts_a_stuck_client_without_any_capture_age() -> None:
+    """Breaks the 2026-10-11 deadlock: the leaking client was the pressure source.
+
+    PreEndOfGame for 3h, client at 12.4GB, commit 97%.  The resource guard
+    paused the fleet and suppressed capture age, so the drought rule never saw
+    the stall and the client stayed above the worker start limit forever.
+    """
+    args = _restart_args()
+    health = {"ok": True, "phase": "PreEndOfGame"}
+
+    assert WATCHDOG.should_restart_client(args, health, 12414.3, None, 14.0)[0] is False
+    restart, reason = WATCHDOG.should_restart_client(args, health, 12414.3, None, 15.0)
+
+    assert restart is True
+    assert "no game process" in reason and "stuck" in reason
+
+
+def test_blocked_idle_rule_can_be_disabled() -> None:
+    args = _restart_args(unsafe_phase_idle_restart_after_min=0.0)
+    health = {"ok": True, "phase": "PreEndOfGame"}
+
+    assert WATCHDOG.should_restart_client(args, health, 12414.3, None, 500.0)[0] is False
+
+
+def test_blocked_idle_clock_needs_unsafe_phase_oversized_client_and_no_game(monkeypatch) -> None:
+    args = _restart_args()
+    stuck = {"ok": True, "phase": "PreEndOfGame"}
+    monkeypatch.setitem(WATCHDOG._BLOCKED_CLIENT_STATE, "since_monotonic", None)
+    monkeypatch.setattr(WATCHDOG, "game_client_running", lambda: False)
+
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=0.0) == 0.0
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=900.0) == 15.0
+    # A client small enough to crawl, or a safe phase, is not blocked.
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 6000.0, now=960.0) is None
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=1020.0) == 0.0
+    assert WATCHDOG.blocked_client_idle_min(args, {"ok": True, "phase": "None"}, 12414.3, now=1080.0) is None
+
+    # A running game always resets the clock: the phase gate is protecting it.
+    WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=2000.0)
+    monkeypatch.setattr(WATCHDOG, "game_client_running", lambda: True)
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=9000.0) is None
+    monkeypatch.setattr(WATCHDOG, "game_client_running", lambda: False)
+    assert WATCHDOG.blocked_client_idle_min(args, stuck, 12414.3, now=9060.0) == 0.0
+
+
+def test_resource_pause_no_longer_hides_a_stuck_oversized_client(monkeypatch, tmp_path: Path) -> None:
+    args, current, stopped, started, closed = _stub_check_once(
+        monkeypatch,
+        tmp_path,
+        restart_client=True,
+        workers=[],
+        sample=_resource_sample(commit_percent=95.0),
+    )
+    monkeypatch.setattr(WATCHDOG, "lcu_health", lambda: {"ok": True, "phase": "PreEndOfGame"})
+    monkeypatch.setattr(WATCHDOG, "game_client_running", lambda: False)
+    monkeypatch.setattr(
+        WATCHDOG,
+        "league_main_metrics",
+        lambda: {
+            "rss_mb": 100.0,
+            "private_mb": 12414.3,
+            "pressure_mb": 12414.3,
+            "pressure_metric": "max(rss_mb,private_mb)",
+        },
+    )
+    ready = {
+        "ready": True,
+        "health": {"ok": True, "phase": "None"},
+        "league_main_mb": 1000.0,
+        "league_main_metrics": {
+            "rss_mb": 100.0,
+            "private_mb": 1000.0,
+            "pressure_mb": 1000.0,
+            "pressure_metric": "max(rss_mb,private_mb)",
+        },
+    }
+    monkeypatch.setattr(WATCHDOG, "wait_for_lcu_ready", lambda args: ready)
+    clock = iter([0.0, 14 * 60.0, 15 * 60.0])
+    real_idle = WATCHDOG.blocked_client_idle_min
+    monkeypatch.setattr(
+        WATCHDOG,
+        "blocked_client_idle_min",
+        lambda a, h, mb: real_idle(a, h, mb, now=next(clock)),
+    )
+
+    first = WATCHDOG.check_once(args)
+    WATCHDOG.check_once(args)
+    assert first["resource_guard"]["capture_suppressed"] is True
+    assert closed == []
+
+    record = WATCHDOG.check_once(args)
+
+    assert closed == [True]
+    assert [a["action"] for a in record["actions"]].count("restart_league_client") == 1
 
 
 def test_safe_phase_paths_are_unchanged() -> None:

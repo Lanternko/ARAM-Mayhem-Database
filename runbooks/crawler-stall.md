@@ -49,7 +49,7 @@ python scripts/lcu_collector.py family-stats --queue 2400
 ## Interpret
 
 - 確認 parent 未運行／排程未執行：先處理 harness availability，LCU recovery 沒有執行者；只有心跳缺失時仍需交叉驗證 process 與排程，不能直接歸因 client 修復條件失效。
-- 資源保護暫停或恢復樣本尚未達標：比對 action 當時的 resource state、memory 與實際 argv。暫停不是 seed exhaustion，也不能用累積停收時間繞過 phase 保護；缺少讀值不當作資源充足。
+- 資源保護暫停或恢復樣本尚未達標：比對 action 當時的 resource state、memory 與實際 argv。暫停不是 seed exhaustion，也不能用累積停收時間繞過 phase 保護；缺少讀值不當作資源充足。唯一例外是 client 自己就是壓力來源：不安全 phase、沒有 `League of Legends.exe`、client 高於 worker 啟動上限且連續達到 `--unsafe-phase-idle-restart-after-min`，watchdog 會重啟 client；這條不看停收時間。
 - 已有 recovery action：分辨等待 ready、重試失敗、workers 已拉起但未收場，以及已持續成長。Action 名稱或 process 存在本身不是成功證據。
 - LCU 401/connection failure：重新抓 current credentials 與 `current_summoner`；通常是 restart 後 port/token 變更或 `/lol-*` 尚未 ready，不是 TLS cert 真過期。
 - Riot remoting 回 424：現有 Riot Client 的 product launcher 無法開 League；watchdog 必須殺掉 Riot Client 再冷啟動。不要對同一個 instance 反覆 POST。
@@ -71,7 +71,7 @@ python scripts/lcu_collector.py family-stats --queue 2400
 
 不在本 runbook 複製 production 門檻。設定 owner 與說明見 [OPERATIONS.md](../OPERATIONS.md)，啟動參數來源是 live `scripts/watchdog_keepalive.ps1`；目前 process argv 與 action 當時的 recovery JSONL 才能證明實際套用值。三者不一致時記錄差異，不用 Python generic defaults 或舊文件推定 runtime 行為。
 
-Watchdog recovery JSONL 應保留 action、thresholds、LCU status／phase，以及當時 client memory 與可用的 system resource state。調參或恢復前核對這些證據；不能把資源保護造成的停收視為 client 卡住而觸發 phase 例外。
+Watchdog recovery JSONL 應保留 action、thresholds、LCU status／phase，以及當時 client memory 與可用的 system resource state。調參或恢復前核對這些證據；不能把資源保護造成的停收視為 client 卡住而觸發以停收時間為準的 phase 例外；沒有對局程序且 client 過大的 idle 例外不依賴停收時間，recovery reason 會寫明 `no game process`。
 
 ## League restart guardrail
 
