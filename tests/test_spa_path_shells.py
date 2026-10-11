@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 from html.parser import HTMLParser
 import tempfile
@@ -283,6 +284,12 @@ class SpaPathShellTests(unittest.TestCase):
                 self.assertNotIn("http-equiv='refresh'", body)
                 self.assertNotIn("noindex", body)
                 self.assertIn("champion-shell.js?v=", body)
+                # The shell downloads from the head, not after the loader runs.
+                preload = re.search(r"<link rel='preload' as='fetch' crossorigin href='([^']+)'>", body)
+                self.assertIsNotNone(preload)
+                self.assertLess(preload.start(), body.index("</head>"))
+                self.assertIn(f"data-app-shell='{preload[1]}'", body)
+                self.assertIn("fetchpriority='high'", body)
                 self.assertIn("53.0%", body)
                 self.assertIn("2,000", body)
                 self.assertIn("20%", body)

@@ -39,9 +39,21 @@ def champion_shell_html(
         f"<a href='{prefix}/'>{copy[5]}</a></div></main>"
     )
     head = re.split(r"<body\b[^>]*>", localized_html, maxsplit=1, flags=re.I)[0]
+    # Fetch the shell alongside the head's payload preloads. Discovered only by
+    # the loader, it queued behind them and left the bare fallback up for ~20s
+    # on a slow link; `crossorigin` is what lets the loader's fetch() reuse it.
+    shell_preload = (
+        f"<link rel='preload' as='fetch' crossorigin "
+        f"href='{html.escape(shell_url, quote=True)}'>"
+    )
+    head, closed = re.subn(r"</head>", lambda m: shell_preload + m[0], head, count=1, flags=re.I)
+    if not closed:
+        head += shell_preload
     return (
         head + "<body>" + fallback
-        + f"<script src='{html.escape(loader_url, quote=True)}' "
+        # A deferred end-of-body script is low priority by default, which starved
+        # this 2KB loader behind the 680KB payload.
+        + f"<script src='{html.escape(loader_url, quote=True)}' fetchpriority='high' "
         + f"data-app-shell='{html.escape(shell_url, quote=True)}' defer></script>"
         + "</body></html>\n"
     )
