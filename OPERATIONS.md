@@ -112,6 +112,8 @@ Get-Content data/site/model_refresh_state.json
 
 不要只用「process 存在」判斷 crawler 健康；workers alive 但 Mayhem 不成長時，依 `runbooks/crawler-stall.md` 先記錄 metrics、查 LCU 與 seed yield。
 
+首次拜訪車道以 `crawl_seen.process_count > 0` 為 canonical 判斷，透過 SQLite triggers 同步 `crawl_queue.has_been_crawled` 與 partial index。Writer 啟動時依 `first_visit_state_v1` 做一次既有 frontier 回填；後續重開不重掃。這避免領取玩家時逐筆探查整個 revisit backlog，阻塞單一 writer 並引發 RPC 逾時。LCU 健康探測失敗時隔 1 秒再確認一次；只有兩次皆失敗才交給原有恢復流程，state 的 `lcu.probes` 保存各次狀態、耗時與錯誤類型，不保存玩家回應內容。
+
 ## 5. Lifecycle 與故障分流
 
 - Keepalive 每分鐘只檢查 watchdog parent；parent 消失會被拉起，parent 再確保 workers、publisher、model refresher 存活。調參後需讓舊 parent 結束並由排程重生，否則仍跑舊 argv。

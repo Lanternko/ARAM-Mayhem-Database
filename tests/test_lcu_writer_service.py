@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+import itertools
 import sqlite3
 import time
 from unittest.mock import patch
@@ -235,6 +236,98 @@ def test_player_claim_lease_follows_claim_timeout_ms(tmp_path: pathlib.Path) -> 
     )
     assert result["status"] in {"FINALIZED", "REQUEUED"}
     assert result.get("status") != "STALE_CLAIM"
+
+
+@pytest.mark.parametrize("rpc", [False, True])
+def test_first_visit_claim_skips_hot_revisits_with_bounded_work(tmp_path, rpc):
+    """A deep first-visit candidate must not probe every recent revisit."""
+    from aram_nn.lcu import snowball as sb
+
+    service = WriterService(tmp_path / "frontier.db")
+    con = service.con
+    # All 2,000 revisits sort ahead of the first-visit candidates. Their queue
+    # timestamps model normal finalize/requeue behavior on the live frontier.
+    con.executemany(
+        "INSERT INTO crawl_seen(puuid,source,priority,min_depth,first_seen_at,"
+        "process_count) VALUES (?, 'match', 10, 1, '2026-01-01', 1)",
+        [(f"visited-{i}",) for i in range(2_000)],
+    )
+    con.executemany(
+        "INSERT INTO crawl_queue(puuid,depth,source,priority,discovered_match_created_ms,"
+        "enqueued_at,updated_at,classic_last_crawl_ms) "
+        "VALUES (?, 1, 'match', 10, ?, '2026-01-01', '2026-01-01', 500)",
+        [(f"visited-{i}", 10_000 + i) for i in range(2_000)],
+    )
+    con.commit()
+    service.enqueue_player("older-new", discovered_match_created_ms=100)
+    service.enqueue_player("newest-new", discovered_match_created_ms=200)
+    service.enqueue_player("deferred", discovered_match_created_ms=300)
+    service.enqueue_player("future", discovered_match_created_ms=400)
+    con.execute("UPDATE crawl_seen SET process_count=1 WHERE puuid='deferred'")
+    # A stale denormalized legacy row is still rejected by the canonical guard.
+    con.execute("UPDATE crawl_queue SET has_been_crawled=0 WHERE puuid='deferred'")
+    con.execute("UPDATE crawl_queue SET eligible_at_ms=99999 WHERE puuid='future'")
+    con.commit()
+    work = [0]
+
+    def budget():
+        work[0] += 1
+        return int(work[0] > 100)  # 10k VM steps, independent of machine speed.
+
+    con.set_progress_handler(budget, 100)
+    try:
+        if rpc:
+            service._claim_count = itertools.count(3)
+            claimed = service.handle({
+                "version": 1, "command": "snowball_queue", "operation": "claim_next",
+                "request_id": "bounded-first-visit", "classic_claim_percent": 0,
+                "now_ms": 1000, "worker_id": "w",
+            }, channel_id="w")
+            assert claimed["puuid"] == "newest-new"
+            assert claimed["claim_lane"] == "unvisited"
+        else:
+            with patch.object(sb, "_claim_counter", return_value=3), patch.object(sb, "_now_ms", return_value=1000):
+                claimed = sb._claim_next_player(con, "w", 300_000, classic_claim_percent=0)
+            assert claimed[0] == "newest-new"
+            assert claimed[-1] == "unvisited"
+    finally:
+        con.set_progress_handler(None, 0)
+        service.close()
+
+
+def test_first_visit_state_migrates_old_rows_and_tracks_both_write_orders():
+    from aram_nn.lcu import snowball as sb
+
+    con = sqlite3.connect(":memory:")
+    con.executescript("""
+        CREATE TABLE crawl_seen(puuid TEXT PRIMARY KEY, process_count INTEGER);
+        CREATE TABLE crawl_queue(queue_idx INTEGER PRIMARY KEY, puuid TEXT UNIQUE,
+            status TEXT DEFAULT 'pending', classic_affinity_rank INTEGER DEFAULT 0,
+            discovered_match_created_ms INTEGER DEFAULT 0, priority INTEGER DEFAULT 10,
+            depth INTEGER DEFAULT 0, updated_at TEXT DEFAULT '');
+        CREATE TABLE crawl_runtime_state(state_key TEXT PRIMARY KEY, state_value TEXT, updated_at TEXT);
+        INSERT INTO crawl_seen VALUES ('old-visited', 7), ('new', 0), ('missing-queue', 2);
+        INSERT INTO crawl_queue(puuid) VALUES ('old-visited'), ('new');
+    """)
+    sb._ensure_first_visit_state(con)
+    assert con.execute("SELECT has_been_crawled FROM crawl_queue ORDER BY puuid").fetchall() == [(0,), (1,)]
+    con.commit()
+
+    # Deferred histories increment process_count without a successful finalize.
+    con.execute("UPDATE crawl_seen SET process_count=1 WHERE puuid='new'")
+    assert con.execute("SELECT has_been_crawled FROM crawl_queue WHERE puuid='new'").fetchone() == (1,)
+    con.rollback()
+    assert con.execute("SELECT has_been_crawled FROM crawl_queue WHERE puuid='new'").fetchone() == (0,)
+    con.execute("INSERT INTO crawl_queue(puuid) VALUES ('missing-queue'), ('missing-seen')")
+    con.execute("INSERT INTO crawl_seen VALUES ('missing-seen', 3)")
+    assert con.execute("SELECT has_been_crawled FROM crawl_queue WHERE puuid LIKE 'missing-%'").fetchall() == [(1,), (1,)]
+    con.commit()
+
+    # The migration and triggers are safe to run on every writer restart.
+    before = con.total_changes
+    sb._ensure_first_visit_state(con)
+    assert con.total_changes == before
+    con.close()
 
 
 def test_writer_defer_stops_after_empty_history_retry_limit(tmp_path: pathlib.Path) -> None:

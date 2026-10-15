@@ -363,6 +363,7 @@ class WriterService:
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_RANK_INDEX_SQL)
             self.con.execute(sb._CREATE_GENERAL_CLAIM_INDEX_SQL)
+            sb._ensure_first_visit_state(self.con)
             self.con.execute(sb._DROP_OLD_CLASSIC_FRESH_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_FRESH_INDEX_SQL)
             self.con.execute(sb._CREATE_CLASSIC_SEED_INDEX_SQL)
@@ -1366,10 +1367,11 @@ class WriterService:
                 """SELECT q.queue_idx, q.puuid, q.depth, q.source,
                           q.discovered_match_created_ms, q.seed_family,
                           q.discovered_queue_id
-                   FROM crawl_queue q INDEXED BY idx_crawl_queue_general_claim
+                   FROM crawl_queue q INDEXED BY idx_crawl_queue_general_unvisited
                    WHERE q.status = 'pending'
                      AND q.eligible_at_ms <= ?
                      AND q.classic_affinity_rank = 0
+                     AND q.has_been_crawled = 0
                      AND NOT EXISTS (
                            SELECT 1 FROM crawl_seen s
                            WHERE s.puuid = q.puuid AND s.process_count > 0)

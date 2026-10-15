@@ -523,6 +523,25 @@ def lcu_get(path: str, timeout_sec: float = 5.0) -> tuple[int | str, str]:
 
 
 def lcu_health() -> dict[str, Any]:
+    # One delayed localhost response must not tear down a productive fleet and
+    # restart League. Confirm a failure once; persistent failures still recover
+    # in this tick. Keep both probe summaries so transient slowness is visible.
+    probes: list[dict[str, Any]] = []
+    for attempt in range(2):
+        if attempt:
+            time.sleep(1)
+        started = time.monotonic()
+        health = _lcu_health_probe()
+        probes.append({
+            **health,
+            "elapsed_sec": round(time.monotonic() - started, 3),
+        })
+        if health["ok"]:
+            break
+    return {**health, "probe_count": len(probes), "probes": probes}
+
+
+def _lcu_health_probe() -> dict[str, Any]:
     summoner_status, summoner_body = lcu_get("/lol-summoner/v1/current-summoner")
     phase_status, phase_body = lcu_get("/lol-gameflow/v1/gameflow-phase")
     phase = None
@@ -538,6 +557,8 @@ def lcu_health() -> dict[str, Any]:
         "phase": phase,
         "summoner_body_bytes": len(summoner_body.encode("utf-8", "replace")),
         "phase_body_bytes": len(phase_body.encode("utf-8", "replace")),
+        "summoner_error_type": summoner_body.split(":", 1)[0] if summoner_status == "ERR" else None,
+        "phase_error_type": phase_body.split(":", 1)[0] if phase_status == "ERR" else None,
     }
 
 
