@@ -19,10 +19,14 @@ from aram_nn.site.static_publish import (  # noqa: E402
 )
 
 
+from aram_nn.site.participant_replay import ParticipantReplay
+from aram_nn.site.build_timing import timed
+
 PRODUCTION_SITE_URL = "https://arammeta.com"
 PRODUCTION_META_PICK_API_URL = "https://api.arammeta.com"
 
 
+@timed("builder.refresh_empirical_champion_profiles")
 def refresh_empirical_champion_profiles(
     *, db: Path, queue_id: int, patch_prefix: str | None
 ) -> bool:
@@ -71,6 +75,7 @@ def load_team_score_artifact(*, queue_id: int, patch_prefix: str | None) -> dict
         return None
 
 
+@timed("builder.train_and_save_team_score_bundle")
 def train_and_save_team_score_bundle(
     *,
     db: Path,
@@ -354,6 +359,9 @@ def main(
                 f"[tierlist] skipping previous-patch smoothing for current stats; "
                 f"{baseline_patch_prefix} remains comparison-only"
             )
+
+    # Click closes the bounded replay even when rendering or training fails.
+    click.get_current_context().with_resource(ParticipantReplay(db, queue_id, patch_prefix))
 
     all_champ_records, champ_aug, champ_pairs = compute_winrates(
         db,
@@ -647,7 +655,7 @@ def main(
             else f"(current {patch_prefix}; current-patch data only)"
         )
     )
-    html = render_html(
+    html = timed("builder.render_html")(render_html)(
         champ_records,
         champ_meta,
         champ_profiles,
@@ -697,7 +705,7 @@ def main(
     # reuses the same data payload and shared JS asset as Home, while carrying
     # its route marker, noindex metadata, panel markup and API base only here.
     player_history_path = out_path.parent / "p" / "player-history" / "index.html"
-    player_history_html = render_html(
+    player_history_html = timed("builder.render_html")(render_html)(
         champ_records,
         champ_meta,
         champ_profiles,
@@ -740,7 +748,7 @@ def main(
         f"[tierlist] wrote hidden player-history shell {player_history_path} "
         f"({player_history_path.stat().st_size:,} bytes)"
     )
-    mirrors = write_spa_path_shells(
+    mirrors = timed("builder.route_shells")(write_spa_path_shells)(
         out_path,
         site_url=site_url,
         og_image=og_image,

@@ -25,16 +25,11 @@ import sys
 from pathlib import Path
 
 import click
-import numpy as np
 from aram_nn.parquet_batches import TEAM_COLUMNS
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analyze_composition_signals import champion_matrix  # noqa: E402
-from train_ability_nn import TeamDataset, build_vocab  # noqa: E402
-from ablation_champ_archetype_persistence import (  # noqa: E402
-    COMP_FIT_DEFS, ARCHETYPE_LABELS, accumulate, build_cap_pct,
-    calibrate_thresholds, fit_champion_lr, load_comp_vectors,
-)
+from aram_nn.site.analysis_cache import cached_analysis
+
 
 SCHEMA_KIND = "champ_archetype_fit"
 
@@ -43,6 +38,7 @@ def load_all(data: Path, patches, *, min_duration=300, val_frac=0.15):
     """Whole-window dataset (vocab over ALL games) + a time-tail val for the LR's
     C-selection.  Residuals are taken on every game; the per-cell estimate uses the
     full window, unlike the ablation which holds out a test split for the gate."""
+    from train_ability_nn import TeamDataset, build_vocab
     import polars as pl
 
     df = pl.read_parquet(data, columns=TEAM_COLUMNS).filter(pl.col("duration_sec") >= min_duration)
@@ -81,7 +77,16 @@ def load_all(data: Path, patches, *, min_duration=300, val_frac=0.15):
               help="Below this game count an archetype cell is unqualified (frontend falls back).")
 @click.option("--out", default=Path("docs/api/champ-archetype-fit.json"),
               type=click.Path(path_type=Path), show_default=True)
+@cached_analysis(SCHEMA_KIND, ("alias", "name", "comp"))
 def main(data, patches, payload, membership_quantile, shrink_k, persistence_factor, min_cell, out):
+    import numpy as np
+    from aram_nn.site.champion_matrix import champion_matrix
+    from aram_nn.site.archetype_thresholds import score_buffers, thresholds_from_scores, accumulate_scores
+    from aram_nn.site.build_timing import stage
+    from ablation_champ_archetype_persistence import (  # noqa: E402
+        COMP_FIT_DEFS, ARCHETYPE_LABELS, build_cap_pct,
+        archetype_scores, fit_champion_lr, load_comp_vectors,
+    )
     patch_set = [p.strip() for p in patches.split(",") if p.strip()]
     print("[1/4] comp vectors + percentile norm ...", flush=True)
     comp_by_cid = load_comp_vectors(payload)
@@ -90,16 +95,21 @@ def main(data, patches, payload, membership_quantile, shrink_k, persistence_fact
     names = {int(k): (v.get("alias") or v.get("name") or k) for k, v in champ_meta.items()}
 
     print("[2/4] loading whole window + fitting additive Champion LR ...", flush=True)
-    full, tr, val, champ_to_idx, patch_list, n_games = load_all(data, patch_set)
-    n_champs = len(champ_to_idx)
-    idx_to_cid = {i: c for c, i in champ_to_idx.items()}
-    model = fit_champion_lr(champion_matrix(tr, n_champs), np.asarray(tr.labels, dtype=np.float64),
-                            champion_matrix(val, n_champs), np.asarray(val.labels, dtype=np.float64))
-    res_full = np.asarray(full.labels, dtype=np.float64) - model.predict_proba(champion_matrix(full, n_champs))[:, 1]
+    with stage(SCHEMA_KIND + '.load_and_fit'):
+        full, tr, val, champ_to_idx, patch_list, n_games = load_all(data, patch_set)
+        n_champs = len(champ_to_idx)
+        idx_to_cid = {i: c for c, i in champ_to_idx.items()}
+        model = fit_champion_lr(champion_matrix(tr, n_champs), np.asarray(tr.labels, dtype=np.float64),
+                                champion_matrix(val, n_champs), np.asarray(val.labels, dtype=np.float64))
+        res_full = np.asarray(full.labels, dtype=np.float64) - model.predict_proba(champion_matrix(full, n_champs))[:, 1]
 
     print("[3/4] thresholds + accumulating champion x archetype cells ...", flush=True)
-    thresholds = calibrate_thresholds(full, idx_to_cid, cap_pct, membership_quantile)
-    ssum, cnt, _ = accumulate(full, res_full, idx_to_cid, cap_pct, thresholds)
+    with stage(SCHEMA_KIND + '.thresholds'):
+        scores = score_buffers(full, idx_to_cid, cap_pct,
+                               score=archetype_scores, archetypes=COMP_FIT_DEFS)
+        thresholds = thresholds_from_scores(scores, membership_quantile)
+    with stage(SCHEMA_KIND + '.accumulate'):
+        ssum, cnt = accumulate_scores(full, res_full, scores, thresholds, n_champs)
 
     print("[4/4] shrink + persistence haircut -> artifact ...", flush=True)
     champs_out: dict[str, dict] = {}

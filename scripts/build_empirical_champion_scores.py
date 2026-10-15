@@ -14,6 +14,7 @@ engage, then overwrites the combat columns for champions with enough games.
 from __future__ import annotations
 
 import csv
+from aram_nn.gamedata import patch_predicate
 import json
 import sqlite3
 from collections import defaultdict
@@ -54,7 +55,8 @@ def percentile_scores(values: dict[int, float]) -> dict[int, float]:
 def patch_where_clause(patch_prefix: str) -> tuple[str, list[Any]]:
     if not patch_prefix:
         return "", []
-    return " AND patch LIKE ?", [f"{patch_prefix}.%"]
+    clause, params = patch_predicate(patch_prefix + ".")
+    return " AND " + clause, params
 
 
 def load_semantic_rows(path: Path) -> tuple[list[dict[str, str]], dict[int, dict[str, str]]]:

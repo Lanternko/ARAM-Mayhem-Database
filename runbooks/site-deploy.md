@@ -83,6 +83,12 @@ Data publisher 的 Git contract 維持 isolated：fetch latest remote、detached
 
 ## Verification by lane
 
+### Publish performance evidence
+
+Publisher 每次實際 build 會將分階段耗時寫入 state 同目錄的 `static_publish_state.timings.json`，並 append 到同名 `.jsonl`；可用 `--timings <path>` 指定。未達門檻／check-only 不覆蓋上一輪 build，失敗的 build 也保存已完成階段。報表分開 resource wait、tier-list、archetype fit、empirical axes、Classic 與 Git；tier-list 內再分 participant projection、勝率、版本比較、能力刷新、隊伍分數校準、各類推薦與 rendering。Parent 耗時已包含 child，不能把巢狀列直接相加；GitHub Pages／CDN 傳播在 push 之後，須另外查 Actions，不能列成本機 build 耗時。
+
+完整 builder 在同一輪用 bounded temporary replay 共用一次 current-patch JSON 解析，僅保存統計需要的 participant 欄位，結束即移除，不建立 current-patch settled snapshot。雷達使用 sparse champion matrix；分位數與殘差統計共用 compact double score buffers，以 `add.at` 保持原有逐筆加總順序。pooled 雷達／能力軸的 private cache 位於 `data/cache/site-analysis/`，key 包含 parquet 檔案 identity（path／size／mtime／ctime／inode）、實際消費的英雄欄位、參數、Python sources 與套件版本。只有相同依賴才沿用；source、資料或能力向量改變時完整重算。不要以 `--reuse-model-artifacts`／`--skip-patch-comparison` 代替這些優化，那會改變發布範圍。
+
 Routine data：確認 live payload patch／timestamp／row count、主要 JSON 200、首頁／英雄／augment／draft／game 可用，commit 只有 atomic allowlist。
 
 Frontend shell：確認 live CSS／JS／HTML change、canonical／OG／analytics metadata、desktop/mobile 與 console；確認公開 payload version 與 data timestamp 沒有因 UI ship 改變。

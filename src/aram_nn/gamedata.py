@@ -25,6 +25,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -39,7 +40,7 @@ _BASE_COLUMNS = (
 def _connect_ro(db: Path | str) -> sqlite3.Connection:
     """Read-only connection so analysis scripts can never corrupt the
     collector's DB (which may be mid-write by the watchdog)."""
-    return sqlite3.connect(f"file:{Path(db)}?mode=ro", uri=True)
+    return sqlite3.connect(Path(db).resolve().as_uri() + '?mode=ro', uri=True)
 
 
 def _where(queue_id: int | None, patch_prefix: str | None) -> tuple[str, list]:
@@ -48,9 +49,22 @@ def _where(queue_id: int | None, patch_prefix: str | None) -> tuple[str, list]:
         clauses.append("queue_id=?")
         params.append(queue_id)
     if patch_prefix:
-        clauses.append("patch LIKE ?")
-        params.append(f"{patch_prefix}%")
+        clause, values = patch_predicate(patch_prefix)
+        clauses.append(clause)
+        params.extend(values)
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def patch_predicate(prefix: str) -> tuple[str, list[str]]:
+    """Preserve prefix-LIKE semantics while bounding the BINARY patch index.
+
+    Numeric/dot prefixes have no LIKE wildcards or case variants. Incrementing
+    the final ASCII character gives their exact lexical upper bound (including
+    partial prefixes such as 16.2). Other callers keep the original LIKE rule.
+    """
+    if re.fullmatch(r'[0-9.]+', prefix):
+        return 'patch >= ? AND patch < ?', [prefix, prefix[:-1] + chr(ord(prefix[-1]) + 1)]
+    return 'patch LIKE ?', [prefix + '%']
 
 
 JADE_CHAMPION_ID_OFFSET = 60_000

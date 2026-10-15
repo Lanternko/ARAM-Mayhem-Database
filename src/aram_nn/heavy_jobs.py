@@ -5,7 +5,7 @@ not load data. This is a sampled circuit breaker, not an allocation hard limit.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from functools import wraps
@@ -54,11 +54,11 @@ def must_stop(sample: ResourceSample, limits: Limits) -> bool:
                 or sample.commit_limit_mb - sample.commit_total_mb <= limits.stop_commit_free_mb)
 
 
-# Defaults remain conservative for unspecified whole-frame workloads. The site
-# profile predates bounded model refresh and stays separate so its established
-# admission policy is not silently changed by a training repair.
+# The site uses a bounded participant replay, sparse LR, and compact quantiles.
+# Retain the 2 GiB active stop floor while admitting at 5 GiB; the old 6 GiB
+# start floor covered a dense radar that alone committed about 6 GiB.
 SITE_BUILD_LIMITS = Limits(
-    start_available_mb=6144,
+    start_available_mb=5120,
     start_commit_percent=95,
     start_commit_free_mb=2048,
     stop_available_mb=2048,
@@ -193,6 +193,19 @@ def guarded_pipeline(function):
         with HeavyJob(function.__name__, limits=limits).admitted():
             return function(*args, **kwargs)
     return wrapped
+
+
+@contextmanager
+def site_build_admission(enabled=True):
+    """Called only after growth checks, so a skipped publish never waits for RAM."""
+    if not enabled or _active.get() is not None:
+        yield
+        return
+    from .site.build_timing import stage
+    with ExitStack() as stack:
+        with stage('publisher.resource_wait'):
+            stack.enter_context(HeavyJob('publish_static_site_once', limits=SITE_BUILD_LIMITS).admitted())
+        yield
 
 
 def _stop_tree(process):

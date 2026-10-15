@@ -40,6 +40,8 @@ def acquire_publisher_lock(state_path: Path) -> BinaryIO:
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"), show_default=True)
 @click.option("--state", "state_path", type=click.Path(path_type=Path), default=DEFAULT_STATE_PATH, show_default=True)
+@click.option("--timings", "timings_path", type=click.Path(path_type=Path), default=None,
+              help="Write per-stage timing JSON (default: <state>.timings.json).")
 @click.option("--threshold", type=int, default=0, show_default=True, help="Minimum absolute growth before publishing. 0 = ratio-only.")
 @click.option("--growth-ratio", type=float, default=0.10, show_default=True, help="Publish after this fractional growth since the previous publish.")
 @click.option(
@@ -88,6 +90,7 @@ def main(
     isolated_worktree: bool,
     watch: bool,
     interval_sec: int,
+    timings_path: Path | None = None,
 ) -> None:
     """Rebuild, commit, and push the GitHub Pages static tier-list outputs."""
     # Keep the handle alive for the entire one-shot/watch process. The OS releases
@@ -139,6 +142,7 @@ def main(
                 check_only=check_only,
                 dry_run=dry_run,
                 isolated_worktree=isolated_worktree,
+                timings_path=timings_path or state_path.with_suffix(".timings.json"),
             )
         except Exception as exc:
             if not watch:

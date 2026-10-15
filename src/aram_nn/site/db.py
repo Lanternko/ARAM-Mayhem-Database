@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from aram_nn.gamedata import _connect_ro, patch_predicate
 import json
 import re
 import sqlite3
@@ -116,7 +117,7 @@ def latest_patch_prefix(
     """
     if not db_path.exists():
         return None
-    con = connect(db_path)
+    con = _connect_ro(db_path)
     try:
         rows = con.execute(
             """
@@ -151,17 +152,17 @@ def latest_patch_prefix(
 def count_games(db_path: Path, *, queue_id: int | None = None, patch_prefix: str | None = None) -> int:
     if not db_path.exists():
         return 0
-    con = connect(db_path)
+    con = _connect_ro(db_path)
     try:
-        ensure_public_schema(con)
         clauses: list[str] = []
         params: list[Any] = []
         if queue_id is not None:
             clauses.append("queue_id = ?")
             params.append(int(queue_id))
         if patch_prefix:
-            clauses.append("patch LIKE ?")
-            params.append(f"{patch_prefix}%")
+            clause, values = patch_predicate(patch_prefix)
+            clauses.append(clause)
+            params.extend(values)
         sql = "SELECT COUNT(*) FROM games"
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
@@ -256,8 +257,9 @@ def iter_public_games(
             clauses.append("queue_id = ?")
             params.append(int(queue_id))
         if patch_prefix:
-            clauses.append("patch LIKE ?")
-            params.append(f"{patch_prefix}%")
+            clause, values = patch_predicate(patch_prefix)
+            clauses.append(clause)
+            params.extend(values)
         sql = f"SELECT {', '.join(PUBLIC_GAME_COLUMNS)} FROM games"
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)

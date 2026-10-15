@@ -24,6 +24,7 @@ both the browser and the Meta Pick API.
 from __future__ import annotations
 
 import hashlib
+from aram_nn.gamedata import patch_predicate
 import json
 import math
 import sqlite3
@@ -103,9 +104,9 @@ def load_team_games(
         if patch_prefix:
             rows = con.execute(
                 "SELECT created_ms, blue_champs, red_champs, blue_wins "
-                "FROM games WHERE queue_id=? AND patch LIKE ? "
+                f"FROM games WHERE queue_id=? AND {patch_predicate(patch_prefix)[0]} "
                 "ORDER BY created_ms, game_id",
-                (queue_id, f"{patch_prefix}%"),
+                (queue_id, *patch_predicate(patch_prefix)[1]),
             )
         else:
             rows = con.execute(

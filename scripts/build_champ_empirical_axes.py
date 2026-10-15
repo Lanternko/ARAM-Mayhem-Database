@@ -22,6 +22,7 @@ from pathlib import Path
 
 import click
 from aram_nn.parquet_batches import iter_parquet_rows
+from aram_nn.site.analysis_cache import cached_analysis
 
 SCHEMA_KIND = "champ_empirical_axes"
 SNOWBALL_SPREE_W = 0.6
@@ -48,6 +49,7 @@ EARLY_MAX_SEC = 16 * 60
               help="Min total games for a snowball value.")
 @click.option("--out", default=Path("docs/api/champ-empirical-axes.json"),
               type=click.Path(path_type=Path), show_default=True)
+@cached_analysis(SCHEMA_KIND, ("alias", "name"))
 def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games, out):
     patch_set = {p.strip() for p in patches.split(",") if p.strip()}
     print("[1/3] streaming games in batches of 256 ...", flush=True)

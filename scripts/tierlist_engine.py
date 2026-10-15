@@ -34,6 +34,9 @@ import click
 import httpx
 
 from aram_nn import patch_snapshot
+from aram_nn.gamedata import _connect_ro, patch_predicate
+from aram_nn.site.participant_replay import iter_rows as iter_site_rows, cached_counts
+from aram_nn.site.build_timing import timed
 from aram_nn.site.item_families import canonical_item_id, item_families_payload
 from aram_nn.site.augment_taxonomy import (
     AUGMENT_CATEGORY_ORDER,
@@ -1332,6 +1335,7 @@ def load_item_metadata(
         }
     return out
 
+@timed("builder._scan_patch_counters")
 def _scan_patch_counters(
     db_path: Path,
     queue_id: int,
@@ -1343,19 +1347,7 @@ def _scan_patch_counters(
     frozen as counters and re-derived without re-reading hundreds of thousands
     of rows; see ``aram_nn.patch_snapshot`` for the settle / re-settle rules.
     """
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ?",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-            "WHERE queue_id=?",
-            (queue_id,),
-        )
+    rows = iter_site_rows(db_path, queue_id, patch_prefix, teams=True)
 
     games: Counter[int] = Counter()
     wins: Counter[int] = Counter()
@@ -1389,7 +1381,7 @@ def _scan_patch_counters(
                             cp_wins[(c, teammate)] += 1
             if not pj:
                 continue
-            for p in json.loads(pj):
+            for p in pj:
                 cid = int(p.get("championId", 0))
                 if cid <= 0:
                     continue
@@ -1407,7 +1399,7 @@ def _scan_patch_counters(
                         ca_slot_games[(cid, a, slot)] += 1
                         ca_slot_wins[(cid, a, slot)] += player_won
     finally:
-        con.close()
+        rows.close()
 
     return {
         "games": games,
@@ -1421,6 +1413,7 @@ def _scan_patch_counters(
     }
 
 
+@timed("builder.compute_winrates")
 def compute_winrates(
     db_path: Path,
     queue_id: int,
@@ -1735,6 +1728,7 @@ def settled_patch_counters(
     return counters
 
 
+@timed("builder.compute_settled_winrates")
 def compute_settled_winrates(
     db_path: Path,
     queue_id: int,
@@ -1762,18 +1756,22 @@ def compute_settled_winrates(
     return _derive_winrate_records(counters)
 
 
+@timed("builder.count_patch_games")
 def count_patch_games(
     db_path: Path,
     queue_id: int,
     patch_prefix: str | None,
 ) -> int:
     """Return the total number of games in the requested queue / patch scope."""
-    con = sqlite3.connect(str(db_path))
+    cached = cached_counts(db_path, queue_id, patch_prefix)
+    if cached is not None:
+        return cached[0]
+    con = _connect_ro(db_path)
     try:
         if patch_prefix:
             row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ?",
-                (queue_id, f"{patch_prefix}%"),
+                f"SELECT COUNT(*) FROM games WHERE queue_id=? AND {patch_predicate(patch_prefix)[0]}",
+                (queue_id, *patch_predicate(patch_prefix)[1]),
             ).fetchone()
         else:
             row = con.execute(
@@ -1785,6 +1783,7 @@ def count_patch_games(
         con.close()
 
 
+@timed("builder.count_participant_games")
 def count_participant_games(
     db_path: Path,
     queue_id: int,
@@ -1797,13 +1796,16 @@ def count_participant_games(
     dividing by the full game count would deflate every augment uniformly.  We
     count games where augments are observable instead.
     """
-    con = sqlite3.connect(str(db_path))
+    cached = cached_counts(db_path, queue_id, patch_prefix)
+    if cached is not None:
+        return cached[1]
+    con = _connect_ro(db_path)
     try:
         if patch_prefix:
             row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ? "
+                f"SELECT COUNT(*) FROM games WHERE queue_id=? AND {patch_predicate(patch_prefix)[0]} "
                 "AND participants_json IS NOT NULL AND participants_json != ''",
-                (queue_id, f"{patch_prefix}%"),
+                (queue_id, *patch_predicate(patch_prefix)[1]),
             ).fetchone()
         else:
             row = con.execute(
@@ -1913,6 +1915,7 @@ def posterior_wr_summary(wins: int, games: int, baseline: float, prior_strength:
     lower = beta_posterior_quantile(AUGMENT_POSTERIOR_Q, alpha, beta)
     return mean, lower
 
+@timed("builder.build_augment_global_stats")
 def build_augment_global_stats(
     champ_aug_records: list[dict],
     aug_meta: dict[int, dict],
@@ -2281,12 +2284,16 @@ def _heartsteel_followup_slug(non_heartsteel_weights: Counter[str]) -> str | Non
         return leader
     return None
 
-def _participant_item_infos(item_ids: list[int], item_meta: dict[int, dict]) -> list[dict[str, str]]:
+def _participant_item_infos(
+    item_ids: list[int], item_meta: dict[int, dict],
+    style_by_id: dict[int, list[dict[str, str]]] | None = None,
+) -> list[dict[str, str]]:
     item_style_weights: Counter[str] = Counter()
     item_style_by_slug: dict[str, dict[str, str]] = {}
     for item_id in item_ids:
         item = item_meta.get(int(item_id))
-        for info in item_style_infos(item):
+        infos = item_style_infos(item) if style_by_id is None else style_by_id.get(int(item_id), [])
+        for info in infos:
             slug = str(info.get("slug") or "")
             if not slug:
                 continue
@@ -3112,6 +3119,7 @@ def _finalize_category_affinity(
         }
     return out
 
+@timed("builder.compute_champ_category_affinities")
 def compute_champ_category_affinities(
     db_path: Path,
     queue_id: int,
@@ -3131,19 +3139,10 @@ def compute_champ_category_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL",
-            (queue_id,),
-        )
+    rows = iter_site_rows(db_path, queue_id, patch_prefix)
+    # Item taxonomy is metadata: classify each item once per build instead of
+    # rebuilding its strings/sets for every participant inventory slot.
+    style_by_id = {int(item_id): item_style_infos(meta) for item_id, meta in item_meta.items()}
 
     # The game's own pools when the per-patch payload is available; the keyword
     # classifier only as a fallback so a missing payload degrades the labels
@@ -3152,6 +3151,8 @@ def compute_champ_category_affinities(
         if augment_group_infos is not None:
             return augment_group_infos.get(aid) or []
         return augment_category_infos(aid, meta, augment_category_overrides)
+
+    group_by_augment = {aid: _augment_group_of(aid, meta) for aid, meta in aug_meta.items()}
 
     dims = ("sets", "items", "augtypes")
     cs_games = {dim: Counter() for dim in dims}
@@ -3184,7 +3185,7 @@ def compute_champ_category_affinities(
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -3199,16 +3200,17 @@ def compute_champ_category_affinities(
                     if not meta:
                         continue
                     set_infos.extend(meta.get("sets") or [])
-                    aug_type_infos.extend(_augment_group_of(int(augment_id), meta))
+                    aug_type_infos.extend(group_by_augment.get(int(augment_id)) or [])
                 item_infos = _participant_item_infos(
                     participant.get("items") or participant.get("itemSlots") or [],
                     item_meta,
+                    style_by_id,
                 )
                 add("sets", cid, player_won, baseline, set_infos)
                 add("items", cid, player_won, baseline, item_infos)
                 add("augtypes", cid, player_won, baseline, aug_type_infos)
     finally:
-        con.close()
+        rows.close()
 
     augtype_groups = None
     if champ_profiles:
@@ -3236,6 +3238,7 @@ def compute_champ_category_affinities(
         ),
     )
 
+@timed("builder.compute_champ_item_pair_affinities")
 def compute_champ_item_pair_affinities(
     db_path: Path,
     queue_id: int,
@@ -3249,21 +3252,7 @@ def compute_champ_item_pair_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
+    rows = iter_site_rows(db_path, queue_id, patch_prefix, require='items')
 
     cs_games: Counter[tuple[int, str]] = Counter()
     cs_wins: Counter[tuple[int, str]] = Counter()
@@ -3282,7 +3271,7 @@ def compute_champ_item_pair_affinities(
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -3318,7 +3307,7 @@ def compute_champ_item_pair_affinities(
                         "items": items,
                     }
     finally:
-        con.close()
+        rows.close()
 
     best_order_by_pair: dict[tuple[int, str], list[int]] = {}
     order_candidates: dict[tuple[int, str], list[tuple[float, int, str]]] = defaultdict(list)
@@ -3366,6 +3355,7 @@ def compute_champ_item_pair_affinities(
             row["items"] = items
     return affinity
 
+@timed("builder._compute_champ_item_slot_affinities")
 def _compute_champ_item_slot_affinities(
     db_path: Path,
     queue_id: int,
@@ -3384,21 +3374,7 @@ def _compute_champ_item_slot_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
+    rows = iter_site_rows(db_path, queue_id, patch_prefix, require='items')
 
     cs_games: Counter[tuple[int, str]] = Counter()
     cs_wins: Counter[tuple[int, str]] = Counter()
@@ -3414,7 +3390,7 @@ def _compute_champ_item_slot_affinities(
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -3448,7 +3424,7 @@ def _compute_champ_item_slot_affinities(
                             "items": items,
                         }
     finally:
-        con.close()
+        rows.close()
 
     return _finalize_category_affinity(
         cs_games,
@@ -3473,6 +3449,7 @@ def _compute_champ_item_slot_affinities(
         popular_bad_n=SINGLE_ITEM_COMMON_TRAP_N,
     )
 
+@timed("builder.single_items")
 def compute_champ_single_item_affinities(
     db_path: Path,
     queue_id: int,
@@ -3496,6 +3473,7 @@ def compute_champ_single_item_affinities(
         top_n=0,
     )
 
+@timed("builder.boots")
 def compute_champ_boot_item_affinities(
     db_path: Path,
     queue_id: int,
@@ -3519,6 +3497,7 @@ def compute_champ_boot_item_affinities(
         top_n=4,
     )
 
+@timed("builder.compute_champ_spell_affinities")
 def compute_champ_spell_affinities(
     db_path: Path,
     queue_id: int,
@@ -3540,21 +3519,7 @@ def compute_champ_spell_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
-            "AND participants_json LIKE '%\"spells\"%'",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND participants_json LIKE '%\"spells\"%'",
-            (queue_id,),
-        )
+    rows = iter_site_rows(db_path, queue_id, patch_prefix, require='spells')
 
     cs_games: Counter[tuple[int, str]] = Counter()
     cs_wins: Counter[tuple[int, str]] = Counter()
@@ -3570,7 +3535,7 @@ def compute_champ_spell_affinities(
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -3615,7 +3580,7 @@ def compute_champ_spell_affinities(
                         "items": spells,
                     }
     finally:
-        con.close()
+        rows.close()
 
     return _finalize_category_affinity(
         cs_games,
@@ -3768,6 +3733,7 @@ def _apply_core_item_baselines(
     }
 
 
+@timed("builder._scan_core_item_counters")
 def _scan_core_item_counters(
     db_path: Path,
     queue_id: int,
@@ -3793,19 +3759,13 @@ def _scan_core_item_counters(
     # this champion had *with any core item*, i.e. the same population the
     # champ_item numerators are drawn from.
     champ_games_stats: dict[int, float] = defaultdict(float)
-    con = sqlite3.connect(str(db_path))
+    rows = iter_site_rows(db_path, queue_id, patch_prefix, require="items")
     try:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
-        )
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -3843,7 +3803,7 @@ def _scan_core_item_counters(
                     champ_bucket["games"] += 1
                     champ_bucket["wins"] += player_won
     finally:
-        con.close()
+        rows.close()
     return {
         "item": item_stats,
         "champ_item": champ_item_stats,
@@ -3966,6 +3926,7 @@ def _item_rank_score(row: dict) -> float:
     return float(row.get("delta", 0.0) or 0.0) * weight
 
 
+@timed("builder.compute_patch_changes")
 def compute_patch_changes(
     db_path: Path,
     queue_id: int,
@@ -4358,6 +4319,7 @@ def _select_diverse_item_cluster_rows(
     return selected
 
 
+@timed("builder.compute_champ_item_build_clusters")
 def compute_champ_item_build_clusters(
     db_path: Path,
     queue_id: int,
@@ -4394,21 +4356,7 @@ def compute_champ_item_build_clusters(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
-    if patch_prefix:
-        sql_rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
-        )
-    else:
-        sql_rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
+    sql_rows = iter_site_rows(db_path, queue_id, patch_prefix, require='items')
 
     champ_total: Counter[int] = Counter()
     champ_builds: dict[int, list[tuple[tuple[int, ...], int, int]]] = defaultdict(list)
@@ -4417,7 +4365,7 @@ def compute_champ_item_build_clusters(
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
-            for participant in json.loads(participants_json):
+            for participant in participants_json:
                 cid = int(participant.get("championId", 0) or 0)
                 team_id = int(participant.get("teamId", 0) or 0)
                 if cid <= 0 or team_id not in (100, 200):
@@ -4439,7 +4387,7 @@ def compute_champ_item_build_clusters(
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won))
     finally:
-        con.close()
+        sql_rows.close()
 
     full_core_len = max_items - 1
     out: dict[int, dict] = {}
@@ -4828,6 +4776,7 @@ def infer_secondary_roles_from_data(
 
     return changes
 
+@timed("builder.build_champ_augment_picks")
 def build_champ_augment_picks(
     champ_aug: list[dict],
     aug_meta: dict[int, dict],
@@ -5021,13 +4970,13 @@ def compute_champ_set_affinity(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = _connect_ro(db_path)
     if patch_prefix:
         rows = list(
             con.execute(
                 "SELECT blue_wins, participants_json FROM games "
-                "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
-                (queue_id, f"{patch_prefix}%"),
+                f"WHERE queue_id=? AND {patch_predicate(patch_prefix)[0]} AND participants_json IS NOT NULL",
+                (queue_id, *patch_predicate(patch_prefix)[1]),
             )
         )
     else:

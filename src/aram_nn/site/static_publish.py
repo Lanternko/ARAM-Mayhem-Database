@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 import datetime as dt
 import json
 import math
@@ -12,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from aram_nn.heavy_jobs import guarded_pipeline, run_command
+from aram_nn.heavy_jobs import site_build_admission, run_command
+from .build_timing import publish_report, timed, collect_child_timings, stage
 
 from .db import count_games
 
@@ -364,17 +366,19 @@ def decide_static_publish(
 
 def _default_runner(command: Sequence[str]) -> CommandResult:
     completed = run_command(command)
+    collect_child_timings(completed.stdout)
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
 def _run_checked(runner: CommandRunner, command: Sequence[str]) -> CommandResult:
-    result = runner(command)
-    if result.returncode != 0:
-        rendered = " ".join(command)
-        detail = "\n".join(part for part in (
-            result.stderr.strip(), result.stdout.strip()) if part)
-        raise RuntimeError(f"command failed ({rendered}), exit={result.returncode}: {detail}")
-    return result
+    with stage("git." + str(command[1])) if command and command[0] == "git" else nullcontext():
+        result = runner(command)
+        if result.returncode != 0:
+            rendered = " ".join(command)
+            detail = "\n".join(part for part in (
+                result.stderr.strip(), result.stdout.strip()) if part)
+            raise RuntimeError(f"command failed ({rendered}), exit={result.returncode}: {detail}")
+        return result
 
 
 def git_output(runner: CommandRunner, command: Sequence[str]) -> str:
@@ -403,7 +407,8 @@ def merge_upstream(runner: CommandRunner, branch: str) -> str | None:
     behind = git_output(runner, ["git", "rev-list", "--count", f"HEAD..origin/{branch}"])
     if behind in {"", "0"}:
         return None
-    result = runner(["git", "merge", "--no-edit", f"origin/{branch}"])
+    with stage("git.merge"):
+        result = runner(["git", "merge", "--no-edit", f"origin/{branch}"])
     if result.returncode != 0:
         runner(["git", "merge", "--abort"])
         detail = result.stderr.strip() or result.stdout.strip()
@@ -431,7 +436,8 @@ def push_with_upstream_merge(
         return None
 
     merged = merge_upstream(runner, branch)
-    result = runner(["git", "push", "origin", branch])
+    with stage("git.push"):
+        result = runner(["git", "push", "origin", branch])
     if result.returncode == 0:
         return merged
     # Something landed upstream between our fetch and our push. Absorb it and
@@ -446,6 +452,7 @@ def runner_in(cwd: Path) -> CommandRunner:
 
     def run(command: Sequence[str]) -> CommandResult:
         completed = run_command(command, cwd=cwd)
+        collect_child_timings(completed.stdout)
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
     return run
@@ -515,6 +522,7 @@ def dirty_paths(runner: CommandRunner, paths: Sequence[Path]) -> list[str]:
     return dirty
 
 
+@timed("git.diff")
 def docs_have_diff(runner: CommandRunner, paths: Sequence[Path]) -> bool:
     command = ["git", "diff", "--quiet", "--", *(str(path) for path in paths)]
     result = runner(command)
@@ -530,6 +538,7 @@ def current_branch(runner: CommandRunner) -> str:
     return git_output(runner, ["git", "rev-parse", "--abbrev-ref", "HEAD"])
 
 
+@timed("publisher.tier_list")
 def build_split_site(
     *,
     runner: CommandRunner,
@@ -578,6 +587,7 @@ def resolve_comp_fit_parquet(parquet: Path | None) -> Path | None:
     return None
 
 
+@timed("publisher.archetype_fit")
 def build_champ_archetype_fit(
     *,
     runner: CommandRunner,
@@ -626,6 +636,7 @@ def build_champ_archetype_fit(
     return {"built": True, "reason": "ok", "parquet": str(resolved)}
 
 
+@timed("publisher.empirical_axes")
 def build_champ_empirical_axes(
     *,
     runner: CommandRunner,
@@ -683,6 +694,7 @@ CLASSIC_PAGE_OUTPUTS = (
 )
 
 
+@timed("publisher.classic")
 def build_classic_page(
     *,
     runner: CommandRunner,
@@ -718,7 +730,7 @@ def build_classic_page(
     return {"built": True, "reason": "ok", "recent_patches": recent_patches}
 
 
-@guarded_pipeline
+@publish_report
 def publish_static_site_once(
     *,
     db: Path = Path("data/lcu/games.db"),
@@ -736,6 +748,7 @@ def publish_static_site_once(
     comp_fit_parquet: Path | None = None,
     isolated_worktree: bool = False,
     _detached_target_branch: str | None = None,
+    timings_path: Path | None = None,
     runner: CommandRunner = _default_runner,
 ) -> dict[str, Any]:
     state = load_state(state_path)
@@ -772,169 +785,170 @@ def publish_static_site_once(
             "max_age_hours": max_age_hours,
         }
 
-    if isolated_worktree:
-        source_root = Path.cwd().resolve()
-        branch_name = current_branch(runner)
-        if branch_name != branch:
-            raise RuntimeError(
-                f"refusing to publish from branch {branch_name!r}; expected {branch!r}"
-            )
-        _run_checked(runner, ["git", "fetch", "origin"])
-        db = db.resolve()
-        state_path = state_path.resolve()
-        resolved_parquet = resolve_comp_fit_parquet(comp_fit_parquet)
-        if resolved_parquet is not None:
-            resolved_parquet = resolved_parquet.resolve()
-        with tempfile.TemporaryDirectory(prefix="arammeta-publish-") as tmp:
-            worktree = Path(tmp) / "repo"
-            _run_checked(
-                runner,
-                ["git", "worktree", "add", "--detach", str(worktree), f"origin/{branch}"],
-            )
-            try:
-                link_local_build_inputs(source_root, worktree)
-                result = publish_static_site_once(
-                    db=db,
-                    state_path=state_path,
-                    threshold=threshold,
-                    growth_ratio=growth_ratio,
-                    max_age_hours=max_age_hours,
-                    force=force,
-                    queue_id=queue_id,
-                    patch_prefix=patch_prefix,
-                    site_url=site_url,
-                    branch=branch,
-                    check_only=False,
-                    dry_run=dry_run,
-                    comp_fit_parquet=resolved_parquet,
-                    isolated_worktree=False,
-                    _detached_target_branch=branch,
-                    runner=runner_in(worktree),
+    with site_build_admission(runner is _default_runner):
+        if isolated_worktree:
+            source_root = Path.cwd().resolve()
+            branch_name = current_branch(runner)
+            if branch_name != branch:
+                raise RuntimeError(
+                    f"refusing to publish from branch {branch_name!r}; expected {branch!r}"
                 )
-                result["isolated_worktree"] = True
-                return result
-            finally:
-                unlink_local_build_inputs(worktree)
-                runner(["git", "worktree", "remove", "--force", str(worktree)])
-                runner(["git", "worktree", "prune"])
+            _run_checked(runner, ["git", "fetch", "origin"])
+            db = db.resolve()
+            state_path = state_path.resolve()
+            resolved_parquet = resolve_comp_fit_parquet(comp_fit_parquet)
+            if resolved_parquet is not None:
+                resolved_parquet = resolved_parquet.resolve()
+            with tempfile.TemporaryDirectory(prefix="arammeta-publish-") as tmp:
+                worktree = Path(tmp) / "repo"
+                _run_checked(
+                    runner,
+                    ["git", "worktree", "add", "--detach", str(worktree), f"origin/{branch}"],
+                )
+                try:
+                    link_local_build_inputs(source_root, worktree)
+                    result = publish_static_site_once(
+                        db=db,
+                        state_path=state_path,
+                        threshold=threshold,
+                        growth_ratio=growth_ratio,
+                        max_age_hours=max_age_hours,
+                        force=force,
+                        queue_id=queue_id,
+                        patch_prefix=patch_prefix,
+                        site_url=site_url,
+                        branch=branch,
+                        check_only=False,
+                        dry_run=dry_run,
+                        comp_fit_parquet=resolved_parquet,
+                        isolated_worktree=False,
+                        _detached_target_branch=branch,
+                        runner=runner_in(worktree),
+                    )
+                    result["isolated_worktree"] = True
+                    return result
+                finally:
+                    unlink_local_build_inputs(worktree)
+                    runner(["git", "worktree", "remove", "--force", str(worktree)])
+                    runner(["git", "worktree", "prune"])
 
-    branch_name = current_branch(runner)
-    expected_branch = "HEAD" if _detached_target_branch else branch
-    if branch_name != expected_branch:
-        raise RuntimeError(f"refusing to publish from branch {branch_name!r}; expected {branch!r}")
+        branch_name = current_branch(runner)
+        expected_branch = "HEAD" if _detached_target_branch else branch
+        if branch_name != expected_branch:
+            raise RuntimeError(f"refusing to publish from branch {branch_name!r}; expected {branch!r}")
 
-    preexisting = dirty_paths(runner, DEFAULT_DOC_PATHS)
-    if preexisting:
-        raise RuntimeError("refusing to overwrite dirty site output files: " + "; ".join(preexisting))
+        preexisting = dirty_paths(runner, DEFAULT_DOC_PATHS)
+        if preexisting:
+            raise RuntimeError("refusing to overwrite dirty site output files: " + "; ".join(preexisting))
 
-    build_split_site(
-        runner=runner,
-        site_url=site_url,
-        queue_id=queue_id,
-        patch_prefix=patch_prefix,
-        db=db,
-    )
-    # Regenerate the empirical comp-fit radar from the just-rebuilt tier-list.json
-    # so it ships in the SAME commit as the tier list it depends on.  Non-fatal:
-    # a comp-fit failure must never block the tier-list publish.
-    comp_fit = build_champ_archetype_fit(runner=runner, parquet=comp_fit_parquet)
-    # Regenerate the empirical ability axes (scaling + snowball) from the same
-    # rebuilt tier-list.json + pooled parquet so the 後期 / 滾雪球 bars ship in the
-    # same commit.  Also non-fatal -- a failure here must never block the publish.
-    empirical_axes = build_champ_empirical_axes(runner=runner, parquet=comp_fit_parquet)
-    # The Classic page reads only the DB, not tier-list.json, but it rides the same
-    # commit so it stays current.  Non-fatal, like the two artifacts above.
-    classic = build_classic_page(runner=runner, db=db)
+        build_split_site(
+            runner=runner,
+            site_url=site_url,
+            queue_id=queue_id,
+            patch_prefix=patch_prefix,
+            db=db,
+        )
+        # Regenerate the empirical comp-fit radar from the just-rebuilt tier-list.json
+        # so it ships in the SAME commit as the tier list it depends on.  Non-fatal:
+        # a comp-fit failure must never block the tier-list publish.
+        comp_fit = build_champ_archetype_fit(runner=runner, parquet=comp_fit_parquet)
+        # Regenerate the empirical ability axes (scaling + snowball) from the same
+        # rebuilt tier-list.json + pooled parquet so the 後期 / 滾雪球 bars ship in the
+        # same commit.  Also non-fatal -- a failure here must never block the publish.
+        empirical_axes = build_champ_empirical_axes(runner=runner, parquet=comp_fit_parquet)
+        # The Classic page reads only the DB, not tier-list.json, but it rides the same
+        # commit so it stays current.  Non-fatal, like the two artifacts above.
+        classic = build_classic_page(runner=runner, db=db)
 
-    changed = docs_have_diff(runner, DEFAULT_DOC_PATHS)
-    if not changed:
+        changed = docs_have_diff(runner, DEFAULT_DOC_PATHS)
+        if not changed:
+            _record_patch_state(
+                state,
+                patch_prefix=patch_prefix,
+                payload={
+                    "last_published_total": decision.local_total,
+                    "last_publish_at_unix": time.time(),
+                    "last_result": "no docs diff after rebuild",
+                    "last_queue_id": queue_id,
+                    "last_patch_prefix": patch_prefix,
+                    "last_threshold": decision.threshold,
+                    "last_growth_ratio": decision.growth_ratio,
+                    "last_max_age_hours": max_age_hours,
+                },
+            )
+            if not dry_run:
+                save_state(state_path, state)
+            return {
+                "published": False,
+                "would_publish": False,
+                "reason": "no docs diff after rebuild",
+                "local_total": decision.local_total,
+                "last_published_total": decision.last_published_total,
+                "threshold": decision.threshold,
+                "growth_ratio": decision.growth_ratio,
+                "max_age_hours": max_age_hours,
+                "comp_fit": comp_fit,
+                "empirical_axes": empirical_axes,
+                "classic": classic,
+            }
+
+        today = dt.date.today().isoformat()
+        message = f"Refresh split tier list {today}"
+
+        if dry_run:
+            return {
+                "published": False,
+                "would_publish": True,
+                "reason": "dry run",
+                "local_total": decision.local_total,
+                "last_published_total": decision.last_published_total,
+                "threshold": decision.threshold,
+                "growth_ratio": decision.growth_ratio,
+                "max_age_hours": max_age_hours,
+                "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
+                "commit_message": message,
+                "comp_fit": comp_fit,
+                "empirical_axes": empirical_axes,
+                "classic": classic,
+            }
+
+        _run_checked(runner, ["git", "add", *(str(path) for path in DEFAULT_DOC_PATHS)])
+        _run_checked(runner, ["git", "commit", "-m", message])
+        merged = push_with_upstream_merge(
+            runner, branch, detached=_detached_target_branch is not None
+        )
+        commit = git_output(runner, ["git", "rev-parse", "--short", "HEAD"])
+
         _record_patch_state(
             state,
             patch_prefix=patch_prefix,
             payload={
                 "last_published_total": decision.local_total,
                 "last_publish_at_unix": time.time(),
-                "last_result": "no docs diff after rebuild",
+                "last_commit": commit,
                 "last_queue_id": queue_id,
                 "last_patch_prefix": patch_prefix,
+                "last_result": "published",
                 "last_threshold": decision.threshold,
                 "last_growth_ratio": decision.growth_ratio,
                 "last_max_age_hours": max_age_hours,
             },
         )
-        if not dry_run:
-            save_state(state_path, state)
-        return {
-            "published": False,
-            "would_publish": False,
-            "reason": "no docs diff after rebuild",
-            "local_total": decision.local_total,
-            "last_published_total": decision.last_published_total,
-            "threshold": decision.threshold,
-            "growth_ratio": decision.growth_ratio,
-            "max_age_hours": max_age_hours,
-            "comp_fit": comp_fit,
-            "empirical_axes": empirical_axes,
-            "classic": classic,
-        }
+        save_state(state_path, state)
 
-    today = dt.date.today().isoformat()
-    message = f"Refresh split tier list {today}"
-
-    if dry_run:
         return {
-            "published": False,
+            "published": True,
             "would_publish": True,
-            "reason": "dry run",
+            "reason": decision.reason,
             "local_total": decision.local_total,
             "last_published_total": decision.last_published_total,
             "threshold": decision.threshold,
             "growth_ratio": decision.growth_ratio,
             "max_age_hours": max_age_hours,
+            "commit": commit,
+            "merged_upstream": merged,
             "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
             "commit_message": message,
             "comp_fit": comp_fit,
             "empirical_axes": empirical_axes,
-            "classic": classic,
         }
-
-    _run_checked(runner, ["git", "add", *(str(path) for path in DEFAULT_DOC_PATHS)])
-    _run_checked(runner, ["git", "commit", "-m", message])
-    merged = push_with_upstream_merge(
-        runner, branch, detached=_detached_target_branch is not None
-    )
-    commit = git_output(runner, ["git", "rev-parse", "--short", "HEAD"])
-
-    _record_patch_state(
-        state,
-        patch_prefix=patch_prefix,
-        payload={
-            "last_published_total": decision.local_total,
-            "last_publish_at_unix": time.time(),
-            "last_commit": commit,
-            "last_queue_id": queue_id,
-            "last_patch_prefix": patch_prefix,
-            "last_result": "published",
-            "last_threshold": decision.threshold,
-            "last_growth_ratio": decision.growth_ratio,
-            "last_max_age_hours": max_age_hours,
-        },
-    )
-    save_state(state_path, state)
-
-    return {
-        "published": True,
-        "would_publish": True,
-        "reason": decision.reason,
-        "local_total": decision.local_total,
-        "last_published_total": decision.last_published_total,
-        "threshold": decision.threshold,
-        "growth_ratio": decision.growth_ratio,
-        "max_age_hours": max_age_hours,
-        "commit": commit,
-        "merged_upstream": merged,
-        "changed_paths": [path.as_posix() for path in DEFAULT_DOC_PATHS],
-        "commit_message": message,
-        "comp_fit": comp_fit,
-        "empirical_axes": empirical_axes,
-    }
