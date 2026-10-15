@@ -193,6 +193,59 @@ ON crawl_queue(discovered_match_created_ms DESC, priority ASC, depth ASC,
 WHERE status = 'pending' AND classic_affinity_rank = 0;
 """
 
+# Mirror the exact first-visit predicate from crawl_seen: older general players
+# and deferred histories can have process_count > 0 but no Classic timestamp.
+_CREATE_GENERAL_UNVISITED_INDEX_SQL = """
+CREATE INDEX IF NOT EXISTS idx_crawl_queue_general_unvisited
+ON crawl_queue(discovered_match_created_ms DESC, priority ASC, depth ASC,
+               updated_at ASC, queue_idx ASC)
+WHERE status = 'pending' AND classic_affinity_rank = 0
+  AND has_been_crawled = 0;
+"""
+
+
+def _ensure_first_visit_state(con: sqlite3.Connection) -> None:
+    """Index first visits without changing the canonical process_count rule.
+
+    Triggers cover both RPC and legacy writers, including deferred histories
+    and re-created queue rows. A one-shot migration handles the old frontier;
+    later starts only check a watermark. All work stays in the schema owner's
+    transaction, before producers are admitted.
+    """
+    _ensure_column(con, "crawl_queue", "has_been_crawled",
+                   "has_been_crawled INTEGER NOT NULL DEFAULT 0")
+    for event, name in (("INSERT", "insert"), ("UPDATE OF process_count", "update")):
+        con.execute(f"""
+            CREATE TRIGGER IF NOT EXISTS crawl_seen_first_visit_{name}
+            AFTER {event} ON crawl_seen WHEN NEW.process_count > 0
+            BEGIN
+                UPDATE crawl_queue SET has_been_crawled=1
+                WHERE puuid=NEW.puuid AND has_been_crawled=0;
+            END
+        """)
+    con.execute("""
+        CREATE TRIGGER IF NOT EXISTS crawl_queue_first_visit_insert
+        AFTER INSERT ON crawl_queue
+        WHEN EXISTS (SELECT 1 FROM crawl_seen
+                     WHERE puuid=NEW.puuid AND process_count > 0)
+        BEGIN
+            UPDATE crawl_queue SET has_been_crawled=1 WHERE queue_idx=NEW.queue_idx;
+        END
+    """)
+    flag = "first_visit_state_v1"
+    if con.execute("SELECT 1 FROM crawl_runtime_state WHERE state_key=?", (flag,)).fetchone() is None:
+        con.execute("""
+            UPDATE crawl_queue SET has_been_crawled=1
+            WHERE has_been_crawled=0 AND EXISTS (
+                SELECT 1 FROM crawl_seen
+                WHERE crawl_seen.puuid=crawl_queue.puuid AND process_count > 0)
+        """)
+        con.execute(
+            "INSERT INTO crawl_runtime_state(state_key,state_value,updated_at) VALUES (?, '1', ?)",
+            (flag, _utc_now()),
+        )
+    con.execute(_CREATE_GENERAL_UNVISITED_INDEX_SQL)
+
 # The fresh half of the Classic lane: rank>0 players (almost all discovered in a
 # Classic game) who have never been visited.  First visits of Classic co-players
 # returned 11-29 Classic games per 100 visits against 0 for dormant revisits, but
@@ -1160,6 +1213,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_CLASSIC_CLAIM_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_RANK_INDEX_SQL)
     con.execute(_CREATE_GENERAL_CLAIM_INDEX_SQL)
+    _ensure_first_visit_state(con)
     con.execute(_DROP_OLD_CLASSIC_FRESH_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_FRESH_INDEX_SQL)
     con.execute(_CREATE_CLASSIC_SEED_INDEX_SQL)
@@ -2688,10 +2742,11 @@ def _claim_next_player(
             SELECT q.queue_idx, q.puuid, q.depth, q.source,
                    q.discovered_match_created_ms, q.seed_family,
                    q.discovered_queue_id
-            FROM crawl_queue q INDEXED BY idx_crawl_queue_general_claim
+            FROM crawl_queue q INDEXED BY idx_crawl_queue_general_unvisited
             WHERE q.status = 'pending'
               AND q.eligible_at_ms <= ?
               AND q.classic_affinity_rank = 0
+              AND q.has_been_crawled = 0
               AND NOT EXISTS (
                     SELECT 1 FROM crawl_seen s
                     WHERE s.puuid = q.puuid AND s.process_count > 0)

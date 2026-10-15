@@ -19,6 +19,42 @@ WATCHDOG = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(WATCHDOG)
 
 
+def test_lcu_health_does_not_retry_a_healthy_probe(monkeypatch):
+    calls = []
+
+    def get(path):
+        calls.append(path)
+        return (200, '"None"') if "gameflow" in path else (200, '{"name":"private"}')
+
+    monkeypatch.setattr(WATCHDOG, "lcu_get", get)
+    monkeypatch.setattr(WATCHDOG.time, "sleep", lambda _: pytest.fail("unexpected retry"))
+    health = WATCHDOG.lcu_health()
+    assert health["ok"] is True
+    assert health["probe_count"] == 1
+    assert len(calls) == 2
+    assert "private" not in str(health)
+
+
+@pytest.mark.parametrize("recovered", [False, True])
+def test_lcu_health_confirms_failure_and_keeps_probe_evidence(monkeypatch, recovered):
+    replies = iter([
+        ("ERR", "TimeoutError: local request timed out"), (200, '"None"'),
+        (200, "{}") if recovered else ("ERR", "TimeoutError: timed out again"),
+        (200, '"Lobby"'),
+    ])
+    pauses = []
+    monkeypatch.setattr(WATCHDOG, "lcu_get", lambda path: next(replies))
+    monkeypatch.setattr(WATCHDOG.time, "sleep", pauses.append)
+    health = WATCHDOG.lcu_health()
+    assert health["ok"] is recovered
+    assert health["phase"] == "Lobby"
+    assert health["probe_count"] == 2
+    assert health["probes"][0]["summoner_error_type"] == "TimeoutError"
+    assert health["probes"][0]["ok"] is False
+    assert pauses == [1]
+    assert "timed out" not in str(health)
+
+
 def _create_games(con: sqlite3.Connection) -> None:
     con.execute(
         """
