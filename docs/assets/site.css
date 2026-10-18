@@ -4587,15 +4587,29 @@
         border-radius: var(--r-sm, 6px);
         cursor: pointer;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
     }
     .site-header .lang-menu-list [data-lang]:hover {
         color: var(--text);
         background: var(--surface-2);
     }
+    /* Selected = accent tint + accent text + check; no outline box. */
     .site-header .lang-menu-list [data-lang].is-active {
-        color: var(--text);
-        background: var(--surface-2);
-        box-shadow: inset 0 0 0 1px var(--border);
+        color: var(--accent-soft);
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+    .site-header .lang-menu-list [data-lang].is-active::after {
+        content: '';
+        width: 10px;
+        height: 5px;
+        margin-bottom: 3px;
+        border-left: 2px solid currentColor;
+        border-bottom: 2px solid currentColor;
+        transform: rotate(-45deg);
+        flex-shrink: 0;
     }
 
     /* Shared content rail: chrome + grid align to one max-width on wide
