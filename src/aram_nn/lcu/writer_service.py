@@ -1779,7 +1779,7 @@ class WriterService:
                    LIMIT 1""",
                 (now,),
             ).fetchone()
-        if row is None:
+        if row is None and classic_percent > 0:
             arm = sb._classic_lane_arm_for_slot(claim_number, classic_percent)
             row = self.con.execute(
                 sb._CLASSIC_LANE_SQL[arm], sb._classic_lane_params(now, arm)

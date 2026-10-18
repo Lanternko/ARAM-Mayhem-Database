@@ -824,3 +824,42 @@ def test_snowball_init_migrates_legacy_players_only_into_empty_frontier(tmp_path
     assert second["ok"] and second["migrated"] == 0
     assert service.con.execute("SELECT COUNT(*) FROM crawl_queue").fetchone()[0] == 1
     service.close()
+
+
+@pytest.mark.parametrize("rpc", [False, True])
+@pytest.mark.parametrize("classic_percent", [0, 10])
+def test_zero_classic_share_disables_empty_frontier_fallback(tmp_path, rpc, classic_percent):
+    from aram_nn.lcu import snowball as sb
+
+    service = WriterService(tmp_path / "games.db")
+    try:
+        service.enqueue_player("classic-only")
+        service.con.execute(
+            "UPDATE crawl_queue SET classic_affinity_rank=3, eligible_at_ms=0 "
+            "WHERE puuid='classic-only'"
+        )
+        service.con.commit()
+        if rpc:
+            service._claim_count = itertools.count(1)
+            claimed = service.handle({
+                "version": 1, "command": "snowball_queue", "operation": "claim_next",
+                "request_id": "classic-disabled", "classic_claim_percent": classic_percent,
+                "worker_id": "w",
+            }, channel_id="w")
+            assert claimed["status"] == ("EMPTY" if classic_percent == 0 else "CLAIMED")
+            if classic_percent:
+                assert claimed["claim_lane"].startswith("classic_fallback_")
+        else:
+            with patch.object(sb, "_claim_counter", return_value=1):
+                claimed = sb._claim_next_player(service.con, "w", 300_000, classic_percent)
+            if classic_percent == 0:
+                assert claimed is None
+            else:
+                assert claimed[0] == "classic-only"
+                assert claimed[-1].startswith("classic_fallback_")
+        if classic_percent == 0:
+            assert service.con.execute(
+                "SELECT status FROM crawl_queue WHERE puuid='classic-only'"
+            ).fetchone()[0] == "pending"
+    finally:
+        service.close()

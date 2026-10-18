@@ -99,7 +99,7 @@ $argsList = @(
     "--check-interval-sec", "60",
     "--client-ready-timeout-sec", "600",
     "--games-per-player", "0",
-    "--classic-claim-percent", "10",
+    "--classic-claim-percent", "0",
     "--classic-revisit-min-hours", "10",
     "--classic-revisit-max-hours", "168",
     "--seed-riot-id-file", (Join-Path $root "data/seeds/opgg_tw.txt"),

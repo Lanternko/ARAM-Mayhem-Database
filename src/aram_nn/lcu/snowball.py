@@ -2836,7 +2836,7 @@ def _claim_next_player(
             LIMIT 1
             """
         , (now_ms,)).fetchone()
-    if row is None:
+    if row is None and classic_claim_percent > 0:
         # General frontier is empty, so this is spare capacity rather than the
         # reserved budget.  It stays on the same alternating arms; tagging it
         # separately keeps it out of the A/B comparison, which is only valid over
