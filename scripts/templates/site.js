@@ -1153,10 +1153,27 @@
     ];
     let columnArticle = null;
     const SET_RESIDUAL_THRESHOLD = 0.02;
+    // GA's loader is not injected, so gtag is normally absent.  The events in
+    // USAGE_EVENTS also go to the site API's anonymous counter (POST
+    // /api/events; server-side allowlist in aram_nn.site.events).  text/plain
+    // keeps the beacon a CORS simple request, so there is no preflight.
+    const USAGE_EVENTS = new Set(['search_scope_open', 'search_scope_change', 'search_use']);
     function trackEvent(name, params = {}) {
         if (typeof gtag === 'function') {
             gtag('event', name, params);
         }
+        if (!USAGE_EVENTS.has(name)) return;
+        try {
+            const base = String(META_PICK_API_BASE || '').trim().replace(/\/$/, '');
+            if (!base || !navigator.sendBeacon) return;
+            const body = JSON.stringify({
+                name,
+                params,
+                locale: document.documentElement.lang || '',
+                viewport: window.matchMedia('(max-width: 767px)').matches ? 'mobile' : 'desktop',
+            });
+            navigator.sendBeacon(`${base}/api/events`, new Blob([body], { type: 'text/plain' }));
+        } catch {}
     }
     const COPY = {
         zh: {
@@ -12196,8 +12213,17 @@
     const searchEl = document.getElementById('champ-search');
     if (searchEl) {
         let searchDebounceT = null;
+        // One search_use per search session (until the box is cleared), with
+        // the scope in effect: the denominator for search_scope_change.
+        let searchUseSent = false;
         searchEl.addEventListener('input', () => {
             filterState.q = searchEl.value || '';
+            if (!filterState.q.trim()) {
+                searchUseSent = false;
+            } else if (!searchUseSent) {
+                searchUseSent = true;
+                trackEvent('search_use', { scope: filterState.scope });
+            }
             clearTimeout(searchDebounceT);
             searchDebounceT = setTimeout(() => { searchDebounceT = null; applyFilters(); }, 120);
             if (filterState.scope === 'all') {
@@ -12224,6 +12250,9 @@
     // Home search defaults to champions.  The native details disclosure keeps
     // augment/item lookup available without making the primary typing surface
     // compete with the hero picker.
+    document.getElementById('search-scope')?.addEventListener('toggle', (ev) => {
+        if (ev.currentTarget.open) trackEvent('search_scope_open');
+    });
     document.getElementById('search-scope')?.addEventListener('click', (ev) => {
         const option = ev.target.closest('[data-search-scope]');
         if (!option) return;

@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from .db import count_games, insert_public_games, latest_patch_prefix
+from .events import (
+    DEFAULT_EVENTS_DB,
+    EventValidationError,
+    events_rate_limit_per_hour,
+    insert_event,
+    normalize_event,
+)
 from .feedback_discord import start_discord_worker
 from .feedback import (
     DEFAULT_FEEDBACK_DB,
@@ -36,7 +44,7 @@ ADMIN_TOKEN = os.environ.get("ARAM_SITE_ADMIN_TOKEN", "")
 
 
 try:
-    from fastapi import FastAPI, Header, HTTPException, Query, Request
+    from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
     from fastapi.middleware.cors import CORSMiddleware
 except Exception as exc:  # pragma: no cover - import-time guidance for optional web deps
     raise RuntimeError(
@@ -74,6 +82,7 @@ if _cors_raw:
 # Best-effort single-process submit limiter (not shared across workers).
 _submit_limiter = InProcessRateLimiter(rate_limit_per_hour())
 _feedback_limiter = InProcessRateLimiter(feedback_rate_limit_per_hour())
+_events_limiter = InProcessRateLimiter(events_rate_limit_per_hour())
 
 
 def _require_admin_token(authorization: str | None) -> None:
@@ -90,6 +99,10 @@ def _site_db() -> Path:
 
 def _feedback_db() -> Path:
     return Path(os.environ.get("ARAM_FEEDBACK_DB", str(DEFAULT_FEEDBACK_DB)))
+
+
+def _events_db() -> Path:
+    return Path(os.environ.get("ARAM_EVENTS_DB", str(DEFAULT_EVENTS_DB)))
 
 
 def _snapshot_path() -> Path:
@@ -217,6 +230,28 @@ def post_feedback(payload: dict[str, Any], request: Request) -> dict[str, Any]:
         "accepted": True,
         "reference": f"F-{feedback_id:06d}",
     }
+
+
+@app.post("/events")
+@app.post("/api/events")
+async def post_event(request: Request) -> Response:
+    """Count one allowlisted UI event.
+
+    The site sends these with navigator.sendBeacon as text/plain (a CORS
+    simple request, so no preflight), hence the manual body parse.
+    """
+    key = client_key_from_request(request)
+    if not _events_limiter.allow(key):
+        raise HTTPException(status_code=429, detail="rate limit exceeded")
+    body = await request.body()
+    if len(body) > 2048:
+        raise HTTPException(status_code=413, detail="event too large")
+    try:
+        event = normalize_event(json.loads(body or b"null"))
+    except (ValueError, EventValidationError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await asyncio.to_thread(insert_event, _events_db(), event)
+    return Response(status_code=204)
 
 
 @app.get("/meta-pick/leaderboard")
