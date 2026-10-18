@@ -690,30 +690,6 @@ def _site_header_html() -> str:
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
     parts.append(
-        "<details class='mode-menu' id='mode-menu'>"
-        "<summary class='mode-select' aria-label='切換遊戲模式' "
-        "data-aria-zh='切換遊戲模式' data-aria-zh-cn='切换游戏模式' "
-        "data-aria-en='Switch game mode'>"
-        "<span data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</span>"
-        "<svg viewBox='0 0 16 16' width='12' height='12' fill='none' "
-        "stroke='currentColor' stroke-width='1.8' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='m4 6 4 4 4-4'></path></svg>"
-        "</summary>"
-        "<div class='mode-options' role='menu'>"
-        "<a class='mode-option' role='menuitem' href='/' aria-current='page' "
-        "data-mode-target='mayhem' data-href-zh='/' data-href-zh-cn='/zh-cn' "
-        "data-href-en='/en' data-i18n-zh='大亂鬥' data-i18n-zh-cn='大乱斗' "
-        "data-i18n-en='Mayhem'>大亂鬥</a>"
-        "<a class='mode-option' role='menuitem' href='/classic.html' "
-        "data-mode-target='classic' data-href-zh='/classic.html' "
-        "data-href-zh-cn='/zh-cn/classic.html' data-href-en='/en/classic.html' "
-        "data-i18n-zh='經典模式' data-i18n-zh-cn='经典模式' "
-        "data-i18n-en='Classic'>經典模式</a>"
-        "</div></details>"
-    )
-    parts.append(
         "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
         "type='button' title='切換淺色' aria-label='切換主題'>"
         f"{sun_icon}{moon_icon}"
@@ -1270,6 +1246,8 @@ def write_site_info_pages(
             encoding="utf-8",
         )
         written.append(ads_txt)
+    from aram_nn.site.classic_status import write_classic_status_pages
+    written.extend(write_classic_status_pages(root, site_url=site_url))
     return written
 
 

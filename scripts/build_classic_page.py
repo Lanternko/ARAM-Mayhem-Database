@@ -1,4 +1,6 @@
-"""Build the 經典 (queue 4310, gameMode JADE) champion win-rate page.
+"""Write the Classic retirement notice. Research helpers below are retained offline.
+
+Historical research-page context:
 
 This is a standalone public data surface linked from the main site.  It keeps
 its own builder (no import from build_tier_list / tierlist_engine) so the
@@ -2261,7 +2263,7 @@ def render_research_preview(
 
 
 @click.command()
-@click.option("--db", default="data/lcu/games.db", type=click.Path(exists=True))
+@click.option("--db", default="data/lcu/games.db", type=click.Path())
 @click.option("--out", default="docs/classic.html", type=click.Path())
 @click.option("--patch", "patch_prefix", default="", help="版本前綴過濾；省略＝全收")
 @click.option(
@@ -2282,128 +2284,15 @@ def main(
     item_icon_dir: str,
     refresh_icons: bool,
 ) -> None:
-    db_path = Path(db)
-    if recent_patches and patch_prefix:
-        raise click.UsageError("--patch and --recent-patches are mutually exclusive")
-    prefixes: str | list[str] | None = patch_prefix or None
-    if recent_patches:
-        prefixes = recent_patch_prefixes(db_path, recent_patches)
-        if not prefixes:
-            raise click.ClickException(f"no queue {CLASSIC_QUEUE_ID} patches found in {db}")
-        click.echo(f"[classic] recent patches: {', '.join(p.rstrip('.') for p in prefixes)}")
-
-    click.echo(f"[classic] scanning queue {CLASSIC_QUEUE_ID} from {db_path} ...")
-    stats = collect_stats(db_path, prefixes)
-    games = stats["hero_games"]
-    wins = stats["hero_wins"]
-    total = stats["total_games"]
-    per_patch = stats["per_patch"]
-    if not total:
-        raise click.ClickException(f"no queue {CLASSIC_QUEUE_ID} games found in {db}")
-    click.echo(f"[classic] {total:,} games, {len(games)} champions")
-
-    click.echo("[classic] fetching Jade_* champion metadata from CommunityDragon ...")
-    meta = load_classic_champion_metadata()
-    click.echo(f"[classic] {len(meta)} Jade entries")
-    unknown = [c for c in games if c not in meta]
-    if unknown:
-        # base_champion_id() should make this impossible; if it fires, the Jade
-        # offset assumption has drifted and the page would silently drop champs.
-        click.echo(f"[classic] WARNING: {len(unknown)} unmapped champion ids: {unknown}")
-
-    fetched = download_icons(meta, Path(icon_dir), refresh_icons)
-    click.echo(
-        f"[classic] icons: {fetched} downloaded, "
-        f"{len(list(Path(icon_dir).glob('*.png')))} on disk -> {icon_dir}"
-    )
-
-    rows = build_rows(games, wins, total, meta, stats["hero_position_games"])
-    attach_combat_profiles(rows, stats["hero_combat_sums"])
-    attach_relationships(
-        rows,
-        stats["ally_pair_games"],
-        stats["ally_pair_wins"],
-        stats["matchup_games"],
-        stats["matchup_wins"],
-    )
-    click.echo("[classic] fetching item metadata for final-inventory association ...")
-    item_meta = load_classic_item_metadata()
-    observed_item_ids = set(stats["item_games"])
-    fetched_items = download_item_icons(item_meta, observed_item_ids, Path(item_icon_dir))
-    click.echo(
-        f"[classic] item icons: {fetched_items} downloaded, "
-        f"{len(list(Path(item_icon_dir).glob('*.png')))} on disk -> {item_icon_dir}"
-    )
-    item_rows = build_item_rows(stats["item_games"], stats["item_wins"], total, item_meta)
-    attach_hero_items(
-        rows,
-        stats["hero_item_games"],
-        stats["hero_item_wins"],
-        stats["hero_first_slots_games"],
-        stats["hero_first_slots_wins"],
-        item_meta,
-    )
-    observed_spell_ids = {
-        int(spell_id)
-        for (_champion_id, spell_id) in stats["hero_spell_games"]
-    }
-    click.echo("[classic] fetching summoner-spell metadata ...")
-    spell_meta = load_classic_summoner_spell_metadata(observed_spell_ids)
-    fetched_spells = download_spell_icons(spell_meta, SPELL_ICON_DIR)
-    click.echo(
-        f"[classic] spell icons: {fetched_spells} downloaded, "
-        f"{len(list(SPELL_ICON_DIR.glob('*.png')))} on disk -> {SPELL_ICON_DIR}"
-    )
-    attach_hero_spells(
-        rows,
-        stats["hero_spell_games"],
-        stats["hero_spell_wins"],
-        spell_meta,
-    )
-    attach_hero_position_profiles(
-        rows,
-        stats["hero_position_games"],
-        stats["hero_position_wins"],
-        stats["hero_position_item_games"],
-        stats["hero_position_item_wins"],
-        stats["hero_position_first_slots_games"],
-        stats["hero_position_first_slots_wins"],
-        item_meta,
-        stats["hero_position_spell_games"],
-        stats["hero_position_spell_wins"],
-        spell_meta,
-    )
-    if not item_rows:
-        raise click.ClickException("no Classic final-inventory items could be resolved")
+    # Keep legacy options accepted so existing publishers cannot revive rankings.
+    # Public builds always produce the retirement notice, without touching the DB.
+    from aram_nn.site.classic_status import write_classic_status_pages
 
     out_path = Path(out)
-    locale_paths = {
-        "zh-Hant": out_path,
-        "zh-Hans": out_path.parent / "zh-cn" / out_path.name,
-        "en": out_path.parent / "en" / out_path.name,
-    }
-    for locale, locale_path in locale_paths.items():
-        locale_path.parent.mkdir(parents=True, exist_ok=True)
-        locale_path.write_text(
-            render_research_preview(
-                rows,
-                item_rows,
-                total,
-                per_patch,
-                stats["position_observations"],
-                stats["position_eligible_teams"],
-                stats["position_total_teams"],
-                locale=locale,
-            ),
-            encoding="utf-8",
-        )
-        size_kb = locale_path.stat().st_size / 1024
-        click.echo(f"[classic] wrote {locale_path} ({size_kb:.0f} KB, {len(item_rows)} items)")
-    top = rows[0]
-    click.echo(
-        f"[classic] top: {top['name_zh']} {top['shrunk_wr'] * 100:.1f}% "
-        f"(raw {top['raw_wr'] * 100:.1f}%, {top['games']} games)"
-    )
+    if out_path.name != "classic.html":
+        raise click.UsageError("the public status page must be named classic.html")
+    for path in write_classic_status_pages(out_path.parent):
+        click.echo(f"[classic] wrote disabled status: {path}")
 
 
 if __name__ == "__main__":

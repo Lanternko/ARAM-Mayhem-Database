@@ -689,13 +689,13 @@ def build_classic_page(
     db: Path = Path("data/lcu/games.db"),
     recent_patches: int = CLASSIC_RECENT_PATCHES,
 ) -> dict[str, Any]:
-    """Regenerate the standalone Classic (queue 4310) page and its locale copies.
+    """Regenerate the Classic retirement notice and its locale copies.
 
     Independent of the tier list, but published in the same commit so it can no
-    longer freeze at whatever day someone last ran it by hand.  Deliberately
-    NON-FATAL -- it fetches CommunityDragon metadata, and a CDN hiccup must never
-    block the Mayhem publish.  On failure the three pages are restored so a
-    half-written locale set cannot ship; the previous Classic page goes out as-is.
+    longer revive stale rankings after the surface was disabled. Legacy DB and
+    patch options remain accepted, but the builder does no data or metadata work.
+    On failure the three pages are restored so a half-written locale set cannot
+    ship; the previously published retirement notice goes out as-is.
     """
     command = [
         sys.executable,
