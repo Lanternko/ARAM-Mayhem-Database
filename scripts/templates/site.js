@@ -53,12 +53,12 @@
             }
             const toggleLabel = document.getElementById('lang-toggle-label');
             if (toggleLabel) {
-                toggleLabel.textContent = pendingBootLang === 'en' ? 'English' : '简体中文';
+                toggleLabel.textContent = 'Language';
             }
             const toggle = document.getElementById('lang-toggle');
             if (toggle) {
                 const lab = pendingBootLang === 'en' ? 'English' : '简体中文';
-                toggle.title = lab;
+                toggle.title = 'Language';
                 toggle.setAttribute('aria-label', 'Language / 語言: ' + lab);
             }
             if (pendingBootLang === 'en' || pendingBootLang === 'zh-CN') {
@@ -10710,10 +10710,10 @@
         const toggle = document.getElementById('lang-toggle');
         const toggleLabel = document.getElementById('lang-toggle-label');
         if (toggle) {
-            toggle.title = meta.label;
+            toggle.title = 'Language';
             toggle.setAttribute('aria-label', 'Language / 語言: ' + meta.label);
         }
-        if (toggleLabel) toggleLabel.textContent = meta.label;
+        if (toggleLabel) toggleLabel.textContent = 'Language';
         document.querySelectorAll('.lang-menu-list [data-lang]').forEach(btn => {
             const on = btn.getAttribute('data-lang') === currentLang;
             btn.classList.toggle('is-active', on);

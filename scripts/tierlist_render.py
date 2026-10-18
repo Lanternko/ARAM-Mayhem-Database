@@ -699,8 +699,8 @@ def _site_header_html() -> str:
     parts.append(
         "<details class='lang-menu' id='lang-menu'>"
         "<summary class='icon-btn lang-toggle' id='lang-toggle' "
-        "title='繁體中文' aria-label='語言: 繁體中文'>"
-        f"{globe_icon}<span id='lang-toggle-label'>繁體中文</span>"
+        "title='Language' aria-label='Language / 語言: 繁體中文'>"
+        f"{globe_icon}<span id='lang-toggle-label' lang='en'>Language</span>"
         "</summary>"
         "<div class='lang-menu-list' role='menu'>"
         "<button type='button' role='menuitem' data-lang='zh' class='is-active' "
@@ -757,8 +757,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
     if locale == "zh-CN":
         header = header.replace(">版本變動</a>", ">版本变动</a>")
     label = {"zh": "繁體中文", "zh-CN": "简体中文", "en": "English"}[locale]
-    header = header.replace("title='繁體中文' aria-label='語言: 繁體中文'", f"title='{label}' aria-label='Language: {label}'")
-    header = header.replace("id='lang-toggle-label'>繁體中文", f"id='lang-toggle-label'>{label}")
+    header = header.replace("aria-label='Language / 語言: 繁體中文'", f"aria-label='Language / 語言: {label}'")
     header = header.replace(" class='is-active' aria-current='true'", "")
     header = header.replace(f"data-lang='{locale}'", f"data-lang='{locale}' class='is-active' aria-current='true'")
     header = header.replace("aria-label='切換遊戲模式'", {"zh": "aria-label='切換遊戲模式'", "zh-CN": "aria-label='切换游戏模式'", "en": "aria-label='Switch game mode'"}[locale])

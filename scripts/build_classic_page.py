@@ -2109,10 +2109,10 @@ def render_research_preview(
     page.append(
         "<details class='lang-menu classic-lang-menu' id='classic-lang-menu'>"
         "<summary class='icon-btn lang-toggle' id='classic-lang-toggle' "
-        f"title='{html.escape(language_menu_labels['current'], quote=True)}' "
+        "title='Language' "
         f"aria-label='{html.escape(language_menu_labels['aria'], quote=True)}'>"
         f"{LANGUAGE_MENU_GLOBE_ICON}"
-        f"<span id='classic-lang-toggle-label'>{language_menu_labels['current']}</span>"
+        "<span id='classic-lang-toggle-label' lang='en'>Language</span>"
         "</summary><div class='lang-menu-list' role='menu'>"
     )
     for language_locale, language_label, language_code in (
