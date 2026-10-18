@@ -266,7 +266,7 @@ Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、
 
 Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。增幅內含 增幅榜（`/augments/`）與 增幅池（`/augments/pools/`）。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
 
-桌面 header 高度為 56px，字標在左、主要 tab 在中、theme、language、Classic 與其他 utilities 在右。行動版改為兩列，主要 tab 可水平捲動且 active item 必須被帶入可視區，不能把五個 tab 壓成無法閱讀的縮寫。
+桌面 header 高度為 56px，字標在左、主要 tab 在中、theme、language 與其他 utilities 在右。行動版改為兩列，主要 tab 可水平捲動且 active item 必須被帶入可視區，不能把五個 tab 壓成無法閱讀的縮寫。
 
 ### Display modes
 
@@ -347,7 +347,7 @@ Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金�
 ### Do:
 
 - **Do** 使用 `Engineered Calm` 作為每個畫面的審核標準：資料密集、低彩度、層級清楚、互動焦點稀少。
-- **Do** 維持五個主要產品分頁，Classic 與資訊頁保持次級入口。
+- **Do** 維持五個主要產品分頁，資訊頁保持次級入口；Classic 僅保留原網址的停用說明。
 - **Do** 讓 `aram` 保持 muted 500、`meta` 保持 primary 700，整體用小寫 Outfit 字標返回首頁。
 - **Do** 用 1320px rail、56px header、24px page gutter，以及 8px、12px、16px radius family 建立一致節奏。
 - **Do** 先顯示 tier 或建議，再顯示勝率、lift、games、patch 與限制。

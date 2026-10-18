@@ -354,7 +354,7 @@ class SpaPathShellTests(unittest.TestCase):
                 site_url="https://arammeta.com/",
                 build_date="2026-07-15",
             )
-            self.assertEqual(len(written), 7)
+            self.assertEqual(len(written), 10)
             privacy = (root / "privacy" / "index.html").read_text(encoding="utf-8")
             self.assertIn("Google AdSense", privacy)
             self.assertIn("Meta Pick 排行榜", privacy)
