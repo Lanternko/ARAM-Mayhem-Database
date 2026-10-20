@@ -4827,7 +4827,7 @@
         height: 100%;
         min-height: 0;
         max-height: none;
-        background: #0a0c10;
+        background: var(--surface-sunken);
         border: 0;
         border-radius: 0;
         box-shadow: none;
@@ -4835,17 +4835,17 @@
         min-width: 0;
         overflow: hidden;
         /* Neutral chrome only — no blue/red team paint. */
-        --side-color: rgba(255, 255, 255, 0.88);
+        --side-color: var(--text);
     }
     .draft-side.is-enemy {
-        --side-color: rgba(255, 255, 255, 0.88);
+        --side-color: var(--text);
     }
     .draft-side.is-ally,
     .draft-side.is-enemy {
         box-shadow: none;
     }
     .draft-side.is-targeting .draft-side-select {
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--surface-2);
     }
     .draft-side-select {
         display: flex;
@@ -4857,9 +4857,9 @@
         padding: 14px 16px;
         margin: 0;
         border: 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid var(--border);
         border-radius: 0;
-        background: rgba(255, 255, 255, 0.04);
+        background: var(--surface);
         color: inherit;
         font: inherit;
         cursor: pointer;
@@ -4867,22 +4867,26 @@
         flex: none;
     }
     .draft-side.is-enemy .draft-side-select {
-        background: rgba(255, 255, 255, 0.04);
         text-align: right;
         flex-direction: row-reverse;
     }
     .draft-side-select:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: var(--surface-2);
     }
     .draft-side-select.is-active {
-        background: rgba(255, 255, 255, 0.09);
+        background: var(--surface-2);
+    }
+    .draft-side-select:focus-visible,
+    .draft-slot:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
     }
     .draft-side-label {
         font-size: 15px;
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: #e8eaed;
+        color: var(--text);
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -4894,7 +4898,7 @@
         font-variant-numeric: tabular-nums;
         letter-spacing: -0.02em;
         line-height: 1;
-        color: #f3f5f7;
+        color: var(--text);
         text-shadow: none;
     }
     .draft-slots {
@@ -4916,9 +4920,9 @@
         padding: 0;
         border: 0;
         border-radius: 0;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.45);
-        background: #12151c;
-        color: #e8eaed;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+        color: var(--text);
         font: inherit;
         cursor: pointer;
         min-width: 0;
@@ -4927,11 +4931,11 @@
     }
     .draft-slot:last-child { border-bottom: 0; }
     .draft-slot.is-empty {
-        background: #10131a;
-        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 80%, transparent);
+        background: var(--surface-sunken);
+        color: var(--text-muted);
     }
     .draft-side.is-enemy .draft-slot.is-empty {
-        background: #10131a;
+        background: var(--surface-sunken);
     }
     /*
      * Lock-in splash crop (broadcast bars)
@@ -5014,9 +5018,9 @@
         border-radius: 4px;
         font-size: 11px;
         font-weight: 800;
-        color: rgba(232, 234, 237, 0.78);
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        color: var(--text-muted);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
     }
     .draft-side.is-enemy .draft-slot-ph {
         left: auto;
@@ -5049,7 +5053,7 @@
         transform: none;
         left: 12px;
         right: 28px;
-        color: color-mix(in srgb, var(--text-muted, #9aa0a6) 90%, transparent);
+        color: var(--text-muted);
         text-shadow: none;
         font-weight: 600;
     }
@@ -10912,7 +10916,7 @@
     .feedback-main { padding-top: 28px; }
     .feedback-main h1 { font-size: 24px; }
 }
-</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='Draft' data-i18n-en='Draft' href='/draft/'>Draft</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/game/'>小遊戲</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='Language' aria-label='Language / 語言: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label' lang='en'>Language</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>意見回饋</h1>
+</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='選角' data-i18n-zh-cn='选角' data-i18n-en='Draft' href='/draft/'>選角</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/game/'>小遊戲</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='Language' aria-label='Language / 語言: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label' lang='en'>Language</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>意見回饋</h1>
 <form class="feedback-form" data-feedback-form data-endpoint="https://api.arammeta.com/api/feedback" data-locale="zh-Hant">
 <label class="feedback-field"><span class="feedback-label">內容</span>
 <textarea name="message" minlength="5" maxlength="3000" required placeholder="例如：

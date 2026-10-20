@@ -636,7 +636,7 @@ def _site_header_html() -> str:
     NAV_TABS = (
         ("champions", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
-        ("draft", "Draft", "Draft", None),
+        ("draft", "選角", "Draft", "选角"),
         ("game", "小遊戲", "Game", "小游戏"),
         ("changes", "版本變動", "Patch Changes", None),
         # 專欄 is unpublished; keep its draft source out of the public shell.
@@ -2241,8 +2241,8 @@ def write_spa_path_shells(
         (
             root / "draft" / "index.html",
             "/draft",
-            "Draft · arammeta",
-            "組隊 Draft：估計勝率與隊伍特性",
+            "選角 · arammeta",
+            "選角分析：估計勝率與隊伍特性",
             "zh-Hant",
         ),
         (
@@ -2326,8 +2326,8 @@ def write_spa_path_shells(
         (
             root / "zh-cn" / "draft" / "index.html",
             "/zh-cn/draft",
-            "Draft · arammeta",
-            "组队 Draft：估计胜率与队伍特性",
+            "选角 · arammeta",
+            "选角分析：估计胜率与队伍特性",
             "zh-Hans",
         ),
         (
@@ -4050,13 +4050,13 @@ def render_html(
         "<div class='draft-slots' id='draft-ally-slots'></div>"
         "</aside>"
         "<div class='draft-main'>"
-        "<div class='draft-mode-tabs' role='tablist' aria-label='Draft views'>"
+        "<div class='draft-mode-tabs' role='tablist' aria-label='選角模式'>"
         "<button type='button' class='draft-mode-tab is-active' id='draft-mode-draft' "
         "data-draft-view='draft' role='tab' aria-selected='true' "
-        "data-i18n-zh='Draft' data-i18n-en='Draft'>Draft</button>"
+        "data-i18n-zh='選角' data-i18n-zh-cn='选角' data-i18n-en='Draft'>選角</button>"
         "<button type='button' class='draft-mode-tab' id='draft-mode-analysis' "
         "data-draft-view='analysis' role='tab' aria-selected='false' "
-        "data-i18n-zh='Draft Analysis' data-i18n-en='Draft Analysis'>Draft Analysis</button>"
+        "data-i18n-zh='分析勝率' data-i18n-zh-cn='分析胜率' data-i18n-en='Draft Analysis'>分析勝率</button>"
         "</div>"
         "<section class='draft-pane is-active' id='draft-pane-draft' data-draft-pane='draft' "
         "role='tabpanel' aria-labelledby='draft-mode-draft'>"
@@ -4078,7 +4078,7 @@ def render_html(
         "role='tabpanel' aria-labelledby='draft-mode-analysis' hidden>"
         "<div class='draft-analysis-intro'>"
         "<div><span class='draft-analysis-kicker' data-i18n-zh='雙方陣容評估' data-i18n-en='ROSTER EVALUATION'>雙方陣容評估</span>"
-        "<h2 data-i18n-zh='Draft Analysis' data-i18n-en='Draft Analysis'>Draft Analysis</h2></div>"
+        "<h2 data-i18n-zh='分析勝率' data-i18n-zh-cn='分析胜率' data-i18n-en='Draft Analysis'>分析勝率</h2></div>"
         "</div>"
         "<div class='draft-metrics' id='draft-metrics'></div>"
         "<div class='draft-result' id='draft-result'></div>"
