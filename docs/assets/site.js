@@ -754,7 +754,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     const ROLE_LABELS = {"zh": {"Assassin": "刺客", "Fighter": "戰士", "Mage": "法師", "Marksman": "射手", "Support": "輔助", "Tank": "坦克"}, "en": {"Assassin": "Assassin", "Fighter": "Fighter", "Mage": "Mage", "Marksman": "Marksman", "Support": "Support", "Tank": "Tank"}};
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
-    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3097":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Fighter"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
+    const ITEM_FILTER_ROLES = {"2049":["Mage"],"2050":["Mage"],"2051":["Tank"],"2065":["Support"],"2501":["Fighter"],"2502":["Tank"],"2503":["Mage"],"2504":["Tank"],"2510":["Mage"],"2512":["Marksman"],"2517":["Fighter","Marksman"],"2520":["Marksman"],"2522":["Mage"],"2523":["Marksman"],"2524":["Support"],"2525":["Tank"],"2526":["Support"],"2530":["Support"],"3001":["Tank"],"3002":["Tank"],"3003":["Mage"],"3004":["Assassin","Fighter","Marksman"],"3011":["Support"],"3026":["Fighter"],"3031":["Fighter","Marksman"],"3032":["Marksman"],"3033":["Fighter","Marksman"],"3036":["Fighter","Marksman"],"3039":["Fighter"],"3040":["Mage"],"3042":["Assassin","Fighter","Marksman"],"3046":["Fighter","Marksman"],"3050":["Support","Tank"],"3053":["Fighter"],"3065":["Tank"],"3068":["Tank"],"3071":["Fighter"],"3072":["Fighter","Marksman"],"3073":["Fighter"],"3074":["Fighter"],"3075":["Tank"],"3078":["Fighter","Marksman"],"3083":["Tank"],"3084":["Tank"],"3085":["Marksman"],"3087":["Mage","Marksman"],"3089":["Mage"],"3091":["Fighter","Marksman"],"3094":["Marksman"],"3095":["Marksman"],"3100":["Mage"],"3102":["Mage"],"3107":["Support"],"3109":["Support","Tank"],"3110":["Tank"],"3112":["Mage"],"3115":["Mage","Marksman"],"3116":["Fighter","Mage"],"3118":["Mage"],"3119":["Tank"],"3121":["Tank"],"3124":["Marksman"],"3128":["Mage"],"3131":["Marksman"],"3135":["Mage"],"3137":["Mage"],"3139":["Marksman"],"3142":["Assassin"],"3143":["Tank"],"3146":["Fighter","Mage"],"3152":["Mage"],"3153":["Fighter","Marksman"],"3156":["Fighter"],"3157":["Mage"],"3161":["Fighter"],"3165":["Mage"],"3177":["Assassin","Fighter","Marksman"],"3179":["Assassin"],"3181":["Fighter"],"3184":["Fighter","Marksman"],"3190":["Support","Tank"],"3193":["Tank"],"3222":["Support"],"3302":["Marksman"],"3430":["Mage","Marksman"],"3504":["Support"],"3508":["Marksman"],"3742":["Tank"],"3748":["Fighter","Tank"],"3814":["Assassin"],"4004":["Assassin"],"4005":["Mage","Support"],"4010":["Fighter"],"4011":["Support"],"4012":["Tank"],"4013":["Fighter"],"4014":["Marksman"],"4015":["Mage"],"4016":["Mage"],"4017":["Marksman"],"4401":["Tank"],"4402":["Support"],"4403":["Mage","Marksman"],"4628":["Mage"],"4629":["Mage"],"4633":["Fighter","Mage"],"4636":["Mage"],"4637":["Mage"],"4643":["Tank"],"4644":["Fighter"],"4645":["Mage"],"4646":["Mage"],"6035":["Fighter"],"6333":["Fighter"],"6609":["Fighter"],"6610":["Fighter"],"6616":["Support"],"6617":["Support"],"6620":["Support"],"6621":["Support"],"6630":["Fighter"],"6631":["Fighter"],"6632":["Marksman"],"6653":["Mage"],"6655":["Mage"],"6656":["Fighter"],"6657":["Fighter","Mage"],"6662":["Tank"],"6664":["Tank"],"6665":["Tank"],"6667":["Tank"],"6671":["Marksman"],"6672":["Marksman"],"6673":["Fighter","Marksman"],"6675":["Marksman"],"6676":["Fighter","Marksman"],"6691":["Assassin"],"6692":["Assassin","Fighter"],"6693":["Assassin"],"6694":["Assassin","Fighter"],"6695":["Assassin","Fighter"],"6696":["Assassin","Fighter"],"6697":["Assassin"],"6698":["Assassin","Fighter"],"6699":["Assassin"],"6700":["Fighter"],"6701":["Assassin"],"8001":["Tank"],"8010":["Mage"],"8020":["Tank"],"123430":["Mage","Marksman"],"124011":["Support"],"126697":["Assassin","Fighter"],"222051":["Tank"],"222065":["Support"],"222502":["Tank"],"222503":["Mage"],"222504":["Tank"],"222510":["Marksman"],"222512":["Marksman"],"222517":["Fighter"],"222522":["Mage"],"222523":["Marksman"],"222524":["Tank"],"222525":["Tank"],"222526":["Tank"],"222530":["Tank"],"223001":["Tank"],"223002":["Tank"],"223003":["Mage"],"223004":["Marksman"],"223011":["Support"],"223026":["Fighter"],"223031":["Marksman"],"223032":["Marksman"],"223033":["Marksman"],"223036":["Marksman"],"223039":["Marksman"],"223040":["Mage"],"223042":["Marksman"],"223046":["Marksman"],"223050":["Tank"],"223053":["Fighter"],"223057":["Marksman"],"223065":["Tank"],"223068":["Tank"],"223069":["Tank"],"223071":["Marksman"],"223072":["Fighter"],"223073":["Marksman"],"223074":["Marksman"],"223075":["Tank"],"223078":["Marksman"],"223084":["Tank"],"223085":["Marksman"],"223087":["Marksman"],"223089":["Mage"],"223091":["Marksman"],"223094":["Marksman"],"223095":["Marksman"],"223100":["Marksman"],"223102":["Fighter"],"223107":["Support"],"223109":["Tank"],"223110":["Tank"],"223112":["Mage"],"223115":["Marksman"],"223116":["Fighter"],"223118":["Mage"],"223119":["Tank"],"223121":["Tank"],"223124":["Marksman"],"223135":["Mage"],"223137":["Mage"],"223139":["Fighter"],"223142":["Assassin"],"223143":["Tank"],"223146":["Mage"],"223152":["Mage"],"223153":["Marksman"],"223156":["Fighter"],"223157":["Fighter"],"223161":["Fighter"],"223165":["Fighter"],"223172":["Marksman"],"223177":["Fighter"],"223181":["Fighter"],"223184":["Marksman"],"223185":["Assassin"],"223190":["Support"],"223193":["Tank"],"223222":["Support"],"223302":["Marksman"],"223504":["Support"],"223508":["Marksman"],"223742":["Tank"],"223748":["Marksman"],"223814":["Assassin"],"224004":["Assassin"],"224005":["Support"],"224401":["Tank"],"224403":["Mage","Marksman"],"224628":["Mage"],"224629":["Fighter"],"224633":["Fighter"],"224636":["Mage"],"224637":["Mage"],"224644":["Fighter"],"224645":["Mage"],"224646":["Mage"],"226035":["Fighter"],"226333":["Fighter"],"226609":["Fighter"],"226610":["Fighter"],"226616":["Support"],"226617":["Support"],"226620":["Support"],"226621":["Support"],"226630":["Fighter"],"226631":["Marksman"],"226632":["Marksman"],"226653":["Mage"],"226655":["Mage"],"226656":["Fighter"],"226657":["Fighter"],"226662":["Marksman"],"226664":["Tank"],"226665":["Tank"],"226667":["Tank"],"226668":["Fighter"],"226671":["Marksman"],"226672":["Marksman"],"226673":["Marksman"],"226675":["Marksman"],"226676":["Marksman"],"226691":["Assassin"],"226692":["Fighter"],"226693":["Assassin"],"226694":["Marksman"],"226695":["Assassin"],"226696":["Assassin"],"226697":["Assassin"],"226698":["Assassin"],"226699":["Assassin"],"226701":["Assassin"],"228001":["Tank"],"228002":["Mage"],"228003":["Marksman"],"228004":["Tank"],"228005":["Marksman"],"228006":["Marksman"],"228008":["Marksman"],"228020":["Fighter"],"322065":["Support"],"322526":["Tank"],"322530":["Tank"],"323002":["Tank"],"323003":["Mage"],"323004":["Marksman"],"323040":["Mage"],"323042":["Marksman"],"323050":["Tank"],"323075":["Tank"],"323107":["Support"],"323109":["Tank"],"323110":["Tank"],"323119":["Tank"],"323121":["Tank"],"323190":["Support"],"323222":["Support"],"323504":["Support"],"324005":["Support"],"326616":["Support"],"326617":["Support"],"326620":["Support"],"326621":["Support"],"326657":["Fighter"],"328020":["Tank"],"443054":["Marksman"],"443055":["Marksman"],"443056":["Fighter"],"443058":["Tank"],"443059":["Tank"],"443060":["Mage","Marksman"],"443061":["Marksman"],"443062":["Fighter"],"443063":["Tank"],"443064":["Mage","Marksman"],"443069":["Marksman"],"443079":["Tank"],"443080":["Fighter"],"443081":["Marksman"],"443083":["Tank"],"443090":["Marksman"],"443193":["Tank"],"444636":["Mage"],"444637":["Mage"],"444644":["Fighter"],"446632":["Marksman"],"446656":["Fighter"],"446667":["Tank"],"446671":["Marksman"],"446691":["Assassin"],"447100":["Mage"],"447101":["Marksman"],"447102":["Marksman"],"447103":["Fighter"],"447104":["Support"],"447105":["Mage"],"447106":["Marksman"],"447107":["Mage"],"447108":["Mage"],"447109":["Fighter"],"447110":["Fighter"],"447111":["Fighter"],"447112":["Mage"],"447113":["Mage"],"447114":["Marksman"],"447115":["Assassin"],"447116":["Fighter"],"447118":["Mage"],"447119":["Marksman"],"447120":["Marksman"],"447121":["Fighter"],"447122":["Marksman"],"447123":["Support"],"663039":["Marksman"],"663056":["Fighter"],"663058":["Tank"],"663059":["Tank"],"663060":["Mage","Marksman"],"663146":["Mage"],"663172":["Marksman"],"663193":["Tank"],"664011":["Support"],"664403":["Mage","Marksman"],"664644":["Fighter"],"667101":["Assassin"],"667109":["Fighter"],"667112":["Mage"],"667666":["Marksman"],"773001":["Fighter"],"773003":["Mage"],"773004":["Marksman"],"773005":["Marksman"],"773022":["Marksman"],"773023":["Fighter"],"773025":["Fighter"],"773026":["Tank"],"773027":["Fighter"],"773031":["Marksman"],"773035":["Assassin"],"773042":["Marksman"],"773046":["Marksman"],"773050":["Fighter"],"773056":["Fighter"],"773060":["Fighter"],"773063":["Tank"],"773064":["Tank"],"773065":["Tank"],"773068":["Tank"],"773069":["Support"],"773071":["Marksman"],"773072":["Fighter"],"773073":["Tank"],"773074":["Marksman"],"773075":["Tank"],"773077":["Marksman"],"773078":["Mage","Marksman"],"773083":["Tank"],"773084":["Support"],"773085":["Marksman"],"773087":["Marksman"],"773089":["Mage"],"773091":["Marksman"],"773100":["Marksman"],"773102":["Tank"],"773105":["Tank"],"773107":["Tank"],"773109":["Marksman"],"773110":["Tank"],"773114":["Marksman"],"773115":["Marksman"],"773116":["Fighter"],"773123":["Marksman"],"773124":["Marksman"],"773128":["Mage"],"773131":["Marksman"],"773135":["Mage"],"773139":["Fighter"],"773142":["Marksman"],"773143":["Tank"],"773146":["Mage"],"773151":["Mage"],"773152":["Mage"],"773153":["Marksman"],"773154":["Marksman"],"773156":["Fighter"],"773157":["Fighter"],"773160":["Marksman"],"773161":["Fighter"],"773165":["Fighter"],"773172":["Marksman"],"773174":["Fighter"],"773178":["Marksman"],"773190":["Support"],"773206":["Marksman"],"773207":["Marksman"],"773209":["Marksman"],"773222":["Support"],"773504":["Support"],"773512":["Tank"],"773515":["Mage"],"773516":["Mage"],"994403":["Assassin","Fighter","Mage","Marksman","Support","Tank"],"3076":["Tank"],"3097":["Marksman"],"3123":["Assassin","Fighter","Marksman"],"3916":["Mage","Support"]};
     const ITEM_FILTER_ROLE_ORDER = ['Assassin', 'Fighter', 'Mage', 'Marksman', 'Support', 'Tank'];
     // 「常見」= high pick-rate on this champion (matches common-trap force floor).
     const SINGLE_ITEM_COMMON_MIN_PICK = 0.10;
@@ -2218,16 +2218,54 @@ const feedbackFab = document.querySelector('.feedback-fab');
         return 'is-even';
     }
 
+    // Present the existing plain-text game data without accepting source HTML or
+    // inventing missing scaling values. Each tone describes a game mechanic.
+    const DESCRIPTION_TERMS = [
+        ['ap', 'Ability Power|魔法攻擊|魔法攻击|法術強度|法术强度'],
+        ['ad', 'Attack Damage|物理攻擊|物理攻击|攻擊力|攻击力'],
+        ['magic', 'magic damage|魔法傷害|魔法伤害'],
+        ['physical', 'physical damage|物理傷害|物理伤害'],
+        ['true', 'true damage|真實傷害|真实伤害'],
+        ['health', 'maximum Health|max Health|Health|healing|heals?|生命值|生命|治療|治疗|回復|回复'],
+        ['speed', 'Attack Speed|Move(?:ment)? Speed|攻擊速度|攻击速度|跑速|移動速度|移动速度'],
+        ['haste', 'Ability Haste|技能加速|技能急速'],
+        ['shield', 'shield(?:ing|s)?|護盾|护盾'],
+        ['crit', 'Critical(?:ly)? Strik(?:e|es|ing)|Crit(?:ical)? Chance|暴擊機率|暴击几率|暴擊|暴击'],
+        ['mana', 'Mana(?: Regeneration)?|魔力回復|法力回复|魔力|法力'],
+    ];
+    const DESCRIPTION_TERM_PATTERN = DESCRIPTION_TERMS.map(([, pattern]) =>
+        `(?:${pattern.split('|').map(term => /^[a-z]/i.test(term) ? `\\b${term}\\b` : term).join('|')})`
+    ).join('|');
+    const DESCRIPTION_TOKEN_RE = new RegExp(`${DESCRIPTION_TERM_PATTERN}|[+−-]?\\d+(?:[.,]\\d+)*(?:[%％])?`, 'gi');
+    const DESCRIPTION_TONE_RES = DESCRIPTION_TERMS.map(([tone, pattern]) => [tone, new RegExp(`^(?:${pattern})$`, 'i')]);
+
+    function formatDescriptionInlineHtml(text) {
+        let html = '', offset = 0;
+        // matchAll gets its own iterator, so calls cannot share regex state.
+        for (const match of String(text).matchAll(DESCRIPTION_TOKEN_RE)) {
+            html += escHtml(text.slice(offset, match.index));
+            const token = escHtml(match[0]);
+            const tone = DESCRIPTION_TONE_RES.find(([, re]) => re.test(match[0]));
+            html += tone ? `<span class="desc-tone desc-${tone[0]}">${token}</span>` : `<strong class="desc-value">${token}</strong>`;
+            offset = match.index + match[0].length;
+        }
+        return html + escHtml(text.slice(offset));
+    }
+
     function formatItemDescHtml(desc) {
         const text = String(desc || '').trim();
         if (!text) return '';
-        // CommunityDragon plain text uses newlines between stat lines and passives.
-        return text
-            .split(/\n+/)
-            .map(line => line.trim())
-            .filter(Boolean)
-            .map(line => `<div class="item-tip-line">${escHtml(line)}</div>`)
-            .join('');
+        // Blank lines separate attributes from named passives in game data.
+        return text.replace(/\r\n?/g, '\n').split(/\n\s*\n/).map(block => {
+            const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+            const hasHeading = lines.length > 1 && lines[0].length <= 60
+                && !/[\d。！？.!?:：]/.test(lines[0]);
+            return `<div class="item-tip-section">${lines.map((line, index) =>
+                hasHeading && index === 0
+                    ? `<div class="item-tip-effect-name">${escHtml(line)}</div>`
+                    : `<div class="item-tip-line">${formatDescriptionInlineHtml(line)}</div>`
+            ).join('')}</div>`;
+        }).join('');
     }
 
     function buildItemTipHtml(opts = {}) {
@@ -2287,8 +2325,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
         }
 
         const rows = [];
-        if (opts.wr != null && opts.wr !== '') {
-            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
+        const hasWinRate = opts.wr != null && opts.wr !== '';
+        const hasLift = opts.lift != null && opts.lift !== '' && opts.liftLabel;
+        if (hasWinRate) {
+            const strength = Math.min(100, Math.abs(Number(opts.lift) || 0) / 0.05 * 100);
+            const delta = hasLift ? `<span class="item-tip-delta ${liftToneClass(opts.lift)}" style="--tip-lift-strength:${strength.toFixed(1)}%">(${escHtml(String(opts.liftLabel))})</span>` : '';
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b>${escHtml(String(opts.wr))}${delta}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
             const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
@@ -2296,7 +2338,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             const pickHeat = pickHeatClass(rate, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
-        if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
+        if (hasLift && !hasWinRate) {
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipLift || 'Lift')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.liftLabel))}</b></div>`);
         }
         if (opts.games != null && opts.games !== '') {
@@ -2346,6 +2388,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
     let _itemFloatTipEl = null;
     let _itemFloatTipHideTimer = 0;
     let _itemFloatTipAnchor = null;
+    let _itemFloatTipPinned = false;
+    let _itemFloatTipPreviousDescription = null;
+    let _itemFloatTipDismissed = false;
     function ensureItemFloatTip() {
         if (_itemFloatTipEl && document.body.contains(_itemFloatTipEl)) return _itemFloatTipEl;
         const el = document.createElement('div');
@@ -2365,8 +2410,13 @@ const feedbackFab = document.querySelector('.feedback-fab');
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
-        if (_itemFloatTipAnchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        if (_itemFloatTipAnchor) {
+            if (_itemFloatTipPreviousDescription === null) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+            else _itemFloatTipAnchor.setAttribute('aria-describedby', _itemFloatTipPreviousDescription);
+        }
         _itemFloatTipAnchor = null;
+        _itemFloatTipPinned = false;
+        _itemFloatTipPreviousDescription = null;
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
@@ -2384,15 +2434,18 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const vw = window.innerWidth || document.documentElement.clientWidth || 0;
         const vh = window.innerHeight || document.documentElement.clientHeight || 0;
 
-        // Natural content height first — no forced scrollbar for short tips.
+        // Measure natural height, then choose a side and constrain to its space.
         el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable');
         el.style.maxHeight = '';
         el.style.left = '0px';
         el.style.top = '0px';
 
         let tipRect = el.getBoundingClientRect();
-        const maxH = Math.max(120, vh - margin * 2);
-        // Only clamp + scroll when content genuinely exceeds the viewport.
+        const spaceAbove = Math.max(0, rect.top - margin - gap);
+        const spaceBelow = Math.max(0, vh - rect.bottom - margin - gap);
+        const flipBelow = tipRect.height > spaceAbove
+            && (tipRect.height <= spaceBelow || spaceBelow > spaceAbove);
+        const maxH = Math.max(1, flipBelow ? spaceBelow : spaceAbove);
         if (tipRect.height > maxH) {
             el.style.maxHeight = maxH + 'px';
             el.classList.add('is-scrollable');
@@ -2402,30 +2455,16 @@ const feedbackFab = document.querySelector('.feedback-fab');
         let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
         left = Math.max(margin, Math.min(left, vw - tipRect.width - margin));
 
-        let top = rect.top - tipRect.height - gap;
-        let flipBelow = false;
-        if (top < margin) {
-            top = rect.bottom + gap;
-            flipBelow = true;
-        }
-        if (top + tipRect.height > vh - margin) {
-            // Prefer whichever side has more room.
-            const spaceAbove = rect.top - margin;
-            const spaceBelow = vh - rect.bottom - margin;
-            if (spaceBelow > spaceAbove) {
-                top = Math.min(rect.bottom + gap, vh - tipRect.height - margin);
-                flipBelow = true;
-            } else {
-                top = Math.max(margin, rect.top - tipRect.height - gap);
-                flipBelow = false;
-            }
-        }
+        const top = Math.max(margin, Math.min(
+            flipBelow ? rect.bottom + gap : rect.top - tipRect.height - gap,
+            vh - tipRect.height - margin
+        ));
 
         el.style.left = Math.round(left) + 'px';
         el.style.top = Math.round(top) + 'px';
         el.classList.toggle('flip-below', flipBelow);
         // Arrow horizontal alignment toward the anchor center.
-        const arrowX = rect.left + rect.width / 2 - left;
+        const arrowX = Math.max(20, Math.min(tipRect.width - 20, rect.left + rect.width / 2 - left));
         el.style.setProperty('--item-tip-arrow-x', Math.round(arrowX) + 'px');
     }
 
@@ -2434,9 +2473,14 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const poolId = anchor.getAttribute('data-recommended-pool');
         const src = anchor.querySelector('.item-tip-src');
         if (!src && !poolId) return;
-        if (_itemFloatTipAnchor && _itemFloatTipAnchor !== anchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        if (_itemFloatTipAnchor === anchor && _itemFloatTipEl && !_itemFloatTipEl.hidden) {
+            clearTimeout(_itemFloatTipHideTimer);
+            return;
+        }
+        hideItemFloatTip();
         _itemFloatTipAnchor = anchor;
-        anchor.setAttribute('aria-describedby', 'item-float-tip');
+        _itemFloatTipPreviousDescription = anchor.getAttribute('aria-describedby');
+        anchor.setAttribute('aria-describedby', [_itemFloatTipPreviousDescription, 'item-float-tip'].filter(Boolean).join(' '));
         if (poolId && !augPools.data) loadAugPools();
         if (_itemFloatTipHideTimer) {
             clearTimeout(_itemFloatTipHideTimer);
@@ -2447,17 +2491,23 @@ const feedbackFab = document.querySelector('.feedback-fab');
         el.classList.toggle('is-champion-table-tip', anchor.classList.contains('champion-table-icon'));
         el.classList.toggle('is-item-family-tip', Boolean(anchor.querySelector('.item-family-icon')));
         el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
+        el.scrollTop = 0;
         el.hidden = false;
         el.classList.add('is-visible');
         positionItemFloatTip(anchor);
+        // Local icons may finish loading after the initial measurement.
+        el.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
+            if (_itemFloatTipAnchor === anchor && !el.hidden) positionItemFloatTip(anchor);
+        }, { once: true }));
     }
 
     function scheduleHideItemFloatTip() {
+        if (_itemFloatTipPinned || (_itemFloatTipAnchor && _itemFloatTipAnchor.contains(document.activeElement))) return;
         if (_itemFloatTipHideTimer) clearTimeout(_itemFloatTipHideTimer);
         _itemFloatTipHideTimer = setTimeout(() => {
             _itemFloatTipHideTimer = 0;
             hideItemFloatTip();
-        }, 80);
+        }, 160);
     }
 
     function normalizeSearchText(value) {
@@ -2782,7 +2832,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         return buildItemTipHtml({
             name: aug ? augName(aug, entry.id) : '#' + entry.id,
             icons: aug && aug.icon ? [aug.icon] : [],
-            subtitle: setName ? `${copy.augSetLabel}: ${setName}` : '',
+            subtitle: [aug && (copy.rarityLabels || {})[aug.rarity], setName ? `${copy.augSetLabel}: ${setName}` : ''].filter(Boolean).join(' · '),
             desc: augDesc(aug, entry.id),
             wr: pct(entry.wr),
             pick: pct(pickRate),
@@ -2871,7 +2921,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                         <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
                         <span class="aug-pick-icon rarity-${r.css}">${iconHtml(v)}</span>
                         <span class="aug-pick-name">${escHtml(v.name)}</span>
-                        ${v.desc ? `<span class="aug-pick-desc">${escHtml(v.desc)}</span>` : ''}
+                        ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
                         <span class="aug-pick-foot">
                             <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
                         </span>
@@ -11806,7 +11856,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
-            if (_itemFloatTipAnchor && _itemFloatTipAnchor.hasAttribute('data-recommended-pool')) {
+            if (_itemFloatTipAnchor) {
+                _itemFloatTipDismissed = true;
                 hideItemFloatTip();
                 return;
             }
@@ -11860,7 +11911,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
     }, { passive: true });
 
     // Rich item float-tip: show on hover/focus of any .has-item-tip host.
+    document.addEventListener('pointermove', () => { _itemFloatTipDismissed = false; }, { passive: true });
     document.addEventListener('mouseover', (ev) => {
+        if (_itemFloatTipDismissed) return;
+        if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
@@ -11876,6 +11930,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         scheduleHideItemFloatTip();
     }, { passive: true });
     document.addEventListener('focusin', (ev) => {
+        _itemFloatTipDismissed = false;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (host) showItemFloatTip(host);
     });
@@ -11889,12 +11944,24 @@ const feedbackFab = document.querySelector('.feedback-fab');
     });
     document.addEventListener('click', ev => {
         const familyHost = ev.target.closest && ev.target.closest('.has-item-tip');
-        const host = (ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon'))
-            || (familyHost && familyHost.querySelector('.item-family-icon') ? familyHost : null);
-        if (host) showItemFloatTip(host);
+        const host = (ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon, .quick-item, .quick-augment'))
+            || (familyHost && !familyHost.closest('button, a, [role="button"]') ? familyHost : null);
+        if (host) {
+            _itemFloatTipDismissed = false;
+            if (_itemFloatTipAnchor === host && _itemFloatTipPinned) hideItemFloatTip();
+            else {
+                showItemFloatTip(host);
+                _itemFloatTipPinned = true;
+            }
+        }
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
-    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') hideItemFloatTip(); });
+    document.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') {
+            _itemFloatTipDismissed = true;
+            hideItemFloatTip();
+        }
+    });
     window.addEventListener('scroll', ev => {
         if (_itemFloatTipEl && _itemFloatTipEl.contains(ev.target)) return;
         hideItemFloatTip();

@@ -2484,16 +2484,54 @@
         return 'is-even';
     }
 
+    // Present the existing plain-text game data without accepting source HTML or
+    // inventing missing scaling values. Each tone describes a game mechanic.
+    const DESCRIPTION_TERMS = [
+        ['ap', 'Ability Power|魔法攻擊|魔法攻击|法術強度|法术强度'],
+        ['ad', 'Attack Damage|物理攻擊|物理攻击|攻擊力|攻击力'],
+        ['magic', 'magic damage|魔法傷害|魔法伤害'],
+        ['physical', 'physical damage|物理傷害|物理伤害'],
+        ['true', 'true damage|真實傷害|真实伤害'],
+        ['health', 'maximum Health|max Health|Health|healing|heals?|生命值|生命|治療|治疗|回復|回复'],
+        ['speed', 'Attack Speed|Move(?:ment)? Speed|攻擊速度|攻击速度|跑速|移動速度|移动速度'],
+        ['haste', 'Ability Haste|技能加速|技能急速'],
+        ['shield', 'shield(?:ing|s)?|護盾|护盾'],
+        ['crit', 'Critical(?:ly)? Strik(?:e|es|ing)|Crit(?:ical)? Chance|暴擊機率|暴击几率|暴擊|暴击'],
+        ['mana', 'Mana(?: Regeneration)?|魔力回復|法力回复|魔力|法力'],
+    ];
+    const DESCRIPTION_TERM_PATTERN = DESCRIPTION_TERMS.map(([, pattern]) =>
+        `(?:${pattern.split('|').map(term => /^[a-z]/i.test(term) ? `\\b${term}\\b` : term).join('|')})`
+    ).join('|');
+    const DESCRIPTION_TOKEN_RE = new RegExp(`${DESCRIPTION_TERM_PATTERN}|[+−-]?\\d+(?:[.,]\\d+)*(?:[%％])?`, 'gi');
+    const DESCRIPTION_TONE_RES = DESCRIPTION_TERMS.map(([tone, pattern]) => [tone, new RegExp(`^(?:${pattern})$`, 'i')]);
+
+    function formatDescriptionInlineHtml(text) {
+        let html = '', offset = 0;
+        // matchAll gets its own iterator, so calls cannot share regex state.
+        for (const match of String(text).matchAll(DESCRIPTION_TOKEN_RE)) {
+            html += escHtml(text.slice(offset, match.index));
+            const token = escHtml(match[0]);
+            const tone = DESCRIPTION_TONE_RES.find(([, re]) => re.test(match[0]));
+            html += tone ? `<span class="desc-tone desc-${tone[0]}">${token}</span>` : `<strong class="desc-value">${token}</strong>`;
+            offset = match.index + match[0].length;
+        }
+        return html + escHtml(text.slice(offset));
+    }
+
     function formatItemDescHtml(desc) {
         const text = String(desc || '').trim();
         if (!text) return '';
-        // CommunityDragon plain text uses newlines between stat lines and passives.
-        return text
-            .split(/\n+/)
-            .map(line => line.trim())
-            .filter(Boolean)
-            .map(line => `<div class="item-tip-line">${escHtml(line)}</div>`)
-            .join('');
+        // Blank lines separate attributes from named passives in game data.
+        return text.replace(/\r\n?/g, '\n').split(/\n\s*\n/).map(block => {
+            const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+            const hasHeading = lines.length > 1 && lines[0].length <= 60
+                && !/[\d。！？.!?:：]/.test(lines[0]);
+            return `<div class="item-tip-section">${lines.map((line, index) =>
+                hasHeading && index === 0
+                    ? `<div class="item-tip-effect-name">${escHtml(line)}</div>`
+                    : `<div class="item-tip-line">${formatDescriptionInlineHtml(line)}</div>`
+            ).join('')}</div>`;
+        }).join('');
     }
 
     function buildItemTipHtml(opts = {}) {
@@ -2553,8 +2591,12 @@
         }
 
         const rows = [];
-        if (opts.wr != null && opts.wr !== '') {
-            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
+        const hasWinRate = opts.wr != null && opts.wr !== '';
+        const hasLift = opts.lift != null && opts.lift !== '' && opts.liftLabel;
+        if (hasWinRate) {
+            const strength = Math.min(100, Math.abs(Number(opts.lift) || 0) / 0.05 * 100);
+            const delta = hasLift ? `<span class="item-tip-delta ${liftToneClass(opts.lift)}" style="--tip-lift-strength:${strength.toFixed(1)}%">(${escHtml(String(opts.liftLabel))})</span>` : '';
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b>${escHtml(String(opts.wr))}${delta}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
             const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
@@ -2562,7 +2604,7 @@
             const pickHeat = pickHeatClass(rate, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
-        if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
+        if (hasLift && !hasWinRate) {
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipLift || 'Lift')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.liftLabel))}</b></div>`);
         }
         if (opts.games != null && opts.games !== '') {
@@ -2612,6 +2654,9 @@
     let _itemFloatTipEl = null;
     let _itemFloatTipHideTimer = 0;
     let _itemFloatTipAnchor = null;
+    let _itemFloatTipPinned = false;
+    let _itemFloatTipPreviousDescription = null;
+    let _itemFloatTipDismissed = false;
     function ensureItemFloatTip() {
         if (_itemFloatTipEl && document.body.contains(_itemFloatTipEl)) return _itemFloatTipEl;
         const el = document.createElement('div');
@@ -2631,8 +2676,13 @@
             clearTimeout(_itemFloatTipHideTimer);
             _itemFloatTipHideTimer = 0;
         }
-        if (_itemFloatTipAnchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        if (_itemFloatTipAnchor) {
+            if (_itemFloatTipPreviousDescription === null) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+            else _itemFloatTipAnchor.setAttribute('aria-describedby', _itemFloatTipPreviousDescription);
+        }
         _itemFloatTipAnchor = null;
+        _itemFloatTipPinned = false;
+        _itemFloatTipPreviousDescription = null;
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
@@ -2650,15 +2700,18 @@
         const vw = window.innerWidth || document.documentElement.clientWidth || 0;
         const vh = window.innerHeight || document.documentElement.clientHeight || 0;
 
-        // Natural content height first — no forced scrollbar for short tips.
+        // Measure natural height, then choose a side and constrain to its space.
         el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable');
         el.style.maxHeight = '';
         el.style.left = '0px';
         el.style.top = '0px';
 
         let tipRect = el.getBoundingClientRect();
-        const maxH = Math.max(120, vh - margin * 2);
-        // Only clamp + scroll when content genuinely exceeds the viewport.
+        const spaceAbove = Math.max(0, rect.top - margin - gap);
+        const spaceBelow = Math.max(0, vh - rect.bottom - margin - gap);
+        const flipBelow = tipRect.height > spaceAbove
+            && (tipRect.height <= spaceBelow || spaceBelow > spaceAbove);
+        const maxH = Math.max(1, flipBelow ? spaceBelow : spaceAbove);
         if (tipRect.height > maxH) {
             el.style.maxHeight = maxH + 'px';
             el.classList.add('is-scrollable');
@@ -2668,30 +2721,16 @@
         let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
         left = Math.max(margin, Math.min(left, vw - tipRect.width - margin));
 
-        let top = rect.top - tipRect.height - gap;
-        let flipBelow = false;
-        if (top < margin) {
-            top = rect.bottom + gap;
-            flipBelow = true;
-        }
-        if (top + tipRect.height > vh - margin) {
-            // Prefer whichever side has more room.
-            const spaceAbove = rect.top - margin;
-            const spaceBelow = vh - rect.bottom - margin;
-            if (spaceBelow > spaceAbove) {
-                top = Math.min(rect.bottom + gap, vh - tipRect.height - margin);
-                flipBelow = true;
-            } else {
-                top = Math.max(margin, rect.top - tipRect.height - gap);
-                flipBelow = false;
-            }
-        }
+        const top = Math.max(margin, Math.min(
+            flipBelow ? rect.bottom + gap : rect.top - tipRect.height - gap,
+            vh - tipRect.height - margin
+        ));
 
         el.style.left = Math.round(left) + 'px';
         el.style.top = Math.round(top) + 'px';
         el.classList.toggle('flip-below', flipBelow);
         // Arrow horizontal alignment toward the anchor center.
-        const arrowX = rect.left + rect.width / 2 - left;
+        const arrowX = Math.max(20, Math.min(tipRect.width - 20, rect.left + rect.width / 2 - left));
         el.style.setProperty('--item-tip-arrow-x', Math.round(arrowX) + 'px');
     }
 
@@ -2700,9 +2739,14 @@
         const poolId = anchor.getAttribute('data-recommended-pool');
         const src = anchor.querySelector('.item-tip-src');
         if (!src && !poolId) return;
-        if (_itemFloatTipAnchor && _itemFloatTipAnchor !== anchor) _itemFloatTipAnchor.removeAttribute('aria-describedby');
+        if (_itemFloatTipAnchor === anchor && _itemFloatTipEl && !_itemFloatTipEl.hidden) {
+            clearTimeout(_itemFloatTipHideTimer);
+            return;
+        }
+        hideItemFloatTip();
         _itemFloatTipAnchor = anchor;
-        anchor.setAttribute('aria-describedby', 'item-float-tip');
+        _itemFloatTipPreviousDescription = anchor.getAttribute('aria-describedby');
+        anchor.setAttribute('aria-describedby', [_itemFloatTipPreviousDescription, 'item-float-tip'].filter(Boolean).join(' '));
         if (poolId && !augPools.data) loadAugPools();
         if (_itemFloatTipHideTimer) {
             clearTimeout(_itemFloatTipHideTimer);
@@ -2713,17 +2757,23 @@
         el.classList.toggle('is-champion-table-tip', anchor.classList.contains('champion-table-icon'));
         el.classList.toggle('is-item-family-tip', Boolean(anchor.querySelector('.item-family-icon')));
         el.innerHTML = poolId ? recommendedPoolTip(poolId, anchor.textContent.trim()) : src.innerHTML;
+        el.scrollTop = 0;
         el.hidden = false;
         el.classList.add('is-visible');
         positionItemFloatTip(anchor);
+        // Local icons may finish loading after the initial measurement.
+        el.querySelectorAll('img').forEach(img => img.addEventListener('load', () => {
+            if (_itemFloatTipAnchor === anchor && !el.hidden) positionItemFloatTip(anchor);
+        }, { once: true }));
     }
 
     function scheduleHideItemFloatTip() {
+        if (_itemFloatTipPinned || (_itemFloatTipAnchor && _itemFloatTipAnchor.contains(document.activeElement))) return;
         if (_itemFloatTipHideTimer) clearTimeout(_itemFloatTipHideTimer);
         _itemFloatTipHideTimer = setTimeout(() => {
             _itemFloatTipHideTimer = 0;
             hideItemFloatTip();
-        }, 80);
+        }, 160);
     }
 
     function normalizeSearchText(value) {
@@ -3048,7 +3098,7 @@
         return buildItemTipHtml({
             name: aug ? augName(aug, entry.id) : '#' + entry.id,
             icons: aug && aug.icon ? [aug.icon] : [],
-            subtitle: setName ? `${copy.augSetLabel}: ${setName}` : '',
+            subtitle: [aug && (copy.rarityLabels || {})[aug.rarity], setName ? `${copy.augSetLabel}: ${setName}` : ''].filter(Boolean).join(' · '),
             desc: augDesc(aug, entry.id),
             wr: pct(entry.wr),
             pick: pct(pickRate),
@@ -3137,7 +3187,7 @@
                         <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
                         <span class="aug-pick-icon rarity-${r.css}">${iconHtml(v)}</span>
                         <span class="aug-pick-name">${escHtml(v.name)}</span>
-                        ${v.desc ? `<span class="aug-pick-desc">${escHtml(v.desc)}</span>` : ''}
+                        ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
                         <span class="aug-pick-foot">
                             <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
                         </span>
@@ -12072,7 +12122,8 @@
     // scrolling.
     document.addEventListener('keydown', (ev) => {
         if (ev.key === 'Escape') {
-            if (_itemFloatTipAnchor && _itemFloatTipAnchor.hasAttribute('data-recommended-pool')) {
+            if (_itemFloatTipAnchor) {
+                _itemFloatTipDismissed = true;
                 hideItemFloatTip();
                 return;
             }
@@ -12126,7 +12177,10 @@
     }, { passive: true });
 
     // Rich item float-tip: show on hover/focus of any .has-item-tip host.
+    document.addEventListener('pointermove', () => { _itemFloatTipDismissed = false; }, { passive: true });
     document.addEventListener('mouseover', (ev) => {
+        if (_itemFloatTipDismissed) return;
+        if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
         // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
@@ -12142,6 +12196,7 @@
         scheduleHideItemFloatTip();
     }, { passive: true });
     document.addEventListener('focusin', (ev) => {
+        _itemFloatTipDismissed = false;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (host) showItemFloatTip(host);
     });
@@ -12155,12 +12210,24 @@
     });
     document.addEventListener('click', ev => {
         const familyHost = ev.target.closest && ev.target.closest('.has-item-tip');
-        const host = (ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon'))
-            || (familyHost && familyHost.querySelector('.item-family-icon') ? familyHost : null);
-        if (host) showItemFloatTip(host);
+        const host = (ev.target.closest && ev.target.closest('[data-recommended-pool], [data-pool-augment], .champ-pools-rank, .champion-table-icon, .quick-item, .quick-augment'))
+            || (familyHost && !familyHost.closest('button, a, [role="button"]') ? familyHost : null);
+        if (host) {
+            _itemFloatTipDismissed = false;
+            if (_itemFloatTipAnchor === host && _itemFloatTipPinned) hideItemFloatTip();
+            else {
+                showItemFloatTip(host);
+                _itemFloatTipPinned = true;
+            }
+        }
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
     });
-    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') hideItemFloatTip(); });
+    document.addEventListener('keydown', ev => {
+        if (ev.key === 'Escape') {
+            _itemFloatTipDismissed = true;
+            hideItemFloatTip();
+        }
+    });
     window.addEventListener('scroll', ev => {
         if (_itemFloatTipEl && _itemFloatTipEl.contains(ev.target)) return;
         hideItemFloatTip();
