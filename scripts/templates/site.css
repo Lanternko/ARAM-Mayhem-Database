@@ -10043,12 +10043,12 @@
         min-width: 0;
         padding: 20px 16px 16px;
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: var(--r-sm);
         background:
             radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, var(--verdict, var(--text-muted)) 12%, transparent), transparent 70%),
             var(--surface);
         text-align: center;
-        transition: transform .18s ease, border-color .18s ease;
+        transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
     }
     .aug-pick-card.is-good { --verdict: var(--wr-5); }
     .aug-pick-card.is-bad { --verdict: var(--wr-1); }
@@ -10057,6 +10057,16 @@
         transform: translateY(-2px);
         border-color: color-mix(in oklab, var(--verdict, var(--text-muted)) 45%, var(--border));
         outline: none;
+    }
+    .aug-pick-card:focus-visible,
+    .aug-tier-row:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .aug-pick-card { transition: none; }
+        .aug-pick-card:hover,
+        .aug-pick-card:focus-visible { transform: none; }
     }
     .aug-pick-rank {
         position: absolute;
@@ -10073,14 +10083,14 @@
         place-items: center;
         width: 64px;
         height: 64px;
-        border-radius: 50%;
+        border-radius: var(--r-sm);
         box-shadow: 0 0 0 2px color-mix(in oklab, var(--rar, var(--border)) 55%, transparent), 0 6px 18px rgba(0, 0, 0, .28);
     }
     .aug-pick-icon.rarity-silver { --rar: #c9d1dc; }
     .aug-pick-icon.rarity-gold { --rar: #f0c14b; }
     .aug-pick-icon.rarity-prismatic { --rar: #d7a8ff; }
     .aug-pick-icon img,
-    .aug-pick-icon .aicon-ph { width: 64px; height: 64px; border-radius: 50%; }
+    .aug-pick-icon .aicon-ph { width: 64px; height: 64px; border-radius: var(--r-sm); }
     .aug-pick-name {
         max-width: 100%;
         overflow: hidden;
@@ -10188,7 +10198,7 @@
         counter-increment: aug-tier;
     }
     .aug-tier-row:hover,
-    .aug-tier-row:focus-visible { background: var(--surface); outline: none; }
+    .aug-tier-row:focus-visible { background: var(--surface); }
     .aug-tier-idx { display: none; }
     .aug-tier-row .aug-tier-idx::before { content: counter(aug-tier); }
     .aug-tier-name {
@@ -10214,7 +10224,7 @@
         width: 36px;
         height: 36px;
         flex: 0 0 auto;
-        border-radius: 50%;
+        border-radius: var(--r-sm);
     }
     .aug-tier-pick {
         display: flex;
