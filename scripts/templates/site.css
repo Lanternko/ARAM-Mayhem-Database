@@ -6586,6 +6586,13 @@
     .item-tip-row > b.is-good { color: var(--wr-positive); }
     .item-tip-row > b.is-bad { color: var(--wr-negative); }
     .item-tip-row > b.is-even { color: var(--text); }
+    .item-tip-delta.is-good {
+        color: color-mix(in oklch, var(--wr-5) var(--tip-lift-strength, 0%), var(--wr-positive));
+    }
+    .item-tip-delta.is-bad {
+        color: color-mix(in oklch, var(--wr-1) var(--tip-lift-strength, 0%), var(--wr-negative));
+    }
+    .item-tip-delta.is-even { color: var(--wr-neutral); }
     .item-tip-note {
         margin-top: 7px;
         padding-top: 6px;

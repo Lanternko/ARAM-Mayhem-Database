@@ -2594,8 +2594,9 @@
         const hasWinRate = opts.wr != null && opts.wr !== '';
         const hasLift = opts.lift != null && opts.lift !== '' && opts.liftLabel;
         if (hasWinRate) {
-            const delta = hasLift ? (currentLang === 'en' ? ` (${opts.liftLabel})` : `（${opts.liftLabel}）`) : '';
-            rows.push(`<div class="item-tip-row"><span>${escHtml((copy.itemTipWr || 'WR') + delta)}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
+            const strength = Math.min(100, Math.abs(Number(opts.lift) || 0) / 0.05 * 100);
+            const delta = hasLift ? `<span class="item-tip-delta ${liftToneClass(opts.lift)}" style="--tip-lift-strength:${strength.toFixed(1)}%">(${escHtml(String(opts.liftLabel))})</span>` : '';
+            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b>${escHtml(String(opts.wr))}${delta}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
             const rate = Number(opts.pickRate != null ? opts.pickRate : 0);

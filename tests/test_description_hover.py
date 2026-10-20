@@ -47,19 +47,22 @@ def test_hover_combines_win_rate_delta_without_dropping_standalone_evidence():
     script = r'''
     const assert = require('node:assert/strict');
     let currentLang = 'zh';
-    const escHtml = s => String(s), liftToneClass = () => 'is-bad';
+    const escHtml = s => String(s), liftToneClass = v => v > .005 ? 'is-good' : v < -.005 ? 'is-bad' : 'is-even';
     const itemIconUrl = () => '', itemFamilyNote = () => '';
     const tr = () => ({itemTipWr: currentLang === 'en' ? 'Win rate' : '勝率', itemTipLift:'相對基準'});
     ''' + builder + r'''
     for (const lang of ['zh', 'zh-CN', 'en']) {
         currentLang = lang;
-        const out = buildItemTipHtml({wr:'53.2%',lift:-.006,liftLabel:'-0.6%'});
-        assert.ok(out.includes(lang === 'en' ? 'Win rate (-0.6%)' : '勝率（-0.6%）'));
-        assert.ok(out.includes('53.2%'));
+        const out = buildItemTipHtml({wr:'53.6%',lift:-.006,liftLabel:'-0.6%'});
+        assert.ok(out.includes(lang === 'en' ? '<span>Win rate</span>' : '<span>勝率</span>'));
+        assert.ok(out.includes('<b>53.6%<span class="item-tip-delta is-bad"'));
+        assert.ok(out.includes('>(-0.6%)</span></b>'));
+        assert.ok(out.includes('--tip-lift-strength:12.0%'));
         assert.ok(!out.includes('相對基準'));
     }
     currentLang = 'zh';
-    assert.ok(buildItemTipHtml({wr:'50%',lift:0,liftLabel:'+0.0%'}).includes('勝率（+0.0%）'));
+    assert.ok(buildItemTipHtml({wr:'60%',lift:.08,liftLabel:'+8.0%'}).includes('item-tip-delta is-good" style="--tip-lift-strength:100.0%'));
+    assert.ok(buildItemTipHtml({wr:'50%',lift:0,liftLabel:'+0.0%'}).includes('>(+0.0%)</span></b>'));
     assert.ok(buildItemTipHtml({wr:'50%'}).includes('<span>勝率</span>'));
     assert.ok(buildItemTipHtml({lift:-.006,liftLabel:'-0.6%'}).includes('相對基準'));
     '''
