@@ -76,6 +76,18 @@
         --panel-quiet: oklch(0.175 0.01 255);
         /* Augment artwork needs a dark backing in either theme. */
         --augment-icon-surface: #0b0e13;
+        --tip-surface: oklch(0.155 0.008 255);
+        --desc-ap: oklch(0.76 0.13 296);
+        --desc-ad: oklch(0.8 0.12 55);
+        --desc-magic: oklch(0.81 0.105 220);
+        --desc-physical: oklch(0.8 0.12 55);
+        --desc-true: oklch(0.91 0.04 210);
+        --desc-health: oklch(0.8 0.12 155);
+        --desc-speed: oklch(0.86 0.12 90);
+        --desc-haste: oklch(0.84 0.09 175);
+        --desc-shield: oklch(0.81 0.105 220);
+        --desc-crit: oklch(0.81 0.11 60);
+        --desc-mana: oklch(0.79 0.1 245);
         --tier-op-frame: linear-gradient(135deg,
             #ffffff 0%, #e7d5ff 18%, #bcd6ff 36%,
             #ffd5ec 58%, #fff1c8 78%, #ffffff 100%);
@@ -118,6 +130,18 @@
         --surface-2: #eef0f3;
         --surface-sunken: #eef1f6;
         --surface-raised: #ffffff;
+        --tip-surface: oklch(0.99 0.004 255);
+        --desc-ap: oklch(0.45 0.16 296);
+        --desc-ad: oklch(0.44 0.1 55);
+        --desc-magic: oklch(0.43 0.08 220);
+        --desc-physical: oklch(0.44 0.1 55);
+        --desc-true: oklch(0.4 0.035 210);
+        --desc-health: oklch(0.42 0.09 155);
+        --desc-speed: oklch(0.43 0.08 90);
+        --desc-haste: oklch(0.42 0.07 175);
+        --desc-shield: oklch(0.43 0.08 220);
+        --desc-crit: oklch(0.45 0.1 60);
+        --desc-mana: oklch(0.44 0.1 245);
         --chip-bg: #eceff4;
         --overlay: #ffffff;
         --text: #1a1e26;
@@ -6356,6 +6380,7 @@
 
     /* ----- Rich item hover (floating, never clipped by carousels) ----- */
     .item-tip-src { display: none !important; }
+    .has-item-tip { -webkit-tap-highlight-color: transparent; }
     .cg-icon-host {
         position: relative;
         display: inline-flex;
@@ -6371,7 +6396,8 @@
         z-index: 80;
         left: 0;
         top: 0;
-        width: min(300px, calc(100vw - 16px));
+        width: min(380px, calc(100vw - 24px));
+        box-sizing: border-box;
         /* Height follows content.  JS only applies max-height + scroll when the
            tip would otherwise overflow the viewport after flip positioning. */
         max-height: none;
@@ -6380,43 +6406,36 @@
         pointer-events: none;
         opacity: 0;
         transform: translateY(4px);
-        transition: opacity 0.12s ease-out, transform 0.12s ease-out;
-        filter: drop-shadow(0 10px 28px rgba(0, 0, 0, 0.55));
+        transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
+        filter: none;
+        border-radius: var(--r-sm);
+        box-shadow: var(--shadow);
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
     }
     .item-float-tip.is-scrollable {
         overflow-y: auto;
+        overscroll-behavior: contain;
     }
     .item-float-tip.is-visible {
+        display: block !important;
+        pointer-events: auto;
         opacity: 1;
         transform: translateY(0);
     }
     .item-float-tip[hidden] { display: none !important; }
-    .item-float-tip:is(.is-champion-table-tip, .is-item-family-tip).is-visible { display: block !important; pointer-events: auto; filter: none; box-shadow: var(--panel-shadow); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card { background: var(--surface-raised); border-color: var(--border-strong); color: var(--text); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-card::after { background: var(--surface-raised); border-color: var(--border-strong); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-name,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-part-name,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc .item-tip-line:first-child,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > b { color: var(--text); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-desc,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-sub,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-row > span,
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-note { color: var(--text-muted); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-gold { color: var(--accent-soft); }
-    :is(.is-champion-table-tip, .is-item-family-tip) .item-tip-stats { border-color: var(--border); }
     .item-tip-card {
         position: relative;
-        padding: 10px 12px 11px;
-        border-radius: 10px;
-        border: 1px solid rgba(212, 175, 92, 0.28);
-        background:
-            linear-gradient(180deg, rgba(36, 42, 56, 0.98) 0%, rgba(14, 17, 24, 0.98) 100%);
-        color: #e6e8eb;
-        font-size: 12px;
-        line-height: 1.45;
+        padding: 20px;
+        border-radius: var(--r-sm);
+        border: 1px solid var(--border-strong);
+        background: var(--tip-surface);
+        color: var(--text);
+        font-size: 14px;
+        line-height: 1.6;
         text-align: left;
+        overflow-wrap: anywhere;
+        font-variant-numeric: tabular-nums;
     }
     .item-tip-card::after {
         content: "";
@@ -6426,9 +6445,9 @@
         width: 10px;
         height: 10px;
         margin-left: -5px;
-        background: #0e1118;
-        border-right: 1px solid rgba(212, 175, 92, 0.28);
-        border-bottom: 1px solid rgba(212, 175, 92, 0.28);
+        background: var(--tip-surface);
+        border-right: 1px solid var(--border-strong);
+        border-bottom: 1px solid var(--border-strong);
         transform: rotate(45deg);
     }
     .item-float-tip.flip-below .item-tip-card::after {
@@ -6436,28 +6455,32 @@
         top: -6px;
         border-right: none;
         border-bottom: none;
-        border-left: 1px solid rgba(212, 175, 92, 0.28);
-        border-top: 1px solid rgba(212, 175, 92, 0.28);
+        border-left: 1px solid var(--border-strong);
+        border-top: 1px solid var(--border-strong);
     }
+    /* A transparent bridge makes the pointer's path to the reading surface safe. */
+    .item-float-tip::before { content: ""; position: absolute; top: 100%; inset-inline: 0; height: 12px; }
+    .item-float-tip.flip-below::before { top: auto; bottom: 100%; }
+    .item-float-tip.is-scrollable .item-tip-card::after { display: none; }
     .item-tip-head {
         display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        margin-bottom: 8px;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
     }
     .item-tip-icons {
         display: flex;
         flex-wrap: wrap;
         gap: 4px;
         flex: 0 0 auto;
-        max-width: 96px;
+        max-width: 104px;
     }
     .item-tip-icon {
-        width: 40px;
-        height: 40px;
-        border-radius: 7px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: #1a2030;
+        width: 48px;
+        height: 48px;
+        border-radius: var(--r-sm);
+        border: 1px solid var(--border);
+        background: var(--augment-icon-surface);
         object-fit: contain;
         box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
     }
@@ -6467,39 +6490,48 @@
         padding-top: 1px;
     }
     .item-tip-name {
-        font-weight: 750;
-        font-size: 13px;
-        letter-spacing: 0.01em;
-        color: #f5d780;
+        font-weight: 700;
+        font-size: 16px;
+        color: var(--text);
         line-height: 1.3;
     }
     .item-tip-sub {
         margin-top: 2px;
-        font-size: 10.5px;
-        color: #8fd8f4;
+        font-size: 12px;
+        color: var(--text-muted);
         line-height: 1.3;
     }
     .item-tip-gold {
         display: inline-block;
         margin-top: 3px;
-        font-size: 11px;
+        font-size: 13px;
         font-variant-numeric: tabular-nums;
-        color: #d7b25a;
-        background: rgba(215, 178, 90, 0.12);
-        border: 1px solid rgba(215, 178, 90, 0.22);
-        border-radius: 999px;
-        padding: 1px 7px;
+        color: var(--accent-soft);
+        font-weight: 600;
     }
     .item-tip-desc {
-        color: #c5cad3;
-        font-size: 11.5px;
-        line-height: 1.45;
-        margin-bottom: 8px;
+        color: var(--text-muted);
+        font-size: 14px;
+        line-height: 1.65;
+        margin-bottom: 16px;
         white-space: normal;
     }
-    .item-tip-line + .item-tip-line { margin-top: 3px; }
-    /* First block of stat lines tends to be pure numbers — slightly brighter. */
-    .item-tip-desc .item-tip-line:first-child { color: #e8ecf3; }
+    .item-tip-line + .item-tip-line { margin-top: 2px; }
+    .item-tip-section + .item-tip-section { margin-top: 14px; }
+    .item-tip-effect-name { margin-bottom: 3px; color: var(--text); font-weight: 700; }
+    .desc-value { color: var(--text); font-weight: 700; }
+    .desc-tone { font-weight: 500; }
+    .desc-ap { color: var(--desc-ap); }
+    .desc-ad { color: var(--desc-ad); }
+    .desc-magic { color: var(--desc-magic); }
+    .desc-physical { color: var(--desc-physical); }
+    .desc-true { color: var(--desc-true); }
+    .desc-health { color: var(--desc-health); }
+    .desc-speed { color: var(--desc-speed); }
+    .desc-haste { color: var(--desc-haste); }
+    .desc-shield { color: var(--desc-shield); }
+    .desc-crit { color: var(--desc-crit); }
+    .desc-mana { color: var(--desc-mana); }
     .item-tip-parts {
         display: flex;
         flex-direction: column;
@@ -6508,7 +6540,7 @@
     }
     .item-tip-part {
         padding-top: 6px;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        border-top: 1px solid var(--border);
     }
     .item-tip-part:first-child {
         padding-top: 0;
@@ -6517,7 +6549,7 @@
     .item-tip-part-name {
         font-weight: 650;
         font-size: 11.5px;
-        color: #f0d18a;
+        color: var(--text);
         margin-bottom: 3px;
     }
     .item-tip-parts-list {
@@ -6530,48 +6562,59 @@
         display: inline-block;
         padding: 2px 7px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        color: #d7dde7;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        color: var(--text);
         font-size: 10.5px;
     }
     .item-tip-stats {
         display: grid;
         grid-template-columns: 1fr auto;
         gap: 4px 12px;
-        padding-top: 8px;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        font-size: 11px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
     }
     .item-tip-row {
         display: contents;
     }
     .item-tip-row > span {
-        color: #8b93a7;
+        color: var(--text-muted);
     }
     .item-tip-row > b {
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        color: #e6e8eb;
+        color: var(--text);
         text-align: right;
     }
-    .item-tip-row > b.is-good { color: #6bd16b; }
-    .item-tip-row > b.is-bad { color: #ff8a8a; }
-    .item-tip-row > b.is-even { color: #c7cede; }
+    .item-tip-row > b.is-good { color: var(--wr-positive); }
+    .item-tip-row > b.is-bad { color: var(--wr-negative); }
+    .item-tip-row > b.is-even { color: var(--text); }
+    .item-tip-delta.is-good {
+        color: color-mix(in oklch, var(--wr-5) var(--tip-lift-strength, 0%), var(--wr-positive));
+    }
+    .item-tip-delta.is-bad {
+        color: color-mix(in oklch, var(--wr-1) var(--tip-lift-strength, 0%), var(--wr-negative));
+    }
+    .item-tip-delta.is-even { color: var(--wr-neutral); }
     .item-tip-note {
         margin-top: 7px;
         padding-top: 6px;
-        border-top: 1px dashed rgba(255, 255, 255, 0.08);
-        color: #8b93a7;
-        font-size: 10.5px;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 12px;
         line-height: 1.4;
     }
-    /* Solar pick ladder on tip values (tip is always dark; colour only). */
+    /* Keep statistical evidence secondary to the game description. */
     .item-tip-row > b.pick-1 { color: #7c8aa1; font-weight: 500; }
     .item-tip-row > b.pick-2 { color: #e6e8eb; font-weight: 600; }
     .item-tip-row > b.pick-3 { color: #c4a35a; font-weight: 650; }
     .item-tip-row > b.pick-4 { color: #fde047; font-weight: 700; }
     .item-tip-row > b.pick-5 { color: #67e8f9; font-weight: 700; }
+    [data-theme="light"] .item-tip-row > b[class*="pick-"] { color: var(--text); }
+    @media (prefers-reduced-motion: reduce) {
+        .item-float-tip { transition: none; transform: none; }
+    }
     #augch-host {
         position: fixed;
         inset: 0;
@@ -10004,12 +10047,12 @@
         min-width: 0;
         padding: 20px 16px 16px;
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: var(--r-sm);
         background:
             radial-gradient(120% 70% at 50% 0%, color-mix(in oklab, var(--verdict, var(--text-muted)) 12%, transparent), transparent 70%),
             var(--surface);
         text-align: center;
-        transition: transform .18s ease, border-color .18s ease;
+        transition: transform var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
     }
     .aug-pick-card.is-good { --verdict: var(--wr-5); }
     .aug-pick-card.is-bad { --verdict: var(--wr-1); }
@@ -10018,6 +10061,16 @@
         transform: translateY(-2px);
         border-color: color-mix(in oklab, var(--verdict, var(--text-muted)) 45%, var(--border));
         outline: none;
+    }
+    .aug-pick-card:focus-visible,
+    .aug-tier-row:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 3px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .aug-pick-card { transition: none; }
+        .aug-pick-card:hover,
+        .aug-pick-card:focus-visible { transform: none; }
     }
     .aug-pick-rank {
         position: absolute;
@@ -10034,14 +10087,14 @@
         place-items: center;
         width: 64px;
         height: 64px;
-        border-radius: 50%;
+        border-radius: var(--r-sm);
         box-shadow: 0 0 0 2px color-mix(in oklab, var(--rar, var(--border)) 55%, transparent), 0 6px 18px rgba(0, 0, 0, .28);
     }
     .aug-pick-icon.rarity-silver { --rar: #c9d1dc; }
     .aug-pick-icon.rarity-gold { --rar: #f0c14b; }
     .aug-pick-icon.rarity-prismatic { --rar: #d7a8ff; }
     .aug-pick-icon img,
-    .aug-pick-icon .aicon-ph { width: 64px; height: 64px; border-radius: 50%; }
+    .aug-pick-icon .aicon-ph { width: 64px; height: 64px; border-radius: var(--r-sm); }
     .aug-pick-name {
         max-width: 100%;
         overflow: hidden;
@@ -10149,7 +10202,7 @@
         counter-increment: aug-tier;
     }
     .aug-tier-row:hover,
-    .aug-tier-row:focus-visible { background: var(--surface); outline: none; }
+    .aug-tier-row:focus-visible { background: var(--surface); }
     .aug-tier-idx { display: none; }
     .aug-tier-row .aug-tier-idx::before { content: counter(aug-tier); }
     .aug-tier-name {
@@ -10175,7 +10228,7 @@
         width: 36px;
         height: 36px;
         flex: 0 0 auto;
-        border-radius: 50%;
+        border-radius: var(--r-sm);
     }
     .aug-tier-pick {
         display: flex;
