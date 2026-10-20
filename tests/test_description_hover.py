@@ -39,3 +39,28 @@ def test_game_descriptions_keep_structure_semantics_and_escape_source():
     assert.equal(formatItemDescHtml('4% Ability Power'), formatItemDescHtml('4% Ability Power'));
     '''
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True, encoding="utf-8")
+
+
+def test_hover_combines_win_rate_delta_without_dropping_standalone_evidence():
+    js = (ROOT / "scripts/templates/site.js").read_text(encoding="utf-8")
+    builder = js[js.index("    function buildItemTipHtml"):js.index("    function itemTipSource")]
+    script = r'''
+    const assert = require('node:assert/strict');
+    let currentLang = 'zh';
+    const escHtml = s => String(s), liftToneClass = () => 'is-bad';
+    const itemIconUrl = () => '', itemFamilyNote = () => '';
+    const tr = () => ({itemTipWr: currentLang === 'en' ? 'Win rate' : '勝率', itemTipLift:'相對基準'});
+    ''' + builder + r'''
+    for (const lang of ['zh', 'zh-CN', 'en']) {
+        currentLang = lang;
+        const out = buildItemTipHtml({wr:'53.2%',lift:-.006,liftLabel:'-0.6%'});
+        assert.ok(out.includes(lang === 'en' ? 'Win rate (-0.6%)' : '勝率（-0.6%）'));
+        assert.ok(out.includes('53.2%'));
+        assert.ok(!out.includes('相對基準'));
+    }
+    currentLang = 'zh';
+    assert.ok(buildItemTipHtml({wr:'50%',lift:0,liftLabel:'+0.0%'}).includes('勝率（+0.0%）'));
+    assert.ok(buildItemTipHtml({wr:'50%'}).includes('<span>勝率</span>'));
+    assert.ok(buildItemTipHtml({lift:-.006,liftLabel:'-0.6%'}).includes('相對基準'));
+    '''
+    subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True, encoding="utf-8")

@@ -2591,8 +2591,11 @@
         }
 
         const rows = [];
-        if (opts.wr != null && opts.wr !== '') {
-            rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipWr || 'WR')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
+        const hasWinRate = opts.wr != null && opts.wr !== '';
+        const hasLift = opts.lift != null && opts.lift !== '' && opts.liftLabel;
+        if (hasWinRate) {
+            const delta = hasLift ? (currentLang === 'en' ? ` (${opts.liftLabel})` : `（${opts.liftLabel}）`) : '';
+            rows.push(`<div class="item-tip-row"><span>${escHtml((copy.itemTipWr || 'WR') + delta)}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.wr))}</b></div>`);
         }
         if (opts.pick != null && opts.pick !== '') {
             const rate = Number(opts.pickRate != null ? opts.pickRate : 0);
@@ -2600,7 +2603,7 @@
             const pickHeat = pickHeatClass(rate, colorFn);
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipPick || 'Pick')}</span><b class="${pickHeat}">${escHtml(String(opts.pick))}</b></div>`);
         }
-        if (opts.lift != null && opts.lift !== '' && opts.liftLabel) {
+        if (hasLift && !hasWinRate) {
             rows.push(`<div class="item-tip-row"><span>${escHtml(copy.itemTipLift || 'Lift')}</span><b class="${liftToneClass(opts.lift)}">${escHtml(String(opts.liftLabel))}</b></div>`);
         }
         if (opts.games != null && opts.games !== '') {

@@ -6404,7 +6404,7 @@
         transform: translateY(4px);
         transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease);
         filter: none;
-        border-radius: var(--r-lg);
+        border-radius: var(--r-sm);
         box-shadow: var(--shadow);
         scrollbar-width: thin;
         scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
@@ -6423,7 +6423,7 @@
     .item-tip-card {
         position: relative;
         padding: 20px;
-        border-radius: var(--r-lg);
+        border-radius: var(--r-sm);
         border: 1px solid var(--border-strong);
         background: var(--tip-surface);
         color: var(--text);
