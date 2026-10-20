@@ -1255,7 +1255,7 @@
             pickNoteEmpty: n => `最多選 ${n} 隻；未滿 5 隻時看推薦補位，選滿後看整隊勝率與維度。`,
             pickNotePartial: want => `目前這組選角的完整資料較少，先用已知搭配排序。`,
             pickNoteReady: (want, minGames) => `已選 ${want}/${MAX_TEAM_PICKS} 隻；pair 門檻 >= ${minGames} 場。`,
-            panelEmpty: '到 Draft 分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
+            panelEmpty: '到選角分頁選 1～5 隻我方英雄；可再選對手。未滿 5 隻時排出補位推薦；有對手時顯示對陣估計勝率與雙方隊伍特性。',
             panelNoData: '這組英雄目前沒有足夠的 pair 資料。',
             draftEmpty: '連續點選英雄：先填我方 5 隻，滿了會自動接續選對手。',
             draftAllyEval: '我方陣容',
@@ -2142,6 +2142,8 @@
             draftSearch.placeholder = copy.draftSearchPlaceholderMobile;
             draftSearch.setAttribute('aria-label', copy.draftSearchAria);
         }
+        const draftModes = document.querySelector('.draft-mode-tabs');
+        if (draftModes) draftModes.setAttribute('aria-label', currentLang === 'en' ? 'Draft views' : zhUi('選角模式'));
     }
 
     function champName(info, cid) {
@@ -6357,7 +6359,12 @@
         //    Prefer remote Fandom with scale-to-width-down for reliable bar loads.
         if (DRAFT_SPLASH_HD && DRAFT_SPLASH_HD.byCid) {
             const hit = DRAFT_SPLASH_HD.byCid[String(cid != null ? cid : info.id || '')];
-            if (hit && hit.url) {
+            // Older maps may point to archived artwork, even under a local URL.
+            // Prefer current Riot art over a higher-resolution historical splash.
+            const historical = hit && /OriginalSkin[ _]old(?:[ _.]|$)/i.test(
+                [hit.url, hit.remoteUrl, hit.wikiTitle].join(' ')
+            );
+            if (hit && hit.url && !historical) {
                 const u = String(hit.url);
                 if (/^https?:\/\//i.test(u)) return draftScaleFandomHdUrl(u);
                 // site-relative path → absolute against origin (not <base href>)

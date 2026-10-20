@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -33,6 +34,7 @@ UA = (
     "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 arammeta-wiki-hd/1.0"
 )
 API = "https://leagueoflegends.fandom.com/api.php"
+HISTORICAL_SKIN_RE = re.compile(r"OriginalSkin[ _]old(?:[ _.]|$)", re.I)
 
 # DDragon alias / site name_en → Wiki file title stem (before _OriginalSkin_HD)
 ALIAS_TO_WIKI = {
@@ -120,9 +122,6 @@ def wiki_imageinfo(title: str) -> dict | None:
 
 # Extra wiki titles when standard OriginalSkin_HD is missing / renamed.
 EXTRA_TITLES = {
-    "Ahri": ["File:Ahri OriginalSkin old HD.jpg"],
-    "Kayle": ["File:Kayle OriginalSkin old.jpg"],  # may not be true HD
-    "Amumu": ["File:Amumu OriginalSkin old.jpg"],
     "Mel": [
         "File:Mel OriginalSkin.jpg",
         "File:Mel_OriginalSkin.jpg",
@@ -148,6 +147,13 @@ EXTRA_TITLES = {
 }
 
 
+def is_historical_splash(entry: dict) -> bool:
+    return any(
+        HISTORICAL_SKIN_RE.search(str(entry.get(key) or ""))
+        for key in ("url", "remoteUrl", "wikiTitle")
+    )
+
+
 def candidate_titles(alias: str, name_en: str) -> list[str]:
     stems: list[str] = []
     for s in (
@@ -164,8 +170,6 @@ def candidate_titles(alias: str, name_en: str) -> list[str]:
         for t in (
             f"File:{stem}_OriginalSkin_HD.jpg",
             f"File:{stem} OriginalSkin HD.jpg",
-            f"File:{stem} OriginalSkin old HD.jpg",
-            f"File:{stem}_OriginalSkin_old_HD.jpg",
         ):
             if t not in titles:
                 titles.append(t)
@@ -173,7 +177,7 @@ def candidate_titles(alias: str, name_en: str) -> list[str]:
         for t in EXTRA_TITLES.get(key, []):
             if t not in titles:
                 titles.append(t)
-    # Non-HD last (often 1215 — only if nothing better exists)
+    # Current non-HD art beats any historical HD master.
     for stem in stems:
         for t in (
             f"File:{stem}_OriginalSkin.jpg",
@@ -227,7 +231,7 @@ def main() -> None:
         if not hit:
             missing.append({"cid": cid, "alias": alias, "name_en": name_en})
             # retain universe fallback if we had one
-            if cid in prev:
+            if cid in prev and not is_historical_splash(prev[cid]):
                 by_cid[cid] = {**prev[cid], "source": prev[cid].get("source") or "universe-fallback"}
             print(f"[{i}/{len(champs)}] MISS {cid} {alias}")
             time.sleep(args.sleep)

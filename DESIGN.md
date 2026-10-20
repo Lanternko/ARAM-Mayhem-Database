@@ -256,7 +256,7 @@ Panel 使用 8px、12px、16px 三級圓角。8px 屬於 button、input、tile �
 
 1. 英雄 / Champions
 2. 增幅 / Augments，簡中標籤為海克斯
-3. Draft
+3. 選角 / Draft
 4. 小遊戲 / Game
 5. 版本變動 / Patch Changes
 
@@ -264,7 +264,9 @@ Panel 使用 8px、12px、16px 三級圓角。8px 屬於 button、input、tile �
 
 Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、出裝與增幅池，收合後保留搜尋、篩選與捲動位置。選取金框貼齊頭像原框，角色標籤使用中性文字。展開區提供「查看完整英雄分析」入口。Champions（`/champions/`）使用可排序的英雄表格，欄位為英雄、勝率（實際對局未校正值）、出場率、場數、兩件推薦核心裝與兩個推薦增幅圖示，預設按出場率排序；搜尋和角色篩選與首頁一致。核心裝沿用詳細頁第一組核心，增幅沿用既有推薦分數，圖示支援 hover、鍵盤與點擊說明。核心裝 ID 以精簡 shell 設定帶入，不額外下載所有英雄 detail shards。點頭像或名稱進入獨立詳細頁（`/champions/<slug>/`），提供完整概覽、出裝、增幅、增幅池與能力分析。首頁不選取產品 tab，表格與詳細頁選取 Champions；三語路由、桌面與手機使用相同規則。英雄增幅前三名只顯示在大卡片區，下方清單從第四名開始，切換排序亦不重複前三名。
 
-Draft 內含 Draft 與 Draft Analysis 兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。增幅內含 增幅榜（`/augments/`）與 增幅池（`/augments/pools/`）。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
+選角（Draft）內含「選角」（Draft）與「分析勝率」（Draft Analysis）兩個 submode。Game 內含 Meta Pick 與 Augment Draft 兩個 submode。增幅內含 增幅榜（`/augments/`）與 增幅池（`/augments/pools/`）。所有 submode 採同一組 tab 語意與 URL/state 規則，不另創一套視覺。
+
+選角側欄、隊伍標題與空白欄位沿用 surface、border 與 text 主題 token，淺色模式不得保留大面積黑底。已選英雄的圖片保留深色遮罩與亮色名稱，確保圖上文字清楚。
 
 桌面 header 高度為 56px，字標在左、主要 tab 在中、theme、language 與其他 utilities 在右。行動版改為兩列，主要 tab 可水平捲動且 active item 必須被帶入可視區，不能把五個 tab 壓成無法閱讀的縮寫。
 
