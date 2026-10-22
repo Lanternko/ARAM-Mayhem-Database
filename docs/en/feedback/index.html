@@ -10311,6 +10311,9 @@
     .aug-tier-sort.is-active::after { content: " \25BE"; font-size: 10px; }
     [data-theme="light"] .aug-tier-sort.is-active { color: #8a6400; }
     .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier 3; }
+    .aug-tier-list.is-full { counter-reset: aug-tier 0; }
+    .aug-tier-row[hidden] { display: none; }
+    .aug-tier-more { display: block; width: 100%; margin-top: 8px; justify-content: center; }
     .aug-tier-row {
         min-height: 56px;
         border-bottom: 1px solid var(--border);
