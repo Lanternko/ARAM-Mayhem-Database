@@ -425,6 +425,93 @@ def localize_cdragon_icons(
     )
     return downloaded
 
+# New augments ship only the white line-art `_small` icon; Riot's colored
+# per-rarity art lands in the game-asset dump patches later (or never).  Until
+# then, tint the white art with the rarity palette so the board still reads as
+# silver / gold / prismatic.  Frame = faint pixels, glyph = bright opaque ones.
+_AUGMENT_TINT_PALETTES: dict[str, dict] = {
+    "kSilver": {"frame": (49, 67, 71), "stops": [(110, 138, 142), (160, 184, 188), (205, 222, 224)]},
+    "kGold": {"frame": (74, 58, 40), "stops": [(176, 132, 74), (231, 200, 150), (250, 238, 206)]},
+    "kPrismatic": {"frame": (66, 46, 82), "stops": [(255, 166, 65), (238, 124, 220), (176, 124, 255), (120, 200, 255)]},
+}
+_AUGMENT_TINT_VERSION = 1
+
+
+def _tint_augment_icon(src: Path, dest: Path, rarity: str, size: int = 256) -> None:
+    import numpy as np
+    from PIL import Image
+
+    palette = _AUGMENT_TINT_PALETTES[rarity]
+    im = Image.open(src).convert("LA").resize((size, size), Image.LANCZOS)
+    arr = np.asarray(im, dtype=np.float32) / 255.0
+    lum, alpha = arr[..., 0], arr[..., 1]
+    yy, xx = np.mgrid[0:size, 0:size] / (size - 1)
+    # Prismatic sweeps diagonally like the client's iridescent art; metals
+    # brighten toward the top.
+    t = (yy * 0.7 + xx * 0.3) if rarity == "kPrismatic" else (1.0 - yy)
+    stops = np.array(palette["stops"], np.float32) / 255.0
+    seg = np.clip(t * (len(stops) - 1), 0, len(stops) - 1 - 1e-6)
+    idx = seg.astype(int)
+    frac = (seg - idx)[..., None]
+    grad = stops[idx] * (1 - frac) + stops[idx + 1] * frac
+    glyph = np.clip((alpha - 0.45) / 0.4, 0, 1)[..., None]
+    shade = (0.55 + 0.45 * lum)[..., None]
+    frame = np.array(palette["frame"], np.float32) / 255.0
+    rgb = frame * (1 - glyph) + grad * shade * glyph
+    out = np.dstack([rgb, np.clip(alpha * 2.2, 0, 1)])
+    Image.fromarray((out * 255).astype(np.uint8), "RGBA").save(dest)
+
+
+def tint_gray_augment_icons(
+    payload: dict,
+    assets_dir: Path,
+    *,
+    rel_prefix: str = "assets/icons",
+) -> int:
+    """Point every augment still on gray `_small` art at a rarity-tinted copy.
+
+    Runs after `localize_cdragon_icons`, so the source is already on disk.
+    Returns how many distinct tinted icons the payload now references."""
+    made: dict[str, str] = {}
+
+    def fix(node: dict) -> None:
+        icon, rarity = node.get("icon"), node.get("rarity")
+        if (
+            not isinstance(icon, str)
+            or rarity not in _AUGMENT_TINT_PALETTES
+            or not icon.startswith(f"{rel_prefix}/")
+            or not icon.endswith("_small.png")
+        ):
+            return
+        stem = icon.rsplit("/", 1)[-1][: -len("_small.png")]
+        name = f"{stem}_{rarity[1:].lower()}_tint{_AUGMENT_TINT_VERSION}.png"
+        key = f"{rel_prefix}/{name}"
+        if key not in made:
+            dest = assets_dir / name
+            if not dest.exists():
+                try:
+                    _tint_augment_icon(assets_dir / icon.rsplit("/", 1)[-1], dest, rarity)
+                except Exception as exc:  # keep the gray icon
+                    click.echo(f"[tierlist] WARN: failed to tint {icon}: {exc}")
+                    return
+            made[key] = key
+        node["icon"] = key
+
+    def walk(node) -> None:
+        if isinstance(node, dict):
+            if "rarity" in node and "icon" in node:
+                fix(node)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload)
+    if made:
+        click.echo(f"[tierlist] rarity-tinted {len(made)} gray augment icons")
+    return len(made)
+
 def _read_site_template(name: str) -> str:
     """Load a frontend template (site.css / site.js) shipped beside this script.
 
@@ -3457,6 +3544,7 @@ def render_html(
         validate_draft_public_payload(payload)
     if icon_assets_dir is not None:
         localize_cdragon_icons(payload, icon_assets_dir)
+        tint_gray_augment_icons(payload, icon_assets_dir)
     _dedupe_item_objects(payload)
     slim_stats = slim_site_payload(payload)
     click.echo(
