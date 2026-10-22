@@ -4730,18 +4730,15 @@
         }
     }
 
-    const OVERVIEW_MODE_KEY = 'aram-overview-mode';
     const quickOverviewRoutes = new Map();
-    function readOverviewMode() {
-        try { return localStorage.getItem(OVERVIEW_MODE_KEY) === 'compare' ? 'compare' : 'quick'; }
-        catch { return 'quick'; }
-    }
     function quickOverviewItem(item, core = false) {
         const name = itemDisplayName(item);
         return `<button type="button" class="quick-item has-item-tip${core ? ' is-core' : ''}" aria-label="${escHtml(name)}">${itemIconHtml(item, 'quick-item-icon', name)}<span>${escHtml(name)}</span>${core ? `<small class="quick-core-label">${escHtml(pickLang('核心', 'Core'))}</small>` : ''}${itemTipSource(buildItemTipHtml({name, items: [item]}))}</button>`;
     }
     function buildQuickOverview(cid, info) {
-        const groups = info.itemClusters?.groups || [];
+        // Routes rank by the same smoothed win rate the card shows for them.
+        const routeWr = g => Number(g.quickCore?.items?.length ? g.quickCore.wr : g.wr) || 0;
+        const groups = [...(info.itemClusters?.groups || [])].sort((a, b) => routeWr(b) - routeWr(a));
         const selected = Math.min(quickOverviewRoutes.get(String(cid)) || 0, Math.max(0, groups.length - 1));
         const group = groups[selected];
         const completion = group?.completion || [];
@@ -4757,31 +4754,22 @@
         const spell = info.spells?.top?.[0];
         const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
         const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}"><span>${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</span>${Number(g.pick) > 0 ? `<small>${escHtml(pickLang('選用', 'Pick'))} ${pct(g.pick)}</small>` : ''}</button>`).join('')}</div>` : '';
-        const buildNote = complete
-            ? pickLang(`核心後為常見搭配 · ${fmtInt(group.completionGames)} 場`, `Later items are common pairings · ${fmtInt(group.completionGames)} games`)
-            : pickLang('樣本不足，僅顯示核心', 'Not enough games for a full build; core only');
-        const buildNoteTip = complete
-            ? pickLang('核心之後依序取最常一起出的裝備；場數為同時持有這幾件（不含鞋子）的對局。後段請依對局調整。', 'After the core, each next item is the one most often built alongside; the count is games holding all of these (boots aside). Adapt the later items to the match.')
-            : '';
-        const basis = core.items.length === 3 ? pickLang('核心三件', 'Three-item core') : pickLang('核心兩件', 'Two-item core');
         const rate = Number(core.g) > 0 && Number.isFinite(core.wr)
-            ? `<div class="quick-build-rate" title="${escHtml(pickLang('依核心組合歷史勝率平滑估計；後續裝備與鞋子不計入此數字，並非單場勝負預測。', 'Smoothed historical win rate of this core combination; excludes later items and boots, not a prediction of a single match.'))}"><span>${escHtml(pickLang('預估勝率', 'Estimated win rate'))}</span><strong>${pct(core.wr)}</strong><small>${escHtml(basis)} · ${fmtInt(core.g)} ${escHtml(pickLang('場', 'games'))}</small></div>` : '';
-        const bootNote = boot ? `<p class="quick-note">${escHtml(pickLang('勝率', 'WR'))} ${pct(boot.wr)} · ${fmtInt(boot.g)} ${escHtml(pickLang('場', 'games'))}</p>` : `<p class="quick-note">${escHtml(pickLang('樣本不足', 'Not enough games'))}</p>`;
+            ? `<div class="quick-build-rate" title="${escHtml(pickLang('依核心組合歷史勝率平滑估計；後續裝備與鞋子不計入此數字，並非單場勝負預測。', 'Smoothed historical win rate of this core combination; excludes later items and boots, not a prediction of a single match.'))}"><span>${escHtml(pickLang('預估勝率', 'Estimated win rate'))}</span><strong>${pct(core.wr)}</strong></div>` : '';
         const rarities = [['kSilver', 'silver', '銀色', 'Silver'], ['kGold', 'gold', '金色', 'Gold'], ['kPrismatic', 'prismatic', '彩色', 'Prismatic']];
         const augments = rarities.map(([key, css, zh, en]) => {
-            const rows = (info.top?.[key] || []).slice(0, 3);
-            return `<section class="quick-rarity rarity-${css}"><h3>${escHtml(pickLang(zh, en))}<small>TOP 3</small></h3><ol>${rows.map(row => {
+            const rows = (info.top?.[key] || []).slice(0, 5);
+            return `<section class="quick-rarity rarity-${css}"><h3>${escHtml(pickLang(zh, en))}<small>TOP <span class="quick-top-wide">5</span><span class="quick-top-narrow">3</span></small></h3><ol>${rows.map(row => {
                 const aug = DATA.augs[row.id];
                 if (!aug) return '';
                 const name = augName(aug, row.id);
                 return `<li><button type="button" class="quick-augment has-item-tip" data-aug-id="${escHtml(String(row.id))}" aria-label="${escHtml(`${name} · ${pct(row.wr)}`)}"><span class="quick-augment-icon">${aug.icon ? `<img src="${escHtml(aug.icon)}" alt="" loading="lazy">` : ''}</span><span class="quick-augment-name">${escHtml(name)}</span><b class="wr-${wrToneTier(row)}">${pct(row.wr)}</b>${itemTipSource(buildAugTipHtml(row, false))}</button></li>`;
             }).join('')}</ol>${rows.length ? '' : missing}</section>`;
         }).join('');
-        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '推薦出裝' : '推薦核心', complete ? 'Recommended build' : 'Recommended core'))}</h3>${choices}<div class="quick-build-line"><div class="quick-items">${items.map(item => quickOverviewItem(item, coreIds.has(Number(item.id)))).join('') || missing}</div>${rate}</div><p class="quick-note"${buildNoteTip ? ` title="${escHtml(buildNoteTip)}"` : ''}>${escHtml(buildNote)}</p></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('鞋子', 'Boots'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div>${bootNote}</section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(item => quickOverviewItem(item)).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>${groups.length ? `<p class="quick-more"><button type="button" data-overview-mode="compare">${escHtml(groups.length > 1 ? pickLang(`比較全部 ${groups.length} 條路線`, `Compare all ${groups.length} build paths`) : pickLang('查看完整數據', 'See full stats'))}<span aria-hidden="true"> →</span></button></p>` : ''}`;
+        return `<div class="quick-loadout"><section class="quick-build"><h3>${escHtml(pickLang(complete ? '推薦出裝' : '推薦核心', complete ? 'Recommended build' : 'Recommended core'))}</h3>${choices}<div class="quick-build-line"><div class="quick-items">${items.map(item => quickOverviewItem(item, coreIds.has(Number(item.id)))).join('') || missing}</div>${rate}</div></section><div class="quick-utilities"><section><h3>${escHtml(pickLang('鞋子', 'Boots'))}</h3><div class="quick-items">${boot ? quickOverviewItem(boot) : missing}</div></section><section><h3>${escHtml(pickLang('召喚師技能', 'Summoner spells'))}</h3><div class="quick-items">${(spell?.items || []).map(item => quickOverviewItem(item)).join('') || missing}</div></section></div></div><div class="quick-augments">${augments}</div>`;
     }
-    function buildOverviewModes(cid, info, comparison) {
-        const mode = readOverviewMode();
-        return `<div class="champ-overview" data-overview-cid="${escHtml(String(cid))}"><div class="overview-mode-switch" role="group" aria-label="${escHtml(pickLang('概覽模式', 'Overview mode'))}">${[['quick', '快速推薦', 'Quick picks'], ['compare', '詳細比較', 'Compare builds']].map(([key, zh, en]) => `<button type="button" data-overview-mode="${key}" aria-pressed="${mode === key}">${escHtml(pickLang(zh, en))}</button>`).join('')}</div><div class="quick-overview"${mode === 'quick' ? '' : ' hidden'}>${buildQuickOverview(cid, info)}</div><div class="compare-overview"${mode === 'compare' ? '' : ' hidden'}>${comparison}</div></div>`;
+    function buildQuickOverviewPanel(cid, info) {
+        return `<div class="champ-overview" data-overview-cid="${escHtml(String(cid))}"><div class="quick-overview">${buildQuickOverview(cid, info)}</div></div>`;
     }
     document.addEventListener('click', event => {
         const retry = event.target.closest('[data-augment-stats-retry]');
@@ -4789,23 +4777,6 @@
             fullAugmentStatsFailed = false;
             if (retry.closest('#augch-host')) renderAugChamps();
             else renderAugDraft();
-            return;
-        }
-        const modeButton = event.target.closest('[data-overview-mode]');
-        if (modeButton) {
-            const mode = modeButton.dataset.overviewMode;
-            try { localStorage.setItem(OVERVIEW_MODE_KEY, mode); } catch {}
-            document.querySelectorAll('.champ-overview').forEach(host => {
-                host.querySelector('.quick-overview').hidden = mode !== 'quick';
-                host.querySelector('.compare-overview').hidden = mode !== 'compare';
-                host.querySelectorAll('.overview-mode-switch [data-overview-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.overviewMode === mode)));
-            });
-            // A link inside the panel it just hid would drop focus; hand it to the switch.
-            if (!modeButton.closest('.overview-mode-switch')) {
-                const host = modeButton.closest('.champ-overview');
-                host.querySelector('.overview-mode-switch [aria-pressed="true"]')?.focus({preventScroll: true});
-                host.scrollIntoView({block: 'start'});
-            }
             return;
         }
         const route = event.target.closest('[data-quick-route]');
@@ -5459,7 +5430,7 @@
             }).join('');
             const labels = tabs.map(tab => {
                 const inputId = `${name}-${tab.key}`;
-                return `<label class="detail-tab-label" id="${inputId}-label" role="tab" for="${inputId}">${escHtml(tab.label)}</label>`;
+                return `<label class="detail-tab-label${tab.groupStart ? ' is-group-start' : ''}" id="${inputId}-label" role="tab" for="${inputId}">${escHtml(tab.label)}</label>`;
             }).join('');
             const panels = tabs.map(tab => {
                 const inputId = `${name}-${tab.key}`;
@@ -5479,15 +5450,16 @@
             `;
         };
         const mainTabLabels = currentLang === 'en'
-            ? { overview: 'Overview', items: 'Items', augments: 'Augments', compfit: 'Abilities' }
-            : { overview: zhUi('概覽'), items: zhUi('出裝'), augments: zhUi('增幅裝置'), compfit: zhUi('英雄能力') };
+            ? { overview: 'Overview', compare: 'Compare', items: 'Items', augments: 'Augments', pools: 'Augment pools', compfit: 'Other' }
+            : { overview: zhUi('概覽'), compare: zhUi('詳細比較'), items: zhUi('裝備'), augments: zhUi('增幅裝置'), pools: zhUi('增幅池'), compfit: zhUi('其他') };
         const bootItemTitle = pickLang('推薦鞋子', 'Recommended Boots');
         const bootItemMeta = pickLang('勝率 · 選取率', 'WR · pick');
         const spellRailTitle = pickLang('召喚師技能組合', 'Summoner Spell Pairs');
         const spellRailMeta = pickLang('勝率 · 選取率', 'WR · pick');
-        // \u6982\u89bd: the hero carries the headline numbers; this is a two-column split \u2014 build routes
-        // on the left, a compact boots rail filling the space on the right.
-        const overviewTabContent = buildOverviewModes(cid, info, `
+        const overviewTabContent = buildQuickOverviewPanel(cid, info);
+        // Compare: two-column split \u2014 build routes on the left, a compact boots rail
+        // filling the space on the right.
+        const compareTabContent = `
             <div class="overview-split">
                 <div class="overview-split-main">
                     ${buildCoreGroupSection(
@@ -5505,7 +5477,7 @@
                     })}
                 </div>
             </div>
-        `);
+        `;
         // \u51fa\u88dd: single items + first-two items stacked (no sub-tabs).
         const itemTabContent = `
             ${buildSingleItemPanel(singleItemTitle, singleItemMeta, singleItemInfo)}
@@ -5535,11 +5507,12 @@
             : buildChampHero(cid, info, overview, copy);
         const detailTabs = buildDetailTabSet('main', [
             { key: 'overview', label: mainTabLabels.overview, content: overviewTabContent },
+            { key: 'compare', label: mainTabLabels.compare, content: compareTabContent },
             { key: 'items', label: mainTabLabels.items, content: itemTabContent },
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
-            { key: 'pools', label: pickLang('增幅池', 'Augment pools'), content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
+            { key: 'pools', label: mainTabLabels.pools, groupStart: true, content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
-        ].filter(tab => !opts.inline || ['overview', 'items', 'augments', 'pools'].includes(tab.key)), 'detail-main-tabs');
+        ].filter(tab => !opts.inline || ['overview', 'compare', 'items', 'augments', 'pools'].includes(tab.key)), 'detail-main-tabs');
         return heroHtml + detailTabs;
     }
 
@@ -11130,7 +11103,7 @@
     const CHAMP_TAB_KEY = 'aram-detail-tab';
     const RECENT_CHAMPS_KEY = 'aram-recent-champs';
     const RECENT_CHAMPS_MAX = 8;
-    const CHAMP_PAGE_TABS = ['overview', 'items', 'augments', 'pools', 'compfit'];
+    const CHAMP_PAGE_TABS = ['overview', 'compare', 'items', 'augments', 'pools', 'compfit'];
     const CHAMP_SEARCH_LIMIT = 8;
     let champPageSlugNow = '';
     let champPageToken = 0;
@@ -11382,7 +11355,7 @@
     document.addEventListener('change', ev => {
         const t = ev.target;
         if (!t || !t.matches || !t.matches('.detail-page .detail-tab-input[id^="detail-main-"]')) return;
-        const m = /-(overview|items|augments|pools|compfit)$/.exec(t.id);
+        const m = /-(overview|compare|items|augments|pools|compfit)$/.exec(t.id);
         if (!m) return;
         try { localStorage.setItem(CHAMP_TAB_KEY, m[1]); } catch {}
     });
