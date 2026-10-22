@@ -80,7 +80,10 @@ class PlayerHistoryUiTests(unittest.TestCase):
         self.assertIn("aria-live='polite'", html)
         self.assertIn("data-i18n-zh-cn=", html)
         self.assertIn("data-i18n-en=", html)
-        self.assertEqual(len(re.findall(r"class='nav-tab(?: |')", html)), 5)
+        self.assertEqual(len(re.findall(r"class='nav-tab(?: |')", html)), 4)
+        self.assertNotIn("id='tab-game'", html)
+        self.assertIn("id='header-search'", html)
+        self.assertEqual(html.count("data-role-seg="), 7)
 
     def test_hidden_metadata_does_not_canonicalize_home(self) -> None:
         html = render_shell(

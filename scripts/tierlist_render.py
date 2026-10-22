@@ -701,8 +701,52 @@ li + li { margin-top: 8px; }
 """
 
 
-def _site_header_html() -> str:
-    """Canonical product header shared by the app and feedback page."""
+def _header_role_search_html() -> str:
+    """Header search popover: name search + one segmented row of role icons.
+
+    Segments proxy the home view's role chips (site.js clicks the matching
+    .chip), so filter state, analytics and badge refresh stay in one place.
+    """
+    search_icon = (
+        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<circle cx='11' cy='11' r='7'></circle>"
+        "<line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg>"
+    )
+    segs = [
+        "<button type='button' class='role-seg is-active' data-role-seg='' "
+        "aria-pressed='true' title='全部' aria-label='全部'>"
+        "<span class='role-seg-icon role-seg-all' aria-hidden='true'></span></button>"
+    ]
+    for role_en in ROLE_ORDER:
+        role_zh = ROLE_LABELS.get(role_en, {}).get("zh", role_en)
+        segs.append(
+            f"<button type='button' class='role-seg' data-role-seg='{html.escape(role_en)}' "
+            f"aria-pressed='false' title='{html.escape(role_zh)}' aria-label='{html.escape(role_zh)}'>"
+            f"<span class='role-seg-icon role-seg-{role_en.lower()}' aria-hidden='true'></span></button>"
+        )
+    return (
+        "<details class='header-search' id='header-search'>"
+        "<summary class='icon-btn header-search-toggle' title='搜尋英雄' aria-label='搜尋英雄'>"
+        f"{search_icon}</summary>"
+        "<div class='header-search-panel'>"
+        "<input class='header-search-input' id='header-champ-search' type='search' "
+        "placeholder='搜尋英雄名稱（中 / 英）' autocomplete='off' spellcheck='false' "
+        "aria-label='搜尋英雄名稱'>"
+        "<div class='role-seg-bar' role='group' aria-label='依職業篩選英雄'>"
+        f"{''.join(segs)}</div>"
+        "</div></details>"
+    )
+
+
+def _site_header_html(*, patch_label: str = "", role_search: bool = False) -> str:
+    """Canonical product header shared by the app and feedback page.
+
+    ``patch_label`` (e.g. "16.21") names the patch-changes tab; pages that do
+    not know the build patch fall back to 版本變動.  ``role_search`` adds the
+    header role-filter popover, which needs the app runtime (site.js).
+    """
     parts: list[str] = []
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -724,8 +768,8 @@ def _site_header_html() -> str:
         ("champions", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
         ("draft", "選角", "Draft", "选角"),
-        ("game", "小遊戲", "Game", "小游戏"),
-        ("changes", "版本變動", "Patch Changes", None),
+        # Meta Pick (#game) is still routable but no longer a header tab.
+        ("changes", patch_label or "版本變動", patch_label or "Patch Changes", None),
         # 專欄 is unpublished; keep its draft source out of the public shell.
         # ("column", "專欄", "Articles", None),
     )
@@ -776,6 +820,8 @@ def _site_header_html() -> str:
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
+    if role_search:
+        parts.append(_header_role_search_html())
     parts.append(
         "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
         "type='button' title='切換淺色' aria-label='切換主題'>"
@@ -3768,7 +3814,7 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    parts.append(_site_header_html())
+    parts.append(_site_header_html(patch_label=display_patch, role_search=True))
     parts.append("<main class='site-main'>")
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(

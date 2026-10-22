@@ -10849,6 +10849,7 @@
         if (sideClose) sideClose.setAttribute('aria-label', copy.closeRecs);
         syncLangMenu();
         syncThemeToggleLabels();
+        if (typeof syncHeaderSearchLabels === 'function') syncHeaderSearchLabels();
 
         // Static chrome strings (nav tabs, augment placeholder) carry their
         // own zh/en text via data-i18n-* attributes; zh-CN falls back to t2s(zh).
@@ -12097,6 +12098,11 @@
         document.querySelectorAll('.chip').forEach(chip => {
             chip.classList.toggle('active', chip.getAttribute('data-role') === role);
         });
+        document.querySelectorAll('[data-role-seg]').forEach(seg => {
+            const on = seg.getAttribute('data-role-seg') === role;
+            seg.classList.toggle('is-active', on);
+            seg.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
     }
 
     // Role chip clicks (event delegation).  "All" chip (data-role="") already
@@ -12122,6 +12128,73 @@
         });
         trackEvent('role_filter_click', { role: filterState.role || 'all' });
     });
+
+    // Header search popover: the role segments and name box proxy the list
+    // view's own chips / #champ-search, so filtering logic stays single-sourced.
+    const headerSearch = document.getElementById('header-search');
+    function showChampionList() {
+        const list = document.getElementById('view-home');
+        if (!list?.classList.contains('is-active')) setActiveView('champions', false, 'push');
+    }
+    if (headerSearch) {
+        const headerInput = document.getElementById('header-champ-search');
+        headerSearch.addEventListener('toggle', () => {
+            if (!headerSearch.open) return;
+            const listInput = document.getElementById('champ-search');
+            if (headerInput && listInput) headerInput.value = listInput.value;
+            headerInput?.focus({ preventScroll: true });
+        });
+        document.addEventListener('click', (ev) => {
+            const seg = ev.target.closest('[data-role-seg]');
+            if (seg) {
+                const role = seg.getAttribute('data-role-seg') || '';
+                showChampionList();
+                document.querySelector(`.role-chips .chip[data-role="${CSS.escape(role)}"]`)?.click();
+                headerSearch.open = false;
+                return;
+            }
+            if (headerSearch.open && !headerSearch.contains(ev.target)) headerSearch.open = false;
+        });
+        headerInput?.addEventListener('input', () => {
+            const listInput = document.getElementById('champ-search');
+            if (!listInput) return;
+            showChampionList();
+            listInput.value = headerInput.value;
+            listInput.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        headerSearch.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                headerSearch.open = false;
+                headerSearch.querySelector('summary')?.focus();
+            } else if (ev.key === 'Enter' && ev.target === headerInput) {
+                headerSearch.open = false;
+            }
+        });
+    }
+    function syncHeaderSearchLabels() {
+        if (!headerSearch) return;
+        const pick = (zh, en) => currentLang === 'en' ? en : (currentLang === 'zh-CN' ? t2s(zh) : zh);
+        headerSearch.querySelectorAll('[data-role-seg]').forEach(seg => {
+            const role = seg.getAttribute('data-role-seg');
+            const zh = role ? (ROLE_LABELS.zh?.[role] || role) : '全部';
+            const en = role ? (ROLE_LABELS.en?.[role] || role) : 'All';
+            const label = pick(zh, en);
+            seg.setAttribute('title', label);
+            seg.setAttribute('aria-label', label);
+        });
+        const toggle = headerSearch.querySelector('summary');
+        const toggleLabel = pick('搜尋英雄', 'Search champions');
+        toggle?.setAttribute('title', toggleLabel);
+        toggle?.setAttribute('aria-label', toggleLabel);
+        const input = document.getElementById('header-champ-search');
+        if (input) {
+            input.placeholder = pick('搜尋英雄名稱（中 / 英）', 'Search champion (EN / 中文)');
+            input.setAttribute('aria-label', pick('搜尋英雄名稱', 'Search champion name'));
+        }
+        headerSearch.querySelector('.role-seg-bar')
+            ?.setAttribute('aria-label', pick('依職業篩選英雄', 'Filter champions by class'));
+    }
+    syncHeaderSearchLabels();
 
     // Keyboard activation for cards.  Enter / Space on a `.champ` or `.aug`
     // triggers the same path a click would (they're role="button" /
