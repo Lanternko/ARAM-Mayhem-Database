@@ -97,6 +97,14 @@ class SiteSearchContractTests(unittest.TestCase):
         for alias in ("腎", "莫甘娜", "模乾那", "EZ", "火人", "死歌", "死哥"):
             self.assertIn(alias, self.render)
 
+    def test_header_query_filters_role_grid(self) -> None:
+        start = self.js.index("function renderHeaderRoleGrid(role)")
+        block = self.js[start:start + 3000]
+        self.assertIn("getElementById('header-champ-search')", block)
+        self.assertIn("searchMatchesText(card.getAttribute('data-champion-search')", block)
+        self.assertIn("header-role-empty", block)
+        self.assertIn("else if (headerInput.value.trim()) renderHeaderRoleGrid('')", self.js)
+
     def test_champion_scope_does_not_use_detail_item_or_augment_blob(self) -> None:
         self.assertIn("data-champion-search", self.render)
         self.assertIn("const championBlob = c.getAttribute('data-champion-search')", self.js)

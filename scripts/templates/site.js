@@ -12143,7 +12143,8 @@
     }
     // Clicking a role segment drops an icon-only grid of that role's champions
     // (All = every champion), ordered by tier then win rate.  Clicking the
-    // active segment again folds it away.
+    // active segment again folds it away.  The header name box narrows the
+    // same grid, so role and name combine.
     let headerRoleGridRole = null;
     function renderHeaderRoleGrid(role) {
         const grid = document.getElementById('header-role-grid');
@@ -12155,6 +12156,7 @@
             seg.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
         if (role === null) { grid.hidden = true; grid.replaceChildren(); return; }
+        const q = (document.getElementById('header-champ-search')?.value || '').trim();
         const tierRank = new Map();
         const cards = [];
         document.querySelectorAll('#view-home .tier-block').forEach(block => {
@@ -12164,6 +12166,7 @@
             block.querySelectorAll('.tier-grid > .champ').forEach(card => {
                 const tags = (card.getAttribute('data-tags') || '').split(' ');
                 if (role && !tags.includes(role)) return;
+                if (q && !searchMatchesText(card.getAttribute('data-champion-search') || '', q)) return;
                 cards.push({ card, tierColor, rank: tierRank.get(tier), wr: parseFloat(card.getAttribute('data-wr')) || 0 });
             });
         });
@@ -12187,6 +12190,12 @@
             a.appendChild(img);
             return a;
         }));
+        if (!cards.length) {
+            const empty = document.createElement('p');
+            empty.className = 'header-role-empty';
+            empty.textContent = currentLang === 'en' ? 'No matching champions' : (currentLang === 'zh-CN' ? t2s('沒有符合的英雄') : '沒有符合的英雄');
+            grid.replaceChildren(empty);
+        }
         grid.hidden = false;
         grid.scrollTop = 0;
     }
@@ -12221,13 +12230,19 @@
             showChampionList();
             listInput.value = headerInput.value;
             listInput.dispatchEvent(new Event('input', { bubbles: true }));
+            // Typing with no role picked opens the All grid so matches show here.
+            if (headerRoleGridRole !== null) renderHeaderRoleGrid(headerRoleGridRole);
+            else if (headerInput.value.trim()) renderHeaderRoleGrid('');
         });
         headerSearch.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape') {
                 headerSearch.open = false;
                 headerSearch.querySelector('summary')?.focus();
             } else if (ev.key === 'Enter' && ev.target === headerInput) {
+                // Enter on a name opens the top hit; on a blank box it just closes.
+                const first = headerInput.value.trim() && document.querySelector('#header-role-grid [data-hdr-cid]');
                 headerSearch.open = false;
+                if (first) openChampByCid(first.getAttribute('data-hdr-cid'));
             }
         });
     }

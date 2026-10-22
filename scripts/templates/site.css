@@ -4668,6 +4668,13 @@
         padding-right: 2px;
     }
     .header-role-grid[hidden] { display: none; }
+    .header-role-empty {
+        grid-column: 1 / -1;
+        margin: 6px 0;
+        color: var(--text-muted, var(--text));
+        font-size: 13px;
+        text-align: center;
+    }
     .header-role-champ {
         display: block;
         aspect-ratio: 1;
