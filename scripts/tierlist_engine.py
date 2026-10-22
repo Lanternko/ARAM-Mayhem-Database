@@ -34,6 +34,7 @@ import click
 import httpx
 
 from aram_nn import patch_snapshot
+from aram_nn.site.augment_strings import augment_description_text
 from aram_nn.site.item_families import canonical_item_id, item_families_payload
 from aram_nn.site.augment_taxonomy import (
     AUGMENT_CATEGORY_ORDER,
@@ -1048,10 +1049,10 @@ def load_augment_descriptions(
         # Prefer the *Summary (DescriptionTra) — it tends to be a short clean
         # blurb with no @placeholders.  Fall back to Tooltip if missing.
         raw = ""
-        if desc_key and desc_key in entries:
-            raw = entries[desc_key]
-        if not raw and tip_key and tip_key in entries:
-            raw = entries[tip_key]
+        if desc_key:
+            raw = augment_description_text(entries, desc_key, locale=locale)
+        if not raw and tip_key:
+            raw = augment_description_text(entries, tip_key, locale=locale)
         cleaned = _clean_desc(raw)
         if cleaned:
             out[pid] = cleaned
