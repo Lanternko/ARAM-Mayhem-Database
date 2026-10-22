@@ -413,76 +413,6 @@
         gap: 8px;
         max-width: 100%;
     }
-    .search-scope {
-        /* Own opt-in: .search-rail is pointer-events:none, and this control
-           must stay clickable even when it is a direct child of the rail. */
-        pointer-events: auto;
-        position: relative;
-        flex: 0 0 auto;
-    }
-    .search-scope > summary {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        min-height: 40px;
-        padding: 0 10px;
-        background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
-        color: var(--text-muted);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 650;
-        white-space: nowrap;
-        list-style: none;
-        transition: background-color .12s var(--ease), color .12s var(--ease),
-                    border-color .12s var(--ease), box-shadow .12s var(--ease);
-    }
-    .search-scope > summary::-webkit-details-marker { display: none; }
-    .search-scope > summary:hover,
-    .search-scope[open] > summary {
-        color: var(--text);
-        border-color: var(--accent);
-        background: color-mix(in srgb, var(--surface-raised) 100%, transparent);
-    }
-    .search-scope[open] > summary svg { transform: rotate(180deg); }
-    .search-scope > summary svg { transition: transform .16s var(--ease); }
-    .search-scope-menu {
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 48;
-        display: grid;
-        gap: 4px;
-        width: max-content;
-        min-width: 230px;
-        padding: 6px;
-        background: var(--surface);
-        border: 1px solid var(--border-strong, var(--border));
-        border-radius: 8px;
-        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
-    }
-    .search-scope-option {
-        display: grid;
-        gap: 2px;
-        width: 100%;
-        padding: 9px 10px;
-        background: transparent;
-        color: var(--text);
-        border: 1px solid transparent;
-        border-radius: 6px;
-        cursor: pointer;
-        font: inherit;
-        text-align: left;
-    }
-    .search-scope-option:hover,
-    .search-scope-option.is-active {
-        background: color-mix(in srgb, var(--accent) 12%, var(--surface));
-        border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-    }
-    .search-scope-option > span { font-size: 12px; font-weight: 700; }
-    .search-scope-option > small { color: var(--text-muted); font-size: 11px; line-height: 1.35; }
     .role-chips {
         display: flex;
         flex-wrap: wrap;
@@ -3970,7 +3900,6 @@
             max-width: none;
             min-width: 0;
         }
-        .search-scope-menu { max-width: calc(100vw - 24px); }
         .tool-btn { min-height: 36px; }
         .updates-panel {
             margin: 0 0 14px;
@@ -4306,8 +4235,6 @@
     .pick-chip:focus-visible,
     .rec-row:focus-visible,
     .search:focus-visible,
-    .search-scope > summary:focus-visible,
-    .search-scope-option:focus-visible,
     .champ:focus-visible,
     .item-build-card:focus-visible,
     .aug:focus-visible {
@@ -4650,6 +4577,176 @@
         transform: rotate(-45deg);
         flex-shrink: 0;
     }
+
+    /* Header search popover: name box + segmented role bar (All + 6 classes).
+       Segments proxy the champion list's role chips. */
+    .site-header .header-search {
+        position: relative;
+        display: inline-flex;
+    }
+    .site-header .header-search > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 8px;
+        line-height: 0;
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        color: var(--accent);
+        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: var(--r-sm);
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
+    }
+    .site-header .header-search > summary::-webkit-details-marker { display: none; }
+    .site-header .header-search > summary::marker { content: ''; }
+    .site-header .header-search > summary:hover {
+        background: color-mix(in srgb, var(--accent) 20%, transparent);
+        border-color: var(--accent);
+    }
+    .site-header .header-search[open] > summary {
+        color: var(--accent-on);
+        background: var(--accent);
+        border-color: var(--accent);
+    }
+    .site-header .header-search > summary:active { transform: scale(0.96); transition-duration: var(--dur-1); }
+    .site-header .header-search-panel {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 80;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px;
+        max-width: calc(100vw - 32px);
+        background: var(--surface-raised, #1a1d21);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--r-md, 10px);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.2);
+        isolation: isolate;
+    }
+    .site-header .header-search-input {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        font: inherit;
+        font-size: 13px;
+        color: var(--text);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm, 6px);
+    }
+    .site-header .header-search-input:focus { outline: none; border-color: var(--accent); }
+    .role-seg-bar {
+        display: inline-flex;
+        align-self: flex-start;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--r-sm, 6px);
+        overflow: hidden;
+    }
+    .role-seg {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 38px;
+        padding: 0;
+        border: 0;
+        border-left: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease);
+    }
+    .role-seg:first-child { border-left: 0; }
+    .role-seg:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .role-seg.is-active {
+        color: var(--accent-soft);
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+    }
+    .role-seg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .role-seg-icon {
+        width: 22px;
+        height: 22px;
+        background: currentColor;
+        -webkit-mask: var(--role-mask) center / contain no-repeat;
+        mask: var(--role-mask) center / contain no-repeat;
+    }
+    .header-role-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+        gap: 4px;
+        max-height: min(320px, 55vh);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: 2px;
+    }
+    .header-role-grid[hidden] { display: none; }
+    .header-role-empty {
+        grid-column: 1 / -1;
+        margin: 6px 0;
+        color: var(--text-muted, var(--text));
+        font-size: 13px;
+        text-align: center;
+    }
+    .header-role-champ {
+        display: block;
+        aspect-ratio: 1;
+        border-radius: var(--r-sm, 6px);
+        overflow: hidden;
+        background: var(--surface-2);
+        /* Tier-coloured square frame, drawn inside the box so it never adds layout. */
+        outline: 2px solid var(--tier-color, var(--border));
+        outline-offset: -2px;
+        transition: outline-color var(--dur-2) var(--ease), filter var(--dur-2) var(--ease);
+    }
+    .header-role-champ img { display: block; width: 100%; height: 100%; object-fit: cover; }
+    /* No scale on hover: a scaled edge tile overflows the scrolling grid,
+       flashes a scrollbar and reflows the grid out from under the cursor. */
+    .header-role-champ:hover,
+    .header-role-champ:focus-visible { outline-color: var(--text); filter: brightness(1.12); }
+    /* Home role filter reuses the header's connected segments; active tint
+       keeps each role's own color. (0,4,0) beats the light-theme chip rules. */
+    .role-chips .role-chip-bar { align-self: center; flex: 0 0 auto; }
+    .filter-bar .role-chip-bar .chip.role-seg {
+        width: auto;
+        min-height: 0;
+        height: 34px;
+        gap: 6px;
+        padding: 0 12px;
+        border: 0;
+        border-left: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .filter-bar .role-chip-bar .chip.role-seg:first-child { border-left: 0; }
+    .filter-bar .role-chip-bar .chip.role-seg:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .filter-bar .role-chip-bar .chip.role-seg.active {
+        color: var(--role-color);
+        background: color-mix(in srgb, var(--role-color) 20%, transparent);
+    }
+    .role-chip-bar .role-seg-icon { width: 18px; height: 18px; flex: none; }
+    /* Labels only fit beside the sticky search rail on wide screens. */
+    @media (max-width: 1080px) {
+        .filter-bar .role-chip-bar .chip.role-seg { width: 42px; height: 36px; padding: 0; }
+        .role-chip-bar .chip-label { display: none; }
+        .role-chip-bar .role-seg-icon { width: 20px; height: 20px; }
+    }
+    .role-seg-all { --role-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9'/%3E%3C/g%3E%3C/svg%3E"); width: 18px; height: 18px; }
+    .role-seg-assassin { --role-mask: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAAFEElEQVR42q3YXYwdZRkH8N/MnO1qt27Nsu22mFJtitINFWxaP0hqA9oGJVEsGAXRopFEYmJiDEaj3phgonitJqi3JmrUiKGBGCCAJIg2trXSAhqCLbLCGgNddXvOzOPFvGd6Zre73W53zs0578fzf5+v//ufw1KffJFfK/AUeKNve9Lv3WMsjazY08FWx0T6HPe2NLpip7/SC8IZpdIZ4UVXrxREgR2mhF7jQU94xa6VCFSOy73UMn8WYvJi053JrXF0nvk+xHGjctnFJfdbwpl55iON3nMxYcqw1j+VqnMCVCrTxtLKJbXPfIC3WLdgEDKZMVsWt3I+gFWL+hgYvhACmP+MolpwtkorXEyIFgMIbFl+DmDneUthRwJaVhUNOSGU56yhSDPPWbW4DwtTRGbPoub7EPtky+mFDu4TukKpN6cXKj1l6ucHlkN7HXwwnbBsjMacb/3ZD10oRIFL/V2l1BMed8BMA1UK/3W7R4SeUuWUTRdCGQU2OiqUSuExa3Gd083If+zDGzzSjBzzpoUhslaxFtiQGLRSecH61K/Xek2ozNibRsY933h5zKVzIBLF5I3Zs+YPN8kNN6b4drDH/3S9b2DkhpTorvDnFkTR77Mh99qFXK7AhCNpQ094IhVsP/F7Xd8kNNPBoy2IjSjkcrzbjw3B38z6QsKdaE5fb/tsq4nyOd2fyRxorqOucNTGNPdFXX+tvx4SwkGbjA2Yr7dcgTebbPKUN65nJm3BVrNN4dYQ4zZ7UAiHaoAjqqQUnm5OUymFk9biVj+YV+cdfM8BrPF8U0v17me8JMyqHOm7mymUNrpClU6YCZw2g9VusUY5EKpMabVbrcGM04imWCqXm1DqDNZQPRUqucC0BxUoFHjVqDvEQAnmwmes9e8maIWHTSegqrUWf2hRWiW8ZtJxYco67FZ52YaBPOTWm1K5FmNOCc/a7tUWnZTCUzXAz1uypBJK494jdO3AOi8LP8WQTGYIPxH+ZQO2mxXe6xJlC6Ar/KwGuKtVOZXQsw3fED4nw6+Uwucbn+8USvcj82nhm9imNw/grnr5Vap5wmRSjof8EXxY6Orab8SIG3V1hZvBEx5D7spziJqr+s3ylGpOkHajcIlnvBNDDjeFezIV5THDuNpz1suxu3X+nsqTMlld0Z+aJ21vS5Jll+/Kkw9nL52ecBMy33FNWnnbPBufrPslk3udvwz40BXuRkeOa7wV/CJB1Nz5axm2Jk87uHsgkzW7Dvf5tEi31+D0/alHcqxW4JYWR92OwsjAqoMDHnSF6wfJu8CPGgOVMGU00VyWePNI60Z72qqBWUZNtRjph+27IZMb8afmDKWwt9EKRSrldoS/1pgoZPY18F3hkJE+yeeNQpux34sKZdJyN7fk1JaWvApsbim8j6VdpY6TPmJGzJVjBd7uH0JXJbxirC4zGSZMN4xZKVMXZ6nMx00Lla5wyvaFbucC25xITRW+3JB0gS81QeqluaIh7q80e+r3z2IxPTHhoFDqmjKWLr+6lE+olEqVZ70+lWAuN25KVyn8xrrzyZcCma+nl6bvU9+qCuwXenrCRxszQ7hXCLO+urT/AOq47/SQSJriLMTDQni0Zf4mIfzWO5q9S5RefMJRYU9KZoGdKuFd6VeO64TDPt6SPkt8P84w7E6/8wGFPBn4pfsa84UbPO6OJN/z5b3jM2yfzbL02eSy5vtl3j8QvmW+gnSWoMMXjfv/AU871EFo9EIpAAAAAElFTkSuQmCC"); }
+    .role-seg-fighter { --role-mask: url("data:image/png;base64,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"); }
+    .role-seg-mage { --role-mask: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAAEA0lEQVR42sXXTahVVRQH8N/5eC+l8qMSgyCcKEUFUkgflOAkkAZFXxThIAozI5sVVIMGQdGwQRAEfUBgUdGjpCAisQZREIXYpDAVxRJTE18+7z177wZnv+O9Vr6X90J7weXsc/dee63/Wv+112F+o1KC2n8c1TzWFCpBcq1NDvtNYayjVbfWNjM2kD0Zq/qFXpEkG+bp8X9SX1hihyR5BxPGPEqFjyUzohsV47a/wv2SU5JfLUKhHGcMSnwp6El+s1A1Xg8KLHNUEgXJA2C9NePKpBKrBEkUJTO2mhJ9oxyPJyVWmJFEqZNG8vi5MPrfGLBHEiRJ1NcIgmMuV4wDpgrvZsVxyIcPxkO5CndJepJkeuiIO8dxRKGwwG7Jdg/a10UjiPZarBy97JVY7z68kC1vpS95eTyhbsctA6GOGabgxvHANGGhH7L9MR/Szr4zoRoVpgpPZ1AayWtez099yZOj+lDiCn8Koij43VIXO9LNp60cjREl3s/W9iUPg00Db7aO4kOJy82IokbyBSqVwg5JI4qmXXbuxa/C+pz30bSryIXuGn9mkJJbz+7DXGcvyNQqvG2XShRUdtqqyDm1YG4YzjYOdEH8sUvJQmkXklLhwOilIupJPu6YW+NTSU/0k/MU586FChslfU3OoVqd86jRkzw0GhPaPuI9SU8w43pwk1P5pt46/wyqBmSwShZKi/yYi/ZeF1piX57tdMHf1g7qmSP4dbatwtWOC/qSj2yT9AV/uLKD5/TqfwxkMukGlYTkpGN+dbyzKag17vWOJndFUVS72/tqjUqUwCKXWmKhAoXgaz1Fa8O6gWs9Cfb73LNWd4fUeDFb3nryPOoOoNWe8bn9uaTPyrrWwxoviU6JmbOzC6LP3JYTs1b4RNJocspWOWlv89nQnlbLKdFLbUoXSt8P3VdR0Ojn2ZSVmFC4xC+S5GcXKUxgpanujmuEM1qD72c9XKUnZOvjkA+NIDniHkxijaDvujy7xxFJGDJtVoKgZ1Ub6C1DyLVRON2qtNufwAI85tH89MTAv1Gjf0YEkmRLe8CbDjnoUJajQ5d76GzcnO1ufzd3/oUOzKRxtNNz0CFvtf3bUmVONAq1RVa41jo3Ox9BJYkqd5gyiZ7bfSgoFYIK077yhe/scVwzoCs6ejayrfCU3V0nFJywBqxxIr9Jkt2esmLuqjkopapj5mLPOdnBccByyx3oYDvpOYs7LrdFZljmLBetxbs6Bnzr2+55V/aoHuXaL0xime0ZqNR9kGy3DJPj+2qeytndMmZqvtvqOYp4sNYjkiazskBSKL2hVnjVDpVwrlbX+Uabpd9pmX23cS4j5+6P41kbhDgaRAmH7dT847pG7XBe9f+NvwAOuj7MXee/zwAAAABJRU5ErkJggg=="); }
+    .role-seg-marksman { --role-mask: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAAEZklEQVR42s3YS6hVVRgH8N/e+5zrzeyiUKkIQqQYZKWDTGnWQHqgEx9JClFa2ayBEDQRGjRIKKMoiqiJAzFCCAoh6trISYQQ1cB8NQj1JpbezHvO2ftrcNbd3Zd6Dt2gdWCz9l7re/2/9T3W4X80ciy3PM36IOpn74te7JOqj5HJnXBCLpsNdsUUNgXWqFTWpLeJoot+IcqVYhJZhidlMk+mt39Eh/L6ImYW+oC95qBIKmQYdEoIpwzWInIFbvGq+3r3TZfZb773eA1OIbNeKJXC+gRKV+sn/OC8ObLefVPgLSEctKz+8pHQ1hY+rpnf7aAQ3kCjHwfzmEpb+MPLBjDkglCphAuG0LTHJaGt8ug0x98UpCHnhL+EswbwjNAR6fksBpwVrgnnDE1x/E1OUShcNpyIvtDCLYi0yiBaPk/7v3FZkVZ7Dim2CVeVtqGJT4WOjvBp+rJV6ZqwnX7CL8dcDFhhmeUGNTTl5vtZCD+bL9fUMGi5Fe4xkCh6OqYNbLJZPmV7hjVKpTXT8M7lNtvUy0kqsNLVZHR3LPaCD82VY489yM31oRcsnmDzdletvNlZyrHQSeFbq91qiad84qIQDifcu8/DQrjoE09Z4larfSuctPBGQGUKhWGhLVTOuCyE0DYm7MeAAbwpjGmn1cvOqBLVsGJampyE/n6hJZSJuKOjSkLCS+Cl9BaqdKoiUbSSGo3rob+lJg2VMrGOmllYb72ohU7f2Ra2zOSJXGapiymZzfyrhFGjaTbzr1S6aGmKpCn6H6mTwWS2bW1tZc24Esr0dbqojnBkqg0Fnp4ET6eeTxU3s/btCbC1hafHRWTpWC3wgztSJftHesic84UrTnvERpUcldxnvnaX2zxukahPTZe2woh7XUI1rv++pEVXhyu+sl9LqTRiBdgwKZtuACuMKJVa9vvKaA1SW9g3rmjXvaM1nsOetxS8L4wJI1ZpWD0BnMpqDauMpB3vg6WeM1z7bXTc1Q3sUwmVA9bWXmma74RwVXgHt08qOLfj7bR6wnzNGta1DiRu+8YjYp5fhaPW1fGcJ8+sdF5oOYbMd3VN/k4mc0xLOG9l2p3XMbzOUeFX87oyNwuvyCb0EBMT34/C7xbiUF0PDuFOl4SfpiW4bp+ReUXY3NX4A7vrhenRscC7wka8Vhf91/CE8J4FM+bPrqK7fSCj6YEZ+rjJJfVha7GjtmAHHvLwDYput625P+XfG1aibIL7xp287jrt5XXqfdZDG1NgiT+F8Kcl9bebdyd9NDLNuiYP9E7ca6cfcm2/gF+05L02Kb1fJXKcJj3z/+KGkzkOjveDbT8CwoPgwX56uH7a4S11HGztr9Xtxc7MIhdUSqXKBYumF8V/e4E9PKkeHJ7Nu2aBnRMKane2c/ZgyvFlalu6qaKj8mVvNvRq5phMpSOT6ahkxnoj7PVeVSk1MYY5KLvlfPYsGFI443WrrPK6MwpDs/kXQmavXeMFEPPssrefa2uvoyGX93Nd5W+5WCba0lBLawAAAABJRU5ErkJggg=="); }
+    .role-seg-support { --role-mask: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAAFFUlEQVR42rXYX4gddxUH8M/M3HXdGMsSEy1LMW2KhO2GpfbNIA2IaaHVotA2D1JoY8GIfSn65kPoQ1+yFCqFEDCNz/aplqQ2hUZqKUo3+hCoSkmCxiRNmkpjAjG3d2aOD/O7s/fu3pveYPz94HLnzPmdf79zvr/zG5qRudUjW/3wgHWfsSAfmDc2aMYDgypybHfK1C3xJEPHKdsbyRly4Q8WfcVVmRi5KHzRQbepkbvi6c/gveiEb8jUFHhI6JlP3qwdHTwlBubuRF07cszrCQ+haAhH1cLjsrGLMstK3TRLy7KxxmQeF2pv9g2+U1clHGg0rhkFdghVa38l7LgB9wGh0nVnQ3pS+FQ4Y0Y2YpsLvCKUrjjiiCtK4ZWRCjKZGWeSxCcb4n6hpxQeGxHZHFv8Rym8CF4UStdsGbFnHTwmlHrC/oZ4VChVwrJsjVUdPC/01O5VKNyr1hOeH2FOIbMsVErhaENcTlEtk1OdVVk960O18BZyOd4Sah+aXVU5nRTwMkn8U+Nipkwaa/vMKYccz1Sug6qlNf+uq4bE50pz9qlTRMr+i+ND2XFMkexcseq5FNWtYGvaseeGvM3lCseGsm25yYNpl73jPVdtFrb4qldlA3UazvuRXMcF72CPbwulH/sXiStH7ZDvq4Tf+a3jTjrivb7+BUtOq4We8HJClJU8ekMIJ+RyJ4TwxkAONZwvp9W105YsrMR4zrtDMNATDtuIjnygNkthm23pX7/ucx1sdDitXJnvmpOR+YJzal31kIqTHmwTj/XOqoW99gq1s9bTJvWDTg6Jb6SdtU7WuPdToatUKpOaUggH3d2G4AWhct55lfBCG5i7HRxY0Z+l8LOGJ5PZ4NLQ6yajauGqJVMKLLbKa6VFFKYsuSrUbebUKpVS5SMb+oBY4Am/d8zrXvXBqt0ImxPP20JPT3g7UTYPcK2ePxnEqn65fN0vnFMP7EapshPTbY32630aO1OBrsxz/uxv/uE3imGcKnzea63QsnW5JzyLKcymQF4ymyjPDthf6en5wM99zW2jj5Rdap+u2oOe8Ct0FHhJCC+h0MGhNvOrAS8uuWulRvrFVMv92nq/dMpfcY8tico8qoSTDThmMhXuQa6Wy5z2F2x1l73+rhhAriHkX0zNy4wnXEzp9nEbkt3tedyE7OPEccEPzKR1izdqOfK0H0WCjwtCqXYfPtce/E+lp/vUSfzC0Lp8rUgDgcpUKkx738OuC5n5NR1ThnmZcN3D3jeNSiWTq8croE7omOm6ww+TqMWRCvrUp92hm97HsPhxvU1zjr1pXqiwjVUL60QN0/bYYbt/j27ERvc2hbDLvG4q9gXrVs4nUFpnIaV317xdYmQTM0ZBA2KlIrWCm3xpjQcbbBIyFKoEihMrCBzXUav0ZP7p4qpgdlx0RqanUiscb8+2CTvk3JQjLXQ8krBnpQ6m8UiLQ4dNjWvpO2M96PmePb7lkkP+mCq3anuKSuY137TbJscc0BvTa094Q8mTKc8I4Zn0lI+7z0y2ySHTUego1Ckxd5J+G0qROG7a+tH+bPSJED6xcfK7UD6hggL3m1WpzI5t3f8HBYHvtoj/nZtLyskC1HT9lSrdJG7p1bcJULRdRbh/0iDlE3vwaAI+KuHRST3IJ/ai216vMpnurf8scLvL6jQvu/1Wf34osE/o6gpLk6fppCOXmXNNCNfMjb0lj7RssjooXBG+7CP7vZ7g4//2geYmov9felV3ZYNqp6wAAAAASUVORK5CYII="); }
+    .role-seg-tank { --role-mask: url("data:image/png;base64,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"); }
 
     /* Shared content rail: chrome + grid align to one max-width on wide
        monitors so the brand and header actions don't drift to far corners. */
@@ -5819,7 +5916,17 @@
             font-size: 11px;
         }
         .site-header .theme-toggle,
+        .site-header .header-search > summary,
         .site-header .lang-toggle { padding: 5px 8px; }
+        /* Toggle sits mid-header here, so right-anchoring would push the
+           panel off the left edge; pin it to the viewport gutters instead. */
+        .site-header .header-search-panel {
+            position: fixed;
+            top: calc(var(--header-h, 56px) + 6px);
+            left: 16px;
+            right: 16px;
+            max-width: none;
+        }
         .nav-tabs {
             order: 10;
             flex-basis: 100%;
@@ -5837,7 +5944,7 @@
        substitution and gets stuck on the old colour).  Transition
        background-color instead for the interactive chrome, which IS
        interpolable, so theme switches always land. */
-    .chip, .icon-btn, .gh-star, .tool-btn, .search, .search-scope > summary, .search-scope-option, .change-tab,
+    .chip, .icon-btn, .gh-star, .tool-btn, .search, .change-tab,
     .pick-chip, .meta-help, .detail-tab-label, .rec-fab, .side-close,
     .nav-tab, .champ, .article-card, .setting-card {
         transition: background-color var(--dur-2) var(--ease),
@@ -5866,15 +5973,6 @@
     [data-theme="light"] .search-rail .search-wrap {
         background: color-mix(in srgb, var(--bg) 82%, transparent);
         border-color: var(--border);
-    }
-    [data-theme="light"] .search-scope > summary {
-        background: var(--surface);
-        border-color: var(--border-strong);
-    }
-    [data-theme="light"] .search-scope-menu {
-        background: var(--surface);
-        border-color: var(--border-strong);
-        box-shadow: 0 12px 30px rgba(31, 41, 55, 0.14);
     }
     [data-theme="light"] .detail-main-tabs > .detail-tab-rail {
         background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -10928,7 +11026,7 @@
     .feedback-main { padding-top: 28px; }
     .feedback-main h1 { font-size: 24px; }
 }
-</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='選角' data-i18n-zh-cn='选角' data-i18n-en='Draft' href='/draft/'>選角</a><a class='nav-tab' id='tab-game' data-nav-tab='game' data-i18n-zh='小遊戲' data-i18n-zh-cn='小游戏' data-i18n-en='Game' href='/game/'>小遊戲</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='Language' aria-label='Language / 語言: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label' lang='en'>Language</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>意見回饋</h1>
+</style></head><body class='feedback-page'><header class='site-header' data-nosnippet><div class='site-header-inner'><a class='brand' data-nav-tab='home' aria-label='arammeta' href='/'><span class='brand-title' id='site-title' aria-label='arammeta'><span class='brand-aram'>aram</span><span class='brand-meta'>meta</span></span></a><nav class='nav-tabs' aria-label='主要分頁'><a class='nav-tab' id='tab-champions' data-nav-tab='champions' data-i18n-zh='英雄' data-i18n-en='Champions' href='/champions/'>英雄</a><a class='nav-tab' id='tab-augments' data-nav-tab='augments' data-i18n-zh='增幅' data-i18n-zh-cn='海克斯' data-i18n-en='Augments' href='/augments/'>增幅</a><a class='nav-tab' id='tab-draft' data-nav-tab='draft' data-i18n-zh='選角' data-i18n-zh-cn='选角' data-i18n-en='Draft' href='/draft/'>選角</a><a class='nav-tab' id='tab-changes' data-nav-tab='changes' data-i18n-zh='版本變動' data-i18n-en='Patch Changes' href='/changes/'>版本變動</a></nav><div class='header-actions'><button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle type='button' title='切換淺色' aria-label='切換主題'><svg class='icon-sun' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'></circle><path d='M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'></path></svg><svg class='icon-moon' viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 14.5A8.5 8.5 0 1 1 9.5 3a7 7 0 0 0 11.5 11.5Z'></path></svg></button><details class='lang-menu' id='lang-menu'><summary class='icon-btn lang-toggle' id='lang-toggle' title='Language' aria-label='Language / 語言: 繁體中文'><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='10'></circle><path d='M2 12h20'></path><path d='M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z'></path></svg><span id='lang-toggle-label' lang='en'>Language</span></summary><div class='lang-menu-list' role='menu'><button type='button' role='menuitem' data-lang='zh' class='is-active' aria-current='true'>繁體中文</button><button type='button' role='menuitem' data-lang='zh-CN'>简体中文</button><button type='button' role='menuitem' data-lang='en'>English</button></div></details></div></div></header><main class='site-main feedback-main'><h1>意見回饋</h1>
 <form class="feedback-form" data-feedback-form data-endpoint="https://api.arammeta.com/api/feedback" data-locale="zh-Hant">
 <label class="feedback-field"><span class="feedback-label">內容</span>
 <textarea name="message" minlength="5" maxlength="3000" required placeholder="例如：
