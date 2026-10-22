@@ -4577,19 +4577,22 @@
         align-items: center;
         padding: 6px 8px;
         line-height: 0;
-        background: transparent;
-        color: var(--text-muted);
-        border: 1px solid var(--border);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        color: var(--accent);
+        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
         border-radius: var(--r-sm);
         transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
     }
     .site-header .header-search > summary::-webkit-details-marker { display: none; }
     .site-header .header-search > summary::marker { content: ''; }
-    .site-header .header-search > summary:hover,
+    .site-header .header-search > summary:hover {
+        background: color-mix(in srgb, var(--accent) 20%, transparent);
+        border-color: var(--accent);
+    }
     .site-header .header-search[open] > summary {
-        color: var(--text);
-        background: var(--surface-2);
-        border-color: var(--border-strong);
+        color: var(--accent-on);
+        background: var(--accent);
+        border-color: var(--accent);
     }
     .site-header .header-search > summary:active { transform: scale(0.96); transition-duration: var(--dur-1); }
     .site-header .header-search-panel {

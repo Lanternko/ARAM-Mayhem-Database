@@ -105,6 +105,12 @@ class SiteSearchContractTests(unittest.TestCase):
         self.assertIn("header-role-empty", block)
         self.assertIn("else if (headerInput.value.trim()) renderHeaderRoleGrid('')", self.js)
 
+    def test_header_toggle_is_accent_filter_icon(self) -> None:
+        self.assertIn("<path d='M4 5h16l-6 7.5V19l-4-2v-4.5z'></path>", self.render)
+        start = self.css.index(".site-header .header-search > summary {")
+        self.assertIn("color: var(--accent);", self.css[start:start + 600])
+        self.assertIn("background: var(--accent);", self.css[start:start + 1400])
+
     def test_champion_scope_does_not_use_detail_item_or_augment_blob(self) -> None:
         self.assertIn("data-champion-search", self.render)
         self.assertIn("const championBlob = c.getAttribute('data-champion-search')", self.js)

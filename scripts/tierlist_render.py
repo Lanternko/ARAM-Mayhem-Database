@@ -707,12 +707,11 @@ def _header_role_search_html() -> str:
     Segments proxy the home view's role chips (site.js clicks the matching
     .chip), so filter state, analytics and badge refresh stay in one place.
     """
-    search_icon = (
+    filter_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
         "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
         "stroke-linejoin='round' aria-hidden='true'>"
-        "<circle cx='11' cy='11' r='7'></circle>"
-        "<line x1='21' y1='21' x2='16.5' y2='16.5'></line></svg>"
+        "<path d='M4 5h16l-6 7.5V19l-4-2v-4.5z'></path></svg>"
     )
     segs = [
         "<button type='button' class='role-seg is-active' data-role-seg='' "
@@ -729,7 +728,7 @@ def _header_role_search_html() -> str:
     return (
         "<details class='header-search' id='header-search'>"
         "<summary class='icon-btn header-search-toggle' title='搜尋英雄' aria-label='搜尋英雄'>"
-        f"{search_icon}</summary>"
+        f"{filter_icon}</summary>"
         "<div class='header-search-panel'>"
         "<input class='header-search-input' id='header-champ-search' type='search' "
         "placeholder='搜尋英雄名稱（中 / 英）' autocomplete='off' spellcheck='false' "
