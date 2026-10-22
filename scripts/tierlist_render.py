@@ -3883,32 +3883,7 @@ def render_html(
         'aria-label="搜尋英雄名稱" aria-describedby="search-scope-hint">'
         "</label>"
     )
-    parts.append(
-        "<details class='search-scope' id='search-scope'>"
-        "<summary class='search-scope-summary' id='search-scope-summary' "
-        "title='展開進階搜尋' aria-label='搜尋範圍：英雄。展開進階搜尋'>"
-        "<span id='search-scope-value'>英雄</span>"
-        "<svg viewBox='0 0 24 24' width='14' height='14' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'><path d='m6 9 6 6 6-6'></path></svg>"
-        "</summary>"
-        "<div class='search-scope-menu' id='search-scope-menu' role='group' aria-label='搜尋範圍'>"
-        "<button type='button' class='search-scope-option is-active' "
-        "data-search-scope='champions' aria-pressed='true' "
-        "aria-label='只搜英雄：中／英文名稱、別名'>"
-        "<span data-i18n-zh='只搜英雄' data-i18n-en='Champions only'>只搜英雄</span>"
-        "<small data-i18n-zh='中／英文名稱、別名' data-i18n-en='Chinese / English names and aliases'>中／英文名稱、別名</small>"
-        "</button>"
-        "<button type='button' class='search-scope-option' "
-        "data-search-scope='all' aria-pressed='false' "
-        "aria-label='全部：英雄＋增幅＋裝備'>"
-        "<span data-i18n-zh='全部' data-i18n-en='ALL'>全部</span>"
-        "<small data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='champions + augments + items'>英雄＋增幅＋裝備</small>"
-        "</button>"
-        "</div>"
-        "</details>"
-    )
-    parts.append("<span class='sr-only' id='search-scope-hint'>預設只搜尋英雄名稱</span>")
+    parts.append("<span class='sr-only' id='search-scope-hint'>搜尋英雄中／英文名稱與別名</span>")
     parts.append("</div>")  # /search-rail
 
     # Optional player-history lookup. This markup is emitted only for the

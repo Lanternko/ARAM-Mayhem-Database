@@ -1196,7 +1196,7 @@
             searchScopeChampions: '英雄',
             searchScopeAll: '全部',
             searchScopeToggle: '展開進階搜尋',
-            searchScopeHint: '預設只搜尋英雄名稱；展開後可搜尋增幅與裝備',
+            searchScopeHint: '搜尋英雄中／英文名稱與別名',
             searchScopeChampionOption: '只搜英雄',
             searchScopeChampionHint: '中／英文名稱、別名',
             searchScopeAllOption: '全部',
@@ -1545,7 +1545,7 @@
             searchScopeChampions: 'Champions',
             searchScopeAll: 'All data',
             searchScopeToggle: 'Open advanced search',
-            searchScopeHint: 'Searches champion names by default; expand for augments and items',
+            searchScopeHint: 'Searches champion names (Chinese / English) and aliases',
             searchScopeChampionOption: 'Champions only',
             searchScopeChampionHint: 'Chinese / English names and aliases',
             searchScopeAllOption: 'ALL',
@@ -1894,12 +1894,11 @@
     let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
-    let filterState = { role: '', q: '', scope: readSavedSearchScope() };
-    function readSavedSearchScope() {
-        try {
-            return localStorage.getItem(SEARCH_SCOPE_KEY) === 'all' ? 'all' : 'champions';
-        } catch { return 'champions'; }
-    }
+    // Home search is champions-only: the scope dropdown was removed (≈1.5% of
+    // searches used 'all'; augments and items have their own tabs).  Drop any
+    // remembered 'all' so returning visitors aren't stuck in it.
+    let filterState = { role: '', q: '', scope: 'champions' };
+    try { localStorage.removeItem(SEARCH_SCOPE_KEY); } catch {}
     let _trZhCN = null;
 
     // Product term (aramkit / CN client): 增幅(裝置) → 海克斯.
@@ -12161,17 +12160,19 @@
         document.querySelectorAll('#view-home .tier-block').forEach(block => {
             const tier = block.getAttribute('data-tier') || '';
             if (!tierRank.has(tier)) tierRank.set(tier, tierRank.size);
+            const tierColor = block.style.getPropertyValue('--tier-color');
             block.querySelectorAll('.tier-grid > .champ').forEach(card => {
                 const tags = (card.getAttribute('data-tags') || '').split(' ');
                 if (role && !tags.includes(role)) return;
-                cards.push({ card, rank: tierRank.get(tier), wr: parseFloat(card.getAttribute('data-wr')) || 0 });
+                cards.push({ card, tierColor, rank: tierRank.get(tier), wr: parseFloat(card.getAttribute('data-wr')) || 0 });
             });
         });
         cards.sort((a, b) => a.rank - b.rank || b.wr - a.wr);
         const nameKey = currentLang === 'en' ? 'data-name-en' : 'data-name-zh';
-        grid.replaceChildren(...cards.map(({ card }) => {
+        grid.replaceChildren(...cards.map(({ card, tierColor }) => {
             const a = document.createElement('a');
             a.className = 'header-role-champ';
+            if (tierColor) a.style.setProperty('--tier-color', tierColor);
             a.href = card.getAttribute('href') || '#';
             a.setAttribute('data-hdr-cid', card.getAttribute('data-cid'));
             a.setAttribute('data-tier', card.getAttribute('data-tier') || '');
@@ -12230,8 +12231,12 @@
             }
         });
     }
+    // applyLanguage runs for /en and /zh-CN before this block executes; the
+    // hoisted declaration is callable then but headerSearch is still in its TDZ.
+    // `var` hoists as undefined, so early calls bail and the init call below syncs.
+    var headerSearchReady = false;
     function syncHeaderSearchLabels() {
-        if (!headerSearch) return;
+        if (!headerSearchReady || !headerSearch) return;
         const pick = (zh, en) => currentLang === 'en' ? en : (currentLang === 'zh-CN' ? t2s(zh) : zh);
         headerSearch.querySelectorAll('[data-role-seg]').forEach(seg => {
             const role = seg.getAttribute('data-role-seg');
@@ -12254,6 +12259,7 @@
             ?.setAttribute('aria-label', pick('依職業列出英雄', 'List champions by class'));
         if (headerRoleGridRole !== null) renderHeaderRoleGrid(headerRoleGridRole);
     }
+    headerSearchReady = true;
     syncHeaderSearchLabels();
 
     // Keyboard activation for cards.  Enter / Space on a `.champ` or `.aug`
@@ -12433,11 +12439,6 @@
             }
             clearTimeout(searchDebounceT);
             searchDebounceT = setTimeout(() => { searchDebounceT = null; applyFilters(); }, 120);
-            if (filterState.scope === 'all') {
-                ensureRelatedSearchIndex().then(() => {
-                    if (filterState.scope === 'all') applyFilters();
-                }).catch(() => {});
-            }
         });
         // Esc inside the search clears the filter and unfocuses, so the
         // typical "open, search, escape back to grid" flow works.  Immediate:
@@ -12452,42 +12453,6 @@
                 searchEl.blur();
             }
         });
-    }
-
-    // Home search defaults to champions.  The native details disclosure keeps
-    // augment/item lookup available without making the primary typing surface
-    // compete with the hero picker.
-    document.getElementById('search-scope')?.addEventListener('toggle', (ev) => {
-        if (ev.currentTarget.open) trackEvent('search_scope_open');
-    });
-    document.getElementById('search-scope')?.addEventListener('click', (ev) => {
-        const option = ev.target.closest('[data-search-scope]');
-        if (!option) return;
-        ev.preventDefault();
-        const next = option.getAttribute('data-search-scope') === 'all' ? 'all' : 'champions';
-        if (filterState.scope === next) {
-            document.getElementById('search-scope').open = false;
-            return;
-        }
-        filterState.scope = next;
-        try { localStorage.setItem(SEARCH_SCOPE_KEY, next); } catch {}
-        updateSearchPlaceholder();
-        applyFilters();
-        if (next === 'all') {
-            ensureRelatedSearchIndex().then(() => {
-                if (filterState.scope === 'all') applyFilters();
-            }).catch(() => {});
-        }
-        document.getElementById('search-scope').open = false;
-        trackEvent('search_scope_change', { scope: next });
-    });
-    // A remembered 'all' scope needs the augment/item index before its
-    // matches can appear; champion-only results render in the meantime.
-    if (filterState.scope === 'all') {
-        updateSearchPlaceholder();
-        ensureRelatedSearchIndex().then(() => {
-            if (filterState.scope === 'all') applyFilters();
-        }).catch(() => {});
     }
 
     // Ctrl+F / Cmd+F shortcut → focus our search input.

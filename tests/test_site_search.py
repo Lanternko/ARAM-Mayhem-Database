@@ -87,19 +87,13 @@ class SiteSearchContractTests(unittest.TestCase):
         cls.css = (ROOT / "scripts" / "templates" / "site.css").read_text(encoding="utf-8")
         cls.render = (ROOT / "scripts" / "tierlist_render.py").read_text(encoding="utf-8")
 
-    def test_home_search_defaults_to_champions_and_has_advanced_scope(self) -> None:
-        self.assertIn("scope: readSavedSearchScope()", self.js)
-        self.assertIn("=== 'all' ? 'all' : 'champions'", self.js)
-        self.assertIn("data-search-scope='champions'", self.render)
-        self.assertIn("data-search-scope='all'", self.render)
-        self.assertIn("searchScopeChampionOption", self.js)
-        self.assertIn("searchScopeAllOption", self.js)
+    def test_home_search_is_champions_only(self) -> None:
+        # The scope dropdown was removed; a remembered 'all' must not survive.
+        self.assertIn("scope: 'champions' }", self.js)
+        self.assertIn("localStorage.removeItem(SEARCH_SCOPE_KEY)", self.js)
+        self.assertNotIn("id='search-scope'", self.render)
+        self.assertNotIn("data-search-scope='all'", self.render)
         self.assertIn("searchAriaChampion", self.js)
-        self.assertIn("searchAriaAll", self.js)
-        self.assertIn("aria-label='搜尋範圍：英雄。展開進階搜尋'", self.render)
-        self.assertIn("aria-label='只搜英雄：中／英文名稱、別名'", self.render)
-        self.assertIn("data-i18n-zh='全部' data-i18n-en='ALL'>全部</span>", self.render)
-        self.assertIn("data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='champions + augments + items'>英雄＋增幅＋裝備</small>", self.render)
         for alias in ("腎", "莫甘娜", "模乾那", "EZ", "火人", "死歌", "死哥"):
             self.assertIn(alias, self.render)
 
@@ -128,4 +122,4 @@ class SiteSearchContractTests(unittest.TestCase):
     def test_search_stays_available_on_mobile(self) -> None:
         self.assertIn(".search-rail {\n            display: flex !important;", self.css)
         self.assertNotIn(".search-rail,\n        .search-wrap,", self.css)
-        self.assertIn(".search-scope-option:focus-visible", self.css)
+        self.assertNotIn(".search-scope", self.css)
