@@ -527,7 +527,7 @@ class SpaPathShellTests(unittest.TestCase):
         }
         slim_site_payload(payload)
         champ = payload["champs"]["1"]
-        self.assertEqual(len(champ["top"]["kGold"]), 16)
+        self.assertEqual(len(champ["top"]["kGold"]), 40)  # augment tab lists every eligible pair
         self.assertEqual(len(champ["bot"]["kGold"]), 12)
         self.assertEqual(len(champ["pairs"]), 24)
         self.assertNotIn("rawWr", champ["top"]["kGold"][0])

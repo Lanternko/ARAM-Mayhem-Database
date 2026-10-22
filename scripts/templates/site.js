@@ -3117,6 +3117,10 @@
     // Rarity + sort persist across champions so the next lookup opens the same way.
     let champAugRarity = 'kGold';
     let champAugSort = 'rank';
+    // The list holds every pair past the sample floor; show the first
+    // CHAMP_AUG_COLLAPSED (podium included) until the reader expands it.
+    let champAugExpanded = false;
+    const CHAMP_AUG_COLLAPSED = 16;
     // Plain-language verdict per augment: 推薦 when the lift clears its 80%
     // sampling interval above zero, 避開 when it clears it below, else no chip.
     // Casual players read the word; the interval math stays out of sight.
@@ -3196,14 +3200,17 @@
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;
             }).join('');
-            const rows = entries.slice(3).map((e, idx) => {
+            // Every entry gets a row: the podium three hide while sorted by
+            // recommendation and rejoin the list when sorted by pick or WR, so
+            // those sorts cover the whole ranking.
+            const rows = entries.length > 3 ? entries.map((e, idx) => {
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
                 const ariaLabel = copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc);
                 return `
-                    <li class="aug-tier-row has-item-tip is-${verdict}" tabindex="0"
-                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx + 3}"
+                    <li class="aug-tier-row has-item-tip is-${verdict}${idx < 3 ? ' is-podium' : ''}" tabindex="0"
+                        data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tier-idx" aria-hidden="true"></span>
@@ -3221,12 +3228,15 @@
                         <span class="aug-tier-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b>${champAugBadge(verdict)}</span>
                         ${itemTipSource(buildAugTipHtml(e, false))}
                     </li>`;
-            }).join('');
+            }).join('') : '';
             const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
+            const more = entries.length > CHAMP_AUG_COLLAPSED
+                ? `<button type="button" class="tool-btn aug-tier-more" data-aug-expand data-total="${entries.length}"></button>`
+                : '';
             return `
                 <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
                     ${podium ? `<ol class="aug-pick-cards">${podium}</ol>` : ''}
-                    ${rows || !entries.length ? `${head}<ol class="aug-tier-list" start="4" data-rarity="${r.key}">${body}</ol>` : ''}
+                    ${rows || !entries.length ? `${head}<ol class="aug-tier-list" start="4" data-rarity="${r.key}">${body}</ol>${more}` : ''}
                 </div>`;
         }).join('');
         return `
@@ -3264,6 +3274,24 @@
                     return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
                 });
                 rows.forEach(row => list.appendChild(row));
+                const full = champAugSort !== 'rank';
+                list.classList.toggle('is-full', full);
+                list.setAttribute('start', full ? '1' : '4');
+                const limit = full ? CHAMP_AUG_COLLAPSED : CHAMP_AUG_COLLAPSED - 3;
+                let shown = 0;
+                rows.forEach(row => {
+                    const podium = !full && row.classList.contains('is-podium');
+                    row.hidden = podium || (!champAugExpanded && shown >= limit);
+                    if (!podium) shown += 1;
+                });
+                const more = list.parentElement && list.parentElement.querySelector('[data-aug-expand]');
+                if (more) {
+                    const total = Number(more.getAttribute('data-total') || 0);
+                    more.textContent = champAugExpanded
+                        ? pickLang('收合', 'Show less')
+                        : pickLang(`顯示全部 ${fmtInt(total)} 個`, `Show all ${fmtInt(total)}`);
+                    more.setAttribute('aria-expanded', String(champAugExpanded));
+                }
             });
         });
     }
@@ -11207,7 +11235,7 @@
             const tab = readChampTab();
             host.innerHTML = `<div class="detail detail-page">${renderDetail(cid, { page: true, tab })}</div>`;
             wireChampHero(host);
-            if (champAugSort !== 'rank') syncChampAugTable(host);
+            syncChampAugTable(host);
             applySingleItemFilter(host);
             if (tab === 'pools') {
                 renderChampionPools();
@@ -11536,6 +11564,16 @@
             champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
             syncChampAugTable();
             trackEvent('aug_rarity_select', { rarity: champAugRarity });
+            return;
+        }
+        const augExpandBtn = ev.target.closest('[data-aug-expand]');
+        if (augExpandBtn) {
+            champAugExpanded = !champAugExpanded;
+            syncChampAugTable();
+            if (!champAugExpanded) {
+                const pane = augExpandBtn.closest('.aug-tier-pane');
+                if (pane) pane.scrollIntoView({ block: 'nearest' });
+            }
             return;
         }
         const augSortBtn = ev.target.closest('[data-aug-sort]');

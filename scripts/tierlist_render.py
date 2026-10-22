@@ -1363,8 +1363,11 @@ SPA_FULL_SHELL_PATHS = frozenset({
 })
 
 # Cap shipped per-champion detail rows.  UI carousels only show a handful;
-# shipping the full ranked buckets was ~18 MB and dominated load time.
-PAYLOAD_TOP_AUGS_PER_RARITY = 16
+# shipping the full ranked buckets inline was ~18 MB and dominated load time.
+# Augment rankings are the exception: they now live in lazy per-champion shards,
+# and the augment tab lists every pair past the sample floor (None = no cap) so
+# common picks and avoid-worthy rows are not silently cut at 16.
+PAYLOAD_TOP_AUGS_PER_RARITY: int | None = None
 PAYLOAD_BOT_AUGS_PER_RARITY = 12
 PAYLOAD_PAIRS_EACH_SIDE = 12
 PAYLOAD_ITEM_PAIR_ROWS = 16

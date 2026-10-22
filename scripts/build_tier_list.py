@@ -174,8 +174,9 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
 # old raw-lift-at-floor-40 build shipped.
 @click.option("--min-synergy-games", type=int, default=10,
               help="Min games per same-team champion pair for synergy / recommendation ranking")
-@click.option("--top-n", type=int, default=16,
-              help="Max best augments per rarity (default 16; 0 keeps all — bloats payload)")
+@click.option("--top-n", type=int, default=0,
+              help="Max best augments per rarity (default 0 keeps every pair past --min-pair-games; "
+                   "the champion augment tab lists them all behind a show-all toggle)")
 @click.option("--bot-n", type=int, default=12,
               help="Max worst augments per rarity (default 12; 0 keeps all — bloats payload)")
 @click.option("--site-url", default="",
