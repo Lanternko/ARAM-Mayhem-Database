@@ -12482,30 +12482,5 @@
         });
     }
 
-    // Ctrl+F / Cmd+F shortcut → focus our search input.
-    //
-    // Rationale: the default scope is a focused hero picker with zh-TW name,
-    // English name, aliases, and conservative typo tolerance.  The advanced
-    // scope remains available for augment/item lookup without making those
-    // terms compete with the common champion-search flow.  Native browser
-    // find can also discover champions thanks to the .sr-only English alias
-    // spans, but the in-page search additionally filters out non-matches.
-    //
-    // If the user is already inside the search box, fall through to the
-    // browser's native find dialog (no preventDefault) so they retain that
-    // escape hatch.
-    document.addEventListener('keydown', (ev) => {
-        const isFind = (ev.ctrlKey || ev.metaKey) && ev.key && ev.key.toLowerCase() === 'f';
-        if (!isFind) return;
-        // Only hijack find on the home view; on Column/Settings the search box is
-        // hidden, so let the browser's native find work there.
-        const homeView = document.getElementById('view-home');
-        if (!homeView || !homeView.classList.contains('is-active')) return;
-        const sEl = document.getElementById('champ-search');
-        if (!sEl) return;
-        if (document.activeElement === sEl) return;  // let browser take over on 2nd press
-        ev.preventDefault();
-        sEl.focus({ preventScroll: true });
-        sEl.select();
-    });
-    
+    // Ctrl+F / Cmd+F is left to the browser's native find on every view.
+
