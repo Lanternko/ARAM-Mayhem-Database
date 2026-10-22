@@ -4754,6 +4754,37 @@
     .header-role-champ img { display: block; width: 100%; height: 100%; object-fit: cover; }
     .header-role-champ:hover,
     .header-role-champ:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; transform: scale(1.06); }
+    /* Home role filter reuses the header's connected segments; active tint
+       keeps each role's own color. (0,4,0) beats the light-theme chip rules. */
+    .role-chips .role-chip-bar { align-self: center; flex: 0 0 auto; }
+    .filter-bar .role-chip-bar .chip.role-seg {
+        width: auto;
+        min-height: 0;
+        height: 34px;
+        gap: 6px;
+        padding: 0 12px;
+        border: 0;
+        border-left: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .filter-bar .role-chip-bar .chip.role-seg:first-child { border-left: 0; }
+    .filter-bar .role-chip-bar .chip.role-seg:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+    .filter-bar .role-chip-bar .chip.role-seg.active {
+        color: var(--role-color);
+        background: color-mix(in srgb, var(--role-color) 20%, transparent);
+    }
+    .role-chip-bar .role-seg-icon { width: 18px; height: 18px; flex: none; }
+    /* Labels only fit beside the sticky search rail on wide screens. */
+    @media (max-width: 1080px) {
+        .filter-bar .role-chip-bar .chip.role-seg { width: 42px; height: 36px; padding: 0; }
+        .role-chip-bar .chip-label { display: none; }
+        .role-chip-bar .role-seg-icon { width: 20px; height: 20px; }
+    }
     .role-seg-all { --role-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9'/%3E%3C/g%3E%3C/svg%3E"); width: 18px; height: 18px; }
     .role-seg-assassin { --role-mask: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAQAAAD9CzEMAAAFEElEQVR42q3YXYwdZRkH8N/MnO1qt27Nsu22mFJtitINFWxaP0hqA9oGJVEsGAXRopFEYmJiDEaj3phgonitJqi3JmrUiKGBGCCAJIg2trXSAhqCLbLCGgNddXvOzOPFvGd6Zre73W53zs0578fzf5+v//ufw1KffJFfK/AUeKNve9Lv3WMsjazY08FWx0T6HPe2NLpip7/SC8IZpdIZ4UVXrxREgR2mhF7jQU94xa6VCFSOy73UMn8WYvJi053JrXF0nvk+xHGjctnFJfdbwpl55iON3nMxYcqw1j+VqnMCVCrTxtLKJbXPfIC3WLdgEDKZMVsWt3I+gFWL+hgYvhACmP+MolpwtkorXEyIFgMIbFl+DmDneUthRwJaVhUNOSGU56yhSDPPWbW4DwtTRGbPoub7EPtky+mFDu4TukKpN6cXKj1l6ucHlkN7HXwwnbBsjMacb/3ZD10oRIFL/V2l1BMed8BMA1UK/3W7R4SeUuWUTRdCGQU2OiqUSuExa3Gd083If+zDGzzSjBzzpoUhslaxFtiQGLRSecH61K/Xek2ozNibRsY933h5zKVzIBLF5I3Zs+YPN8kNN6b4drDH/3S9b2DkhpTorvDnFkTR77Mh99qFXK7AhCNpQ094IhVsP/F7Xd8kNNPBoy2IjSjkcrzbjw3B38z6QsKdaE5fb/tsq4nyOd2fyRxorqOucNTGNPdFXX+tvx4SwkGbjA2Yr7dcgTebbPKUN65nJm3BVrNN4dYQ4zZ7UAiHaoAjqqQUnm5OUymFk9biVj+YV+cdfM8BrPF8U0v17me8JMyqHOm7mymUNrpClU6YCZw2g9VusUY5EKpMabVbrcGM04imWCqXm1DqDNZQPRUqucC0BxUoFHjVqDvEQAnmwmes9e8maIWHTSegqrUWf2hRWiW8ZtJxYco67FZ52YaBPOTWm1K5FmNOCc/a7tUWnZTCUzXAz1uypBJK494jdO3AOi8LP8WQTGYIPxH+ZQO2mxXe6xJlC6Ar/KwGuKtVOZXQsw3fED4nw6+Uwucbn+8USvcj82nhm9imNw/grnr5Vap5wmRSjof8EXxY6Orab8SIG3V1hZvBEx5D7spziJqr+s3ylGpOkHajcIlnvBNDDjeFezIV5THDuNpz1suxu3X+nsqTMlld0Z+aJ21vS5Jll+/Kkw9nL52ecBMy33FNWnnbPBufrPslk3udvwz40BXuRkeOa7wV/CJB1Nz5axm2Jk87uHsgkzW7Dvf5tEi31+D0/alHcqxW4JYWR92OwsjAqoMDHnSF6wfJu8CPGgOVMGU00VyWePNI60Z72qqBWUZNtRjph+27IZMb8afmDKWwt9EKRSrldoS/1pgoZPY18F3hkJE+yeeNQpux34sKZdJyN7fk1JaWvApsbim8j6VdpY6TPmJGzJVjBd7uH0JXJbxirC4zGSZMN4xZKVMXZ6nMx00Lla5wyvaFbucC25xITRW+3JB0gS81QeqluaIh7q80e+r3z2IxPTHhoFDqmjKWLr+6lE+olEqVZ70+lWAuN25KVyn8xrrzyZcCma+nl6bvU9+qCuwXenrCRxszQ7hXCLO+urT/AOq47/SQSJriLMTDQni0Zf4mIfzWO5q9S5RefMJRYU9KZoGdKuFd6VeO64TDPt6SPkt8P84w7E6/8wGFPBn4pfsa84UbPO6OJN/z5b3jM2yfzbL02eSy5vtl3j8QvmW+gnSWoMMXjfv/AU871EFo9EIpAAAAAElFTkSuQmCC"); }
     .role-seg-fighter { --role-mask: url("data:image/png;base64,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"); }

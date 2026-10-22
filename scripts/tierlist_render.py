@@ -3841,16 +3841,22 @@ def render_html(
     # (not nested in a short chrome row) so position:sticky survives detail
     # scroll.  CSS pulls the rail up into the same visual row as the chips.
     parts.append("<div class='filter-bar' data-nosnippet>")
-    parts.append("<div class='role-chips'>")
-    parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
-    for role_en in ROLE_ORDER:
-        labels = ROLE_LABELS.get(role_en, {})
-        role_zh = labels.get("zh", role_en)
-        role_label_en = labels.get("en", role_en)
+    # Same connected icon segments as the header role popover; the label
+    # span hides on narrow screens (title/aria-label keep it reachable).
+    parts.append("<div class='role-chips'><div class='role-seg-bar role-chip-bar' role='group'>")
+    for role_en, role_zh, role_label_en in [("", "全部", "All")] + [
+        (r, ROLE_LABELS.get(r, {}).get("zh", r), ROLE_LABELS.get(r, {}).get("en", r)) for r in ROLE_ORDER
+    ]:
+        icon = role_en.lower() or "all"
+        active = " active" if not role_en else ""
         parts.append(
-            f'<button class="chip" data-role="{html.escape(role_en)}" data-label-zh="{html.escape(role_zh)}" '
-            f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
-    )
+            f'<button class="chip role-seg{active}" data-role="{html.escape(role_en)}" '
+            f'data-label-zh="{html.escape(role_zh)}" data-label-en="{html.escape(role_label_en)}" '
+            f'title="{html.escape(role_zh)}" aria-label="{html.escape(role_zh)}">'
+            f'<span class="role-seg-icon role-seg-{icon}" aria-hidden="true"></span>'
+            f'<span class="chip-label">{html.escape(role_zh)}</span></button>'
+        )
+    parts.append("</div>")  # /role-chip-bar
     # Count sits immediately after the last role chip (Tank), not beside search.
     parts.append(
         f'<span class="shown-count"><span id="shown-n">{len(records)}</span> / {len(records)} '

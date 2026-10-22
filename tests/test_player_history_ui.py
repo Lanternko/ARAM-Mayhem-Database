@@ -85,6 +85,8 @@ class PlayerHistoryUiTests(unittest.TestCase):
         self.assertIn("id='header-search'", html)
         self.assertEqual(html.count("data-role-seg="), 7)
         self.assertIn("id='header-role-grid' hidden", html)
+        self.assertIn("role-seg-bar role-chip-bar", html)
+        self.assertEqual(html.count('<span class="chip-label">'), 7)
 
     def test_hidden_metadata_does_not_canonicalize_home(self) -> None:
         html = render_shell(

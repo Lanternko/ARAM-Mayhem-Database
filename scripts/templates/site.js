@@ -48,7 +48,12 @@
                 });
                 document.querySelectorAll('.chip[data-label-en]').forEach(chip => {
                     const val = chip.getAttribute('data-label-en');
-                    if (val != null) chip.textContent = val;
+                    if (val == null) return;
+                    const label = chip.querySelector('.chip-label');
+                    if (!label) { chip.textContent = val; return; }
+                    label.textContent = val;
+                    chip.title = val;
+                    chip.setAttribute('aria-label', val);
                 });
             }
             const toggleLabel = document.getElementById('lang-toggle-label');
@@ -10825,11 +10830,17 @@
             el.textContent = copy.tierUnit;
         });
         document.querySelectorAll('.chip, .item-role-chip, .apool-role-chip').forEach(chip => {
-            if (currentLang === 'en') {
-                chip.textContent = chip.getAttribute('data-label-en') || chip.textContent || '';
-            } else {
-                const zh = chip.getAttribute('data-label-zh') || chip.textContent || '';
-                chip.textContent = zhUi(zh);
+            // Icon segments keep their icon span; only the label (and the
+            // tooltip that stands in for it on narrow screens) is swapped.
+            const label = chip.querySelector('.chip-label');
+            const target = label || chip;
+            const text = currentLang === 'en'
+                ? (chip.getAttribute('data-label-en') || target.textContent || '')
+                : zhUi(chip.getAttribute('data-label-zh') || target.textContent || '');
+            target.textContent = text;
+            if (label) {
+                chip.title = text;
+                chip.setAttribute('aria-label', text);
             }
         });
         // Scope knob is state-driven (label + tooltip), not a static data-label
