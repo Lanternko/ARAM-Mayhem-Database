@@ -701,8 +701,52 @@ li + li { margin-top: 8px; }
 """
 
 
-def _site_header_html() -> str:
-    """Canonical product header shared by the app and feedback page."""
+def _header_role_search_html() -> str:
+    """Header search popover: name search + one segmented row of role icons.
+
+    Segments proxy the home view's role chips (site.js clicks the matching
+    .chip), so filter state, analytics and badge refresh stay in one place.
+    """
+    filter_icon = (
+        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
+        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
+        "stroke-linejoin='round' aria-hidden='true'>"
+        "<path d='M4 5h16l-6 7.5V19l-4-2v-4.5z'></path></svg>"
+    )
+    segs = [
+        "<button type='button' class='role-seg is-active' data-role-seg='' "
+        "aria-pressed='true' title='全部' aria-label='全部'>"
+        "<span class='role-seg-icon role-seg-all' aria-hidden='true'></span></button>"
+    ]
+    for role_en in ROLE_ORDER:
+        role_zh = ROLE_LABELS.get(role_en, {}).get("zh", role_en)
+        segs.append(
+            f"<button type='button' class='role-seg' data-role-seg='{html.escape(role_en)}' "
+            f"aria-pressed='false' title='{html.escape(role_zh)}' aria-label='{html.escape(role_zh)}'>"
+            f"<span class='role-seg-icon role-seg-{role_en.lower()}' aria-hidden='true'></span></button>"
+        )
+    return (
+        "<details class='header-search' id='header-search'>"
+        "<summary class='icon-btn header-search-toggle' title='搜尋英雄' aria-label='搜尋英雄'>"
+        f"{filter_icon}</summary>"
+        "<div class='header-search-panel'>"
+        "<input class='header-search-input' id='header-champ-search' type='search' "
+        "placeholder='搜尋英雄名稱（中 / 英）' autocomplete='off' spellcheck='false' "
+        "aria-label='搜尋英雄名稱'>"
+        "<div class='role-seg-bar' role='group' aria-label='依職業列出英雄'>"
+        f"{''.join(segs)}</div>"
+        "<div class='header-role-grid' id='header-role-grid' hidden></div>"
+        "</div></details>"
+    )
+
+
+def _site_header_html(*, patch_label: str = "", role_search: bool = False) -> str:
+    """Canonical product header shared by the app and feedback page.
+
+    ``patch_label`` (e.g. "16.21") names the patch-changes tab; pages that do
+    not know the build patch fall back to 版本變動.  ``role_search`` adds the
+    header role-filter popover, which needs the app runtime (site.js).
+    """
     parts: list[str] = []
     globe_icon = (
         "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
@@ -724,8 +768,8 @@ def _site_header_html() -> str:
         ("champions", "英雄", "Champions", None),
         ("augments", "增幅", "Augments", "海克斯"),
         ("draft", "選角", "Draft", "选角"),
-        ("game", "小遊戲", "Game", "小游戏"),
-        ("changes", "版本變動", "Patch Changes", None),
+        # Meta Pick (#game) is still routable but no longer a header tab.
+        ("changes", patch_label or "版本變動", patch_label or "Patch Changes", None),
         # 專欄 is unpublished; keep its draft source out of the public shell.
         # ("column", "專欄", "Articles", None),
     )
@@ -776,6 +820,8 @@ def _site_header_html() -> str:
     parts.append("<span class='nav-ind' aria-hidden='true'></span>")
     parts.append("</nav>")
     parts.append("<div class='header-actions'>")
+    if role_search:
+        parts.append(_header_role_search_html())
     parts.append(
         "<button class='icon-btn theme-toggle' id='theme-toggle' data-theme-toggle "
         "type='button' title='切換淺色' aria-label='切換主題'>"
@@ -3771,7 +3817,7 @@ def render_html(
         "1 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8"
         "Z'></path></svg>"
     )
-    parts.append(_site_header_html())
+    parts.append(_site_header_html(patch_label=display_patch, role_search=True))
     parts.append("<main class='site-main'>")
     # ---- View: 主頁 (home) — champion tier list + recommend panel ----
     parts.append(
@@ -3797,16 +3843,22 @@ def render_html(
     # (not nested in a short chrome row) so position:sticky survives detail
     # scroll.  CSS pulls the rail up into the same visual row as the chips.
     parts.append("<div class='filter-bar' data-nosnippet>")
-    parts.append("<div class='role-chips'>")
-    parts.append('<button class="chip active" data-role="" data-label-zh="★ All" data-label-en="★ All">★ All</button>')
-    for role_en in ROLE_ORDER:
-        labels = ROLE_LABELS.get(role_en, {})
-        role_zh = labels.get("zh", role_en)
-        role_label_en = labels.get("en", role_en)
+    # Same connected icon segments as the header role popover; the label
+    # span hides on narrow screens (title/aria-label keep it reachable).
+    parts.append("<div class='role-chips'><div class='role-seg-bar role-chip-bar' role='group'>")
+    for role_en, role_zh, role_label_en in [("", "全部", "All")] + [
+        (r, ROLE_LABELS.get(r, {}).get("zh", r), ROLE_LABELS.get(r, {}).get("en", r)) for r in ROLE_ORDER
+    ]:
+        icon = role_en.lower() or "all"
+        active = " active" if not role_en else ""
         parts.append(
-            f'<button class="chip" data-role="{html.escape(role_en)}" data-label-zh="{html.escape(role_zh)}" '
-            f'data-label-en="{html.escape(role_label_en)}">{html.escape(role_zh)}</button>'
-    )
+            f'<button class="chip role-seg{active}" data-role="{html.escape(role_en)}" '
+            f'data-label-zh="{html.escape(role_zh)}" data-label-en="{html.escape(role_label_en)}" '
+            f'title="{html.escape(role_zh)}" aria-label="{html.escape(role_zh)}">'
+            f'<span class="role-seg-icon role-seg-{icon}" aria-hidden="true"></span>'
+            f'<span class="chip-label">{html.escape(role_zh)}</span></button>'
+        )
+    parts.append("</div>")  # /role-chip-bar
     # Count sits immediately after the last role chip (Tank), not beside search.
     parts.append(
         f'<span class="shown-count"><span id="shown-n">{len(records)}</span> / {len(records)} '
@@ -3833,32 +3885,7 @@ def render_html(
         'aria-label="搜尋英雄名稱" aria-describedby="search-scope-hint">'
         "</label>"
     )
-    parts.append(
-        "<details class='search-scope' id='search-scope'>"
-        "<summary class='search-scope-summary' id='search-scope-summary' "
-        "title='展開進階搜尋' aria-label='搜尋範圍：英雄。展開進階搜尋'>"
-        "<span id='search-scope-value'>英雄</span>"
-        "<svg viewBox='0 0 24 24' width='14' height='14' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'><path d='m6 9 6 6 6-6'></path></svg>"
-        "</summary>"
-        "<div class='search-scope-menu' id='search-scope-menu' role='group' aria-label='搜尋範圍'>"
-        "<button type='button' class='search-scope-option is-active' "
-        "data-search-scope='champions' aria-pressed='true' "
-        "aria-label='只搜英雄：中／英文名稱、別名'>"
-        "<span data-i18n-zh='只搜英雄' data-i18n-en='Champions only'>只搜英雄</span>"
-        "<small data-i18n-zh='中／英文名稱、別名' data-i18n-en='Chinese / English names and aliases'>中／英文名稱、別名</small>"
-        "</button>"
-        "<button type='button' class='search-scope-option' "
-        "data-search-scope='all' aria-pressed='false' "
-        "aria-label='全部：英雄＋增幅＋裝備'>"
-        "<span data-i18n-zh='全部' data-i18n-en='ALL'>全部</span>"
-        "<small data-i18n-zh='英雄＋增幅＋裝備' data-i18n-en='champions + augments + items'>英雄＋增幅＋裝備</small>"
-        "</button>"
-        "</div>"
-        "</details>"
-    )
-    parts.append("<span class='sr-only' id='search-scope-hint'>預設只搜尋英雄名稱</span>")
+    parts.append("<span class='sr-only' id='search-scope-hint'>搜尋英雄中／英文名稱與別名</span>")
     parts.append("</div>")  # /search-rail
 
     # Optional player-history lookup. This markup is emitted only for the

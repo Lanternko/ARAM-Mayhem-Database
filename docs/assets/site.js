@@ -50,7 +50,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 });
                 document.querySelectorAll('.chip[data-label-en]').forEach(chip => {
                     const val = chip.getAttribute('data-label-en');
-                    if (val != null) chip.textContent = val;
+                    if (val == null) return;
+                    const label = chip.querySelector('.chip-label');
+                    if (!label) { chip.textContent = val; return; }
+                    label.textContent = val;
+                    chip.title = val;
+                    chip.setAttribute('aria-label', val);
                 });
             }
             const toggleLabel = document.getElementById('lang-toggle-label');
@@ -925,7 +930,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             searchScopeChampions: '英雄',
             searchScopeAll: '全部',
             searchScopeToggle: '展開進階搜尋',
-            searchScopeHint: '預設只搜尋英雄名稱；展開後可搜尋增幅與裝備',
+            searchScopeHint: '搜尋英雄中／英文名稱與別名',
             searchScopeChampionOption: '只搜英雄',
             searchScopeChampionHint: '中／英文名稱、別名',
             searchScopeAllOption: '全部',
@@ -1274,7 +1279,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             searchScopeChampions: 'Champions',
             searchScopeAll: 'All data',
             searchScopeToggle: 'Open advanced search',
-            searchScopeHint: 'Searches champion names by default; expand for augments and items',
+            searchScopeHint: 'Searches champion names (Chinese / English) and aliases',
             searchScopeChampionOption: 'Champions only',
             searchScopeChampionHint: 'Chinese / English names and aliases',
             searchScopeAllOption: 'ALL',
@@ -1623,12 +1628,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
     let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
-    let filterState = { role: '', q: '', scope: readSavedSearchScope() };
-    function readSavedSearchScope() {
-        try {
-            return localStorage.getItem(SEARCH_SCOPE_KEY) === 'all' ? 'all' : 'champions';
-        } catch { return 'champions'; }
-    }
+    // Home search is champions-only: the scope dropdown was removed (≈1.5% of
+    // searches used 'all'; augments and items have their own tabs).  Drop any
+    // remembered 'all' so returning visitors aren't stuck in it.
+    let filterState = { role: '', q: '', scope: 'champions' };
+    try { localStorage.removeItem(SEARCH_SCOPE_KEY); } catch {}
     let _trZhCN = null;
 
     // Product term (aramkit / CN client): 增幅(裝置) → 海克斯.
@@ -4484,7 +4488,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const complete = completion.length > core.items.length + 1 && Number(group.completionGames) > 0
             && core.items.every(item => completion.some(i => Number(i.id) === Number(item.id)))
             && boot && completion.some(item => Number(item.id) === Number(boot.id));
-        const items = complete ? completion : core.items;
+        // Boots already have their own column beside the build; don't show them twice.
+        const items = complete ? completion.filter(item => Number(item.id) !== Number(boot.id)) : core.items;
         const spell = info.spells?.top?.[0];
         const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
         const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}"><span>${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</span>${Number(g.pick) > 0 ? `<small>${escHtml(pickLang('選用', 'Pick'))} ${pct(g.pick)}</small>` : ''}</button>`).join('')}</div>` : '';
@@ -10532,11 +10537,17 @@ const feedbackFab = document.querySelector('.feedback-fab');
             el.textContent = copy.tierUnit;
         });
         document.querySelectorAll('.chip, .item-role-chip, .apool-role-chip').forEach(chip => {
-            if (currentLang === 'en') {
-                chip.textContent = chip.getAttribute('data-label-en') || chip.textContent || '';
-            } else {
-                const zh = chip.getAttribute('data-label-zh') || chip.textContent || '';
-                chip.textContent = zhUi(zh);
+            // Icon segments keep their icon span; only the label (and the
+            // tooltip that stands in for it on narrow screens) is swapped.
+            const label = chip.querySelector('.chip-label');
+            const target = label || chip;
+            const text = currentLang === 'en'
+                ? (chip.getAttribute('data-label-en') || target.textContent || '')
+                : zhUi(chip.getAttribute('data-label-zh') || target.textContent || '');
+            target.textContent = text;
+            if (label) {
+                chip.title = text;
+                chip.setAttribute('aria-label', text);
             }
         });
         // Scope knob is state-driven (label + tooltip), not a static data-label
@@ -10556,6 +10567,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (sideClose) sideClose.setAttribute('aria-label', copy.closeRecs);
         syncLangMenu();
         syncThemeToggleLabels();
+        if (typeof syncHeaderSearchLabels === 'function') syncHeaderSearchLabels();
 
         // Static chrome strings (nav tabs, augment placeholder) carry their
         // own zh/en text via data-i18n-* attributes; zh-CN falls back to t2s(zh).
@@ -11830,6 +11842,149 @@ const feedbackFab = document.querySelector('.feedback-fab');
         trackEvent('role_filter_click', { role: filterState.role || 'all' });
     });
 
+    // Header search popover: the role segments and name box proxy the list
+    // view's own chips / #champ-search, so filtering logic stays single-sourced.
+    const headerSearch = document.getElementById('header-search');
+    function showChampionList() {
+        const list = document.getElementById('view-home');
+        if (!list?.classList.contains('is-active')) setActiveView('champions', false, 'push');
+    }
+    // Clicking a role segment drops an icon-only grid of that role's champions
+    // (All = every champion), ordered by tier then win rate.  Clicking the
+    // active segment again folds it away.  The header name box narrows the
+    // same grid, so role and name combine.
+    let headerRoleGridRole = null;
+    function renderHeaderRoleGrid(role) {
+        const grid = document.getElementById('header-role-grid');
+        if (!grid) return;
+        headerRoleGridRole = role;
+        headerSearch.querySelectorAll('[data-role-seg]').forEach(seg => {
+            const on = seg.getAttribute('data-role-seg') === role;
+            seg.classList.toggle('is-active', on);
+            seg.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (role === null) { grid.hidden = true; grid.replaceChildren(); return; }
+        const q = (document.getElementById('header-champ-search')?.value || '').trim();
+        const tierRank = new Map();
+        const cards = [];
+        document.querySelectorAll('#view-home .tier-block').forEach(block => {
+            const tier = block.getAttribute('data-tier') || '';
+            if (!tierRank.has(tier)) tierRank.set(tier, tierRank.size);
+            const tierColor = block.style.getPropertyValue('--tier-color');
+            block.querySelectorAll('.tier-grid > .champ').forEach(card => {
+                const tags = (card.getAttribute('data-tags') || '').split(' ');
+                if (role && !tags.includes(role)) return;
+                if (q && !searchMatchesText(card.getAttribute('data-champion-search') || '', q)) return;
+                cards.push({ card, tierColor, rank: tierRank.get(tier), wr: parseFloat(card.getAttribute('data-wr')) || 0 });
+            });
+        });
+        cards.sort((a, b) => a.rank - b.rank || b.wr - a.wr);
+        const nameKey = currentLang === 'en' ? 'data-name-en' : 'data-name-zh';
+        grid.replaceChildren(...cards.map(({ card, tierColor }) => {
+            const a = document.createElement('a');
+            a.className = 'header-role-champ';
+            if (tierColor) a.style.setProperty('--tier-color', tierColor);
+            a.href = card.getAttribute('href') || '#';
+            a.setAttribute('data-hdr-cid', card.getAttribute('data-cid'));
+            a.setAttribute('data-tier', card.getAttribute('data-tier') || '');
+            let name = card.getAttribute(nameKey) || '';
+            if (currentLang === 'zh-CN') name = t2s(name);
+            a.title = `${name} · ${card.getAttribute('data-tier') || ''} · ${card.getAttribute('data-wr') || ''}`;
+            a.setAttribute('aria-label', name);
+            const img = document.createElement('img');
+            img.src = card.querySelector('.champ-portrait img')?.getAttribute('src') || '';
+            img.alt = '';
+            img.loading = 'lazy';
+            a.appendChild(img);
+            return a;
+        }));
+        if (!cards.length) {
+            const empty = document.createElement('p');
+            empty.className = 'header-role-empty';
+            empty.textContent = currentLang === 'en' ? 'No matching champions' : (currentLang === 'zh-CN' ? t2s('沒有符合的英雄') : '沒有符合的英雄');
+            grid.replaceChildren(empty);
+        }
+        grid.hidden = false;
+        grid.scrollTop = 0;
+    }
+    if (headerSearch) {
+        const headerInput = document.getElementById('header-champ-search');
+        headerSearch.addEventListener('toggle', () => {
+            if (!headerSearch.open) return;
+            const listInput = document.getElementById('champ-search');
+            if (headerInput && listInput) headerInput.value = listInput.value;
+            headerInput?.focus({ preventScroll: true });
+        });
+        document.addEventListener('click', (ev) => {
+            const seg = ev.target.closest('[data-role-seg]');
+            if (seg) {
+                const role = seg.getAttribute('data-role-seg') || '';
+                renderHeaderRoleGrid(headerRoleGridRole === role ? null : role);
+                return;
+            }
+            const pick = ev.target.closest('[data-hdr-cid]');
+            if (pick) {
+                if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+                ev.preventDefault();
+                headerSearch.open = false;
+                openChampByCid(pick.getAttribute('data-hdr-cid'));
+                return;
+            }
+            if (headerSearch.open && !headerSearch.contains(ev.target)) headerSearch.open = false;
+        });
+        headerInput?.addEventListener('input', () => {
+            const listInput = document.getElementById('champ-search');
+            if (!listInput) return;
+            showChampionList();
+            listInput.value = headerInput.value;
+            listInput.dispatchEvent(new Event('input', { bubbles: true }));
+            // Typing with no role picked opens the All grid so matches show here.
+            if (headerRoleGridRole !== null) renderHeaderRoleGrid(headerRoleGridRole);
+            else if (headerInput.value.trim()) renderHeaderRoleGrid('');
+        });
+        headerSearch.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                headerSearch.open = false;
+                headerSearch.querySelector('summary')?.focus();
+            } else if (ev.key === 'Enter' && ev.target === headerInput) {
+                // Enter on a name opens the top hit; on a blank box it just closes.
+                const first = headerInput.value.trim() && document.querySelector('#header-role-grid [data-hdr-cid]');
+                headerSearch.open = false;
+                if (first) openChampByCid(first.getAttribute('data-hdr-cid'));
+            }
+        });
+    }
+    // applyLanguage runs for /en and /zh-CN before this block executes; the
+    // hoisted declaration is callable then but headerSearch is still in its TDZ.
+    // `var` hoists as undefined, so early calls bail and the init call below syncs.
+    var headerSearchReady = false;
+    function syncHeaderSearchLabels() {
+        if (!headerSearchReady || !headerSearch) return;
+        const pick = (zh, en) => currentLang === 'en' ? en : (currentLang === 'zh-CN' ? t2s(zh) : zh);
+        headerSearch.querySelectorAll('[data-role-seg]').forEach(seg => {
+            const role = seg.getAttribute('data-role-seg');
+            const zh = role ? (ROLE_LABELS.zh?.[role] || role) : '全部';
+            const en = role ? (ROLE_LABELS.en?.[role] || role) : 'All';
+            const label = pick(zh, en);
+            seg.setAttribute('title', label);
+            seg.setAttribute('aria-label', label);
+        });
+        const toggle = headerSearch.querySelector('summary');
+        const toggleLabel = pick('搜尋英雄', 'Search champions');
+        toggle?.setAttribute('title', toggleLabel);
+        toggle?.setAttribute('aria-label', toggleLabel);
+        const input = document.getElementById('header-champ-search');
+        if (input) {
+            input.placeholder = pick('搜尋英雄名稱（中 / 英）', 'Search champion (EN / 中文)');
+            input.setAttribute('aria-label', pick('搜尋英雄名稱', 'Search champion name'));
+        }
+        headerSearch.querySelector('.role-seg-bar')
+            ?.setAttribute('aria-label', pick('依職業列出英雄', 'List champions by class'));
+        if (headerRoleGridRole !== null) renderHeaderRoleGrid(headerRoleGridRole);
+    }
+    headerSearchReady = true;
+    syncHeaderSearchLabels();
+
     // Keyboard activation for cards.  Enter / Space on a `.champ` or `.aug`
     // triggers the same path a click would (they're role="button" /
     // tabindex="0").  Preventing default on Space stops the page from
@@ -12007,11 +12162,6 @@ const feedbackFab = document.querySelector('.feedback-fab');
             }
             clearTimeout(searchDebounceT);
             searchDebounceT = setTimeout(() => { searchDebounceT = null; applyFilters(); }, 120);
-            if (filterState.scope === 'all') {
-                ensureRelatedSearchIndex().then(() => {
-                    if (filterState.scope === 'all') applyFilters();
-                }).catch(() => {});
-            }
         });
         // Esc inside the search clears the filter and unfocuses, so the
         // typical "open, search, escape back to grid" flow works.  Immediate:
@@ -12026,42 +12176,6 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 searchEl.blur();
             }
         });
-    }
-
-    // Home search defaults to champions.  The native details disclosure keeps
-    // augment/item lookup available without making the primary typing surface
-    // compete with the hero picker.
-    document.getElementById('search-scope')?.addEventListener('toggle', (ev) => {
-        if (ev.currentTarget.open) trackEvent('search_scope_open');
-    });
-    document.getElementById('search-scope')?.addEventListener('click', (ev) => {
-        const option = ev.target.closest('[data-search-scope]');
-        if (!option) return;
-        ev.preventDefault();
-        const next = option.getAttribute('data-search-scope') === 'all' ? 'all' : 'champions';
-        if (filterState.scope === next) {
-            document.getElementById('search-scope').open = false;
-            return;
-        }
-        filterState.scope = next;
-        try { localStorage.setItem(SEARCH_SCOPE_KEY, next); } catch {}
-        updateSearchPlaceholder();
-        applyFilters();
-        if (next === 'all') {
-            ensureRelatedSearchIndex().then(() => {
-                if (filterState.scope === 'all') applyFilters();
-            }).catch(() => {});
-        }
-        document.getElementById('search-scope').open = false;
-        trackEvent('search_scope_change', { scope: next });
-    });
-    // A remembered 'all' scope needs the augment/item index before its
-    // matches can appear; champion-only results render in the meantime.
-    if (filterState.scope === 'all') {
-        updateSearchPlaceholder();
-        ensureRelatedSearchIndex().then(() => {
-            if (filterState.scope === 'all') applyFilters();
-        }).catch(() => {});
     }
 
     // Ctrl+F / Cmd+F shortcut → focus our search input.
