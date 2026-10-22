@@ -86,6 +86,7 @@ def test_quick_ui_uses_one_supported_completion_and_all_three_rarities():
     // A chain that stopped one item short is still a valid example.
     info.itemClusters.groups[0].completion=[...six.slice(0,4),six[5]];
     html=buildQuickOverview('1',info); assert(html.includes('i13.png')); assert(html.includes('i15.png')); assert(!html.includes('i14.png'));
+    assert.equal((html.match(/i15\.png/g)||[]).length,1); // boots only in their own column
     // Core plus boots alone adds nothing beyond the core row.
     info.itemClusters.groups[0].completion=[...six.slice(0,3),six[5]];
     html=buildQuickOverview('1',info); assert(html.includes('推薦核心'));

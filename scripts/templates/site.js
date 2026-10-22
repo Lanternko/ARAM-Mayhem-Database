@@ -4750,7 +4750,8 @@
         const complete = completion.length > core.items.length + 1 && Number(group.completionGames) > 0
             && core.items.every(item => completion.some(i => Number(i.id) === Number(item.id)))
             && boot && completion.some(item => Number(item.id) === Number(boot.id));
-        const items = complete ? completion : core.items;
+        // Boots already have their own column beside the build; don't show them twice.
+        const items = complete ? completion.filter(item => Number(item.id) !== Number(boot.id)) : core.items;
         const spell = info.spells?.top?.[0];
         const missing = `<p class="quick-empty">${escHtml(tr().insufficient)}</p>`;
         const choices = groups.length > 1 ? `<div class="quick-route-choices" role="group" aria-label="${escHtml(pickLang('出裝路線', 'Build path'))}">${groups.map((g, i) => `<button type="button" data-quick-route="${i}" aria-pressed="${i === selected}"><span>${escHtml((g.core || []).map(itemDisplayName).join(' + '))}</span>${Number(g.pick) > 0 ? `<small>${escHtml(pickLang('選用', 'Pick'))} ${pct(g.pick)}</small>` : ''}</button>`).join('')}</div>` : '';

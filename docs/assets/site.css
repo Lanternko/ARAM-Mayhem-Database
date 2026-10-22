@@ -2100,14 +2100,14 @@
     /* Divider before a tab that opens a new group (增幅裝置 | 增幅池). */
     .detail-tab-label.is-group-start {
         position: relative;
-        margin-left: 7px;
     }
+    /* Centered in the list gap; bottom offset spans the 2px underline so it matches the active box. */
     .detail-tab-label.is-group-start::before {
         content: "";
         position: absolute;
-        left: -7px;
-        top: 25%;
-        bottom: 25%;
+        left: -3.5px;
+        top: 0;
+        bottom: -2px;
         width: 1px;
         background: rgba(255,255,255,0.16);
         pointer-events: none;
@@ -10611,6 +10611,10 @@
 .quick-core-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .quick-item { position: relative; }
 .quick-item.is-core .quick-item-icon { box-shadow: 0 0 0 2px var(--accent); }
+/* Follow-up items sit back so the ringed core reads first. */
+.quick-build-line .quick-item:not(.is-core) .quick-item-icon { filter: brightness(.62) saturate(.75); transition: filter .15s; }
+.quick-build-line .quick-item:not(.is-core):is(:hover, :focus-visible) .quick-item-icon { filter: none; }
+.quick-build-line .quick-item:not(.is-core) > span:last-of-type { color: var(--text-dim); }
 .quick-items { display: flex; flex-wrap: wrap; align-items: start; gap: 10px; }
 .quick-item { width: 68px; min-height: 72px; padding: 4px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text-muted); cursor: pointer; font: inherit; }
 .quick-item-icon { display: block; width: 40px; height: 40px; margin: 0 auto 6px; border-radius: 6px; }
@@ -10623,7 +10627,8 @@
 .quick-rarity h3 small { font-size: 10px; font-weight: 400; color: var(--text-dim); }
 .quick-top-narrow { display: none; }
 .quick-rarity ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; }
-.quick-augment { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 0; background: transparent; border: 0; border-radius: var(--r-sm); font: inherit; text-align: left; color: var(--text); cursor: pointer; }
+/* Capped width keeps each win rate next to its name instead of the column's far edge. */
+.quick-augment { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; max-width: 240px; min-height: 48px; padding: 6px 0; background: transparent; border: 0; border-radius: var(--r-sm); font: inherit; text-align: left; color: var(--text); cursor: pointer; }
 .quick-augment-icon { width: 36px; height: 36px; background: var(--augment-icon-surface); border-radius: 6px; }
 .quick-augment-icon img { width: 100%; height: 100%; object-fit: contain; }
 .quick-augment-name { min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -10645,6 +10650,6 @@
     /* Desktop lists five per rarity; the phone row fits three. */
     .quick-rarity li:nth-child(n+4), .quick-top-wide { display: none; }
     .quick-top-narrow { display: inline; }
-    .quick-augment { display: flex; flex-direction: column; text-align: center; gap: 6px; }
+    .quick-augment { display: flex; flex-direction: column; text-align: center; gap: 6px; max-width: none; }
     .quick-augment-name { width: 100%; }
 }
