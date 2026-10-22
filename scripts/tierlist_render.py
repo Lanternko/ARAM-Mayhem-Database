@@ -734,8 +734,9 @@ def _header_role_search_html() -> str:
         "<input class='header-search-input' id='header-champ-search' type='search' "
         "placeholder='搜尋英雄名稱（中 / 英）' autocomplete='off' spellcheck='false' "
         "aria-label='搜尋英雄名稱'>"
-        "<div class='role-seg-bar' role='group' aria-label='依職業篩選英雄'>"
+        "<div class='role-seg-bar' role='group' aria-label='依職業列出英雄'>"
         f"{''.join(segs)}</div>"
+        "<div class='header-role-grid' id='header-role-grid' hidden></div>"
         "</div></details>"
     )
 

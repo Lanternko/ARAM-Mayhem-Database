@@ -12098,11 +12098,6 @@
         document.querySelectorAll('.chip').forEach(chip => {
             chip.classList.toggle('active', chip.getAttribute('data-role') === role);
         });
-        document.querySelectorAll('[data-role-seg]').forEach(seg => {
-            const on = seg.getAttribute('data-role-seg') === role;
-            seg.classList.toggle('is-active', on);
-            seg.setAttribute('aria-pressed', on ? 'true' : 'false');
-        });
     }
 
     // Role chip clicks (event delegation).  "All" chip (data-role="") already
@@ -12136,6 +12131,53 @@
         const list = document.getElementById('view-home');
         if (!list?.classList.contains('is-active')) setActiveView('champions', false, 'push');
     }
+    // Clicking a role segment drops an icon-only grid of that role's champions
+    // (All = every champion), ordered by tier then win rate.  Clicking the
+    // active segment again folds it away.
+    let headerRoleGridRole = null;
+    function renderHeaderRoleGrid(role) {
+        const grid = document.getElementById('header-role-grid');
+        if (!grid) return;
+        headerRoleGridRole = role;
+        headerSearch.querySelectorAll('[data-role-seg]').forEach(seg => {
+            const on = seg.getAttribute('data-role-seg') === role;
+            seg.classList.toggle('is-active', on);
+            seg.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        if (role === null) { grid.hidden = true; grid.replaceChildren(); return; }
+        const tierRank = new Map();
+        const cards = [];
+        document.querySelectorAll('#view-home .tier-block').forEach(block => {
+            const tier = block.getAttribute('data-tier') || '';
+            if (!tierRank.has(tier)) tierRank.set(tier, tierRank.size);
+            block.querySelectorAll('.tier-grid > .champ').forEach(card => {
+                const tags = (card.getAttribute('data-tags') || '').split(' ');
+                if (role && !tags.includes(role)) return;
+                cards.push({ card, rank: tierRank.get(tier), wr: parseFloat(card.getAttribute('data-wr')) || 0 });
+            });
+        });
+        cards.sort((a, b) => a.rank - b.rank || b.wr - a.wr);
+        const nameKey = currentLang === 'en' ? 'data-name-en' : 'data-name-zh';
+        grid.replaceChildren(...cards.map(({ card }) => {
+            const a = document.createElement('a');
+            a.className = 'header-role-champ';
+            a.href = card.getAttribute('href') || '#';
+            a.setAttribute('data-hdr-cid', card.getAttribute('data-cid'));
+            a.setAttribute('data-tier', card.getAttribute('data-tier') || '');
+            let name = card.getAttribute(nameKey) || '';
+            if (currentLang === 'zh-CN') name = t2s(name);
+            a.title = `${name} · ${card.getAttribute('data-tier') || ''} · ${card.getAttribute('data-wr') || ''}`;
+            a.setAttribute('aria-label', name);
+            const img = document.createElement('img');
+            img.src = card.querySelector('.champ-portrait img')?.getAttribute('src') || '';
+            img.alt = '';
+            img.loading = 'lazy';
+            a.appendChild(img);
+            return a;
+        }));
+        grid.hidden = false;
+        grid.scrollTop = 0;
+    }
     if (headerSearch) {
         const headerInput = document.getElementById('header-champ-search');
         headerSearch.addEventListener('toggle', () => {
@@ -12148,9 +12190,15 @@
             const seg = ev.target.closest('[data-role-seg]');
             if (seg) {
                 const role = seg.getAttribute('data-role-seg') || '';
-                showChampionList();
-                document.querySelector(`.role-chips .chip[data-role="${CSS.escape(role)}"]`)?.click();
+                renderHeaderRoleGrid(headerRoleGridRole === role ? null : role);
+                return;
+            }
+            const pick = ev.target.closest('[data-hdr-cid]');
+            if (pick) {
+                if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
+                ev.preventDefault();
                 headerSearch.open = false;
+                openChampByCid(pick.getAttribute('data-hdr-cid'));
                 return;
             }
             if (headerSearch.open && !headerSearch.contains(ev.target)) headerSearch.open = false;
@@ -12192,7 +12240,8 @@
             input.setAttribute('aria-label', pick('搜尋英雄名稱', 'Search champion name'));
         }
         headerSearch.querySelector('.role-seg-bar')
-            ?.setAttribute('aria-label', pick('依職業篩選英雄', 'Filter champions by class'));
+            ?.setAttribute('aria-label', pick('依職業列出英雄', 'List champions by class'));
+        if (headerRoleGridRole !== null) renderHeaderRoleGrid(headerRoleGridRole);
     }
     syncHeaderSearchLabels();
 
