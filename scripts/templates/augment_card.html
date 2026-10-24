@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Inter:wght@500;700;800&family=Outfit:wght@500;600;700&display=block" rel="stylesheet">
+<style>
+:root{--bg:#0a0c11;--ink:#f3f1ea;--mute:#9aa0ab;--gold:#e9c46a;--gold2:#b8893a;--green:#3ddc84;--line:rgba(255,255,255,.08)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1350px;overflow:hidden;background:var(--bg)}
+body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:var(--ink);position:relative}
+.bg{position:absolute;inset:0;background:url({{SPLASH}}) center 20%/cover;filter:blur(6px) saturate(.9);opacity:.38;transform:scale(1.06)}
+.bg::after{content:"";position:absolute;inset:0}
+.shade{position:absolute;inset:0;background:
+  radial-gradient(700px 520px at 50% 330px,rgba(233,196,106,.20),transparent 70%),
+  linear-gradient(180deg,rgba(10,12,17,.35) 0%,rgba(10,12,17,.75) 38%,var(--bg) 58%)}
+.wrap{position:relative;height:100%;padding:48px 64px 40px;display:flex;flex-direction:column}
+.top{display:flex;justify-content:space-between;align-items:center}
+.brand{display:flex;align-items:baseline}
+.bt{font-family:Outfit,sans-serif;font-size:34px;font-weight:600;letter-spacing:-.035em;line-height:1}
+.ba{font-weight:500;color:var(--mute)}.bm{font-weight:700;color:var(--ink)}
+.brand .sub2{color:var(--mute);font-weight:500;letter-spacing:.04em;margin-left:14px;font-family:"Noto Sans TC";font-size:22px}
+.op{font-family:Inter,sans-serif;font-weight:800;font-size:30px;color:#2a2140;padding:8px 26px;border-radius:14px;
+  background:linear-gradient(135deg,#fff 0%,#e7d5ff 18%,#bcd6ff 36%,#ffd5ec 58%,#fff1c8 78%,#fff 100%);
+  box-shadow:0 0 28px rgba(216,184,255,.45)}
+.hero{display:flex;flex-direction:column;align-items:center;margin-top:22px}
+.ring{width:208px;height:208px;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle,#1c1a16 0%,#0e0f12 70%);
+  box-shadow:0 0 0 3px rgba(233,196,106,.55),0 0 0 12px rgba(233,196,106,.08),0 0 80px rgba(233,196,106,.35)}
+.ring img{width:166px;height:166px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.6))}
+.name{font-size:var(--nfs,88px);font-weight:900;margin-top:28px;letter-spacing:.04em;line-height:1}
+.meta{margin-top:18px;display:flex;gap:12px;align-items:center;font-size:22px;color:var(--mute)}
+.pill{padding:4px 14px;border-radius:999px;border:1px solid rgba(233,196,106,.5);color:var(--gold);font-weight:700;font-size:20px}
+.en{font-family:Inter,sans-serif;font-weight:500}
+.tag{margin-top:20px;font-size:34px;font-weight:700;color:var(--gold)}
+.desc{margin:16px auto 0;max-width:860px;text-wrap:balance;text-align:center;font-size:27px;line-height:1.6;color:#d6d3cb}
+.stats{margin-top:32px;display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.03)}
+.st{padding:22px 0 24px;text-align:center}
+.st+.st{border-left:1px solid var(--line)}
+.k{font-size:21px;color:var(--mute);letter-spacing:.08em}
+.v{font-family:Inter,sans-serif;font-weight:800;font-size:68px;margin-top:6px;line-height:1.05}
+.v .u{font-size:40px}
+.v small{font-size:34px;font-weight:700}
+.win{color:var(--green)}
+.sub{font-size:19px;color:var(--green);margin-top:4px;opacity:.85}
+.sec{margin-top:30px;display:flex;align-items:baseline;justify-content:space-between}
+.sec h3{font-size:30px;font-weight:900;letter-spacing:.06em}
+.sec p{font-size:19px;color:var(--mute)}
+.champs{margin-top:20px;display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+.ch{position:relative;text-align:center;padding:18px 0 14px;border-radius:18px;background:rgba(255,255,255,.035);border:1px solid var(--line)}
+.ch:first-child{border-color:rgba(233,196,106,.45);background:rgba(233,196,106,.07)}
+.ch img{width:100px;height:100px;border-radius:16px;display:block;margin:0 auto}
+.rank{position:absolute;top:10px;left:12px;font-family:Inter;font-weight:800;font-size:20px;color:var(--gold)}
+.cn{font-size:24px;font-weight:700;margin-top:12px}
+.lift{font-family:Inter,sans-serif;font-weight:800;font-size:32px;color:var(--green);margin-top:4px}
+.cwr{font-size:17px;color:var(--mute);margin-top:2px}
+.lower{margin-top:auto;margin-bottom:56px}
+.foot{display:flex;justify-content:space-between;font-size:19px;color:#6d727c}
+</style></head><body>
+<div class="bg"></div><div class="shade"></div>
+<div class="wrap">
+  <div class="top"><div class="brand"><span class="bt"><span class="ba">aram</span><span class="bm">meta</span></span><span class="sub2">海克斯大混戰 · {{PATCH}}</span></div><div class="op">OP</div></div>
+  <div class="hero">
+    <div class="ring"><img src="{{ICON}}"></div>
+    <div class="name" style="--nfs:{{NFS}}">{{NAME}}</div>
+    <div class="meta"><span class="pill">金色海克斯</span><span class="en">{{EN}}</span></div>
+    <div class="tag">{{TAG}}</div>
+    <div class="desc">{{DESC}}</div>
+  </div>
+  <div class="lower">
+  <div class="stats">
+    <div class="st"><div class="k">勝率</div><div class="v win">{{WR}}<small>%</small></div></div>
+    <div class="st"><div class="k">選取率</div><div class="v">{{PICK}}<small>%</small></div></div>
+  </div>
+  <div class="sec"><h3>最適配英雄</h3><p>綠字＝拿這顆後的勝率加成</p></div>
+  <div class="champs">{{CHAMPS}}</div>
+  </div>
+  <div class="foot"><span>arammeta.com</span><span>{{IDX}} / 5</span></div>
+</div>
+</body></html>

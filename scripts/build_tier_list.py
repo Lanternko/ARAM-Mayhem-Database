@@ -370,6 +370,10 @@ def main(
     champ_records = [r for r in all_champ_records if r["games"] >= min_games]
     click.echo(f"[tierlist] {len(champ_records)} champions after min_games={min_games}")
     click.echo(f"[tierlist] {len(champ_aug):,} (champ, augment) pairs total")
+    # 第 1-4 選 cells are thin per champion, so they borrow the previous patch's
+    # same round even on a mature patch (labelled in the tooltip); the headline
+    # WR keeps the current-data-only rule above.
+    attach_champ_aug_slot_evidence(champ_aug, baseline_champ_aug or None)
     click.echo(f"[tierlist] {len(champ_pairs):,} ordered same-team champion pairs total")
 
     patch_changes = None
