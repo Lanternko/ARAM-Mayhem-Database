@@ -159,6 +159,25 @@ def _log_gui_exception(context: str) -> None:
         pass
 
 
+def _load_settings() -> dict:
+    from aram_nn.desktop.update import cache_root, read_json
+
+    try:
+        return read_json(cache_root() / "settings.json")
+    except Exception:
+        return {}
+
+
+def _save_settings(**changes) -> None:
+    """Best-effort: a failed write only loses the preference for next launch."""
+    from aram_nn.desktop.update import atomic_json, cache_root
+
+    try:
+        atomic_json(cache_root() / "settings.json", {**_load_settings(), **changes})
+    except Exception:
+        _log_gui_exception("save settings")
+
+
 def _set_window_icon(root: tk.Tk) -> None:
     icon_path = _resource_path(DEFAULT_APP_ICON)
     if not icon_path.exists():
@@ -1050,7 +1069,8 @@ class RecommenderApp:
 
         root.title("ARAM Recommender")
         _set_window_icon(root)
-        root.attributes("-topmost", True)
+        self.topmost = _load_settings().get("topmost", True)
+        root.attributes("-topmost", self.topmost)
         root.attributes("-alpha", 1.0)
         root.geometry("840x620+40+40")
         root.configure(bg=BG)
@@ -1083,6 +1103,14 @@ class RecommenderApp:
             anchor="w", padx=12,
         )
         self.header.grid(row=0, column=0, sticky="ew")
+        self._pin_button = tk.Button(
+            header_row, text="置頂", command=self._toggle_topmost,
+            relief="flat", bd=0, padx=10, pady=3, cursor="hand2",
+            activebackground=DIVIDER, activeforeground=FG,
+            font=self._font(FONT_SUB),
+        )
+        self._pin_button.grid(row=0, column=1, padx=(0, 12))
+        self._style_pin()
 
         self.subheader = tk.Label(
             root, text="",
@@ -1376,6 +1404,15 @@ class RecommenderApp:
         for key, button in self._tab_buttons.items():
             selected = key == self.tab
             button.config(bg=DIVIDER if selected else ROW, fg=FG if selected else DIM)
+
+    def _style_pin(self) -> None:
+        self._pin_button.config(bg=DIVIDER if self.topmost else ROW, fg=FG if self.topmost else DIM)
+
+    def _toggle_topmost(self) -> None:
+        self.topmost = not self.topmost
+        self.root.attributes("-topmost", self.topmost)
+        self._style_pin()
+        _save_settings(topmost=self.topmost)
 
     def _select_tab(self, key: str) -> None:
         if key == self.tab:
@@ -2385,6 +2422,7 @@ def main(
         print(f"[gui] WARN: synergy stats not found at {pair_stats}; old blend fallback will use LR only")
 
     if self_test:
+        from aram_nn.desktop import webview_host
         from aram_nn.desktop.update import atomic_json, cache_root
         probe = tk.Tk()
         probe.withdraw()
@@ -2396,7 +2434,7 @@ def main(
             "app_version": version if getattr(sys, "frozen", False) else "source",
             "python": sys.version.split()[0], "tk": probe.tk.call("info", "patchlevel"),
             "champions": model.n_champs, "data_status": DESKTOP_STATUS,
-            "sample_probability": probability,
+            "sample_probability": probability, "webview": webview_host.diagnose(),
         })
         probe.destroy()
         return

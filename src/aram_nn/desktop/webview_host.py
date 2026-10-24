@@ -67,14 +67,21 @@ def _load_runtime():
     return lib
 
 
-def available() -> bool:
+def diagnose() -> dict:
+    """``bundled``: the SDK DLLs and pythonnet load; ``runtime``: the installed Edge WebView2 version."""
     try:
         _load_runtime()
         from Microsoft.Web.WebView2.Core import CoreWebView2Environment
+    except Exception as exc:
+        return {"bundled": False, "runtime": "", "error": f"{type(exc).__name__}: {exc}"}
+    try:
+        return {"bundled": True, "runtime": str(CoreWebView2Environment.GetAvailableBrowserVersionString() or "")}
+    except Exception as exc:  # no WebView2 Runtime installed on this machine
+        return {"bundled": True, "runtime": "", "error": f"{type(exc).__name__}: {exc}"}
 
-        return bool(CoreWebView2Environment.GetAvailableBrowserVersionString())
-    except Exception:
-        return False
+
+def available() -> bool:
+    return bool(diagnose()["runtime"])
 
 
 class SiteView:

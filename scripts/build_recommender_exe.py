@@ -45,7 +45,10 @@ def build(*, version: str, input_root: Path, region: str | None, time_cutoff: st
            "--name", APP_NAME, "--distpath", str(dist), "--workpath", str(ROOT / "build/pyinstaller"),
            "--specpath", str(ROOT / "build/pyinstaller"), "--paths", str(ROOT / "src"),
            "--icon", str(icon), "--add-data", f"{resources};desktop-data",
-           "--add-data", f"{icon};docs"]
+           "--add-data", f"{icon};docs",
+           # Site tabs: pywebview ships the WebView2 SDK DLLs, pythonnet loads them.
+           "--collect-all", "webview", "--collect-all", "pythonnet", "--collect-all", "clr_loader",
+           "--hidden-import", "clr"]
     for module in EXCLUDE_MODULES:
         cmd.extend(["--exclude-module", module])
     cmd.append(str(ROOT / "scripts/recommend_gui.py"))
