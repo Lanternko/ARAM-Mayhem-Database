@@ -125,6 +125,8 @@
         }
         return await response.json();
     }
+    // Desktop recommender WebView page: one champion's detail, nothing else.
+    const IS_EMBED = document.documentElement.getAttribute('data-embed') === 'champion';
     const DATA = __PAYLOAD__;
     const CHAMP_DETAIL_FIELDS = [
         'poolAugments',
@@ -279,8 +281,9 @@
         try {
             _compNormCache = null;
             _stageTempoCache = null;
-            if (document.querySelector('.view-draft.is-active')) renderDraft();
-            if (document.querySelector('.view-champ.is-active')) renderChampPage(champPageSlugNow, true);
+            if (IS_EMBED) refreshChampEmbed();
+            else if (document.querySelector('.view-draft.is-active')) renderDraft();
+            if (!IS_EMBED && document.querySelector('.view-champ.is-active')) renderChampPage(champPageSlugNow, true);
         } catch {}
     };
     const secondaryFetches = [
@@ -290,7 +293,7 @@
     if (wantCnNamesEarly) {
         // CN names ARE first-paint copy for /zh-CN shares — keep that one blocking.
         await loadSitePayload('api/names-zh-cn.json').then(d => { NAMES_ZH_CN = d; attachCnNames(); }).catch(() => { NAMES_ZH_CN = null; });
-    } else {
+    } else if (!IS_EMBED) {
         // Non-blocking: official CN names arrive after first interactive frame.
         loadSitePayload('api/names-zh-cn.json').then(d => {
             NAMES_ZH_CN = d;
@@ -307,14 +310,16 @@
             try { renderDraftSlots('ally'); renderDraftSlots('enemy'); } catch {}
         }
     }
-    loadSitePayload('api/draft-slot-crops.json').then(d => {
-        DRAFT_SLOT_CROPS = d || null;
-        refreshDraftSlotsIfOpen();
-    }).catch(() => { DRAFT_SLOT_CROPS = null; });
-    loadSitePayload('api/draft-splash-hd.json').then(d => {
-        DRAFT_SPLASH_HD = d || null;
-        refreshDraftSlotsIfOpen();
-    }).catch(() => { DRAFT_SPLASH_HD = null; });
+    if (!IS_EMBED) {
+        loadSitePayload('api/draft-slot-crops.json').then(d => {
+            DRAFT_SLOT_CROPS = d || null;
+            refreshDraftSlotsIfOpen();
+        }).catch(() => { DRAFT_SLOT_CROPS = null; });
+        loadSitePayload('api/draft-splash-hd.json').then(d => {
+            DRAFT_SPLASH_HD = d || null;
+            refreshDraftSlotsIfOpen();
+        }).catch(() => { DRAFT_SPLASH_HD = null; });
+    }
     const pct = x => (x * 100).toFixed(1) + '%';
     const signed = x => (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
     const escHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -5624,7 +5629,8 @@
             { key: 'augments', label: mainTabLabels.augments, content: augmentTabContent },
             { key: 'pools', label: mainTabLabels.pools, groupStart: true, content: `<div class="champ-pools" data-champ-pools="${escHtml(cid)}"></div>` },
             { key: 'compfit', label: mainTabLabels.compfit, content: compFitTabContent },
-        ].filter(tab => !opts.inline || ['overview', 'compare', 'items', 'augments', 'pools'].includes(tab.key)), 'detail-main-tabs');
+        ].filter(tab => !opts.inline || ['overview', 'compare', 'items', 'augments', 'pools'].includes(tab.key))
+            .filter(tab => !opts.embed || EMBED_TABS.includes(tab.key)), 'detail-main-tabs');
         return heroHtml + detailTabs;
     }
 
@@ -11216,6 +11222,60 @@
         openChampPage(champSlugForCid(cid));
     }
 
+    // ---- Desktop recommender embed (/embed/champion/) --------------------------------
+    // The recommender app hosts this page in a WebView and owns the tab bar, so
+    // only one champion's detail is drawn: no app shell, card wall or other view.
+    const EMBED_TABS = ['overview', 'compare', 'items', 'augments'];
+    let embedCid = '';
+    let embedTab = 'overview';
+    let embedToken = 0;
+    function showChampEmbed(cid, tab, force = false) {
+        const host = document.getElementById('champ-page-host');
+        const key = String(cid || '');
+        embedTab = EMBED_TABS.includes(tab) ? tab : 'overview';
+        if (!host) return;
+        if (!force && key === embedCid) {
+            // Same champion: flip the CSS radio (or let the pending render pick embedTab up).
+            const input = host.querySelector(`#detail-main-${key}-${embedTab}`);
+            if (input) input.checked = true;
+            window.scrollTo(0, 0);
+            return;
+        }
+        const info = DATA.champs && DATA.champs[key];
+        embedCid = key;
+        const token = ++embedToken;
+        if (!info) {
+            host.innerHTML = `<div class="champ-page-empty">${escHtml(pickLang('沒有這位英雄的資料。', 'No data for this champion.'))}</div>`;
+            return;
+        }
+        document.title = `${champName(info, key)} · arammeta`;
+        if (!force) host.innerHTML = `<div class="detail detail-page detail-loading"><div class="detail-skeleton" aria-hidden="true"></div></div>`;
+        ensureChampDetail(key).then(() => {
+            if (token !== embedToken) return;
+            host.innerHTML = `<div class="detail detail-page">${renderDetail(key, { page: true, embed: true, tab: embedTab })}</div>`;
+            wireChampHero(host);
+            syncChampAugTable(host);
+            applySingleItemFilter(host);
+            if (!force) window.scrollTo(0, 0);
+        }).catch(err => {
+            if (token !== embedToken) return;
+            embedCid = '';
+            console.error('champion embed load failed', key, err);
+            host.innerHTML = `<div class="detail detail-page detail-load-error"><div class="empty" role="alert">${escHtml(pickLang('英雄詳細資料載入失敗。', 'Champion details could not be loaded.'))}</div></div>`;
+        });
+    }
+    // Secondary data (archetype fit, axes) landed: redraw on the same tab.
+    function refreshChampEmbed() {
+        if (!embedCid) return;
+        const checked = document.querySelector('#champ-page-host .detail-main-tabs > .detail-tab-input:checked');
+        showChampEmbed(embedCid, checked ? checked.id.split('-').pop() : embedTab, true);
+    }
+    function initChampEmbed() {
+        const params = new URLSearchParams(location.search);
+        window.aramEmbed = { show: (cid, tab) => showChampEmbed(cid, tab) };
+        if (params.get('cid')) showChampEmbed(params.get('cid'), params.get('tab'));
+    }
+
     // ---- Champion page (/champions/<slug>) ------------------------------------------
     // Each champion has a shareable URL. The static route hydrates the shared
     // app shell in place; this view renders full detail with a remembered tab.
@@ -12057,28 +12117,34 @@
     // Chrome was already flipped for /en at the top of this IIFE; applyLanguage
     // here finishes data-bound copy (cards, panels).  historyMode 'none': the
     // following routeFromLocation will write the locale prefix if needed.
-    setRecommendMode(false);
-    initPlayerHistory();
-    syncPickDecorations();
-    renderSidePanel();
-    if (currentLang !== 'zh') {
-        // Non-default locale must land in the same turn as the first interactive
-        // frame so shared /en or /zh-CN links never need a manual language toggle.
-        applyLanguage(currentLang, 'none');
+    if (IS_EMBED) {
+        applyTheme('dark');
+        // Deferred: later top-level consts must be initialised before render.
+        setTimeout(initChampEmbed, 0);
     } else {
-        refreshSecondaryRoleBadges();
-        renderUpdatesPanel();
-        syncLangMenu();
-    }
-    // Warm the search indexes in the background; do not await (keeps init moving).
-    whenIdle(() => { warmChampIndexesInBackground().catch(err => console.error('index warm pass failed', err)); });
+        setRecommendMode(false);
+        initPlayerHistory();
+        syncPickDecorations();
+        renderSidePanel();
+        if (currentLang !== 'zh') {
+            // Non-default locale must land in the same turn as the first interactive
+            // frame so shared /en or /zh-CN links never need a manual language toggle.
+            applyLanguage(currentLang, 'none');
+        } else {
+            refreshSecondaryRoleBadges();
+            renderUpdatesPanel();
+            syncLangMenu();
+        }
+        // Warm the search indexes in the background; do not await (keeps init moving).
+        whenIdle(() => { warmChampIndexesInBackground().catch(err => console.error('index warm pass failed', err)); });
 
-    // ---- Chrome init: theme, tab routing ----
-    try {
-        const savedTheme = localStorage.getItem(THEME_KEY);
-        applyTheme(savedTheme === 'light' ? 'light' : 'dark');
-    } catch { applyTheme('dark'); }
-    routeFromLocation(true, 'replace');  // instant: no View Transition on first paint
+        // ---- Chrome init: theme, tab routing ----
+        try {
+            const savedTheme = localStorage.getItem(THEME_KEY);
+            applyTheme(savedTheme === 'light' ? 'light' : 'dark');
+        } catch { applyTheme('dark'); }
+        routeFromLocation(true, 'replace');  // instant: no View Transition on first paint
+    }
     // Position the sliding indicator/thumb now (base CSS has transition:none so
     // they snap), commit that layout with a reflow, THEN enable the transitions
     // so only later tab/theme changes animate -- never a grow-from-0 on load.

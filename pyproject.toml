@@ -22,6 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Desktop recommender site tabs: WebView2 hosted through pythonnet.
+desktop = ["pywebview>=5", "pythonnet>=3"]
 
 [project.scripts]
 aram-ingest = "aram_nn.ingest.cli:main"

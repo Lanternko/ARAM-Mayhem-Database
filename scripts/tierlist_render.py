@@ -2287,6 +2287,37 @@ def load_champion_page_routes(out_dir: Path, champion_ids, champ_meta: dict) -> 
     return champion_page_routes(champion_ids, champ_meta, names_zh_cn=names_zh_cn)
 
 
+def _champion_embed_html(full_shell: str) -> str:
+    """Single-champion page the desktop recommender hosts in a WebView.
+
+    Reuses the full shell's build config, site.js and site.css so styling and
+    rendering stay identical, but drops the app body, ads, analytics and SEO
+    metadata: the app only needs one champion's detail at a time.
+    """
+    head = re.search(r"<head\b[^>]*>(.*?)</head>", full_shell, flags=re.S | re.I)
+    head_html = head[1] if head else ""
+    keep: list[str] = []
+    for tag in re.finditer(r"<script\b[^>]*>.*?</script>|<link\b[^>]*>|<base\b[^>]*>|<noscript>.*?</noscript>", head_html, flags=re.S | re.I):
+        text = tag[0]
+        if text.lower().startswith("<script"):
+            if "__ARAM_BUILD__" in text or "/assets/site." in text:
+                keep.append(text)
+        elif text.lower().startswith("<base") or "fonts.g" in text or "api/tier-list.json" in text:
+            keep.append(text)
+    body = re.search(r"<body\b[^>]*>(.*)</body>", full_shell, flags=re.S | re.I)
+    loader = re.findall(r"<script>[^<]*?/assets/site\.js[^<]*?</script>", body[1] if body else "")
+    return (
+        "<!doctype html><html lang='zh-Hant' data-embed='champion'><head>"
+        "<meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<meta name='robots' content='noindex'><title>arammeta</title>"
+        + "".join(keep)
+        + "</head><body><main class='view view-champ is-active' id='view-champ' data-view='champ'>"
+        "<div class='champ-page'><div class='champ-page-host' id='champ-page-host'></div></div></main>"
+        + (loader[-1] if loader else "")
+        + "</body></html>"
+    )
+
+
 def _champion_route_specs(root: Path, routes) -> list[tuple[Path, str, str, str, str]]:
     specs: list[tuple[Path, str, str, str, str]] = []
     for route in routes:
@@ -2505,6 +2536,9 @@ def write_spa_path_shells(
         loader_path.write_text(_read_site_template("champion-shell.js"), encoding="utf-8")
         shell_url = "assets/app-shell.html?v=" + hashlib.sha256(shell_path.read_bytes()).hexdigest()[:12]
         loader_url = "assets/champion-shell.js?v=" + hashlib.sha256(loader_path.read_bytes()).hexdigest()[:12]
+        embed_path = root / "embed" / "champion" / "index.html"
+        embed_path.parent.mkdir(parents=True, exist_ok=True)
+        embed_path.write_text(_champion_embed_html(full_shell), encoding="utf-8")
     written: list[Path] = []
     for dest, cpath, title, desc, html_lang in route_specs:
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -2538,7 +2572,7 @@ def write_spa_path_shells(
         dest.write_text(body, encoding="utf-8")
         written.append(dest)
     if champion_routes:
-        written.extend([shell_path, loader_path])
+        written.extend([shell_path, loader_path, embed_path])
     return written
 
 

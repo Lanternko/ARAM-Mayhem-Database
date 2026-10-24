@@ -27,6 +27,7 @@ import threading
 import tkinter as tk
 import tkinter.font as tkfont
 import urllib.request
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -894,6 +895,16 @@ DIM       = "#9aa0a6"
 MUTED     = "#69707a"
 DIVIDER   = "#30363d"
 GOLD      = "#f5c518"
+SITE_BG   = "#0a0b0d"  # site.css --bg, so the WebView area has no seam
+
+# (key, label): the first four are site embed tabs, matchup is the Tk view.
+SITE_TABS = (
+    ("overview", "概覽"),
+    ("compare", "詳細"),
+    ("items", "裝備"),
+    ("augments", "增幅"),
+    ("matchup", "對戰勝率"),
+)
 GREEN     = "#8ec441"
 RED       = "#ff6a4a"
 BLUE      = "#3aa0ff"
@@ -1096,8 +1107,29 @@ class RecommenderApp:
         # self.augment_panel.pack(fill="x", padx=12, pady=(6, 0))
         # self._render_augment_panel()
 
+        # Site tabs mirror the public champion page; 對戰勝率 is the native
+        # matchup view.  The WebView is only created on the first site-tab
+        # click, so users who never leave 對戰勝率 pay nothing for it.
+        self.tab = "matchup"
+        self._tab_buttons: dict[str, tk.Button] = {}
+        self.site_view = None
+        self._site_error: str | None = None
+        tab_bar = tk.Frame(root, bg=BG)
+        tab_bar.pack(fill="x", padx=12, pady=(6, 0))
+        for key, label in SITE_TABS:
+            button = tk.Button(
+                tab_bar, text=label, command=lambda k=key: self._select_tab(k),
+                relief="flat", bd=0, padx=10, pady=3, cursor="hand2",
+                activebackground=DIVIDER, activeforeground=FG,
+                font=self._font(FONT_SUB),
+            )
+            button.pack(side="left", padx=(0, 4))
+            self._tab_buttons[key] = button
+        self._style_tabs()
+
         self.body = tk.Frame(root, bg=BG)
         self.body.pack(fill="both", expand=True, padx=12, pady=(8, 10))
+        self.web_frame = tk.Frame(root, bg=SITE_BG)
 
         _make_observer_window(root)
         self.root.after_idle(lambda: _make_observer_window(root))
@@ -1143,6 +1175,8 @@ class RecommenderApp:
         self._apply_zoom_geometry()
         self.header.config(font=self._font(FONT_HEAD))
         self.subheader.config(font=self._font(FONT_SUB))
+        for button in self._tab_buttons.values():
+            button.config(font=self._font(FONT_SUB))
         # self._render_augment_panel()  # augment panel disabled (Overwolf offline)
         if self._last_render_args is not None:
             self._render(*self._last_render_args)
@@ -1286,7 +1320,7 @@ class RecommenderApp:
 
     def _handle(self, msg: tuple) -> None:
         kind = msg[0]
-        if kind not in ("ingame", "quickpicks", "static"):
+        if kind not in ("ingame", "quickpicks", "static", "siteview_error"):
             self._last_ingame_args = None
         if kind == "static":
             self.id_to_name = msg[1]
@@ -1314,6 +1348,7 @@ class RecommenderApp:
             current_combo = rest[1] if len(rest) > 1 else None
             self._render(parsed, suggestions, combos, current_combo)
             self._render_augment_panel()
+            self._sync_site()
         elif kind == "ingame":
             _, snapshot, current_combo, enemy_combo = msg
             active = snapshot.get("active_champion_id")
@@ -1322,11 +1357,104 @@ class RecommenderApp:
                 del self._quick_state[self.active_champion_id]  # new game, try again
             self._render_ingame(snapshot, current_combo, enemy_combo)
             self._render_augment_panel()
+            self._sync_site()
         elif kind == "quickpicks":
             _, champion_id, ok = msg
             self._quick_state[champion_id] = "ready" if ok else "failed"
-            if self._last_ingame_args is not None and self.active_champion_id == champion_id:
+            if self.active_champion_id != champion_id:
+                return
+            if self._last_ingame_args is not None:
                 self._render_ingame(*self._last_ingame_args)
+            elif self._last_render_args is not None:
+                self._render(*self._last_render_args)
+        elif kind == "siteview_error":
+            self._site_failed(str(msg[1]))
+
+    # ----- Site tabs (WebView2 embed of the public champion page) -----
+
+    def _style_tabs(self) -> None:
+        for key, button in self._tab_buttons.items():
+            selected = key == self.tab
+            button.config(bg=DIVIDER if selected else ROW, fg=FG if selected else DIM)
+
+    def _select_tab(self, key: str) -> None:
+        if key == self.tab:
+            return
+        self.tab = key
+        self._style_tabs()
+        if key == "matchup":
+            self.web_frame.pack_forget()
+            self.body.pack(fill="both", expand=True, padx=12, pady=(8, 10))
+            return
+        self.body.pack_forget()
+        self.web_frame.pack(fill="both", expand=True)
+        self._sync_site()
+
+    def _sync_site(self) -> None:
+        """Point the WebView at the active champion when a site tab is showing."""
+        if self.tab == "matchup":
+            return
+        cid = self.active_champion_id
+        if self._site_error is not None:
+            self._render_site_fallback()
+            return
+        if not cid:
+            if self.site_view is None or not self.site_view.started:
+                self._site_message("選角或進入遊戲後顯示該英雄的網站資料。")
+            return
+        for widget in self.web_frame.winfo_children():
+            widget.destroy()
+        try:
+            if self.site_view is None:
+                from aram_nn.desktop.webview_host import SiteView
+
+                self.site_view = SiteView(
+                    self.web_frame, _icon_cache_dir().parent / "webview2",
+                    on_event=lambda *event: self.q.put(event),
+                )
+            self.site_view.show(cid, self.tab)
+        except Exception as exc:
+            self._site_failed(f"{type(exc).__name__}: {exc}")
+
+    def _site_failed(self, error: str) -> None:
+        print(f"[gui] site view unavailable: {error}")
+        self._site_error = error
+        if self.site_view is not None:
+            try:
+                self.site_view.close()
+            except Exception:
+                pass
+        if self.tab != "matchup":
+            self._render_site_fallback()
+
+    def _site_message(self, text: str) -> tk.Frame:
+        for widget in self.web_frame.winfo_children():
+            widget.destroy()
+        box = tk.Frame(self.web_frame, bg=SITE_BG)
+        box.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(
+            box, text=text, bg=SITE_BG, fg=DIM, font=self._font(FONT_SUB),
+            anchor="w", justify="left", wraplength=640,
+        ).pack(fill="x")
+        return box
+
+    def _render_site_fallback(self) -> None:
+        from aram_nn.desktop.webview_host import site_url
+
+        box = self._site_message("這台電腦無法內嵌網站頁（需要 WebView2 Runtime）。")
+        alias = ""
+        if self.icon_cache is not None and self.active_champion_id:
+            alias = getattr(self.icon_cache, "_alias", {}).get(self.active_champion_id, "")
+        url = site_url(alias)
+        tk.Button(
+            box, text="在瀏覽器開啟", command=lambda: webbrowser.open(url),
+            bg=ROW, fg=FG, activebackground=DIVIDER, activeforeground=FG,
+            relief="flat", bd=0, padx=10, pady=4, cursor="hand2", font=self._font(FONT_SUB),
+        ).pack(anchor="w", pady=(10, 0))
+
+    def close_site(self) -> None:
+        if self.site_view is not None:
+            self.site_view.close()
 
     # ----- Rendering -----
 
@@ -1362,8 +1490,31 @@ class RecommenderApp:
         right = tk.Frame(self.body, bg=BG)
         right.grid(row=1, column=1, sticky="new", pady=(8, 0))
 
+        self._render_spell_hint(left, int(parsed.my_current_id))
         self._render_team_section(left, parsed, suggestions, current_combo)
         self._render_bench_table(right, suggestions)
+
+    def _render_spell_hint(self, parent: tk.Frame, champion_id: int) -> None:
+        """Recommended summoner spells for the champion currently held in champ select."""
+        if self.quick_source is None or not champion_id:
+            return
+        self._request_quick_picks(champion_id)
+        if self._quick_state.get(champion_id) != "ready":
+            return
+        overview = self.quick_source.overview(champion_id, self._quick_route.get(champion_id, 0))
+        if overview is None or not overview.spells:
+            return
+        row = tk.Frame(parent, bg=BG)
+        row.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            row, text="推薦召喚師技能", bg=BG, fg=DIM, font=self._font(FONT_SECTION), anchor="w",
+        ).pack(side="left", padx=(0, 6))
+        for spell in overview.spells:
+            self._asset_icon(row, spell.icon, 24, BG).pack(side="left", padx=(0, 2))
+        tk.Label(
+            row, text=" + ".join(spell.name for spell in overview.spells),
+            bg=BG, fg=FG, font=self._font(FONT_SUB), anchor="w",
+        ).pack(side="left", padx=(4, 0))
 
     def _render_ingame(self, snapshot: dict, current_combo=None, enemy_combo=None) -> None:
         self._last_render_args = None
@@ -2281,10 +2432,14 @@ def main(
                     # the GUI stays on its placeholder "Loading..." header forever.
 
     root = tk.Tk()
-    RecommenderApp(root, q, icon_cache=icon_cache)
+    app = RecommenderApp(root, q, icon_cache=icon_cache)
     try:
         root.mainloop()
     finally:
+        try:
+            app.close_site()
+        except Exception:
+            pass
         # Signal the poll thread to exit cleanly so the httpx client closes.
         stop_event.set()
 

@@ -10043,6 +10043,12 @@
         background: color-mix(in oklab, var(--bg) 92%, transparent);
     }
 
+    /* Desktop recommender embed (/embed/champion/): the app draws the tab bar
+       and owns the window chrome, so drop the rail and the header offset. */
+    html[data-embed] { --header-h: 0px; }
+    html[data-embed] .champ-page-host { padding: 12px 14px 24px; }
+    html[data-embed] .detail-page .detail-main-tabs > .detail-tab-rail { display: none; }
+
     /* 增幅裝置 on the champion page: rarity segmented control + vertical table. */
     .aug-tier-table { margin-top: 10px; }
     .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }

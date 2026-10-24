@@ -92,6 +92,7 @@ DEFAULT_DOC_PATHS = (
     # HTML references it by content-hash ?v=, so it must ship in the same commit.
     Path("docs/assets/site.css"),
     Path("docs/assets/app-shell.html"),
+    Path("docs/embed/champion/index.html"),
     Path("docs/assets/champion-shell.js"),
     # Classic mode is built separately, but its root page must be staged with
     # the locale copies already covered by docs/en and docs/zh-cn whenever a UI
