@@ -51,7 +51,7 @@ jobs:
           python-version: '3.13'
           architecture: x64
       - name: Install desktop build dependencies
-        run: python -m pip install numpy==2.2.6 click==8.1.8 httpx==0.28.1 psutil==7.0.0 Pillow==11.2.1 pyinstaller==6.20.0 pytest==8.3.5
+        run: python -m pip install numpy==2.2.6 click==8.1.8 httpx==0.28.1 psutil==7.0.0 Pillow==11.2.1 pyinstaller==6.20.0 pytest==8.3.5 pywebview==6.2.1 pythonnet==3.2.1
       - name: Verify updater timing, integrity and release promotion
         run: python -m pytest tests/test_desktop_update.py tests/test_desktop_ci_release.py -q
       - name: Verify public model and choose a newer version
@@ -101,6 +101,7 @@ jobs:
           if ($proc.ExitCode) { throw "Candidate failed: $($proc.ExitCode)" }
           $report = Get-Content "$env:LOCALAPPDATA/ARAMRecommender/diagnostics.json" -Raw | ConvertFrom-Json
           if (-not $report.ok -or $report.app_version -ne $env:EXPECTED_VERSION) { throw 'Candidate inference or Tk failed' }
+          if (-not $report.webview.bundled) { throw "WebView2 support missing from the EXE: $($report.webview.error)" }
           $report | ConvertTo-Json
       - uses: actions/upload-artifact@v4
         if: always()

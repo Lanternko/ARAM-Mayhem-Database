@@ -2385,6 +2385,7 @@ def main(
         print(f"[gui] WARN: synergy stats not found at {pair_stats}; old blend fallback will use LR only")
 
     if self_test:
+        from aram_nn.desktop import webview_host
         from aram_nn.desktop.update import atomic_json, cache_root
         probe = tk.Tk()
         probe.withdraw()
@@ -2396,7 +2397,7 @@ def main(
             "app_version": version if getattr(sys, "frozen", False) else "source",
             "python": sys.version.split()[0], "tk": probe.tk.call("info", "patchlevel"),
             "champions": model.n_champs, "data_status": DESKTOP_STATUS,
-            "sample_probability": probability,
+            "sample_probability": probability, "webview": webview_host.diagnose(),
         })
         probe.destroy()
         return
