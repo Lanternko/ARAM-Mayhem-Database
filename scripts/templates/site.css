@@ -6713,6 +6713,56 @@
         color: color-mix(in oklch, var(--wr-1) var(--tip-lift-strength, 0%), var(--wr-negative));
     }
     .item-tip-delta.is-even { color: var(--wr-neutral); }
+    /* 第 1-4 選 strip: hue = above/below the augment's own mean across
+       rounds, depth = size (--slot-k, 0-100%, full at ±4pp). */
+    .aug-slots {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border);
+    }
+    .aug-slots-head {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+    .aug-slots-row {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 5px;
+    }
+    .aug-slot {
+        --slot-hue: var(--wr-3);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 6px 2px 5px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: color-mix(in oklab, var(--slot-hue) calc(var(--slot-k, 0%) * 0.5), color-mix(in oklab, var(--text) 4%, transparent));
+        min-height: 40px;
+    }
+    .aug-slot.is-up { --slot-hue: var(--wr-5); }
+    .aug-slot.is-down { --slot-hue: var(--wr-1); }
+    .aug-slot-label {
+        font-size: 10px;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+    .aug-slot-val {
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+    }
+    .aug-slot.is-prev .aug-slot-val::after { content: '*'; color: var(--text-muted); margin-left: 1px; }
+    .aug-slot.is-coarse { border-style: dashed; }
+    .aug-slot.is-empty { opacity: 0.45; }
+    .aug-slots-foot {
+        margin-top: 5px;
+        font-size: 10px;
+        color: var(--text-muted);
+    }
     .item-tip-note {
         margin-top: 7px;
         padding-top: 6px;

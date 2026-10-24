@@ -2633,6 +2633,7 @@
         const noteHtml = opts.note
             ? `<div class="item-tip-note">${escHtml(opts.note)}</div>`
             : '';
+        const extraHtml = opts.extraHtml || '';
 
         return `
             <div class="item-tip-card">
@@ -2647,6 +2648,7 @@
                 ${bodyHtml}
                 ${familyNotesHtml}
                 ${statsHtml}
+                ${extraHtml}
                 ${noteHtml}
             </div>
         `;
@@ -3113,8 +3115,85 @@
             lift: entry.lift,
             liftLabel: signed(entry.lift),
             games: entry.g,
+            extraHtml: buildAugSlotStrip(entry, onBoard),
             note: onBoard ? copy.augChampsHint : '',
         });
+    }
+
+    // 第 1-4 選 strip.  Champion rows carry their own cells ({g, wr, lift, show,
+    // prev}); a cell too thin to print falls back to the augment's all-champion
+    // round shape (DATA.augs[id].slots = [g, wr, lift, exact]) as colour only.
+    // Lift is vs that round's baseline (the late round sits near 49%); colour is
+    // that lift minus the augment's own mean lift across rounds, so a strong
+    // augment does not paint four identical greens and the early/late shape is
+    // what shows.  Numbers stay absolute.
+    const AUG_SLOT_DEV_FULL = 0.04;
+    function augSlotCells(entry, onBoard) {
+        const aug = DATA.augs[entry.id] || {};
+        const global = Array.isArray(aug.slots) ? aug.slots : [];
+        const own = !onBoard && Array.isArray(entry.slots) ? entry.slots : null;
+        const meanOf = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+        const globalLift = i => (Array.isArray(global[i]) && Number.isFinite(Number(global[i][2])) ? Number(global[i][2]) : null);
+        const ownCell = i => {
+            const c = own ? own[i] : null;
+            return c && Number.isFinite(Number(c.lift)) && c.show ? c : null;
+        };
+        const globalMean = meanOf([0, 1, 2, 3].map(globalLift).filter(x => x != null));
+        const ownLifts = [0, 1, 2, 3].map(ownCell).filter(Boolean).map(c => Number(c.lift));
+        // One printed champion cell carries no shape on its own; borrow the
+        // all-champion shape for it instead of painting it neutral.
+        const ownMean = ownLifts.length >= 2 ? meanOf(ownLifts) : null;
+        const cells = [];
+        for (let i = 0; i < 4; i += 1) {
+            const c = ownCell(i);
+            const gl = globalLift(i);
+            const globalDev = gl == null ? 0 : gl - globalMean;
+            if (c) {
+                const lift = Number(c.lift);
+                const dev = ownMean == null ? globalDev : lift - ownMean;
+                cells.push({ wr: Number(c.wr), lift, dev, g: Number(c.g), prev: Number(c.prev || 0), coarse: false });
+                continue;
+            }
+            if (gl != null) {
+                const gc = global[i];
+                const exact = onBoard && Number(gc[3]) === 1;
+                cells.push({ wr: Number(gc[1]), lift: gl, dev: globalDev, g: Number(gc[0]), prev: 0, coarse: !exact });
+                continue;
+            }
+            cells.push(null);
+        }
+        return cells;
+    }
+
+    function buildAugSlotStrip(entry, onBoard) {
+        const cells = augSlotCells(entry, onBoard);
+        if (!cells.some(Boolean)) return '';
+        const anyCoarse = cells.some(c => c && c.coarse);
+        const anyPrev = cells.some(c => c && c.prev > 0);
+        const boxes = cells.map((c, i) => {
+            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            if (!c) {
+                return `<div class="aug-slot is-empty"><span class="aug-slot-label">${label}</span><b class="aug-slot-val">–</b></div>`;
+            }
+            const t = Math.max(-1, Math.min(1, c.dev / AUG_SLOT_DEV_FULL));
+            const tone = t >= 0 ? 'is-up' : 'is-down';
+            const strength = Math.round(Math.abs(t) * 100);
+            const val = c.coarse ? '' : pct(c.wr);
+            const title = c.coarse
+                ? pickLang(`${label}：樣本不足，顏色依全英雄趨勢`, `${label}: thin sample, colour from all champions`)
+                : `${label}: ${pct(c.wr)} · ${pickLang('比同輪平均', 'vs round avg')} ${signed(c.lift)} · ${pickLang('比它自己平均', 'vs its own avg')} ${signed(c.dev)} · ${fmtInt(c.g)}${pickLang(' 場', ' games')}`;
+            return `<div class="aug-slot ${tone}${c.coarse ? ' is-coarse' : ''}${c.prev > 0 ? ' is-prev' : ''}" style="--slot-k:${strength}%" title="${escHtml(title)}">`
+                + `<span class="aug-slot-label">${label}</span>`
+                + `<b class="aug-slot-val">${escHtml(val)}</b></div>`;
+        }).join('');
+        const notes = [pickLang('綠／紅＝比它自己四選平均高／低', 'Green/red = above/below its own average')];
+        if (anyPrev) notes.push(pickLang('* 含上一版樣本', '* includes last patch'));
+        if (anyCoarse) notes.push(pickLang('無數字＝樣本不足，顏色依全英雄趨勢', 'No number = thin sample, colour from all champions'));
+        return `<div class="aug-slots">`
+            + `<div class="aug-slots-head">${escHtml(pickLang('第幾個選它的勝率', 'Win rate by pick round'))}</div>`
+            + `<div class="aug-slots-row">${boxes}</div>`
+            + (notes.length ? `<div class="aug-slots-foot">${escHtml(notes.join(' · '))}</div>` : '')
+            + `</div>`;
     }
 
     // ----- Champion page 增幅裝置: one rarity at a time, as a vertical table ---

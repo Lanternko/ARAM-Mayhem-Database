@@ -2939,11 +2939,20 @@ def render_html(
             if not slot:
                 slot_rows.append(None)
                 continue
-            slot_rows.append({
-                "g": int(slot["games"]),
-                "wr": round(float(slot["smoothed_wr"]), 4),
+            row = {
+                "g": int(slot.get("eff_games", slot["games"])),
+                "wr": round(float(slot.get("eff_wr", slot["smoothed_wr"])), 4),
                 "rawWr": round(float(slot["raw_wr"]), 4),
-            })
+            }
+            # attach_champ_aug_slot_evidence: lift vs the round-adjusted
+            # champion baseline, previous-patch share, and whether the cell has
+            # enough games to print a number (else the tooltip colours it only).
+            if "lift" in slot:
+                row["lift"] = round(float(slot["lift"]), 4)
+                row["show"] = 1 if slot.get("show") else 0
+                if slot.get("prev_mix"):
+                    row["prev"] = round(float(slot["prev_mix"]), 3)
+            slot_rows.append(row)
         if slot_rows:
             packed["slots"] = slot_rows
         return packed
@@ -3525,6 +3534,18 @@ def render_html(
             "curG": int(_gs.get("curG", _gs["g"])),
             "prevMix": round(float(_gs.get("prevMix", 0.0)), 3),
         })
+        # 第 1-4 選: [games, wr, lift vs that round's baseline, exact] per round,
+        # null when the augment never appeared in that round.
+        if _gs.get("slots"):
+            js_augs[_key]["slots"] = [
+                [
+                    int(_s["g"]),
+                    round(float(_s["wr"]), 4),
+                    round(float(_s["lift"]), 4),
+                    1 if _s.get("exact") else 0,
+                ] if _s else None
+                for _s in _gs["slots"]
+            ]
 
     css = _read_site_template("site.css")
     if not player_history_route:

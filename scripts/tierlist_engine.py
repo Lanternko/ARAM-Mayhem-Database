@@ -1999,6 +1999,9 @@ def build_augment_global_stats(
     total_g = sum(games_by.values())
     total_w = sum(wins_by.values())
     overall = total_w / total_g if total_g else 0.5
+    cur_slots = _rollup_augment_slots(champ_aug_records)
+    prev_slots = _rollup_augment_slots(prev_champ_aug_records)
+    slot_base = _slot_baselines(cur_slots, overall)
     stats: dict[int, dict] = {}
     # Only augments actually present in the current patch.  curG below
     # present_min_games (0 across a mature patch == removed/disabled) is dropped,
@@ -2032,7 +2035,162 @@ def build_augment_global_stats(
             "curG": cur_g,
             "prevMix": round(borrowed_g / eff_g, 3) if eff_g else 0.0,
         }
+        slots = _augment_slot_stats(
+            aid,
+            eff_w / eff_g,
+            overall,
+            cur_slots,
+            prev_slots,
+            slot_base,
+        )
+        if slots:
+            stats[aid]["slots"] = slots
     return stats
+
+
+# Per-draft-round (第 1-4 選) augment WR.  Rounds share one baseline per slot:
+# the 4th-round baseline sits ~1pp under 50% (16.20: 49.1% vs 50.0%), so each
+# cell's lift is measured against its own round, never against 50%.
+AUGMENT_SLOT_COUNT = 4
+AUGMENT_SLOT_PRIOR_GAMES = 150.0
+# Below this many current-patch games a round is topped up from the previous
+# patch's same round.
+AUGMENT_SLOT_CURRENT_MIN_GAMES = 400
+# A round shows its WR number only with this many games and no borrowed sample;
+# thinner rounds are rendered as colour only (see buildAugSlotStrip in site.js).
+AUGMENT_SLOT_EXACT_MIN_GAMES = 1000
+
+
+def _rollup_augment_slots(records: list[dict] | None) -> dict[tuple[int, int], list[int]]:
+    """(augment_id, slot) -> [games, wins], summed over champions."""
+    out: dict[tuple[int, int], list[int]] = {}
+    for r in records or []:
+        aid = int(r["augment_id"])
+        for idx, slot in enumerate(r.get("slots") or [], start=1):
+            if not slot or idx > AUGMENT_SLOT_COUNT:
+                continue
+            cell = out.setdefault((aid, idx), [0, 0])
+            cell[0] += int(slot["games"])
+            cell[1] += int(slot["wins"])
+    return out
+
+
+def _slot_baselines(cells: dict[tuple[int, int], list[int]], fallback: float) -> dict[int, float]:
+    totals: dict[int, list[int]] = {}
+    for (_aid, slot), (g, w) in cells.items():
+        t = totals.setdefault(slot, [0, 0])
+        t[0] += g
+        t[1] += w
+    return {
+        slot: (totals[slot][1] / totals[slot][0]) if slot in totals and totals[slot][0] else fallback
+        for slot in range(1, AUGMENT_SLOT_COUNT + 1)
+    }
+
+
+def _augment_slot_stats(
+    aid: int,
+    aug_raw_wr: float,
+    overall: float,
+    cur_slots: dict[tuple[int, int], list[int]],
+    prev_slots: dict[tuple[int, int], list[int]],
+    slot_base: dict[int, float],
+) -> list[dict | None]:
+    """WR of ``aid`` when it was the 1st/2nd/3rd/4th pick.
+
+    Each round is shrunk toward the augment's own WR shifted by that round's
+    baseline offset, so a thin round reads as "no evidence of a timing
+    difference" rather than collapsing to 50%.  Observed association only: the
+    offered-but-not-picked cards are not recorded.
+    """
+    out: list[dict | None] = []
+    for slot in range(1, AUGMENT_SLOT_COUNT + 1):
+        g, w = cur_slots.get((aid, slot), (0, 0))
+        eff_g, eff_w, borrowed = float(g), float(w), 0.0
+        pg, pw = prev_slots.get((aid, slot), (0, 0))
+        if g < AUGMENT_SLOT_CURRENT_MIN_GAMES and pg > 0:
+            borrowed = float(min(AUGMENT_SLOT_CURRENT_MIN_GAMES - g, pg))
+            eff_g = g + borrowed
+            eff_w = w + (pw / pg) * borrowed
+        if eff_g <= 0:
+            out.append(None)
+            continue
+        base = slot_base[slot]
+        prior = min(0.99, max(0.01, aug_raw_wr + (base - overall)))
+        k = AUGMENT_SLOT_PRIOR_GAMES
+        wr = (eff_w + prior * k) / (eff_g + k)
+        prev_mix = borrowed / eff_g
+        out.append({
+            "g": int(round(eff_g)),
+            "wr": wr,
+            "lift": wr - base,
+            "prevMix": round(prev_mix, 3),
+            "exact": bool(g >= AUGMENT_SLOT_EXACT_MIN_GAMES and borrowed == 0),
+        })
+    return out if any(out) else []
+
+
+# Champion-page cells are ~1/150 the size of the global ones, so they use their
+# own floors: top up from the previous patch below CHAMP_AUG_SLOT_CURRENT_MIN,
+# and show a number only at CHAMP_AUG_SLOT_SHOW_MIN; below that the frontend
+# colours the cell from the augment's all-champion round shape instead.
+CHAMP_AUG_SLOT_CURRENT_MIN_GAMES = 150
+CHAMP_AUG_SLOT_SHOW_MIN_GAMES = 100
+
+
+def attach_champ_aug_slot_evidence(
+    champ_aug_records: list[dict],
+    prev_champ_aug_records: list[dict] | None = None,
+) -> None:
+    """Finish each (champion, augment) row's 第 1-4 選 cells in place.
+
+    Adds ``eff_games`` / ``eff_wr`` (previous-patch top-up included),
+    ``lift`` (vs the champion's baseline shifted by the round's all-augment
+    baseline), ``prev_mix`` and ``show`` to every slot dict, creating a slot
+    from the previous patch when the current patch has none.
+    """
+    prev_by: dict[tuple[int, int], list] = {}
+    for r in prev_champ_aug_records or []:
+        prev_by[(int(r["champion_id"]), int(r["augment_id"]))] = r.get("slots") or []
+    cells = _rollup_augment_slots(champ_aug_records)
+    total_g = sum(g for g, _w in cells.values())
+    overall = (sum(w for _g, w in cells.values()) / total_g) if total_g else 0.5
+    slot_base = _slot_baselines(cells, overall)
+    k = AUGMENT_SLOT_PRIOR_GAMES
+    for r in champ_aug_records:
+        cur = list(r.get("slots") or [])
+        prev = prev_by.get((int(r["champion_id"]), int(r["augment_id"])), [])
+        if not cur and not prev:
+            continue
+        cur += [None] * (AUGMENT_SLOT_COUNT - len(cur))
+        baseline = float(r.get("baseline_wr", 0.5))
+        center = float(r.get("smoothed_wr", baseline))
+        for idx in range(AUGMENT_SLOT_COUNT):
+            slot = cur[idx]
+            p = prev[idx] if idx < len(prev) else None
+            g = int(slot["games"]) if slot else 0
+            w = int(slot["wins"]) if slot else 0
+            eff_g, eff_w, borrowed = float(g), float(w), 0.0
+            if g < CHAMP_AUG_SLOT_CURRENT_MIN_GAMES and p and int(p["games"]) > 0:
+                pg, pw = int(p["games"]), int(p["wins"])
+                borrowed = float(min(CHAMP_AUG_SLOT_CURRENT_MIN_GAMES - g, pg))
+                eff_g = g + borrowed
+                eff_w = w + (pw / pg) * borrowed
+            if eff_g <= 0:
+                continue
+            offset = slot_base[idx + 1] - overall
+            prior = min(0.99, max(0.01, center + offset))
+            eff_wr = (eff_w + prior * k) / (eff_g + k)
+            if slot is None:
+                slot = {"games": 0, "wins": 0, "raw_wr": 0.0, "smoothed_wr": eff_wr}
+                cur[idx] = slot
+            slot.update({
+                "eff_games": int(round(eff_g)),
+                "eff_wr": eff_wr,
+                "lift": eff_wr - (baseline + offset),
+                "prev_mix": round(borrowed / eff_g, 3),
+                "show": bool(eff_g >= CHAMP_AUG_SLOT_SHOW_MIN_GAMES),
+            })
+        r["slots"] = cur
 
 def _safe_float(value: object, default: float = 0.0) -> float:
     try:
