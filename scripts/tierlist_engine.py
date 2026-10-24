@@ -1095,6 +1095,29 @@ AUGMENT_NAME_OVERRIDES: dict[int, str] = {
     1349: "最終型態",
 }
 
+# English counterpart for augments whose CDragon English name is blank.
+AUGMENT_NAME_EN_OVERRIDES: dict[int, str] = {}
+
+# Augment ids that are recorded in the LCU augment list but are not a card the
+# player picks.  They are dropped from every site statistic.
+#   3176 GoH_PentakillAug_Generic: the Pentakill map-event marker.  The event
+#   grants it at game start (always list position 0), then grants a metal
+#   augment that names the empowered ability: 3170 Q / 3171 W / 3172 E at
+#   start, 3173 R only as the late second grant.  Every 3176 row co-occurs with
+#   one of those, so 3176 is a duplicate count of the same grant.
+NON_PICK_AUGMENT_IDS: frozenset[int] = frozenset({3176})
+
+_KEYLIKE_NAME_RE = re.compile(r"[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+")
+
+
+def _usable_augment_name(name: str | None) -> str | None:
+    """Return the name, or None when it is blank or an untranslated string key."""
+    if not name or not name.strip():
+        return None
+    if _KEYLIKE_NAME_RE.fullmatch(name.strip()):
+        return None
+    return name.strip()
+
 # Some tooltips contain spell-slot placeholders like "your @SpellName@ gains
 # @Value@ ability haste".  Our generic cleaner intentionally collapses opaque
 # numeric tokens to `[數值]`, but for Bread-and-* augments that also erases the
@@ -1142,10 +1165,17 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
         if aug_id is None:
             continue
         aug_id = int(aug_id)
+        if aug_id in NON_PICK_AUGMENT_IDS:
+            continue
         tw_entry = tw_by_id.get(aug_id, {})
-        tw_name = tw_entry.get("nameTRA") or tw_entry.get("name")
-        en_name = entry.get("nameTRA") or entry.get("name") or entry.get("simpleNameTRA")
-        name_zh = tw_name if tw_name and tw_name.strip() else en_name
+        tw_name = _usable_augment_name(tw_entry.get("nameTRA") or tw_entry.get("name"))
+        en_name = _usable_augment_name(
+            entry.get("nameTRA") or entry.get("name") or entry.get("simpleNameTRA")
+        )
+        en_name = AUGMENT_NAME_EN_OVERRIDES.get(aug_id, en_name)
+        if tw_name is None and en_name is None and aug_id not in AUGMENT_NAME_OVERRIDES:
+            click.echo(f"[tierlist] WARN: augment {aug_id} has no usable name; add AUGMENT_NAME_OVERRIDES")
+        name_zh = tw_name or en_name
         name_en = en_name or tw_name
         name = name_zh
         # Apply manual TW translation override if we have one.
@@ -1395,8 +1425,11 @@ def _scan_patch_counters(
                 if cid <= 0:
                     continue
                 player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
-                for slot, a in enumerate(p.get("augments") or [], start=1):
-                    a = int(a)
+                picked = [
+                    int(a) for a in (p.get("augments") or [])
+                    if int(a) not in NON_PICK_AUGMENT_IDS
+                ]
+                for slot, a in enumerate(picked, start=1):
                     if a <= 0:
                         continue
                     ca_games[(cid, a)] += 1
@@ -1529,6 +1562,9 @@ def _derive_winrate_records(
     pair_k = 20
     champ_aug_records = []
     for (cid, aid), g in ca_games.items():
+        # Settled patch snapshots froze their counters before this filter.
+        if aid in NON_PICK_AUGMENT_IDS:
+            continue
         w = ca_wins[(cid, aid)]
         raw = w / g if g else 0.0
         baseline = raw_wr_by_champ.get(cid, 0.5)
