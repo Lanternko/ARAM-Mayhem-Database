@@ -2917,6 +2917,7 @@ def render_html(
     player_history_api_url: str = "",
     player_history_route: bool = False,
     team_score_bundle: dict[str, object] | None = None,
+    champ_destiny_items: dict[int, dict] | None = None,
 ) -> str:
     # Group champions by tier
     by_tier: dict[str, list[dict]] = {t: [] for t in TIER_ORDER}
@@ -3519,6 +3520,15 @@ def render_html(
                 float(champ_stat_by_cid.get(cid, {}).get("prev_mix", 0.0) or 0.0), 3
             ),
         }
+        # 命定武器 item pick (see compute_champ_destiny_items): only the id and the
+        # lift the champion page prints, deliberately without sample counts or the
+        # interval — the card is a recommendation, not a statistics table.
+        _destiny = (champ_destiny_items or {}).get(cid)
+        if _destiny:
+            js_champs[str(cid)]["destinyItem"] = {
+                "id": int(_destiny["item_id"]),
+                "lift": round(float(_destiny["lift"]), 3),
+            }
     related_search_index = _build_related_search_index(js_champs)
     aug_cat_overrides = load_augment_category_overrides()
     if aug_cat_overrides:
@@ -4596,6 +4606,15 @@ def _run_shell_only(
         for k, v in (payload.get("augs") or {}).items()
         if str(k).lstrip("-").isdigit()
     }
+    # A frontend-only rebuild must keep the 命定武器 item picks the data lane
+    # published; render_html rebuilds js_champs from scratch, so hand them back
+    # explicitly instead of letting the shell drop the field.
+    champ_destiny_items = {
+        int(cid_s): {"item_id": int(c["destinyItem"]["id"]),
+                     "lift": float(c["destinyItem"]["lift"])}
+        for cid_s, c in champs.items()
+        if isinstance(c.get("destinyItem"), dict) and c["destinyItem"].get("id")
+    }
 
     if not og_image and site_url:
         # Shell-only reuses the og-image.png the last full build wrote; hash its
@@ -4623,6 +4642,7 @@ def _run_shell_only(
         meta_pick_api_url=meta_pick_api_url,
         player_history_api_url="",
         player_history_route=False,
+        champ_destiny_items=champ_destiny_items,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
@@ -4649,6 +4669,7 @@ def _run_shell_only(
         meta_pick_api_url=meta_pick_api_url,
         player_history_api_url=player_history_api_url,
         player_history_route=True,
+        champ_destiny_items=champ_destiny_items,
     )
     hidden_path.parent.mkdir(parents=True, exist_ok=True)
     hidden_path.write_text(hidden_html, encoding="utf-8")

@@ -532,6 +532,18 @@ def main(
         f"(games >= {BOOT_ITEM_MIN_GAMES}, pick >= {BOOT_ITEM_TOP_MIN_PICK_RATE:.1%} of champ games, "
         f"top_lift >= {BOOT_ITEM_TOP_MIN_LIFT:.1%})"
     )
+    destiny_legendary_ids = legendary_item_ids(version, cache_dir=Path("data/cache"))
+    destiny_items = compute_champ_destiny_items(
+        db,
+        queue_id,
+        patch_prefix,
+        destiny_legendary_ids,
+    )
+    click.echo(
+        f"[tierlist] {len(destiny_items)} champions have a 命定武器 item recommendation "
+        f"({len(destiny_legendary_ids)} legendary items considered, "
+        f"n >= {DESTINY_MIN_SIDE_GAMES} on each side, LCB lift > 0)"
+    )
     spell_affinity = compute_champ_spell_affinities(
         db,
         queue_id,
@@ -690,6 +702,7 @@ def main(
         player_history_api_url="",
         player_history_route=False,
         team_score_bundle=team_score_bundle,
+        champ_destiny_items=destiny_items,
     )
     if payload_out is not None:
         click.echo(f"[tierlist] wrote {payload_out}  ({payload_out.stat().st_size:,} bytes)")
@@ -738,6 +751,7 @@ def main(
         player_history_api_url=player_history_api_url,
         player_history_route=True,
         team_score_bundle=team_score_bundle,
+        champ_destiny_items=destiny_items,
     )
     player_history_path.parent.mkdir(parents=True, exist_ok=True)
     player_history_path.write_text(player_history_html, encoding="utf-8")
