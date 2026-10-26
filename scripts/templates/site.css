@@ -6535,10 +6535,13 @@
     }
     .item-float-tip.is-visible {
         display: block !important;
-        pointer-events: auto;
+        /* Hover tips must never sit under the pointer; only a pinned
+           (clicked) tip accepts mouse input. */
+        pointer-events: none;
         opacity: 1;
         transform: translateY(0);
     }
+    .item-float-tip.is-visible.is-pinned { pointer-events: auto; }
     .item-float-tip[hidden] { display: none !important; }
     .item-tip-card {
         position: relative;
@@ -9852,7 +9855,8 @@
 .champ-pool-augment small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 .champ-pool-augment:hover { background: var(--panel-inner); border-color: var(--border); }
 .champ-pool-augment:focus-visible, .champ-pools-help > summary:focus-visible, .champ-pools-source > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.item-float-tip:has(.champ-pool-tip) { filter: none; pointer-events: auto; }
+.item-float-tip:has(.champ-pool-tip) { filter: none; }
+.item-float-tip.is-pinned:has(.champ-pool-tip) { pointer-events: auto; }
 .item-float-tip.is-visible:has(.champ-pool-tip) { display: block !important; }
 .item-tip-card.champ-pool-tip { background: var(--panel-surface); border-color: var(--panel-line); color: var(--text); box-shadow: var(--panel-shadow); padding: 14px 16px; }
 .champ-pool-tip::after { background: var(--panel-surface); border-color: var(--panel-line); }
@@ -9909,7 +9913,7 @@
         border-color: var(--border-strong);
     }
     .recommended-pool-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-    .item-float-tip.is-pool-tip { pointer-events: auto; }
+    .item-float-tip.is-pool-tip.is-pinned { pointer-events: auto; }
     .recommended-pool-members { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
     .recommended-pool-members li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
     .recommended-pool-members img { width: 28px; height: 28px; flex: 0 0 28px; }
@@ -10378,6 +10382,9 @@
     }
     .aug-tier-row:hover,
     .aug-tier-row:focus-visible { background: var(--surface); }
+    /* Augment tips open on click, so they read as clickable. */
+    .aug-pick-card.has-item-tip,
+    .aug-tier-row.has-item-tip { cursor: pointer; }
     .aug-tier-idx { display: none; }
     .aug-tier-row .aug-tier-idx::before { content: counter(aug-tier); }
     .aug-tier-name {

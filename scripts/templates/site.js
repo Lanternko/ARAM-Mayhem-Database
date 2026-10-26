@@ -2699,7 +2699,7 @@
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
-        el.classList.remove('is-visible', 'flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.classList.remove('is-visible', 'is-pinned', 'flip-below', 'align-left', 'align-right', 'is-scrollable');
         el.style.maxHeight = '';
         el.innerHTML = '';
     }
@@ -12497,10 +12497,13 @@
     // Rich item float-tip: show on hover/focus of any .has-item-tip host.
     document.addEventListener('pointermove', () => { _itemFloatTipDismissed = false; }, { passive: true });
     document.addEventListener('mouseover', (ev) => {
-        if (_itemFloatTipDismissed) return;
+        if (_itemFloatTipPinned || _itemFloatTipDismissed) return;
         if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
+        // Augment cards and rows open their tip on click; hovering must not
+        // raise a panel that would cover the rarity buttons above them.
+        if (host.matches('.aug-pick-card, .aug-tier-row')) return;
         // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
         showItemFloatTip(host);
     }, { passive: true });
@@ -12536,6 +12539,7 @@
             else {
                 showItemFloatTip(host);
                 _itemFloatTipPinned = true;
+                ensureItemFloatTip().classList.add('is-pinned');
             }
         }
         else if (!ev.target.closest('.item-float-tip')) hideItemFloatTip();
