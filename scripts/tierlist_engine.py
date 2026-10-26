@@ -153,6 +153,15 @@ EMPIRICAL_CHAMPION_SCORES = Path("data/cache/champion_scores_empirical_merged.cs
 SEMANTIC_CHAMPION_SCORES = Path("data/cache/champion_semantic_scores.csv")
 ITEM_MIN_TOTAL_GOLD = 1800
 ITEM_BOOT_MIN_TOTAL_GOLD = 900
+# 「命定武器」(Weapon of Destiny) is the one augment whose value depends entirely
+# on which item you hold, so the champion page names that item instead of only
+# showing the augment.  The stat is champion-stratified: among players of the same
+# champion, WR with (3081 AND the item) minus WR with (the item, no 3081), which
+# removes both the champion's own strength and who buys the item.  Compared with a
+# 95% interval and only recommended when the lower bound clears 0.
+DESTINY_AUGMENT_ID = 3081
+DESTINY_ITEM_MIN_GOLD = 2200          # legendary tier, same floor as the item stats
+DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without 3081)
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "oblivion orb",
@@ -1255,6 +1264,24 @@ def load_augment_metadata(cache_dir: Path | None = None) -> dict[int, dict]:
 
     return by_id
 
+def _ddragon_item_rows(version: str, cache_dir: Path | None = None) -> dict:
+    """Raw Data Dragon ``item.json`` id → item payload, or ``{}`` when unavailable.
+
+    Shared by the icon list and the legendary-item filter so one build reads the
+    cached file once.
+    """
+    try:
+        data = _cached_get_json(
+            f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/item.json",
+            (cache_dir or Path("data/cache")) / f"ddragon_items_{version}.json",
+        )
+    except Exception as exc:  # pragma: no cover - network/cache failure is non-fatal
+        click.echo(f"[tierlist] WARN: ddragon item.json fetch failed ({exc}); items stay on CommunityDragon")
+        return {}
+    raw = data.get("data") if isinstance(data, dict) else None
+    return raw if isinstance(raw, dict) else {}
+
+
 def _ddragon_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
     """Item IDs that Data Dragon serves an icon for.
 
@@ -1265,17 +1292,7 @@ def _ddragon_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
     item it actually has and only fall back to CommunityDragon for the handful of
     Mayhem-exclusive items it 403s on.
     """
-    try:
-        data = _cached_get_json(
-            f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/item.json",
-            (cache_dir or Path("data/cache")) / f"ddragon_items_{version}.json",
-        )
-    except Exception as exc:  # pragma: no cover - network/cache failure is non-fatal
-        click.echo(f"[tierlist] WARN: ddragon item.json fetch failed ({exc}); items stay on CommunityDragon")
-        return set()
-    raw = data.get("data") if isinstance(data, dict) else None
-    if not isinstance(raw, dict):
-        return set()
+    raw = _ddragon_item_rows(version, cache_dir)
     ids: set[int] = set()
     for key in raw:
         try:
@@ -1283,6 +1300,35 @@ def _ddragon_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
         except (TypeError, ValueError):
             continue
     return ids
+
+
+def legendary_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
+    """Finished legendary items, by the Data Dragon catalogue fields.
+
+    Data Dragon is the authority here because it carries the fields the stat needs:
+    ``gold.total`` (tier), ``into`` (components/build paths are excluded) and
+    ``maps["12"]`` (Mayhem's map).  Boots are dropped because a "hold this item"
+    recommendation should never be a boot slot.
+    """
+    out: set[int] = set()
+    for key, row in _ddragon_item_rows(version, cache_dir).items():
+        if not isinstance(row, dict):
+            continue
+        try:
+            item_id = int(key)
+        except (TypeError, ValueError):
+            continue
+        if int((row.get("gold") or {}).get("total") or 0) < DESTINY_ITEM_MIN_GOLD:
+            continue
+        if row.get("into"):
+            continue
+        if not (row.get("maps") or {}).get("12"):
+            continue
+        if "Boots" in (row.get("tags") or []):
+            continue
+        out.add(item_id)
+    return out
+
 
 def clean_item_description(raw_html: str | None) -> str:
     """Strip Riot item HTML into compact plain text for site tooltips.
@@ -3713,6 +3759,93 @@ def compute_champ_boot_item_affinities(
         top_min_pick_rate=BOOT_ITEM_TOP_MIN_PICK_RATE,
         top_n=4,
     )
+
+
+def compute_champ_destiny_items(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    legendary_ids: set[int] | frozenset[int],
+    *,
+    min_side_games: int = DESTINY_MIN_SIDE_GAMES,
+) -> dict[int, dict]:
+    """Best legendary item to hold alongside 命定武器, per champion.
+
+    For champion ``c`` and item ``i`` the statistic is the champion-stratified
+    difference ``WR(c, i, 3081) - WR(c, i, no 3081)`` over the patch; champion
+    identity cancels out, so the number answers "does this item make the augment
+    pay off?" rather than "is this item good".  Each side needs
+    ``min_side_games``; the interval is the pooled-rate 95% half-width.
+
+    Returns ``{champion_id: {"item_id", "lift", "lcb"}}`` for champions where the
+    best item's lower bound clears 0.  Champions with no qualifying item are
+    simply absent — the site then renders the augment card as it always has.
+
+    ``participants_json`` is streamed row by row (never materialised) because the
+    patch is hundreds of thousands of games; the tally is only champ×item cells.
+    """
+    items_ok = {int(i) for i in legendary_ids or ()}
+    if not items_ok:
+        return {}
+    sql = "SELECT blue_wins, participants_json FROM games WHERE queue_id=?"
+    params: list[object] = [queue_id]
+    if patch_prefix:
+        sql += " AND patch LIKE ?"
+        params.append(f"{patch_prefix}%")
+
+    # (champion_id, item_id) -> [wins_without, games_without, wins_with, games_with]
+    cells: dict[tuple[int, int], list[int]] = {}
+    con = sqlite3.connect(str(db_path))
+    try:
+        for blue_wins, participants_json in con.execute(sql, params):
+            if not participants_json:
+                continue
+            blue_won = bool(blue_wins)
+            for participant in json.loads(participants_json):
+                cid = int(participant.get("championId", 0) or 0)
+                team_id = int(participant.get("teamId", 0) or 0)
+                if cid <= 0 or team_id not in (100, 200):
+                    continue
+                # The LCU list may carry a different augment each slot; membership
+                # is all that matters here (you either have 命定武器 or you don't).
+                has_destiny = DESTINY_AUGMENT_ID in {
+                    int(a) for a in (participant.get("augments") or []) if a
+                }
+                won = 1 if (team_id == 100) == blue_won else 0
+                held = {
+                    int(i) for i in (
+                        participant.get("items")
+                        or [i for i in (participant.get("itemSlots") or []) if i]
+                    )
+                    if int(i) in items_ok
+                }
+                base = 2 if has_destiny else 0
+                for item_id in held:
+                    cell = cells.setdefault((cid, item_id), [0, 0, 0, 0])
+                    cell[base] += won
+                    cell[base + 1] += 1
+    finally:
+        con.close()
+
+    best: dict[int, dict] = {}
+    for (cid, item_id), (w_no, n_no, w_yes, n_yes) in cells.items():
+        if n_yes < min_side_games or n_no < min_side_games:
+            continue
+        lift = w_yes / n_yes - w_no / n_no
+        pooled = (w_yes + w_no) / (n_yes + n_no)
+        half = 1.96 * math.sqrt(pooled * (1 - pooled) * (1 / n_yes + 1 / n_no))
+        lcb = lift - half
+        if lcb <= 0:
+            continue
+        cur = best.get(cid)
+        # argmax lcb; ties go to the lower item id so the payload is deterministic
+        # regardless of database row order.
+        if cur is None or lcb > cur["lcb"] or (
+            lcb == cur["lcb"] and item_id < cur["item_id"]
+        ):
+            best[cid] = {"item_id": item_id, "lift": lift, "lcb": lcb}
+    return best
+
 
 def compute_champ_spell_affinities(
     db_path: Path,

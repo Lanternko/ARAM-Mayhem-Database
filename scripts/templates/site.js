@@ -3103,7 +3103,7 @@
     }
 
     // Shared rich float tip (same card language as items).
-    function buildAugTipHtml(entry, onBoard) {
+    function buildAugTipHtml(entry, onBoard, extraNote = '') {
         const aug = DATA.augs[entry.id];
         const copy = tr();
         const setName = augSetName(aug, entry.id);
@@ -3121,7 +3121,7 @@
             liftLabel: signed(entry.lift),
             games: entry.g,
             extraHtml: buildAugSlotStrip(entry, onBoard),
-            note: onBoard ? copy.augChampsHint : '',
+            note: [onBoard ? copy.augChampsHint : '', extraNote].filter(Boolean).join(' · '),
         });
     }
 
@@ -3234,7 +3234,7 @@
         return `<span class="aug-verdict is-${verdict}">${escHtml(pickLang(words[0], words[1]))}</span>`;
     }
 
-    function buildChampAugTable(top, extraHtml = '') {
+    function buildChampAugTable(top, extraHtml = '', destinyItem = null) {
         const copy = tr();
         const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
             const r = RARITIES.find(x => x.key === key);
@@ -3256,6 +3256,29 @@
             };
         };
         const iconHtml = (v) => (v.icon ? `<img loading="lazy" src="${v.icon}" alt="">` : '<span class="aicon-ph"></span>');
+        /* 命定武器 (Weapon of Destiny, 3081) only pays off with the right item, so
+           on the champion page its slot shows that legendary item instead of the
+           augment, with the augment kept as a small corner badge that is allowed
+           to hang past the frame.  `destinyItem` is absent for champions with no
+           qualifying item, and then the card renders exactly as before. */
+        const destiny = destinyItem && destinyItem.id ? destinyItem : null;
+        const isDestiny = (e) => !!destiny && String(e.id) === '3081';
+        const destinyItemName = () => (destiny ? itemDisplayName({ id: destiny.id }) : '');
+        const destinyText = () => pickLang(
+            `推薦：${destinyItemName()} ${signed(Number(destiny.lift || 0))}`,
+            `Recommended: ${destinyItemName()} ${signed(Number(destiny.lift || 0))}`
+        );
+        const destinyIcon = (v) => {
+            const src = destiny ? itemIconUrl({ id: destiny.id }) : '';
+            if (!src) return iconHtml(v);
+            return `<span class="destiny-icon">`
+                + `<img class="destiny-item" loading="lazy" src="${escHtml(src)}" alt="${escHtml(destinyItemName())}">`
+                + (v.icon ? `<img class="destiny-badge" src="${escHtml(v.icon)}" alt="">` : '')
+                + `</span>`;
+        };
+        const cardIcon = (e, v) => (isDestiny(e) ? destinyIcon(v) : iconHtml(v));
+        const destinyNote = (e) => (isDestiny(e) ? destinyText() : '');
+        const withDestiny = (e, label) => (isDestiny(e) ? `${label} · ${destinyText()}` : label);
         // Each rarity pane repeats the sort header so it sits right above its list.
         const head = `
             <div class="aug-tier-head">
@@ -3277,15 +3300,16 @@
                 const verdict = champAugVerdict(e);
                 return `
                     <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0" data-aug-id="${escHtml(String(e.id))}"
-                        aria-label="${escHtml(copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc))}">
+                        aria-label="${escHtml(withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc)))}">
                         <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
-                        <span class="aug-pick-icon rarity-${r.css}">${iconHtml(v)}</span>
+                        <span class="aug-pick-icon rarity-${r.css}">${cardIcon(e, v)}</span>
                         <span class="aug-pick-name">${escHtml(v.name)}</span>
+                        ${isDestiny(e) ? `<span class="aug-pick-destiny">${escHtml(destinyText())}</span>` : ''}
                         ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
                         <span class="aug-pick-foot">
                             <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
                         </span>
-                        ${itemTipSource(buildAugTipHtml(e, false))}
+                        ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
                     </li>`;
             }).join('');
             // Every entry gets a row: the podium three hide while sorted by
@@ -3295,7 +3319,7 @@
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
-                const ariaLabel = copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc);
+                const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc));
                 return `
                     <li class="aug-tier-row has-item-tip is-${verdict}${idx < 3 ? ' is-podium' : ''}" tabindex="0"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
@@ -3303,9 +3327,10 @@
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tier-idx" aria-hidden="true"></span>
                         <span class="aug-tier-name">
-                            ${iconHtml(v)}
+                            ${cardIcon(e, v)}
                             <span class="aug-tier-text">
                                 <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
+                                ${isDestiny(e) ? `<span class="aug-tier-destiny">${escHtml(destinyText())}</span>` : ''}
                                 ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
                             </span>
                         </span>
@@ -3314,7 +3339,7 @@
                             <i class="aug-tier-bar" style="--w:${(pickRate / maxPick).toFixed(4)}" aria-hidden="true"></i>
                         </span>
                         <span class="aug-tier-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b>${champAugBadge(verdict)}</span>
-                        ${itemTipSource(buildAugTipHtml(e, false))}
+                        ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
                     </li>`;
             }).join('') : '';
             const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
@@ -5613,7 +5638,7 @@
                         <span class="meta-help-wrap">
                             <button class="meta-help" type="button" aria-label="${escHtml(augRankTip)}">?</button>
                             <span class="meta-help-tip" role="tooltip">${escHtml(augRankTip)}</span>
-                        </span>`)}
+                        </span>`, info.destinyItem)}
                     ${buildSetSummary(setTop)}
                 </div>
             </div>
