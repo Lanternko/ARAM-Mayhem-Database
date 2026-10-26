@@ -2559,6 +2559,9 @@ def write_spa_path_shells(
                 body = champion_shell_html(
                     body, route=route, record=records_by_cid.get(route["cid"], {}),
                     language=html_lang, shell_url=shell_url, loader_url=loader_url,
+                    # The champion detail shards + name tables this build already
+                    # published; read-only, used for the crawlable rankings.
+                    api_dir=root / "api",
                 )
         else:
             body = _spa_deep_link_stub(

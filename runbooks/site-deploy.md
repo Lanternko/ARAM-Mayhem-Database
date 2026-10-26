@@ -57,9 +57,9 @@ Production URL 會自動補 canonical split payload、Meta Pick API 與公開 an
 
 Frontend lane 不得 stage `docs/api/tier-list.json`、champion shards、radar 或 axes。若 shell build 讓 data artifacts 出現實質 diff，停止並調查；不要擴大成 full data deploy 來掩蓋 scope drift。
 
-搜尋 discovery 也是 shell 產物：兩條 build 路徑都由 `src/aram_nn/site/search_discovery.py` 從本輪明確生成的 HTML 產生 `sitemap.xml` 與 `robots.txt`，排除 noindex、轉址、非 self-canonical 與未列入本輪的舊檔，語系 alternate 只列存在且互相對應的頁面。不要用 shell build 日期假造 Sitemap `lastmod`，也不要手改生成清單。
+搜尋 discovery 也是 shell 產物：兩條 build 路徑都由 `src/aram_nn/site/search_discovery.py` 從本輪明確生成的 HTML 產生 `sitemap.xml` 與 `robots.txt`，排除 noindex、轉址、非 self-canonical 與未列入本輪的舊檔，語系 alternate 只列存在且互相對應的頁面。Sitemap `lastmod` 只取自頁面 `window.__ARAM_BUILD__` 的 `buildDate`（資料快照日期，`YYYY-MM-DD`）；沒有這個欄位的頁面（about、privacy、舊路徑 stub）不輸出 lastmod，格式不符就略過。不要用 shell build 日期、檔案 mtime 或 wall-clock 假造 lastmod，也不要手改生成清單。
 
-英雄網址直接回傳有英雄名稱、Bayesian 勝率、樣本與資料範圍的 HTML，由 `scripts/templates/champion-shell.js` 原地載入一份共用 `docs/assets/app-shell.html`，保留英雄 canonical 與三語 alternate。這兩個共用檔、英雄 HTML 和 Sitemap 必須 atomic publish；共用 body 檔標記 noindex，不獨立收錄。驗證直接開啟英雄網址不跳首頁、互動詳情可用，以及 `/en/`、`/zh-cn/` 的語言與 canonical。
+英雄網址直接回傳有英雄名稱、Bayesian 勝率、樣本與資料範圍的 HTML，並由建置期從該英雄的 detail shard 寫入稜彩／金色／銀色增幅前 5 名、核心出裝前 3 組、鞋子與召喚師技能前 2 名的靜態排名（三語各自本地化；空資料整段省略），再以 `scripts/templates/champion-shell.js` 原地載入一份共用 `docs/assets/app-shell.html` 取代它，保留英雄 canonical 與三語 alternate。靜態區塊只在互動 UI 接手前存在（loader 會移除），不可與互動內容重複顯示。這兩個共用檔、英雄 HTML 和 Sitemap 必須 atomic publish；共用 body 檔標記 noindex，不獨立收錄。驗證直接開啟英雄網址不跳首頁、互動詳情可用、關閉 JS 後仍看得到排名數字，以及 `/en/`、`/zh-cn/` 的語言與 canonical。
 
 ## Lane 3 — generator or schema publish
 

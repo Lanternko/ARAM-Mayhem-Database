@@ -57,3 +57,54 @@ def test_local_preview_does_not_emit_public_crawler_settings(tmp_path):
     home = page(tmp_path, "")
     assert write_search_discovery(tmp_path, [home], site_url="") == []
     assert not (tmp_path / "robots.txt").exists()
+
+
+def _build_page(tmp_path, route, build_script):
+    path = tmp_path / route / "index.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    url = "https://arammeta.com/" + (route + "/" if route else "")
+    path.write_text(
+        f"<html><head><link rel='canonical' href='{url}'>{build_script}</head><body>x</body></html>",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_sitemap_lastmod_is_the_data_snapshot_build_date(tmp_path):
+    dated = _build_page(
+        tmp_path, "champions/aatrox",
+        "<script>window.__ARAM_BUILD__={\"patchLabel\":\"patch 26.21\","
+        "\"buildDate\":\"2026-10-26\"}</script>",
+    )
+    about = page(tmp_path, "about")
+    outputs = write_search_discovery(
+        tmp_path, [dated, about], site_url="https://arammeta.com/",
+    )
+    tree = ET.parse(outputs[0])
+    lastmods = {
+        node.findtext(f"{{{SITEMAP_NS}}}loc"): node.findtext(f"{{{SITEMAP_NS}}}lastmod")
+        for node in tree.findall(f"{{{SITEMAP_NS}}}url")
+    }
+    assert lastmods == {
+        "https://arammeta.com/champions/aatrox/": "2026-10-26",
+        "https://arammeta.com/about/": None,
+    }
+
+
+def test_sitemap_skips_malformed_or_missing_build_date(tmp_path):
+    malformed = _build_page(
+        tmp_path, "champions/ahri",
+        "<script>window.__ARAM_BUILD__={\"buildDate\":\"2026-1-2\"}</script>",
+    )
+    broken_json = _build_page(
+        tmp_path, "champions/jinx",
+        "<script>window.__ARAM_BUILD__={buildDate: nope}</script>",
+    )
+    no_date = _build_page(
+        tmp_path, "champions/kaisa",
+        "<script>window.__ARAM_BUILD__={\"patchLabel\":\"patch 26.21\"}</script>",
+    )
+    outputs = write_search_discovery(
+        tmp_path, [malformed, broken_json, no_date], site_url="https://arammeta.com/",
+    )
+    assert "lastmod" not in outputs[0].read_text(encoding="utf-8")

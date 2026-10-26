@@ -1,6 +1,8 @@
 """Search discovery artifacts derived only from this build's public pages."""
 from __future__ import annotations
 
+import json
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -9,6 +11,25 @@ from xml.etree import ElementTree as ET
 SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 XHTML_NS = "http://www.w3.org/1999/xhtml"
 
+# The shell's inline build config carries the data snapshot date; that is the
+# only freshness signal a static build actually has.
+_BUILD_RE = re.compile(r"window\.__ARAM_BUILD__\s*=\s*(\{.*?\})\s*;?\s*</script>", re.S)
+_BUILD_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _page_build_date(text: str) -> str:
+    match = _BUILD_RE.search(text)
+    if not match:
+        return ""
+    try:
+        snapshot = json.loads(match[1])
+    except ValueError:
+        return ""
+    value = snapshot.get("buildDate") if isinstance(snapshot, dict) else None
+    if isinstance(value, str) and _BUILD_DATE_RE.match(value):
+        return value
+    return ""
+
 
 class _PageHead(HTMLParser):
     def __init__(self) -> None:
@@ -16,6 +37,7 @@ class _PageHead(HTMLParser):
         self.canonical = ""
         self.excluded = False
         self.alternates: dict[str, str] = {}
+        self.lastmod = ""
         self.in_head = True
 
     def handle_starttag(self, tag: str, attrs) -> None:
@@ -47,7 +69,12 @@ def write_search_discovery(
 
     Explicit build outputs avoid publishing stale/unlisted files from disk.
     Redirect stubs, 404s, private utilities and noncanonical aliases are omitted.
-    No lastmod is emitted: a shell build date is not a data freshness timestamp.
+
+    ``lastmod`` is the data snapshot date the page itself declares in
+    ``window.__ARAM_BUILD__`` (``buildDate``, ``YYYY-MM-DD``).  Pages without it
+    — about, privacy, redirect stubs — get no ``lastmod`` rather than a made-up
+    one: the shell build date is not data freshness, and file mtimes / wall-clock
+    time say even less.  A malformed ``buildDate`` is skipped, not coerced.
     """
     parsed = urlsplit(site_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
@@ -64,9 +91,11 @@ def write_search_discovery(
             continue
         route = relative.removesuffix("index.html") if page.name == "index.html" else relative
         expected = urljoin(base, route)
+        text = page.read_text(encoding="utf-8")
         head = _PageHead()
-        head.feed(page.read_text(encoding="utf-8"))
+        head.feed(text)
         if not head.excluded and urljoin(expected, head.canonical) == expected and head.canonical:
+            head.lastmod = _page_build_date(text)
             entries[expected] = head
 
     ET.register_namespace("", SITEMAP_NS)
@@ -75,6 +104,8 @@ def write_search_discovery(
     for url, head in sorted(entries.items()):
         node = ET.SubElement(sitemap, f"{{{SITEMAP_NS}}}url")
         ET.SubElement(node, f"{{{SITEMAP_NS}}}loc").text = url
+        if head.lastmod:
+            ET.SubElement(node, f"{{{SITEMAP_NS}}}lastmod").text = head.lastmod
         for lang, href in sorted(head.alternates.items()):
             target = urljoin(url, href)
             # Only advertise real, self-canonical pages with reciprocal links.
