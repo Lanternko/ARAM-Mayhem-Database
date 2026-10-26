@@ -10342,9 +10342,11 @@
             font-size: 14px;
         }
         .aug-pick-desc { grid-column: 2 / -1; min-height: 0; }
+        .aug-pick-destiny { grid-column: 2 / -1; }
         .aug-pick-foot { grid-column: 3; grid-row: 1; margin-top: 0; }
         .aug-pick-wr b { font-size: 18px; }
         .aug-pick-icon, .aug-pick-icon img, .aug-pick-icon .aicon-ph { width: 52px; height: 52px; }
+        .aug-pick-icon .destiny-icon { width: 52px; height: 52px; }
     }
     .aug-tier-head,
     .aug-tier-row {
@@ -10411,6 +10413,55 @@
         height: 36px;
         flex: 0 0 auto;
         border-radius: var(--r-sm);
+    }
+    /* 命定武器 (3081): the recommended legendary item fills the icon slot and the
+       augment sits on top as a small badge.  The badge is deliberately allowed to
+       hang a few px past the frame (badge/insignia reading, not a second tile). */
+    .destiny-icon {
+        position: relative;
+        display: block;
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        overflow: visible;
+    }
+    .destiny-icon .destiny-item {
+        width: 100%;
+        height: 100%;
+        border-radius: var(--r-sm);
+        object-fit: cover;
+    }
+    .destiny-icon .destiny-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 45%;
+        height: 45%;
+        padding: 0;
+        border-radius: 4px;
+        background: var(--augment-icon-surface);
+        box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.85), 0 2px 6px rgba(0, 0, 0, 0.5);
+        object-fit: contain;
+        z-index: 1;
+    }
+    .aug-tier-name .destiny-icon { width: 36px; height: 36px; }
+    .aug-tier-destiny {
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .aug-pick-icon .destiny-icon { width: 64px; height: 64px; border-radius: var(--r-sm); }
+    /* .aug-pick-icon img pins every child image to 64px; the badge must stay small. */
+    .aug-pick-icon .destiny-icon .destiny-badge { width: 45%; height: 45%; }
+    .aug-pick-destiny {
+        color: var(--accent);
+        font-size: 12.5px;
+        font-weight: 600;
+        line-height: 1.35;
     }
     .aug-tier-pick {
         display: flex;
