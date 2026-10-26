@@ -3520,15 +3520,19 @@ def render_html(
                 float(champ_stat_by_cid.get(cid, {}).get("prev_mix", 0.0) or 0.0), 3
             ),
         }
-        # 命定武器 item pick (see compute_champ_destiny_items): only the id and the
-        # lift the champion page prints, deliberately without sample counts or the
-        # interval — the card is a recommendation, not a statistics table.
+        # 命定武器 item pick (see compute_champ_destiny_items): only the id, the
+        # lift the champion page prints and, for a carried-over pick, the flag
+        # that says so — deliberately without sample counts or the interval; the
+        # card is a recommendation, not a statistics table.
         _destiny = (champ_destiny_items or {}).get(cid)
         if _destiny:
-            js_champs[str(cid)]["destinyItem"] = {
+            _destiny_payload = {
                 "id": int(_destiny["item_id"]),
                 "lift": round(float(_destiny["lift"]), 3),
             }
+            if _destiny.get("prev"):
+                _destiny_payload["prev"] = True
+            js_champs[str(cid)]["destinyItem"] = _destiny_payload
     related_search_index = _build_related_search_index(js_champs)
     aug_cat_overrides = load_augment_category_overrides()
     if aug_cat_overrides:
@@ -4611,7 +4615,8 @@ def _run_shell_only(
     # explicitly instead of letting the shell drop the field.
     champ_destiny_items = {
         int(cid_s): {"item_id": int(c["destinyItem"]["id"]),
-                     "lift": float(c["destinyItem"]["lift"])}
+                     "lift": float(c["destinyItem"]["lift"]),
+                     "prev": bool(c["destinyItem"].get("prev"))}
         for cid_s, c in champs.items()
         if isinstance(c.get("destinyItem"), dict) and c["destinyItem"].get("id")
     }

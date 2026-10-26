@@ -539,10 +539,38 @@ def main(
         patch_prefix,
         destiny_legendary_ids,
     )
+    # Champions without a current-patch pick borrow the previous patch's, but only
+    # while Data Dragon says the item is unchanged between the two catalogues
+    # (see merge_destiny_items_with_previous).  Both the patch prefix and the
+    # Data Dragon version are derived; any failure just means "no fallback".
+    destiny_prev_prefix = previous_patch_prefix(patch_prefix)
+    destiny_prev_version = (
+        ddragon_version_for_patch(destiny_prev_prefix, cache_dir=Path("data/cache"))
+        if destiny_prev_prefix
+        else None
+    )
+    destiny_items = merge_destiny_items_with_previous(
+        destiny_items,
+        (
+            compute_champ_destiny_items(
+                db,
+                queue_id,
+                destiny_prev_prefix,
+                legendary_item_ids(destiny_prev_version, cache_dir=Path("data/cache")),
+            )
+            if destiny_prev_version
+            else {}
+        ),
+        current_version=version,
+        previous_version=destiny_prev_version,
+        cache_dir=Path("data/cache"),
+    )
+    destiny_prev_n = sum(1 for rec in destiny_items.values() if rec.get("prev"))
     click.echo(
         f"[tierlist] {len(destiny_items)} champions have a 命定武器 item recommendation "
         f"({len(destiny_legendary_ids)} legendary items considered, "
-        f"n >= {DESTINY_MIN_SIDE_GAMES} on each side, LCB lift > 0)"
+        f"n >= {DESTINY_MIN_DESTINY_GAMES} with / {DESTINY_MIN_SIDE_GAMES} without 3081, "
+        f"LCB lift > 0; {destiny_prev_n} carried over from {destiny_prev_prefix or 'n/a'})"
     )
     spell_affinity = compute_champ_spell_affinities(
         db,

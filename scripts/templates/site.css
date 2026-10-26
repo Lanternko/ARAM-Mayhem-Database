@@ -10463,6 +10463,14 @@
         font-weight: 600;
         line-height: 1.35;
     }
+    /* "上版資料" on a carried-over 命定武器 item pick: present but quiet, so it
+       never reads as part of the recommendation itself. */
+    .destiny-prev {
+        color: var(--text-muted);
+        font-size: 0.85em;
+        font-weight: 500;
+        white-space: nowrap;
+    }
     .aug-tier-pick {
         display: flex;
         flex-direction: column;

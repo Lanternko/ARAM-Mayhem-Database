@@ -162,6 +162,10 @@ ITEM_BOOT_MIN_TOTAL_GOLD = 900
 DESTINY_AUGMENT_ID = 3081
 DESTINY_ITEM_MIN_GOLD = 2200          # legendary tier, same floor as the item stats
 DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without 3081)
+# The with-3081 side is the rarer population and the one that decides whether the
+# item actually pays off; 60 games there let a short streak flip the pick.  150
+# keeps most of the champion coverage while making the sign stable.
+DESTINY_MIN_DESTINY_GAMES = 150
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "oblivion orb",
@@ -1328,6 +1332,39 @@ def legendary_item_ids(version: str, cache_dir: Path | None = None) -> set[int]:
             continue
         out.add(item_id)
     return out
+
+
+def ddragon_version_for_patch(
+    patch_prefix: str | None,
+    cache_dir: Path | None = None,
+) -> str | None:
+    """Newest Data Dragon version whose ``major.minor`` matches ``patch_prefix``.
+
+    Data Dragon publishes one version per patch (``16.20.1``), so the previous
+    patch's item catalogue is addressed by looking its prefix up in
+    ``versions.json`` rather than guessing the revision suffix.  Returns ``None``
+    when the list cannot be fetched or holds no such version, which callers treat
+    as "no previous catalogue, skip the cross-patch comparison".
+    """
+    if not patch_prefix:
+        return None
+    try:
+        listed = _cached_get_json(
+            "https://ddragon.leagueoflegends.com/api/versions.json",
+            (cache_dir or Path("data/cache")) / "ddragon_versions.json",
+            max_age_hours=24.0,
+        )
+    except Exception:  # pragma: no cover - network failure just disables the fallback
+        return None
+    if not isinstance(listed, list):
+        return None
+    for version in listed:  # newest first
+        if not isinstance(version, str):
+            continue
+        match = re.match(r"(\d+\.\d+)", version)
+        if match and match.group(1) == patch_prefix.strip():
+            return version
+    return None
 
 
 def clean_item_description(raw_html: str | None) -> str:
@@ -3768,14 +3805,17 @@ def compute_champ_destiny_items(
     legendary_ids: set[int] | frozenset[int],
     *,
     min_side_games: int = DESTINY_MIN_SIDE_GAMES,
+    min_destiny_games: int = DESTINY_MIN_DESTINY_GAMES,
 ) -> dict[int, dict]:
     """Best legendary item to hold alongside 命定武器, per champion.
 
     For champion ``c`` and item ``i`` the statistic is the champion-stratified
     difference ``WR(c, i, 3081) - WR(c, i, no 3081)`` over the patch; champion
     identity cancels out, so the number answers "does this item make the augment
-    pay off?" rather than "is this item good".  Each side needs
-    ``min_side_games``; the interval is the pooled-rate 95% half-width.
+    pay off?" rather than "is this item good".  The without-3081 side needs
+    ``min_side_games`` (the augment is rare, so that side is cheap to fill) and
+    the with-3081 side needs the stricter ``min_destiny_games``; the interval is
+    the pooled-rate 95% half-width.
 
     Returns ``{champion_id: {"item_id", "lift", "lcb"}}`` for champions where the
     best item's lower bound clears 0.  Champions with no qualifying item are
@@ -3829,7 +3869,7 @@ def compute_champ_destiny_items(
 
     best: dict[int, dict] = {}
     for (cid, item_id), (w_no, n_no, w_yes, n_yes) in cells.items():
-        if n_yes < min_side_games or n_no < min_side_games:
+        if n_yes < min_destiny_games or n_no < min_side_games:
             continue
         lift = w_yes / n_yes - w_no / n_no
         pooled = (w_yes + w_no) / (n_yes + n_no)
@@ -3845,6 +3885,58 @@ def compute_champ_destiny_items(
         ):
             best[cid] = {"item_id": item_id, "lift": lift, "lcb": lcb}
     return best
+
+
+def merge_destiny_items_with_previous(
+    current: dict[int, dict],
+    previous: dict[int, dict],
+    *,
+    current_version: str | None,
+    previous_version: str | None,
+    cache_dir: Path | None = None,
+) -> dict[int, dict]:
+    """Let a champion with no current-patch pick borrow the previous patch's.
+
+    The augment recommendation is only worth carrying over while the item itself
+    is unchanged: an item rework between the two patches makes last patch's lift
+    a statement about a different item.  So a fallback survives only when the
+    item's Data Dragon ``description``, ``stats`` and ``gold.total`` are
+    identical in both catalogues; anything else (including a missing row on
+    either side) drops it.  Without both catalogues no fallback is applied at
+    all — silently guessing is worse than showing no recommendation.
+
+    Current-patch picks always win.  Fallback entries are marked ``"prev": True``
+    so the payload can say out loud that the number is last patch's.
+    """
+    merged = {cid: dict(rec) for cid, rec in current.items()}
+    if not previous or not current_version or not previous_version:
+        return merged
+    cur_rows = _ddragon_item_rows(current_version, cache_dir)
+    prev_rows = _ddragon_item_rows(previous_version, cache_dir)
+    if not cur_rows or not prev_rows:
+        return merged
+    for cid, rec in previous.items():
+        if cid in merged:
+            continue
+        item_id = int(rec["item_id"])
+        cur_row = cur_rows.get(str(item_id))
+        prev_row = prev_rows.get(str(item_id))
+        if not isinstance(cur_row, dict) or not isinstance(prev_row, dict):
+            continue
+        if (
+            cur_row.get("description") != prev_row.get("description")
+            or (cur_row.get("stats") or {}) != (prev_row.get("stats") or {})
+            or (cur_row.get("gold") or {}).get("total")
+            != (prev_row.get("gold") or {}).get("total")
+        ):
+            continue
+        merged[cid] = {
+            "item_id": item_id,
+            "lift": float(rec["lift"]),
+            "lcb": float(rec.get("lcb", 0.0)),
+            "prev": True,
+        }
+    return merged
 
 
 def compute_champ_spell_affinities(

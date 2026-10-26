@@ -59,15 +59,36 @@ class DestinyItemSelectionTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._dir.cleanup()
 
-    def _recs(self, observations, legendary=(1, 2, 3), min_side_games=60):
+    def _recs(self, observations, legendary=(1, 2, 3), min_side_games=60,
+              min_destiny_games=None):
         _write_games(self.db_path, observations)
+        # The selection tests exercise the argmax rule, not the production sample
+        # floors, so both sides default to the small synthetic floor.
         return tier_list.compute_champ_destiny_items(
             self.db_path,
             2400,
             "16.21",
             set(legendary),
             min_side_games=min_side_games,
+            min_destiny_games=(
+                min_side_games if min_destiny_games is None else min_destiny_games
+            ),
         )
+
+    def test_with_augment_side_requires_150_games(self) -> None:
+        # 149 games with 命定武器 is one short; 150 clears the floor.  Both sides
+        # otherwise show the same large, obviously positive lift.
+        observations = (
+            _side(1, 1, True, 149, 110)
+            + _side(1, 1, False, 60, 24)
+            + _side(2, 1, True, 150, 110)
+            + _side(2, 1, False, 60, 24)
+        )
+        _write_games(self.db_path, observations)
+        recs = tier_list.compute_champ_destiny_items(self.db_path, 2400, "16.21", {1})
+        self.assertNotIn(1, recs)
+        self.assertEqual(recs[2]["item_id"], 1)
+        self.assertGreater(recs[2]["lift"], 0.30)
 
     def test_argmax_lcb_prefers_the_tighter_estimate_over_the_bigger_lift(self) -> None:
         # Item 1: lift +25pp off 60/60 games -> wide interval, LCB ~+7.5pp.
@@ -128,6 +149,116 @@ class LegendaryItemFilterTests(unittest.TestCase):
         }
         with mock.patch.object(engine, "_ddragon_item_rows", lambda *a, **k: rows):
             self.assertEqual(tier_list.legendary_item_ids("16.21.1"), {100})
+
+
+class DestinyPreviousPatchFallbackTests(unittest.TestCase):
+    """Cross-patch fallback (merge_destiny_items_with_previous)."""
+
+    CUR = "16.21.1"
+    PREV = "16.20.1"
+
+    def setUp(self) -> None:
+        self._dir = tempfile.TemporaryDirectory()
+        self.cache_dir = Path(self._dir.name)
+
+    def tearDown(self) -> None:
+        self._dir.cleanup()
+
+    @staticmethod
+    def _item(description="<mainText>+80 ability power</mainText>", ap=80, gold=2600):
+        return {
+            "description": description,
+            "stats": {"FlatMagicDamageMod": ap},
+            "gold": {"base": 900, "total": gold, "sell": gold // 2},
+        }
+
+    def _merge(self, current, previous, *, prev_row=None, cur_row=None,
+               previous_version=PREV):
+        cur_row = cur_row if cur_row is not None else self._item()
+        prev_row = prev_row if prev_row is not None else self._item()
+        rows = {self.CUR: {"100": cur_row}, self.PREV: {"100": prev_row}}
+        with mock.patch.object(
+            engine, "_ddragon_item_rows", lambda version, *a, **k: rows.get(version, {})
+        ):
+            return tier_list.merge_destiny_items_with_previous(
+                current,
+                previous,
+                current_version=self.CUR,
+                previous_version=previous_version,
+                cache_dir=self.cache_dir,
+            )
+
+    def test_current_pick_wins_and_missing_pick_falls_back(self) -> None:
+        current = {1: {"item_id": 100, "lift": 0.05, "lcb": 0.02}}
+        previous = {
+            1: {"item_id": 100, "lift": 0.01, "lcb": 0.001},   # already recommended
+            2: {"item_id": 100, "lift": 0.04, "lcb": 0.01},    # only in last patch
+        }
+        merged = self._merge(current, previous)
+        self.assertEqual(merged[1]["item_id"], 100)
+        self.assertAlmostEqual(merged[1]["lift"], 0.05)
+        self.assertNotIn("prev", merged[1])
+        self.assertAlmostEqual(merged[2]["lift"], 0.04)
+        self.assertTrue(merged[2]["prev"])
+
+    def test_fallback_is_skipped_when_the_item_changed(self) -> None:
+        previous = {2: {"item_id": 100, "lift": 0.04, "lcb": 0.01}}
+        variants = {
+            "description": self._item(description="<mainText>+100 ability power</mainText>"),
+            "stats": self._item(ap=100),
+            "gold.total": self._item(gold=2800),
+        }
+        for field, prev_row in variants.items():
+            with self.subTest(field=field):
+                self.assertEqual(
+                    self._merge({}, previous, prev_row=prev_row), {},
+                    f"changed {field} must drop the fallback",
+                )
+
+    def test_fallback_is_skipped_when_a_catalogue_is_unavailable(self) -> None:
+        previous = {2: {"item_id": 100, "lift": 0.04, "lcb": 0.01}}
+        # No previous Data Dragon version resolved -> no comparison, no fallback.
+        self.assertEqual(self._merge({}, previous, previous_version=None), {})
+        # Neither catalogue fetched -> same conservative outcome.
+        with mock.patch.object(engine, "_ddragon_item_rows", lambda *a, **k: {}):
+            self.assertEqual(
+                tier_list.merge_destiny_items_with_previous(
+                    {}, previous, current_version=self.CUR,
+                    previous_version=self.PREV, cache_dir=self.cache_dir,
+                ),
+                {},
+            )
+
+    def test_fallback_is_skipped_when_the_item_is_missing_from_a_catalogue(self) -> None:
+        previous = {2: {"item_id": 100, "lift": 0.04, "lcb": 0.01}}
+        rows = {self.CUR: {}, self.PREV: {"100": self._item()}}
+        with mock.patch.object(
+            engine, "_ddragon_item_rows", lambda version, *a, **k: rows.get(version, {})
+        ):
+            # Empty current catalogue -> entire fallback disabled.
+            self.assertEqual(
+                tier_list.merge_destiny_items_with_previous(
+                    {}, previous, current_version=self.CUR,
+                    previous_version=self.PREV, cache_dir=self.cache_dir,
+                ),
+                {},
+            )
+
+
+class PreviousDdragonVersionTests(unittest.TestCase):
+    def test_resolves_the_newest_version_for_the_patch_prefix(self) -> None:
+        versions = ["16.21.1", "16.20.1", "16.20.0", "16.19.1"]
+        with mock.patch.object(engine, "_cached_get_json", lambda *a, **k: versions):
+            self.assertEqual(engine.ddragon_version_for_patch("16.20"), "16.20.1")
+            self.assertIsNone(engine.ddragon_version_for_patch("16.18"))
+            self.assertIsNone(engine.ddragon_version_for_patch(None))
+
+    def test_fetch_failure_returns_none_instead_of_raising(self) -> None:
+        def boom(*_a, **_k):
+            raise RuntimeError("offline")
+
+        with mock.patch.object(engine, "_cached_get_json", boom):
+            self.assertIsNone(engine.ddragon_version_for_patch("16.20"))
 
 
 if __name__ == "__main__":
