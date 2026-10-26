@@ -13,6 +13,9 @@
     shell.getElementById('view-home')?.classList.remove('is-active');
     shell.getElementById('view-champ')?.classList.add('is-active');
     fallback.replaceWith(...shell.body.childNodes);
+    // The static rankings section is crawlable / no-JS content only; the
+    // interactive view renders the same data, so it must not linger next to it.
+    document.getElementById('champion-static')?.remove();
     // Inline build config must precede the cached site.js startup.
     for (const source of scripts) {
         const script = document.createElement('script');
