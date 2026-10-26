@@ -4603,6 +4603,8 @@ def _run_shell_only(
         og_token = og_cache_bust(out_path.parent / "og-image.png", build_date)
         og_image = site_url.rstrip("/") + "/og-image.png" + f"?v={og_token}"
 
+    # Both shells embed championCores; the hidden player-history page needs them too.
+    table_core_items = champion_table_core_items(payload, payload_path.parent / "champions")
     html = render_html(
         records, champ_meta,
         champ_profiles={}, champ_picks={}, champ_sets={}, champ_item_builds={},
@@ -4615,7 +4617,7 @@ def _run_shell_only(
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
         shell_payload=payload,
-        table_core_items=champion_table_core_items(payload, payload_path.parent / "champions"),
+        table_core_items=table_core_items,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
@@ -4641,6 +4643,7 @@ def _run_shell_only(
         build_date=build_date, cloudflare_analytics_token=cloudflare_analytics_token,
         ga_measurement_id=ga_measurement_id, payload_out_path=None,
         shell_payload=payload,
+        table_core_items=table_core_items,
         payload_url=resolved_payload_url, icon_assets_dir=None, aug_global=None,
         script_assets_dir=out_path.parent / "assets",
         meta_pick_api_url=meta_pick_api_url,
