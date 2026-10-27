@@ -2998,10 +2998,22 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const destiny = destinyItem && destinyItem.id ? destinyItem : null;
         const isDestiny = (e) => !!destiny && String(e.id) === '3081';
         const destinyItemName = () => (destiny ? itemDisplayName({ id: destiny.id }) : '');
-        const destinyText = () => pickLang(
+        const destinyLine = () => pickLang(
             `推薦：${destinyItemName()} ${signed(Number(destiny.lift || 0))}`,
             `Recommended: ${destinyItemName()} ${signed(Number(destiny.lift || 0))}`
         );
+        // A pick carried over from the previous patch keeps the raw text (the
+        // recommendation line, then the caveat) so it reads correctly both in
+        // plain-text ARIA labels and as the muted label appended in the card.
+        const destinyPrevLabel = () => pickLang('上版資料', 'previous patch');
+        const destinyText = () =>
+            (destiny && destiny.prev ? `${destinyLine()} ${destinyPrevLabel()}` : destinyLine());
+        const destinyTextHtml = () => {
+            const line = escHtml(destinyLine());
+            return destiny && destiny.prev
+                ? `${line} <span class="destiny-prev">${escHtml(destinyPrevLabel())}</span>`
+                : line;
+        };
         const destinyIcon = (v) => {
             const src = destiny ? itemIconUrl({ id: destiny.id }) : '';
             if (!src) return iconHtml(v);
@@ -3038,7 +3050,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                         <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
                         <span class="aug-pick-icon rarity-${r.css}">${cardIcon(e, v)}</span>
                         <span class="aug-pick-name">${escHtml(v.name)}</span>
-                        ${isDestiny(e) ? `<span class="aug-pick-destiny">${escHtml(destinyText())}</span>` : ''}
+                        ${isDestiny(e) ? `<span class="aug-pick-destiny">${destinyTextHtml()}</span>` : ''}
                         ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
                         <span class="aug-pick-foot">
                             <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
@@ -3064,7 +3076,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                             ${cardIcon(e, v)}
                             <span class="aug-tier-text">
                                 <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
-                                ${isDestiny(e) ? `<span class="aug-tier-destiny">${escHtml(destinyText())}</span>` : ''}
+                                ${isDestiny(e) ? `<span class="aug-tier-destiny">${destinyTextHtml()}</span>` : ''}
                                 ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
                             </span>
                         </span>
