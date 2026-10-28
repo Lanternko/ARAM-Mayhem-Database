@@ -1101,11 +1101,9 @@ def load_augment_display_tags(cache_dir: Path) -> dict[int, list[int]]:
 #
 # Format: aid -> TW name as it actually appears in the game client.
 AUGMENT_NAME_OVERRIDES: dict[int, str] = {
-    # Internal: Kiwi_UltimateAwakening; icon ZeroHour_small.png.
-    # CommunityDragon zh_tw: 「大絕覺醒」, Garena TW client ships 「最終型態」
-    # (型 not 形 — Garena consistently picks 型態 over 形態 for "form" in
-    # game context).  Verified against live client screenshot 2026-05-15.
-    1349: "最終型態",
+    # 1349 (Kiwi_UltimateAwakening) used to be forced to 「最終型態」, but that
+    # name belongs to 1344 Final Form; the override made two cards share one
+    # name.  CDragon's 「大絕覺醒」 is correct (user report 2026-10-27).
 }
 
 # English counterpart for augments whose CDragon English name is blank.

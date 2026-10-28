@@ -1053,6 +1053,9 @@ def _feedback_fab_html() -> str:
         "zh": "許願新功能，或是回報網站的bug",
         "zh_cn": "许愿新功能，或是反馈网站的bug",
         "en": "Request a feature or report a website bug",
+        "label_zh": "回饋",
+        "label_zh_cn": "反馈",
+        "label_en": "Feedback",
     }
     copy = {k: html.escape(v, quote=True) for k, v in copy.items()}
     return (
@@ -1064,6 +1067,9 @@ def _feedback_fab_html() -> str:
         "stroke-linejoin='round' aria-hidden='true'>"
         "<path d='m21 3-7 18-4-7-7-4 18-7Z'></path>"
         "<path d='m10 14 11-11'></path></svg>"
+        "<span class='feedback-fab-label' aria-hidden='true' "
+        f"data-i18n-zh='{copy['label_zh']}' data-i18n-zh-cn='{copy['label_zh_cn']}' "
+        f"data-i18n-en='{copy['label_en']}'>{copy['label_zh']}</span>"
         "<span class='feedback-fab-tip' id='feedback-fab-tip' "
         f"data-i18n-zh='{copy['zh']}' data-i18n-zh-cn='{copy['zh_cn']}' "
         f"data-i18n-en='{copy['en']}'>{copy['zh']}</span>"
