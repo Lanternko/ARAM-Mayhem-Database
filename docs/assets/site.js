@@ -2853,9 +2853,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
             colorTierFn: onBoard ? augBoardColorTier : pickColorTier,
             lift: entry.lift,
             liftLabel: signed(entry.lift),
-            games: entry.g,
             extraHtml: buildAugSlotStrip(entry, onBoard),
-            note: [onBoard ? copy.augChampsHint : '', extraNote].filter(Boolean).join(' · '),
+            note: extraNote,
         });
     }
 
@@ -2948,12 +2947,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 + (num ? `<text x="${p.x}" y="${numY.toFixed(1)}" text-anchor="middle">${escHtml(num)}</text>` : '')
                 + `</g>`;
         }).join('');
-        const notes = [pickLang('虛線＝它自己四選的平均；點在上／下＝那一選比平均高／低', 'Dashed line = its own average across rounds; above/below = higher/lower in that round')];
+        const notes = [];
         if (anyPrev) notes.push(pickLang('* 含上一版樣本', '* includes last patch'));
         if (anyCoarse) notes.push(pickLang('空心點＝樣本不足，位置依全英雄趨勢', 'Hollow dot = thin sample, shape from all champions'));
         const aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
         return `<div class="aug-slots">`
-            + `<div class="aug-slots-head">${escHtml(aria)}</div>`
             + `<svg class="aug-curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escHtml(aria)}">`
             + `<line class="aug-curve-base" x1="12" x2="${W - 12}" y1="${BASE}" y2="${BASE}"/>`
             + (path ? `<path class="aug-curve-line" d="${path}"/>` : '')
