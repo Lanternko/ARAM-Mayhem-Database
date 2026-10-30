@@ -10189,95 +10189,165 @@
         return Number(value || 0) >= 0 ? 'up' : 'down';
     }
 
-    function changeHeroRow(row) {
+    // ---- Slope ledger: every row in a tab shares ONE axis so bar length is a
+    // real, comparable quantity (baseline -> current).  The reference tick is
+    // 50% WR for win-rate tabs and 0 for lift tabs; the axis always includes it
+    // so "crossed the line" reads at a glance. ----
+    function changeAxis(rows, baseKey, curKey, ref) {
+        let lo = ref, hi = ref;
+        (rows || []).forEach(r => {
+            const a = Number(r[baseKey] || 0), b = Number(r[curKey] || 0);
+            if (a < lo) lo = a; if (b < lo) lo = b;
+            if (a > hi) hi = a; if (b > hi) hi = b;
+        });
+        const pad = Math.max((hi - lo) * 0.08, 0.005);
+        return { lo: lo - pad, hi: hi + pad, ref };
+    }
+
+    function changeTrack(base, cur, axis) {
+        const span = (axis.hi - axis.lo) || 1;
+        const pos = v => Math.min(100, Math.max(0, ((Number(v || 0) - axis.lo) / span) * 100));
+        const a = pos(base), b = pos(cur), r = pos(axis.ref);
+        const left = Math.min(a, b), width = Math.max(Math.abs(b - a), 0.6);
+        const dir = Number(cur || 0) >= Number(base || 0) ? 'up' : 'down';
+        return `
+            <span class="change-track" aria-hidden="true">
+                <i class="change-track-ref" style="left:${r.toFixed(2)}%"></i>
+                <i class="change-track-bar ${dir}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"></i>
+                <i class="change-track-base" style="left:${a.toFixed(2)}%"></i>
+                <i class="change-track-now ${dir}" style="left:${b.toFixed(2)}%"></i>
+            </span>
+        `;
+    }
+
+    function changeTierMark(from, to) {
+        if (!from && !to) return '';
+        return `<span class="change-tier"><b>${escHtml(from || '—')}</b><span class="change-tier-arrow">→</span><b>${escHtml(to || '—')}</b></span>`;
+    }
+
+    function changeHeroRow(row, axis) {
         const labels = changeLabels();
         const name = localizedEntityName(row);
         const title = `${name} ${signed(row.delta || 0)}`;
-        const meta = `${pct(row.baseline_wr || 0)} -> ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.games} · ${row.baseline_tier || ''}->${row.current_tier || ''}`;
+        const meta = `${pct(row.baseline_wr || 0)} → ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.games}`;
         return `
             <button class="change-row" type="button" data-change-cid="${row.id}" title="${escHtml(title)}">
-                <img class="change-icon" src="${escHtml(row.image || '')}" alt="">
-                <span>
-                    <span class="change-name">${escHtml(name)}</span>
+                <img class="change-icon" src="${escHtml(row.image || '')}" alt="" loading="lazy">
+                <span class="change-text">
+                    <span class="change-name">${escHtml(name)}${changeTierMark(row.baseline_tier, row.current_tier)}</span>
                     <span class="change-meta">${escHtml(meta)}</span>
                 </span>
+                ${changeTrack(row.baseline_wr, row.current_wr, axis)}
                 <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
             </button>
         `;
     }
 
-    function changeItemRow(row) {
+    function changeItemRow(row, axis) {
         const labels = changeLabels();
         const name = localizedEntityName(row);
         const title = `${name} ${signed(row.delta || 0)}`;
-        const meta = `${pct(row.baseline_wr || 0)} -> ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        const meta = `${pct(row.baseline_wr || 0)} → ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
         return `
             <div class="change-row" title="${escHtml(title)}">
                 ${itemIconHtml(row, 'change-icon')}
-                <span>
+                <span class="change-text">
                     <span class="change-name">${escHtml(name)}</span>
                     <span class="change-meta">${escHtml(meta)}</span>
                 </span>
+                ${changeTrack(row.baseline_wr, row.current_wr, axis)}
                 <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
             </div>
         `;
     }
 
-    function changeChampItemRow(row) {
+    function changeChampItemRow(row, axis) {
         const labels = changeLabels();
         const champ = row.champ || {};
         const item = row.item || {};
         const champName = localizedEntityName(champ);
         const itemName = localizedEntityName(item);
         const title = `${champName} + ${itemName} ${signed(row.delta || 0)}`;
-        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} -> ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} → ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
         return `
             <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
                 <span class="change-duo">
-                    <img src="${escHtml(champ.image || '')}" alt="">
+                    <img src="${escHtml(champ.image || '')}" alt="" loading="lazy">
                     ${itemIconHtml(item, 'change-item-icon')}
                 </span>
-                <span>
-                    <span class="change-name">${escHtml(champName)} + ${escHtml(itemName)}</span>
+                <span class="change-text">
+                    <span class="change-name">${escHtml(champName)}<span class="change-plus">+</span>${escHtml(itemName)}</span>
                     <span class="change-meta">${escHtml(meta)}</span>
                 </span>
+                ${changeTrack(row.baseline_lift, row.current_lift, axis)}
                 <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
             </button>
         `;
     }
 
-    function changeChampAugRow(row) {
+    function changeChampAugRow(row, axis) {
         const labels = changeLabels();
         const champ = row.champ || {};
         const aug = row.augment || {};
         const champName = localizedEntityName(champ);
         const augName = localizedEntityName(aug);
         const title = `${champName} + ${augName} ${signed(row.delta || 0)}`;
-        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} -> ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
+        const meta = `${labels.lift} ${signed(row.baseline_lift || 0)} → ${signed(row.current_lift || 0)} · WR ${pct(row.current_wr || 0)} · ${fmtInt(row.current_games)} ${labels.uses}`;
         return `
             <button class="change-row" type="button" data-change-cid="${champ.id}" title="${escHtml(title)}">
                 <span class="change-duo">
-                    <img src="${escHtml(champ.image || '')}" alt="">
-                    <img src="${escHtml(aug.icon || '')}" alt="">
+                    <img src="${escHtml(champ.image || '')}" alt="" loading="lazy">
+                    <img class="change-aug-icon" src="${escHtml(aug.icon || '')}" alt="" loading="lazy">
                 </span>
-                <span>
-                    <span class="change-name">${escHtml(champName)} + ${escHtml(augName)}</span>
+                <span class="change-text">
+                    <span class="change-name">${escHtml(champName)}<span class="change-plus">+</span>${escHtml(augName)}</span>
                     <span class="change-meta">${escHtml(meta)}</span>
                 </span>
+                ${changeTrack(row.baseline_lift, row.current_lift, axis)}
                 <span class="change-delta ${changeDeltaClass(row.delta)}">${signed(row.delta || 0)}</span>
             </button>
         `;
     }
 
-    function changeColumn(title, rows, renderer) {
+    // The axis legend sits in a footer row that shares the row grid, so its
+    // labels land exactly under the track column of that list.
+    function changeAxisLegend(axis, kind) {
+        const fmt = kind === 'lift' ? signed : pct;
+        const span = (axis.hi - axis.lo) || 1;
+        const r = Math.min(100, Math.max(0, ((axis.ref - axis.lo) / span) * 100));
+        return `
+            <div class="change-axis-row" aria-hidden="true">
+                <span></span><span></span>
+                <span class="change-axis">
+                    <span>${escHtml(fmt(axis.lo))}</span>
+                    <span class="change-axis-ref" style="left:${r.toFixed(2)}%">${escHtml(fmt(axis.ref))}</span>
+                    <span>${escHtml(fmt(axis.hi))}</span>
+                </span>
+                <span></span>
+            </div>
+        `;
+    }
+
+    function changeColumn(title, rows, renderer, axis, dir, kind, duo) {
         const labels = changeLabels();
         const body = rows && rows.length
-            ? rows.map(renderer).join('')
+            ? rows.map(r => renderer(r, axis)).join('') + changeAxisLegend(axis, kind)
             : `<div class="change-empty">${escHtml(labels.noData)}</div>`;
         return `
-            <div class="change-column">
-                <h3 class="change-column-title">${escHtml(title)}</h3>
+            <div class="change-column is-${dir}${duo ? ' is-duo' : ''}">
+                <h3 class="change-column-title"><span>${escHtml(title)}</span><small>${rows ? rows.length : 0}</small></h3>
                 <div class="change-list">${body}</div>
+            </div>
+        `;
+    }
+
+    function changeLedger(up, down, renderer, labelsUp, labelsDown, baseKey, curKey, ref, kind) {
+        const axis = changeAxis([...(up || []), ...(down || [])], baseKey, curKey, ref);
+        const duo = renderer === changeChampItemRow || renderer === changeChampAugRow;
+        return `
+            <div class="change-grid">
+                ${changeColumn(labelsUp, up || [], renderer, axis, 'up', kind, duo)}
+                ${changeColumn(labelsDown, down || [], renderer, axis, 'down', kind, duo)}
             </div>
         `;
     }
@@ -10286,48 +10356,24 @@
         if (!changes || !changes.currentPatch) {
             return `<div class="change-empty">${escHtml(labels.noData)}</div>`;
         }
+        const note = text => `<p class="change-note">${escHtml(text)}</p>`;
         if (activeUpdateTab === 'items') {
-            return `
-                <div class="change-grid">
-                    ${changeColumn(labels.itemUp, changes.itemRisers || [], changeItemRow)}
-                    ${changeColumn(labels.itemDown, changes.itemFallers || [], changeItemRow)}
-                </div>
-                <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
-            `;
+            return changeLedger(changes.itemRisers, changes.itemFallers, changeItemRow, labels.itemUp, labels.itemDown, 'baseline_wr', 'current_wr', 0.5, 'wr')
+                + note(labels.itemNote);
         }
         if (activeUpdateTab === 'champItems') {
-            return `
-                <div class="change-grid">
-                    ${changeColumn(labels.champItemUp, changes.champItemRisers || [], changeChampItemRow)}
-                    ${changeColumn(labels.champItemDown, changes.champItemFallers || [], changeChampItemRow)}
-                </div>
-                <div class="change-meta" style="margin-top:10px">${escHtml(labels.itemNote)}</div>
-            `;
+            return changeLedger(changes.champItemRisers, changes.champItemFallers, changeChampItemRow, labels.champItemUp, labels.champItemDown, 'baseline_lift', 'current_lift', 0, 'lift')
+                + note(labels.itemNote);
         }
         if (activeUpdateTab === 'champAugs') {
-            return `
-                <div class="change-grid">
-                    ${changeColumn(labels.champAugUp, changes.champAugRisers || [], changeChampAugRow)}
-                    ${changeColumn(labels.champAugDown, changes.champAugFallers || [], changeChampAugRow)}
-                </div>
-                <div class="change-meta" style="margin-top:10px">${escHtml(labels.champAugNote)}</div>
-            `;
+            return changeLedger(changes.champAugRisers, changes.champAugFallers, changeChampAugRow, labels.champAugUp, labels.champAugDown, 'baseline_lift', 'current_lift', 0, 'lift')
+                + note(labels.champAugNote);
         }
         if (activeUpdateTab === 'augments') {
-            return `
-                <div class="change-grid">
-                    ${changeColumn(labels.augmentUp, changes.augmentRisers || [], changeItemRow)}
-                    ${changeColumn(labels.augmentDown, changes.augmentFallers || [], changeItemRow)}
-                </div>
-                <div class="change-meta" style="margin-top:10px">${escHtml(labels.augmentNote)}</div>
-            `;
+            return changeLedger(changes.augmentRisers, changes.augmentFallers, changeItemRow, labels.augmentUp, labels.augmentDown, 'baseline_wr', 'current_wr', 0.5, 'wr')
+                + note(labels.augmentNote);
         }
-        return `
-            <div class="change-grid">
-                ${changeColumn(labels.heroUp, changes.heroRisers || [], changeHeroRow)}
-                ${changeColumn(labels.heroDown, changes.heroFallers || [], changeHeroRow)}
-            </div>
-        `;
+        return changeLedger(changes.heroRisers, changes.heroFallers, changeHeroRow, labels.heroUp, labels.heroDown, 'baseline_wr', 'current_wr', 0.5, 'wr');
     }
 
     function renderUpdatesPanel() {
@@ -10338,7 +10384,6 @@
             activeUpdateTab = 'heroes';
         }
         const button = document.getElementById('updates-toggle');
-        const panel = document.getElementById('updates-panel');
         const kicker = document.getElementById('updates-kicker');
         const title = document.getElementById('updates-title');
         const close = document.getElementById('updates-close');
@@ -10347,7 +10392,16 @@
             button.textContent = labels.button || copy.updatesButton;
             button.setAttribute('aria-expanded', updatesOpen ? 'true' : 'false');
         }
-        if (kicker) kicker.textContent = labels.kicker || copy.updatesKicker;
+        if (kicker) {
+            // Patch pair as the headline: the old version recedes, the new one leads.
+            if (changes.baselinePatch && changes.currentPatch) {
+                kicker.innerHTML = `<span class="updates-patch is-base">${escHtml(changes.baselinePatch)}</span>`
+                    + `<span class="updates-patch-arrow" aria-hidden="true">→</span>`
+                    + `<span class="updates-patch">${escHtml(changes.currentPatch)}</span>`;
+            } else {
+                kicker.textContent = labels.kicker || copy.updatesKicker;
+            }
+        }
         if (title) title.textContent = labels.title || copy.updatesTitle;
         if (close) close.setAttribute('aria-label', labels.close || copy.updatesClose);
         if (list) {
@@ -10358,16 +10412,16 @@
                 </button>
             `).join('');
             const summary = changes.currentPatch ? `
-                <div class="change-summary">
-                    <span class="change-chip">${escHtml(labels.summaryBase)} ${escHtml(changes.baselinePatch || '')}</span>
-                    <span class="change-chip">${escHtml(labels.summarySample)} ${fmtInt(changes.currentGames)} / ${fmtInt(changes.baselineGames)}</span>
-                    <span class="change-chip">${escHtml(labels.summaryRule)} ${escHtml(labels.summaryRuleText)}</span>
-                </div>
+                <dl class="change-summary">
+                    <div><dt>${escHtml(labels.summaryBase)}</dt><dd>${escHtml(changes.baselinePatch || '')}</dd></div>
+                    <div><dt>${escHtml(labels.summarySample)}</dt><dd>${fmtInt(changes.currentGames)} <span class="change-summary-vs">/ ${fmtInt(changes.baselineGames)}</span></dd></div>
+                    <div><dt>${escHtml(labels.summaryRule)}</dt><dd>${escHtml(labels.summaryRuleText)}</dd></div>
+                </dl>
             ` : '';
             list.innerHTML = `
-                ${summary}
                 <div class="change-tabs" role="tablist">${tabHtml}</div>
                 ${renderChangeTabContent(changes, labels)}
+                ${summary}
             `;
         }
     }
