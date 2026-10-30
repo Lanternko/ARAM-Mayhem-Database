@@ -6756,8 +6756,11 @@
         gap: 2px;
         padding: 6px 2px 5px;
         border-radius: 6px;
-        border: 1px solid var(--border);
-        background: color-mix(in oklab, var(--slot-hue) calc(var(--slot-k, 0%) * 0.5), color-mix(in oklab, var(--text) 4%, transparent));
+        /* Neutral fill; the hue lives on the top bar, border and number only —
+           mixing saturated red/green into the dark card read as mud. */
+        border: 1px solid color-mix(in oklab, var(--slot-hue) calc(var(--slot-k, 0%) * 0.55), var(--border));
+        background: color-mix(in oklab, var(--text) 4%, transparent);
+        box-shadow: inset 0 3px 0 color-mix(in oklab, var(--slot-hue) calc(15% + var(--slot-k, 0%) * 0.85), transparent);
         min-height: 40px;
     }
     .aug-slot.is-up { --slot-hue: var(--wr-5); }
@@ -6771,7 +6774,7 @@
         font-size: 12px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        color: var(--text);
+        color: color-mix(in oklab, var(--slot-hue) calc(20% + var(--slot-k, 0%) * 0.8), var(--text));
     }
     .aug-slot.is-prev .aug-slot-val::after { content: '*'; color: var(--text-muted); margin-left: 1px; }
     .aug-slot.is-coarse { border-style: dashed; }
