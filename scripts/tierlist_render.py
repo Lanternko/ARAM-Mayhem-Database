@@ -708,10 +708,10 @@ def _header_role_search_html() -> str:
     .chip), so filter state, analytics and badge refresh stay in one place.
     """
     filter_icon = (
-        "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' "
-        "stroke='currentColor' stroke-width='2' stroke-linecap='round' "
-        "stroke-linejoin='round' aria-hidden='true'>"
-        "<path d='M4 5h16l-6 7.5V19l-4-2v-4.5z'></path></svg>"
+        "<svg viewBox='0 0 24 24' width='15' height='15' fill='currentColor' "
+        "aria-hidden='true'>"
+        "<path d='M4.2 4h15.6a1 1 0 0 1 .78 1.63L14.5 13.2v5.3a1 1 0 0 1-.55.9l-3 1.5"
+        "A1 1 0 0 1 9.5 20v-6.8L3.42 5.63A1 1 0 0 1 4.2 4z'></path></svg>"
     )
     segs = [
         "<button type='button' class='role-seg is-active' data-role-seg='' "

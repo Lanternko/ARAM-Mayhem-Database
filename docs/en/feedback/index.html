@@ -1562,9 +1562,11 @@
         }
     }
     .aug.hidden { display: none; }
-    .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #efd6ff; background: color-mix(in srgb, #d36bff 18%, transparent); }
-    .aug-rarity-chip.rarity-kGold.is-active { border-color: #f5c518; color: #ffe9a3; background: color-mix(in srgb, #f5c518 18%, transparent); }
-    .aug-rarity-chip.rarity-kSilver.is-active { border-color: #c0c5cc; color: #eef1f5; background: color-mix(in srgb, #c0c5cc 22%, transparent); }
+    /* Solid fill like the category chips' active state; a translucent tint
+       over the dark surface reads muddy. */
+    .aug-rarity-chip.rarity-kPrismatic.is-active { border-color: #d36bff; color: #14110a; background: #d36bff; }
+    .aug-rarity-chip.rarity-kGold.is-active { border-color: #f5c518; color: #14110a; background: #f5c518; }
+    .aug-rarity-chip.rarity-kSilver.is-active { border-color: #c0c5cc; color: #14110a; background: #c0c5cc; }
     .champ {
         position: relative;
         aspect-ratio: 1 / 1;
@@ -4682,11 +4684,12 @@
         color: var(--text);
         background: var(--surface-2);
     }
-    /* Selected = accent tint + accent text + check; no outline box. */
+    /* Selected = neutral row + accent check; no tint, no outline box. */
     .site-header .lang-menu-list [data-lang].is-active {
-        color: var(--accent-soft);
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--text);
+        background: var(--surface-2);
     }
+    .site-header .lang-menu-list [data-lang].is-active::after { color: var(--accent); }
     .site-header .lang-menu-list [data-lang].is-active::after {
         content: '';
         width: 10px;
@@ -4712,17 +4715,19 @@
         align-items: center;
         padding: 6px 8px;
         line-height: 0;
-        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        /* Neutral frame like the theme / language toggles; the solid funnel
+           carries the accent, and the whole button fills only when open. */
+        background: transparent;
         color: var(--accent);
-        border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+        border: 1px solid var(--border);
         border-radius: var(--r-sm);
         transition: color var(--dur-2) var(--ease), background-color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-1) var(--ease);
     }
     .site-header .header-search > summary::-webkit-details-marker { display: none; }
     .site-header .header-search > summary::marker { content: ''; }
     .site-header .header-search > summary:hover {
-        background: color-mix(in srgb, var(--accent) 20%, transparent);
-        border-color: var(--accent);
+        background: var(--surface-2);
+        border-color: var(--border-strong);
     }
     .site-header .header-search[open] > summary {
         color: var(--accent-on);
@@ -4785,8 +4790,8 @@
     .role-seg:first-child { border-left: 0; }
     .role-seg:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
     .role-seg.is-active {
-        color: var(--accent-soft);
-        background: color-mix(in srgb, var(--accent) 22%, transparent);
+        color: var(--accent-on);
+        background: var(--accent);
     }
     .role-seg:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
     .role-seg-icon {
@@ -4850,8 +4855,8 @@
     .filter-bar .role-chip-bar .chip.role-seg:first-child { border-left: 0; }
     .filter-bar .role-chip-bar .chip.role-seg:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
     .filter-bar .role-chip-bar .chip.role-seg.active {
-        color: var(--role-color);
-        background: color-mix(in srgb, var(--role-color) 20%, transparent);
+        color: #0e1116;
+        background: var(--role-color);
     }
     .role-chip-bar .role-seg-icon { width: 18px; height: 18px; flex: none; }
     /* Labels only fit beside the sticky search rail on wide screens. */
