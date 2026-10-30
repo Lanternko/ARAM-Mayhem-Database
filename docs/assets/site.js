@@ -2909,28 +2909,56 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (!cells.some(Boolean)) return '';
         const anyCoarse = cells.some(c => c && c.coarse);
         const anyPrev = cells.some(c => c && c.prev > 0);
-        const boxes = cells.map((c, i) => {
-            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
-            if (!c) {
-                return `<div class="aug-slot is-empty"><span class="aug-slot-label">${label}</span><b class="aug-slot-val">–</b></div>`;
-            }
+        // Pick-order curve: x = round, y = deviation from the augment's own
+        // mean across rounds (dashed baseline), clamped at ±AUG_SLOT_DEV_FULL.
+        // Numbers stay absolute WR; the curve only shows the early/late shape.
+        const W = 280, H = 88, X0 = 35, DX = 70, BASE = 52, AMP = 16;
+        const xs = i => X0 + i * DX;
+        const pts = cells.map((c, i) => {
+            if (!c) return null;
             const t = Math.max(-1, Math.min(1, c.dev / AUG_SLOT_DEV_FULL));
-            const tone = t >= 0 ? 'is-up' : 'is-down';
-            const strength = Math.round(Math.abs(t) * 100);
-            const val = c.coarse ? '' : pct(c.wr);
-            const title = c.coarse
-                ? pickLang(`${label}：樣本不足，顏色依全英雄趨勢`, `${label}: thin sample, colour from all champions`)
-                : `${label}: ${pct(c.wr)} · ${pickLang('比同輪平均', 'vs round avg')} ${signed(c.lift)} · ${pickLang('比它自己平均', 'vs its own avg')} ${signed(c.dev)} · ${fmtInt(c.g)}${pickLang(' 場', ' games')}`;
-            return `<div class="aug-slot ${tone}${c.coarse ? ' is-coarse' : ''}${c.prev > 0 ? ' is-prev' : ''}" style="--slot-k:${strength}%" title="${escHtml(title)}">`
-                + `<span class="aug-slot-label">${label}</span>`
-                + `<b class="aug-slot-val">${escHtml(val)}</b></div>`;
+            return { x: xs(i), y: BASE - t * AMP, t, c };
+        });
+        const runs = [];
+        let run = [];
+        pts.forEach(p => {
+            if (p) { run.push(p); return; }
+            if (run.length > 1) runs.push(run);
+            run = [];
+        });
+        if (run.length > 1) runs.push(run);
+        const path = runs.map(r => r.map((p, j) => `${j ? 'L' : 'M'}${p.x} ${p.y.toFixed(1)}`).join(' ')).join(' ');
+        const labels = cells.map((c, i) => {
+            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            return `<text class="aug-pt-label${c ? '' : ' is-empty'}" x="${xs(i)}" y="11" text-anchor="middle">${escHtml(label)}</text>`;
         }).join('');
-        const notes = [pickLang('綠／紅＝比它自己四選平均高／低', 'Green/red = above/below its own average')];
+        const marks = pts.map((p, i) => {
+            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            if (!p) return `<text class="aug-pt-none" x="${xs(i)}" y="${BASE + 4}" text-anchor="middle">–</text>`;
+            const c = p.c;
+            const tone = p.t >= 0 ? 'is-up' : 'is-down';
+            const strength = Math.round(Math.abs(p.t) * 100);
+            const num = c.coarse ? '' : pct(c.wr) + (c.prev > 0 ? '*' : '');
+            const numY = p.t >= 0 ? p.y - 9 : p.y + 17;
+            const title = c.coarse
+                ? pickLang(`${label}：樣本不足，位置依全英雄趨勢`, `${label}: thin sample, position from all champions`)
+                : `${label}: ${pct(c.wr)} · ${pickLang('比同輪平均', 'vs round avg')} ${signed(c.lift)} · ${pickLang('比它自己平均', 'vs its own avg')} ${signed(c.dev)} · ${fmtInt(c.g)}${pickLang(' 場', ' games')}`;
+            return `<g class="aug-pt ${tone}${c.coarse ? ' is-coarse' : ''}" style="--slot-k:${strength}%"><title>${escHtml(title)}</title>`
+                + `<circle cx="${p.x}" cy="${p.y.toFixed(1)}" r="4.5"/>`
+                + (num ? `<text x="${p.x}" y="${numY.toFixed(1)}" text-anchor="middle">${escHtml(num)}</text>` : '')
+                + `</g>`;
+        }).join('');
+        const notes = [pickLang('虛線＝它自己四選的平均；點在上／下＝那一選比平均高／低', 'Dashed line = its own average across rounds; above/below = higher/lower in that round')];
         if (anyPrev) notes.push(pickLang('* 含上一版樣本', '* includes last patch'));
-        if (anyCoarse) notes.push(pickLang('無數字＝樣本不足，顏色依全英雄趨勢', 'No number = thin sample, colour from all champions'));
+        if (anyCoarse) notes.push(pickLang('空心點＝樣本不足，位置依全英雄趨勢', 'Hollow dot = thin sample, shape from all champions'));
+        const aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
         return `<div class="aug-slots">`
-            + `<div class="aug-slots-head">${escHtml(pickLang('第幾個選它的勝率', 'Win rate by pick round'))}</div>`
-            + `<div class="aug-slots-row">${boxes}</div>`
+            + `<div class="aug-slots-head">${escHtml(aria)}</div>`
+            + `<svg class="aug-curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escHtml(aria)}">`
+            + `<line class="aug-curve-base" x1="12" x2="${W - 12}" y1="${BASE}" y2="${BASE}"/>`
+            + (path ? `<path class="aug-curve-line" d="${path}"/>` : '')
+            + labels + marks
+            + `</svg>`
             + (notes.length ? `<div class="aug-slots-foot">${escHtml(notes.join(' · '))}</div>` : '')
             + `</div>`;
     }

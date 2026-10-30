@@ -6760,73 +6760,78 @@
         color: color-mix(in oklch, var(--wr-1) var(--tip-lift-strength, 0%), var(--wr-negative));
     }
     .item-tip-delta.is-even { color: var(--wr-neutral); }
-    /* 第 1-4 選 strip: hue = above/below the augment's own mean across
-       rounds, size = --slot-k (0-100%, full at ±4pp). The four rounds form
-       one segmented rail; the hue lives only on the number and on a short
-       centred meter whose LENGTH (never thickness) grows with the delta. */
+    /* 第 1-4 選 pick-order curve (inline SVG from buildAugSlotStrip): x =
+       round, y = deviation from the augment's own mean across rounds (the
+       dashed baseline), hue = above/below, depth = size (--slot-k). Numbers
+       are absolute WR and sit on the outside of each dot. */
     .aug-slots {
-        margin-top: 8px;
-        padding-top: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
         border-top: 1px solid var(--border);
     }
     .aug-slots-head {
         font-size: 11px;
         color: var(--text-muted);
-        margin-bottom: 6px;
+        margin-bottom: 2px;
     }
-    .aug-slots-row {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0;
-        border-radius: 8px;
-        overflow: hidden;
-        background: color-mix(in oklab, var(--text) 4%, transparent);
+    .aug-curve {
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
+        font-family: var(--font-ui);
     }
-    .aug-slot {
+    .aug-curve-base {
+        stroke: color-mix(in oklab, var(--text) 28%, transparent);
+        stroke-width: 1;
+        stroke-dasharray: 3 4;
+        stroke-linecap: round;
+    }
+    .aug-curve-line {
+        fill: none;
+        stroke: color-mix(in oklab, var(--text) 38%, transparent);
+        stroke-width: 1.75;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+    .aug-pt {
         --slot-hue: var(--wr-3);
-        --slot-ink: color-mix(in oklab, var(--slot-hue) calc(30% + var(--slot-k, 0%) * 0.7), var(--text));
-        --slot-meter: color-mix(in oklab, var(--slot-hue) calc(40% + var(--slot-k, 0%) * 0.6), transparent);
-        position: relative;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 2px;
-        padding: 7px 4px 9px;
-        min-height: 44px;
+        --slot-ink: color-mix(in oklab, var(--slot-hue) calc(40% + var(--slot-k, 0%) * 0.6), var(--text));
     }
-    .aug-slot + .aug-slot { border-left: 1px solid var(--border); }
-    .aug-slot.is-up { --slot-hue: var(--wr-5); }
-    .aug-slot.is-down { --slot-hue: var(--wr-1); }
-    .aug-slot-label {
-        font-size: 10px;
-        color: var(--text-muted);
-        white-space: nowrap;
+    .aug-pt.is-up { --slot-hue: var(--wr-5); }
+    .aug-pt.is-down { --slot-hue: var(--wr-1); }
+    .aug-pt circle {
+        fill: var(--slot-ink);
+        stroke: var(--tip-surface);
+        stroke-width: 2.5;
+        paint-order: stroke;
     }
-    .aug-slot-val {
+    .aug-pt.is-coarse circle {
+        fill: var(--tip-surface);
+        stroke: var(--slot-ink);
+        stroke-width: 1.75;
+    }
+    .aug-pt text {
         font-size: 13px;
         font-weight: 700;
-        line-height: 1.1;
         font-variant-numeric: tabular-nums;
-        color: var(--slot-ink);
+        letter-spacing: -0.01em;
+        fill: var(--slot-ink);
+        paint-order: stroke;
+        stroke: var(--tip-surface);
+        stroke-width: 3px;
+        stroke-linejoin: round;
     }
-    /* Meter: 18% wide at no delta, up to ~80% at full strength. */
-    .aug-slot::after {
-        content: '';
-        position: absolute;
-        left: 50%;
-        bottom: 4px;
-        height: 2px;
-        width: calc(18% + var(--slot-k, 0%) * 0.62);
-        transform: translateX(-50%);
-        border-radius: 1px;
-        background: var(--slot-meter);
+    .aug-pt-label {
+        font-size: 10px;
+        fill: var(--text-muted);
     }
-    .aug-slot.is-coarse::after {
-        background: repeating-linear-gradient(90deg, var(--slot-meter) 0 3px, transparent 3px 5px);
+    .aug-pt-label.is-empty { opacity: 0.45; }
+    .aug-pt-none {
+        font-size: 12px;
+        fill: var(--text-muted);
+        opacity: 0.6;
     }
-    .aug-slot.is-prev .aug-slot-val::after { content: '*'; color: var(--text-muted); margin-left: 1px; }
-    .aug-slot.is-empty { opacity: 0.45; }
-    .aug-slot.is-empty::after { background: var(--border); }
     .aug-slots-foot {
         margin-top: 5px;
         font-size: 10px;
