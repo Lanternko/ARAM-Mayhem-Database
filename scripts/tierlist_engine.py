@@ -2139,7 +2139,9 @@ AUGMENT_SLOT_PRIOR_GAMES = 150.0
 AUGMENT_SLOT_CURRENT_MIN_GAMES = 400
 # A round shows its WR number only with this many games and no borrowed sample;
 # thinner rounds are rendered as colour only (see buildAugSlotStrip in site.js).
-AUGMENT_SLOT_EXACT_MIN_GAMES = 1000
+# 1000 hid every round of mid-pick prismatics (Spirit Bomb: ~2.8k games, ~650
+# per round); at 400 the k=150 shrink keeps the printed number within ~2pp SE.
+AUGMENT_SLOT_EXACT_MIN_GAMES = 400
 
 
 def _rollup_augment_slots(records: list[dict] | None) -> dict[tuple[int, int], list[int]]:
