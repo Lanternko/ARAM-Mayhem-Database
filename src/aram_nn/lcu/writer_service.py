@@ -1259,7 +1259,22 @@ class WriterService:
         )
         eligible = 0
         if should_requeue:
-            eligible = self._clock_ms() + max(requeue_cooldown, initial_delay)
+            # Rediscovery must honour the same revisit policy as finalize.  The
+            # newer game that triggers it is usually the one just captured from
+            # a teammate's history, so a flat cooldown re-crawls the player within
+            # hours for nothing (live: ~40% of revisits, 86% of them empty).
+            cooldown = requeue_cooldown
+            if effective_rank == 0:
+                sb = _snowball()
+                if sb.revisit_arm(puuid) == "treatment":
+                    cooldown = sb._treatment_cooldown_ms(
+                        int(new_games or 0), first_seen, time.time()
+                    )
+                else:
+                    cooldown = sb._requeue_cooldown_for(
+                        int(new_games or 0), int(process_count or 0), requeue_cooldown
+                    )
+            eligible = self._clock_ms() + max(cooldown, initial_delay)
         became = self._snowball_upsert_queue_locked(
             puuid=puuid, depth=best_depth, source=best_source, priority=best_priority,
             discovered_from_game_id=best_game, discovered_match_created_ms=latest,

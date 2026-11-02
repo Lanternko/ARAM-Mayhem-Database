@@ -144,6 +144,51 @@ def test_writer_classic_score_claim_prefers_yield_over_wait_time(tmp_path: pathl
     assert claimed["claim_lane"] == "classic_score"
 
 
+@pytest.mark.parametrize("arm", ["treatment", "control"])
+def test_rediscovery_requeue_honours_revisit_arm_cooldown(tmp_path: pathlib.Path, arm: str) -> None:
+    """Seeing a crawled player in a newer game must not bypass the revisit
+    policy with the flat 45s requeue cooldown."""
+    from datetime import datetime, timedelta, timezone
+
+    now = [5_000_000]
+    service = WriterService(tmp_path / "games.db", clock_ms=lambda: now[0])
+    service.enqueue_player("p", discovered_match_created_ms=100)
+    first_seen = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    # Crawled long ago, productive, nothing pending: the state finalize leaves
+    # behind when the history held no game newer than the one we last saw.
+    service.con.execute(
+        "UPDATE crawl_seen SET processed=1, process_count=4, new_games_found=40, "
+        "first_seen_at=?, last_crawled_match_created_ms=100 WHERE puuid='p'",
+        (first_seen,),
+    )
+    service.con.execute("UPDATE crawl_queue SET status='done' WHERE puuid='p'")
+    service.con.commit()
+    with patch("aram_nn.lcu.snowball.revisit_arm", return_value=arm):
+        result = service.handle(
+            {
+                "version": 1,
+                "command": "snowball_queue",
+                "operation": "enqueue",
+                "request_id": f"rediscover-{arm}",
+                "puuid": "p",
+                "discovered_match_created_ms": 200,
+                "requeue_cooldown_ms": 45_000,
+            },
+            channel_id="w",
+        )
+    assert result["result"] == "requeued"
+    status, eligible = service.con.execute(
+        "SELECT status, eligible_at_ms FROM crawl_queue WHERE puuid='p'"
+    ).fetchone()
+    assert status == "pending"
+    if arm == "treatment":
+        # 40 games over 48h -> ~18h to accumulate 15; floored at the 24h minimum.
+        assert eligible - now[0] >= 24 * HOUR_MS
+    else:
+        # Control keeps the shipped yield tiers: productive players use the base.
+        assert eligible - now[0] == 45_000
+
+
 def test_writer_finalize_persists_classic_yield_columns(tmp_path: pathlib.Path) -> None:
     service = WriterService(tmp_path / "games.db")
     service.enqueue_player("classic")
