@@ -1248,8 +1248,8 @@
     }
   },
   "data_dragon_version": "16.22.1",
-  "generated_at": "2026-11-04T05:48:09Z",
-  "patch_prefix": "16.21",
+  "generated_at": "2026-11-04T15:18:52Z",
+  "patch_prefix": "16.22",
   "primary_role_by_champion": {
     "Aatrox": "Fighter",
     "Ahri": "Mage",
