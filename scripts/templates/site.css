@@ -783,6 +783,40 @@
         transform: translateX(-50%);
         color: var(--text-muted);
     }
+    /* Patch-notes sub-tab: static cards reuse the hover tooltip's surface,
+       type scale and description colours (.item-tip-*, .desc-*). */
+    .patch-notes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .patch-note-card { padding: 16px 18px; }
+    .patch-note-card::after { display: none; }
+    .patch-note-card .item-tip-head { margin-bottom: 12px; }
+    .patch-note-card .item-tip-icon { width: 40px; height: 40px; }
+    .patch-note-icon-blank { display: block; }
+    .patch-note-card .item-tip-desc { margin-bottom: 0; }
+    .patch-note-line + .patch-note-line { margin-top: 10px; }
+    .patch-note-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+    .patch-note-before { color: var(--text-dim); text-decoration: line-through; text-decoration-color: color-mix(in oklab, var(--text-dim) 60%, transparent); }
+    .patch-note-before .desc-value, .patch-note-before .desc-tone { color: inherit; font-weight: inherit; }
+    .patch-note-arrow { color: var(--text-dim); }
+    .patch-note-name { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; }
+    .patch-note-dir { flex: 0 0 auto; width: 18px; height: 18px; }
+    .patch-note-dir.is-down { color: #ef4444; }
+    .patch-note-dir.is-up { color: #22c55e; }
+    [data-theme="light"] .patch-note-dir.is-down { color: #dc2626; }
+    [data-theme="light"] .patch-note-dir.is-up { color: #16a34a; }
+    .patch-note-new {
+        margin-right: 6px;
+        padding: 0 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--accent-soft);
+        border: 1px solid currentColor;
+    }
     .change-note {
         margin: 12px 0 0;
         color: var(--text-dim);

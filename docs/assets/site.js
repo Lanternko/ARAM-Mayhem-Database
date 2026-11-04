@@ -826,6 +826,14 @@ const feedbackFab = document.querySelector('.feedback-fab');
     const DATE_STR_ZH = (__BUILD.dateStrZh || '');
     const BUILD_DATE = (__BUILD.buildDate || '');
     const PATCH_LABEL = (__BUILD.patchLabel || '');
+    // Internal Riot patch ids (16.x) are shown publicly as 26.x; mirrors
+    // tierlist_engine.display_patch_prefix.  Display only, never for lookups.
+    function displayPatch(patch) {
+        const m = /^(\d+)(\..+)$/.exec(String(patch || '').trim());
+        if (!m) return String(patch || '').trim();
+        const major = Number(m[1]);
+        return major >= 10 && major < 20 ? `${major + 10}${m[2]}` : m[0];
+    }
     const TOTAL_GAMES = (__BUILD.totalGames || '');
     const LANG_KEY = 'aram-mayhem-site-lang';
     const THEME_KEY = 'aram-mayhem-site-theme';
@@ -1633,6 +1641,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     let currentLang = normalizeLang(pendingBootLang || 'zh');
     let updatesOpen = false;
     let activeUpdateTab = 'heroes';
+    let updateTabChosen = false;
     // Home search is champions-only: the scope dropdown was removed (≈1.5% of
     // searches used 'all'; augments and items have their own tabs).  Drop any
     // remembered 'all' so returning visitors aren't stuck in it.
@@ -2232,8 +2241,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
     // Present the existing plain-text game data without accepting source HTML or
     // inventing missing scaling values. Each tone describes a game mechanic.
     const DESCRIPTION_TERMS = [
-        ['ap', 'Ability Power|魔法攻擊|魔法攻击|法術強度|法术强度'],
-        ['ad', 'Attack Damage|物理攻擊|物理攻击|攻擊力|攻击力'],
+        ['ap', 'Ability Power|魔法攻擊|魔法攻击|法術強度|法术强度|魔攻'],
+        ['ad', 'Attack Damage|物理攻擊|物理攻击|攻擊力|攻击力|物攻'],
         ['magic', 'magic damage|魔法傷害|魔法伤害'],
         ['physical', 'physical damage|物理傷害|物理伤害'],
         ['true', 'true damage|真實傷害|真实伤害'],
@@ -7878,7 +7887,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             );
         }).join('');
         const patchLabel = metaPickSession.boardPatch
-            ? escHtml(metaPickSession.boardPatch)
+            ? escHtml(displayPatch(metaPickSession.boardPatch))
             : '';
         body.innerHTML = (
             (patchLabel ? `<div class="game-board-meta">${escHtml(copy.gameBoardPatch || 'Patch')} ${patchLabel}</div>` : '')
@@ -9852,7 +9861,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
     function changeLabels() {
         const changes = DATA.patchChanges || {};
         const range = changes.baselinePatch && changes.currentPatch
-            ? `${changes.baselinePatch} -> ${changes.currentPatch}`
+            ? `${displayPatch(changes.baselinePatch)} -> ${displayPatch(changes.currentPatch)}`
             : PATCH_LABEL;
         if (currentLang === 'en') {
             return {
@@ -9860,7 +9869,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 kicker: range,
                 title: 'What moved this patch',
                 close: 'Close patch changes',
-                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items', champItems: 'Hero x item', champAugs: 'Hero x augment' },
+                tabs: { heroes: 'Heroes', augments: 'Augments', items: 'Items' },
                 summaryBase: 'Compared with',
                 summarySample: 'Sample',
                 summaryRule: 'Signal',
@@ -9878,7 +9887,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 champAugUp: 'Hero-augment spikes',
                 champAugDown: 'Hero-augment slumps',
                 champAugNote: 'Only pairings taken by at least 5% of that champion’s games in both patches; compares lift relative to the champion’s own baseline.',
-                itemNote: 'Core items only; boots and augment-gated rewards are excluded. Hero x item compares item lift against that hero baseline.',
+                itemNote: 'Core items only; boots and augment-gated rewards are excluded.',
                 games: 'games',
                 uses: 'uses',
                 lift: 'lift',
@@ -9889,7 +9898,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             kicker: range,
             title: '這版誰變多了',
             close: '關閉版本變動',
-            tabs: { heroes: '英雄', augments: '增幅', items: '裝備', champItems: '英雄×裝備', champAugs: '英雄×增幅' },
+            tabs: { heroes: '英雄', augments: '增幅', items: '裝備' },
             summaryBase: '比較基準',
             summarySample: '樣本',
             summaryRule: '訊號門檻',
@@ -9907,7 +9916,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             champAugUp: '增幅突然變好',
             champAugDown: '增幅突然變差',
             champAugNote: '只列兩版都被該英雄至少 5% 場次選用的增幅；比較的是相對該英雄 baseline 的 lift 變動。',
-            itemNote: '只看核心裝備，不含鞋子與增幅限定獎勵；英雄×裝備比較的是相對該英雄 baseline 的 lift 變動。',
+            itemNote: '只看核心裝備，不含鞋子與增幅限定獎勵。',
             games: '場',
             uses: '次',
             lift: 'lift',
@@ -10112,7 +10121,93 @@ const feedbackFab = document.querySelector('.feedback-fab');
         `;
     }
 
+    // Official Mayhem augment patch notes, keyed by the public patch number
+    // (26.x, see displayPatch).  `id` links to DATA.augs for icon + localized
+    // name; augments missing from the payload fall back to `zh` / `en`.
+    // Each change is [label_zh, label_en, before, after]; before === null
+    // marks a new effect.
+    const PATCH_NOTES = {
+        '26.22': [
+            { id: '3049', zh: '裝甲衝擊', changes: [['傷害', 'Damage', '50 - 125 + 250%額外物防', '25 - 125 + 220%額外物防', 'down']] },
+            { id: '3086', zh: '蜜蜂來襲！！！', changes: [
+                ['基礎傷害成長', 'Base damage scaling', '75 - 200 + 150%額外物攻 + 70%總魔攻', '75 - 140 + 150%額外物攻 + 70%總魔攻', 'down'],
+                ['蜂巢飛行時間', 'Hive travel time', '0.75秒', '1.1秒', 'down'],
+            ] },
+            { id: '3071', zh: '銅管爆破', changes: [
+                ['冷卻時間', 'Cooldown', '75秒', '50秒', 'up'],
+                ['士兵傷害', 'Minion damage', '', '已移除', 'down'],
+            ] },
+            { id: '3088', zh: '血色鈷石', changes: [['標記視覺特效', 'Mark VFX', '所有玩家可見', '僅限增幅裝置擁有者可見']] },
+            { id: '3060', zh: '一片歌手', changes: [['效果', 'Effect', null, '根據技能加速獲得傷害，但不再受益於技能加速。']] },
+            { id: '2077', zh: '貪婪束縛', changes: [
+                ['額外生命治療係數', 'Bonus Health heal ratio', '0.1', '0.12', 'up'],
+                ['基礎治療量', 'Base heal', '50 - 200', '75 - 300', 'up'],
+            ] },
+            { id: '3159', zh: '崛起', changes: [['效果', 'Effect', null, '使用大絕擊殺敵方英雄時會重置冷卻時間，最多3次。', 'up']] },
+            { id: '2115', zh: '伸縮手掌黏黏樂', en: 'Squishy Slappy Grab', icon: 'assets/icons/squishyslappygrab_large.png', changes: [['每個拉到的目標獲得的護盾', 'Shield per target pulled', '50 - 200 + 50%額外物防 + 50%額外魔防', '100 - 300 + 70%額外物防 + 70%額外魔防', 'up']] },
+            { id: '1375', zh: '食魂者', changes: [['每層獲得生命', 'Health per stack', '20', '30', 'up']] },
+            { id: '2076', zh: '果斷', changes: [['每次技能命中獲得雙防', 'Resists per ability hit', '等級1 / 7 / 11 - 1 / 2 / 3', '等級1 / 11 - 2 / 3', 'up']] },
+            { id: '3116', zh: '全面擊潰', changes: [['五連擊觸發傷害', 'Five-hit proc damage', '（15 + 5%額外攻速 + 0.15%總技能加速）%已損失生命', '17%已損失生命']] },
+            { id: '1001', zh: '泰坦的決意', changes: [['每級重型武裝所需層數', 'Stacks per Heavy Armament level', '10', '7', 'up']] },
+            { id: '3081', zh: '命定武器', changes: [
+                ['固定物理穿透係數', 'Flat armor pen ratio', '35', '20', 'down'],
+                ['固定魔法穿透係數', 'Flat magic pen ratio', '25', '15', 'down'],
+                ['百分比物理穿透係數', '% armor pen ratio', '0.25', '0.15', 'down'],
+                ['百分比魔法穿透係數', '% magic pen ratio', '0.15', '0.09', 'down'],
+            ] },
+        ],
+    };
+
+    function patchNotesFor(changes) {
+        return (changes && PATCH_NOTES[displayPatch(changes.currentPatch)]) || null;
+    }
+
+    function patchNoteDirIcon(dir) {
+        const label = dir === 'down' ? pickLang('削弱', 'Nerf') : pickLang('加強', 'Buff');
+        const path = dir === 'down' ? 'M8 13 3 7.5h3.2V3h3.6v4.5H13Z' : 'M8 3l5 5.5H9.8V13H6.2V8.5H3Z';
+        return `<svg class="patch-note-dir is-${dir}" viewBox="0 0 16 16" width="14" height="14" role="img" aria-label="${escHtml(label)}"><title>${escHtml(label)}</title><path d="${path}" fill="currentColor"/></svg>`;
+    }
+
+    function renderPatchNotes(notes) {
+        const loc = s => (currentLang === 'zh-CN' ? t2s(s) : s);
+        const cards = notes.map(entry => {
+            const aug = entry.id && DATA.augs ? DATA.augs[entry.id] : null;
+            const name = aug ? augName(aug, entry.id) : (currentLang === 'en' && entry.en ? entry.en : loc(entry.zh));
+            const iconSrc = (aug && aug.icon) || entry.icon || '';
+            const icon = iconSrc
+                ? `<img class="item-tip-icon" src="${escHtml(iconSrc)}" alt="" loading="lazy">`
+                : '<span class="item-tip-icon patch-note-icon-blank" aria-hidden="true"></span>';
+            // Direction marks sit beside the augment name: buffs first, then
+            // nerfs, so a mixed change shows both arrows.
+            const dirs = ['up', 'down'].filter(d => entry.changes.some(c => c[4] === d));
+            const marks = dirs.map(patchNoteDirIcon).join('');
+            const lines = entry.changes.map(([labelZh, labelEn, before, after]) => {
+                const label = currentLang === 'en' ? labelEn : loc(labelZh);
+                const body = before === null
+                    ? `<span class="patch-note-new">${escHtml(pickLang('新增', 'New'))}</span><span class="patch-note-after">${formatDescriptionInlineHtml(loc(after))}</span>`
+                    : (before ? `<span class="patch-note-before">${formatDescriptionInlineHtml(loc(before))}</span><span class="patch-note-arrow" aria-hidden="true">→</span>` : '')
+                        + `<span class="patch-note-after">${formatDescriptionInlineHtml(loc(after))}</span>`;
+                return `<div class="patch-note-line"><div class="item-tip-effect-name">${escHtml(label)}</div><div class="patch-note-body">${body}</div></div>`;
+            }).join('');
+            return `
+                <article class="item-tip-card patch-note-card">
+                    <div class="item-tip-head">
+                        <div class="item-tip-icons">${icon}</div>
+                        <div class="item-tip-head-text"><div class="item-tip-name patch-note-name">${escHtml(name)}${marks}</div></div>
+                    </div>
+                    <div class="item-tip-desc">${lines}</div>
+                </article>
+            `;
+        }).join('');
+        const note = pickLang('官方增幅平衡調整；文字取自更新公告，英文為非官方翻譯。', 'Official augment balance changes; English labels are unofficial translations.');
+        return `<div class="patch-notes-grid">${cards}</div><p class="change-note">${escHtml(note)}</p>`;
+    }
+
     function renderChangeTabContent(changes, labels) {
+        if (activeUpdateTab === 'notes') {
+            const notes = patchNotesFor(changes);
+            if (notes) return renderPatchNotes(notes);
+        }
         if (!changes || !changes.currentPatch) {
             return `<div class="change-empty">${escHtml(labels.noData)}</div>`;
         }
@@ -10120,14 +10215,6 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (activeUpdateTab === 'items') {
             return changeLedger(changes.itemRisers, changes.itemFallers, changeItemRow, labels.itemUp, labels.itemDown, 'baseline_wr', 'current_wr', 0.5, 'wr')
                 + note(labels.itemNote);
-        }
-        if (activeUpdateTab === 'champItems') {
-            return changeLedger(changes.champItemRisers, changes.champItemFallers, changeChampItemRow, labels.champItemUp, labels.champItemDown, 'baseline_lift', 'current_lift', 0, 'lift')
-                + note(labels.itemNote);
-        }
-        if (activeUpdateTab === 'champAugs') {
-            return changeLedger(changes.champAugRisers, changes.champAugFallers, changeChampAugRow, labels.champAugUp, labels.champAugDown, 'baseline_lift', 'current_lift', 0, 'lift')
-                + note(labels.champAugNote);
         }
         if (activeUpdateTab === 'augments') {
             return changeLedger(changes.augmentRisers, changes.augmentFallers, changeItemRow, labels.augmentUp, labels.augmentDown, 'baseline_wr', 'current_wr', 0.5, 'wr')
@@ -10140,7 +10227,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const copy = tr();
         const labels = changeLabels();
         const changes = DATA.patchChanges || {};
-        if (!['heroes', 'augments', 'items', 'champItems', 'champAugs'].includes(activeUpdateTab)) {
+        const hasNotes = !!patchNotesFor(changes);
+        if (!updateTabChosen && hasNotes) activeUpdateTab = 'notes';
+        if (!['heroes', 'augments', 'items'].concat(hasNotes ? ['notes'] : []).includes(activeUpdateTab)) {
             activeUpdateTab = 'heroes';
         }
         const button = document.getElementById('updates-toggle');
@@ -10155,9 +10244,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (kicker) {
             // Patch pair as the headline: the old version recedes, the new one leads.
             if (changes.baselinePatch && changes.currentPatch) {
-                kicker.innerHTML = `<span class="updates-patch is-base">${escHtml(changes.baselinePatch)}</span>`
+                kicker.innerHTML = `<span class="updates-patch is-base">${escHtml(displayPatch(changes.baselinePatch))}</span>`
                     + `<span class="updates-patch-arrow" aria-hidden="true">→</span>`
-                    + `<span class="updates-patch">${escHtml(changes.currentPatch)}</span>`;
+                    + `<span class="updates-patch">${escHtml(displayPatch(changes.currentPatch))}</span>`;
             } else {
                 kicker.textContent = labels.kicker || copy.updatesKicker;
             }
@@ -10165,7 +10254,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (title) title.textContent = labels.title || copy.updatesTitle;
         if (close) close.setAttribute('aria-label', labels.close || copy.updatesClose);
         if (list) {
-            const tabHtml = Object.entries(labels.tabs).map(([key, label]) => `
+            const tabEntries = hasNotes
+                ? [['notes', pickLang('更新說明', 'Patch notes')], ...Object.entries(labels.tabs)]
+                : Object.entries(labels.tabs);
+            const tabHtml = tabEntries.map(([key, label]) => `
                 <button class="change-tab${activeUpdateTab === key ? ' active' : ''}" type="button"
                         data-change-tab="${key}" aria-pressed="${activeUpdateTab === key ? 'true' : 'false'}">
                     ${escHtml(label)}
@@ -10173,7 +10265,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             `).join('');
             const summary = changes.currentPatch ? `
                 <dl class="change-summary">
-                    <div><dt>${escHtml(labels.summaryBase)}</dt><dd>${escHtml(changes.baselinePatch || '')}</dd></div>
+                    <div><dt>${escHtml(labels.summaryBase)}</dt><dd>${escHtml(displayPatch(changes.baselinePatch))}</dd></div>
                     <div><dt>${escHtml(labels.summarySample)}</dt><dd>${fmtInt(changes.currentGames)} <span class="change-summary-vs">/ ${fmtInt(changes.baselineGames)}</span></dd></div>
                     <div><dt>${escHtml(labels.summaryRule)}</dt><dd>${escHtml(labels.summaryRuleText)}</dd></div>
                 </dl>
@@ -11588,6 +11680,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const changeTab = ev.target.closest('[data-change-tab]');
         if (changeTab) {
             activeUpdateTab = changeTab.getAttribute('data-change-tab') || 'heroes';
+            updateTabChosen = true;
             renderUpdatesPanel();
             trackEvent('patch_change_tab', { tab: activeUpdateTab });
             return;
