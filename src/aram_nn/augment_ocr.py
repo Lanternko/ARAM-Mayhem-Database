@@ -224,8 +224,12 @@ def client_rect(hwnd: int) -> tuple[int, int, int, int] | None:
 Rect = tuple[int, int, int, int]  # left, top, right, bottom in desktop pixels
 
 
-def own_window_rects() -> list[Rect]:
+def own_window_rects(above: int | None = None) -> list[Rect]:
     """Visible top-level windows of this process, except click-through overlays.
+
+    With ``above`` (the game window), only windows stacked above it count: a
+    maximised recommender sitting *behind* the game covers the same rect but
+    is not on screen, and masking it blacked out the whole game frame.
 
     The augment overlay (layered + WS_EX_TRANSPARENT) only draws win-rate
     plates below the card names, so it stays unmasked; masking its bounding
@@ -241,12 +245,23 @@ def own_window_rects() -> list[Rect]:
     pid = os.getpid()
     ws_ex_transparent = 0x00000020
     rects: list[Rect] = []
+    on_top: set[int] | None = None
+    if above:
+        on_top = set()
+        hwnd = above
+        for _ in range(10000):  # GW_HWNDPREV walks toward the top of the z-order
+            hwnd = user32.GetWindow(hwnd, 3)
+            if not hwnd:
+                break
+            on_top.add(int(hwnd))
 
     @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
     def visit(hwnd, _lparam):
         owner = wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
         if owner.value != pid or not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+            return True
+        if on_top is not None and int(hwnd) not in on_top:
             return True
         if user32.GetWindowLongW(hwnd, -20) & ws_ex_transparent:  # GWL_EXSTYLE
             return True
@@ -319,7 +334,7 @@ def capture_offer_region(hwnd: int, band: Band | None = None) -> Frame | None:
     # The grab is screen pixels, so a recommender window pinned over the game
     # gets read too — its TOP3 lists are augment names in a row and were
     # reported as a (fake) offer.  Black out our own windows first.
-    image = mask_rects(image, (box[0], box[1]), own_window_rects())
+    image = mask_rects(image, (box[0], box[1]), own_window_rects(above=hwnd))
     scale = 1.0
     if image.height > MAX_OCR_HEIGHT:
         scale = MAX_OCR_HEIGHT / image.height

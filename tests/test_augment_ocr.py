@@ -213,3 +213,46 @@ def test_own_window_rects_is_safe_without_windows():
     from aram_nn.augment_ocr import own_window_rects
 
     assert isinstance(own_window_rects(), list)
+
+
+def test_own_window_rects_skips_windows_behind_the_game():
+    import sys
+
+    import pytest
+
+    if sys.platform != "win32":
+        pytest.skip("z-order check is Windows-only")
+    import tkinter as tk
+
+    from aram_nn.augment_ocr import own_window_rects
+
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip("no display")
+    try:
+        root.geometry("200x150+100+100")  # stands in for a recommender behind the game
+        game = tk.Toplevel(root)
+        game.geometry("300x200+120+120")
+        front = tk.Toplevel(root)
+        front.geometry("120x90+400+400")
+        root.update()
+        root.lower()
+        game.lift()
+        front.lift()
+        root.update()
+        hwnd = lambda w: int(w.wm_frame(), 16)  # noqa: E731
+        import ctypes
+        from ctypes import wintypes
+
+        def rect(w):
+            r = wintypes.RECT()
+            ctypes.windll.user32.GetWindowRect(hwnd(w), ctypes.byref(r))
+            return (r.left, r.top, r.right, r.bottom)
+
+        rects = own_window_rects(above=hwnd(game))
+        assert rect(front) in rects
+        assert rect(root) not in rects
+        assert rect(game) not in rects
+    finally:
+        root.destroy()
