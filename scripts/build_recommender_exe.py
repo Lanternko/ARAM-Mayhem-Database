@@ -46,6 +46,8 @@ def build(*, version: str, input_root: Path, region: str | None, time_cutoff: st
            "--specpath", str(ROOT / "build/pyinstaller"), "--paths", str(ROOT / "src"),
            "--icon", str(icon), "--add-data", f"{resources};desktop-data",
            "--add-data", f"{icon};docs",
+           # Champ-select HTML view (webview_host.PAGE_DIR resolves next to the module).
+           "--add-data", f"{ROOT / 'src/aram_nn/desktop/pick_view'};aram_nn/desktop/pick_view",
            # Site tabs: pywebview ships the WebView2 SDK DLLs, pythonnet loads them.
            "--collect-all", "webview", "--collect-all", "pythonnet", "--collect-all", "clr_loader",
            "--hidden-import", "clr"]

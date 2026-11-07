@@ -1427,6 +1427,13 @@ class RecommenderApp:
         self.body = tk.Frame(root, bg=BG)
         self.body.pack(fill="both", expand=True, padx=14, pady=(12, 14))
         self.web_frame = tk.Frame(root, bg=SITE_BG)
+        # Champ select renders as HTML in WebView2 (rounded, anti-aliased,
+        # same tokens as the site); the Tk body stays as the fallback.
+        self.pick_frame = tk.Frame(root, bg=SITE_BG)
+        self._matchup_html = False
+        self._web_pick = None
+        self._pick_error: str | None = None
+        self._pick_available: bool | None = None
 
         _make_observer_window(root)
         self.root.after_idle(lambda: _make_observer_window(root))
@@ -1641,7 +1648,8 @@ class RecommenderApp:
 
     def _handle(self, msg: tuple) -> None:
         kind = msg[0]
-        if kind not in ("ingame", "quickpicks", "static", "siteview_error", "active_champion"):
+        if kind not in ("ingame", "quickpicks", "static", "siteview_error", "active_champion",
+                        "webview_action", "pickview_error"):
             self._last_ingame_args = None
         if kind == "static":
             self.id_to_name = msg[1]
@@ -1695,6 +1703,10 @@ class RecommenderApp:
                 self._render(*self._last_render_args)
         elif kind == "siteview_error":
             self._site_failed(str(msg[1]))
+        elif kind == "webview_action":
+            self._web_action(msg[1])
+        elif kind == "pickview_error":
+            self._pick_failed(str(msg[1]))
 
     # ----- Site tabs (WebView2 embed of the public champion page) -----
 
@@ -1720,9 +1732,10 @@ class RecommenderApp:
         self._style_tabs()
         if key == "matchup":
             self.web_frame.pack_forget()
-            self.body.pack(fill="both", expand=True, padx=14, pady=(12, 14))
+            self._show_matchup(self._matchup_html)
             return
         self.body.pack_forget()
+        self.pick_frame.pack_forget()
         self.web_frame.pack(fill="both", expand=True)
         self._sync_site()
 
@@ -1789,12 +1802,30 @@ class RecommenderApp:
         ).pack(anchor="w", pady=(10, 0))
 
     def close_site(self) -> None:
-        if self.site_view is not None:
-            self.site_view.close()
+        for view in (self.site_view, self._web_pick):
+            if view is not None:
+                try:
+                    view.close()
+                except Exception:
+                    pass
 
     # ----- Rendering -----
 
+    def _show_matchup(self, html: bool) -> None:
+        """Pick which surface the 對戰勝率 tab shows: the HTML champ-select
+        view or the Tk body (idle / status / in-game screens)."""
+        self._matchup_html = html
+        if self.tab != "matchup":
+            return
+        if html:
+            self.body.pack_forget()
+            self.pick_frame.pack(fill="both", expand=True)
+        else:
+            self.pick_frame.pack_forget()
+            self.body.pack(fill="both", expand=True, padx=14, pady=(12, 14))
+
     def _clear_body(self) -> None:
+        self._show_matchup(False)
         for w in self.body.winfo_children():
             w.destroy()
         # Grid weights survive their widgets; reset so a later pack/grid
@@ -1837,6 +1868,12 @@ class RecommenderApp:
         self._last_render_args = (parsed, suggestions, combos, current_combo)
         cur_name = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
         self.header.config(text=f"選角中 · {cur_name}", fg=FG)
+        if self._html_pick_ready():
+            self.subheader.config(text=f"位置 {parsed.my_cell_id}　·　評分 B ≈ 普通")
+            self._clear_body()
+            self._show_matchup(True)
+            self._push_web_pick()
+            return
         self.subheader.config(
             text=f"位置 {parsed.my_cell_id}　·　MLΔ 換人後勝率變化　·　z 英雄本體強度　·　評分 B ≈ 普通"
         )
@@ -1861,6 +1898,171 @@ class RecommenderApp:
         self._render_team_section(left_inner, parsed, suggestions, current_combo)
         self._render_spell_hint(left_inner, int(parsed.my_current_id))
         self._render_bench_table(right_head, right_inner, suggestions)
+
+    # ----- HTML champ-select view (WebView2) -----
+
+    def _html_pick_ready(self) -> bool:
+        """True when champ select should render as HTML; probes WebView2 once."""
+        if self._pick_error is not None or os.environ.get("ARAM_TK_PICK"):
+            return False
+        if self._pick_available is None:
+            try:
+                from aram_nn.desktop import webview_host
+
+                self._pick_available = webview_host.available() and webview_host.PAGE_DIR.is_dir()
+            except Exception:
+                self._pick_available = False
+            if not self._pick_available:
+                print("[gui] HTML pick view unavailable; using the Tk layout")
+        return bool(self._pick_available)
+
+    def _pick_failed(self, error: str) -> None:
+        print(f"[gui] HTML pick view failed: {error}")
+        _log_gui_exception(f"pick view: {error}")
+        self._pick_error = error
+        view, self._web_pick = self._web_pick, None
+        if view is not None:
+            try:
+                view.close()
+            except Exception:
+                pass
+        if self._last_render_args is not None:
+            self._render(*self._last_render_args)
+
+    def _ensure_web_pick(self):
+        if self._web_pick is None:
+            from aram_nn.desktop.webview_host import AppView
+
+            def relay(kind, *rest) -> None:
+                # Same host class as the site tabs; keep their errors apart.
+                self.q.put(("pickview_error" if kind == "siteview_error" else kind, *rest))
+
+            self._web_pick = AppView(
+                self.pick_frame, _icon_cache_dir().parent / "webview2", _icon_cache_dir().parent,
+                on_event=relay,
+            )
+        return self._web_pick
+
+    def _icon_url(self, champion_id: int) -> str:
+        from aram_nn.desktop.webview_host import asset_url
+
+        if self.icon_cache is not None:
+            self.icon_cache.get(int(champion_id))  # fetches to disk on a miss
+        return asset_url(_icon_cache_dir().parent, _icon_cache_dir() / f"{int(champion_id)}.png")
+
+    @staticmethod
+    def _rating_tone(value: float) -> str:
+        if math.isnan(value):
+            return "mid"
+        if value >= 4.0:
+            return "top"
+        if value >= 3.0:
+            return "ok"
+        if value >= 2.0:
+            return "mid"
+        return "low"
+
+    def _web_pick_payload(self, parsed, suggestions, combos=None, current_combo=None) -> dict:
+        """Everything the HTML pick view draws, as plain JSON."""
+        def num(value) -> float | None:
+            return None if value is None or math.isnan(value) else float(value)
+
+        def champ(cid, **extra) -> dict:
+            cid = int(cid)
+            return {"id": cid, "name": self.id_to_name.get(cid, f"#{cid}"), "icon": self._icon_url(cid), **extra}
+
+        owned = {int(c) for c in parsed.my_team_ids}
+        combos = combos or []
+        keep = next((s for s in suggestions if s.source == "keep" and s.is_known), None)
+        team_win = num(getattr(current_combo, "win_prob", None)) if current_combo is not None else None
+        if team_win is None and keep is not None:
+            team_win = num(keep.win_prob)
+
+        ratings = []
+        if current_combo is not None:
+            for r in list(getattr(current_combo, "ratings", None) or [])[:5]:
+                risk = r.label.startswith(("高風險", "風險", "低點"))
+                ratings.append({
+                    "label": r.label, "grade": _fmt_rating(r.value), "detail": r.detail or "",
+                    "tone": self._rating_tone(r.value), "risk": risk,
+                    "severe": r.label.startswith(("高風險", "風險")),
+                })
+
+        bench = [s for s in suggestions if s.source == "bench"]
+        best_idx = next((i for i, s in enumerate(bench) if s.is_known), None)
+        bench_rows = [
+            champ(s.champion_id, known=bool(s.is_known), best=i == best_idx,
+                  delta=num(s.delta * 100) if s.is_known else None,
+                  win=num(s.win_prob) if s.is_known else None,
+                  z=num(s.z_score) if s.is_known else None)
+            for i, s in enumerate(bench)
+        ]
+
+        spells = None
+        cid = int(parsed.my_current_id)
+        if self.quick_source is not None and cid and self._quick_state.get(cid) == "ready":
+            overview = self.quick_source.overview(cid, self._quick_route.get(cid, 0))
+            if overview is not None and overview.spells:
+                from aram_nn.desktop.webview_host import asset_url
+
+                spells = {
+                    "items": [
+                        {"name": s.name, "icon": asset_url(_icon_cache_dir().parent,
+                                                           self.quick_source.icon_path(s.icon, fetch=False))}
+                        for s in overview.spells
+                    ],
+                    "status": self._loadout_status.get(cid, ""),
+                }
+
+        return {
+            "kind": "pick",
+            "title": self.id_to_name.get(cid, f"#{cid}"),
+            "subtitle": f"位置 {parsed.my_cell_id}",
+            "scanned": combos[0].total_combos if combos else 0,
+            "combos": [
+                {"rank": c.rank, "win": num(c.win_prob), "delta": num(c.delta * 100),
+                 "champs": [champ(x, owned=int(x) in owned) for x in c.champion_ids]}
+                for c in combos
+            ],
+            "team": {
+                "win": team_win,
+                "ratings": ratings,
+                "roster": [champ(x, me=int(x) == cid) for x in parsed.my_team_ids],
+                "me": {"name": self.id_to_name.get(cid, f"#{cid}"),
+                       "z": num(keep.z_score) if keep is not None else None},
+            },
+            "spells": spells,
+            "bench": bench_rows,
+        }
+
+    def _push_web_pick(self) -> None:
+        if self._last_render_args is None:
+            return
+        try:
+            payload = self._web_pick_payload(*self._last_render_args)
+            self._ensure_web_pick().show(payload)
+        except Exception as exc:
+            self._pick_failed(f"{type(exc).__name__}: {exc}")
+
+    def _web_action(self, message: dict) -> None:
+        if self._last_render_args is None:
+            return
+        parsed, suggestions, combos, _ = self._last_render_args
+        action = message.get("action")
+        cid = int(parsed.my_current_id)
+        if action == "copy_combo" and combos:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self._combo_clipboard_text(combos[0], suggestions, parsed.my_team_ids))
+        elif action == "copy_bench":
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self._bench_top_clipboard_text(suggestions))
+        elif action in ("apply_spells", "import_items"):
+            def report(text: str, ok) -> None:
+                view = self._web_pick
+                if view is not None:
+                    js = f"window.aramPick&&aramPick.status({json.dumps(text)},{json.dumps(ok)})"
+                    view._invoke(lambda: view._web.ExecuteScriptAsync(js))
+            self._import_loadout(cid, "spells" if action == "apply_spells" else "items", report)
 
     def _render_spell_hint(self, parent: tk.Frame, champion_id: int) -> None:
         """Recommended summoner spells for the champion currently held in champ select."""
@@ -1927,13 +2129,19 @@ class RecommenderApp:
             self._loadout_status[champion_id] = result[1]
 
             def show() -> None:
+                if callable(status):  # web view: report through the page
+                    status(result[1], bool(result[0]))
+                    return
                 try:
                     status.config(text=result[1], fg=GREEN if result[0] else RED)
                 except tk.TclError:  # row was re-rendered meanwhile
                     pass
             self.root.after(0, show)
 
-        status.config(text="匯入中…", fg=DIM)
+        if callable(status):
+            status("匯入中…", None)
+        else:
+            status.config(text="匯入中…", fg=DIM)
         threading.Thread(target=work, name=f"loadout-{action}", daemon=True).start()
 
     def _render_ingame(self, snapshot: dict, current_combo=None, enemy_combo=None) -> None:
