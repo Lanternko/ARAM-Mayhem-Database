@@ -192,3 +192,24 @@ class RealOcrTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_mask_rects_blacks_out_only_the_overlap():
+    from PIL import Image
+
+    from aram_nn.augment_ocr import mask_rects
+
+    image = Image.new("RGB", (100, 50), (255, 255, 255))
+    # Desktop origin of the image is (1000, 200); the window covers its left 30 px
+    # and spills outside the image on every other side.
+    mask_rects(image, (1000, 200), [(900, 100, 1030, 400), (5000, 5000, 5100, 5100)])
+    assert image.getpixel((0, 0)) == (0, 0, 0)
+    assert image.getpixel((29, 49)) == (0, 0, 0)
+    assert image.getpixel((30, 0)) == (255, 255, 255)
+    assert image.getpixel((99, 49)) == (255, 255, 255)
+
+
+def test_own_window_rects_is_safe_without_windows():
+    from aram_nn.augment_ocr import own_window_rects
+
+    assert isinstance(own_window_rects(), list)

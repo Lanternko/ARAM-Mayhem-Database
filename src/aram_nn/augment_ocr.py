@@ -221,6 +221,59 @@ def client_rect(hwnd: int) -> tuple[int, int, int, int] | None:
     return origin.x, origin.y, origin.x + rect.right, origin.y + rect.bottom
 
 
+Rect = tuple[int, int, int, int]  # left, top, right, bottom in desktop pixels
+
+
+def own_window_rects() -> list[Rect]:
+    """Visible top-level windows of this process, except click-through overlays.
+
+    The augment overlay (layered + WS_EX_TRANSPARENT) only draws win-rate
+    plates below the card names, so it stays unmasked; masking its bounding
+    box could hide the very names being read.
+    """
+    if sys.platform != "win32":
+        return []
+    import ctypes
+    import os
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    pid = os.getpid()
+    ws_ex_transparent = 0x00000020
+    rects: list[Rect] = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def visit(hwnd, _lparam):
+        owner = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value != pid or not user32.IsWindowVisible(hwnd) or user32.IsIconic(hwnd):
+            return True
+        if user32.GetWindowLongW(hwnd, -20) & ws_ex_transparent:  # GWL_EXSTYLE
+            return True
+        rect = wintypes.RECT()
+        if user32.GetWindowRect(hwnd, ctypes.byref(rect)) and rect.right > rect.left and rect.bottom > rect.top:
+            rects.append((rect.left, rect.top, rect.right, rect.bottom))
+        return True
+
+    user32.EnumWindows(visit, 0)
+    return rects
+
+
+def mask_rects(image, origin: tuple[int, int], rects: Iterable[Rect]):
+    """Paint ``rects`` (desktop coords) black on ``image`` whose (0, 0) is ``origin``."""
+    from PIL import ImageDraw
+
+    draw = None
+    for left, top, right, bottom in rects:
+        box = (max(0, left - origin[0]), max(0, top - origin[1]),
+               min(image.width, right - origin[0]), min(image.height, bottom - origin[1]))
+        if box[0] >= box[2] or box[1] >= box[3]:
+            continue
+        draw = draw or ImageDraw.Draw(image)
+        draw.rectangle((box[0], box[1], box[2] - 1, box[3] - 1), fill=(0, 0, 0))
+    return image
+
+
 @dataclass(frozen=True)
 class Frame:
     """A captured strip of the game client plus how to map it back."""
@@ -263,6 +316,10 @@ def capture_offer_region(hwnd: int, band: Band | None = None) -> Frame | None:
         top + int(height * y1),
     )
     image = ImageGrab.grab(bbox=box, all_screens=True)
+    # The grab is screen pixels, so a recommender window pinned over the game
+    # gets read too — its TOP3 lists are augment names in a row and were
+    # reported as a (fake) offer.  Black out our own windows first.
+    image = mask_rects(image, (box[0], box[1]), own_window_rects())
     scale = 1.0
     if image.height > MAX_OCR_HEIGHT:
         scale = MAX_OCR_HEIGHT / image.height
