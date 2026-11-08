@@ -1259,22 +1259,11 @@ class WriterService:
         )
         eligible = 0
         if should_requeue:
-            # Rediscovery must honour the same revisit policy as finalize.  The
-            # newer game that triggers it is usually the one just captured from
-            # a teammate's history, so a flat cooldown re-crawls the player within
-            # hours for nothing (live: ~40% of revisits, 86% of them empty).
-            cooldown = requeue_cooldown
-            if effective_rank == 0:
-                sb = _snowball()
-                if sb.revisit_arm(puuid) == "treatment":
-                    cooldown = sb._treatment_cooldown_ms(
-                        int(new_games or 0), first_seen, time.time()
-                    )
-                else:
-                    cooldown = sb._requeue_cooldown_for(
-                        int(new_games or 0), int(process_count or 0), requeue_cooldown
-                    )
-            eligible = self._clock_ms() + max(cooldown, initial_delay)
+            eligible = self._rediscovery_eligible_ms(
+                puuid, new_games=new_games, process_count=process_count,
+                first_seen=first_seen, classic_rank=effective_rank,
+                base_cooldown_ms=requeue_cooldown, initial_delay_ms=initial_delay,
+            )
         became = self._snowball_upsert_queue_locked(
             puuid=puuid, depth=best_depth, source=best_source, priority=best_priority,
             discovered_from_game_id=best_game, discovered_match_created_ms=latest,
@@ -1287,6 +1276,33 @@ class WriterService:
         if int(processed or 0) == 0:
             return "updated"
         return "noop"
+
+    def _rediscovery_eligible_ms(
+        self,
+        puuid: str,
+        *,
+        new_games: Any,
+        process_count: Any,
+        first_seen: str | None,
+        classic_rank: int,
+        base_cooldown_ms: int,
+        initial_delay_ms: int = 0,
+    ) -> int:
+        """When a crawled player seen in a newer game may be crawled again.
+
+        Rediscovery must honour the same revisit policy as finalize.  The newer
+        game that triggers it is usually the one just captured from a teammate's
+        history, so a flat cooldown re-crawls the player within hours for nothing
+        (live: ~40% of revisits, 86% of them empty).
+        """
+        cooldown = base_cooldown_ms
+        if classic_rank == 0:
+            sb = _snowball()
+            if sb.revisit_arm(puuid) == "treatment":
+                cooldown = sb._treatment_cooldown_ms(int(new_games or 0), first_seen, time.time())
+            else:
+                cooldown = sb._requeue_cooldown_for(int(new_games or 0), int(process_count or 0), base_cooldown_ms)
+        return self._clock_ms() + max(cooldown, initial_delay_ms)
 
     def _snowball_upsert_queue_locked(
         self,
@@ -1634,7 +1650,7 @@ class WriterService:
         return _json(counts) if counts else old
 
     def _upsert_player_locked(self, puuid: str, *, source: str, depth: int, priority: int, discovered_from_game_id: str | None, discovered_match_created_ms: int, seed_family: str, now: str) -> None:
-        existing = self.con.execute("SELECT latest_seen_match_created_ms, last_crawled_match_created_ms, processed FROM crawl_seen WHERE puuid=?", (puuid,)).fetchone()
+        existing = self.con.execute("SELECT latest_seen_match_created_ms, last_crawled_match_created_ms, processed, process_count, new_games_found, first_seen_at, classic_affinity_rank FROM crawl_seen WHERE puuid=?", (puuid,)).fetchone()
         if existing is None:
             self.con.execute("INSERT INTO crawl_seen(puuid, source, priority, min_depth, discovered_from_game_id, first_seen_at, latest_seen_match_created_ms, last_crawled_match_created_ms, processed, seed_family, discovered_queue_id, classic_affinity, classic_affinity_rank) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 0, 'none', 0)", (puuid, source, int(priority), int(depth), discovered_from_game_id, now, int(discovered_match_created_ms), seed_family))
         else:
@@ -1642,8 +1658,18 @@ class WriterService:
         queue = self.con.execute("SELECT status FROM crawl_queue WHERE puuid=?", (puuid,)).fetchone()
         if queue is None:
             self.con.execute("INSERT INTO crawl_queue(puuid, depth, source, priority, discovered_from_game_id, discovered_match_created_ms, enqueued_at, updated_at, claimed_by, claimed_at_ms, eligible_at_ms, status, seed_family, discovered_queue_id, classic_affinity_rank) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 'pending', ?, 0, 0)", (puuid, int(depth), source, int(priority), discovered_from_game_id, int(discovered_match_created_ms), now, now, seed_family))
-        elif str(queue[0]) == "done":
-            self.con.execute("UPDATE crawl_queue SET status='pending', eligible_at_ms=0, updated_at=?, seed_family=? WHERE puuid=?", (now, seed_family, puuid))
+        elif str(queue[0]) == "done" and existing is not None and int(discovered_match_created_ms) > int(existing[1] or 0):
+            # Every saved game passes its ten participants through here, so a
+            # done player must not jump straight back to eligible: that re-crawled
+            # players seconds after finalize, often for a game older than their
+            # last crawl (live: the bulk of short revisits in both arms).
+            eligible = self._rediscovery_eligible_ms(
+                puuid, new_games=existing[4], process_count=existing[3],
+                first_seen=existing[5], classic_rank=int(existing[6] or 0),
+                base_cooldown_ms=_DEFAULT_REQUEUE_DELAY_MS,
+            )
+            self.con.execute("UPDATE crawl_queue SET status='pending', eligible_at_ms=?, updated_at=?, seed_family=? WHERE puuid=?", (eligible, now, seed_family, puuid))
+            self.con.execute("UPDATE crawl_seen SET processed=0 WHERE puuid=?", (puuid,))
 
 
 __all__ = ["WriterService"]
