@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any, Callable, NamedTuple
@@ -379,7 +380,11 @@ def run_id_gap(
     claim_timeout_sec: int = 300,
 ) -> IdGapStats:
     """Fleet entry point: run one sweeper until the writer stops claims."""
-    storage = SnowballWriterFacade(writer_client, request_prefix=f"id-gap-{worker_id}")
+    # Request IDs are journaled in writer_requests; a prefix that repeats across
+    # restarts replays "id-gap-G01-0" with a different payload and the writer
+    # rejects it (REQUEST_ID_CONFLICT). Keep the worker id for readability but
+    # make every process unique.
+    storage = SnowballWriterFacade(writer_client, request_prefix=f"id-gap-{worker_id}-{uuid.uuid4().hex[:12]}")
     config = IdGapConfig(
         target_queues=frozenset(int(q) for q in target_queues),
         rps=float(rps),

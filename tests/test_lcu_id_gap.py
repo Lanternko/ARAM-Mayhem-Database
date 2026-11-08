@@ -206,3 +206,26 @@ def test_busy_or_done_claim_is_left_alone(tmp_path: Path) -> None:
     sweeper.sweep_batch(1000)
     assert sweeper.stats.already_claimed == 1 and sweeper.stats.saved == 0
     assert service.con.execute("SELECT COUNT(*) FROM games").fetchone()[0] == 0
+
+
+def test_restarted_fleet_worker_does_not_replay_journaled_request_ids(tmp_path: Path, monkeypatch) -> None:
+    """A G01 restart must not reuse request IDs already journaled by the previous process."""
+    import aram_nn.lcu.id_gap as id_gap
+
+    class _NoLcu:
+        def reconnect(self) -> None: ...
+
+        def close(self) -> None: ...
+
+    def _one_cursor_write(self):
+        cursor = self.load_cursor() or 1000
+        self.save_cursor(cursor + 1)
+        return self.stats
+
+    monkeypatch.setattr(id_gap, "_LcuProbe", _NoLcu)
+    monkeypatch.setattr(id_gap.IdGapSweeper, "run", _one_cursor_write)
+    service = WriterService(tmp_path / "games.db")
+    SnowballWriterFacade(_Channel(service)).runtime_set(CURSOR_KEY, "1000")
+    for _ in range(3):
+        id_gap.run_id_gap(writer_client=_Channel(service), worker_id="G01")
+    assert SnowballWriterFacade(_Channel(service)).runtime_get(CURSOR_KEY) == "1003"
