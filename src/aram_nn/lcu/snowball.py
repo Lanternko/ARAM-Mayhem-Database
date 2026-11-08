@@ -46,6 +46,7 @@ from .client import (
 from .poller import DEFAULT_QUEUES, _parse_game_detail, _participants_payload_has_postgame_stats
 from .process import get_credentials
 from .db_state import update_capture_watermark
+from .game_participants import CREATE_GAME_PARTICIPANTS_SQL, extract_puuids, insert_game_participants
 
 _EMPTY_QUEUE_GRACE_SEC = 30.0
 _EMPTY_QUEUE_IDLE_POLL_SEC = 60.0
@@ -1069,6 +1070,7 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(_CREATE_RIOT_ID_BRIDGE_SQL)
     con.execute(_CREATE_CRAWL_RUNTIME_STATE_SQL)
     con.execute(_CREATE_CRAWL_VISIT_EVENTS_SQL)
+    con.execute(CREATE_GAME_PARTICIPANTS_SQL)
 
     _ensure_column(
         con,
@@ -1986,6 +1988,13 @@ def _insert_game(con: sqlite3.Connection, record: dict) -> bool:
     )
     inserted = cursor.rowcount > 0
     if inserted:
+        insert_game_participants(
+            con,
+            extract_puuids(record.get("participants", []), record.get("participants_private", [])),
+            int(record["created_ms"]),
+            str(record["game_id"]),
+            int(record["queue_id"]),
+        )
         update_capture_watermark(
             con,
             queue_id=int(record["queue_id"]),
@@ -2026,7 +2035,16 @@ def _backfill_participants_json(con: sqlite3.Connection, record: dict) -> bool:
         or not _participants_payload_has_postgame_stats(current_private_json)
         or _participants_payload_has_postgame_stats(new_private_json)
     )
+    # Index the participants even when the stored payload is already richer.
+    insert_game_participants(
+        con,
+        extract_puuids(record.get("participants", []), record.get("participants_private", [])),
+        int(record["created_ms"]),
+        str(record["game_id"]),
+        int(record["queue_id"]),
+    )
     if not should_update_public and not should_update_private:
+        con.commit()
         return False
 
     assignments: list[str] = []

@@ -26,6 +26,7 @@ import time
 from typing import Any
 
 from .db_state import CAPTURE_WATERMARK_PREFIX
+from .game_participants import CREATE_GAME_PARTICIPANTS_SQL, extract_puuids, insert_game_participants
 from .writer_protocol import ProtocolError, decode_frame, encode_frame, validate_message
 
 
@@ -358,6 +359,7 @@ class WriterService:
                 ("crawl_visit_events", "claim_score", "claim_score REAL NOT NULL DEFAULT 0"),
             ):
                 self._ensure_column(table, column, definition)
+            self.con.execute(CREATE_GAME_PARTICIPANTS_SQL)
             sb = _snowball()
             sb._register_sql_functions(self.con)
             self.con.execute(sb._CREATE_CLASSIC_CLAIM_INDEX_SQL)
@@ -713,7 +715,7 @@ class WriterService:
             private = record["participants_private"]
             public_json = _json(participants)
             private_json = _json(private)
-            existing = self.con.execute("SELECT participants_json, participants_private_json FROM games WHERE game_id=?", (game_id,)).fetchone()
+            existing = self.con.execute("SELECT participants_json, participants_private_json, created_ms, queue_id FROM games WHERE game_id=?", (game_id,)).fetchone()
             inserted = existing is None
             if inserted:
                 self.con.execute(
@@ -745,6 +747,19 @@ class WriterService:
             puuids = self._participant_puuids(message, record)
             for puuid in puuids:
                 self._upsert_player_locked(puuid, source="match", depth=0, priority=10, discovered_from_game_id=game_id, discovered_match_created_ms=int(record["created_ms"]), seed_family=str(record["seed_family"]), now=_utc_now())
+            # Index every puuid we know for this game (message list, public and
+            # private payloads).  INSERT OR IGNORE also covers the richer-payload
+            # path for an existing game.  Same transaction as the enqueue above,
+            # so the participant_enqueue rollback drops these rows too.
+            index_created_ms = int(record["created_ms"]) if existing is None else int(existing[2])
+            index_queue_id = int(record["queue_id"]) if existing is None else int(existing[3])
+            insert_game_participants(
+                self.con,
+                extract_puuids([{"puuid": value} for value in puuids], participants, private),
+                index_created_ms,
+                game_id,
+                index_queue_id,
+            )
             self._checkpoint("participant_enqueue")
             self.con.execute("UPDATE writer_game_claims SET status='done', channel_id='', token='', expires_at_ms=0 WHERE game_id=?", (game_id,))
             self._checkpoint("game_claim_done")
