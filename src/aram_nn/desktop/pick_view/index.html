@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARAM Recommender</title>
+<style>
+/* Same tokens as docs/assets/site.css: near-black cool grey, one gold
+   accent, translucent-white hairlines, low-chroma status colours. */
+:root {
+  color-scheme: dark;
+  --bg: #0a0b0d;
+  --panel: oklch(0.205 0.012 255);
+  --panel-2: oklch(0.235 0.012 255);
+  --inner: oklch(0.175 0.01 255);
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --dim: #6b7280;
+  --gold: #f5c518;
+  --gold-soft: rgba(245, 197, 24, 0.14);
+  --pos: oklch(0.8 0.11 155);
+  --neg: oklch(0.72 0.13 25);
+  --neg-soft: rgba(230, 90, 80, 0.11);
+  --tier-s: #f5c518;
+  --tier-a: oklch(0.82 0.08 200);
+  --tier-b: #e8eaed;
+  --tier-c: oklch(0.72 0.11 40);
+  --radius: 14px;
+  --radius-s: 9px;
+  --ui: "Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif;
+  --num: "Segoe UI Variable Display", "Segoe UI", "Bahnschrift", sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body {
+  background:
+    radial-gradient(1200px 380px at 12% -120px, rgba(245, 197, 24, 0.06), transparent 70%),
+    radial-gradient(900px 420px at 100% 0, rgba(90, 130, 200, 0.07), transparent 70%),
+    var(--bg);
+  color: var(--text);
+  font: 14px/1.4 var(--ui);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+.app { display: grid; grid-template-rows: auto auto 1fr; gap: 12px; height: 100%; padding: 14px; }
+.card { padding: 14px; }
+
+/* ---- page head ---- */
+.head { display: flex; align-items: baseline; gap: 14px; }
+.head h1 { font-size: 22px; font-weight: 650; letter-spacing: 0.01em; }
+.head h1 .phase { color: var(--muted); font-weight: 500; margin-right: 8px; }
+.head .legend { color: var(--dim); font-size: 12px; margin-left: auto; }
+
+/* ---- cards ---- */
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 30px rgba(0,0,0,0.28);
+  min-height: 0;
+}
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.card-head h2 { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; }
+.card-head .meta { color: var(--dim); font-size: 12px; }
+.card-head .spacer { flex: 1; }
+
+.btn {
+  appearance: none; border: 1px solid var(--line-strong); background: rgba(255,255,255,0.03);
+  color: var(--muted); font: 500 12px var(--ui); padding: 5px 11px; border-radius: 999px;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.btn:hover { background: rgba(255,255,255,0.08); color: var(--text); border-color: rgba(255,255,255,0.22); }
+.btn.done { color: var(--pos); border-color: color-mix(in oklab, var(--pos) 40%, transparent); }
+
+/* ---- portraits ---- */
+.pt {
+  position: relative; flex: none; width: var(--s, 40px); height: var(--s, 40px);
+  border-radius: calc(var(--s, 40px) * 0.24); overflow: hidden;
+  background: var(--inner);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.pt img { width: 100%; height: 100%; display: block; transform: scale(1.1); }
+.pt.me { box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(245,197,24,0.35); }
+.pt .tag {
+  position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
+  font-size: 10px; font-weight: 700; padding: 1px 0;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85), rgba(0,0,0,0.0));
+}
+.pt .tag.me { color: var(--gold); }
+.pt .tag.own { color: var(--muted); }
+
+/* ---- combos ---- */
+.combos { display: grid; gap: 8px; }
+.combo-best {
+  display: flex; align-items: center; gap: 14px; min-width: 0;
+  padding: 12px 14px; border-radius: 12px;
+  background: linear-gradient(110deg, var(--gold-soft), rgba(245,197,24,0.02) 55%), var(--inner);
+  border: 1px solid rgba(245,197,24,0.22);
+}
+.combo-best .strip { display: flex; gap: 6px; }
+.combo-best .score { margin-left: auto; text-align: right; white-space: nowrap; }
+.big { font-size: 30px; font-weight: 700; line-height: 1; }
+.delta { font-size: 12px; font-weight: 600; margin-top: 3px; }
+.delta.pos { color: var(--pos); }
+.delta.neg { color: var(--neg); }
+.combo-alts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 8px; }
+.combo-alt {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; min-width: 0;
+  background: var(--inner); border: 1px solid var(--line);
+}
+.combo-alt .rank { color: var(--dim); font-weight: 700; width: 14px; }
+.combo-alt .strip { display: flex; gap: 5px; }
+.combo-alt .score { margin-left: auto; font-size: 15px; font-weight: 650; }
+.combo-alt .strip { gap: 4px; }
+.rank-badge {
+  font: 700 12px var(--num); color: var(--bg); background: var(--gold);
+  border-radius: 6px; padding: 2px 7px; margin-right: 2px;
+}
+
+/* ---- lower grid ---- */
+.lower { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 12px; min-height: 0; }
+.lower > .card { overflow-y: auto; }
+.lower > .card::-webkit-scrollbar { width: 6px; }
+.lower > .card::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+
+.team-score { display: flex; align-items: baseline; gap: 10px; }
+.team-score .cap { color: var(--dim); font-size: 12px; }
+
+/* 2×2 stat tiles: label + detail stacked left, grade right. */
+.ratings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.rating {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px;
+  background: var(--inner); border: 1px solid var(--line); border-radius: var(--radius-s);
+  padding: 7px 11px; min-width: 0;
+}
+.rating .lab { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rating .grade { grid-row: span 2; font: 700 20px/1 var(--num); }
+.rating .det { color: var(--dim); font-size: 11px; line-height: 1.2; }
+.rating .det:empty { display: none; }
+.rating:has(.det:empty) .grade { grid-row: auto; }
+.t-top { color: var(--tier-s); } .t-ok { color: var(--tier-a); }
+.t-mid { color: var(--tier-b); } .t-low { color: var(--tier-c); }
+
+.risk {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+  padding: 8px 12px; border-radius: var(--radius-s);
+  background: var(--neg-soft); border: 1px solid rgba(230,90,80,0.22);
+  font-size: 13px;
+}
+.risk.mild { background: rgba(255,255,255,0.03); border-color: var(--line); }
+.risk .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--neg); flex: none; }
+.risk.mild .dot { background: var(--dim); }
+.risk .lab { color: var(--text); }
+.risk .grade { font: 700 14px var(--num); }
+.risk .det { margin-left: auto; color: var(--dim); font-size: 12px; }
+
+.roster { display: flex; gap: 8px; margin-top: 16px; }
+
+.spells {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.spells img { width: 26px; height: 26px; border-radius: 7px; box-shadow: 0 0 0 1px var(--line-strong); }
+.spells .names { color: var(--text); font-size: 13px; margin-left: 2px; }
+.spells .spacer { flex: 1; }
+.spells-status { color: var(--dim); font-size: 12px; text-align: right; margin-top: 6px; min-height: 1em; }
+
+/* ---- bench ---- */
+.lower > .bench-card { display: flex; flex-direction: column; overflow: hidden; }
+.bench { overflow-y: auto; min-height: 0; flex: 1; margin: 0 -6px; padding: 0 6px; }
+.bench::-webkit-scrollbar { width: 6px; }
+.bench::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+.bench-row {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 10px; border: 1px solid transparent;
+  transition: background .12s, border-color .12s;
+}
+.bench-row + .bench-row { margin-top: 3px; }
+.bench-row:hover { background: rgba(255,255,255,0.035); border-color: var(--line); }
+.bench-row .name { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bench-row .sub { color: var(--dim); font-size: 11.5px; }
+.bench-row .win { font-size: 17px; font-weight: 650; text-align: right; min-width: 58px; }
+.chip {
+  font: 600 12px var(--num); padding: 3px 8px; border-radius: 999px; min-width: 58px; text-align: center;
+}
+.chip.pos { color: var(--pos); background: color-mix(in oklab, var(--pos) 13%, transparent); }
+.chip.neg { color: var(--neg); background: color-mix(in oklab, var(--neg) 12%, transparent); }
+.chip.flat { color: var(--muted); background: rgba(255,255,255,0.05); }
+.bench-row.best {
+  background: linear-gradient(90deg, var(--gold-soft), transparent 70%);
+  border-color: rgba(245,197,24,0.25);
+}
+.bench-row.best .name { color: var(--gold); }
+.pill { font: 700 10.5px var(--ui); color: var(--bg); background: var(--gold); padding: 1px 6px; border-radius: 5px; margin-left: 6px; vertical-align: 2px; }
+.bench-row.unknown { opacity: 0.55; }
+.empty { color: var(--dim); padding: 20px 4px; }
+
+.card-head h2 { white-space: nowrap; }
+.spells { flex-wrap: wrap; }
+
+/* Narrow window (the default ~880px window is ~590 CSS px at 150% DPI):
+   stack the cards and let the whole page scroll instead of each card. */
+@media (max-width: 760px) {
+  body { overflow-y: auto; }
+  body::-webkit-scrollbar { width: 6px; }
+  body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  .app { height: auto; grid-template-rows: none !important; }
+  .lower { grid-template-columns: minmax(0, 1fr); }
+  .lower > .card, .lower > .bench-card { overflow: visible; }
+  .bench { overflow: visible; }
+  .card-head .meta { display: none; }
+}
+
+.fade-in { animation: fade .22s ease-out; }
+@keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="app" id="app"><div class="empty">等待選角資料…</div></div>
+<script>
+(function () {
+  "use strict";
+  var app = document.getElementById("app");
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function pct(p) { return p == null ? "—" : (p * 100).toFixed(1) + "%"; }
+  function signed(pp) {
+    if (pp == null) return "—";
+    var s = Math.abs(pp).toFixed(1) + "%";
+    return (pp > 0 ? "+" : pp < 0 ? "−" : "±") + s;
+  }
+  function sign(pp) { return pp == null || Math.abs(pp) < 0.05 ? "flat" : pp > 0 ? "pos" : "neg"; }
+  function post(msg) {
+    if (window.chrome && chrome.webview) chrome.webview.postMessage(JSON.stringify(msg));
+  }
+  function portrait(c, size, extra) {
+    var cls = "pt" + (c.me ? " me" : "");
+    var tag = c.me ? '<span class="tag me">你</span>' : (extra === "owned" && c.owned ? '<span class="tag own">已有</span>' : "");
+    var img = c.icon ? '<img src="' + esc(c.icon) + '" alt="">' : "";
+    return '<div class="' + cls + '" style="--s:' + size + 'px" title="' + esc(c.name) + '">' + img + tag + "</div>";
+  }
+
+  function combosHtml(d) {
+    if (!d.combos || !d.combos.length) return "";
+    var best = d.combos[0];
+    var alts = d.combos.slice(1).map(function (c) {
+      return '<div class="combo-alt"><span class="rank num">' + c.rank + '</span><div class="strip">' +
+        c.champs.map(function (x) { return portrait(x, 28); }).join("") +
+        '</div><span class="score num">' + pct(c.win) + "</span></div>";
+    }).join("");
+    return '<section class="card fade-in"><div class="card-head"><h2>最佳 5 人組合</h2>' +
+      '<span class="meta num">掃描 ' + esc(d.scanned) + ' 組</span><span class="spacer"></span>' +
+      '<button class="btn" data-act="copy_combo">複製推薦</button></div>' +
+      '<div class="combos"><div class="combo-best"><span class="rank-badge">1</span><div class="strip">' +
+      best.champs.map(function (x) { return portrait(x, 44, "owned"); }).join("") +
+      '</div><div class="score"><div class="big num">' + pct(best.win) + '</div>' +
+      '<div class="delta num ' + sign(best.delta) + '">' + signed(best.delta) + " 相比目前</div></div></div>" +
+      '<div class="combo-alts">' + alts + "</div></div></section>";
+  }
+
+  function teamHtml(d) {
+    var t = d.team || {};
+    var tiles = (t.ratings || []).filter(function (r) { return !r.risk; }).map(function (r) {
+      return '<div class="rating"><div class="lab">' + esc(r.label) + '</div><div class="grade t-' + r.tone + '">' +
+        esc(r.grade) + '</div><div class="det">' + esc(r.detail || "") + "</div></div>";
+      // grid order: lab (r1c1), grade (c2, spans), det (r2c1)
+    }).join("");
+    var risks = (t.ratings || []).filter(function (r) { return r.risk; }).map(function (r) {
+      return '<div class="risk' + (r.severe ? "" : " mild") + '"><span class="dot"></span><span class="lab">' +
+        esc(r.label) + '</span><span class="grade t-' + r.tone + '">' + esc(r.grade) + '</span><span class="det">' +
+        esc(r.detail || "") + "</span></div>";
+    }).join("");
+    var roster = (t.roster || []).map(function (c) { return portrait(c, 40); }).join("");
+    var sp = d.spells;
+    var spells = sp && sp.items && sp.items.length ?
+      '<div class="spells">' + sp.items.map(function (s) { return s.icon ? '<img src="' + esc(s.icon) + '" alt="">' : ""; }).join("") +
+      '<span class="names">' + sp.items.map(function (s) { return esc(s.name); }).join(" + ") + '</span><span class="spacer"></span>' +
+      '<button class="btn" data-act="apply_spells">套用技能</button><button class="btn" data-act="import_items">匯入裝備</button></div>' +
+      '<div class="spells-status" id="spells-status">' + esc(sp.status || "") + "</div>" : "";
+    var me = t.me ? '<span class="cap">' + esc(t.me.name) + (t.me.z != null ? " · z " + (t.me.z > 0 ? "+" : "") + t.me.z.toFixed(2) : "") + "</span>" : "";
+    return '<section class="card fade-in"><div class="card-head"><h2>你的隊伍</h2><span class="spacer"></span>' + me + "</div>" +
+      '<div class="team-score"><span class="big num">' + pct(t.win) + '</span><span class="cap">目前預估勝率</span></div>' +
+      '<div class="ratings">' + tiles + "</div>" + risks +
+      '<div class="roster">' + roster + "</div>" + spells + "</section>";
+  }
+
+  function benchHtml(d) {
+    var rows = (d.bench || []).map(function (b) {
+      if (!b.known) {
+        return '<div class="bench-row unknown">' + portrait(b, 36) + '<div><div class="name">' + esc(b.name) +
+          '</div><div class="sub">無資料</div></div><span class="chip flat num">—</span><span class="win num">—</span></div>';
+      }
+      var z = b.z == null ? "" : "z " + (b.z > 0 ? "+" : "") + b.z.toFixed(2);
+      return '<div class="bench-row' + (b.best ? " best" : "") + '" title="換後勝率 ' + pct(b.win) + "　" + esc(z) + '">' +
+        portrait(b, 36) + '<div><div class="name">' + esc(b.name) + (b.best ? '<span class="pill">首選</span>' : "") +
+        '</div></div><span class="chip num ' + sign(b.delta) + '">' + signed(b.delta) +
+        '</span><span class="win num">' + pct(b.win) + "</span></div>";
+    }).join("");
+    return '<section class="card bench-card fade-in"><div class="card-head"><h2>替補池</h2>' +
+      '<span class="meta">換人後勝率變化 · 換後勝率</span><span class="spacer"></span>' +
+      '<button class="btn" data-act="copy_bench">複製前 7</button></div>' +
+      '<div class="bench">' + (rows || '<div class="empty">替補池目前是空的。</div>') + "</div></section>";
+  }
+
+  function render(d) {
+    var scroll = (document.querySelector(".bench") || {}).scrollTop || 0;
+    var page = document.scrollingElement.scrollTop;  // narrow layout scrolls the page
+    // The window's own header band already names the phase and champion.
+    app.innerHTML = combosHtml(d) + '<div class="lower">' + teamHtml(d) + benchHtml(d) + "</div>";
+    app.style.gridTemplateRows = d.combos && d.combos.length ? "auto 1fr" : "1fr";
+    var bench = document.querySelector(".bench");
+    if (bench) bench.scrollTop = scroll;
+    document.scrollingElement.scrollTop = page;
+  }
+
+  app.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("[data-act]");
+    if (!btn) return;
+    post({ action: btn.getAttribute("data-act") });
+    if (btn.getAttribute("data-act").indexOf("copy") === 0) {
+      var old = btn.textContent;
+      btn.textContent = "已複製"; btn.classList.add("done");
+      setTimeout(function () { btn.textContent = old; btn.classList.remove("done"); }, 1400);
+    }
+  });
+
+  window.aramPick = {
+    render: render,
+    status: function (text, ok) {
+      var el = document.getElementById("spells-status");
+      if (el) { el.textContent = text; el.style.color = ok ? "var(--pos)" : ok === false ? "var(--neg)" : ""; }
+    }
+  };
+})();
+</script>
+</body>
+</html>

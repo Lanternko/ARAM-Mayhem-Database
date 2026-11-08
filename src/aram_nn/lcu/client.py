@@ -93,6 +93,17 @@ class LCUClient:
             self._log_failure("POST", path, repr(exc))
         return None
 
+    def send(self, method: str, path: str, payload: Any = None) -> bool:
+        """PATCH/PUT/POST a JSON body; True on any 2xx (LCU writes often reply 204)."""
+        try:
+            r = self._client.request(method, path, json=payload)
+            if 200 <= r.status_code < 300:
+                return True
+            self._log_failure(method, path, f"status={r.status_code} body={r.text[:200]}")
+        except Exception as exc:
+            self._log_failure(method, path, repr(exc))
+        return False
+
     def close(self) -> None:
         self._client.close()
 

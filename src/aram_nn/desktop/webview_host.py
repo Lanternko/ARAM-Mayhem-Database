@@ -115,7 +115,21 @@ class SiteView:
             if not self._ready or want == self._shown:
                 return
             self._shown = want
-        self._invoke(lambda: self._web.ExecuteScriptAsync(show_script(*want)))
+        self._invoke(lambda: self._web.ExecuteScriptAsync(self._push_script(want)))
+
+    # ---- hooks (overridden by AppView) -----------------------------------
+
+    def _initial_url(self, want) -> str:
+        return embed_url(*want)
+
+    def _allowed(self, uri: str) -> bool:
+        return uri.startswith(EMBED_URL)
+
+    def _push_script(self, want) -> str:
+        return show_script(*want)
+
+    def _configure_core(self, core) -> None:
+        pass
 
     def close(self) -> None:
         web = self._web
@@ -162,12 +176,14 @@ class SiteView:
                 core = web.CoreWebView2
                 core.Settings.AreDevToolsEnabled = False
                 core.Settings.IsStatusBarEnabled = False
+                self._configure_core(core)
                 core.NavigationStarting += on_navigate
                 core.NewWindowRequested += on_new_window
                 core.NavigationCompleted += on_loaded
+                web.Source = Uri(self._initial_url(want))
 
             def on_navigate(_sender, args) -> None:
-                if not str(args.Uri).startswith(EMBED_URL):
+                if not self._allowed(str(args.Uri)):
                     args.Cancel = True
                     webbrowser.open(str(args.Uri))
 
@@ -185,7 +201,7 @@ class SiteView:
                     stale = want_now != self._shown
                     self._shown = want_now
                 if stale and want_now:
-                    web.ExecuteScriptAsync(show_script(*want_now))
+                    web.ExecuteScriptAsync(self._push_script(want_now))
 
             try:
                 hwnd = web.Handle.ToInt64()
@@ -196,7 +212,9 @@ class SiteView:
                 user32.MoveWindow(hwnd, 0, 0, size[0], size[1], True)
                 user32.ShowWindow(hwnd, _SW_SHOWNOACTIVATE)
                 web.CoreWebView2InitializationCompleted += on_init
-                web.Source = Uri(embed_url(*want))
+                # Navigate only once the core exists, so _configure_core
+                # (virtual host mappings) is in place before the first request.
+                web.EnsureCoreWebView2Async(None)
                 self._web = web
                 Application.Run()
             except Exception as exc:  # pragma: no cover - runtime failure path
@@ -221,6 +239,86 @@ class SiteView:
     def _on_configure(self, event) -> None:
         if self._hwnd:
             ctypes.windll.user32.MoveWindow(self._hwnd, 0, 0, event.width, event.height, True)
+
+
+APP_HOST = "app.aram"        # the bundled page folder
+ASSET_HOST = "assets.aram"   # icon caches (champion icons, quick-pick art)
+PAGE_DIR = Path(__file__).with_name("pick_view")
+
+
+def payload_script(payload: dict) -> str:
+    """Hand a render payload to the page, waiting for its hook if needed."""
+    data = json.dumps(payload, ensure_ascii=False)
+    return (
+        "(function f(n){if(window.aramPick){window.aramPick.render(" + data + ");}"
+        "else if(n<300){setTimeout(function(){f(n+1);},50);}})(0);"
+    )
+
+
+class AppView(SiteView):
+    """The recommender's own HTML view, served from disk via virtual hosts.
+
+    ``show(payload)`` re-renders the page; button presses in the page come
+    back as ``on_event("webview_action", dict)``.
+    """
+
+    def __init__(self, parent, user_data_dir: Path, asset_dir: Path,
+                 on_event: Callable[..., None], page: str = "index.html") -> None:
+        super().__init__(parent, user_data_dir, on_event)
+        self.asset_dir = Path(asset_dir)
+        self.page = page
+
+    def show(self, payload: dict) -> None:  # type: ignore[override]
+        want = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        with self._lock:
+            self._want = want
+            if not self.started:
+                self._start(want)
+                return
+            if not self._ready or want == self._shown:
+                return
+            self._shown = want
+        self._invoke(lambda: self._web.ExecuteScriptAsync(self._push_script(want)))
+
+    def _initial_url(self, want) -> str:
+        return f"https://{APP_HOST}/{self.page}"
+
+    def _allowed(self, uri: str) -> bool:
+        return uri.startswith(f"https://{APP_HOST}/")
+
+    def _push_script(self, want) -> str:
+        return payload_script(json.loads(want))
+
+    def _configure_core(self, core) -> None:
+        from Microsoft.Web.WebView2.Core import CoreWebView2HostResourceAccessKind
+
+        core.SetVirtualHostNameToFolderMapping(
+            APP_HOST, str(PAGE_DIR), CoreWebView2HostResourceAccessKind.Allow)
+        self.asset_dir.mkdir(parents=True, exist_ok=True)
+        core.SetVirtualHostNameToFolderMapping(
+            ASSET_HOST, str(self.asset_dir), CoreWebView2HostResourceAccessKind.Allow)
+        core.Settings.AreDefaultContextMenusEnabled = False
+
+        def on_message(_sender, args) -> None:
+            try:
+                message = json.loads(str(args.TryGetWebMessageAsString()))
+            except Exception:
+                return
+            if isinstance(message, dict):
+                self.on_event("webview_action", message)
+
+        core.WebMessageReceived += on_message
+
+
+def asset_url(asset_dir: Path, path: Path | str | None) -> str:
+    """``https://assets.aram/...`` for a file under the asset dir, else ''."""
+    if not path:
+        return ""
+    try:
+        rel = Path(path).resolve().relative_to(Path(asset_dir).resolve())
+    except (ValueError, OSError):
+        return ""
+    return f"https://{ASSET_HOST}/" + rel.as_posix()
 
 
 def _bg_color():

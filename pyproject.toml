@@ -24,6 +24,16 @@ dependencies = [
 dev = ["pytest>=8"]
 # Desktop recommender site tabs: WebView2 hosted through pythonnet.
 desktop = ["pywebview>=5", "pythonnet>=3"]
+# Recommender augment panel: read the in-game offer with Windows' built-in OCR.
+ocr = [
+    "winrt-runtime>=3; sys_platform == 'win32'",
+    "winrt-Windows.Media.Ocr>=3; sys_platform == 'win32'",
+    "winrt-Windows.Graphics.Imaging>=3; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3; sys_platform == 'win32'",
+    "winrt-Windows.Globalization>=3; sys_platform == 'win32'",
+    "winrt-Windows.Foundation>=3; sys_platform == 'win32'",
+    "winrt-Windows.Foundation.Collections>=3; sys_platform == 'win32'",
+]
 
 [project.scripts]
 aram-ingest = "aram_nn.ingest.cli:main"

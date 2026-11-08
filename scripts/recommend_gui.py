@@ -33,6 +33,9 @@ from pathlib import Path
 
 import click
 
+from aram_nn.augment_bridge import start_bridge_thread
+from aram_nn.augment_ocr import start_ocr_watcher
+from aram_nn.augment_overlay import AugmentOverlay, badge_layout
 from aram_nn.icons import IconCache
 from aram_nn.lcu.client import (
     LCUClient, get_champion_summary, get_champ_select_session, get_current_summoner,
@@ -80,6 +83,10 @@ _DESKTOP_PATHS = {
 LIVE_CLIENT_ALL_GAME_DATA_URL = "https://127.0.0.1:2999/liveclientdata/allgamedata"
 OVERWOLF_AUGMENT_EVENT = Path("data/overwolf/latest_augments.json")
 OVERWOLF_AUGMENT_LOG = Path("data/overwolf/augment_events.jsonl")
+# An offer stays on screen until the player picks (the probe then posts
+# `picked`, which hides the panel) or this long passes.  The Mayhem selection
+# screen does not force a pick, so allow a generous window.
+AUGMENT_OFFER_TTL_SEC = 300
 
 
 def _project_root() -> Path:
@@ -247,10 +254,30 @@ def load_fallback_champion_names() -> dict[int, str]:
     return out
 
 
-def load_champion_alias_to_id() -> dict[str, int]:
-    """Offline Data Dragon alias -> championId map for Live Client Data."""
-    names = load_fallback_champion_names()
-    return {alias.lower(): cid for cid, alias in names.items()}
+def load_champion_alias_to_id(tier_payload: Path | None = None) -> dict[str, int]:
+    """Offline Data Dragon alias -> championId map for Live Client Data.
+
+    The abilities cache under data/cache can be cleared; the site payload the
+    augment panel already needs carries the same ddragon aliases, so it backs
+    it up.  Without either, a 1-player game (practice/custom) could not name
+    the champion and every augment showed "no data".
+    """
+    out: dict[str, int] = {}
+    try:
+        payload = json.loads(_resolve_resource(tier_payload, DEFAULT_TIER_PAYLOAD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        payload = {}
+    for cid, champ in (payload.get("champs") or {}).items():
+        try:
+            champion_id = int(cid)
+        except (TypeError, ValueError):
+            continue
+        for alias in (champ.get("alias"), champ.get("name_en")):
+            if isinstance(alias, str) and alias and champion_id > 0:
+                out.setdefault(alias.lower(), champion_id)
+    for cid, alias in load_fallback_champion_names().items():
+        out[alias.lower()] = cid
+    return out
 
 
 def _norm_key(value: object) -> str:
@@ -281,6 +308,15 @@ class AugmentAdvisor:
         raw_champs = payload.get("champs") or payload.get("champions") or {}
         self.augments = {int(k): v for k, v in raw_augs.items() if str(k).isdigit()}
         self.champs = {int(k): v for k, v in raw_champs.items() if str(k).isdigit()}
+        # tier-list.json only carries each champion's top/bottom few augments;
+        # the full per-champion table lives next to it (augmentStatsUrl).
+        self.champ_stats: dict[int, dict] = {}
+        stats_path = self.docs_dir / str(payload.get("augmentStatsUrl") or "api/champions/augment-stats.json")
+        try:
+            raw_stats = json.loads(stats_path.read_text(encoding="utf-8"))
+            self.champ_stats = {int(k): v for k, v in raw_stats.items() if str(k).isdigit()}
+        except (OSError, ValueError):
+            pass
 
         for aid, meta in self.augments.items():
             keys = {
@@ -329,9 +365,27 @@ class AugmentAdvisor:
                 return self.name_to_id[norm]
         return None
 
+    @property
+    def docs_dir(self) -> Path:
+        # docs/api/tier-list.json -> docs/
+        return self.payload_path.parent.parent
+
+    def icon_path(self, augment_id: int | None) -> Path | None:
+        icon = (self.augments.get(augment_id or -1) or {}).get("icon")
+        if not icon or str(icon).startswith("http"):
+            return None
+        path = self.docs_dir / str(icon)
+        return path if path.exists() else None
+
     def _champ_rows(self, champion_id: int) -> dict[int, dict]:
         champ = self.champs.get(int(champion_id)) or {}
         rows: dict[int, dict] = {}
+        for group in (self.champ_stats.get(int(champion_id)) or {}).values():
+            for row in group or []:
+                try:
+                    rows[int(row.get("id"))] = row
+                except (TypeError, ValueError):
+                    continue
         for side in ("top", "bot"):
             by_rarity = champ.get(side) or {}
             if isinstance(by_rarity, dict):
@@ -341,15 +395,29 @@ class AugmentAdvisor:
             for group in groups:
                 for row in group or []:
                     try:
-                        rows[int(row.get("id") or row.get("augment_id"))] = row
+                        rows.setdefault(int(row.get("id") or row.get("augment_id")), row)
                     except (TypeError, ValueError):
                         continue
         return rows
+
+    def _champ_ranks(self, champion_id: int) -> dict[int, int]:
+        """Win-rate rank (1 = best) of each augment among this champion's same-rarity augments."""
+        ranks: dict[int, int] = {}
+        for group in (self.champ_stats.get(int(champion_id)) or {}).values():
+            rated = [row for row in group or [] if row.get("wr") is not None and row.get("id") is not None]
+            rated.sort(key=lambda row: -float(row["wr"]))
+            for rank, row in enumerate(rated, start=1):
+                try:
+                    ranks[int(row["id"])] = rank
+                except (TypeError, ValueError):
+                    continue
+        return ranks
 
     def recommend(self, champion_id: int | None, offered: list[dict]) -> list[dict]:
         if not offered:
             return []
         champ_rows = self._champ_rows(int(champion_id or 0)) if champion_id else {}
+        champ_ranks = self._champ_ranks(int(champion_id or 0)) if champion_id else {}
         out: list[dict] = []
         for index, augment in enumerate(offered, start=1):
             aid = self.resolve_id(augment)
@@ -371,6 +439,11 @@ class AugmentAdvisor:
                 "lift": (row or {}).get("lift"),
                 "score": (row or {}).get("score"),
                 "games": int((row or {}).get("g") or (row or {}).get("games") or 0),
+                "pick": (row or {}).get("pick"),
+                "rank": champ_ranks.get(aid or -1),
+                "rarity": meta.get("rarity"),
+                "order": index,
+                "screen": augment.get("screen"),
             })
         out.sort(key=lambda row: (
             row["score"] is None,
@@ -514,6 +587,24 @@ def read_latest_augment_event() -> dict | None:
     return event
 
 
+def is_live_offer(event: dict | None, now: datetime | None = None,
+                  ttl_sec: int = AUGMENT_OFFER_TTL_SEC) -> bool:
+    """True while an offer is on screen: newest event is an offer, and recent.
+
+    A `picked` event is written to the same latest file, so picking an augment
+    hides the panel; a leftover offer from an earlier game ages out.
+    """
+    if not event or event.get("type") != "offer":
+        return False
+    if not any(isinstance(aug, dict) for aug in event.get("augments") or []):
+        return False
+    received = _parse_event_time(event.get("received_at"))
+    if received is None:
+        return False
+    age = ((now or datetime.now(timezone.utc)) - received).total_seconds()
+    return -30 <= age <= ttl_sec
+
+
 def _live_raw_champion_alias(raw_name: object) -> str:
     raw = str(raw_name or "")
     for prefix in (
@@ -590,6 +681,30 @@ def get_live_game_snapshot(alias_to_id: dict[str, int], timeout_sec: float = 1.0
         "names": names,
         "game_time": ((data.get("gameData") or {}).get("gameTime")),
     }
+
+
+def get_live_active_champion(alias_to_id: dict[str, int], timeout_sec: float = 1.0) -> int | None:
+    """The local player's champion from Live Client Data, even without a full 5v5.
+
+    The augment panel only needs this one id; custom/practice games and the
+    first seconds of a match have no complete roster, which used to leave the
+    panel saying 「此英雄無資料」.
+    """
+    try:
+        context = ssl._create_unverified_context()
+        with urllib.request.urlopen(LIVE_CLIENT_ALL_GAME_DATA_URL, timeout=timeout_sec, context=context) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception:
+        return None
+    active = data.get("activePlayer") or {}
+    active_riot_id = active.get("riotId") or active.get("summonerName")
+    if not active_riot_id:
+        return None
+    for player in data.get("allPlayers") or []:
+        if active_riot_id in (player.get("riotId"), player.get("summonerName")):
+            alias = _live_raw_champion_alias(player.get("rawChampionName"))
+            return alias_to_id.get(alias.lower())
+    return None
 
 
 def get_gameflow_team_snapshot(session: dict | None, current_summoner: dict | None) -> dict | None:
@@ -783,6 +898,9 @@ def poll_loop(
                                     last_hash = state
                                 stop_event.wait(max(poll_interval, 2.0))
                                 continue
+                            active_id = get_live_active_champion(alias_to_id)
+                            if active_id:
+                                q.put(("active_champion", active_id))
                             phase = "InProgress (live data unavailable)"
                         phase_label = f"{phase} (session incomplete)" if session else phase
                         if verbose or phase != last_phase:
@@ -904,16 +1022,24 @@ def fake_poll_loop(
 # Palette - aligned with the public site: slate neutrals plus Mayhem-like
 # tier accents.  The GUI runs over a visually busy League client, so clarity
 # wins over transparency.
-BG        = "#0e1116"
-SURFACE   = "#161a22"
-ROW       = "#11151d"
-BEST_BG   = "#202414"
-WARN_BG   = "#241817"
-FG        = "#e6e8eb"
-DIM       = "#9aa0a6"
-MUTED     = "#69707a"
-DIVIDER   = "#30363d"
+# Three depth layers: the header band (lit, cool navy, continuous with the
+# DWM title bar), the body floor (darkest), and panels raised off the floor
+# with a hairline edge.  Depth comes from these value steps, not shadows.
+HEAD_TOP  = "#1c2333"  # also the Windows caption colour, so the band starts at the title bar
+HEAD_BOT  = "#121722"  # header gradient end and the tab strip
+BG        = "#0a0d13"  # body floor
+SURFACE   = "#121722"  # raised panel
+EDGE      = "#232b3a"  # panel hairline
+ROW       = "#181e2b"  # row stripe inside a panel
+ROW_HI    = "#1f2636"  # emphasised row (best combo)
+BEST_BG   = "#18261a"
+WARN_BG   = "#2a1918"
+FG        = "#e8eaed"
+DIM       = "#9aa3b2"
+MUTED     = "#5f6877"
+DIVIDER   = "#2a3242"
 GOLD      = "#f5c518"
+GOLD_DIM  = "#8a6f12"
 SITE_BG   = "#0a0b0d"  # site.css --bg, so the WebView area has no seam
 
 # (key, label): the first four are site embed tabs, matchup is the Tk view.
@@ -936,11 +1062,17 @@ FONT_SUB     = ("Microsoft JhengHei UI", 9)
 FONT_SECTION = ("Microsoft JhengHei UI", 8, "bold")
 FONT_NAME    = ("Microsoft JhengHei UI", 11)
 FONT_NAME_B  = ("Microsoft JhengHei UI", 11, "bold")
-FONT_SCORE    = ("Microsoft JhengHei UI", 18, "bold")
-FONT_ICON     = ("Segoe UI Symbol", 12, "bold")
-FONT_NUM      = ("Consolas", 11)
-FONT_NUM_B    = ("Consolas", 11, "bold")
-FONT_NUM_BEST = ("Consolas", 14, "bold")
+FONT_SCORE    = ("Bahnschrift", 24, "bold")
+FONT_ICON     = ("Segoe UI Symbol", 11)
+# Bahnschrift (Windows 10+) has tabular lining figures, so columns still
+# align, without Consolas' terminal look.
+FONT_NUM      = ("Bahnschrift", 11)
+FONT_NUM_B    = ("Bahnschrift", 11, "bold")
+FONT_NUM_BEST = ("Bahnschrift", 15, "bold")
+FONT_TAB      = ("Microsoft JhengHei UI", 10)
+FONT_PANEL    = ("Microsoft JhengHei UI", 9, "bold")
+AUGMENT_ICON_PX = 64
+AUGMENT_RARITY_COLORS = {"kSilver": "#9fb0c0", "kGold": "#d4a73a", "kPrismatic": "#b77cff"}
 
 # U+2212 MINUS SIGN - proper typographic minus instead of HYPHEN-MINUS.
 # Same width as "+" in Consolas so the columns still align.
@@ -1047,6 +1179,136 @@ def _make_observer_window(root: tk.Tk) -> None:
         return
 
 
+def _colorref(hex_color: str) -> int:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return r | (g << 8) | (b << 16)
+
+
+def _style_title_bar(root: tk.Tk, caption: str = HEAD_TOP, text: str = FG) -> None:
+    """Paint the native title bar to match the header band (Windows 11).
+
+    Without this Windows draws its default light caption above a dark app.
+    Dark mode (attr 20) covers Windows 10 20H1+; the caption/text/border
+    colours (35/36/34) are Windows 11 only and are silently ignored earlier.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        root.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) or root.winfo_id()
+        set_attr = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        for attr, value in ((20, 1), (35, _colorref(caption)), (36, _colorref(text)),
+                            (34, _colorref(caption))):
+            val = ctypes.c_int(value)
+            set_attr(hwnd, attr, ctypes.byref(val), ctypes.sizeof(val))
+    except Exception:
+        return
+
+
+def _mix(a: str, b: str, t: float) -> str:
+    """Linear blend of two #rrggbb colours (t=0 -> a, t=1 -> b)."""
+    ca = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#%02x%02x%02x" % tuple(round(x + (y - x) * t) for x, y in zip(ca, cb))
+
+
+class _CanvasText:
+    """Label-like `config(text=, fg=, font=)` facade over a canvas text item."""
+
+    def __init__(self, canvas: tk.Canvas, item: int) -> None:
+        self.canvas, self.item = canvas, item
+
+    def config(self, **kw) -> None:
+        opts = {}
+        if "text" in kw:
+            opts["text"] = kw["text"]
+        if "fg" in kw:
+            opts["fill"] = kw["fg"]
+        if "font" in kw:
+            opts["font"] = kw["font"]
+        self.canvas.itemconfigure(self.item, **opts)
+
+    configure = config
+
+
+class _HeaderBand:
+    """Gradient header: title, subtitle and the pin toggle drawn on a canvas.
+
+    Tk widgets are opaque, so anything placed over a gradient would punch a
+    flat rectangle into it; everything here is a canvas item instead.  The
+    gradient is a PhotoImage rebuilt (debounced) when the width changes.
+    """
+
+    HEIGHT = 74
+
+    def __init__(self, root: tk.Tk, font_head, font_sub, on_pin) -> None:
+        self.canvas = tk.Canvas(root, height=self.HEIGHT, bg=HEAD_TOP, highlightthickness=0, bd=0)
+        self._image = None
+        self._width = 0
+        self._pending = None
+        self._bg = self.canvas.create_image(0, 0, anchor="nw")
+        self.canvas.create_rectangle(16, 18, 19, 56, fill=GOLD, width=0)
+        self.title = _CanvasText(self.canvas, self.canvas.create_text(
+            30, 16, anchor="nw", text="Loading...", fill=FG, font=font_head))
+        self.sub = _CanvasText(self.canvas, self.canvas.create_text(
+            31, 50, anchor="nw", text="", fill=DIM, font=font_sub))
+        self._pin_box = self.canvas.create_polygon(0, 0, 0, 0, smooth=True, width=1, tags=("pin",))
+        self._pin_text = self.canvas.create_text(0, 0, text="📌 置頂", font=font_sub, tags=("pin",))
+        self.canvas.tag_bind("pin", "<Button-1>", lambda _e: on_pin())
+        self.canvas.tag_bind("pin", "<Enter>", lambda _e: self.canvas.config(cursor="hand2"))
+        self.canvas.tag_bind("pin", "<Leave>", lambda _e: self.canvas.config(cursor=""))
+        self.canvas.bind("<Configure>", self._on_configure)
+
+    def set_pin(self, on: bool, font_sub) -> None:
+        self.canvas.itemconfigure(self._pin_text, fill=GOLD if on else DIM, font=font_sub)
+        self.canvas.itemconfigure(self._pin_box, outline=GOLD_DIM if on else EDGE,
+                                  fill=_mix(HEAD_TOP, GOLD, 0.08) if on else HEAD_TOP)
+        self._place_pin()
+
+    def _place_pin(self) -> None:
+        width = self._width or self.canvas.winfo_width()
+        x1, y0, y1 = width - 16, 20, 46
+        bbox = self.canvas.bbox(self._pin_text)
+        text_w = (bbox[2] - bbox[0]) if bbox else 48
+        x0 = x1 - text_w - 24
+        r = 8
+        pts = (x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1, x1 - r, y1,
+               x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0)
+        self.canvas.coords(self._pin_box, *pts)
+        self.canvas.coords(self._pin_text, (x0 + x1) / 2, (y0 + y1) / 2)
+
+    def _on_configure(self, event) -> None:
+        if event.width == self._width:
+            return
+        self._width = event.width
+        self._place_pin()
+        if self._pending is not None:
+            self.canvas.after_cancel(self._pending)
+        self._pending = self.canvas.after(60, self._paint)
+
+    def _paint(self) -> None:
+        self._pending = None
+        w, h = max(self._width, 1), self.HEIGHT
+        # Vertical fall-off from the caption colour, plus a faint warm glow
+        # rising from the lower left behind the gold tick.
+        img = tk.PhotoImage(width=w, height=h)
+        step = 8  # colour bands this wide; keeps the build ~10 ms at 900 px
+        for y in range(h):
+            ty = y / (h - 1)
+            base = _mix(HEAD_TOP, HEAD_BOT, ty ** 1.4)
+            row = []
+            for x0 in range(0, w, step):
+                d = ((x0 / w) / 0.55) ** 2 + ((1 - ty) / 1.3) ** 2
+                glow = max(0.0, 1 - d) * 0.07 * ty  # zero on row 0: seamless with the caption
+                row.append(" ".join([_mix(base, GOLD, glow)] * min(step, w - x0)))
+            img.put("{" + " ".join(row) + "}", to=(0, y))
+        self._image = img
+        self.canvas.itemconfigure(self._bg, image=img)
+        self.canvas.tag_lower(self._bg)
+
+
 class RecommenderApp:
     def __init__(self, root: tk.Tk, q: queue.Queue, icon_cache: IconCache | None = None) -> None:
         self.root = root
@@ -1056,6 +1318,7 @@ class RecommenderApp:
         self.font_scale = 1.0
         self._last_render_args: tuple | None = None
         self.active_champion_id: int | None = None
+        self._loadout_status: dict[int, str] = {}
         self.augment_advisor = AugmentAdvisor()
         self.quick_source = _quick_pick_source(
             self.augment_advisor.payload, self.augment_advisor.payload_path,
@@ -1072,9 +1335,9 @@ class RecommenderApp:
         self.topmost = _load_settings().get("topmost", True)
         root.attributes("-topmost", self.topmost)
         root.attributes("-alpha", 1.0)
-        root.geometry("840x620+40+40")
+        root.geometry("860x800+40+40")
         root.configure(bg=BG)
-        root.minsize(740, 520)
+        root.minsize(760, 560)
 
         # Pixel-perfect column geometry, applied identically to every row
         # frame so cells line up regardless of font.  Tk widget `width=N`
@@ -1084,9 +1347,9 @@ class RecommenderApp:
         # Pinning to minsize fixes it regardless of font.
         self._base_cols = {
             "icon": 42,
-            "delta": 74,
-            "prob": 64,
-            "z": 58,
+            "delta": 82,
+            "prob": 70,
+            "z": 70,
         }
         self._apply_zoom_geometry()
 
@@ -1094,46 +1357,39 @@ class RecommenderApp:
         # (internal padding).  Asymmetric padding goes on the geometry
         # manager call (.pack / .grid).  We use that distinction to set
         # generous outer rhythm without bloating the labels themselves.
-        header_row = tk.Frame(root, bg=BG)
-        header_row.pack(fill="x", pady=(8, 0))
-        header_row.grid_columnconfigure(0, weight=1)
-        self.header = tk.Label(
-            header_row, text="Loading...",
-            bg=BG, fg=FG, font=self._font(FONT_HEAD),
-            anchor="w", padx=12,
-        )
-        self.header.grid(row=0, column=0, sticky="ew")
-        self._pin_button = tk.Button(
-            header_row, text="置頂", command=self._toggle_topmost,
-            relief="flat", bd=0, padx=10, pady=3, cursor="hand2",
-            activebackground=DIVIDER, activeforeground=FG,
-            font=self._font(FONT_SUB),
-        )
-        self._pin_button.grid(row=0, column=1, padx=(0, 12))
+        _style_title_bar(root)
+        self.band = _HeaderBand(root, self._font(FONT_HEAD), self._font(FONT_SUB), self._toggle_topmost)
+        self.band.canvas.pack(fill="x")
+        self.header = self.band.title
+        self.subheader = self.band.sub
         self._style_pin()
-
-        self.subheader = tk.Label(
-            root, text="",
-            bg=BG, fg=DIM, font=self._font(FONT_SUB),
-            anchor="w", padx=12,
-        )
-        self.subheader.pack(fill="x", pady=(0, 8))
         if DESKTOP_STATUS:
-            tk.Label(root, text=DESKTOP_STATUS, bg=BG, fg=DIM,
-                     font=self._font(FONT_SUB), anchor="w", padx=12, wraplength=800).pack(fill="x", pady=(0, 8))
+            tk.Label(root, text=DESKTOP_STATUS, bg=HEAD_BOT, fg=DIM,
+                     font=self._font(FONT_SUB), anchor="w", padx=16, wraplength=800).pack(fill="x")
 
-        # Thin divider between header and the dynamic body - replaces what
-        # a bottom border on the header would do, without violating the
-        # absolute ban on accent borders.
-        tk.Frame(root, bg=DIVIDER, height=1).pack(fill="x", padx=12)
-
+        # Live augment offer (Overwolf GEP -> probe app -> embedded bridge).
+        # The panel is only packed while an offer is live (see is_live_offer),
+        # so a missing Overwolf or a finished pick never leaves stale text.
         self.augment_panel = tk.Frame(root, bg=BG)
-        # Augment panel disabled: Overwolf bridge currently can't connect, so the
-        # "Best augment" line is stale noise.  Keep the frame attribute alive
-        # (referenced by _render_augment_panel / _apply_zoom) but don't pack or
-        # populate it.  Re-enable the three lines below once Overwolf is back.
-        # self.augment_panel.pack(fill="x", padx=12, pady=(6, 0))
-        # self._render_augment_panel()
+        self._augment_panel_shown = False
+        self._augment_bridge = start_bridge_thread(_augment_event_path().parent)
+        # Overwolf will not load the probe app without Riot approval, so the
+        # offer is also read off the screen (only while the game is focused).
+        self._augment_ocr = None
+        if os.environ.get("ARAM_AUGMENT_OCR", "1") != "0":
+            self._augment_ocr = start_ocr_watcher(_augment_event_path().parent, {
+                str(meta.get("name_zh")): aid
+                for aid, meta in self.augment_advisor.augments.items()
+                if meta.get("name_zh")
+            })
+        # Created at startup (not on the first offer) so it is never mapped
+        # while the game has focus.
+        self._augment_overlay = None
+        if os.environ.get("ARAM_AUGMENT_OVERLAY", "1") != "0":
+            try:
+                self._augment_overlay = AugmentOverlay(root)
+            except tk.TclError:
+                self._augment_overlay = None
 
         # Site tabs mirror the public champion page; 對戰勝率 is the native
         # matchup view.  The WebView is only created on the first site-tab
@@ -1142,22 +1398,42 @@ class RecommenderApp:
         self._tab_buttons: dict[str, tk.Button] = {}
         self.site_view = None
         self._site_error: str | None = None
-        tab_bar = tk.Frame(root, bg=BG)
-        tab_bar.pack(fill="x", padx=12, pady=(6, 0))
+        # Underline tabs on the band's tail colour; a hairline closes the
+        # header so the body floor reads as a separate, deeper layer.
+        tab_strip = tk.Frame(root, bg=HEAD_BOT)
+        tab_strip.pack(fill="x")
+        tab_bar = tk.Frame(tab_strip, bg=HEAD_BOT)
+        tab_bar.pack(fill="x", padx=10)
+        self._tab_rule = tk.Frame(root, bg=EDGE, height=1)
+        self._tab_rule.pack(fill="x")
+        self._tab_bar = tab_strip
+        self._tab_marks: dict[str, tk.Frame] = {}
         for key, label in SITE_TABS:
+            cell = tk.Frame(tab_bar, bg=HEAD_BOT)
+            cell.pack(side="left", padx=(0, 2))
             button = tk.Button(
-                tab_bar, text=label, command=lambda k=key: self._select_tab(k),
-                relief="flat", bd=0, padx=10, pady=3, cursor="hand2",
-                activebackground=DIVIDER, activeforeground=FG,
-                font=self._font(FONT_SUB),
+                cell, text=label, command=lambda k=key: self._select_tab(k),
+                relief="flat", bd=0, padx=12, pady=6, cursor="hand2",
+                bg=HEAD_BOT, activebackground=HEAD_BOT, activeforeground=FG,
+                font=self._font(FONT_TAB),
             )
-            button.pack(side="left", padx=(0, 4))
+            button.pack()
+            mark = tk.Frame(cell, height=2, bg=HEAD_BOT)
+            mark.pack(fill="x", padx=8)
             self._tab_buttons[key] = button
+            self._tab_marks[key] = mark
         self._style_tabs()
 
         self.body = tk.Frame(root, bg=BG)
-        self.body.pack(fill="both", expand=True, padx=12, pady=(8, 10))
+        self.body.pack(fill="both", expand=True, padx=14, pady=(12, 14))
         self.web_frame = tk.Frame(root, bg=SITE_BG)
+        # Champ select renders as HTML in WebView2 (rounded, anti-aliased,
+        # same tokens as the site); the Tk body stays as the fallback.
+        self.pick_frame = tk.Frame(root, bg=SITE_BG)
+        self._matchup_html = False
+        self._web_pick = None
+        self._pick_error: str | None = None
+        self._pick_available: bool | None = None
 
         _make_observer_window(root)
         self.root.after_idle(lambda: _make_observer_window(root))
@@ -1165,8 +1441,7 @@ class RecommenderApp:
 
         # Begin draining the queue.
         self.root.after(100, self._drain)
-        # Augment polling disabled while the Overwolf bridge is offline.
-        # self.root.after(750, self._poll_augments)
+        self.root.after(750, self._poll_augments)
 
     # ----- Queue handling -----
 
@@ -1203,9 +1478,10 @@ class RecommenderApp:
         self._apply_zoom_geometry()
         self.header.config(font=self._font(FONT_HEAD))
         self.subheader.config(font=self._font(FONT_SUB))
+        self._style_pin()
         for button in self._tab_buttons.values():
-            button.config(font=self._font(FONT_SUB))
-        # self._render_augment_panel()  # augment panel disabled (Overwolf offline)
+            button.config(font=self._font(FONT_TAB))
+        self._render_augment_panel()
         if self._last_render_args is not None:
             self._render(*self._last_render_args)
         elif self._last_ingame_args is not None:
@@ -1247,108 +1523,133 @@ class RecommenderApp:
                     if isinstance(aug, dict)
                 ),
             )
+        live = is_live_offer(event)
+        signature = (signature, live, self.active_champion_id)
         if force or signature != self._last_augment_signature:
-            self.latest_augment_event = event
+            self.latest_augment_event = event if live else None
             self._last_augment_signature = signature
             self._render_augment_panel()
         if not force:
             self.root.after(1000, self._poll_augments)
-
-    def _force_rescan_augments(self) -> None:
-        self._poll_augments(force=True)
 
     def _render_augment_panel(self) -> None:
         for widget in self.augment_panel.winfo_children():
             widget.destroy()
 
         event = self.latest_augment_event
-        if event is None:
-            text = "Augments: waiting for Overwolf"
-            fg = DIM
+        augments = [aug for aug in (event or {}).get("augments") or [] if isinstance(aug, dict)]
+        rows = self.augment_advisor.recommend(self.active_champion_id, augments) if augments else []
+        if rows and all(row.get("wr") is None for row in rows):
+            rows = self._recheck_augment_champion(augments, rows)
+        self._write_augment_state(rows)
+        overlay = getattr(self, "_augment_overlay", None)
+        if overlay is not None:
+            overlay.set_badges(badge_layout(rows))
+        if not rows:
+            if self._augment_panel_shown:
+                self.augment_panel.pack_forget()
+                self._augment_panel_shown = False
+            return
+
+        if not self._augment_panel_shown:
+            self.augment_panel.pack(fill="x", padx=14, pady=(10, 0), after=self._tab_rule)
+            self._augment_panel_shown = True
+
+        panel = tk.Frame(self.augment_panel, bg=BG)
+        panel.pack(fill="x")
+        champ = (self.augment_advisor.champs.get(self.active_champion_id or -1) or {}).get("name_zh")
+        title = f"海克斯選項 · {champ}" if champ else "海克斯選項 · 等待英雄資料"
+        tk.Label(panel, text=title, bg=BG, fg=DIM, font=self._font(FONT_SECTION),
+                 anchor="w").pack(fill="x", pady=(0, 4))
+        # rows come best-first; cards keep the in-game left-to-right order so
+        # each one sits under the same position as on screen.
+        best_id = rows[0].get("id") if rows[0].get("wr") is not None else None
+        cards = tk.Frame(panel, bg=BG)
+        cards.pack(fill="x")
+        ordered = sorted(rows, key=lambda row: row.get("order") or 0)
+        for col, row in enumerate(ordered):
+            cards.grid_columnconfigure(col, weight=1, uniform="augcard")
+            self._augment_card(cards, row, best=row.get("id") is not None and row.get("id") == best_id).grid(
+                row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 6, 0))
+
+    def _recheck_augment_champion(self, augments: list[dict], rows: list[dict]) -> list[dict]:
+        """No card has data: ask Live Client directly which champion we are.
+
+        The poll thread can hold a stale/unknown champion (practice and custom
+        games have no 5v5 roster).  Asked once per offer, short timeout, since
+        this runs on the Tk thread.
+        """
+        key = tuple(aug.get("id") or aug.get("name") for aug in augments)
+        if getattr(self, "_augment_recheck_key", None) == key:
+            return rows
+        self._augment_recheck_key = key
+        if getattr(self, "_alias_to_id", None) is None:
+            self._alias_to_id = load_champion_alias_to_id()
+        champion_id = get_live_active_champion(self._alias_to_id, timeout_sec=0.4)
+        if not champion_id or champion_id == self.active_champion_id:
+            return rows
+        self.active_champion_id = champion_id
+        return self.augment_advisor.recommend(champion_id, augments)
+
+    def _write_augment_state(self, rows: list[dict]) -> None:
+        """What the panel/overlay showed, for diagnosing "no data" reports."""
+        state = {
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "champion_id": self.active_champion_id,
+            "rows": [{k: row.get(k) for k in ("id", "name", "wr", "games", "rank", "screen")} for row in rows],
+        }
+        try:
+            path = _augment_event_path().with_name("overlay_state.json")
+            path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _augment_card(self, parent: tk.Frame, row: dict, best: bool) -> tk.Frame:
+        rarity_color = AUGMENT_RARITY_COLORS.get(str(row.get("rarity") or ""), DIVIDER)
+        card = tk.Frame(parent, bg=ROW, highlightthickness=2 if best else 1,
+                        highlightbackground=GREEN if best else rarity_color)
+        photo = self._augment_photo(row.get("id"))
+        icon = tk.Label(card, bg=ROW, bd=0)
+        if photo is not None:
+            icon.config(image=photo)
+            icon.image = photo  # type: ignore[attr-defined]
+        icon.pack(pady=(8, 2))
+        name = str(row.get("name") or row.get("raw_name") or "?")
+        tk.Label(card, text=("★ " if best else "") + name, bg=ROW, fg=GREEN if best else FG,
+                 font=self._font(FONT_NAME_B), wraplength=180).pack(padx=6)
+        if row.get("id") is None:
+            stat, sub, fg = "未收錄", "", GOLD
+        elif row.get("wr") is None:
+            stat, sub, fg = "—", "此英雄無資料" if self.active_champion_id else "等待英雄資料", DIM
         else:
-            event_type = str(event.get("type") or "unknown")
-            augments = [aug for aug in event.get("augments") or [] if isinstance(aug, dict)]
-            if event_type == "offer":
-                rows = self.augment_advisor.recommend(self.active_champion_id, augments)
-                if rows:
-                    best = rows[0]
-                    if best.get("id") is None:
-                        text = f"Augments detected: {best.get('raw_name') or best.get('name')} (unmapped)"
-                        fg = GOLD
-                    elif best.get("wr") is None:
-                        text = f"Best augment: {best['name']} (no champ data)"
-                        fg = GOLD
-                    else:
-                        lift = best.get("lift")
-                        lift_text = f", {_fmt_signed_pct(float(lift) * 100)}" if lift is not None else ""
-                        text = f"Best augment: {best['name']} ({_fmt_prob(float(best['wr']))}{lift_text})"
-                        fg = GREEN
-                else:
-                    text = "Augment offer detected, no options parsed"
-                    fg = GOLD
-            elif event_type == "picked":
-                names = [
-                    str(aug.get("name") or aug.get("slot") or "?")
-                    for aug in augments
-                ]
-                text = "Picked augments: " + (" / ".join(names[-3:]) if names else "detected")
-                fg = FG
-            elif event_type == "error":
-                text = "Augments: latest event unreadable"
-                fg = RED
-            else:
-                text = f"Augments: {event_type}"
-                fg = DIM
+            stat, fg = _fmt_prob(float(row["wr"])), GREEN if best else FG
+            lift = row.get("lift")
+            sub = f"比此英雄平均 {_fmt_signed_pct(float(lift) * 100)}" if lift is not None else ""
+        tk.Label(card, text=stat, bg=ROW, fg=fg, font=self._font(FONT_NUM_BEST)).pack(pady=(4, 0))
+        tk.Label(card, text=sub, bg=ROW, fg=DIM, font=self._font(FONT_SUB)).pack(pady=(0, 8))
+        return card
 
-        row = tk.Frame(self.augment_panel, bg=ROW, highlightthickness=1, highlightbackground=DIVIDER)
-        row.pack(fill="x")
-        tk.Button(
-            row,
-            text="Rescan",
-            command=self._force_rescan_augments,
-            bg=SURFACE,
-            fg=DIM,
-            activebackground=ROW,
-            activeforeground=FG,
-            relief="flat",
-            bd=0,
-            padx=6,
-            pady=1,
-            font=self._font(FONT_SECTION),
-            cursor="hand2",
-            takefocus=0,
-        ).pack(side="right", padx=(4, 6), pady=3)
-        tk.Label(
-            row,
-            text=text,
-            bg=ROW,
-            fg=fg,
-            font=self._font(FONT_SUB),
-            anchor="w",
-        ).pack(side="left", fill="x", expand=True, padx=8, pady=4)
-
-        if event is not None and event.get("type") == "offer":
-            rows = self.augment_advisor.recommend(
-                self.active_champion_id,
-                [aug for aug in event.get("augments") or [] if isinstance(aug, dict)],
-            )
-            detail = " > ".join(
-                str(row.get("name") or row.get("raw_name") or "?")
-                for row in rows[:3]
-            )
-            if detail:
-                tk.Label(
-                    row,
-                    text=detail,
-                    bg=ROW,
-                    fg=DIM,
-                    font=self._font(FONT_SECTION),
-                    anchor="e",
-                ).pack(side="right", padx=8, pady=4)
+    def _augment_photo(self, augment_id: int | None) -> tk.PhotoImage | None:
+        key = (f"augment:{augment_id}", AUGMENT_ICON_PX)
+        if key in self._asset_photos:
+            return self._asset_photos[key]
+        path = self.augment_advisor.icon_path(augment_id)
+        if path is None:
+            return None
+        try:
+            photo = tk.PhotoImage(file=str(path))
+            factor = max(1, round(photo.width() / AUGMENT_ICON_PX))
+            if factor > 1:
+                photo = photo.subsample(factor, factor)
+        except tk.TclError:
+            return None
+        self._asset_photos[key] = photo
+        return photo
 
     def _handle(self, msg: tuple) -> None:
         kind = msg[0]
-        if kind not in ("ingame", "quickpicks", "static", "siteview_error"):
+        if kind not in ("ingame", "quickpicks", "static", "siteview_error", "active_champion",
+                        "webview_action", "pickview_error"):
             self._last_ingame_args = None
         if kind == "static":
             self.id_to_name = msg[1]
@@ -1357,6 +1658,7 @@ class RecommenderApp:
             self._clear_body()
         elif kind == "idle":
             phase = msg[1]
+            self._loadout_status.clear()
             self.header.config(text=f"Idle · {phase}", fg=DIM)
             self.subheader.config(text="Queue for ARAM/Mayhem to see swap suggestions.")
             self._clear_body()
@@ -1386,6 +1688,10 @@ class RecommenderApp:
             self._render_ingame(snapshot, current_combo, enemy_combo)
             self._render_augment_panel()
             self._sync_site()
+        elif kind == "active_champion":
+            if self.active_champion_id != msg[1]:
+                self.active_champion_id = int(msg[1])
+                self._render_augment_panel()
         elif kind == "quickpicks":
             _, champion_id, ok = msg
             self._quick_state[champion_id] = "ready" if ok else "failed"
@@ -1397,16 +1703,21 @@ class RecommenderApp:
                 self._render(*self._last_render_args)
         elif kind == "siteview_error":
             self._site_failed(str(msg[1]))
+        elif kind == "webview_action":
+            self._web_action(msg[1])
+        elif kind == "pickview_error":
+            self._pick_failed(str(msg[1]))
 
     # ----- Site tabs (WebView2 embed of the public champion page) -----
 
     def _style_tabs(self) -> None:
         for key, button in self._tab_buttons.items():
             selected = key == self.tab
-            button.config(bg=DIVIDER if selected else ROW, fg=FG if selected else DIM)
+            button.config(fg=FG if selected else DIM)
+            self._tab_marks[key].config(bg=GOLD if selected else HEAD_BOT)
 
     def _style_pin(self) -> None:
-        self._pin_button.config(bg=DIVIDER if self.topmost else ROW, fg=FG if self.topmost else DIM)
+        self.band.set_pin(self.topmost, self._font(FONT_SUB))
 
     def _toggle_topmost(self) -> None:
         self.topmost = not self.topmost
@@ -1421,9 +1732,10 @@ class RecommenderApp:
         self._style_tabs()
         if key == "matchup":
             self.web_frame.pack_forget()
-            self.body.pack(fill="both", expand=True, padx=12, pady=(8, 10))
+            self._show_matchup(self._matchup_html)
             return
         self.body.pack_forget()
+        self.pick_frame.pack_forget()
         self.web_frame.pack(fill="both", expand=True)
         self._sync_site()
 
@@ -1490,46 +1802,267 @@ class RecommenderApp:
         ).pack(anchor="w", pady=(10, 0))
 
     def close_site(self) -> None:
-        if self.site_view is not None:
-            self.site_view.close()
+        for view in (self.site_view, self._web_pick):
+            if view is not None:
+                try:
+                    view.close()
+                except Exception:
+                    pass
 
     # ----- Rendering -----
 
+    def _show_matchup(self, html: bool) -> None:
+        """Pick which surface the 對戰勝率 tab shows: the HTML champ-select
+        view or the Tk body (idle / status / in-game screens)."""
+        self._matchup_html = html
+        if self.tab != "matchup":
+            return
+        if html:
+            self.body.pack_forget()
+            self.pick_frame.pack(fill="both", expand=True)
+        else:
+            self.pick_frame.pack_forget()
+            self.body.pack(fill="both", expand=True, padx=14, pady=(12, 14))
+
     def _clear_body(self) -> None:
+        self._show_matchup(False)
         for w in self.body.winfo_children():
             w.destroy()
+        # Grid weights survive their widgets; reset so a later pack/grid
+        # layout does not inherit the champ-select column split.
+        for index in range(3):
+            self.body.grid_columnconfigure(index, weight=0, minsize=0, uniform="")
+            self.body.grid_rowconfigure(index, weight=0, minsize=0)
+
+    def _panel(self, parent: tk.Frame, title: str, *, pad: int = 12) -> tuple[tk.Frame, tk.Frame, tk.Frame]:
+        """Raised section: hairline edge, gold tick + title, content area.
+
+        Returns (outer, head, inner); callers grid/pack `outer` and may
+        pack extra controls on the right of `head`.
+        """
+        outer = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
+                         highlightbackground=EDGE, highlightcolor=EDGE)
+        head = tk.Frame(outer, bg=SURFACE)
+        head.pack(fill="x", padx=pad, pady=(9, 6))
+        tk.Frame(head, bg=GOLD, width=3, height=13).pack(side="left", padx=(0, 8))
+        tk.Label(head, text=title, bg=SURFACE, fg=DIM, font=self._font(FONT_PANEL),
+                 anchor="w").pack(side="left")
+        inner = tk.Frame(outer, bg=SURFACE)
+        inner.pack(fill="both", expand=True, padx=pad, pady=(0, 11))
+        return outer, head, inner
+
+    def _ghost_button(self, parent: tk.Frame, text: str, command, *, bg: str = SURFACE,
+                      font: tuple = FONT_SUB, fg: str = DIM) -> tk.Button:
+        button = tk.Button(
+            parent, text=text, command=command, bg=bg, fg=fg,
+            activebackground=ROW_HI, activeforeground=FG, relief="flat", bd=0,
+            highlightthickness=1, highlightbackground=EDGE, highlightcolor=EDGE,
+            padx=8, pady=2, font=self._font(font), cursor="hand2", takefocus=0,
+        )
+        button.bind("<Enter>", lambda _e: button.config(fg=FG, bg=ROW_HI))
+        button.bind("<Leave>", lambda _e: button.config(fg=fg, bg=bg))
+        return button
 
     def _render(self, parsed, suggestions, combos=None, current_combo=None) -> None:
         combos = combos or []
         self._last_render_args = (parsed, suggestions, combos, current_combo)
         cur_name = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
-        self.header.config(text=f"Cell {parsed.my_cell_id} · {cur_name}", fg=FG)
+        self.header.config(text=f"選角中 · {cur_name}", fg=FG)
+        if self._html_pick_ready():
+            self.subheader.config(text=f"位置 {parsed.my_cell_id}　·　評分 B ≈ 普通")
+            self._clear_body()
+            self._show_matchup(True)
+            self._push_web_pick()
+            return
         self.subheader.config(
-            text="MLΔ 是換人後勝率變化；z 是英雄本體強度；隊伍評分 B 約等於普通"
+            text=f"位置 {parsed.my_cell_id}　·　MLΔ 換人後勝率變化　·　z 英雄本體強度　·　評分 B ≈ 普通"
         )
 
         self._clear_body()
 
-        self.body.grid_columnconfigure(0, weight=2, minsize=260)
-        self.body.grid_columnconfigure(1, weight=3, minsize=360)
-        self.body.grid_rowconfigure(0, weight=0)
+        self.body.grid_columnconfigure(0, weight=5, minsize=300, uniform="cs")
+        self.body.grid_columnconfigure(1, weight=6, minsize=340, uniform="cs")
         self.body.grid_rowconfigure(1, weight=1)
-        self.body.grid_rowconfigure(2, weight=0)
 
-        combo_host = tk.Frame(self.body, bg=BG)
-        combo_host.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 0))
-        self._render_combo_section(
-            combo_host, combos, pool=suggestions, owned_ids=parsed.my_team_ids, wraplength=560,
-        )
+        if combos:
+            outer, head, inner = self._panel(
+                self.body, f"最佳 5 人組合　·　掃描 {combos[0].total_combos} 組")
+            outer.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 12))
+            self._render_combo_section(head, inner, combos, pool=suggestions, owned_ids=parsed.my_team_ids)
 
-        left = tk.Frame(self.body, bg=BG)
-        left.grid(row=1, column=0, sticky="new", padx=(0, 18), pady=(8, 0))
-        right = tk.Frame(self.body, bg=BG)
-        right.grid(row=1, column=1, sticky="new", pady=(8, 0))
+        left, _, left_inner = self._panel(self.body, "你的隊伍")
+        left.grid(row=1, column=0, sticky="nsew", padx=(0, 12))
+        right, right_head, right_inner = self._panel(self.body, "替補池")
+        right.grid(row=1, column=1, sticky="nsew")
 
-        self._render_spell_hint(left, int(parsed.my_current_id))
-        self._render_team_section(left, parsed, suggestions, current_combo)
-        self._render_bench_table(right, suggestions)
+        self._render_team_section(left_inner, parsed, suggestions, current_combo)
+        self._render_spell_hint(left_inner, int(parsed.my_current_id))
+        self._render_bench_table(right_head, right_inner, suggestions)
+
+    # ----- HTML champ-select view (WebView2) -----
+
+    def _html_pick_ready(self) -> bool:
+        """True when champ select should render as HTML; probes WebView2 once."""
+        if self._pick_error is not None or os.environ.get("ARAM_TK_PICK"):
+            return False
+        if self._pick_available is None:
+            try:
+                from aram_nn.desktop import webview_host
+
+                self._pick_available = webview_host.available() and webview_host.PAGE_DIR.is_dir()
+            except Exception:
+                self._pick_available = False
+            if not self._pick_available:
+                print("[gui] HTML pick view unavailable; using the Tk layout")
+        return bool(self._pick_available)
+
+    def _pick_failed(self, error: str) -> None:
+        print(f"[gui] HTML pick view failed: {error}")
+        _log_gui_exception(f"pick view: {error}")
+        self._pick_error = error
+        view, self._web_pick = self._web_pick, None
+        if view is not None:
+            try:
+                view.close()
+            except Exception:
+                pass
+        if self._last_render_args is not None:
+            self._render(*self._last_render_args)
+
+    def _ensure_web_pick(self):
+        if self._web_pick is None:
+            from aram_nn.desktop.webview_host import AppView
+
+            def relay(kind, *rest) -> None:
+                # Same host class as the site tabs; keep their errors apart.
+                self.q.put(("pickview_error" if kind == "siteview_error" else kind, *rest))
+
+            self._web_pick = AppView(
+                self.pick_frame, _icon_cache_dir().parent / "webview2", _icon_cache_dir().parent,
+                on_event=relay,
+            )
+        return self._web_pick
+
+    def _icon_url(self, champion_id: int) -> str:
+        from aram_nn.desktop.webview_host import asset_url
+
+        if self.icon_cache is not None:
+            self.icon_cache.get(int(champion_id))  # fetches to disk on a miss
+        return asset_url(_icon_cache_dir().parent, _icon_cache_dir() / f"{int(champion_id)}.png")
+
+    @staticmethod
+    def _rating_tone(value: float) -> str:
+        if math.isnan(value):
+            return "mid"
+        if value >= 4.0:
+            return "top"
+        if value >= 3.0:
+            return "ok"
+        if value >= 2.0:
+            return "mid"
+        return "low"
+
+    def _web_pick_payload(self, parsed, suggestions, combos=None, current_combo=None) -> dict:
+        """Everything the HTML pick view draws, as plain JSON."""
+        def num(value) -> float | None:
+            return None if value is None or math.isnan(value) else float(value)
+
+        def champ(cid, **extra) -> dict:
+            cid = int(cid)
+            return {"id": cid, "name": self.id_to_name.get(cid, f"#{cid}"), "icon": self._icon_url(cid), **extra}
+
+        owned = {int(c) for c in parsed.my_team_ids}
+        combos = combos or []
+        keep = next((s for s in suggestions if s.source == "keep" and s.is_known), None)
+        team_win = num(getattr(current_combo, "win_prob", None)) if current_combo is not None else None
+        if team_win is None and keep is not None:
+            team_win = num(keep.win_prob)
+
+        ratings = []
+        if current_combo is not None:
+            for r in list(getattr(current_combo, "ratings", None) or [])[:5]:
+                risk = r.label.startswith(("高風險", "風險", "低點"))
+                ratings.append({
+                    "label": r.label, "grade": _fmt_rating(r.value), "detail": r.detail or "",
+                    "tone": self._rating_tone(r.value), "risk": risk,
+                    "severe": r.label.startswith(("高風險", "風險")),
+                })
+
+        bench = [s for s in suggestions if s.source == "bench"]
+        best_idx = next((i for i, s in enumerate(bench) if s.is_known), None)
+        bench_rows = [
+            champ(s.champion_id, known=bool(s.is_known), best=i == best_idx,
+                  delta=num(s.delta * 100) if s.is_known else None,
+                  win=num(s.win_prob) if s.is_known else None,
+                  z=num(s.z_score) if s.is_known else None)
+            for i, s in enumerate(bench)
+        ]
+
+        spells = None
+        cid = int(parsed.my_current_id)
+        if self.quick_source is not None and cid and self._quick_state.get(cid) == "ready":
+            overview = self.quick_source.overview(cid, self._quick_route.get(cid, 0))
+            if overview is not None and overview.spells:
+                from aram_nn.desktop.webview_host import asset_url
+
+                spells = {
+                    "items": [
+                        {"name": s.name, "icon": asset_url(_icon_cache_dir().parent,
+                                                           self.quick_source.icon_path(s.icon, fetch=False))}
+                        for s in overview.spells
+                    ],
+                    "status": self._loadout_status.get(cid, ""),
+                }
+
+        return {
+            "kind": "pick",
+            "title": self.id_to_name.get(cid, f"#{cid}"),
+            "subtitle": f"位置 {parsed.my_cell_id}",
+            "scanned": combos[0].total_combos if combos else 0,
+            "combos": [
+                {"rank": c.rank, "win": num(c.win_prob), "delta": num(c.delta * 100),
+                 "champs": [champ(x, owned=int(x) in owned) for x in c.champion_ids]}
+                for c in combos
+            ],
+            "team": {
+                "win": team_win,
+                "ratings": ratings,
+                "roster": [champ(x, me=int(x) == cid) for x in parsed.my_team_ids],
+                "me": {"name": self.id_to_name.get(cid, f"#{cid}"),
+                       "z": num(keep.z_score) if keep is not None else None},
+            },
+            "spells": spells,
+            "bench": bench_rows,
+        }
+
+    def _push_web_pick(self) -> None:
+        if self._last_render_args is None:
+            return
+        try:
+            payload = self._web_pick_payload(*self._last_render_args)
+            self._ensure_web_pick().show(payload)
+        except Exception as exc:
+            self._pick_failed(f"{type(exc).__name__}: {exc}")
+
+    def _web_action(self, message: dict) -> None:
+        if self._last_render_args is None:
+            return
+        parsed, suggestions, combos, _ = self._last_render_args
+        action = message.get("action")
+        cid = int(parsed.my_current_id)
+        if action == "copy_combo" and combos:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self._combo_clipboard_text(combos[0], suggestions, parsed.my_team_ids))
+        elif action == "copy_bench":
+            self.root.clipboard_clear()
+            self.root.clipboard_append(self._bench_top_clipboard_text(suggestions))
+        elif action in ("apply_spells", "import_items"):
+            def report(text: str, ok) -> None:
+                view = self._web_pick
+                if view is not None:
+                    js = f"window.aramPick&&aramPick.status({json.dumps(text)},{json.dumps(ok)})"
+                    view._invoke(lambda: view._web.ExecuteScriptAsync(js))
+            self._import_loadout(cid, "spells" if action == "apply_spells" else "items", report)
 
     def _render_spell_hint(self, parent: tk.Frame, champion_id: int) -> None:
         """Recommended summoner spells for the champion currently held in champ select."""
@@ -1541,25 +2074,83 @@ class RecommenderApp:
         overview = self.quick_source.overview(champion_id, self._quick_route.get(champion_id, 0))
         if overview is None or not overview.spells:
             return
-        row = tk.Frame(parent, bg=BG)
-        row.pack(fill="x", pady=(0, 8))
-        tk.Label(
-            row, text="推薦召喚師技能", bg=BG, fg=DIM, font=self._font(FONT_SECTION), anchor="w",
-        ).pack(side="left", padx=(0, 6))
+        # One compact line under a hairline: spells on the left, the two
+        # client actions on the right, result text beneath when there is one.
+        tk.Frame(parent, bg=EDGE, height=1).pack(fill="x", pady=(10, 8))
+        row = tk.Frame(parent, bg=SURFACE)
+        row.pack(fill="x")
         for spell in overview.spells:
-            self._asset_icon(row, spell.icon, 24, BG).pack(side="left", padx=(0, 2))
+            self._asset_icon(row, spell.icon, 22, SURFACE).pack(side="left", padx=(0, 2))
         tk.Label(
             row, text=" + ".join(spell.name for spell in overview.spells),
-            bg=BG, fg=FG, font=self._font(FONT_SUB), anchor="w",
-        ).pack(side="left", padx=(4, 0))
+            bg=SURFACE, fg=FG, font=self._font(FONT_SUB), anchor="w",
+        ).pack(side="left", padx=(5, 0))
+        status = tk.Label(parent, text=self._loadout_status.get(champion_id, ""), bg=SURFACE, fg=DIM,
+                          font=self._font(FONT_SECTION), anchor="e")
+        for label, action in (("匯入裝備", "items"), ("套用技能", "spells")):
+            self._ghost_button(
+                row, label, lambda a=action: self._import_loadout(champion_id, a, status),
+                font=FONT_SECTION,
+            ).pack(side="right", padx=(5, 0))
+        status.pack(fill="x", pady=(3, 0))
+
+    def _loadout_blocks(self, overview) -> list[tuple[str, list[int]]]:
+        core = [item.id for item in overview.items if item.is_core]
+        rest = [item.id for item in overview.items if not item.is_core]
+        core_label = "核心裝"
+        if overview.core_wr is not None:
+            core_label += f"（勝率 {_fmt_prob(overview.core_wr)}）"
+        blocks = [(core_label, core), ("完整出裝" if overview.complete else "搭配裝備", rest)]
+        if overview.boot is not None and overview.boot.id not in rest:
+            blocks.append(("鞋子", [overview.boot.id]))
+        return blocks
+
+    def _import_loadout(self, champion_id: int, action: str, status: tk.Label) -> None:
+        """Push spells or an item set to the client off the Tk thread."""
+        overview = self.quick_source.overview(champion_id, self._quick_route.get(champion_id, 0)) \
+            if self.quick_source is not None else None
+        if overview is None:
+            return
+        spell_ids = [spell.id for spell in overview.spells]
+        blocks = self._loadout_blocks(overview)
+        name = self.id_to_name.get(champion_id, f"#{champion_id}")
+
+        def work() -> None:
+            from aram_nn.lcu.loadout import apply_item_set, apply_summoner_spells
+            creds = get_credentials()
+            if creds is None:
+                result = (False, "找不到客戶端")
+            else:
+                with LCUClient(creds) as lcu:
+                    if action == "spells":
+                        result = apply_summoner_spells(lcu, get_champ_select_session(lcu), spell_ids)
+                    else:
+                        result = apply_item_set(lcu, champion_id, name, blocks)
+            self._loadout_status[champion_id] = result[1]
+
+            def show() -> None:
+                if callable(status):  # web view: report through the page
+                    status(result[1], bool(result[0]))
+                    return
+                try:
+                    status.config(text=result[1], fg=GREEN if result[0] else RED)
+                except tk.TclError:  # row was re-rendered meanwhile
+                    pass
+            self.root.after(0, show)
+
+        if callable(status):
+            status("匯入中…", None)
+        else:
+            status.config(text="匯入中…", fg=DIM)
+        threading.Thread(target=work, name=f"loadout-{action}", daemon=True).start()
 
     def _render_ingame(self, snapshot: dict, current_combo=None, enemy_combo=None) -> None:
         self._last_render_args = None
         self._last_ingame_args = (snapshot, current_combo, enemy_combo)
         self.id_to_name.update(snapshot.get("names") or {})
 
-        self.header.config(text="In-game · 10 champions detected", fg=FG)
-        self.subheader.config(text="Champ-select bench is gone; showing current 5v5 only.")
+        self.header.config(text="遊戲中 · 5v5", fg=FG)
+        self.subheader.config(text="選角已結束：顯示目前對戰的預估勝率、隊伍評分與快速出裝。")
         self._clear_body()
 
         active = snapshot.get("active_champion_id")
@@ -1575,39 +2166,37 @@ class RecommenderApp:
                 else float("nan")
             )
 
-        summary = tk.Frame(self.body, bg=BG)
-        summary.pack(fill="x", pady=(0, 8))
-        tk.Label(
-            summary, text=f"5v5 estimate {_fmt_prob(current_prob)}",
-            bg=BG, fg=FG, anchor="w", font=self._font(FONT_HEAD),
-        ).pack(side="left")
-
-        if current_combo is not None and getattr(current_combo, "ratings", None):
-            self._render_team_ratings(
-                self.body,
-                current_combo.ratings,
-                getattr(current_combo, "ad_share", float("nan")),
-            )
-
         columns = tk.Frame(self.body, bg=BG)
-        columns.pack(fill="both", expand=True, pady=(4, 0))
+        columns.pack(fill="both", expand=True)
         columns.grid_columnconfigure(0, weight=1, uniform="ingame")
         columns.grid_columnconfigure(1, weight=1, uniform="ingame")
 
-        left = tk.Frame(columns, bg=BG)
-        left.grid(row=0, column=0, sticky="new", padx=(0, 12))
-        right = tk.Frame(columns, bg=BG)
-        right.grid(row=0, column=1, sticky="new", padx=(12, 0))
+        left, _, left_inner = self._panel(columns, "我方")
+        left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        right, _, right_inner = self._panel(columns, "敵方")
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+        self._render_score_line(left_inner, "5v5 預估勝率", current_prob, SURFACE)
+        if current_combo is not None and getattr(current_combo, "ratings", None):
+            self._render_team_ratings(
+                left_inner,
+                current_combo.ratings,
+                getattr(current_combo, "ad_share", float("nan")),
+            )
+        enemy_prob = float("nan") if math.isnan(current_prob) else 1 - current_prob
+        self._render_score_line(right_inner, "敵方預估勝率", enemy_prob, SURFACE)
+        if enemy_combo is not None and getattr(enemy_combo, "ratings", None):
+            self._render_team_ratings(
+                right_inner, enemy_combo.ratings, getattr(enemy_combo, "ad_share", float("nan")),
+            )
 
         self._render_live_team(
-            left,
-            "Your team",
+            left_inner,
             snapshot.get("my_team_ids") or [],
             active_champion_id=snapshot.get("active_champion_id"),
         )
         self._render_live_team(
-            right,
-            "Enemy team",
+            right_inner,
             snapshot.get("enemy_team_ids") or [],
         )
         self._grow_to_fit()
@@ -1680,8 +2269,9 @@ class RecommenderApp:
         self._request_quick_picks(champion_id)
         small = (FONT_SUB[0], 8)
 
-        panel = tk.Frame(parent, bg=SURFACE)
-        panel.pack(fill="x", pady=(0, 10))
+        panel = tk.Frame(parent, bg=SURFACE, highlightthickness=1,
+                         highlightbackground=EDGE, highlightcolor=EDGE)
+        panel.pack(fill="x", pady=(0, 12))
         inner = tk.Frame(panel, bg=SURFACE)
         inner.pack(fill="x", padx=12, pady=(8, 10))
 
@@ -1864,28 +2454,25 @@ class RecommenderApp:
     def _render_live_team(
         self,
         parent: tk.Frame,
-        title: str,
         champion_ids,
         active_champion_id: int | None = None,
     ) -> None:
-        tk.Label(
-            parent, text=title, bg=BG, fg=DIM,
-            font=self._font(FONT_SECTION), anchor="w",
-        ).pack(fill="x", pady=(0, 4))
-
+        roster = tk.Frame(parent, bg=SURFACE)
+        roster.pack(fill="x", pady=(10, 0))
         for cid in champion_ids:
-            row = tk.Frame(parent, bg=ROW if cid == active_champion_id else BG)
-            row.pack(fill="x", pady=1, ipady=2)
+            is_me = cid == active_champion_id
+            row_bg = ROW_HI if is_me else SURFACE
+            row = tk.Frame(roster, bg=row_bg)
+            row.pack(fill="x", pady=1, ipady=1)
             self._configure_team_row(row)
-            self._icon_cell(row, int(cid), bg=ROW if cid == active_champion_id else BG)
+            self._icon_cell(row, int(cid), bg=row_bg)
 
             name = self.id_to_name.get(int(cid), f"#{cid}")
-            marker = "You · " if cid == active_champion_id else ""
             tk.Label(
-                row, text=f"{marker}{name}",
-                bg=ROW if cid == active_champion_id else BG,
-                fg=GOLD if cid == active_champion_id else FG,
-                font=self._font(FONT_NAME_B if cid == active_champion_id else FONT_NAME),
+                row, text=f"{name}　你" if is_me else name,
+                bg=row_bg,
+                fg=GOLD if is_me else FG,
+                font=self._font(FONT_NAME_B if is_me else FONT_NAME),
                 anchor="w",
             ).grid(row=0, column=1, sticky="w")
 
@@ -1895,12 +2482,12 @@ class RecommenderApp:
         row.grid_columnconfigure(1, weight=1)
 
     def _configure_bench_row(self, row: tk.Frame) -> None:
-        """Bench rows: icon + delta + prob + z + name."""
+        """Bench rows: icon + name + delta + prob + z (numbers right-aligned)."""
         row.grid_columnconfigure(0, minsize=self.COL_ICON)
-        row.grid_columnconfigure(1, minsize=self.COL_DELTA)
-        row.grid_columnconfigure(2, minsize=self.COL_PROB)
-        row.grid_columnconfigure(3, minsize=self.COL_Z)
-        row.grid_columnconfigure(4, weight=1)
+        row.grid_columnconfigure(1, weight=1)
+        row.grid_columnconfigure(2, minsize=self.COL_DELTA)
+        row.grid_columnconfigure(3, minsize=self.COL_PROB)
+        row.grid_columnconfigure(4, minsize=self.COL_Z)
 
     def _render_team_section(self, parent, parsed, suggestions, current_combo=None) -> None:
         """Show all 5 blue-team champions in the left column.
@@ -1918,78 +2505,104 @@ class RecommenderApp:
             else keep.win_prob if keep is not None else float("nan")
         )
 
-        current = tk.Frame(parent, bg=BG)
-        current.pack(fill="x", pady=(0, 6))
-        tk.Label(
-            current, text="當前勝率",
-            bg=BG, fg=DIM, anchor="w", font=self._font(FONT_SECTION),
-        ).pack(side="left", padx=(0, 6))
-        tk.Label(
-            current, text=_fmt_prob(current_prob),
-            bg=BG, fg=FG, anchor="w", font=self._font(FONT_SCORE),
-        ).pack(side="left")
+        self._render_score_line(parent, "目前預估勝率", current_prob, SURFACE)
 
         if current_combo is not None and getattr(current_combo, "ratings", None):
-            self._render_team_ratings(parent, current_combo.ratings, getattr(current_combo, "ad_share", float("nan")))
+            self._render_team_ratings(parent, current_combo.ratings,
+                                      getattr(current_combo, "ad_share", float("nan")), bg=SURFACE)
 
+        # Teammates are context, not choices: one portrait strip (same idiom
+        # as the combo rows) with your own pick ringed in gold, then a single
+        # line naming your champion and its z anchor.
+        roster = tk.Frame(parent, bg=SURFACE)
+        roster.pack(fill="x", pady=(10, 0))
         for cid in parsed.my_team_ids:
-            is_me = (cid == parsed.my_current_id)
-            row = tk.Frame(parent, bg=BG)
-            row.pack(fill="x", pady=1)
-            self._configure_team_row(row)
+            is_me = cid == parsed.my_current_id
+            ring = tk.Frame(roster, bg=GOLD if is_me else SURFACE)
+            ring.pack(side="left", padx=(0, 4))
+            self._packed_icon(ring, int(cid), bg=SURFACE, padx=2)
+        me = self.id_to_name.get(parsed.my_current_id, f"#{parsed.my_current_id}")
+        line = tk.Frame(parent, bg=SURFACE)
+        line.pack(fill="x", pady=(5, 0))
+        tk.Label(line, text=f"你：{me}", bg=SURFACE, fg=GOLD, font=self._font(FONT_NAME_B),
+                 anchor="w").pack(side="left")
+        if own_z is not None:
+            tk.Label(line, text=f"z {_fmt_signed_z(own_z)}", bg=SURFACE, fg=self._z_color(own_z),
+                     font=self._font(FONT_NUM)).pack(side="left", padx=(8, 0))
 
-            self._icon_cell(row, cid, bg=BG)
+    def _render_score_line(self, parent: tk.Frame, label: str, prob: float, bg: str) -> None:
+        """Headline probability: small caption over a large figure."""
+        box = tk.Frame(parent, bg=bg)
+        box.pack(fill="x", pady=(0, 2))
+        tk.Label(box, text=_fmt_prob(prob), bg=bg, fg=FG, font=self._font(FONT_SCORE),
+                 anchor="w").pack(side="left")
+        tk.Label(box, text=label, bg=bg, fg=MUTED, font=self._font(FONT_SECTION),
+                 anchor="sw").pack(side="left", padx=(10, 0), pady=(0, 7), fill="y")
 
-            name = self.id_to_name.get(cid, f"#{cid}")
-            if is_me:
-                z_str = f"   {_fmt_signed_z(own_z)}" if own_z is not None else ""
-                tk.Label(
-                    row, text=f"你 · {name}{z_str}",
-                    bg=BG, fg=GOLD, font=self._font(FONT_NAME_B), anchor="w",
-                ).grid(row=0, column=1, sticky="w")
-            else:
-                tk.Label(
-                    row, text=name, bg=BG, fg=DIM,
-                    font=self._font(FONT_NAME), anchor="w",
-                ).grid(row=0, column=1, sticky="w")
+    def _scroll_area(self, parent, bg):
+        """Fill the rest of *parent* with a wheel-scrollable frame.
 
-    def _render_bench_table(self, parent, suggestions) -> None:
+        No chrome scrollbar: a 3px gold-dim thumb appears on the right only
+        when the content overflows, so a long bench never gets clipped."""
+        wrap = tk.Frame(parent, bg=bg)
+        wrap.pack(fill="both", expand=True)
+        canvas = tk.Canvas(wrap, bg=bg, highlightthickness=0, bd=0)
+        thumb = tk.Canvas(wrap, bg=bg, width=3, highlightthickness=0, bd=0)
+        thumb.pack(side="right", fill="y", padx=(4, 0))
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=bg)
+        win = canvas.create_window(0, 0, window=inner, anchor="nw")
+
+        def sync(_event=None):
+            canvas.configure(scrollregion=(0, 0, inner.winfo_reqwidth(), inner.winfo_reqheight()))
+            canvas.itemconfigure(win, width=canvas.winfo_width())
+            thumb.delete("all")
+            lo, hi = canvas.yview()
+            if hi - lo < 0.999:
+                h = thumb.winfo_height()
+                thumb.create_rectangle(0, lo * h, 3, hi * h, fill=GOLD_DIM, width=0)
+
+        def wheel(event):
+            if canvas.yview() != (0.0, 1.0):
+                canvas.yview_scroll(int(-event.delta / 120), "units")
+                sync()
+            return "break"
+
+        def bind_tree(widget):
+            widget.bind("<MouseWheel>", wheel, add="+")
+            for child in widget.winfo_children():
+                bind_tree(child)
+
+        canvas.configure(yscrollincrement=20)
+        inner.bind("<Configure>", lambda e: (sync(), bind_tree(inner)))
+        canvas.bind("<Configure>", sync)
+        canvas.bind("<MouseWheel>", wheel)
+        return inner
+
+    def _render_bench_table(self, head, parent, suggestions) -> None:
         bench = [s for s in suggestions if s.source == "bench"]
 
-        title_bar = tk.Frame(parent, bg=BG)
-        title_bar.pack(fill="x", pady=(0, 4))
-        tk.Label(
-            title_bar, text="替補池",
-            bg=BG, fg=DIM, anchor="w", font=self._font(FONT_SECTION),
-        ).pack(side="left")
-        bench_copy_btn = tk.Button(
-            title_bar,
-            text=COPY_ICON,
-            command=lambda pool=suggestions: self._copy_bench_top(pool, bench_copy_btn),
-            bg=SURFACE,
-            fg=FG,
-            activebackground=BEST_BG,
-            activeforeground=FG,
-            relief="flat",
-            bd=0,
-            width=2,
-            padx=5,
-            pady=1,
-            font=self._font(FONT_ICON),
-            cursor="hand2",
-            takefocus=0,
+        bench_copy_btn = self._ghost_button(
+            head, f"{COPY_ICON} 複製前 7",
+            lambda pool=suggestions: self._copy_bench_top(pool, bench_copy_btn),
         )
+        bench_copy_btn._idle_text = f"{COPY_ICON} 複製前 7"  # type: ignore[attr-defined]
         bench_copy_btn.pack(side="right")
 
-        header = tk.Frame(parent, bg=BG)
-        header.pack(fill="x", pady=(0, 2))
+        if not bench:
+            tk.Label(parent, text="替補池目前是空的。", bg=SURFACE, fg=MUTED,
+                     font=self._font(FONT_SUB), anchor="w").pack(fill="x")
+            return
+
+        # Name first (what you scan for), numbers right-aligned after it.
+        header = tk.Frame(parent, bg=SURFACE)
+        header.pack(fill="x", pady=(0, 3))
         self._configure_bench_row(header)
-        self._cell(header, 1, "MLΔ", DIM, bg=BG, font=FONT_SECTION)
-        self._cell(header, 2, "換後", DIM, bg=BG, font=FONT_SECTION)
-        self._cell(header, 3, "z", DIM, bg=BG, font=FONT_SECTION)
-        self._cell(header, 4, "候選", DIM, bg=BG, font=FONT_SECTION)
+        for col, text in ((1, "候選"), (2, "MLΔ"), (3, "換後"), (4, "z")):
+            self._cell(header, col, text, MUTED, bg=SURFACE, font=FONT_SECTION, anchor="w" if col == 1 else "e")
 
         best_idx = next((i for i, s in enumerate(bench) if s.is_known), None)
+        parent = self._scroll_area(parent, SURFACE)
 
         for i, s in enumerate(bench):
             is_best = i == best_idx
@@ -2005,87 +2618,69 @@ class RecommenderApp:
             self._icon_cell(row, s.champion_id, bg=row_bg)
 
             if not s.is_known:
-                self._cell(row, 1, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 2, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 3, "n/a", MUTED, bg=row_bg, font=FONT_NUM)
-                self._cell(row, 4, f"{name}   (not in vocab)", MUTED, bg=row_bg, font=FONT_NAME)
+                self._cell(row, 1, f"{name}（無資料）", MUTED, bg=row_bg, font=FONT_NAME)
+                for col in (2, 3, 4):
+                    self._cell(row, col, "—", MUTED, bg=row_bg, font=FONT_NUM, anchor="e")
                 continue
 
             delta_pp = s.delta * 100
-            delta_font = FONT_NUM_BEST if is_best else FONT_NUM
+            delta_font = FONT_NUM_BEST if is_best else FONT_NUM_B
             name_color = (GREEN if s.delta > 0 else RED) if is_best else FG
-            marker = "首選 · " if is_best else ""
 
-            self._cell(row, 1, _fmt_signed_pct(delta_pp), self._delta_color(s.delta), bg=row_bg, font=delta_font)
-            self._cell(row, 2, _fmt_prob(s.win_prob), FG, bg=row_bg, font=FONT_NUM)
-            self._cell(row, 3, _fmt_signed_z(s.z_score), self._z_color(s.z_score), bg=row_bg, font=FONT_NUM)
-            self._cell(row, 4, f"{marker}{name}", name_color, bg=row_bg, font=FONT_NAME_B if is_best else FONT_NAME)
+            name_cell = tk.Frame(row, bg=row_bg)
+            name_cell.grid(row=0, column=1, sticky="w")
+            tk.Label(name_cell, text=name, bg=row_bg, fg=name_color,
+                     font=self._font(FONT_NAME_B if is_best else FONT_NAME), anchor="w").pack(side="left")
+            if is_best:
+                tk.Label(name_cell, text="首選", bg=row_bg, fg=name_color,
+                         font=self._font(FONT_SECTION)).pack(side="left", padx=(6, 0))
+            self._cell(row, 2, _fmt_signed_pct(delta_pp), self._delta_color(s.delta), bg=row_bg,
+                       font=delta_font, anchor="e")
+            self._cell(row, 3, _fmt_prob(s.win_prob), FG, bg=row_bg, font=FONT_NUM, anchor="e")
+            self._cell(row, 4, _fmt_signed_z(s.z_score), self._z_color(s.z_score), bg=row_bg,
+                       font=FONT_NUM, anchor="e")
 
-    def _render_combo_section(self, parent, combos, pool=None, owned_ids=None, wraplength: int = 260) -> None:
+    def _render_combo_section(self, head, parent, combos, pool=None, owned_ids=None) -> None:
         if not combos:
             return
 
-        total = combos[0].total_combos
-        copy_bar = tk.Frame(parent, bg=BG)
-        copy_bar.pack(fill="x", pady=(0, 4))
-        tk.Label(
-            copy_bar, text=f"可用池最佳 5 人 · 掃描 {total} 組",
-            bg=BG, fg=DIM, anchor="w", font=self._font(FONT_SECTION),
-        ).pack(side="left")
-        copy_btn = tk.Button(
-            copy_bar,
-            text=COPY_ICON,
-            command=lambda c=combos[0], p=pool, o=owned_ids: self._copy_combo(c, p, o, copy_btn),
-            bg=SURFACE,
-            fg=FG,
-            activebackground=BEST_BG,
-            activeforeground=FG,
-            relief="flat",
-            bd=0,
-            width=2,
-            padx=5,
-            pady=1,
-            font=self._font(FONT_ICON),
-            cursor="hand2",
-            takefocus=0,
+        copy_btn = self._ghost_button(
+            head, f"{COPY_ICON} 複製推薦",
+            lambda c=combos[0], p=pool, o=owned_ids: self._copy_combo(c, p, o, copy_btn),
         )
+        copy_btn._idle_text = f"{COPY_ICON} 複製推薦"  # type: ignore[attr-defined]
         copy_btn.pack(side="right")
 
+        # Every rank gets the same portrait strip, so the three options can be
+        # compared at a glance; rank 1 is lifted, not re-drawn differently.
         for combo in combos:
-            row_bg = SURFACE if combo.rank == 1 else ROW
+            best = combo.rank == 1
+            row_bg = ROW_HI if best else ROW
             row = tk.Frame(parent, bg=row_bg)
-            row.pack(fill="x", pady=1, ipady=3)
-            row.grid_columnconfigure(0, minsize=38)
+            row.pack(fill="x", pady=(0, 3), ipady=3)
+            row.grid_columnconfigure(0, minsize=40)
             row.grid_columnconfigure(1, weight=1)
-            row.grid_columnconfigure(2, minsize=58)
-            row.grid_columnconfigure(3, minsize=64)
+            row.grid_columnconfigure(2, minsize=74)
+            row.grid_columnconfigure(3, minsize=78)
 
             tk.Label(
-                row, text=f"#{combo.rank}", bg=row_bg,
-                fg=GOLD if combo.rank == 1 else DIM,
-                font=self._font(FONT_NUM_B if combo.rank == 1 else FONT_NUM),
-                anchor="w",
-            ).grid(row=0, column=0, sticky="w", padx=(8, 4))
+                row, text=str(combo.rank), bg=row_bg,
+                fg=GOLD if best else MUTED,
+                font=self._font(FONT_NUM_BEST if best else FONT_NUM_B),
+            ).grid(row=0, column=0)
 
-            names = [self.id_to_name.get(cid, f"#{cid}") for cid in combo.champion_ids]
-            if combo.rank == 1:
-                self._combo_icon_strip(row, combo.champion_ids, row_bg)
-            else:
-                tk.Label(
-                    row, text=" / ".join(names), bg=row_bg, fg=FG,
-                    font=self._font(FONT_NAME), anchor="w", wraplength=wraplength, justify="left",
-                ).grid(row=0, column=1, sticky="ew", padx=(0, 8))
+            self._combo_icon_strip(row, combo.champion_ids, row_bg)
 
             tk.Label(
                 row, text=_fmt_prob(combo.win_prob), bg=row_bg, fg=FG,
-                font=self._font(FONT_NUM), anchor="e",
-            ).grid(row=0, column=2, sticky="e", padx=(0, 8))
+                font=self._font(FONT_NUM_BEST if best else FONT_NUM_B), anchor="e",
+            ).grid(row=0, column=2, sticky="e", padx=(0, 4))
 
             tk.Label(
                 row, text=_fmt_signed_pct(combo.delta * 100), bg=row_bg,
                 fg=self._delta_color(combo.delta), font=self._font(FONT_NUM),
                 anchor="e",
-            ).grid(row=0, column=3, sticky="e", padx=(0, 8))
+            ).grid(row=0, column=3, sticky="e", padx=(0, 10))
 
     def _combo_icon_strip(self, parent: tk.Frame, champion_ids, bg: str) -> None:
         strip = tk.Frame(parent, bg=bg)
@@ -2093,41 +2688,43 @@ class RecommenderApp:
         for cid in champion_ids:
             self._packed_icon(strip, int(cid), bg=bg)
 
-    def _render_team_ratings(self, parent, ratings, ad_share: float = float("nan")) -> None:
-        header = tk.Frame(parent, bg=BG)
-        header.pack(fill="x", pady=(5, 3))
-        tk.Label(
-            header, text="隊伍評分",
-            bg=BG, fg=DIM, anchor="w", font=self._font(FONT_SECTION),
-        ).pack(side="left")
+    def _render_team_ratings(self, parent, ratings, ad_share: float = float("nan"), bg: str = SURFACE) -> None:
+        """Strengths as equal stat tiles (caption over grade); the risk line
+        gets its own full-width strip so its long label is never clipped."""
+        ratings = list(ratings[:5])
+        risks = [r for r in ratings if r.label.startswith(("高風險", "風險", "低點"))]
+        tiles = [r for r in ratings if r not in risks]
 
-        grid = tk.Frame(parent, bg=BG)
-        grid.pack(fill="x", pady=(0, 4))
-        column_count = min(max(len(ratings), 1), 5)
-        for col in range(column_count):
+        grid = tk.Frame(parent, bg=bg)
+        grid.pack(fill="x", pady=(6, 0))
+        for col in range(max(len(tiles), 1)):
             grid.grid_columnconfigure(col, weight=1, uniform="team_rating")
+        for col, rating in enumerate(tiles):
+            tile = tk.Frame(grid, bg=ROW)
+            tile.grid(row=0, column=col, sticky="nsew", padx=(0 if col == 0 else 4, 0))
+            tk.Label(tile, text=rating.label, bg=ROW, fg=MUTED, font=self._font(FONT_SECTION),
+                     anchor="w").pack(fill="x", padx=8, pady=(5, 0))
+            # Grade on its own line, detail (e.g. "82%", "3前排") under it:
+            # side by side they clipped in a narrow tile.
+            tk.Label(tile, text=_fmt_rating(rating.value), bg=ROW,
+                     fg=self._rating_color(rating.value), font=self._font(FONT_NUM_BEST),
+                     anchor="w").pack(fill="x", padx=8)
+            tk.Label(tile, text=rating.detail or " ", bg=ROW, fg=MUTED, font=self._font(FONT_SECTION),
+                     anchor="w").pack(fill="x", padx=8, pady=(0, 5))
 
-        for i, rating in enumerate(ratings[:5]):
-            row = i // column_count
-            col = i % column_count
-            chip = tk.Frame(grid, bg=ROW, highlightthickness=1, highlightbackground=DIVIDER)
-            chip.grid(row=row, column=col, sticky="ew", padx=(0 if col == 0 else 4, 0), pady=(0, 3))
-            label_color = RED if rating.label.startswith(("高風險", "風險")) else DIM
-
-            tk.Label(
-                chip, text=rating.label, bg=ROW, fg=label_color,
-                font=self._font(FONT_SECTION), anchor="w",
-            ).pack(side="left", padx=(5, 3), pady=2)
-            tk.Label(
-                chip, text=_rating_value_text(rating), bg=ROW,
-                fg=self._rating_color(rating.value), font=self._font(FONT_NUM_B),
-                anchor="w",
-            ).pack(side="left", pady=2)
-            if rating.detail and rating.label != "AD佔比":
-                tk.Label(
-                    chip, text=rating.detail, bg=ROW, fg=MUTED,
-                    font=self._font(FONT_SECTION), anchor="e",
-                ).pack(side="right", padx=(3, 5), pady=2)
+        for rating in risks:
+            severe = rating.label.startswith(("高風險", "風險"))
+            strip_bg = WARN_BG if severe else ROW
+            strip = tk.Frame(parent, bg=strip_bg)
+            strip.pack(fill="x", pady=(4, 0))
+            tk.Frame(strip, bg=RED if severe else GOLD_DIM, width=3).pack(side="left", fill="y")
+            tk.Label(strip, text=rating.label, bg=strip_bg, fg=RED if severe else DIM,
+                     font=self._font(FONT_SUB), anchor="w").pack(side="left", padx=(8, 6), pady=4)
+            tk.Label(strip, text=_rating_value_text(rating), bg=strip_bg,
+                     fg=self._rating_color(rating.value), font=self._font(FONT_NUM_B)).pack(side="left")
+            if rating.detail:
+                tk.Label(strip, text=rating.detail, bg=strip_bg, fg=MUTED, font=self._font(FONT_SECTION),
+                         anchor="e").pack(side="right", padx=(6, 8))
 
     def _combo_substitute_ids(self, recommended_combo, pool, count: int = 2) -> list[int]:
         """Champion ids for the top `count` available-pool picks not in the best-5.
@@ -2173,10 +2770,10 @@ class RecommenderApp:
         self.root.clipboard_append(self._combo_clipboard_text(recommended_combo, pool, owned_ids))
         self.root.update_idletasks()
         if button is not None:
-            button.config(text=COPIED_ICON, fg=GREEN)
+            button.config(text=f"{COPIED_ICON} 已複製", fg=GREEN)
             self.root.after(
                 1200,
-                lambda: button.winfo_exists() and button.config(text=COPY_ICON, fg=FG),
+                lambda: button.winfo_exists() and button.config(text=getattr(button, "_idle_text", COPY_ICON), fg=DIM),
             )
 
     def _champ_meta_wr(self, champion_id: int) -> float | None:
@@ -2232,10 +2829,10 @@ class RecommenderApp:
         self.root.clipboard_append(self._bench_top_clipboard_text(pool))
         self.root.update_idletasks()
         if button is not None:
-            button.config(text=COPIED_ICON, fg=GREEN)
+            button.config(text=f"{COPIED_ICON} 已複製", fg=GREEN)
             self.root.after(
                 1200,
-                lambda: button.winfo_exists() and button.config(text=COPY_ICON, fg=FG),
+                lambda: button.winfo_exists() and button.config(text=getattr(button, "_idle_text", COPY_ICON), fg=DIM),
             )
 
     def _icon_cell(self, parent: tk.Frame, champion_id: int, bg: str = BG) -> None:
@@ -2258,14 +2855,15 @@ class RecommenderApp:
                 parent, text="", bg=bg, width=4, height=2,
             ).grid(row=0, column=0, padx=(0, 6))
 
-    def _packed_icon(self, parent: tk.Frame, champion_id: int, bg: str = BG) -> None:
+    def _packed_icon(self, parent: tk.Frame, champion_id: int, bg: str = BG, padx=(0, 6)) -> None:
         photo = self.icon_cache.get(champion_id) if self.icon_cache else None
         if photo is not None:
             lbl = tk.Label(parent, image=photo, bg=bg, bd=0)
             lbl.image = photo  # type: ignore[attr-defined]
-            lbl.pack(side="left", padx=(0, 6))
+            lbl.pack(side="left", padx=padx, pady=padx if isinstance(padx, int) else 0)
         else:
-            tk.Label(parent, text="", bg=bg, width=4, height=2).pack(side="left", padx=(0, 6))
+            tk.Label(parent, text="", bg=bg, width=4, height=2).pack(
+                side="left", padx=padx, pady=padx if isinstance(padx, int) else 0)
 
     @staticmethod
     def _delta_color(value: float) -> str:
@@ -2301,7 +2899,7 @@ class RecommenderApp:
 
     def _cell(
         self, parent: tk.Frame, col: int, text: str, fg: str,
-        bg: str = BG, font: tuple = FONT_NUM,
+        bg: str = BG, font: tuple = FONT_NUM, anchor: str = "w",
     ) -> None:
         """Place a left-aligned label at `col` in the row's shared grid.
 
@@ -2312,8 +2910,8 @@ class RecommenderApp:
         """
         tk.Label(
             parent, text=text, bg=bg, fg=fg,
-            font=self._font(font), anchor="w",
-        ).grid(row=0, column=col, sticky="w")
+            font=self._font(font), anchor=anchor,
+        ).grid(row=0, column=col, sticky=anchor, padx=(0, 10) if anchor == "e" and col == 4 else 0)
 
 
 # ---------- Entry point ----------

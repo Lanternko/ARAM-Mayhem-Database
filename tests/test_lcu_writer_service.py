@@ -144,6 +144,92 @@ def test_writer_classic_score_claim_prefers_yield_over_wait_time(tmp_path: pathl
     assert claimed["claim_lane"] == "classic_score"
 
 
+@pytest.mark.parametrize("arm", ["treatment", "control"])
+def test_rediscovery_requeue_honours_revisit_arm_cooldown(tmp_path: pathlib.Path, arm: str) -> None:
+    """Seeing a crawled player in a newer game must not bypass the revisit
+    policy with the flat 45s requeue cooldown."""
+    from datetime import datetime, timedelta, timezone
+
+    now = [5_000_000]
+    service = WriterService(tmp_path / "games.db", clock_ms=lambda: now[0])
+    service.enqueue_player("p", discovered_match_created_ms=100)
+    first_seen = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    # Crawled long ago, productive, nothing pending: the state finalize leaves
+    # behind when the history held no game newer than the one we last saw.
+    service.con.execute(
+        "UPDATE crawl_seen SET processed=1, process_count=4, new_games_found=40, "
+        "first_seen_at=?, last_crawled_match_created_ms=100 WHERE puuid='p'",
+        (first_seen,),
+    )
+    service.con.execute("UPDATE crawl_queue SET status='done' WHERE puuid='p'")
+    service.con.commit()
+    with patch("aram_nn.lcu.snowball.revisit_arm", return_value=arm):
+        result = service.handle(
+            {
+                "version": 1,
+                "command": "snowball_queue",
+                "operation": "enqueue",
+                "request_id": f"rediscover-{arm}",
+                "puuid": "p",
+                "discovered_match_created_ms": 200,
+                "requeue_cooldown_ms": 45_000,
+            },
+            channel_id="w",
+        )
+    assert result["result"] == "requeued"
+    status, eligible = service.con.execute(
+        "SELECT status, eligible_at_ms FROM crawl_queue WHERE puuid='p'"
+    ).fetchone()
+    assert status == "pending"
+    if arm == "treatment":
+        # 40 games over 48h -> ~18h to accumulate 15; floored at the 24h minimum.
+        assert eligible - now[0] >= 24 * HOUR_MS
+    else:
+        # Control keeps the shipped yield tiers: productive players use the base.
+        assert eligible - now[0] == 45_000
+
+
+@pytest.mark.parametrize("arm", ["treatment", "control"])
+def test_saved_game_does_not_instantly_requeue_done_participant(tmp_path: pathlib.Path, arm: str) -> None:
+    """Saving a game must not flip a done participant straight back to eligible:
+    live, players were re-crawled seconds after finalize, often for a game older
+    than their last crawl."""
+    from datetime import datetime, timedelta, timezone
+
+    now = [5_000_000]
+    service = WriterService(tmp_path / "games.db", clock_ms=lambda: now[0])
+    service.enqueue_player("p1", discovered_match_created_ms=100)
+    first_seen = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    service.con.execute(
+        "UPDATE crawl_seen SET processed=1, process_count=4, new_games_found=40, "
+        "first_seen_at=?, last_crawled_match_created_ms=200 WHERE puuid='p1'",
+        (first_seen,),
+    )
+    service.con.execute("UPDATE crawl_queue SET status='done', eligible_at_ms=0 WHERE puuid='p1'")
+    service.con.commit()
+
+    def commit(game_id: str, created_ms: int) -> None:
+        claim = service.handle({"version": 1, "command": "game_claim", "request_id": f"c-{game_id}", "game_id": game_id, "now_ms": now[0]}, channel_id="w")
+        record = {**_game(game_id), "created_ms": created_ms}
+        response = service.handle({"version": 1, "command": "commit_game", "request_id": f"g-{game_id}", "game_id": game_id, "token": claim["token"], "generation": claim["generation"], "record": record, "now_ms": now[0]}, channel_id="w")
+        assert response["status"] == "COMMITTED"
+
+    def queue_state() -> tuple[str, int]:
+        return tuple(service.con.execute("SELECT status, eligible_at_ms FROM crawl_queue WHERE puuid='p1'").fetchone())
+
+    with patch("aram_nn.lcu.snowball.revisit_arm", return_value=arm):
+        # A game no newer than the last crawl holds nothing new for this player.
+        commit("old", 150)
+        assert queue_state() == ("done", 0)
+        commit("new", 300)
+    status, eligible = queue_state()
+    assert status == "pending"
+    if arm == "treatment":
+        assert eligible - now[0] >= 24 * HOUR_MS
+    else:
+        assert eligible - now[0] == 45_000
+
+
 def test_writer_finalize_persists_classic_yield_columns(tmp_path: pathlib.Path) -> None:
     service = WriterService(tmp_path / "games.db")
     service.enqueue_player("classic")

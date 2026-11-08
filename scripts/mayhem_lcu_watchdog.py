@@ -472,6 +472,49 @@ def league_main_mb() -> float:
     return float(league_main_metrics()["pressure_mb"])
 
 
+def _is_riot_client_name(name: str) -> bool:
+    return name.lower().replace(" ", "").startswith("riotclient")
+
+
+def riot_client_metrics() -> dict[str, Any]:
+    """Largest Riot Client process (RiotClientServices / "Riot Client.exe").
+
+    The LeagueClient restart threshold never saw this process, yet since
+    2026-10-21 the "Riot Client.exe" UX host repeatedly leaked to 9-16GB
+    private memory (2026-11-08: 1.4GB -> 10.8GB within one hour), drove system
+    commit past the resource-guard pause threshold and starved the crawler.
+    """
+    best: dict[str, Any] = {
+        "pid": None,
+        "name": None,
+        "rss_mb": 0.0,
+        "private_mb": None,
+        "pressure_mb": 0.0,
+    }
+    for proc in iter_processes():
+        try:
+            name = proc.info.get("name") or ""
+            if not _is_riot_client_name(name):
+                continue
+            memory_info = proc.info.get("memory_info")
+            rss_mb = mb(memory_info.rss) if memory_info else 0.0
+            private = getattr(memory_info, "private", None) if memory_info else None
+            private_mb = mb(private) if private is not None else None
+            pressure_mb = max(rss_mb, private_mb) if private_mb is not None else rss_mb
+            pid = proc.info.get("pid")
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if pressure_mb > best["pressure_mb"]:
+            best = {
+                "pid": pid,
+                "name": name,
+                "rss_mb": rss_mb,
+                "private_mb": private_mb,
+                "pressure_mb": pressure_mb,
+            }
+    return best
+
+
 def lockfile_candidates() -> list[Path]:
     """Prefer the install dir of a running client; fall back to known paths."""
     paths: list[Path] = []
@@ -647,6 +690,34 @@ def close_league_client(grace_sec: int = 20) -> list[int]:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
     return closed
+
+
+def close_riot_client(grace_sec: int = 10) -> list[int]:
+    """Stop every Riot Client process so the next start is a cold boot."""
+    targets = []
+    for proc in iter_processes():
+        try:
+            if _is_riot_client_name(proc.info.get("name") or ""):
+                targets.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    closed: list[int] = []
+    for proc in targets:
+        try:
+            proc.terminate()
+            closed.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    _, alive = psutil.wait_procs(targets, timeout=grace_sec)
+    for proc in alive:
+        try:
+            proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return closed
+
+
+RIOT_CLIENT_RESTART_REASON_PREFIX = "Riot Client memory"
 
 
 def start_league_client() -> dict[str, Any]:
@@ -1093,6 +1164,7 @@ def should_restart_client(
     main_mb: float,
     latest_capture_age_min: float | None = None,
     blocked_idle_min: float | None = None,
+    riot_client_mb: float | None = None,
 ) -> tuple[bool, str]:
     # When LCU is down, gameflow has no phase; treat that like the idle "None" phase.
     phase = health.get("phase") or "None"
@@ -1138,6 +1210,11 @@ def should_restart_client(
         return False, f"phase {phase!r} is not safe to restart"
     if main_mb >= args.client_restart_mb:
         return True, f"LeagueClient memory {main_mb:.1f}MB >= {args.client_restart_mb:.1f}MB"
+    riot_limit = float(getattr(args, "riot_client_restart_mb", 0.0) or 0.0)
+    if riot_limit > 0 and riot_client_mb is not None and riot_client_mb >= riot_limit:
+        return True, (
+            f"{RIOT_CLIENT_RESTART_REASON_PREFIX} {riot_client_mb:.1f}MB >= {riot_limit:.1f}MB"
+        )
     if not health["ok"]:
         return True, "LCU health check failed"
     return False, "client healthy enough"
@@ -1309,12 +1386,15 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             if _STALL_STATE["consecutive_restarts"] >= args.worker_stall_client_restart_after:
                 stall_force_client_restart = True
 
+    riot_limit = float(getattr(args, "riot_client_restart_mb", 0.0) or 0.0)
+    riot_metrics = riot_client_metrics() if riot_limit > 0 else None
     restart, restart_reason = should_restart_client(
         args,
         health,
         main_mb,
         None if resource_decision.capture_suppressed else latest_age,
         blocked_client_idle_min(args, health, main_mb),
+        riot_client_mb=float(riot_metrics["pressure_mb"]) if riot_metrics else None,
     )
     if not restart and stall_force_client_restart:
         phase = health.get("phase") or "None"
@@ -1338,12 +1418,21 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
                 }
             )
         closed = close_league_client()
+        # LeagueClient restarts normally reuse the running Riot Client, so a
+        # leaking Riot Client survives them; recycle it so start is a cold boot.
+        closed_riot = (
+            close_riot_client()
+            if restart_reason.startswith(RIOT_CLIENT_RESTART_REASON_PREFIX)
+            else []
+        )
         started = start_league_client()
         actions.append(
             {
                 "action": "restart_league_client",
                 "reason": restart_reason,
                 "closed_pids": closed,
+                "closed_riot_pids": closed_riot,
+                "riot_client_metrics": riot_metrics,
                 "start": started,
                 **action_context(args, health, main_mb, main_metrics),
             }
@@ -1436,6 +1525,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         "model_refreshers": model_refreshers(),
         "model_refresh_health": refresh_health,
         "latest_capture_age_min": latest_age,
+        "riot_client_metrics": riot_metrics,
         "resource_guard": resource_decision.as_dict(),
         "disk": disk,
         "actual_worker_count": fleet_worker_count(workers),
@@ -1462,6 +1552,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--id-gap-rps", type=float, default=2.0)
     parser.add_argument("--degrade-client-mb", type=float, default=4500.0)
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
+    parser.add_argument(
+        "--riot-client-restart-mb",
+        type=float,
+        default=3000.0,
+        help="restart League + Riot Client when the largest Riot Client process reaches this (0 disables); normal is ~0.9-1.4GB",
+    )
     parser.add_argument("--worker-stop-client-mb", type=float, default=5000.0)
     parser.add_argument("--worker-start-max-client-mb", type=float, default=3500.0)
     parser.add_argument("--system-degrade-commit-percent", type=float, default=80.0)
