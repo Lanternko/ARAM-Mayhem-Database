@@ -219,6 +219,8 @@ def _watchdog_args(monkeypatch, tmp_path: Path, *, restart_client: bool) -> obje
     args.degrade_client_mb = 3900.0
     args.client_restart_mb = 4500.0
     args.worker_start_max_client_mb = 6500.0
+    # Off by default in mocked cycles so the real host's Riot Client is never read.
+    args.riot_client_restart_mb = 0.0
     return args
 
 
@@ -870,3 +872,90 @@ def test_default_commit_headroom_rungs_are_sized_to_the_fleet_not_the_host(
 
     assert workable.desired_workers == 2 and workable.system_pressure is False
     assert starved.desired_workers == 0 and starved.paused is True
+
+
+def test_riot_client_metrics_reports_largest_riot_process(monkeypatch) -> None:
+    procs = [
+        _league_process("RiotClientServices.exe", 120.0, 150.0),
+        _league_process("Riot Client.exe", 600.0, 10795.0),
+        _league_process("LeagueClient.exe", 900.0, 20000.0),
+    ]
+    monkeypatch.setattr(WATCHDOG, "iter_processes", lambda: procs)
+
+    metrics = WATCHDOG.riot_client_metrics()
+
+    assert metrics["name"] == "Riot Client.exe"
+    assert metrics["pressure_mb"] == 10795.0
+
+
+def test_riot_client_leak_triggers_restart_only_in_safe_phase() -> None:
+    """2026-11-08: Riot Client.exe 1.4GB -> 10.8GB in an hour paused the fleet."""
+    args = _restart_args(riot_client_restart_mb=3000.0)
+    idle = {"ok": True, "phase": "None"}
+
+    restart, reason = WATCHDOG.should_restart_client(args, idle, 900.0, 0.5, riot_client_mb=10795.0)
+    assert restart is True
+    assert reason.startswith(WATCHDOG.RIOT_CLIENT_RESTART_REASON_PREFIX)
+
+    assert WATCHDOG.should_restart_client(args, idle, 900.0, 0.5, riot_client_mb=1400.0)[0] is False
+    assert WATCHDOG.should_restart_client(args, idle, 900.0, 0.5)[0] is False
+    in_game = {"ok": True, "phase": "InProgress"}
+    assert WATCHDOG.should_restart_client(args, in_game, 900.0, 0.5, riot_client_mb=10795.0)[0] is False
+    disabled = _restart_args(riot_client_restart_mb=0.0)
+    assert WATCHDOG.should_restart_client(disabled, idle, 900.0, 0.5, riot_client_mb=10795.0)[0] is False
+
+
+def test_riot_client_restart_threshold_defaults_on(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["mayhem_lcu_watchdog.py"])
+    assert WATCHDOG.parse_args().riot_client_restart_mb == 3000.0
+
+
+def _stub_riot_restart(monkeypatch, tmp_path: Path, riot_mb: float):
+    workers = [{"pid": 101, "rss_mb": 10.0, "cmdline": ["pythonw.exe", "--workers", "2"]}]
+    args, current, stopped, started, closed = _stub_check_once(
+        monkeypatch,
+        tmp_path,
+        restart_client=True,
+        workers=workers,
+        sample=_resource_sample(commit_percent=50.0),
+    )
+    args.riot_client_restart_mb = 3000.0
+    monkeypatch.setattr(WATCHDOG, "lcu_health", lambda: {"ok": True, "phase": "None"})
+    monkeypatch.setattr(WATCHDOG, "latest_capture_age_min", lambda db: 1.0)
+    monkeypatch.setattr(
+        WATCHDOG,
+        "riot_client_metrics",
+        lambda: {"pid": 34424, "name": "Riot Client.exe", "rss_mb": 600.0, "private_mb": riot_mb, "pressure_mb": riot_mb},
+    )
+    closed_riot: list[bool] = []
+    monkeypatch.setattr(WATCHDOG, "close_riot_client", lambda: closed_riot.append(True) or [34424])
+    monkeypatch.setattr(
+        WATCHDOG,
+        "wait_for_lcu_ready",
+        lambda a: {"ready": True, "health": {"ok": True, "phase": "None"}, "league_main_mb": 800.0,
+                   "league_main_metrics": {"rss_mb": 800.0, "private_mb": 800.0, "pressure_mb": 800.0,
+                                           "pressure_metric": "max(rss_mb,private_mb)"}},
+    )
+    return args, closed, closed_riot
+
+
+def test_check_once_recycles_leaking_riot_client(monkeypatch, tmp_path: Path) -> None:
+    args, closed, closed_riot = _stub_riot_restart(monkeypatch, tmp_path, 10795.0)
+
+    record = WATCHDOG.check_once(args)
+
+    assert closed == [True]
+    assert closed_riot == [True]
+    restart = next(a for a in record["actions"] if a["action"] == "restart_league_client")
+    assert restart["closed_riot_pids"] == [34424]
+    assert record["riot_client_metrics"]["pressure_mb"] == 10795.0
+
+
+def test_check_once_leaves_healthy_riot_client_alone(monkeypatch, tmp_path: Path) -> None:
+    args, closed, closed_riot = _stub_riot_restart(monkeypatch, tmp_path, 1400.0)
+
+    record = WATCHDOG.check_once(args)
+
+    assert closed == []
+    assert closed_riot == []
+    assert record["riot_client_metrics"]["pressure_mb"] == 1400.0
