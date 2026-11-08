@@ -797,6 +797,14 @@ def start_snowball_fleet(args: argparse.Namespace, worker_count: int) -> dict[st
         "2450",
         "--queue",
         "4310",
+        # Game-ID gap sweep (aram_nn.lcu.id_gap): probes TW game IDs the DB
+        # lacks instead of walking player histories.  Measured 2026-11-09: ~1
+        # new Mayhem game per 3 probes, no rate limit at 2 rps, no measurable
+        # extra LeagueClient leak.
+        "--id-gap-producers",
+        str(max(0, int(getattr(args, "id_gap_producers", 0)))),
+        "--id-gap-rps",
+        str(getattr(args, "id_gap_rps", 2.0)),
         "--seed-riot-id-file",
         str(args.seed_riot_id_file),
         "--seed-self",
@@ -1449,6 +1457,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--restart-client", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--degraded-workers", type=int, default=1)
+    parser.add_argument("--id-gap-producers", type=int, default=1,
+                        help="Game-ID gap sweep producers added to the fleet (0 disables)")
+    parser.add_argument("--id-gap-rps", type=float, default=2.0)
     parser.add_argument("--degrade-client-mb", type=float, default=4500.0)
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
     parser.add_argument("--worker-stop-client-mb", type=float, default=5000.0)

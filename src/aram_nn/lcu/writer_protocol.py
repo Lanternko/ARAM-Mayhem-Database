@@ -130,6 +130,11 @@ _COMMAND_FIELDS: dict[str, frozenset[str]] = {
         "classic_claim_percent", "claim_timeout_ms", "cap", "cooldown_ms",
         "sources", "now_ms", "worker_id",
     }),
+    # Read-only ID-index lookups for the game-ID gap sweep (aram_nn.lcu.id_gap).
+    "game_index": frozenset({
+        "version", "command", "request_id", "operation", "id_lo", "id_hi",
+        "created_before_ms",
+    }),
     "snowball_bridge": frozenset({
         "version", "command", "request_id", "operation", "public_puuid",
         "riot_id", "lcu_puuid", "resolve_status",
@@ -209,6 +214,9 @@ _COMMON_INT_FIELDS = {
     "classic_games_24h",
     "classic_games_recent",
     "classic_last_seen_ms",
+    "id_lo",
+    "id_hi",
+    "created_before_ms",
 }
 
 
@@ -324,6 +332,11 @@ def _check_command_values(message: Mapping[str, Any], command: str) -> None:
         _check_optional_int(message, "lease_ms", minimum=1)
     if command == "requeue_player":
         _check_optional_int(message, "delay_ms", minimum=0)
+    if command == "game_index":
+        if not isinstance(message.get("operation"), str) or not message["operation"]:
+            _fail("MISSING_FIELD" if "operation" not in message else "INVALID_TYPE")
+        for key in ("id_lo", "id_hi", "created_before_ms"):
+            _check_optional_int(message, key, minimum=0)
     if command.startswith("snowball_") and command != "snowball_init":
         if not isinstance(message.get("operation"), str) or not message["operation"]:
             _fail("MISSING_FIELD" if "operation" not in message else "INVALID_TYPE")

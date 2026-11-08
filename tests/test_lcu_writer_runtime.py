@@ -157,7 +157,8 @@ def test_fleet_restarts_a_dead_producer_instead_of_collapsing() -> None:
     fleet_source = _function_source("_run_snowball_fleet")
 
     # The dead producer is replaced in its own slot.
-    assert "processes[idx] = spawn_producer(idx, clients[idx], should_seed=False)" in fleet_source
+    # (spawn_any routes ID-gap slots to their own entry point.)
+    assert "processes[idx] = spawn_any(idx, clients[idx], should_seed=False)" in fleet_source
     # Bounded, so a permanently broken producer cannot hot-loop.
     assert "_PRODUCER_MAX_RESTARTS" in fleet_source
     assert "_PRODUCER_RESTART_BACKOFF_SEC" in fleet_source
@@ -166,5 +167,6 @@ def test_fleet_restarts_a_dead_producer_instead_of_collapsing() -> None:
     assert "single DB writer exited; stopping all producers" in fleet_source
     # A producer exit no longer raises on its own.
     assert "raise RuntimeError(f\"producer failed" not in fleet_source
-    # A clean finish is not a failure; only retirement escalates.
-    assert "if retired:" in fleet_source
+    # A clean finish is not a failure; only retirement escalates.  ID-gap
+    # producers never finish, so only snowball slots decide the natural end.
+    assert "if retired & set(snowball_indices):" in fleet_source

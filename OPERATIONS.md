@@ -9,7 +9,7 @@ MayhemLCUWatchdogKeepalive（Task Scheduler，每分鐘）
 └─ scripts/watchdog_keepalive_hidden.vbs
    └─ scripts/watchdog_keepalive.ps1
       └─ pythonw scripts/mayhem_lcu_watchdog.py
-         ├─ lcu_collector.py snowball-workers：一個 SQLite writer + W01／W02 RPC producer
+         ├─ lcu_collector.py snowball-workers：一個 SQLite writer + W01／W02 RPC producer + G01 ID-gap producer
          ├─ publish_static_site.py --watch：資料成長門檻發布 GitHub Pages
          └─ refresh_recommender_models.py --watch：成長門檻更新本機推薦模型
 
@@ -40,7 +40,7 @@ Crawler 通知（Task Scheduler）
 | 設定 | Source of truth | 現行 production profile |
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
-| Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0` |
+| Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0`；另加 1 個 G01 ID-gap producer（watchdog `--id-gap-producers`，0 關閉）：沿 TW gameId 序列查 DB 沒有的 ID，只存 2400／450，`seed_family='id_gap'`，落後即時 4h，cursor 在 `crawl_runtime_state` 的 `id_gap:cursor` |
 | League memory | 同上 | client 記憶體不降載（degrade=restart=4500 MB；leak 是每個新 puuid 固定成本，降載只會變慢）；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
 | System memory | 同上 | commit ≥80% 或 available RAM ≤3072 MB 降為 1 producer；commit ≥90% 或 available RAM ≤1536 MB 暫停收集；連續 3 次 commit ≤70%、available RAM ≥4096 MB 且 client <3500 MB 才恢復 |
 | DB 磁碟空間 | `scripts/mayhem_lcu_watchdog.py` defaults | `games.db` 所在磁碟剩 <5 GB 暫停收集（事件 `pause_workers_disk_full`），≥10 GB 才恢復；暫停期間不做零產出／client 重啟。磁碟滿在下游只會表現成 `WRITER_START_FAILED`／`disk I/O error` |
@@ -60,7 +60,7 @@ Crawler 通知（Task Scheduler）
 | Watchdog stdout／stderr | `logs/mayhem-lcu-watchdog.out.log`、`.err.log` |
 | Watchdog recovery events | `data/monitor/mayhem_lcu_watchdog.jsonl` |
 | Fleet stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_fleet_*.{out,err}.log` |
-| Producer stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_W*.log`、`snowball_W*.err` |
+| Producer stdout／stderr | `.codex/logs/mayhem_lcu_watchdog/snowball_W*.log`、`snowball_W*.err`；ID-gap 是 `snowball_G*.log`／`.err` |
 | Crawler growth metrics | `data/monitor/crawl_metrics.jsonl` |
 | Static publisher | `data/site/static_publish.{out,err}.log`、`static_publish_state.json` |
 | Model refresh | `data/site/model_refresh.{out,err}.log`、`model_refresh_state.json` |

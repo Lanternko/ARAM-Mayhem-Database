@@ -109,6 +109,28 @@ def _snowball_rpc_worker(
             raise
 
 
+def _id_gap_rpc_worker(
+    writer_client,
+    kwargs: dict,
+    stdout_path: str,
+    stderr_path: str,
+) -> None:
+    """Spawn-safe entry point for a game-ID gap sweeper (see aram_nn.lcu.id_gap)."""
+    from aram_nn.lcu.id_gap import run_id_gap
+
+    with open(stdout_path, "a", encoding="utf-8", buffering=1) as stdout_file, open(
+        stderr_path, "a", encoding="utf-8", buffering=1
+    ) as stderr_file, contextlib.redirect_stdout(stdout_file), contextlib.redirect_stderr(stderr_file):
+        try:
+            run_id_gap(writer_client=writer_client, **kwargs)
+        except BaseException:
+            # Same reason as _snowball_rpc_worker: under pythonw the traceback
+            # is lost unless written while stderr still points at the file.
+            traceback.print_exc(file=stderr_file)
+            stderr_file.flush()
+            raise
+
+
 # Producer restart policy.  Bounded so a genuinely broken producer degrades to
 # "one fewer producer" instead of a hot respawn loop, and so a fleet that has
 # lost every producer still exits and lets the watchdog rebuild it cleanly.
@@ -128,8 +150,16 @@ def _run_snowball_fleet(
     seed_on_first_only: bool,
     run_kwargs: dict,
     control_file: Path | None = None,
+    id_gap_producers: int = 0,
+    id_gap_kwargs: dict | None = None,
 ) -> None:
-    """Run one writer plus N RPC-only producers as one foreground fleet."""
+    """Run one writer plus N RPC-only producers as one foreground fleet.
+
+    ``id_gap_producers`` extra producers (G01, G02, ...) sweep the game-ID
+    sequence instead of the player frontier; each gets its own writer channel.
+    They never finish on their own, so the fleet's natural end is decided by
+    the snowball producers alone.
+    """
     from aram_nn.lcu.writer_supervisor import WriterSupervisor
 
     if workers < 1:
@@ -140,7 +170,8 @@ def _run_snowball_fleet(
     control_file = control_file or db.parent / f".{db.name}.snowball.stop"
     control_file.parent.mkdir(parents=True, exist_ok=True)
     control_file.unlink(missing_ok=True)
-    supervisor = WriterSupervisor(db, workers, context=context)
+    id_gap_producers = max(0, int(id_gap_producers))
+    supervisor = WriterSupervisor(db, workers + id_gap_producers, context=context)
     clients = supervisor.start()
     processes: list[multiprocessing.Process] = []
     worker_ids: dict[int, str] = {}
@@ -184,12 +215,35 @@ def _run_snowball_fleet(
             click.echo(f"  {worker_id}: producer_pid={process.pid} mode={'seed' if should_seed else 'consume'}")
             return process
 
+    def spawn_id_gap(idx: int, client) -> multiprocessing.Process:
+        worker_id = f"G{idx - workers + 1:02d}"
+        kwargs = dict(id_gap_kwargs or {})
+        kwargs["worker_id"] = worker_id
+        stdout_path = log_dir / f"snowball_{worker_id}.log"
+        stderr_path = log_dir / f"snowball_{worker_id}.err"
+        process = context.Process(
+            target=_id_gap_rpc_worker,
+            name=f"aram-id-gap-producer-{worker_id}",
+            args=(client, kwargs, str(stdout_path), str(stderr_path)),
+        )
+        process.start()
+        worker_ids[process.pid] = worker_id
+        click.echo(f"  {worker_id}: producer_pid={process.pid} mode=id-gap")
+        return process
+
+    def spawn_any(idx: int, client, *, should_seed: bool) -> multiprocessing.Process:
+        if idx >= workers:
+            return spawn_id_gap(idx, client)
+        return spawn_producer(idx, client, should_seed=should_seed)
+
+    snowball_indices = range(workers)
+
     try:
         for idx, client in enumerate(clients):
             processes.append(
-                spawn_producer(idx, client, should_seed=idx == 0 or not seed_on_first_only)
+                spawn_any(idx, client, should_seed=idx == 0 or not seed_on_first_only)
             )
-            if stagger_sec > 0 and idx + 1 < workers:
+            if stagger_sec > 0 and idx + 1 < len(clients):
                 time.sleep(stagger_sec)
 
         click.echo(
@@ -263,12 +317,12 @@ def _run_snowball_fleet(
                 # Never re-seed on restart: seeding is a one-time cost at fleet
                 # start, and repeating it on every flap would re-resolve the
                 # whole manual seed list each time.
-                processes[idx] = spawn_producer(idx, clients[idx], should_seed=False)
+                processes[idx] = spawn_any(idx, clients[idx], should_seed=False)
 
             if stopping:
                 break
-            if not any(process.is_alive() for process in processes):
-                if retired:
+            if not any(processes[idx].is_alive() for idx in snowball_indices):
+                if retired & set(snowball_indices):
                     raise RuntimeError(
                         "every producer is dead or retired; restarting the fleet"
                     )
@@ -279,7 +333,7 @@ def _run_snowball_fleet(
                 break
             time.sleep(0.25)
 
-        if stopping:
+        if stopping or id_gap_producers:
             supervisor.stop_claims(timeout=10.0)
             deadline = time.monotonic() + 10.0
             for process in processes:
@@ -1747,6 +1801,18 @@ def snowball(
 @click.option("--classic-revisit-max-hours", default=168.0, show_default=True,
               type=click.FloatRange(min=10.0),
               help="Maximum formula-based Classic revisit interval")
+@click.option("--id-gap-producers", default=0, show_default=True, type=click.IntRange(0, 4),
+              help="Extra producers that sweep unknown game IDs (G01...) via the LCU games/{id} endpoint")
+@click.option("--id-gap-rps", default=2.0, show_default=True, type=click.FloatRange(min=0.1, max=10.0),
+              help="Probe rate per ID-gap producer (LCU requests per second)")
+@click.option("--id-gap-concurrency", default=3, show_default=True, type=click.IntRange(1, 8),
+              help="LCU requests in flight per ID-gap producer (latency is long-tailed; rps still caps the rate)")
+@click.option("--id-gap-lag-hours", default=4.0, show_default=True, type=click.FloatRange(min=1.0),
+              help="Stay this far behind real time so in-progress games are never probed")
+@click.option("--id-gap-start-lookback-hours", default=24.0, show_default=True, type=click.FloatRange(min=1.0),
+              help="Cold start only: begin at the newest stored game this many hours back")
+@click.option("--id-gap-queue", "id_gap_queues", multiple=True, type=int, default=(2400, 450),
+              show_default=True, help="Queue IDs the ID-gap sweep commits (repeatable)")
 def snowball_workers(
     db: Path,
     workers: int,
@@ -1784,6 +1850,12 @@ def snowball_workers(
     classic_claim_percent: int,
     classic_revisit_min_hours: float,
     classic_revisit_max_hours: float,
+    id_gap_producers: int,
+    id_gap_rps: float,
+    id_gap_concurrency: int,
+    id_gap_lag_hours: float,
+    id_gap_start_lookback_hours: float,
+    id_gap_queues: tuple[int, ...],
 ) -> None:
     """Run one foreground writer supervisor with multiple RPC-only producers."""
     if workers < 1:
@@ -1799,6 +1871,15 @@ def snowball_workers(
             control_file=control_file,
             stagger_sec=stagger_sec,
             seed_on_first_only=seed_on_first_only,
+            id_gap_producers=id_gap_producers,
+            id_gap_kwargs={
+                "target_queues": set(id_gap_queues),
+                "rps": id_gap_rps,
+                "concurrency": id_gap_concurrency,
+                "lag_hours": id_gap_lag_hours,
+                "start_lookback_hours": id_gap_start_lookback_hours,
+                "claim_timeout_sec": claim_timeout_sec,
+            },
             run_kwargs=_snowball_run_kwargs(
                 db=db,
                 target_games=target_games,

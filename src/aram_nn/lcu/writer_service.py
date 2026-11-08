@@ -34,6 +34,11 @@ _MAX_LEASE_MS = 24 * 3600_000
 _DEFAULT_REQUEUE_DELAY_MS = 45_000
 _MAX_REQUEUE_DELAY_MS = 30 * 24 * 3600_000
 _CLAIM_ACTIVE = "in_progress"
+# game_index bounds: one "known" lookup covers at most this many IDs, and the
+# "latest" anchor search tries these game-ID digit lengths (TW is 9 today).
+GAME_INDEX_MAX_SPAN = 5_000
+GAME_INDEX_MIN_DIGITS = 6
+GAME_INDEX_MAX_DIGITS = 12
 
 
 def _utc_now() -> str:
@@ -439,6 +444,8 @@ class WriterService:
                     return self._snowball_queue(message, channel_id)
                 if command == "snowball_bridge":
                     return self._snowball_bridge(message, channel_id)
+                if command == "game_index":
+                    return self._game_index(message, channel_id)
                 if command == "snowball_player":
                     return self._snowball_player(message, channel_id)
             except Exception:
@@ -1150,6 +1157,55 @@ class WriterService:
         except Exception:
             self.con.rollback()
             raise
+
+    def _game_index(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
+        """Read-only game-ID lookups for the ID-gap sweep.
+
+        ``known``  -> numeric game IDs already in ``games`` within [id_lo, id_hi]
+        ``latest`` -> highest numeric game ID created at or before
+                      ``created_before_ms`` (the sweep's cold-start anchor)
+
+        Pure reads are not journaled in writer_requests (``commit=False``): a
+        "known" answer can carry thousands of IDs and replaying it is harmless.
+
+        game_id is TEXT, so a numeric range is split per digit count: within one
+        length, text order is numeric order and the primary-key index serves it.
+        """
+        operation = str(message.get("operation") or "")
+        if operation == "known":
+            lo = _int(message.get("id_lo"), -1)
+            hi = _int(message.get("id_hi"), -1)
+            if lo < 0 or hi < lo or hi - lo >= GAME_INDEX_MAX_SPAN:
+                return self._error(message, "INVALID_RANGE")
+            known: list[int] = []
+            for digits in range(len(str(lo)), len(str(hi)) + 1):
+                seg_lo = max(lo, 10 ** (digits - 1) if digits > 1 else 0)
+                seg_hi = min(hi, 10 ** digits - 1)
+                rows = self.con.execute(
+                    "SELECT game_id FROM games WHERE game_id BETWEEN ? AND ?",
+                    (str(seg_lo), str(seg_hi)),
+                ).fetchall()
+                for (value,) in rows:
+                    text = str(value)
+                    if len(text) == digits and text.isdigit() and seg_lo <= int(text) <= seg_hi:
+                        known.append(int(text))
+            self.con.rollback()
+            return self._finish(message, {"ok": True, "status": "FOUND", "mutated": False, "known": sorted(known)}, commit=False)
+        if operation == "latest":
+            before = _int(message.get("created_before_ms"), 0)
+            for digits in range(GAME_INDEX_MAX_DIGITS, GAME_INDEX_MIN_DIGITS - 1, -1):
+                row = self.con.execute(
+                    """SELECT game_id FROM games
+                       WHERE game_id BETWEEN ? AND ? AND length(game_id)=? AND created_ms<=?
+                       ORDER BY game_id DESC LIMIT 1""",
+                    (str(10 ** (digits - 1)), str(10 ** digits - 1), digits, before),
+                ).fetchone()
+                if row is not None and str(row[0]).isdigit():
+                    self.con.rollback()
+                    return self._finish(message, {"ok": True, "status": "FOUND", "mutated": False, "game_id": str(row[0])}, commit=False)
+            self.con.rollback()
+            return self._finish(message, {"ok": True, "status": "MISSING", "mutated": False}, commit=False)
+        return self._error(message, "INVALID_OPERATION")
 
     def _snowball_bridge(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
         operation = str(message.get("operation") or "")

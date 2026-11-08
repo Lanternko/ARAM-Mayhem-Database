@@ -47,6 +47,26 @@ class LCUClient:
             self._log_failure("GET", path, repr(exc))
         return None
 
+    def get_with_status(self, path: str) -> tuple[int, Any]:
+        """GET path and return ``(status, json_or_None)``.
+
+        ``status`` is -1 when the request never got an HTTP answer (client
+        restarting, socket refused, timeout).  Callers that must tell "no such
+        resource" (404) apart from "LCU unreachable" use this instead of
+        :meth:`get`, which collapses both into ``None``.
+        """
+        try:
+            r = self._client.get(path)
+        except Exception as exc:
+            self._log_failure("GET", path, repr(exc))
+            return -1, None
+        if r.status_code != 200:
+            return r.status_code, None
+        try:
+            return 200, r.json()
+        except ValueError:
+            return -1, None
+
     def get_bytes(self, path: str, **params: Any) -> bytes | None:
         """GET path, return raw response bytes (for binary assets like PNGs).
 
@@ -236,7 +256,9 @@ def get_game_detail(client: LCUClient, game_id: str | int) -> dict | None:
 
     Unlike the match-history list endpoint (which only returns the local player),
     this endpoint returns all participants with championId, teamId, and stats.win.
-    Available for any game in the client's local history (~last 20 games).
+    It resolves any platform game ID, not only games in a player's recent
+    history: TW game IDs are one platform-wide sequence, and non-LoL IDs (TFT,
+    customs) answer 404.  ``aram_nn.lcu.id_gap`` sweeps that sequence.
     """
     return client.get(f"/lol-match-history/v1/games/{game_id}")
 

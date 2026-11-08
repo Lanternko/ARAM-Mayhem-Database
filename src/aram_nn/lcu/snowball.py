@@ -664,6 +664,15 @@ class SnowballWriterFacade:
     def release_game(self, claim: GameClaim) -> None:
         self._request("release_game", game_id=claim.game_id, token=claim.token, generation=claim.generation)
 
+    def known_game_ids(self, id_lo: int, id_hi: int) -> set[int]:
+        response = self._request("game_index", operation="known", id_lo=max(0, int(id_lo)), id_hi=max(0, int(id_hi)))
+        return {int(value) for value in response.get("known") or []}
+
+    def latest_game_id(self, *, created_before_ms: int) -> int | None:
+        response = self._request("game_index", operation="latest", created_before_ms=max(0, int(created_before_ms)))
+        value = response.get("game_id")
+        return int(value) if value is not None and str(value).isdigit() else None
+
     def finalize_player(self, claim: PlayerClaim, **kwargs: Any) -> bool:
         response = self._request(
             "snowball_player", operation="finalize", puuid=claim.puuid,
