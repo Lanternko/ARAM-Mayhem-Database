@@ -103,7 +103,7 @@ components:
     backgroundColor: "{colors.surface-raised-dark}"
     textColor: "{colors.text-muted-dark}"
     typography: "{typography.label}"
-    rounded: "{rounded.pill}"
+    rounded: "2px"
     padding: "7px 10px"
   data-panel:
     backgroundColor: "{colors.surface-dark}"
@@ -294,8 +294,9 @@ Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金�
 
 ### Chips and segmented controls
 
-- **Style:** Pill shape、7px 10px padding、低彩度背景與 muted text。
-- **Selected:** 使用 accent、role color 或明確底線，但依 chip 語意只能選一種 encoding。
+- **Style:** Dark theme 的篩選 chip 用 2px 圓角方形、透明底、hairline 邊框與 13px/500 文字；以 `text-box: trim-both cap alphabetic` 做光學垂直置中。
+- **Selected:** 顏色只代表「正在縮小清單」：「全部」選中是白底反白（中性、不上色）；實際篩選是 accent 實心底配 `accent-on` 文字；稀有度用自己的色相。不使用彩色外框。
+- **View switches:** 切換頁面或資料集的控制（增幅榜／增幅池、稀有度）做成一整塊斜線分割的長方形，選中段實心填滿；斜切只用在這類切換，篩選 chip 不斜切。
 - **Role filters:** 色彩只出現在 dot、細邊或小面積 selected state，label 始終保留。
 - **Semantics:** Filter 使用 `aria-pressed`，tab 使用正確 tab 語意與 selected state，不能只靠 class 名稱。
 
