@@ -2880,6 +2880,9 @@ def _claim_next_player(
     )
 
 
+_PENDING_LOG_REFRESH_SEC = 60.0
+
+
 @_retry_on_locked
 def _pending_player_count(con: sqlite3.Connection) -> int:
     if _is_rpc_storage(con):
@@ -4619,6 +4622,11 @@ def run_snowball(
 
         waiting_logged = False
         empty_queue_wait_started_at: float | None = None
+        # The per-player log line only needs a rough queue depth.  Counting
+        # ~545k pending rows on every visit cost the single writer ~150ms per
+        # player (3s cold) -- real load once SGP producers visit ~1 player/s.
+        pending_log_value = 0
+        pending_log_at = float("-inf")
         while stats.saved_games < target_games and stats.processed_players < max_players:
             try:
                 next_player = _claim_next_player(
@@ -4785,10 +4793,13 @@ def run_snowball(
                 )
             elif games_per_player is not None and games_per_player > 0:
                 game_ids = game_ids[:games_per_player]
+            if time.monotonic() - pending_log_at >= _PENDING_LOG_REFRESH_SEC:
+                pending_log_value = max(0, _pending_player_count(db) - 1)
+                pending_log_at = time.monotonic()
             print(
                 f"[snowball] player {stats.processed_players}/{max_players}  "
                 f"depth={depth}  source={source:<6}  player=redacted  "
-                f"target_games={len(game_ids)}  pending={max(0, _pending_player_count(db) - 1)}  "
+                f"target_games={len(game_ids)}  pending~{pending_log_value}  "
                 f"history={history_used}  worker={worker_id}"
             )
 

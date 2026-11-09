@@ -793,3 +793,34 @@ def test_writer_true_none_player_still_leaves_the_lane(tmp_path: pathlib.Path) -
         "SELECT classic_affinity, classic_affinity_rank FROM crawl_seen WHERE puuid='mayhem'"
     ).fetchone())
     assert seen == ("none", 0)
+
+
+def test_snowball_init_migrates_legacy_players_only_into_empty_frontier(tmp_path: pathlib.Path) -> None:
+    # The legacy table outlives its migration; later inits must leave the
+    # (now non-empty) frontier alone and must not need to count it.
+    service = WriterService(tmp_path / "games.db")
+    service.con.execute(
+        """CREATE TABLE crawl_players(
+               puuid TEXT PRIMARY KEY, source TEXT, priority INTEGER, depth INTEGER,
+               discovered_from_game_id TEXT, status TEXT, first_seen_at TEXT,
+               last_crawled_at TEXT, process_count INTEGER, new_games_found INTEGER)"""
+    )
+    service.con.execute(
+        "INSERT INTO crawl_players VALUES ('p1', 'match', 10, 1, NULL, 'pending', '2026-01-01', NULL, 0, 0)"
+    )
+    service.con.commit()
+
+    def init(request_id: str) -> dict:
+        return service.handle({"version": 1, "command": "snowball_init", "request_id": request_id})
+
+    first = init("init-1")
+    assert first["ok"] and first["migrated"] == 1
+    assert service.con.execute("SELECT COUNT(*) FROM crawl_queue").fetchone()[0] == 1
+    service.con.execute(
+        "INSERT INTO crawl_players VALUES ('p2', 'match', 10, 1, NULL, 'pending', '2026-01-01', NULL, 0, 0)"
+    )
+    service.con.commit()
+    second = init("init-2")
+    assert second["ok"] and second["migrated"] == 0
+    assert service.con.execute("SELECT COUNT(*) FROM crawl_queue").fetchone()[0] == 1
+    service.close()

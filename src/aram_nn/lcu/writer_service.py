@@ -1022,9 +1022,12 @@ class WriterService:
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name='crawl_players'"
             ).fetchone()
             if has_legacy:
-                seen_count = int(self.con.execute("SELECT COUNT(*) FROM crawl_seen").fetchone()[0])
-                queue_count = int(self.con.execute("SELECT COUNT(*) FROM crawl_queue").fetchone()[0])
-                if seen_count == 0 and queue_count == 0:
+                # Emptiness probes, not COUNT(*): the legacy table outlives the
+                # migration, and counting ~800k rows in each table cost every
+                # fleet start 4-20s (cold cache) inside the 30s RPC budget.
+                seen_any = self.con.execute("SELECT 1 FROM crawl_seen LIMIT 1").fetchone()
+                queue_any = self.con.execute("SELECT 1 FROM crawl_queue LIMIT 1").fetchone()
+                if seen_any is None and queue_any is None:
                     rows = self.con.execute(
                         """SELECT puuid, source, priority, depth, discovered_from_game_id,
                                   status, first_seen_at, last_crawled_at,
