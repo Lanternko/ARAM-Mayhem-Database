@@ -757,8 +757,48 @@
                 </div>
                 ${adviceHtml}
             </div>
+            <div class="detail-section champ-analysis" data-champ-analysis="${escHtml(String(cid))}"></div>
         `;
     }
+    // Data-written analysis prose (same text as the static champion page HTML),
+    // fetched per champion from api/champions/analysis/<cid>.json.
+    const champAnalysisCache = new Map();
+    function champAnalysisLang() {
+        return currentLang === 'en' ? 'en' : currentLang === 'zh-CN' ? 'zh-Hans' : 'zh-Hant';
+    }
+    function champAnalysisHtml(doc) {
+        const block = doc && doc[champAnalysisLang()];
+        if (!block || !Array.isArray(block.paragraphs)) return '';
+        const prefix = currentLang === 'en' ? '/en' : currentLang === 'zh-CN' ? '/zh-cn' : '';
+        const about = block.about || {};
+        return `<div class="detail-section-head"><h3>${escHtml(block.title || '')}</h3></div>`
+            + block.paragraphs.map(p => `<p class="champ-analysis-p">${escHtml(p)}</p>`).join('')
+            + (about.label ? `<p class="champ-analysis-p"><a href="${escHtml(prefix + '/about/')}">${escHtml(about.label)}</a></p>` : '');
+    }
+    function renderChampionAnalysis() {
+        if (!DATA.detailBase) return;
+        document.querySelectorAll('[data-champ-analysis]').forEach(host => {
+            const cid = host.dataset.champAnalysis;
+            if (host.dataset.lang === champAnalysisLang() && host.childElementCount) return;
+            let load = champAnalysisCache.get(cid);
+            if (!load) {
+                const base = String(DATA.detailBase).replace(/\/$/, '');
+                const version = DATA.detailVersion ? `?v=${encodeURIComponent(String(DATA.detailVersion))}` : '';
+                load = loadSitePayload(`${base}/analysis/${encodeURIComponent(cid)}.json${version}`)
+                    .catch(() => null);
+                champAnalysisCache.set(cid, load);
+            }
+            load.then(doc => {
+                if (!host.isConnected) return;
+                host.innerHTML = champAnalysisHtml(doc);
+                host.dataset.lang = champAnalysisLang();
+                host.hidden = !host.childElementCount;
+            });
+        });
+    }
+    document.addEventListener('change', ev => {
+        if (ev.target.matches && ev.target.matches('.detail-tab-input[id$="-compfit"]')) renderChampionAnalysis();
+    });
     const ROLE_LABELS = __ROLE_LABELS__;
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
@@ -11437,6 +11477,7 @@
                 renderChampionPools();
                 loadAugPools();
             }
+            if (tab === 'compfit') renderChampionAnalysis();
             if (filterState.q.trim()) applySearchHighlights(host);
         }).catch(err => {
             if (token !== homeDetailToken) return;
@@ -11620,6 +11661,7 @@
                 renderChampionPools();
                 loadAugPools();
             }
+            if (tab === 'compfit') renderChampionAnalysis();
         }).catch(err => {
             if (token !== champPageToken) return;
             console.error('champion page load failed', cid, err);

@@ -797,6 +797,7 @@ def main(
             out_path.parent, (r["champion_id"] for r in champ_records), champ_meta,
         ),
         champion_records=champ_records,
+        write_analysis_json=True,
     )
     if mirrors:
         click.echo(f"[tierlist] wrote {len(mirrors)} clean-path deep-link stubs (+ 404.html)")

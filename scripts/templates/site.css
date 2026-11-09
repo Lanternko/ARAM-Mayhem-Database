@@ -2697,6 +2697,13 @@
         color: #9aa0a6;
         font-family: var(--font-caption);
     }
+    .champ-analysis .champ-analysis-p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--text-muted);
+    }
+    .champ-analysis .champ-analysis-p:last-child { margin-bottom: 0; }
     .comp-fit-empty {
         color: #6b7280;
         font-size: 12px;

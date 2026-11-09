@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import sys
 from html.parser import HTMLParser
@@ -301,6 +302,17 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("lang='zh-Hans'", cn)
             self.assertIn("金克丝", cn)
             self.assertIn("FULL_SPA_SHELL", (root / "assets/app-shell.html").read_text())
+            # The analysis JSON is data: only written when the build asks for it.
+            self.assertFalse((root / "api/champions/analysis").exists())
+            self.assertIn("第 1 名", zh)  # rank among published records
+            write_spa_path_shells(
+                index, site_url="https://arammeta.com/", champion_routes=routes,
+                champion_records=[{"champion_id": 222, "bayes_wr": .53, "games": 2000, "prev_mix": .2}],
+                write_analysis_json=True,
+            )
+            doc = json.loads((root / "api/champions/analysis/222.json").read_text(encoding="utf-8"))
+            self.assertEqual(set(doc), {"zh-Hant", "zh-Hans", "en"})
+            self.assertIn("金克丝", doc["zh-Hans"]["title"])
 
     def test_404_redirects_legacy_zh_cn_casing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

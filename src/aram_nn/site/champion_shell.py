@@ -426,8 +426,14 @@ def champion_shell_html(
     if not closed:
         head += shell_preload
     head = _append_description(head, prismatic, language)
+    from aram_nn.site.champion_analysis import analysis_html, champion_analysis
+
+    analysis = analysis_html(champion_analysis(
+        route=route, record=record, api_dir=api_dir, patch_label=patch_label,
+        languages=(language,),
+    ).get(language))
     return (
-        head + "<body>" + fallback + static
+        head + "<body>" + fallback + analysis + static
         # A deferred end-of-body script is low priority by default, which starved
         # this 2KB loader behind the 680KB payload.
         + f"<script src='{html.escape(loader_url, quote=True)}' fetchpriority='high' "

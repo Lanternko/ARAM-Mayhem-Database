@@ -2362,6 +2362,7 @@ def write_spa_path_shells(
     total_games: int | None = None,
     patch_prefix: str | None = None,
     champion_records=(),
+    write_analysis_json: bool = False,
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2530,7 +2531,12 @@ def write_spa_path_shells(
     # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
     routes_by_slug = {route["slug"]: route for route in champion_routes}
-    records_by_cid = {str(record["champion_id"]): record for record in champion_records}
+    # Rank by Bayesian win rate so the analysis prose can say "#k of N".
+    ranked = sorted(champion_records, key=lambda r: -float(r.get("bayes_wr") or 0))
+    records_by_cid = {
+        str(record["champion_id"]): {**record, "rank": index + 1, "rank_total": len(ranked)}
+        for index, record in enumerate(ranked)
+    }
     if champion_routes:
         assets = root / "assets"
         assets.mkdir(parents=True, exist_ok=True)
@@ -2582,6 +2588,38 @@ def write_spa_path_shells(
         written.append(dest)
     if champion_routes:
         written.extend([shell_path, loader_path, embed_path])
+        # Data file (api/), so only data builds write it; shell-only builds must
+        # leave the published snapshot byte-identical.
+        if write_analysis_json:
+            written.extend(_write_champion_analysis(root, champion_routes, records_by_cid, full_shell))
+    return written
+
+
+def _write_champion_analysis(root: Path, champion_routes, records_by_cid: dict, full_shell: str) -> list[Path]:
+    """api/champions/analysis/<cid>.json: the page prose, for the Other tab."""
+    from aram_nn.site.champion_analysis import champion_analysis
+    from aram_nn.site.champion_shell import _BUILD_RE
+
+    match = _BUILD_RE.search(full_shell)
+    patch_label = str((json.loads(match[1]) if match else {}).get("patchLabel") or "").strip()
+    out_dir = root / "api" / "champions" / "analysis"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    seen: set[str] = set()
+    for route in champion_routes:
+        cid = str(route["cid"])
+        if cid in seen:
+            continue
+        seen.add(cid)
+        payload = champion_analysis(
+            route=route, record=records_by_cid.get(cid, {}), api_dir=root / "api",
+            patch_label=patch_label,
+        )
+        if not payload:
+            continue
+        dest = out_dir / f"{cid}.json"
+        dest.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        written.append(dest)
     return written
 
 
