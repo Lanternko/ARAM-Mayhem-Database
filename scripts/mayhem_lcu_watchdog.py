@@ -924,6 +924,13 @@ def start_snowball_fleet(args: argparse.Namespace, worker_count: int) -> dict[st
         str(max(0, int(getattr(args, "id_gap_producers", 0)))),
         "--id-gap-rps",
         str(getattr(args, "id_gap_rps", 2.0)),
+        # First N snowball producers read history straight from Riot SGP
+        # (aram_nn.lcu.sgp), so their visits do not grow the LeagueClient
+        # match-history cache that drives the planned client restarts.
+        "--sgp-producers",
+        str(max(0, int(getattr(args, "sgp_producers", 0)))),
+        "--sgp-min-interval-sec",
+        str(getattr(args, "sgp_min_interval_sec", 1.0)),
         "--seed-riot-id-file",
         str(args.seed_riot_id_file),
         "--seed-self",
@@ -1606,6 +1613,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--id-gap-producers", type=int, default=1,
                         help="Game-ID gap sweep producers added to the fleet (0 disables)")
     parser.add_argument("--id-gap-rps", type=float, default=2.0)
+    parser.add_argument("--sgp-producers", type=int, default=0,
+                        help="Snowball producers that read history from Riot SGP instead of LCU")
+    parser.add_argument("--sgp-min-interval-sec", type=float, default=1.0)
     parser.add_argument("--degrade-client-mb", type=float, default=4500.0)
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
     # Close the leaking Riot Client UX host once LCU is ready after a restart.

@@ -58,6 +58,14 @@ $argsList = @(
     # never dropped under 18GB (p5) in the same window.
     "--degrade-client-mb", "4500",
     "--client-restart-mb", "4500",
+    # 2026-11-09 ramp: the first producer reads match history straight from Riot
+    # SGP (one batch request per player, all 10 participants per game) instead
+    # of the LCU, so its visits add nothing to the LeagueClient match-history
+    # cache above and skip the per-game LCU detail reads.  Any SGP failure falls
+    # back to LCU for that visit; 3 failures or a 429 open a 5-minute breaker.
+    # Raise to 2 once a day of W01 logs shows no 429s and no fallbacks.
+    "--sgp-producers", "1",
+    "--sgp-min-interval-sec", "1.0",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
     # running are left alone, so the old value created a trap -- workers were
     # observed running fine with the client at 5,199MB, but once they needed a

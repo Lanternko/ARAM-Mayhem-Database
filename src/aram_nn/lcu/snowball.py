@@ -45,6 +45,7 @@ from .client import (
 )
 from .poller import DEFAULT_QUEUES, _parse_game_detail, _participants_payload_has_postgame_stats
 from .process import get_credentials
+from .sgp import DEFAULT_SGP_HOST, SGPHistorySource, SGPMatchHistoryClient
 from .db_state import update_capture_watermark
 from .game_participants import CREATE_GAME_PARTICIPANTS_SQL, extract_puuids, insert_game_participants
 
@@ -1860,6 +1861,11 @@ def _classic_revisit_eligible_at_ms(
         except (TypeError, ValueError):
             previous_ms = current_ms
     return max(current_ms, previous_ms + interval_ms)
+
+
+def _build_sgp_history_source(lcu: LCUClient, *, min_interval_sec: float, host: str) -> SGPHistorySource:
+    """Factory seam so tests can inject a fake SGP source."""
+    return SGPHistorySource(SGPMatchHistoryClient(lcu, host=host, min_interval_sec=min_interval_sec))
 
 
 def _extract_participant_puuids(detail: dict) -> list[str]:
@@ -4226,10 +4232,22 @@ def run_snowball(
     classic_revisit_max_hours: float = 168.0,
     writer_client: Any | None = None,
     storage: SnowballWriterFacade | None = None,
+    history_source: str = "lcu",
+    sgp_min_interval_sec: float = 1.0,
+    sgp_host: str = DEFAULT_SGP_HOST,
 ) -> CrawlStats:
-    """Expand the LCU-visible player graph and save unseen target-queue matches."""
+    """Expand the LCU-visible player graph and save unseen target-queue matches.
+
+    ``history_source="sgp"`` reads each claimed player's window straight from
+    Riot SGP (see ``aram_nn.lcu.sgp``): one request returns the whole window with
+    all ten participants, so no per-game LCU detail read follows and the
+    LeagueClient match-history cache does not grow.  Any SGP failure falls back
+    to the LCU path for that visit.
+    """
     if target_queues is None:
         target_queues = DEFAULT_QUEUES
+    if history_source not in {"lcu", "sgp"}:
+        raise ValueError(f"history_source must be 'lcu' or 'sgp', not {history_source!r}")
 
     creds = get_credentials()
     if creds is None:
@@ -4427,6 +4445,16 @@ def run_snowball(
         current_patch = _major_minor_patch(get_game_version(lcu))
         if games_per_player == 0 and current_patch is None:
             raise RuntimeError("Could not determine current League patch from LCU")
+        sgp_source = (
+            _build_sgp_history_source(lcu, min_interval_sec=sgp_min_interval_sec, host=sgp_host)
+            if history_source == "sgp"
+            else None
+        )
+        if sgp_source is not None:
+            print(
+                f"[snowball] history source=sgp  min_interval={sgp_min_interval_sec:g}s  worker={worker_id}",
+                flush=True,
+            )
         me = _get_current_summoner_with_retry(lcu)
         my_puuid = str(me["puuid"]) if me and me.get("puuid") else ""
         my_name = (me or {}).get("gameName") or (me or {}).get("displayName") or "?"
@@ -4705,7 +4733,18 @@ def run_snowball(
             waiting_logged = False
             empty_queue_wait_started_at = None
 
-            history = get_match_history(lcu, puuid, begin=0, end=history_window)
+            sgp_history = sgp_source.history(puuid, history_window) if sgp_source is not None else None
+            if sgp_history is not None:
+                history = sgp_history
+                history_used = "sgp"
+                # Each SGP row is already a full games/{id} detail.
+                sgp_details = {str(row["gameId"]): row for row in sgp_history if row.get("gameId") is not None}
+            else:
+                history = get_match_history(lcu, puuid, begin=0, end=history_window)
+                history_used = "lcu"
+                sgp_details = {}
+            if sgp_source is not None and history_used == "sgp" and sgp_source.stats.visits % 200 == 0:
+                print(f"[sgp] {sgp_source.stats.summary()}  worker={worker_id}", flush=True)
             observed_match_created_ms = _latest_any_match_created_ms(history)
             classic_profile = _classic_affinity_profile(
                 history,
@@ -4750,7 +4789,7 @@ def run_snowball(
                 f"[snowball] player {stats.processed_players}/{max_players}  "
                 f"depth={depth}  source={source:<6}  player=redacted  "
                 f"target_games={len(game_ids)}  pending={max(0, _pending_player_count(db) - 1)}  "
-                f"worker={worker_id}"
+                f"history={history_used}  worker={worker_id}"
             )
 
             new_games_for_player = 0
@@ -4766,7 +4805,13 @@ def run_snowball(
                     continue
                 game_claim = game_claim_response if isinstance(game_claim_response, GameClaim) else None
 
-                detail = get_game_detail(lcu, game_id)
+                detail = sgp_details.get(game_id)
+                if detail is not None and len(detail.get("participants") or []) != 10 and sgp_source is not None:
+                    # A batch row without ten players (privacy-trimmed customs do
+                    # this) gets one single-game SGP read before it is filtered.
+                    detail = sgp_source.game_detail(game_id) or detail
+                if detail is None:
+                    detail = get_game_detail(lcu, game_id)
                 if not detail:
                     _release_game_claim(db, game_id, game_claim)
                     stats.failed_games += 1
@@ -4871,6 +4916,10 @@ def run_snowball(
             )
             if requeued_on_finish:
                 stats.requeued_players += 1
+
+        if sgp_source is not None:
+            print(f"[sgp] final {sgp_source.stats.summary()}  worker={worker_id}", flush=True)
+            sgp_source.close()
 
     pending_after = _pending_player_count(db)
     if con is not None:

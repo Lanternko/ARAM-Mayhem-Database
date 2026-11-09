@@ -152,6 +152,7 @@ def _run_snowball_fleet(
     control_file: Path | None = None,
     id_gap_producers: int = 0,
     id_gap_kwargs: dict | None = None,
+    sgp_producers: int = 0,
 ) -> None:
     """Run one writer plus N RPC-only producers as one foreground fleet.
 
@@ -159,6 +160,9 @@ def _run_snowball_fleet(
     sequence instead of the player frontier; each gets its own writer channel.
     They never finish on their own, so the fleet's natural end is decided by
     the snowball producers alone.
+
+    The first ``sgp_producers`` snowball producers read player history from
+    Riot SGP directly instead of the LCU (see ``aram_nn.lcu.sgp``).
     """
     from aram_nn.lcu.writer_supervisor import WriterSupervisor
 
@@ -202,6 +206,7 @@ def _run_snowball_fleet(
                 include_riot_tier=bool(run_kwargs["include_riot_tier"] and should_seed),
                 seed_riot_ids=run_kwargs["seed_riot_ids"] if should_seed else (),
                 seed_riot_id_files=run_kwargs["seed_riot_id_files"] if should_seed else (),
+                history_source="sgp" if idx < max(0, int(sgp_producers)) else "lcu",
             )
             stdout_path = log_dir / f"snowball_{worker_id}.log"
             stderr_path = log_dir / f"snowball_{worker_id}.err"
@@ -212,7 +217,10 @@ def _run_snowball_fleet(
             )
             process.start()
             worker_ids[process.pid] = worker_id
-            click.echo(f"  {worker_id}: producer_pid={process.pid} mode={'seed' if should_seed else 'consume'}")
+            click.echo(
+                f"  {worker_id}: producer_pid={process.pid} mode={'seed' if should_seed else 'consume'} "
+                f"history={kwargs['history_source']}"
+            )
             return process
 
     def spawn_id_gap(idx: int, client) -> multiprocessing.Process:
@@ -1813,6 +1821,11 @@ def snowball(
               help="Cold start only: begin at the newest stored game this many hours back")
 @click.option("--id-gap-queue", "id_gap_queues", multiple=True, type=int, default=(2400, 450),
               show_default=True, help="Queue IDs the ID-gap sweep commits (repeatable)")
+@click.option("--sgp-producers", default=0, show_default=True, type=click.IntRange(0, 16),
+              help="First N snowball producers read history from Riot SGP instead of LCU "
+                   "(no LeagueClient cache growth, no per-game LCU detail reads)")
+@click.option("--sgp-min-interval-sec", default=1.0, show_default=True, type=click.FloatRange(min=0.2),
+              help="Minimum spacing between SGP requests per producer")
 def snowball_workers(
     db: Path,
     workers: int,
@@ -1856,6 +1869,8 @@ def snowball_workers(
     id_gap_lag_hours: float,
     id_gap_start_lookback_hours: float,
     id_gap_queues: tuple[int, ...],
+    sgp_producers: int,
+    sgp_min_interval_sec: float,
 ) -> None:
     """Run one foreground writer supervisor with multiple RPC-only producers."""
     if workers < 1:
@@ -1864,6 +1879,7 @@ def snowball_workers(
 
     try:
         _run_snowball_fleet(
+            sgp_producers=sgp_producers,
             db=db,
             workers=workers,
             log_dir=log_dir,
@@ -1911,7 +1927,8 @@ def snowball_workers(
                 classic_claim_percent=classic_claim_percent,
                 classic_revisit_min_hours=classic_revisit_min_hours,
                 classic_revisit_max_hours=classic_revisit_max_hours,
-            ),
+            )
+            | {"sgp_min_interval_sec": sgp_min_interval_sec},
         )
     except (RuntimeError, ValueError) as exc:
         click.echo(f"[error] {exc}", err=True)
