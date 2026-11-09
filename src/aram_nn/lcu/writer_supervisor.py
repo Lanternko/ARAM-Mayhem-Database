@@ -5,6 +5,9 @@ from collections import deque
 from dataclasses import dataclass
 import json
 import multiprocessing
+import os
+import sys
+import traceback
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
@@ -28,6 +31,45 @@ _CONTROL_MAX_BYTES = 4096
 _BATCH_MAX_REQUESTS = 200
 _BATCH_MAX_BYTES = 16 * 1024 * 1024
 _BATCH_MAX_SECONDS = 0.025
+# Producers give up on a request after 30s (WriterClient default_timeout) and
+# then crash with WRITER_RESPONSE_TIMEOUT.  Log anything that takes a sizeable
+# share of that so the stalling command shows up before the timeout does.
+_SLOW_REQUEST_MS = float(os.environ.get("ARAM_WRITER_SLOW_MS", "2000"))
+
+
+_LOG_STREAM: Any = None  # set in the writer process when a log_path is given
+
+
+def _log(line: str) -> None:
+    stream = _LOG_STREAM if _LOG_STREAM is not None else sys.stderr
+    if stream is None:  # pythonw without redirected handles
+        return
+    try:
+        stream.write(line + "\n")
+        stream.flush()
+    except (OSError, ValueError):
+        pass
+
+
+def _log_slow_request(
+    *,
+    command: str | None,
+    operation: str,
+    channel: str,
+    wait_ms: float,
+    handle_ms: float,
+    pending: int,
+    status: str,
+) -> None:
+    if max(wait_ms, handle_ms) < _SLOW_REQUEST_MS:
+        return
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    _log(
+        f"[writer] slow request {stamp} command={command} operation={operation or '-'} "
+        f"channel={channel} handle_ms={handle_ms:.0f} wait_ms={wait_ms:.0f} pending={pending} status={status}"
+    )
+
+
 _PRIORITY_COMMANDS = frozenset(
     {
         "player_claim",
@@ -92,10 +134,17 @@ def _writer_process_main(
     lifecycle: Any,
     metrics: Any,
     drain_timeout: float,
+    log_path: str | None = None,
 ) -> None:
+    global _LOG_STREAM
+    if log_path:
+        try:
+            _LOG_STREAM = open(log_path, "a", encoding="utf-8", buffering=1)
+        except OSError:
+            _LOG_STREAM = None
     service: WriterService | None = None
     open_channels = [True] * len(channels)
-    pending: list[deque[tuple[bytes, str | None, str | None]]] = [deque() for _ in channels]
+    pending: list[deque[tuple[bytes, str | None, str | None, str, float]]] = [deque() for _ in channels]
     cursor = 0
     priority_streak = 0
     drain_deadline: float | None = None
@@ -163,7 +212,7 @@ def _writer_process_main(
                         operation = str(message.get("operation") or "")
                     except ProtocolError:
                         pass
-                    pending[index].append((frame, request_id, command, operation))
+                    pending[index].append((frame, request_id, command, operation, time.monotonic()))
                     received_this_round = True
                     _metric_add(metrics, 0)
                     _metric_add(metrics, 3, len(frame))
@@ -178,7 +227,7 @@ def _writer_process_main(
                     (index for offset in range(len(channels)) for index in [(cursor + offset) % len(channels)] if index in candidates),
                     candidates[0],
                 )
-                frame, request_id, command, operation = pending[selected].popleft()
+                frame, request_id, command, operation, received_at = pending[selected].popleft()
                 cursor = (selected + 1) % max(1, len(channels))
                 priority_streak = priority_streak + 1 if selected in high else 0
                 connection = channels[selected][1]
@@ -192,14 +241,30 @@ def _writer_process_main(
                     response = _error_frame("CLAIMS_STOPPED", request_id)
                     _metric_add(metrics, 2)
                 else:
+                    handle_started = time.monotonic()
+                    status = "ok"
                     try:
                         # This return is the acknowledgement boundary: the
                         # service has committed before these bytes are sent.
                         response = service.handle_bytes(frame, channel_id=channels[selected][0])
                         _metric_add(metrics, 1)
                     except Exception:
+                        status = "INTERNAL_ERROR"
+                        _log(
+                            f"[writer] INTERNAL_ERROR {time.strftime('%Y-%m-%d %H:%M:%S')} command={command} "
+                            f"operation={operation or '-'} channel={channels[selected][0]}\n{traceback.format_exc()}"
+                        )
                         response = _error_frame("INTERNAL_ERROR", request_id)
                         _metric_add(metrics, 2)
+                    _log_slow_request(
+                        command=command,
+                        operation=operation,
+                        channel=str(channels[selected][0]),
+                        wait_ms=(handle_started - received_at) * 1000.0,
+                        handle_ms=(time.monotonic() - handle_started) * 1000.0,
+                        pending=sum(len(queue) for queue in pending),
+                        status=status,
+                    )
                 try:
                     connection.send_bytes(response)
                     _metric_add(metrics, 4, len(response))
@@ -271,6 +336,7 @@ class WriterSupervisor:
         startup_timeout: float = 10.0,
         client_timeout: float | None = 30.0,
         context: multiprocessing.context.BaseContext | None = None,
+        log_path: str | Path | None = None,
     ) -> None:
         if not 1 <= int(worker_count) <= 400:
             raise ValueError("worker_count must be between 1 and 400")
@@ -281,6 +347,8 @@ class WriterSupervisor:
         self.drain_timeout = float(drain_timeout)
         self.startup_timeout = float(startup_timeout)
         self.client_timeout = client_timeout
+        # Writer-side slow-request / INTERNAL_ERROR log (append).  None -> stderr.
+        self.log_path = str(Path(log_path)) if log_path is not None else None
         self._context = context or multiprocessing.get_context("spawn")
         self._lifecycle = self._context.Value("i", STATE_CLOSED, lock=False)
         self._metrics = self._context.Array("Q", len(_METRIC_NAMES), lock=True)
@@ -322,7 +390,7 @@ class WriterSupervisor:
         process = self._context.Process(
             target=_writer_process_main,
             name="aram-single-db-writer",
-            args=(self.db_path, writer_channels, writer_control, self._lifecycle, self._metrics, self.drain_timeout),
+            args=(self.db_path, writer_channels, writer_control, self._lifecycle, self._metrics, self.drain_timeout, self.log_path),
         )
         process.start()
         for _, connection in writer_channels:

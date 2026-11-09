@@ -171,3 +171,29 @@ def test_draining_a_channel_lets_the_next_producer_reuse_it(
         assert client.submit(_ping("after-restart"))["request_id"] == "after-restart"
     finally:
         supervisor.shutdown()
+
+
+def test_slow_requests_are_logged_to_the_writer_log(tmp_path: pathlib.Path, monkeypatch) -> None:
+    # The spawned writer re-imports the module, so the env threshold reaches it.
+    monkeypatch.setenv("ARAM_WRITER_SLOW_MS", "0")
+    log_path = tmp_path / "snowball_writer.log"
+    supervisor = WriterSupervisor(tmp_path / "games.db", 1, log_path=log_path)
+    client = supervisor.start()[0]
+    try:
+        client.submit(_ping("slow-1"))
+    finally:
+        supervisor.shutdown()
+    text = log_path.read_text(encoding="utf-8")
+    assert "[writer] slow request" in text
+    assert "command=ping" in text and "channel=worker-0" in text and "status=ok" in text
+
+
+def test_slow_request_log_respects_threshold(capsys) -> None:
+    from aram_nn.lcu import writer_supervisor as ws
+
+    kwargs = dict(command="game_claim", operation="", channel="worker-1", pending=3, status="ok")
+    ws._log_slow_request(wait_ms=10.0, handle_ms=ws._SLOW_REQUEST_MS - 1, **kwargs)
+    assert capsys.readouterr().err == ""
+    ws._log_slow_request(wait_ms=ws._SLOW_REQUEST_MS + 5, handle_ms=1.0, **kwargs)
+    err = capsys.readouterr().err
+    assert "command=game_claim" in err and "operation=-" in err and "pending=3" in err

@@ -175,7 +175,10 @@ def _run_snowball_fleet(
     control_file.parent.mkdir(parents=True, exist_ok=True)
     control_file.unlink(missing_ok=True)
     id_gap_producers = max(0, int(id_gap_producers))
-    supervisor = WriterSupervisor(db, workers + id_gap_producers, context=context)
+    # Channel worker-N is the N-th producer: W01.., then G01...
+    supervisor = WriterSupervisor(
+        db, workers + id_gap_producers, context=context, log_path=log_dir / "snowball_writer.log"
+    )
     clients = supervisor.start()
     processes: list[multiprocessing.Process] = []
     worker_ids: dict[int, str] = {}
