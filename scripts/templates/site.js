@@ -11333,7 +11333,7 @@
                 button.setAttribute('aria-label', full);
                 button.removeAttribute('title');  // custom .open-tip replaces the slow native tooltip
                 const tip = button.querySelector('.open-tip');
-                if (tip) tip.textContent = full;
+                if (tip) tip.replaceChildren(Object.assign(document.createElement('b'), { textContent: name }), Object.assign(document.createElement('span'), { textContent: hint }));
             });
         }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');

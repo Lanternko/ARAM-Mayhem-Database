@@ -3912,11 +3912,11 @@ def render_html(
                  "<button type='button' data-champion-open='expand' aria-pressed='true' aria-label='展開式：向下展開面板'>"
                  "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
                  "<path d='M7 2h10'/><path d='M5 6h14'/><rect x='3' y='10' width='18' height='12' rx='2'/></svg>"
-                 "<span class='open-tip' aria-hidden='true'>展開式：向下展開面板</span></button>"
+                 "<span class='open-tip' aria-hidden='true'><b>展開式</b><span>向下展開面板</span></span></button>"
                  "<button type='button' data-champion-open='page' aria-pressed='false' aria-label='分頁式：打開新分頁看完整內容'>"
                  "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
                  "<path d='M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6'/><path d='m21 3-9 9'/><path d='M15 3h6v6'/></svg>"
-                 "<span class='open-tip' aria-hidden='true'>分頁式：打開新分頁看完整內容</span></button></div></div>"
+                 "<span class='open-tip' aria-hidden='true'><b>分頁式</b><span>打開新分頁看完整內容</span></span></button></div></div>"
                  "<p id='champion-list-hint' hidden></p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail

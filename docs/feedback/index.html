@@ -1902,8 +1902,9 @@
     .champion-open-toggle button:nth-child(2) { --tip-arrow: 70px; }
     .open-tip {
         position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left;
         width: max-content;
-        padding: 7px 11px; border-radius: 2px;
+        padding: 8px 12px; border-radius: 2px;
         background: var(--nfx-fg, var(--text)); color: var(--nfx-on-fg, var(--bg));
         font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: .02em; white-space: nowrap;
         box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
@@ -1919,6 +1920,8 @@
         opacity: 1; visibility: visible; transform: none;
         transition: opacity .1s ease .06s, transform .1s ease .06s, visibility 0s linear .06s;
     }
+    .open-tip > b { font-size: 14px; font-weight: 700; }
+    .open-tip > span { font-size: 12.5px; font-weight: 500; letter-spacing: .01em; opacity: .78; }
     @media (hover: none) { .open-tip { display: none; } }
     .champion-table-wrap { overflow-x: auto; margin-top: 20px; }
     .champion-table-wrap[hidden] { display: none; }
