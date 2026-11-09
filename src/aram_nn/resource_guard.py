@@ -187,6 +187,10 @@ class ResourceGuardState:
     resume_requires_full_window: bool = False
     last_capture_age_min: float | None = None
     nonpause_samples: int = 0
+    # Consecutive samples whose *system* counters were recovery-healthy,
+    # whatever LeagueClient was doing.  Lets a planned client restart skip the
+    # conservative single-producer step when system memory never wavered.
+    system_healthy_samples: int = 0
 
 
 @dataclass(frozen=True)
@@ -299,20 +303,23 @@ def evaluate_resource_guard(
     )
     system_pressure = pause_pressure or degrade_pressure
     recovery_client_limit = config.client_degrade_mb - 400.0
-    healthy = (
+    system_healthy = (
         sample.complete
         and commit_recovered
         and available_mb is not None
         and available_mb >= config.resume_available_mb
+    )
+    system_healthy_samples = (
+        min(state.system_healthy_samples + 1, recovery_samples) if system_healthy else 0
+    )
+    healthy = (
+        system_healthy
         and client_pressure_mb is not None
         and client_pressure_mb < recovery_client_limit
     )
 
     resume_safe = (
-        sample.complete
-        and commit_recovered
-        and available_mb is not None
-        and available_mb >= config.resume_available_mb
+        system_healthy
         and client_pressure_mb is not None
         and client_pressure_mb < config.client_degrade_mb
     )
@@ -344,6 +351,18 @@ def evaluate_resource_guard(
             reason = "degrade-level pressure restarts the conservative single-producer fleet"
     elif healthy:
         next_healthy_samples = min(state.healthy_samples + 1, recovery_samples)
+        if (
+            next_healthy_samples < recovery_samples
+            and system_healthy_samples >= recovery_samples
+            and not state.resume_requires_full_window
+        ):
+            # Only LeagueClient reset the window: its hysteresis band or the
+            # planned leak restart, while system memory stayed healthy for a
+            # full window.  A freshly restarted client sits far below the band,
+            # so the single-producer step bought nothing but a second fleet
+            # rebuild (and seed pass) two minutes later (2026-11-09: every
+            # ~35-minute restart cycle).
+            next_healthy_samples = recovery_samples
         if next_healthy_samples >= recovery_samples:
             desired_workers = normal_workers
             state_name = "healthy"
@@ -396,6 +415,7 @@ def evaluate_resource_guard(
         ),
         last_capture_age_min=last_capture_age,
         nonpause_samples=nonpause_samples,
+        system_healthy_samples=system_healthy_samples,
     )
     decision = ResourceDecision(
         actual_workers=actual_workers,

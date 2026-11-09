@@ -1303,7 +1303,13 @@ class WriterService:
             return "new"
 
         old_source, old_priority, old_depth, old_game, old_latest, old_crawled, processed, old_family, process_count, new_games, first_seen, last_crawled, old_queue_id, old_affinity, old_rank = row
-        best_source = source if priority < int(old_priority) or (priority == int(old_priority) and depth < int(old_depth)) else str(old_source)
+        # The seed pass stamps "now" as the discovery time, which would always
+        # beat last_crawled_match_created_ms; keep recently crawled roots put.
+        # last_crawled_at is wall-clock ISO (_utc_now), so compare in wall time.
+        recent_seed = _snowball()._manual_seed_recently_crawled(source, last_crawled, _now_ms())
+        if recent_seed:
+            discovered_ms = 0
+        best_source =source if priority < int(old_priority) or (priority == int(old_priority) and depth < int(old_depth)) else str(old_source)
         best_priority = min(priority, int(old_priority))
         best_depth = min(depth, int(old_depth))
         effective_family = str(old_family or "")
@@ -1324,7 +1330,7 @@ class WriterService:
             (best_source, best_priority, best_depth, best_game, latest, effective_family,
              effective_queue, affinity, effective_rank, puuid),
         )
-        should_requeue = int(processed or 0) == 1 and (
+        should_requeue = int(processed or 0) == 1 and not recent_seed and (
             discovered_ms > int(old_crawled or 0)
             or (source == "manual_riot_id" and int(old_crawled or 0) == 0)
         )

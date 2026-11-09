@@ -363,3 +363,59 @@ def test_client_band_still_holds_a_single_producer_and_still_degrades_above_it()
 
     assert held.desired_workers == 1
     assert degraded.desired_workers == 1 and degraded.client_pressure is True
+
+
+def _leak_controller() -> guard.ResourceGuard:
+    # Live shape on 2026-11-09: degrade == planned-restart threshold == 4500.
+    return guard.ResourceGuard(
+        guard.ResourceGuardConfig(
+            normal_workers=2, degraded_workers=1, client_degrade_mb=4500
+        )
+    )
+
+
+def test_planned_client_restart_resumes_full_fleet_when_system_stayed_healthy() -> None:
+    controller = _leak_controller()
+    for _ in range(3):
+        assert controller.decide(_sample(), 2, 3500.0, 0.5).desired_workers == 2
+    # LeagueClient leaks into its band, then past the restart threshold.
+    assert controller.decide(_sample(), 2, 4300.0, 0.5).desired_workers == 2
+    assert controller.decide(_sample(), 2, 4520.0, 0.5).desired_workers == 1
+
+    # Fresh client after the planned restart: system memory never wavered, so
+    # there is nothing to probe with a single producer first.
+    decision = controller.decide(_sample(), 0, 900.0, 2.0)
+
+    assert decision.desired_workers == 2
+    assert decision.state == "healthy"
+
+
+def test_cold_start_still_begins_with_one_producer() -> None:
+    decision = _leak_controller().decide(_sample(), 0, 900.0, 2.0)
+
+    assert decision.desired_workers == 1
+    assert decision.state == "recovering"
+
+
+def test_system_pressure_inside_window_keeps_conservative_restart() -> None:
+    controller = _leak_controller()
+    for _ in range(3):
+        controller.decide(_sample(), 2, 3500.0, 0.5)
+    controller.decide(_sample(commit_percent=82.0), 2, 3500.0, 0.5)
+
+    decision = controller.decide(_sample(), 0, 900.0, 2.0)
+
+    assert decision.desired_workers == 1
+
+
+def test_system_pause_still_requires_full_recovery_window_after_client_restart() -> None:
+    controller = _leak_controller()
+    for _ in range(3):
+        controller.decide(_sample(), 2, 3500.0, 0.5)
+    assert controller.decide(_sample(commit_percent=95.0), 2, 3500.0, 0.5).desired_workers == 0
+
+    first = controller.decide(_sample(), 0, 900.0, 2.0)
+    second = controller.decide(_sample(), 0, 900.0, 2.0)
+    third = controller.decide(_sample(), 0, 900.0, 2.0)
+
+    assert (first.desired_workers, second.desired_workers, third.desired_workers) == (0, 0, 2)

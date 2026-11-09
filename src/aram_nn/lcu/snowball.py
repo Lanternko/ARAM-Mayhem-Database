@@ -60,7 +60,7 @@ _SOURCE_FAMILY_RESEED_COOLDOWN_SEC = 20 * 60
 _SOURCE_FAMILY_BACKOFF_ZERO_STREAK = 25
 _SOURCE_FAMILY_BACKOFF_SEC = 45 * 60
 _MANUAL_SEED_HOT_WINDOW_HOURS = 24
-_MANUAL_SEED_WARM_WINDOW_HOURS = 72
+_MANUAL_SEED_CURSOR_KEY = "manual_riot_id_seed_cursor"
 _LCU_UNAVAILABLE_RETRY_DELAY_MS = 60_000
 _SCHEMA_INIT_RETRY_ATTEMPTS = 60
 _SCHEMA_INIT_RETRY_SLEEP_SEC = 2.0
@@ -716,6 +716,29 @@ def _utc_now() -> str:
 
 def _now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _manual_seed_recently_crawled(source: str, last_crawled_at: object, now_ms: int) -> bool:
+    """Whether a manual seed root was crawled inside the hot window.
+
+    The seed pass runs at every fleet start and stamps each root with the
+    current time as its discovered freshness.  That always beats the root's
+    last crawl, so an already crawled root was requeued at the head of the
+    queue on every start.  With LeagueClient restarting every ~35 minutes for
+    its match-history leak, the same ~60 OPGG roots took 12-18% of all visits
+    for 0.11 new games each (2026-11-09).  A root crawled inside the window
+    has no newer evidence than that crawl, so its fake freshness is ignored.
+    """
+    if source != "manual_riot_id" or not last_crawled_at:
+        return False
+    try:
+        crawled = datetime.fromisoformat(str(last_crawled_at).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if crawled.tzinfo is None:
+        crawled = crawled.replace(tzinfo=timezone.utc)
+    age_ms = int(now_ms) - int(crawled.timestamp() * 1000)
+    return age_ms < _MANUAL_SEED_HOT_WINDOW_HOURS * 60 * 60 * 1000
 
 
 def _get_current_summoner_with_retry(lcu: LCUClient, attempts: int = 5, sleep_sec: float = 1.0) -> dict | None:
@@ -2399,6 +2422,9 @@ def _enqueue_player(
         old_classic_rank,
         old_classic_revisit_interval_ms,
     ) = row
+    recent_seed = _manual_seed_recently_crawled(source, last_crawled_at, _now_ms())
+    if recent_seed:
+        discovered_match_created_ms = 0
     best_source, best_priority, best_depth = _pick_best_metadata(
         str(old_source),
         int(old_priority),
@@ -2448,7 +2474,7 @@ def _enqueue_player(
     )
     con.commit()
 
-    should_requeue = int(processed) == 1 and (
+    should_requeue = int(processed) == 1 and not recent_seed and (
         int(discovered_match_created_ms) > int(last_crawled_match_ms)
         or (source == "manual_riot_id" and int(last_crawled_match_ms) == 0)
     )
@@ -3918,8 +3944,6 @@ def _seed_manual_riot_ids(
         return 0
 
     now_ms = _now_ms()
-    hot_cutoff_ms = now_ms - (_MANUAL_SEED_HOT_WINDOW_HOURS * 60 * 60 * 1000)
-    warm_cutoff_ms = now_ms - (_MANUAL_SEED_WARM_WINDOW_HOURS * 60 * 60 * 1000)
 
     existing_open = _open_queue_source_count(con, "manual_riot_id")
     remaining_budget = max(0, pending_cap - existing_open) if pending_cap > 0 else None
@@ -3930,6 +3954,19 @@ def _seed_manual_riot_ids(
             flush=True,
         )
         return 0
+
+    # Resume where the previous pass stopped.  Roots crawled inside the hot
+    # window no longer requeue (see _manual_seed_recently_crawled), so starting
+    # from the top every time would re-walk an ever longer prefix of them with
+    # LCU lookups before reaching a root that can still be queued.
+    total_records = len(seed_records)
+    try:
+        cursor = int(_get_runtime_state_text(con, _MANUAL_SEED_CURSOR_KEY) or 0) % total_records
+    except (TypeError, ValueError):
+        cursor = 0
+    if cursor:
+        seed_records = seed_records[cursor:] + seed_records[:cursor]
+    visited = 0
 
     total_chunks = (len(seed_records) + _LCU_RIOT_ID_LOOKUP_BATCH - 1) // _LCU_RIOT_ID_LOOKUP_BATCH
     resolved_total = 0
@@ -3945,6 +3982,7 @@ def _seed_manual_riot_ids(
         }
         resolved_total += len(by_alias)
         for seed_family, riot_id in chunk:
+            visited += 1
             match = by_alias.get(riot_id)
             lcu_puuid = str(match.get("puuid") or "").strip() if match else ""
             if not lcu_puuid:
@@ -3986,9 +4024,12 @@ def _seed_manual_riot_ids(
                 flush=True,
             )
 
+    next_cursor = (cursor + visited) % total_records
+    _set_runtime_state_text(con, _MANUAL_SEED_CURSOR_KEY, str(next_cursor))
     print(
         f"[snowball] manual_riot_id activity  "
-        f"resolved={resolved_total}  enqueued={added}",
+        f"resolved={resolved_total}  enqueued={added}  "
+        f"cursor={cursor}->{next_cursor}/{total_records}",
         flush=True,
     )
     return added
