@@ -53,6 +53,7 @@ python scripts/lcu_collector.py family-stats --queue 2400
 - 已有 recovery action：分辨等待 ready、重試失敗、workers 已拉起但未收場，以及已持續成長。Action 名稱或 process 存在本身不是成功證據。
 - LCU 401/connection failure：重新抓 current credentials 與 `current_summoner`；通常是 restart 後 port/token 變更或 `/lol-*` 尚未 ready，不是 TLS cert 真過期。
 - 資源暫停但 LeagueClient 不大：查 `stall_forensics/memory_pressure_*.json` 的 `Riot Client.exe` private_mb。它自 2026-10-21 起反覆漏到 9–16GB（正常約 0.9–1.4GB），LeagueClient 重啟會沿用同一個 Riot Client 所以救不回來。Watchdog 在安全 phase 且最大 Riot Client 程序達 `--riot-client-restart-mb`（預設 3000，0 停用）時，會重啟 League 並關掉所有 Riot Client 冷啟動；action 帶 `closed_riot_pids`，每輪紀錄帶 `riot_client_metrics`。
+- 漏的是 `Riot Client.exe`（CEF 介面，6–7 個程序），不是 `RiotClientServices.exe`。Watchdog 預設 `--close-riot-ux`：重啟後 LCU ready 就關掉介面（action `close_riot_client_ux`，平時省 ~1.6GB commit，也沒有東西可漏）；介面不在時 remoting 不會回應，所以下一次 LeagueClient 重啟會直接關掉所有 Riot Client 冷啟動（`closed_riot_pids` 非空是正常的）。介面被關掉期間 LCU 與收集都正常（2026-11-09 實測）。要恢復舊行為用 `--no-close-riot-ux`。
 - Riot remoting 回 424：現有 Riot Client 的 product launcher 無法開 League；watchdog 必須殺掉 Riot Client 再冷啟動。不要對同一個 instance 反覆 POST。
 - Workers alive、done 增加、幾乎全是 `target_games=0`：active subgraph 已吃乾，換 seed page window。
 - `recent-active` 只短暫打開 queue，隨即回到零產出：換 root seed family，不要反覆 recent-active。

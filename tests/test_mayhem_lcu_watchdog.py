@@ -302,6 +302,10 @@ def _stub_check_once(monkeypatch, tmp_path: Path, *, restart_client: bool, worke
     monkeypatch.setattr(WATCHDOG, "append_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(WATCHDOG, "close_league_client", lambda: closed.append(True) or [303])
     monkeypatch.setattr(WATCHDOG, "start_league_client", lambda: {"started": True})
+    # Never touch the real Riot Client from tests; the UX is "still open" by
+    # default so restarts keep their warm-relaunch behaviour.
+    monkeypatch.setattr(WATCHDOG, "riot_client_ux_pids", lambda: [9001])
+    monkeypatch.setattr(WATCHDOG, "close_riot_client_ux", lambda: [])
     def unexpected_wait(*args, **kwargs):
         raise AssertionError("Unexpected client restart in mocked cycle")
 
@@ -959,3 +963,72 @@ def test_check_once_leaves_healthy_riot_client_alone(monkeypatch, tmp_path: Path
     assert closed == []
     assert closed_riot == []
     assert record["riot_client_metrics"]["pressure_mb"] == 1400.0
+
+
+def test_riot_client_ux_name_excludes_services() -> None:
+    assert WATCHDOG._is_riot_client_ux_name("Riot Client.exe")
+    assert WATCHDOG._is_riot_client_ux_name("Riot Client")
+    assert not WATCHDOG._is_riot_client_ux_name("RiotClientServices.exe")
+    assert not WATCHDOG._is_riot_client_ux_name("RiotClientCrashHandler.exe")
+    assert not WATCHDOG._is_riot_client_ux_name("LeagueClient.exe")
+
+
+def test_close_riot_ux_defaults_on(monkeypatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["mayhem_lcu_watchdog.py"])
+    assert WATCHDOG.parse_args().close_riot_ux is True
+
+
+def test_restart_closes_ux_after_lcu_ready(monkeypatch, tmp_path: Path) -> None:
+    """2026-11-09: LCU ran 12+ min healthy with the leaking UX host closed."""
+    args, closed, closed_riot = _stub_riot_restart(monkeypatch, tmp_path, 10795.0)
+    args.close_riot_ux = True
+    closed_ux: list[bool] = []
+    monkeypatch.setattr(WATCHDOG, "close_riot_client_ux", lambda: closed_ux.append(True) or [672, 23496])
+
+    record = WATCHDOG.check_once(args)
+
+    assert closed_ux == [True]
+    ux = next(a for a in record["actions"] if a["action"] == "close_riot_client_ux")
+    assert ux["pids"] == [672, 23496]
+
+
+def test_restart_cold_boots_riot_when_ux_already_closed(monkeypatch, tmp_path: Path) -> None:
+    """Without the UX the remoting endpoint is dead, so a plain LeagueClient
+    memory restart must recycle the Riot Client instead of warm-relaunching."""
+    args, closed, closed_riot = _stub_riot_restart(monkeypatch, tmp_path, 400.0)
+    args.close_riot_ux = True
+    args.riot_client_restart_mb = 3000.0
+    monkeypatch.setattr(WATCHDOG, "riot_client_ux_pids", lambda: [])
+    monkeypatch.setattr(
+        WATCHDOG,
+        "league_main_metrics",
+        lambda: {"rss_mb": 400.0, "private_mb": 9000.0, "pressure_mb": 9000.0,
+                 "pressure_metric": "max(rss_mb,private_mb)"},
+    )
+
+    record = WATCHDOG.check_once(args)
+
+    restart = next(a for a in record["actions"] if a["action"] == "restart_league_client")
+    assert restart["reason"].startswith("LeagueClient memory")
+    assert closed_riot == [True]
+    assert restart["closed_riot_pids"] == [34424]
+
+
+def test_restart_keeps_warm_relaunch_when_ux_close_disabled(monkeypatch, tmp_path: Path) -> None:
+    args, closed, closed_riot = _stub_riot_restart(monkeypatch, tmp_path, 400.0)
+    args.close_riot_ux = False
+    monkeypatch.setattr(WATCHDOG, "riot_client_ux_pids", lambda: [])
+    ux_calls: list[bool] = []
+    monkeypatch.setattr(WATCHDOG, "close_riot_client_ux", lambda: ux_calls.append(True) or [1])
+    monkeypatch.setattr(
+        WATCHDOG,
+        "league_main_metrics",
+        lambda: {"rss_mb": 400.0, "private_mb": 9000.0, "pressure_mb": 9000.0,
+                 "pressure_metric": "max(rss_mb,private_mb)"},
+    )
+
+    record = WATCHDOG.check_once(args)
+
+    assert any(a["action"] == "restart_league_client" for a in record["actions"])
+    assert closed_riot == []
+    assert ux_calls == []

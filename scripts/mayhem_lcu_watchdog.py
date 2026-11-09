@@ -717,6 +717,54 @@ def close_riot_client(grace_sec: int = 10) -> list[int]:
     return closed
 
 
+def _is_riot_client_ux_name(name: str) -> bool:
+    """The CEF UX host ("Riot Client.exe"), not RiotClientServices.exe."""
+    return name.lower().removesuffix(".exe").strip() == "riot client"
+
+
+def riot_client_ux_pids() -> list[int]:
+    pids: list[int] = []
+    for proc in iter_processes():
+        try:
+            if _is_riot_client_ux_name(proc.info.get("name") or ""):
+                pids.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return pids
+
+
+def close_riot_client_ux(grace_sec: int = 10) -> list[int]:
+    """Stop only the Riot Client UX host once League is up.
+
+    2026-11-09: the "Riot Client.exe" CEF host (6-7 processes, ~1.6GB commit at
+    rest) is what leaks to 9-16GB; LCU stays healthy for the whole League
+    session without it while RiotClientServices.exe keeps running.  Without the
+    UX the Riot remoting endpoint stops answering, so the next LeagueClient
+    restart must cold-boot the Riot Client (see ``check_once``).
+    """
+    targets = []
+    for proc in iter_processes():
+        try:
+            if _is_riot_client_ux_name(proc.info.get("name") or ""):
+                targets.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    closed: list[int] = []
+    for proc in targets:
+        try:
+            proc.terminate()
+            closed.append(proc.pid)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    _, alive = psutil.wait_procs(targets, timeout=grace_sec)
+    for proc in alive:
+        try:
+            proc.kill()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return closed
+
+
 RIOT_CLIENT_RESTART_REASON_PREFIX = "Riot Client memory"
 
 
@@ -1420,9 +1468,13 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         closed = close_league_client()
         # LeagueClient restarts normally reuse the running Riot Client, so a
         # leaking Riot Client survives them; recycle it so start is a cold boot.
+        # With the UX host closed (``--close-riot-ux``) the Riot remoting
+        # endpoint no longer answers, so a warm relaunch would only fall into
+        # start_league_client's zombie path; cold-boot deliberately instead.
+        ux_closed = bool(getattr(args, "close_riot_ux", False)) and not riot_client_ux_pids()
         closed_riot = (
             close_riot_client()
-            if restart_reason.startswith(RIOT_CLIENT_RESTART_REASON_PREFIX)
+            if restart_reason.startswith(RIOT_CLIENT_RESTART_REASON_PREFIX) or ux_closed
             else []
         )
         started = start_league_client()
@@ -1465,6 +1517,10 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         resource_decision, _ = apply_disk_guard(args, resource_decision, disk)
         target_workers = resource_decision.desired_workers
         actions.append({"action": "wait_for_lcu_ready", **ready})
+        if ready.get("ready") and getattr(args, "close_riot_ux", False):
+            closed_ux = close_riot_client_ux()
+            if closed_ux:
+                actions.append({"action": "close_riot_client_ux", "pids": closed_ux})
 
     workers = snowball_workers()
     if health["ok"]:
@@ -1552,6 +1608,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--id-gap-rps", type=float, default=2.0)
     parser.add_argument("--degrade-client-mb", type=float, default=4500.0)
     parser.add_argument("--client-restart-mb", type=float, default=6000.0)
+    # Close the leaking Riot Client UX host once LCU is ready after a restart.
+    parser.add_argument("--close-riot-ux", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
         "--riot-client-restart-mb",
         type=float,
