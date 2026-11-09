@@ -11061,12 +11061,13 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 const mode = button.getAttribute('data-champion-open');
                 button.setAttribute('aria-pressed', String(mode === championOpenMode));
                 const [name, hint] = mode === 'expand'
-                    ? [pickLang('展開式', 'Expand'), pickLang('往下展開', 'Expand below')]
-                    : [pickLang('分頁式', 'Page'), pickLang('開新分頁', 'Open in new tab')];
-                button.setAttribute('aria-label', `${name}：${hint}`);
+                    ? [pickLang('展開式', 'Expand'), pickLang('向下展開面板', 'Open the panel below')]
+                    : [pickLang('分頁式', 'Page'), pickLang('打開新分頁看完整內容', 'Open a new tab with full details')];
+                const full = `${name}${pickLang('：', ': ')}${hint}`;
+                button.setAttribute('aria-label', full);
                 button.removeAttribute('title');  // custom .open-tip replaces the slow native tooltip
                 const tip = button.querySelector('.open-tip');
-                if (tip) tip.textContent = hint;
+                if (tip) tip.textContent = full;
             });
         }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');

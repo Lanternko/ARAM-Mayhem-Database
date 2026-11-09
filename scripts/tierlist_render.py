@@ -3909,14 +3909,14 @@ def render_html(
                  "<h1 id='champion-list-title' class='sr-only'>英雄快速查詢</h1>"
                  # Home only: how a champion click opens — inline expand or the champion page.
                  "<div class='champion-open-toggle' id='champion-open-toggle' role='group' aria-label='點選英雄時'>"
-                 "<button type='button' data-champion-open='expand' aria-pressed='true' aria-label='展開式：往下展開'>"
+                 "<button type='button' data-champion-open='expand' aria-pressed='true' aria-label='展開式：向下展開面板'>"
                  "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
-                 "<rect x='3' y='3' width='18' height='6' rx='1.5'/><rect x='3' y='12' width='18' height='9' rx='1.5'/><path d='M9 15.5l3 2.5 3-2.5'/></svg>"
-                 "<span class='open-tip' aria-hidden='true'>往下展開</span></button>"
-                 "<button type='button' data-champion-open='page' aria-pressed='false' aria-label='分頁式：開新分頁'>"
+                 "<path d='M7 2h10'/><path d='M5 6h14'/><rect x='3' y='10' width='18' height='12' rx='2'/></svg>"
+                 "<span class='open-tip' aria-hidden='true'>展開式：向下展開面板</span></button>"
+                 "<button type='button' data-champion-open='page' aria-pressed='false' aria-label='分頁式：打開新分頁看完整內容'>"
                  "<svg viewBox='0 0 24 24' width='22' height='22' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'>"
-                 "<path d='M13 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7'/><path d='M15 3h6v6'/><path d='M21 3l-9 9'/></svg>"
-                 "<span class='open-tip' aria-hidden='true'>開新分頁</span></button></div></div>"
+                 "<path d='M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6'/><path d='m21 3-9 9'/><path d='M15 3h6v6'/></svg>"
+                 "<span class='open-tip' aria-hidden='true'>分頁式：打開新分頁看完整內容</span></button></div></div>"
                  "<p id='champion-list-hint' hidden></p></div>")
     # Role chips scroll away; search-rail is a *sibling of the tier list*
     # (not nested in a short chrome row) so position:sticky survives detail
