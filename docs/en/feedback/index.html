@@ -1889,7 +1889,9 @@
     .champion-open-toggle[hidden] { display: none; }
     .champion-open-toggle button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 40px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
     .champion-open-toggle button:hover { color: var(--text); background: var(--surface-2); }
-    .champion-open-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
+    .champion-open-toggle button[aria-pressed="true"],
+    .champion-open-toggle button[aria-pressed="true"]:hover { background: var(--nfx-fg, var(--text)); color: var(--nfx-on-fg, var(--bg)); }
+    .champion-open-toggle svg { stroke-width: 2.4; }
     .champion-open-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .view-home[data-view="champions"] .champion-table-wrap { display: none; }
     /* Open-mode tooltip: custom, near-instant (native title waits ~1s). Anchored to the group
@@ -11032,6 +11034,15 @@ html[data-theme=light]{
 /* ── header ── */
 html:not(.nfx-off) .site-header{background:linear-gradient(180deg,rgba(var(--nfx-head),.92) 0%,rgba(var(--nfx-head),.6) 70%,rgba(var(--nfx-head),0) 100%)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:0!important}
 html:not(.nfx-off) .site-header.scrolled{background:rgb(var(--nfx-head))!important}
+/* ── light theme: neutral #f0f0f0 page, #fdfdfe cards — no pure #fff (2026-11-09).
+   Same (0,2,0) weight as the base light palette, later in file → wins. Pure neutral greys, cards lift off the page;
+   no tint, no texture. Accent / tier colours unchanged. ── */
+:root[data-theme=light]{
+  --bg:#f0f0f0;--surface:#fdfdfe;--surface-raised:#fdfdfe;--surface-2:#e8e8e8;--surface-sunken:#ebebeb;
+  --chip-bg:#e6e6e6;--overlay:#fdfdfe;--tip-surface:#fdfdfe;
+  --panel-surface:#fdfdfe;--panel-inner:#f5f5f5;--panel-quiet:#f0f0f0;
+  --nfx-head:240,240,240;--nfx-field:#fdfdfe;--nfx-panel:rgba(253,253,254,.97);
+  --nfx-search:#e3e3e3;--nfx-search-focus:#fdfdfe}
 .site-header-inner{min-height:68px;gap:32px!important}
 .nav-tabs{gap:12px!important}
 .nav-ind{display:none!important}
