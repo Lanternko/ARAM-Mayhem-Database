@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -87,7 +88,9 @@ def _retry_after_sec(response: httpx.Response) -> float:
 class SGPMatchHistoryClient:
     """Paced SGP reads authenticated with the LCU entitlements access token.
 
-    Never logs or raises the token.  Single-threaded: one instance per producer.
+    Never logs or raises the token.  Token refresh and pacing are locked, so
+    one instance can serve a thread pool (the id-gap sweeper probes 3-8 IDs at
+    once and paces them itself with ``min_interval_sec=0``).
     """
 
     def __init__(
@@ -119,11 +122,17 @@ class SGPMatchHistoryClient:
         self._token_refresh_at = 0.0
         self._last_request_at: float | None = None
         self._rate_limited_until = 0.0
+        self._token_lock = threading.Lock()
+        self._pace_lock = threading.Lock()
 
     def close(self) -> None:
         self._http.close()
 
     def _access_token(self, *, force: bool = False) -> str:
+        with self._token_lock:
+            return self._access_token_locked(force=force)
+
+    def _access_token_locked(self, *, force: bool) -> str:
         now = self._clock()
         if not force and self._token and now < self._token_refresh_at:
             return self._token
@@ -139,6 +148,10 @@ class SGPMatchHistoryClient:
         return token
 
     def _pace(self) -> None:
+        with self._pace_lock:
+            self._pace_locked()
+
+    def _pace_locked(self) -> None:
         now = self._monotonic()
         if now < self._rate_limited_until:
             raise SGPRateLimited(self._rate_limited_until - now)
@@ -192,8 +205,13 @@ class SGPMatchHistoryClient:
     def game(self, game_id: str | int) -> dict | None:
         """One v5 ``json`` block by platform game ID, or None when unknown."""
         data = self._get_json(f"/match-history-query/v1/products/lol/{self._platform_prefix}_{int(game_id)}/SUMMARY")
+        if data is None:
+            return None
         block = data.get("json") if isinstance(data, dict) else None
-        return block if isinstance(block, dict) else None
+        if not isinstance(block, dict):
+            # A 200 without a game is not a verdict that the ID is unused.
+            raise SGPError("SGP game SUMMARY response has no json block")
+        return block
 
 
 def _perk_fields(perks: object) -> dict[str, int]:

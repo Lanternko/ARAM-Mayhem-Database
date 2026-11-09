@@ -58,14 +58,22 @@ $argsList = @(
     # never dropped under 18GB (p5) in the same window.
     "--degrade-client-mb", "4500",
     "--client-restart-mb", "4500",
-    # 2026-11-09 ramp: the first producer reads match history straight from Riot
-    # SGP (one batch request per player, all 10 participants per game) instead
-    # of the LCU, so its visits add nothing to the LeagueClient match-history
-    # cache above and skip the per-game LCU detail reads.  Any SGP failure falls
-    # back to LCU for that visit; 3 failures or a 429 open a 5-minute breaker.
-    # Raise to 2 once a day of W01 logs shows no 429s and no fallbacks.
-    "--sgp-producers", "1",
+    # 2026-11-09: every reader goes straight to Riot SGP instead of the LCU.
+    # Snowball producers fetch one batch per player (all 10 participants per
+    # game), so their visits add nothing to the LeagueClient match-history
+    # cache above and skip the per-game LCU detail reads; W01 ran on SGP first
+    # (~3.8x an LCU producer, no 429s/fallbacks) before W02 joined.  Any SGP
+    # failure falls back to LCU for that visit/ID; 3 failures or a 429 open a
+    # 5-minute breaker (longer if Retry-After says so).
+    "--sgp-producers", "2",
     "--sgp-min-interval-sec", "1.0",
+    # G01 walks every TW2 game ID in order.  TW2 allocates ~13.3k IDs/h; on the
+    # LCU (~1.5s/ID) the sweep managed ~9k/h and fell a day behind.  SGP answers
+    # the same 404/200 verdicts in ~0.2s, so 4 rps x 6 in flight (~14.4k IDs/h)
+    # outpaces allocation and lets the cursor catch up to the lag frontier.
+    "--id-gap-source", "sgp",
+    "--id-gap-rps", "4",
+    "--id-gap-concurrency", "6",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
     # running are left alone, so the old value created a trap -- workers were
     # observed running fine with the client at 5,199MB, but once they needed a

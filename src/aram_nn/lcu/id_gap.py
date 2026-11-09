@@ -38,6 +38,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, NamedTuple
 
 from .poller import _parse_game_detail
+from .sgp import SGPError, SGPMatchHistoryClient, SGPRateLimited, sgp_game_to_lcu_detail
 from .snowball import (
     SnowballWriterClaimsStopped,
     SnowballWriterFacade,
@@ -314,7 +315,7 @@ class IdGapSweeper:
                 cursor = next_cursor
                 batches += 1
                 if state == "progress" and batches % 10 == 0:
-                    self.log(f"[id-gap] cursor={cursor} {self.stats.summary()} worker={self.worker_id}")
+                    self.log(f"[id-gap] cursor={cursor} {self.stats.summary()}{self._probe_summary()} worker={self.worker_id}")
                 if state == "caught_up":
                     self.log(f"[id-gap] caught up to the {self.config.lag_hours:g}h lag frontier at {cursor}; {self.stats.summary()}")
                     self._sleep_unless_stopped(self.config.caught_up_sleep_sec, should_stop)
@@ -331,8 +332,12 @@ class IdGapSweeper:
                     break
         except SnowballWriterClaimsStopped:
             self.log("[id-gap] writer stopped claims; exiting")
-        self.log(f"[id-gap] done: {self.stats.summary()} worker={self.worker_id}")
+        self.log(f"[id-gap] done: {self.stats.summary()}{self._probe_summary()} worker={self.worker_id}")
         return self.stats
+
+    def _probe_summary(self) -> str:
+        summary = getattr(self.probe, "summary", None)
+        return f" {summary()}" if callable(summary) else ""
 
 
 class _LcuProbe:
@@ -368,6 +373,122 @@ class _LcuProbe:
             self._client.close()
 
 
+class _LcuTokenSource:
+    """``get()`` against whatever LCU connection the probe holds right now.
+
+    The LCU probe rebuilds its client after a League restart; the SGP client
+    keeps this indirection so it always asks the live connection for a token.
+    """
+
+    def __init__(self, lcu_probe: "_LcuProbe") -> None:
+        self._probe = lcu_probe
+
+    def get(self, path: str) -> Any:
+        client = self._probe._client
+        return client.get(path) if client is not None else None
+
+
+class _SgpProbe:
+    """Probe IDs through Riot SGP, falling back to the LCU probe per ID.
+
+    SGP ``/match-history-query/v1/products/lol/TW2_{id}/SUMMARY`` is the
+    service LCU ``games/{id}`` proxies, with the same 404 for unused, non-LoL
+    and in-progress IDs -- but without LeagueClient's ~0.4-7s plugin latency,
+    which capped the LCU sweep below the platform's ID allocation rate.  The
+    LCU connection still issues the access token.
+
+    Any SGP failure sends that ID to LCU; ``failure_threshold`` consecutive
+    failures, or any 429, send every ID to LCU for ``cooldown_sec`` (or the
+    server's Retry-After, if longer).  Thread-safe: the sweeper probes
+    ``concurrency`` IDs at once and paces them itself.
+    """
+
+    def __init__(
+        self,
+        lcu_probe: Callable[[int], ProbeResult],
+        client: Any,
+        *,
+        failure_threshold: int = 3,
+        cooldown_sec: float = 300.0,
+        log: Callable[[str], None] = print,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.lcu = lcu_probe
+        self.client = client
+        self._failure_threshold = max(1, int(failure_threshold))
+        self._cooldown_sec = max(1.0, float(cooldown_sec))
+        self._log = log
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
+        self._failures = 0
+        self._disabled_until = 0.0
+        self.sgp_found = 0
+        self.sgp_not_found = 0
+        self.lcu_fallbacks = 0
+        self.rate_limited = 0
+
+    def reconnect(self) -> None:
+        reconnect = getattr(self.lcu, "reconnect", None)
+        if reconnect is not None:
+            reconnect()
+
+    def _trip(self, seconds: float, reason: str) -> None:
+        self._disabled_until = self._monotonic() + seconds
+        self._failures = 0
+        self._log(f"[id-gap] sgp circuit open for {seconds:.0f}s; probing via LCU  reason={reason}")
+
+    def _fallback(self, game_id: int) -> ProbeResult:
+        with self._lock:
+            self.lcu_fallbacks += 1
+        return self.lcu(game_id)
+
+    def __call__(self, game_id: int) -> ProbeResult:
+        with self._lock:
+            circuit_open = self._monotonic() < self._disabled_until
+            if not circuit_open and self._disabled_until:
+                self._disabled_until = 0.0
+                self._log("[id-gap] sgp circuit closed; probing via SGP")
+        if circuit_open:
+            return self._fallback(game_id)
+        try:
+            block = self.client.game(game_id)
+        except SGPRateLimited as exc:
+            with self._lock:
+                self.rate_limited += 1
+                if self._monotonic() >= self._disabled_until:
+                    self._trip(max(self._cooldown_sec, exc.retry_after_sec), "rate_limited")
+            return self._fallback(game_id)
+        except SGPError as exc:
+            with self._lock:
+                self._failures += 1
+                if self._failures >= self._failure_threshold and self._monotonic() >= self._disabled_until:
+                    self._trip(self._cooldown_sec, str(exc))
+            return self._fallback(game_id)
+        with self._lock:
+            self._failures = 0
+            if block is None:
+                self.sgp_not_found += 1
+            else:
+                self.sgp_found += 1
+        if block is None:
+            return ProbeResult(404, None)
+        return ProbeResult(200, sgp_game_to_lcu_detail(block))
+
+    def summary(self) -> str:
+        return (
+            f"sgp_200={self.sgp_found} sgp_404={self.sgp_not_found} "
+            f"lcu_fallback={self.lcu_fallbacks} sgp_429={self.rate_limited}"
+        )
+
+    def close(self) -> None:
+        try:
+            self.client.close()
+        finally:
+            close = getattr(self.lcu, "close", None)
+            if close is not None:
+                close()
+
+
 def run_id_gap(
     *,
     writer_client: Any,
@@ -378,8 +499,15 @@ def run_id_gap(
     lag_hours: float = 4.0,
     start_lookback_hours: float = 24.0,
     claim_timeout_sec: int = 300,
+    source: str = "lcu",
 ) -> IdGapStats:
-    """Fleet entry point: run one sweeper until the writer stops claims."""
+    """Fleet entry point: run one sweeper until the writer stops claims.
+
+    ``source="sgp"`` probes through Riot SGP and keeps LCU as the per-ID and
+    circuit-breaker fallback (see ``_SgpProbe``).
+    """
+    if source not in {"lcu", "sgp"}:
+        raise ValueError(f"unknown id-gap source: {source!r}")
     # Request IDs are journaled in writer_requests; a prefix that repeats across
     # restarts replays "id-gap-G01-0" with a different payload and the writer
     # rejects it (REQUEST_ID_CONFLICT). Keep the worker id for readability but
@@ -393,19 +521,26 @@ def run_id_gap(
         start_lookback_hours=float(start_lookback_hours),
         claim_timeout_ms=max(1, int(claim_timeout_sec)) * 1000,
     )
-    probe = None
-    while probe is None:
+    lcu_probe = None
+    while lcu_probe is None:
         try:
-            probe = _LcuProbe()
+            lcu_probe = _LcuProbe()
         except RuntimeError:
             print("[id-gap] League client not found; retrying in 30s", flush=True)
             time.sleep(30.0)
+
+    def log(line: str) -> None:
+        print(line, flush=True)
+
+    probe: Any = lcu_probe
+    if source == "sgp":
+        # The sweeper's rps throttle paces requests; the client adds none.
+        probe = _SgpProbe(lcu_probe, SGPMatchHistoryClient(_LcuTokenSource(lcu_probe), min_interval_sec=0.0), log=log)
     try:
-        sweeper = IdGapSweeper(storage, probe, config, reconnect=probe.reconnect, worker_id=worker_id,
-                               log=lambda line: print(line, flush=True))
+        sweeper = IdGapSweeper(storage, probe, config, reconnect=probe.reconnect, worker_id=worker_id, log=log)
         print(
             f"[id-gap] start worker={worker_id} queues={sorted(config.target_queues)} rps={config.rps:g} concurrency={config.concurrency} "
-            f"lag={config.lag_hours:g}h",
+            f"lag={config.lag_hours:g}h source={source}",
             flush=True,
         )
         return sweeper.run()

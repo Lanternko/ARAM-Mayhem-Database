@@ -924,6 +924,11 @@ def start_snowball_fleet(args: argparse.Namespace, worker_count: int) -> dict[st
         str(max(0, int(getattr(args, "id_gap_producers", 0)))),
         "--id-gap-rps",
         str(getattr(args, "id_gap_rps", 2.0)),
+        "--id-gap-concurrency",
+        str(max(1, int(getattr(args, "id_gap_concurrency", 3)))),
+        # sgp: probe Riot SGP directly (LCU stays the per-ID / breaker fallback).
+        "--id-gap-source",
+        str(getattr(args, "id_gap_source", "lcu")),
         # First N snowball producers read history straight from Riot SGP
         # (aram_nn.lcu.sgp), so their visits do not grow the LeagueClient
         # match-history cache that drives the planned client restarts.
@@ -1613,6 +1618,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--id-gap-producers", type=int, default=1,
                         help="Game-ID gap sweep producers added to the fleet (0 disables)")
     parser.add_argument("--id-gap-rps", type=float, default=2.0)
+    parser.add_argument("--id-gap-concurrency", type=int, default=3)
+    parser.add_argument("--id-gap-source", choices=["lcu", "sgp"], default="lcu")
     parser.add_argument("--sgp-producers", type=int, default=0,
                         help="Snowball producers that read history from Riot SGP instead of LCU")
     parser.add_argument("--sgp-min-interval-sec", type=float, default=1.0)

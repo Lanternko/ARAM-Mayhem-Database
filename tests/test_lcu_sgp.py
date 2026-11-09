@@ -360,3 +360,148 @@ def test_sgp_failure_falls_back_to_lcu_for_that_visit(tmp_path: Path, monkeypatc
 def test_unknown_history_source_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         snowball.run_snowball(tmp_path / "x.db", history_source="riot")
+
+
+# --- id-gap sweep through SGP (G01) -------------------------------------------------
+
+from aram_nn.lcu import id_gap  # noqa: E402
+from aram_nn.lcu.id_gap import ProbeResult, _SgpProbe  # noqa: E402
+
+
+def test_game_by_id_maps_404_and_rejects_200_without_game() -> None:
+    clock = _Clock()
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path.endswith("TW2_1/SUMMARY"):
+            return httpx.Response(200, json={"json": _v5_game(1)})
+        if request.url.path.endswith("TW2_2/SUMMARY"):
+            return httpx.Response(404)
+        return httpx.Response(200, json={"metadata": {}})
+
+    client = _client(handler, _FakeLCU([_jwt(clock.now + 3600)]), clock, min_interval=0.0)
+    assert client.game(1)["gameId"] == 1
+    assert client.game(2) is None
+    with pytest.raises(SGPError):
+        client.game(3)
+    assert seen[0] == "/match-history-query/v1/products/lol/TW2_1/SUMMARY"
+
+
+class _ScriptedSgp:
+    def __init__(self, script: list) -> None:
+        self.script = list(script)
+        self.calls: list[int] = []
+        self.closed = False
+
+    def game(self, game_id: int):
+        self.calls.append(game_id)
+        step = self.script.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _LcuIdProbe:
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+        self.reconnects = 0
+
+    def __call__(self, game_id: int) -> ProbeResult:
+        self.calls.append(game_id)
+        return ProbeResult(200, {"from": "lcu", "gameId": game_id})
+
+    def reconnect(self) -> None:
+        self.reconnects += 1
+
+
+def test_sgp_probe_maps_verdicts_and_converts_games() -> None:
+    lcu = _LcuIdProbe()
+    probe = _SgpProbe(lcu, _ScriptedSgp([_v5_game(7), None]), log=lambda _: None)
+    found = probe(7)
+    assert found.status == 200
+    assert _parse_game_detail(found.body, {2400})["game_id"] == "7"
+    assert probe(8) == ProbeResult(404, None)
+    assert lcu.calls == []
+    assert probe.summary() == "sgp_200=1 sgp_404=1 lcu_fallback=0 sgp_429=0"
+
+
+def test_sgp_probe_falls_back_per_id_then_opens_after_threshold() -> None:
+    clock = _Clock()
+    lcu = _LcuIdProbe()
+    logs: list[str] = []
+    sgp = _ScriptedSgp([SGPError("boom"), SGPError("boom"), SGPError("boom"), None])
+    probe = _SgpProbe(lcu, sgp, failure_threshold=3, cooldown_sec=300, log=logs.append, monotonic=clock)
+    for gid in (1, 2, 3):
+        assert probe(gid).body == {"from": "lcu", "gameId": gid}
+    assert any("circuit open for 300s" in line for line in logs)
+    # Open: SGP is not even tried.
+    assert probe(4).body["from"] == "lcu"
+    assert sgp.calls == [1, 2, 3]
+    clock.now += 301
+    assert probe(5) == ProbeResult(404, None)
+    assert any("circuit closed" in line for line in logs)
+    assert lcu.calls == [1, 2, 3, 4]
+    assert "lcu_fallback=4" in probe.summary()
+
+
+def test_sgp_probe_success_resets_failure_count() -> None:
+    lcu = _LcuIdProbe()
+    sgp = _ScriptedSgp([SGPError("x"), SGPError("x"), None, SGPError("x"), SGPError("x"), None])
+    probe = _SgpProbe(lcu, sgp, failure_threshold=3, log=lambda _: None)
+    for gid in range(6):
+        probe(gid)
+    assert sgp.calls == list(range(6))  # never tripped
+
+
+def test_sgp_probe_rate_limit_trips_for_retry_after() -> None:
+    clock = _Clock()
+    lcu = _LcuIdProbe()
+    sgp = _ScriptedSgp([SGPRateLimited(900), None])
+    probe = _SgpProbe(lcu, sgp, cooldown_sec=300, log=lambda _: None, monotonic=clock)
+    assert probe(1).body["from"] == "lcu"
+    clock.now += 600
+    assert probe(2).body["from"] == "lcu"
+    clock.now += 301
+    assert probe(3) == ProbeResult(404, None)
+    assert "sgp_429=1" in probe.summary()
+
+
+def test_sgp_probe_is_safe_under_concurrent_probes() -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    class _Always404:
+        def game(self, game_id: int):
+            return None
+
+        def close(self) -> None:
+            pass
+
+    probe = _SgpProbe(_LcuIdProbe(), _Always404(), log=lambda _: None)
+    with ThreadPoolExecutor(8) as pool:
+        results = list(pool.map(probe, range(400)))
+    assert all(r.status == 404 for r in results)
+    assert probe.summary() == "sgp_200=0 sgp_404=400 lcu_fallback=0 sgp_429=0"
+
+
+def test_sgp_probe_reconnect_and_close_reach_both_sides() -> None:
+    class _ClosableLcu(_LcuIdProbe):
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    lcu = _ClosableLcu()
+    sgp = _ScriptedSgp([])
+    probe = _SgpProbe(lcu, sgp, log=lambda _: None)
+    probe.reconnect()
+    probe.close()
+    assert lcu.reconnects == 1 and lcu.closed and sgp.closed
+
+
+def test_run_id_gap_rejects_unknown_source(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="id-gap source"):
+        id_gap.run_id_gap(writer_client=object(), source="riot")

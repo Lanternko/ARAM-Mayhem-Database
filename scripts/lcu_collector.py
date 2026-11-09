@@ -1819,6 +1819,8 @@ def snowball(
               help="Stay this far behind real time so in-progress games are never probed")
 @click.option("--id-gap-start-lookback-hours", default=24.0, show_default=True, type=click.FloatRange(min=1.0),
               help="Cold start only: begin at the newest stored game this many hours back")
+@click.option("--id-gap-source", type=click.Choice(["lcu", "sgp"]), default="lcu", show_default=True,
+              help="Where the id-gap sweep reads games: LCU games/{id}, or Riot SGP with LCU as fallback")
 @click.option("--id-gap-queue", "id_gap_queues", multiple=True, type=int, default=(2400, 450),
               show_default=True, help="Queue IDs the ID-gap sweep commits (repeatable)")
 @click.option("--sgp-producers", default=0, show_default=True, type=click.IntRange(0, 16),
@@ -1869,6 +1871,7 @@ def snowball_workers(
     id_gap_lag_hours: float,
     id_gap_start_lookback_hours: float,
     id_gap_queues: tuple[int, ...],
+    id_gap_source: str,
     sgp_producers: int,
     sgp_min_interval_sec: float,
 ) -> None:
@@ -1894,6 +1897,7 @@ def snowball_workers(
                 "concurrency": id_gap_concurrency,
                 "lag_hours": id_gap_lag_hours,
                 "start_lookback_hours": id_gap_start_lookback_hours,
+                "source": id_gap_source,
                 "claim_timeout_sec": claim_timeout_sec,
             },
             run_kwargs=_snowball_run_kwargs(
