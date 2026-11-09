@@ -11063,12 +11063,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 const mode = button.getAttribute('data-champion-open');
                 button.setAttribute('aria-pressed', String(mode === championOpenMode));
                 const [name, hint] = mode === 'expand'
-                    ? [pickLang('展開式', 'Expand'), pickLang('點英雄，在列表中展開增幅與出裝', 'Click a champion to show augments & builds inline')]
-                    : [pickLang('分頁式', 'Page'), pickLang('點英雄，開啟英雄完整頁面', 'Click a champion to open its full page')];
+                    ? [pickLang('展開式', 'Expand'), pickLang('往下展開', 'Expand below')]
+                    : [pickLang('分頁式', 'Page'), pickLang('開新分頁', 'Open in new tab')];
                 button.setAttribute('aria-label', `${name}：${hint}`);
                 button.removeAttribute('title');  // custom .open-tip replaces the slow native tooltip
                 const tip = button.querySelector('.open-tip');
-                if (tip) { tip.firstElementChild.textContent = name; tip.lastElementChild.textContent = hint; }
+                if (tip) tip.textContent = hint;
             });
         }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');
@@ -11864,7 +11864,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
         // Cards are real links: modified clicks open a tab via the href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
-        if (championOpenMode === 'expand' && champ.closest('.view-home[data-view="home"]')) openHomeDetail(champ);
+        const onHome = !!champ.closest('.view-home[data-view="home"]');
+        if (onHome && championOpenMode === 'expand') openHomeDetail(champ);
+        else if (onHome) window.open(pathForRoute('champ', champSlug), '_blank', 'noopener');
         else openChampPage(champSlug);
     });
 

@@ -1900,11 +1900,10 @@
     .champion-open-toggle button:nth-child(2) { --tip-arrow: 70px; }
     .open-tip {
         position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
-        display: flex; flex-direction: column; gap: 3px;
-        width: max-content; max-width: min(280px, calc(100vw - 32px));
-        padding: 9px 12px; border-radius: 2px;
+        width: max-content;
+        padding: 7px 11px; border-radius: 2px;
         background: var(--nfx-fg, var(--text)); color: var(--nfx-on-fg, var(--bg));
-        font-size: 12.5px; line-height: 1.35; text-align: left; white-space: normal;
+        font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: .02em; white-space: nowrap;
         box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
         opacity: 0; visibility: hidden; transform: translateY(-3px); pointer-events: none;
         transition: opacity .1s ease, transform .1s ease, visibility 0s linear .1s;
@@ -1913,8 +1912,6 @@
         content: ""; position: absolute; top: -5px; left: calc(var(--tip-arrow) - 5px);
         border: 5px solid transparent; border-top: 0; border-bottom-color: var(--nfx-fg, var(--text));
     }
-    .open-tip b { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
-    .open-tip > span { opacity: .78; font-weight: 500; }
     .champion-open-toggle button:hover .open-tip,
     .champion-open-toggle button:focus-visible .open-tip {
         opacity: 1; visibility: visible; transform: none;
