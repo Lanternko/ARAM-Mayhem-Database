@@ -221,6 +221,41 @@ def test_wal_checkpointer_backfills_without_the_writer(tmp_path: pathlib.Path) -
     assert _claim(service, "after", "c-after")["status"] == "CLAIMED"
 
 
+def test_wal_checkpointer_truncates_a_grown_wal(tmp_path: pathlib.Path) -> None:
+    db = tmp_path / "games.db"
+    service = WriterService(db)
+    service.con.execute("PRAGMA wal_autocheckpoint=0")
+    for index in range(50):
+        _claim(service, f"g{index}", f"c{index}")
+    wal = pathlib.Path(str(db) + "-wal")
+    assert wal.stat().st_size > 0
+    lines: list[str] = []
+    checkpointer = WalCheckpointer(str(db), log=lines.append, truncate_pages=1)
+    con = sqlite3.connect(db)
+    try:
+        checkpointer.checkpoint_once(con)
+        assert checkpointer.truncations == 1 and wal.stat().st_size == 0
+        assert any("wal truncate" in line and "busy=0" in line for line in lines)
+        # The writer carries on into the fresh log.
+        assert _claim(service, "after", "c-after")["status"] == "CLAIMED"
+
+        # A reader inside the WAL blocks the reset: reported busy, then backed off.
+        reader = sqlite3.connect(db)
+        reader.execute("BEGIN")
+        reader.execute("SELECT COUNT(*) FROM writer_game_claims").fetchone()
+        _claim(service, "more", "c-more")
+        con.execute("PRAGMA busy_timeout=50")
+        checkpointer.checkpoint_once(con)
+        assert checkpointer.truncations == 1 and wal.stat().st_size > 0
+        assert "busy=1" in lines[-1]
+        before = len(lines)
+        checkpointer.checkpoint_once(con)
+        assert len(lines) == before
+        reader.close()
+    finally:
+        con.close()
+
+
 @pytest.mark.parametrize("group_commit", ["1", "0"])
 def test_supervisor_acks_only_durable_writes_under_concurrency(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, group_commit: str

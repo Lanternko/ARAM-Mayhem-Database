@@ -12,8 +12,17 @@ copies whatever no open read transaction still needs.  When it has copied
 everything, the writer's next commit restarts the WAL at offset zero and
 ``journal_size_limit`` (set by :class:`WriterService`) truncates the file.
 
+PASSIVE alone never lets the WAL restart under a continuous write load: by the
+time it finishes, the writer has appended more frames, so the log is never
+fully backfilled at the moment the writer begins a transaction and the file
+only grows.  Once the WAL is past ``truncate_pages`` and PASSIVE has left only
+a small remainder, the thread follows up with ``wal_checkpoint(TRUNCATE)``.
+That holds the write lock for the remainder only (the writer waits on its busy
+timeout), then resets the file to zero bytes.
+
 What it cannot fix: a reader that keeps one read transaction open pins the WAL
-from that point on.  The periodic ``backlog`` log line is how that shows up.
+from that point on.  The periodic ``backlog`` log line is how that shows up,
+and TRUNCATE then reports ``busy=1`` and is retried less often.
 """
 from __future__ import annotations
 
@@ -33,6 +42,9 @@ class WalCheckpointer:
         slow_ms: float = 5000.0,
         backlog_log_pages: int = 262_144,  # 1 GiB of 4 KiB pages
         backlog_log_every_sec: float = 600.0,
+        truncate_pages: int = 131_072,  # 512 MiB of 4 KiB pages; 0 disables
+        truncate_max_backlog_pages: int = 65_536,
+        truncate_busy_retry_sec: float = 300.0,
     ) -> None:
         self._db_path = str(db_path)
         self._interval = max(0.05, float(interval_sec))
@@ -43,6 +55,11 @@ class WalCheckpointer:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_backlog_log = 0.0
+        self._truncate_pages = int(truncate_pages)
+        self._truncate_max_backlog = int(truncate_max_backlog_pages)
+        self._truncate_busy_retry = float(truncate_busy_retry_sec)
+        self._truncate_not_before = 0.0
+        self.truncations = 0
         self.runs = 0
         self.last_result: tuple[int, int, int] | None = None  # (busy, wal pages, checkpointed)
         self.last_error: str | None = None
@@ -90,7 +107,29 @@ class WalCheckpointer:
                 f"[writer] wal checkpoint {time.strftime('%Y-%m-%d %H:%M:%S')} ms={elapsed_ms:.0f} "
                 f"wal_pages={result[1]} checkpointed={result[2]} backlog={backlog} busy={result[0]}"
             )
+        if (
+            self._truncate_pages > 0
+            and result[1] >= self._truncate_pages
+            and backlog <= self._truncate_max_backlog
+            and now >= self._truncate_not_before
+        ):
+            self._truncate(con, result[1])
         return result
+
+    def _truncate(self, con: sqlite3.Connection, wal_pages: int) -> None:
+        started = time.monotonic()
+        row = con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        elapsed_ms = (time.monotonic() - started) * 1000.0
+        busy = int(row[0]) if row else 0
+        if busy:
+            # A reader is still inside the WAL; do not stall the writer every pass.
+            self._truncate_not_before = time.monotonic() + self._truncate_busy_retry
+        else:
+            self.truncations += 1
+        self._emit(
+            f"[writer] wal truncate {time.strftime('%Y-%m-%d %H:%M:%S')} ms={elapsed_ms:.0f} "
+            f"wal_pages={wal_pages} busy={busy}"
+        )
 
     def _run(self) -> None:
         con: sqlite3.Connection | None = None
