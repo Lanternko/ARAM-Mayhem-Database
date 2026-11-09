@@ -65,9 +65,9 @@
            every elevation + the light theme (premium-dark technique). */
         --border: rgba(255, 255, 255, 0.09);
         --border-strong: rgba(255, 255, 255, 0.15);
-        --accent: #f5c518;
-        --accent-soft: #f5d780;
-        --accent-on: #14110a;
+        --accent: #c084fc;
+        --accent-soft: #e2c2ff;
+        --accent-on: #1a0b26;
         /* Zen data surfaces: one quiet elevation for panels, one for their
            contents, and low-chroma status colors so the numbers stay legible
            without turning every row into a traffic light. */
@@ -150,9 +150,9 @@
         --border: rgba(0, 0, 0, 0.10);
         --border-strong: rgba(0, 0, 0, 0.16);
         /* Vivid gold for fills/underline; the darker soft tone is text-only. */
-        --accent: #e0a500;
-        --accent-soft: #9a7100;
-        --accent-on: #14110a;
+        --accent: #9d4edd;
+        --accent-soft: #7e22ce;
+        --accent-on: #ffffff;
         --panel-surface: oklch(0.99 0.006 250);
         --panel-inner: oklch(0.965 0.008 250);
         --panel-quiet: oklch(0.95 0.008 250);
@@ -265,9 +265,9 @@
         font-weight: 600;
         background: transparent;
         border: 0;
-        border-bottom: 1px solid #f5d780;
+        border-bottom: 1px solid #e2c2ff;
         border-radius: 0;
-        color: #f5d780;
+        color: #e2c2ff;
         line-height: 1.2;
     }
     .app-shell {
@@ -433,11 +433,11 @@
     }
     .chip:hover { background: var(--overlay); }
     .chip.active {
-        background: var(--role-color, #f5c518);
+        background: var(--role-color, #c084fc);
         color: #0e1116;
-        border-color: var(--role-color, #f5c518);
+        border-color: var(--role-color, #c084fc);
     }
-    .chip[data-role=""]              { --role-color: #f5c518; }
+    .chip[data-role=""]              { --role-color: #c084fc; }
     .chip[data-role="Assassin"]      { --role-color: #ef4444; }
     .chip[data-role="Fighter"]       { --role-color: #f97316; }
     .chip[data-role="Mage"]          { --role-color: #3b82f6; }
@@ -470,9 +470,9 @@
     }
     .tool-btn:hover { background: var(--overlay); border-color: var(--border-strong); }
     .tool-btn.active {
-        background: #f5d780;
-        border-color: #f5d780;
-        color: #231802;
+        background: #e2c2ff;
+        border-color: #e2c2ff;
+        color: #1a0b26;
     }
     .tool-btn.ghost {
         background: transparent;
@@ -483,8 +483,8 @@
     }
     .tool-btn.update-tab {
         position: relative;
-        border-color: #f5d780;
-        color: #f5d780;
+        border-color: #e2c2ff;
+        color: #e2c2ff;
     }
     .tool-btn.update-tab[aria-expanded="true"] {
         background: transparent;
@@ -1321,7 +1321,7 @@
     }
     .rec-row:hover {
         background: #20263a;
-        border-color: rgba(245,215,128,0.28);
+        border-color: rgba(226, 194, 255,0.28);
         transform: translateY(-1px);
     }
     .rec-row.least-fit {
@@ -1394,7 +1394,7 @@
     }
     .rec-score.fit-top {
         color: oklch(0.91 0.13 92);
-        text-shadow: 0 0 12px rgba(245, 215, 128, 0.24);
+        text-shadow: 0 0 12px rgba(226, 194, 255, 0.24);
     }
     .rec-score.fit-strong { color: oklch(0.84 0.12 92); }
     .rec-score.fit-solid { color: oklch(0.76 0.09 92); }
@@ -1631,14 +1631,14 @@
             transform: translateY(-3px) scale(1.015);
             border-color: color-mix(in srgb, var(--accent) 55%, var(--tier-color, #555));
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
-                        0 8px 24px -8px rgba(245, 197, 24, 0.35);
+                        0 8px 24px -8px rgba(192, 132, 252, 0.35);
             z-index: 1;
         }
     }
     .champ.pick-selected {
         box-shadow:
-            inset 0 0 0 2px rgba(245,215,128,0.95),
-            0 0 0 1px rgba(245,215,128,0.35),
+            inset 0 0 0 2px rgba(226, 194, 255,0.95),
+            0 0 0 1px rgba(226, 194, 255,0.35),
             0 6px 16px rgba(0,0,0,0.38);
     }
     .champ.pick-selected::before {
@@ -1649,8 +1649,8 @@
         width: 18px;
         height: 18px;
         border-radius: 999px;
-        background: #f5d780;
-        color: #231802;
+        background: #e2c2ff;
+        color: #1a0b26;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -1720,7 +1720,7 @@
         border-radius: 0;
     }
     .alt-role-badge {
-        --badge-color: #f5d780;
+        --badge-color: #e2c2ff;
         position: absolute;
         top: 4px;
         right: 4px;
@@ -1885,14 +1885,39 @@
     .champion-list-intro p { margin: 0; font-size: 13px; color: var(--text-muted); }
     .champion-list-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 6px; }
     .champion-list-heading h1 { margin: 0; }
-    .champion-layout-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; }
-    .champion-layout-toggle[hidden] { display: none; }
-    .champion-layout-toggle button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 40px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
-    .champion-layout-toggle button:hover { color: var(--text); background: var(--surface-2); }
-    .champion-layout-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
-    .champion-layout-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .view-home[data-view="champions"][data-champion-layout="table"] .tier-block,
-    .view-home[data-view="champions"][data-champion-layout="table"] .cutoffs { display: none; }
+    .champion-open-toggle { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; }
+    .champion-open-toggle[hidden] { display: none; }
+    .champion-open-toggle button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 40px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
+    .champion-open-toggle button:hover { color: var(--text); background: var(--surface-2); }
+    .champion-open-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
+    .champion-open-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .view-home[data-view="champions"] .champion-table-wrap { display: none; }
+    /* Open-mode tooltip: custom, near-instant (native title waits ~1s). Anchored to the group
+       so both tips share one left-aligned spot under the toggle; the arrow points at the hovered button. */
+    .champion-open-toggle { position: relative; }
+    .champion-open-toggle button { position: static; }
+    .champion-open-toggle button:nth-child(1) { --tip-arrow: 24px; }
+    .champion-open-toggle button:nth-child(2) { --tip-arrow: 70px; }
+    .open-tip {
+        position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
+        width: max-content;
+        padding: 7px 11px; border-radius: 2px;
+        background: var(--nfx-fg, var(--text)); color: var(--nfx-on-fg, var(--bg));
+        font-size: 13px; font-weight: 600; line-height: 1.2; letter-spacing: .02em; white-space: nowrap;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+        opacity: 0; visibility: hidden; transform: translateY(-3px); pointer-events: none;
+        transition: opacity .1s ease, transform .1s ease, visibility 0s linear .1s;
+    }
+    .open-tip::before {
+        content: ""; position: absolute; top: -5px; left: calc(var(--tip-arrow) - 5px);
+        border: 5px solid transparent; border-top: 0; border-bottom-color: var(--nfx-fg, var(--text));
+    }
+    .champion-open-toggle button:hover .open-tip,
+    .champion-open-toggle button:focus-visible .open-tip {
+        opacity: 1; visibility: visible; transform: none;
+        transition: opacity .1s ease .06s, transform .1s ease .06s, visibility 0s linear .06s;
+    }
+    @media (hover: none) { .open-tip { display: none; } }
     .champion-table-wrap { overflow-x: auto; margin-top: 20px; }
     .champion-table-wrap[hidden] { display: none; }
     .champion-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -2704,8 +2729,8 @@
     }
     .meta-help:hover,
     .meta-help:focus-visible {
-        border-color: rgba(245,215,128,0.72);
-        color: #f5d780;
+        border-color: rgba(226, 194, 255,0.72);
+        color: #e2c2ff;
     }
     .meta-help-tip {
         position: absolute;
@@ -2824,15 +2849,15 @@
         outline: none;
     }
     .item-build-card.search-hit {
-        border-color: #f5c518;
-        background: #171711;
+        border-color: #c084fc;
+        background: #16111c;
         box-shadow:
-            0 0 0 2px rgba(245, 197, 24, 0.36),
-            0 10px 24px rgba(245, 197, 24, 0.16);
+            0 0 0 2px rgba(192, 132, 252, 0.36),
+            0 10px 24px rgba(192, 132, 252, 0.16);
         transform: translateY(-2px);
     }
     .item-build-card.search-hit .item-build-icons {
-        background: rgba(245, 197, 24, 0.14);
+        background: rgba(192, 132, 252, 0.14);
     }
     .item-build-card.search-hit .item-build-name span,
     .item-build-card.search-hit .item-build-wr {
@@ -3325,7 +3350,7 @@
         align-items: center;
         gap: 6px;
         margin-right: 4px;
-        --role-color: #f5c518;
+        --role-color: #c084fc;
     }
     .item-scope-dots {
         display: inline-flex;
@@ -3370,7 +3395,7 @@
         cursor: pointer;
         font-family: inherit;
         transition: background 0.1s, border-color 0.1s, color 0.1s;
-        --cat-color: #f5c518;
+        --cat-color: #c084fc;
     }
     .aug-cat-chip:hover { background: #2a3142; border-color: #3a4252; }
     .aug-cat-chip.is-active {
@@ -3694,7 +3719,7 @@
         font-weight: 700;
         font-size: 12px;
         margin-bottom: 4px;
-        color: #f5d780;
+        color: #e2c2ff;
     }
     .aug-tip-desc {
         color: #c5cad3;
@@ -3716,11 +3741,11 @@
        2px colour frame double-codes it and fights the icon.  The rarity-* class
        stays on the card — applyAugTierFilters() reads it for the board filter. */
     .aug.search-hit {
-        background: rgba(245, 197, 24, 0.12);
+        background: rgba(192, 132, 252, 0.12);
         box-shadow:
-            inset 0 0 0 2px #f5c518,
-            0 0 0 2px rgba(245, 197, 24, 0.28),
-            0 10px 22px rgba(245, 197, 24, 0.12);
+            inset 0 0 0 2px #c084fc,
+            0 0 0 2px rgba(192, 132, 252, 0.28),
+            0 10px 22px rgba(192, 132, 252, 0.12);
     }
     .mate-list {
         display: grid;
@@ -4479,10 +4504,10 @@
     }
     .brand-meta {
         font-weight: 700;
-        color: var(--text);
+        color: var(--accent);
     }
     .brand:hover .brand-aram { color: var(--text-secondary, var(--text-muted)); }
-    .brand:hover .brand-meta { color: var(--text); }
+    .brand:hover .brand-meta { color: var(--accent-soft); }
     /* Game-mode switcher. It intentionally matches the Classic page so the
        control keeps one learned location, shape and state vocabulary. */
     .site-header .mode-menu {
@@ -5429,9 +5454,9 @@
     }
     /* Always site accent gold when active (not Fighter orange / role tints). */
     .draft-role-chips .chip.active {
-        background: var(--accent, #f5c518);
+        background: var(--accent, #c084fc);
         color: var(--accent-on, #14110a);
-        border-color: var(--accent, #f5c518);
+        border-color: var(--accent, #c084fc);
         font-weight: 700;
     }
     .draft-pool {
@@ -5682,10 +5707,10 @@
         height: 10px;
         border-radius: 2px;
     }
-    .draft-leg.is-ally { color: var(--accent-soft, #f5d780); }
+    .draft-leg.is-ally { color: var(--accent-soft, #e2c2ff); }
     .draft-leg.is-ally i {
-        background: var(--accent, #f5c518);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #f5c518) 40%, transparent);
+        background: var(--accent, #c084fc);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #c084fc) 40%, transparent);
     }
     .draft-leg.is-enemy { color: #b0b5bd; }
     .draft-leg.is-enemy i {
@@ -5750,8 +5775,8 @@
     .draft-cmp-line.is-ally .draft-cmp-fill {
         background: linear-gradient(
             90deg,
-            color-mix(in srgb, var(--accent, #f5c518) 42%, transparent),
-            var(--accent, #f5c518)
+            color-mix(in srgb, var(--accent, #c084fc) 42%, transparent),
+            var(--accent, #c084fc)
         );
     }
     .draft-cmp-line.is-enemy .draft-cmp-fill {
@@ -5767,13 +5792,13 @@
         white-space: nowrap;
     }
     .draft-cmp-line.is-ally .draft-cmp-val {
-        color: var(--accent-soft, #f5d780);
+        color: var(--accent-soft, #e2c2ff);
     }
     .draft-cmp-line.is-enemy .draft-cmp-val {
         color: #b0b5bd;
     }
     [data-theme="light"] .draft-cmp-line.is-ally .draft-cmp-val {
-        color: var(--accent-soft, #9a7100);
+        color: var(--accent-soft, #7e22ce);
     }
     [data-theme="light"] .draft-cmp-track {
         background: color-mix(in srgb, var(--text) 8%, transparent);
@@ -6328,7 +6353,7 @@
     [data-theme="light"] .aug-rarity-chip.rarity-kGold.is-active {
         border-color: #c99600;
         color: #7a5a00;
-        background: color-mix(in srgb, #f5c518 22%, #ffffff);
+        background: color-mix(in srgb, #c084fc 22%, #ffffff);
     }
     [data-theme="light"] .aug-rarity-chip.rarity-kSilver.is-active {
         border-color: #8b939e;
@@ -7085,7 +7110,7 @@
     }
     .game-mode-tab:hover { color: var(--text, #e6e9ef); }
     .game-mode-tab.is-active {
-        background: var(--accent, #f5c518);
+        background: var(--accent, #c084fc);
         color: #0e1116;
     }
     .game-mode-tab:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
@@ -8255,7 +8280,7 @@
         border-color: rgba(255, 77, 94, 0.28);
     }
     .game-notice.is-ok {
-        border-color: rgba(245, 197, 24, 0.35);
+        border-color: rgba(192, 132, 252, 0.35);
     }
     .game-notice-actions {
         display: flex;
@@ -8440,11 +8465,11 @@
     }
     .game-tile:disabled { cursor: default; }
     .game-tile.is-picked {
-        border-color: rgba(245, 197, 24, 0.55);
-        background: rgba(245, 197, 24, 0.06);
+        border-color: rgba(192, 132, 252, 0.55);
+        background: rgba(192, 132, 252, 0.06);
     }
     .game-tile.is-pinned {
-        border-color: rgba(245, 197, 24, 0.65);
+        border-color: rgba(192, 132, 252, 0.65);
     }
     .game-tile-art {
         aspect-ratio: 1;
@@ -8508,19 +8533,19 @@
     }
     /* 下一回合／鎖定／結算：金色實心主按鈕 */
     .game-actions .tool-btn.game-cta:not([disabled]) {
-        background: var(--accent, #f5c518);
-        border-color: var(--accent, #f5c518);
+        background: var(--accent, #c084fc);
+        border-color: var(--accent, #c084fc);
         color: var(--accent-on, #14110a);
         font-size: 14px;
         font-weight: 800;
         border-radius: 10px;
         box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset,
-                    0 4px 14px -4px rgba(245, 197, 24, 0.45);
+                    0 4px 14px -4px rgba(192, 132, 252, 0.45);
     }
     .game-actions .tool-btn.game-cta:not([disabled]):hover {
         filter: brightness(1.06);
-        background: var(--accent-soft, #f5d780);
-        border-color: var(--accent-soft, #f5d780);
+        background: var(--accent-soft, #e2c2ff);
+        border-color: var(--accent-soft, #e2c2ff);
         color: var(--accent-on, #14110a);
     }
     .game-actions .tool-btn.game-cta:not([disabled]):active {
@@ -8529,11 +8554,11 @@
         box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12) inset;
     }
     .game-actions .tool-btn.game-cta:not([disabled]):focus-visible {
-        outline: 2px solid var(--accent, #f5c518);
+        outline: 2px solid var(--accent, #c084fc);
         outline-offset: 2px;
     }
     :root[data-theme="light"] .game-actions .tool-btn.game-cta:not([disabled]) {
-        color: #14110a;
+        color: var(--accent-on);
     }
     .game-miss-bar {
         width: 100%;
@@ -8578,7 +8603,7 @@
         color: var(--text-muted);
     }
     .game-result-banner.is-ok {
-        border-color: rgba(245, 197, 24, 0.3);
+        border-color: rgba(192, 132, 252, 0.3);
         color: var(--text);
     }
     .game-result-banner.is-miss {
@@ -8657,12 +8682,12 @@
     .game-metric-value.is-bad { color: #ff8a96; }
     /* #1/252 gold when Meta Pick is perfect / sole best */
     .game-metric-value.is-rank-top {
-        color: var(--accent, #f5c518);
+        color: var(--accent, #c084fc);
         font-variant-numeric: tabular-nums;
         letter-spacing: -0.01em;
     }
     .game-metric-sub.is-rank-top {
-        color: var(--accent-soft, #f5d780);
+        color: var(--accent-soft, #e2c2ff);
         font-weight: 800;
         letter-spacing: 0.04em;
     }
@@ -8824,7 +8849,7 @@
     .game-tab:hover { color: var(--text); }
     .game-tab.is-active {
         color: var(--text);
-        border-bottom-color: var(--accent, #f5c518);
+        border-bottom-color: var(--accent, #c084fc);
     }
     .game-tab-panel {
         padding: 0;
@@ -8913,7 +8938,7 @@
         flex-shrink: 0;
     }
     .game-an-swatch.is-yours { background: rgba(196, 200, 208, 0.9); }
-    .game-an-swatch.is-best { background: var(--accent, #f5c518); }
+    .game-an-swatch.is-best { background: var(--accent, #c084fc); }
     /* 右上角大字勝率 */
     .game-an-wr-hero {
         display: flex;
@@ -9140,7 +9165,7 @@
     }
     .game-an-grade.is-num .game-an-grade-val {
         font-size: 20px;
-        color: var(--accent, #f5c518);
+        color: var(--accent, #c084fc);
     }
     .game-an-grade.is-grade-s .game-an-grade-val { color: #f5c518; }
     .game-an-grade.is-grade-ap .game-an-grade-val,
@@ -9318,7 +9343,7 @@
     .game-review-row.is-best .game-review-wr,
     .game-review-row.is-both .game-review-name,
     .game-review-row.is-both .game-review-wr {
-        color: var(--accent, #f5c518);
+        color: var(--accent, #c084fc);
     }
     .game-review-row.is-best img,
     .game-review-row.is-both img {
@@ -9327,7 +9352,7 @@
     }
     .game-review-row.is-best .game-review-rank,
     .game-review-row.is-both .game-review-rank {
-        color: color-mix(in srgb, var(--accent, #f5c518) 55%, var(--text-dim));
+        color: color-mix(in srgb, var(--accent, #c084fc) 55%, var(--text-dim));
     }
     /* 圖例 */
     .game-legend-item.is-picked i {
@@ -9342,7 +9367,7 @@
         color: var(--text);
     }
     .game-legend-item.is-correct {
-        color: var(--accent, #f5c518);
+        color: var(--accent, #c084fc);
         font-weight: 700;
     }
     .game-legend-item.is-correct i {
@@ -9398,7 +9423,7 @@
         font-size: clamp(40px, 9vw, 56px);
         font-weight: 800;
         font-variant-numeric: tabular-nums;
-        color: var(--accent, #f5c518);
+        color: var(--accent, #c084fc);
         letter-spacing: -0.02em;
     }
     .game-settle-avg-sub {
@@ -9521,7 +9546,7 @@
         font-size: 15px;
     }
     .game-settle-input:focus {
-        outline: 2px solid color-mix(in srgb, var(--accent, #f5c518) 55%, transparent);
+        outline: 2px solid color-mix(in srgb, var(--accent, #c084fc) 55%, transparent);
         outline-offset: 1px;
     }
     .game-board-nick {
@@ -9575,9 +9600,9 @@
         cursor: pointer;
     }
     .game-main-none.is-active {
-        border-color: color-mix(in srgb, var(--accent, #f5c518) 70%, var(--border));
+        border-color: color-mix(in srgb, var(--accent, #c084fc) 70%, var(--border));
         color: var(--text);
-        background: color-mix(in srgb, var(--accent, #f5c518) 14%, var(--bg));
+        background: color-mix(in srgb, var(--accent, #c084fc) 14%, var(--bg));
     }
     .game-main-none:disabled { opacity: 0.7; cursor: default; }
     .game-main-search { min-height: 36px; font-size: 13px; }
@@ -9610,8 +9635,8 @@
         display: block;
     }
     .game-main-chip.is-active {
-        border-color: color-mix(in srgb, var(--accent, #f5c518) 85%, var(--border));
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #f5c518) 45%, transparent);
+        border-color: color-mix(in srgb, var(--accent, #c084fc) 85%, var(--border));
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #c084fc) 45%, transparent);
     }
     .game-main-chip.is-hidden { display: none; }
     .game-main-chip:disabled { opacity: 0.7; cursor: default; }
@@ -9664,7 +9689,7 @@
         border: 1px solid var(--border);
     }
     .game-settle-status.is-ok {
-        border-color: rgba(245, 197, 24, 0.35);
+        border-color: rgba(192, 132, 252, 0.35);
         color: var(--text);
     }
     .game-settle-status.is-miss {
@@ -9725,7 +9750,7 @@
     }
     .game-board-pos { width: 2.2em; color: var(--text-dim); }
     .game-board-nick { font-weight: 600; color: var(--text); word-break: break-word; }
-    .game-board-avg { font-weight: 700; color: var(--accent, #f5c518); white-space: nowrap; }
+    .game-board-avg { font-weight: 700; color: var(--accent, #c084fc); white-space: nowrap; }
     .game-board-ranks { color: var(--text-muted); font-size: 12px; }
     @media (max-width: 520px) {
         .game-board-ranks { display: none; }
@@ -9953,6 +9978,8 @@
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
 .champ-pools-purpose-filters { margin-top: 8px; }
 .champ-pool-rarity-chip { --role-color: var(--accent); min-height: 40px; }
+/* Accent-filled chips take the theme's on-accent ink (white on the light purple). */
+.champ-pool-rarity-chip.is-active, .chip[data-role=""].active { color: var(--accent-on); }
 .champ-pool-category { margin-top: 28px; }
 .champ-pool-category > h3 { display: flex; align-items: baseline; gap: 12px; font-size: 20px; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .champ-pool-category > h3 small { margin-left: auto; color: var(--text-muted); font-weight: 400; font-size: 12px; }
@@ -10481,7 +10508,7 @@
     .aug-tier-sort.col-name { text-align: left; }
     .aug-tier-sort.is-active { color: var(--accent); }
     .aug-tier-sort.is-active::after { content: " \25BE"; font-size: 10px; }
-    [data-theme="light"] .aug-tier-sort.is-active { color: #8a6400; }
+    [data-theme="light"] .aug-tier-sort.is-active { color: var(--accent-soft); }
     .aug-tier-list { list-style: none; margin: 0; padding: 0; counter-reset: aug-tier 3; }
     .aug-tier-list.is-full { counter-reset: aug-tier 0; }
     .aug-tier-row[hidden] { display: none; }
@@ -10870,7 +10897,7 @@
     [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(4):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(4),
     [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(5):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(5),
     [data-theme="light"] .detail-page .detail-tabset > .detail-tab-input:nth-of-type(6):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(6) {
-        color: #8a6400;
+        color: var(--accent-soft);
         border-bottom-color: var(--accent);
     }
 
@@ -10983,20 +11010,34 @@
     .quick-augment-name { width: 100%; }
 }
 
-/* ── Netflix-style header + esports filter controls (2026-11-09) ──
-   Dark theme only. Header: gradient that turns solid once .site-header.scrolled is set by site.js.
-   Filters: All selected = white reverse; real filter = solid accent; view switches = slash-split slabs. */
-html[data-theme=dark]{--nfx-fg:#e5e5e5;--nfx-line:rgba(229,229,229,.4);--nfx-on-fg:#141414}
+/* ===== Netflix-style header + esports filter controls (2026-11-09) =====
+   Both themes share one rule set; only the --nfx-* tokens differ.
+   Header: gradient that turns solid once .site-header.scrolled is set by site.js.
+   Filters: "All" selected = neutral reverse; real filter = solid accent; view switches = slash-split slabs.
+   Rules are prefixed with `html:not(.nfx-off)` so they keep the (0,1,1) weight the theme-scoped
+   rules had, whether or not data-theme is set yet. ===== */
+html{
+  --nfx-fg:#e5e5e5;--nfx-strong:#fff;--nfx-line:rgba(229,229,229,.4);--nfx-line-soft:rgba(229,229,229,.2);
+  --nfx-on-fg:#141414;--nfx-accent:#c084fc;--nfx-accent-on:#1a0b26;
+  --nfx-head:10,11,13;--nfx-tab-active:rgba(255,255,255,.16);
+  --nfx-slab:rgba(255,255,255,.07);--nfx-slab-hover:rgba(255,255,255,.12);--nfx-dim:#9a9a9a;
+  --nfx-field:#000;--nfx-placeholder:#8c8c8c;--nfx-panel:rgba(0,0,0,.92)}
+html[data-theme=light]{
+  --nfx-fg:#1c1d21;--nfx-strong:#000;--nfx-line:rgba(28,29,33,.32);--nfx-line-soft:rgba(28,29,33,.14);
+  --nfx-on-fg:#fff;--nfx-accent:#9d4edd;--nfx-accent-on:#fff;
+  --nfx-head:243,245,249;--nfx-tab-active:rgba(0,0,0,.08);
+  --nfx-slab:rgba(0,0,0,.06);--nfx-slab-hover:rgba(0,0,0,.1);--nfx-dim:#6b6e75;
+  --nfx-field:#fff;--nfx-placeholder:#8a8d93;--nfx-panel:rgba(255,255,255,.97)}
 
 /* ── header ── */
-html[data-theme=dark] .site-header{background:linear-gradient(180deg,rgba(10,11,13,.92) 0%,rgba(10,11,13,.6) 70%,rgba(10,11,13,0) 100%)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:0!important}
-html[data-theme=dark] .site-header.scrolled{background:rgb(10,11,13)!important}
+html:not(.nfx-off) .site-header{background:linear-gradient(180deg,rgba(var(--nfx-head),.92) 0%,rgba(var(--nfx-head),.6) 70%,rgba(var(--nfx-head),0) 100%)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:0!important}
+html:not(.nfx-off) .site-header.scrolled{background:rgb(var(--nfx-head))!important}
 .site-header-inner{min-height:68px;gap:32px!important}
 .nav-tabs{gap:12px!important}
 .nav-ind{display:none!important}
-html[data-theme=dark] .header-actions .icon-btn{border:0!important;background:transparent!important;box-shadow:none!important;color:var(--nfx-fg)!important}
+html:not(.nfx-off) .header-actions .icon-btn{border:0!important;background:transparent!important;box-shadow:none!important;color:var(--nfx-fg)!important}
 
-/* ── one pill system: nav tabs + every filter chip ──
+/* ── one control system: nav tabs + every filter chip ──
    Vertical centering: Noto Sans TC's line box (asc 1.16 / desc .29 em) puts glyphs ~1px low.
    text-box trims the box to cap-height..baseline so padding is optically symmetric. */
 .nav-tab,.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab{
@@ -11011,56 +11052,73 @@ html[data-theme=dark] .header-actions .icon-btn{border:0!important;background:tr
   .aug-mode-tab{padding:7px 16px 9px!important}}
 
 /* inactive */
-html[data-theme=dark] .nav-tab{color:var(--nfx-fg)!important;background:transparent!important}
-html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab){
+html:not(.nfx-off) .nav-tab{color:var(--nfx-fg)!important;background:transparent!important}
+html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab){
   color:var(--nfx-fg)!important;background:transparent!important;border:1px solid var(--nfx-line)!important}
-html[data-theme=dark] :is(.nav-tab,.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):hover{border-color:var(--nfx-fg)!important;color:#fff!important}
-/* active: desktop nav = soft pill, everything else = solid white */
-html[data-theme=dark] .nav-tab[aria-selected=true]{background:rgba(255,255,255,.16)!important;color:#fff!important}
-html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):is(.is-active,.active){
+html:not(.nfx-off) :is(.nav-tab,.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):hover{border-color:var(--nfx-fg)!important;color:var(--nfx-strong)!important}
+/* active: desktop nav = soft pill, everything else = solid reverse */
+html:not(.nfx-off) .nav-tab[aria-selected=true]{background:var(--nfx-tab-active)!important;color:var(--nfx-strong)!important}
+html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):is(.is-active,.active){
   background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
-/* segmented container + icon role bar */
-html[data-theme=dark] .aug-mode-tabs{background:transparent!important;border:0!important;gap:8px;padding:0!important}
-html[data-theme=dark] .role-seg-bar{background:transparent!important;border:0!important;gap:6px}
-html[data-theme=dark] .role-seg:not(.chip){border-radius:999px!important;border:1px solid var(--nfx-line)!important;background:transparent!important;color:var(--nfx-fg)!important}
-html[data-theme=dark] .role-seg:not(.chip).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
+/* segmented container + icon role bar. The bar used to be one connected, clipped segment;
+   with separate bordered chips the clip ate the last chip's edge, so overflow must stay visible. */
+html:not(.nfx-off) .aug-mode-tabs{background:transparent!important;border:0!important;gap:8px;padding:0!important}
+html:not(.nfx-off) .role-seg-bar{background:transparent!important;border:0!important;gap:6px;overflow:visible!important;border-radius:0!important}
+html:not(.nfx-off) .role-seg:not(.chip){border-radius:999px!important;border:1px solid var(--nfx-line)!important;background:transparent!important;color:var(--nfx-fg)!important}
+html:not(.nfx-off) .role-seg:not(.chip).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
 
-/* ── search: black field, thin light border, white on focus ── */
-html[data-theme=dark] :is(.search-wrap,.draft-search-wrap){background:#000!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important}
-html[data-theme=dark] :is(.search-wrap,.draft-search-wrap):focus-within{border-color:#fff!important;box-shadow:none!important}
-html[data-theme=dark] :is(.header-search-input,.apool-search){background:#000!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important;padding-left:14px!important}
-html[data-theme=dark] :is(.header-search-input,.apool-search):focus{border-color:#fff!important;box-shadow:none!important;outline:0}
-html[data-theme=dark] :is(.search,.header-search-input,.apool-search){color:#fff!important}
-html[data-theme=dark] :is(.search,.header-search-input,.apool-search)::placeholder{color:#8c8c8c!important}
-html[data-theme=dark] .header-search-panel{background:rgba(0,0,0,.92)!important;border:1px solid rgba(229,229,229,.2)!important;border-radius:4px!important}
+/* ── search: solid shade field (no border, no glass) at rest; on focus the inside goes
+   darker and a crisp 2px border appears. The border is always reserved (transparent) so
+   focus never shifts layout, and background-clip:padding-box stops the fill bleeding under
+   the anti-aliased rounded border edge (that bleed is what reads as a fuzzy rim). ── */
+html{--nfx-search:#2a2a2a;--nfx-search-focus:#141414;--nfx-search-ring:#fff;--nfx-search-icon:#a3a3a3}
+html[data-theme=light]{--nfx-search:#e1e4ea;--nfx-search-focus:#fff;--nfx-search-ring:#1c1d21;--nfx-search-icon:#6b6e75}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap,.header-search-input,.apool-search){
+  background:var(--nfx-search) padding-box!important;
+  border:2px solid transparent!important;border-radius:10px!important;
+  box-shadow:none!important;outline:0!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  transition:background-color .12s,border-color .12s}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within,
+html:not(.nfx-off) :is(.header-search-input,.apool-search):focus{
+  background-color:var(--nfx-search-focus)!important;border-color:var(--nfx-search-ring)!important}
+/* the input inside a wrap is just text on the wrap's fill */
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap) .search{
+  background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;outline:0!important;
+  height:40px!important;padding:0 14px 0 42px!important;font-size:15px!important}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap) svg{
+  width:18px!important;height:18px!important;left:14px!important;stroke-width:2.6;color:var(--nfx-search-icon)!important}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within svg{color:var(--nfx-strong)!important}
+html:not(.nfx-off) :is(.header-search-input,.apool-search){padding-left:14px!important}
+html:not(.nfx-off) :is(.search,.header-search-input,.apool-search){color:var(--nfx-strong)!important;caret-color:var(--nfx-strong)}
+html:not(.nfx-off) :is(.search,.header-search-input,.apool-search)::placeholder{color:var(--nfx-placeholder)!important}
+html:not(.nfx-off) .header-search-panel{background:var(--nfx-panel)!important;border:1px solid var(--nfx-line-soft)!important;border-radius:4px!important}
 
-/* ── v3: header icons at Netflix proportion (icon ≈ 1.4× nav text) ── */
+/* ── header icons at Netflix proportion (icon ≈ 1.4× nav text) ── */
 .header-actions{gap:8px!important}
 .header-actions .icon-btn{min-width:40px!important;height:40px!important;padding:0 8px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:8px}
 .header-actions .icon-btn svg{width:24px!important;height:24px!important}
 .lang-toggle #lang-toggle-label{font-size:15px!important;font-weight:500!important}
 
-/* ── v3: colour only means "a filter is narrowing the list" ──
-   "All" is the resting state → never highlighted. View switches (Tier list / Pools) → neutral soft pill.
-   Real filters → accent tint; rarity chips use their own rarity hue. */
-html[data-theme=dark]{--nfx-accent:#f5c518}
-html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg):is(.is-active,.active){
-  background:var(--nfx-accent)!important;border-color:var(--nfx-accent)!important;color:var(--nfx-on-fg)!important}
-html[data-theme=dark] .aug-rarity-chip.rarity-kPrismatic.is-active{--nfx-accent:#d36bff}
-html[data-theme=dark] .aug-rarity-chip.rarity-kSilver.is-active{--nfx-accent:#c0c5cc}
-/* "All" selected = neutral reverse (white), never a hue */
-html[data-theme=dark] :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
+/* ── colour only means "a filter is narrowing the list" ──
+   "All" is the resting state → neutral reverse. Real filters → accent fill; rarity chips use their own hue. */
+html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg):is(.is-active,.active){
+  background:var(--nfx-accent)!important;border-color:var(--nfx-accent)!important;color:var(--nfx-accent-on)!important}
+html:not(.nfx-off) .aug-rarity-chip.rarity-kPrismatic.is-active{--nfx-accent:#d36bff}
+html:not(.nfx-off) .aug-rarity-chip.rarity-kSilver.is-active{--nfx-accent:#c0c5cc}
+html:not(.nfx-off) .aug-rarity-chip.rarity-kGold.is-active{--nfx-accent:#f5c518;--nfx-accent-on:#141414}
+html:not(.nfx-off) :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
   background:var(--nfx-fg)!important;border-color:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
-/* ── v4: Tier list / Pools = one slab split by a slash (esports scoreboard look) ── */
-html[data-theme=dark] .aug-mode-tabs{display:flex!important;gap:0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important}
-html[data-theme=dark] .aug-mode-tabs .aug-mode-tab{flex:1;border:0!important;border-radius:0!important;padding:12px 28px!important;
+/* ── Tier list / Pools = one slab split by a slash (esports scoreboard look) ── */
+html:not(.nfx-off) .aug-mode-tabs{display:flex!important;gap:0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important}
+html:not(.nfx-off) .aug-mode-tabs .aug-mode-tab{flex:1;border:0!important;border-radius:0!important;padding:12px 28px!important;
   font-size:15px!important;font-weight:600!important;letter-spacing:.04em;
-  background:rgba(255,255,255,.07)!important;color:#9a9a9a!important}
-html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);margin-right:-10px}  /* 14px slant − 10px overlap = 4px slash gap */
-html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%)}
-html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
-html[data-theme=dark] .aug-mode-tabs .aug-mode-tab.is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
+  background:var(--nfx-slab)!important;color:var(--nfx-dim)!important}
+html:not(.nfx-off) .aug-mode-tabs .aug-mode-tab:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);margin-right:-10px}  /* 14px slant − 10px overlap = 4px slash gap */
+html:not(.nfx-off) .aug-mode-tabs .aug-mode-tab:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%)}
+html:not(.nfx-off) .aug-mode-tabs .aug-mode-tab:hover{color:var(--nfx-strong)!important;background:var(--nfx-slab-hover)!important}
+html:not(.nfx-off) .aug-mode-tabs .aug-mode-tab.is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ── mobile ── */
 @media (max-width:640px){
@@ -11069,23 +11127,22 @@ html[data-theme=dark] .aug-mode-tabs .aug-mode-tab.is-active{background:var(--nf
  .lang-toggle #lang-toggle-label{display:none}
  .nav-tabs{gap:8px!important;padding:6px 16px 10px!important;overflow-x:auto;scrollbar-width:none}
  .nav-tab{font-size:15px!important;padding:9px 16px!important}
- html[data-theme=dark] .nav-tab{border:1px solid var(--nfx-line)!important}
- html[data-theme=dark] .nav-tab[aria-selected=true]{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
+ html:not(.nfx-off) .nav-tab{border:1px solid var(--nfx-line)!important}
+ html:not(.nfx-off) .nav-tab[aria-selected=true]{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
 }
 
-/* ── v5: filter chips go square (esports), rarity row = 4-way slash slab ── */
-html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg:not(.chip)){border-radius:2px!important}
-html[data-theme=dark] .aug-rarity-bar{display:flex!important;gap:0!important;width:360px;max-width:100%}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip{flex:1;border:0!important;border-radius:0!important;padding:11px 18px!important;
+/* ── filter chips go square (esports), rarity row = 4-way slash slab ── */
+html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg:not(.chip)){border-radius:2px!important}
+html:not(.nfx-off) .aug-rarity-bar{display:flex!important;gap:0!important;width:360px;max-width:100%}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip{flex:1;border:0!important;border-radius:0!important;padding:11px 18px!important;
   font-size:14px!important;font-weight:600!important;letter-spacing:.04em;margin-right:-10px;
-  background:rgba(255,255,255,.07)!important;color:#9a9a9a!important;
+  background:var(--nfx-slab)!important;color:var(--nfx-dim)!important;
   clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%);margin-right:0}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip.is-active{background:var(--nfx-accent)!important;color:var(--nfx-on-fg)!important}
-html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip[data-rarity=""].is-active{background:var(--nfx-fg)!important}
-
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%);margin-right:0}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:hover{color:var(--nfx-strong)!important;background:var(--nfx-slab-hover)!important}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip.is-active{background:var(--nfx-accent)!important;color:var(--nfx-accent-on)!important}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip[data-rarity=""].is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and

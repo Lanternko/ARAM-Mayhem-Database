@@ -6027,9 +6027,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const radar = compRadarOverlaySvg([
             {
                 axes: allyAxes,
-                stroke: 'var(--accent, #f5c518)',
-                fill: 'color-mix(in srgb, var(--accent, #f5c518) 20%, transparent)',
-                dot: 'var(--accent, #f5c518)',
+                stroke: 'var(--accent, #c084fc)',
+                fill: 'color-mix(in srgb, var(--accent, #c084fc) 20%, transparent)',
+                dot: 'var(--accent, #c084fc)',
             },
             {
                 axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
@@ -8333,9 +8333,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
             },
             {
                 axes: best.axes,
-                stroke: 'var(--accent, #f5c518)',
-                fill: 'color-mix(in srgb, var(--accent, #f5c518) 22%, transparent)',
-                dot: 'var(--accent, #f5c518)',
+                stroke: 'var(--accent, #c084fc)',
+                fill: 'color-mix(in srgb, var(--accent, #c084fc) 22%, transparent)',
+                dot: 'var(--accent, #c084fc)',
             },
         ], analysisTitle);
 
@@ -10340,7 +10340,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         return '<g>' + out + '</g>';
     }
     function articleCover(a, uid, par) {
-        const acc = a.cover_accent || '#f5c518';
+        const acc = a.cover_accent || '#c084fc';
         const motif = a.cover_motif || 'tiers';
         const hook = articleField(a, 'cover') || articleField(a, 'kicker');
         const kick = String(articleField(a, 'kicker') || '').toUpperCase();
