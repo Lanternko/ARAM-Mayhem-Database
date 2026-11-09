@@ -11040,12 +11040,30 @@ html:not(.nfx-off) .role-seg-bar{background:transparent!important;border:0!impor
 html:not(.nfx-off) .role-seg:not(.chip){border-radius:999px!important;border:1px solid var(--nfx-line)!important;background:transparent!important;color:var(--nfx-fg)!important}
 html:not(.nfx-off) .role-seg:not(.chip).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
 
-/* ── search: plain field, thin border, strong border on focus ── */
-html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap){background:var(--nfx-field)!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important}
-html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within{border-color:var(--nfx-strong)!important;box-shadow:none!important}
-html:not(.nfx-off) :is(.header-search-input,.apool-search){background:var(--nfx-field)!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important;padding-left:14px!important}
-html:not(.nfx-off) :is(.header-search-input,.apool-search):focus{border-color:var(--nfx-strong)!important;box-shadow:none!important;outline:0}
-html:not(.nfx-off) :is(.search,.header-search-input,.apool-search){color:var(--nfx-strong)!important}
+/* ── search: solid shade field (no border, no glass) at rest; on focus the inside goes
+   darker and a crisp 2px border appears. The border is always reserved (transparent) so
+   focus never shifts layout, and background-clip:padding-box stops the fill bleeding under
+   the anti-aliased rounded border edge (that bleed is what reads as a fuzzy rim). ── */
+html{--nfx-search:#2a2a2a;--nfx-search-focus:#141414;--nfx-search-ring:#fff;--nfx-search-icon:#a3a3a3}
+html[data-theme=light]{--nfx-search:#e1e4ea;--nfx-search-focus:#fff;--nfx-search-ring:#1c1d21;--nfx-search-icon:#6b6e75}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap,.header-search-input,.apool-search){
+  background:var(--nfx-search) padding-box!important;
+  border:2px solid transparent!important;border-radius:10px!important;
+  box-shadow:none!important;outline:0!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  transition:background-color .12s,border-color .12s}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within,
+html:not(.nfx-off) :is(.header-search-input,.apool-search):focus{
+  background-color:var(--nfx-search-focus)!important;border-color:var(--nfx-search-ring)!important}
+/* the input inside a wrap is just text on the wrap's fill */
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap) .search{
+  background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;outline:0!important;
+  height:40px!important;padding:0 14px 0 42px!important;font-size:15px!important}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap) svg{
+  width:18px!important;height:18px!important;left:14px!important;stroke-width:2.6;color:var(--nfx-search-icon)!important}
+html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within svg{color:var(--nfx-strong)!important}
+html:not(.nfx-off) :is(.header-search-input,.apool-search){padding-left:14px!important}
+html:not(.nfx-off) :is(.search,.header-search-input,.apool-search){color:var(--nfx-strong)!important;caret-color:var(--nfx-strong)}
 html:not(.nfx-off) :is(.search,.header-search-input,.apool-search)::placeholder{color:var(--nfx-placeholder)!important}
 html:not(.nfx-off) .header-search-panel{background:var(--nfx-panel)!important;border:1px solid var(--nfx-line-soft)!important;border-radius:4px!important}
 
