@@ -10983,6 +10983,110 @@
     .quick-augment-name { width: 100%; }
 }
 
+/* ── Netflix-style header + esports filter controls (2026-11-09) ──
+   Dark theme only. Header: gradient that turns solid once .site-header.scrolled is set by site.js.
+   Filters: All selected = white reverse; real filter = solid accent; view switches = slash-split slabs. */
+html[data-theme=dark]{--nfx-fg:#e5e5e5;--nfx-line:rgba(229,229,229,.4);--nfx-on-fg:#141414}
+
+/* ── header ── */
+html[data-theme=dark] .site-header{background:linear-gradient(180deg,rgba(10,11,13,.92) 0%,rgba(10,11,13,.6) 70%,rgba(10,11,13,0) 100%)!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:0!important}
+html[data-theme=dark] .site-header.scrolled{background:rgb(10,11,13)!important}
+.site-header-inner{min-height:68px;gap:32px!important}
+.nav-tabs{gap:12px!important}
+.nav-ind{display:none!important}
+html[data-theme=dark] .header-actions .icon-btn{border:0!important;background:transparent!important;box-shadow:none!important;color:var(--nfx-fg)!important}
+
+/* ── one pill system: nav tabs + every filter chip ──
+   Vertical centering: Noto Sans TC's line box (asc 1.16 / desc .29 em) puts glyphs ~1px low.
+   text-box trims the box to cap-height..baseline so padding is optically symmetric. */
+.nav-tab,.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab{
+  border-radius:999px!important;line-height:1!important;text-box:trim-both cap alphabetic;
+  transition:background-color .15s,border-color .15s,color .15s}
+.nav-tab{font-size:17px!important;font-weight:500!important;padding:11px 18px!important;letter-spacing:.02em}
+.aug-cat-chip,.chip.role-seg,.apool-role-chip{font-size:13px!important;font-weight:500!important;padding:8px 14px!important}
+.aug-mode-tab{font-size:14px!important;font-weight:500!important;padding:10px 16px!important}
+@supports not (text-box:trim-both cap alphabetic){
+  .nav-tab{padding:7px 18px 9px!important}
+  .aug-cat-chip,.chip.role-seg,.apool-role-chip{padding:5px 14px 7px!important}
+  .aug-mode-tab{padding:7px 16px 9px!important}}
+
+/* inactive */
+html[data-theme=dark] .nav-tab{color:var(--nfx-fg)!important;background:transparent!important}
+html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab){
+  color:var(--nfx-fg)!important;background:transparent!important;border:1px solid var(--nfx-line)!important}
+html[data-theme=dark] :is(.nav-tab,.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):hover{border-color:var(--nfx-fg)!important;color:#fff!important}
+/* active: desktop nav = soft pill, everything else = solid white */
+html[data-theme=dark] .nav-tab[aria-selected=true]{background:rgba(255,255,255,.16)!important;color:#fff!important}
+html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.aug-mode-tab):is(.is-active,.active){
+  background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
+/* segmented container + icon role bar */
+html[data-theme=dark] .aug-mode-tabs{background:transparent!important;border:0!important;gap:8px;padding:0!important}
+html[data-theme=dark] .role-seg-bar{background:transparent!important;border:0!important;gap:6px}
+html[data-theme=dark] .role-seg:not(.chip){border-radius:999px!important;border:1px solid var(--nfx-line)!important;background:transparent!important;color:var(--nfx-fg)!important}
+html[data-theme=dark] .role-seg:not(.chip).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
+
+/* ── search: black field, thin light border, white on focus ── */
+html[data-theme=dark] :is(.search-wrap,.draft-search-wrap){background:#000!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important}
+html[data-theme=dark] :is(.search-wrap,.draft-search-wrap):focus-within{border-color:#fff!important;box-shadow:none!important}
+html[data-theme=dark] :is(.header-search-input,.apool-search){background:#000!important;border:1px solid var(--nfx-line)!important;border-radius:999px!important;padding-left:14px!important}
+html[data-theme=dark] :is(.header-search-input,.apool-search):focus{border-color:#fff!important;box-shadow:none!important;outline:0}
+html[data-theme=dark] :is(.search,.header-search-input,.apool-search){color:#fff!important}
+html[data-theme=dark] :is(.search,.header-search-input,.apool-search)::placeholder{color:#8c8c8c!important}
+html[data-theme=dark] .header-search-panel{background:rgba(0,0,0,.92)!important;border:1px solid rgba(229,229,229,.2)!important;border-radius:4px!important}
+
+/* ── v3: header icons at Netflix proportion (icon ≈ 1.4× nav text) ── */
+.header-actions{gap:8px!important}
+.header-actions .icon-btn{min-width:40px!important;height:40px!important;padding:0 8px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:8px}
+.header-actions .icon-btn svg{width:24px!important;height:24px!important}
+.lang-toggle #lang-toggle-label{font-size:15px!important;font-weight:500!important}
+
+/* ── v3: colour only means "a filter is narrowing the list" ──
+   "All" is the resting state → never highlighted. View switches (Tier list / Pools) → neutral soft pill.
+   Real filters → accent tint; rarity chips use their own rarity hue. */
+html[data-theme=dark]{--nfx-accent:#f5c518}
+html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg):is(.is-active,.active){
+  background:var(--nfx-accent)!important;border-color:var(--nfx-accent)!important;color:var(--nfx-on-fg)!important}
+html[data-theme=dark] .aug-rarity-chip.rarity-kPrismatic.is-active{--nfx-accent:#d36bff}
+html[data-theme=dark] .aug-rarity-chip.rarity-kSilver.is-active{--nfx-accent:#c0c5cc}
+/* "All" selected = neutral reverse (white), never a hue */
+html[data-theme=dark] :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
+  background:var(--nfx-fg)!important;border-color:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
+
+/* ── v4: Tier list / Pools = one slab split by a slash (esports scoreboard look) ── */
+html[data-theme=dark] .aug-mode-tabs{display:flex!important;gap:0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important}
+html[data-theme=dark] .aug-mode-tabs .aug-mode-tab{flex:1;border:0!important;border-radius:0!important;padding:12px 28px!important;
+  font-size:15px!important;font-weight:600!important;letter-spacing:.04em;
+  background:rgba(255,255,255,.07)!important;color:#9a9a9a!important}
+html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%);margin-right:-10px}  /* 14px slant − 10px overlap = 4px slash gap */
+html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%)}
+html[data-theme=dark] .aug-mode-tabs .aug-mode-tab:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
+html[data-theme=dark] .aug-mode-tabs .aug-mode-tab.is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
+
+/* ── mobile ── */
+@media (max-width:640px){
+ .site-header-inner{min-height:0;gap:0!important}
+ .brand{padding-top:6px}
+ .lang-toggle #lang-toggle-label{display:none}
+ .nav-tabs{gap:8px!important;padding:6px 16px 10px!important;overflow-x:auto;scrollbar-width:none}
+ .nav-tab{font-size:15px!important;padding:9px 16px!important}
+ html[data-theme=dark] .nav-tab{border:1px solid var(--nfx-line)!important}
+ html[data-theme=dark] .nav-tab[aria-selected=true]{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important;border-color:var(--nfx-fg)!important}
+}
+
+/* ── v5: filter chips go square (esports), rarity row = 4-way slash slab ── */
+html[data-theme=dark] :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg:not(.chip)){border-radius:2px!important}
+html[data-theme=dark] .aug-rarity-bar{display:flex!important;gap:0!important;width:360px;max-width:100%}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip{flex:1;border:0!important;border-radius:0!important;padding:11px 18px!important;
+  font-size:14px!important;font-weight:600!important;letter-spacing:.04em;margin-right:-10px;
+  background:rgba(255,255,255,.07)!important;color:#9a9a9a!important;
+  clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:first-child{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%);margin-right:0}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip:hover{color:#fff!important;background:rgba(255,255,255,.12)!important}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip.is-active{background:var(--nfx-accent)!important;color:var(--nfx-on-fg)!important}
+html[data-theme=dark] .aug-rarity-bar .aug-rarity-chip[data-rarity=""].is-active{background:var(--nfx-fg)!important}
+
+
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and
        hairline section rules, with no nested cards or decorative gradients. */
