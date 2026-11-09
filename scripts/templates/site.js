@@ -3665,9 +3665,15 @@
     function augCatMeta() {
         return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
     }
+    // Pool-only augments (no stats this window, so absent from DATA.augs) still
+    // carry their curated categories in augCategories.poolCats.
+    function augmentCats(aid, catalogue) {
+        const own = (catalogue[aid] || {}).cats;
+        if (Array.isArray(own)) return own;
+        return (((DATA && DATA.augCategories) || {}).poolCats || {})[aid] || [];
+    }
     function augmentPurposeTags(cats) {
-        const tags = (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
-        return tags.some(cat => cat !== 'new' && cat !== 'other') ? tags.filter(cat => cat !== 'other') : [...new Set([...tags, 'other'])];
+        return (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
     }
     function augCatLabel(cat) {
         const lbl = (augCatMeta().labels || {})[cat];
@@ -3972,7 +3978,7 @@
     }
     // Pool groups are the compact view of the same detailed filter taxonomy.
     function championPoolCategory(cats) {
-        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || 'other';
+        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || AUGMENT_TAXONOMY.fallback;
         return AUGMENT_TAXONOMY.groups.find(group => group.categories.includes(category)).id;
     }
     // Augments this champion's pools hold but games show the server never offers it.
@@ -3990,7 +3996,7 @@
             for (const aid of new Set((pool.augs || []).map(String))) {
                 if (blocked.has(aid)) continue;
                 if (!entries.has(aid)) entries.set(aid, {
-                    id: aid, weight, category: championPoolCategory((catalogue[aid] || {}).cats || []), sources: [],
+                    id: aid, weight, category: championPoolCategory(augmentCats(aid, catalogue)), sources: [],
                 });
                 const entry = entries.get(aid);
                 entry.weight = Math.max(entry.weight, weight);
@@ -4108,7 +4114,7 @@
                 .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
             + '</dl><p class="champ-pool-tip-note">' + escHtml(pickLang('預估上界：完成 4 輪、每輪看滿 6 張，排除所有已看過選項，依色彩組合機率加權。', 'Estimated upper bound: complete all 4 rounds and see 6 cards per round, excluding every previously seen option; weighted by colour-sequence probabilities.')) + '</p></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
-        const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
+        const tags = augmentPurposeTags(augmentCats(entry.id, DATA.augs || {})).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
         const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
@@ -4150,9 +4156,11 @@
         ].map(row => [String(row.id), row]));
         const offerRates = championPoolOfferRates(entries, d);
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
-            .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
+            // Same slash slab as the 增幅榜 rarity row (.aug-rarity-bar); data-rarity
+            // is left off so the tier-list handler never claims these clicks.
+            .map(([key, zh, en]) => `<button type="button" class="aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const purposeFilters = [{id: '', zh: '全部', en: 'All'}, ...AUGMENT_TAXONOMY.groups.filter(group => entries.some(e => e.category === group.id))]
-            .map(({id, zh, en}) => `<button type="button" class="champ-pool-rarity-chip${id === purpose ? ' is-active' : ''}" data-champ-pool-purpose="${id}" aria-pressed="${id === purpose}">${escHtml(pickLang(zh, en))}</button>`).join('');
+            .map(({id, zh, en}) => `<button type="button" class="aug-cat-chip${id ? '' : ' aug-cat-all'}${id === purpose ? ' is-active' : ''}" data-champ-pool-purpose="${id}" aria-pressed="${id === purpose}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
             const members = visibleEntries.filter(e => e.category === cat);
             if (!members.length) return '';
@@ -4179,8 +4187,8 @@
             </div>
         </div>`;
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}/${complexity.total}${itemTipSource(rankTip)}</button></p>`
-            + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
-            + `<div class="champ-pools-filters champ-pools-purpose-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅用途', 'Filter augment purpose'))}">${purposeFilters}</div>`
+            + `<div class="champ-pools-filters aug-cat-bar aug-rarity-bar" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
+            + `<div class="champ-pools-filters champ-pools-purpose-filters aug-cat-bar" role="group" aria-label="${escHtml(pickLang('篩選增幅用途', 'Filter augment purpose'))}">${purposeFilters}</div>`
             + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此篩選組合沒有可用增幅，請切換稀有度或用途。', 'No augments match. Try another rarity or purpose.'))}</p>`)
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + championPoolFrequencyHtml()

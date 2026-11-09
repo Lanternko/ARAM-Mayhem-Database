@@ -14,7 +14,19 @@ for (const group of taxonomy.groups) {
     for (const cat of group.categories) assert.equal(context.AUGMENT_TAXONOMY.labels[cat] !== undefined, true);
 }
 
+assert.equal(taxonomy.groups.some(group => group.id === 'other'), false);
+assert.ok(taxonomy.groups.some(group => group.id === taxonomy.fallback));
 vm.runInContext(source.slice(start, end), context);
+{
+    const catsStart = source.indexOf('    function augmentCats(');
+    vm.runInContext(source.slice(catsStart, source.indexOf('    function augmentPurposeTags(', catsStart)), context);
+    context.DATA = {augCategories: {poolCats: {'9': ['gold']}}};
+    const cats = (aid, catalogue) => JSON.stringify(context.augmentCats(aid, catalogue));
+    assert.equal(cats('1', {'1': {cats: ['ad']}}), '["ad"]');
+    assert.equal(cats('9', {}), '["gold"]');
+    assert.equal(cats('8', {}), '[]');
+    context.DATA = {augCategories: {poolCats: JSON.parse(fs.readFileSync('docs/api/tier-list.json', 'utf8')).augCategories.poolCats || {}}};
+}
 const data = JSON.parse(fs.readFileSync('docs/api/augment-pools.json', 'utf8'));
 const catalogue = JSON.parse(fs.readFileSync('docs/api/tier-list.json', 'utf8')).augs;
 const pools = Object.fromEntries(data.pools.map(p => [p.id, p]));
@@ -37,10 +49,12 @@ for (const cid of Object.keys(data.champs)) {
         assert.ok(i === 0 || rows[i-1].weight >= row.weight);
         assert.equal(row.sources.length, new Set(row.sources.map(s => s.pool.id)).size);
         assert.ok(row.sources.every(s => s.weight <= row.weight));
+        // No silent "unclassified": every pool augment carries a curated purpose.
+        assert.ok(context.augmentCats(row.id, catalogue).some(cat => detailed.includes(cat)), `augment ${row.id} has no purpose category`);
     });
     champions++;
 }
-assert.equal(context.championPoolCategory(['new']), 'other');
+assert.equal(context.championPoolCategory(['new']), taxonomy.fallback);
 assert.equal(context.championPoolCategory(['crit', 'amp']), 'damage');
 assert.equal(context.championPoolCategory(['ad', 'gold']), 'gold');
 assert.equal(context.championPoolEntries('missing',data,catalogue).length,0);

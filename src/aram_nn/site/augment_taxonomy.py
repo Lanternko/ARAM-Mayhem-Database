@@ -11,8 +11,10 @@ AUGMENT_PURPOSE_GROUPS = (
     {"id": "cd", "zh": "冷卻", "en": "Cooldown", "categories": ("cd",)},
     {"id": "gold", "zh": "經濟", "en": "Economy", "categories": ("gold",)},
     {"id": "mechanic", "zh": "特殊機制", "en": "Special mechanics", "categories": ("mechanic",)},
-    {"id": "other", "zh": "未分類", "en": "Unclassified", "categories": ("other",)},
 )
+# Every augment gets a purpose (curated in scripts/augment_category_overrides.json);
+# anything that slips through is shown under this group, never as "Unclassified".
+AUGMENT_FALLBACK_GROUP = "mechanic"
 AUGMENT_CATEGORY_LABELS = {
     "ad": {"zh": "AD", "en": "AD"},
     "ap": {"zh": "AP", "en": "AP"},
@@ -35,4 +37,5 @@ def augment_taxonomy_payload() -> dict:
         "order": list(AUGMENT_CATEGORY_ORDER),
         "labels": AUGMENT_CATEGORY_LABELS,
         "primaryPriority": list(AUGMENT_PRIMARY_PRIORITY),
+        "fallback": AUGMENT_FALLBACK_GROUP,
     }

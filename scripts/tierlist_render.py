@@ -3572,6 +3572,18 @@ def render_html(
         for aid in used_aug_ids
         if aid in aug_meta
     }
+    # Champion 增幅池 lists every augment in the champion's pools, including ones
+    # with no stats in this window (so absent from js_augs).  Ship their curated
+    # categories too, or the pool page has nothing to group them by.
+    aug_pool_cats = {}
+    for aid in sorted(load_augment_pool_infos()):
+        if str(aid) in js_augs:
+            continue
+        cats = resolve_augment_categories(
+            aid, aug_meta.get(aid), new_aug_ids, aug_cat_overrides
+        )
+        if cats:
+            aug_pool_cats[str(aid)] = cats
     # Merge the global per-augment win-rate / pick share into the augment payload
     # the frontend already ships.  The 增幅榜 tier itself is computed client-side
     # (within-rarity percentile of wr) so it can be tuned without a rebuild.
@@ -3638,6 +3650,7 @@ def render_html(
             "order": list(AUGMENT_CATEGORY_ORDER),
             "labels": AUGMENT_CATEGORY_LABELS,
             "newPatch": display_patch or "",
+            "poolCats": aug_pool_cats,
         },
         "tiers": {
             "order": list(TIER_ORDER),

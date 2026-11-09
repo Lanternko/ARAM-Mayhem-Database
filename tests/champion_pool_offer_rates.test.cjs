@@ -79,6 +79,9 @@ const membershipSource = source.slice(source.indexOf('    function championPoolC
 const built = fs.readFileSync('docs/assets/site.js', 'utf8');
 ctx.AUGMENT_TAXONOMY = JSON.parse(built.match(/const AUGMENT_TAXONOMY = (.*);/)[1]);
 ctx.apoolWeight = weight => weight || 100;
+ctx.DATA = {};
+const catsStart = source.indexOf('    function augmentCats(');
+vm.runInContext(source.slice(catsStart, source.indexOf('    function augmentPurposeTags(', catsStart)), ctx);
 vm.runInContext(membershipSource, ctx);
 rows = ctx.championPoolEntries('63', pool, catalogue);
 const before = performance.now();
