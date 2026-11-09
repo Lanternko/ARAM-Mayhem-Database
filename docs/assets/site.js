@@ -11062,11 +11062,13 @@ const feedbackFab = document.querySelector('.feedback-fab');
             openToggle.querySelectorAll('[data-champion-open]').forEach(button => {
                 const mode = button.getAttribute('data-champion-open');
                 button.setAttribute('aria-pressed', String(mode === championOpenMode));
-                const label = mode === 'expand'
-                    ? pickLang('展開式：在此展開增幅與出裝', 'Expand: show augments and builds here')
-                    : pickLang('分頁式：開啟英雄頁面', 'Page: open the champion page');
-                button.setAttribute('aria-label', label);
-                button.title = label;
+                const [name, hint] = mode === 'expand'
+                    ? [pickLang('展開式', 'Expand'), pickLang('點英雄，在列表中展開增幅與出裝', 'Click a champion to show augments & builds inline')]
+                    : [pickLang('分頁式', 'Page'), pickLang('點英雄，開啟英雄完整頁面', 'Click a champion to open its full page')];
+                button.setAttribute('aria-label', `${name}：${hint}`);
+                button.removeAttribute('title');  // custom .open-tip replaces the slow native tooltip
+                const tip = button.querySelector('.open-tip');
+                if (tip) { tip.firstElementChild.textContent = name; tip.lastElementChild.textContent = hint; }
             });
         }
         const title = pickLang(home ? '英雄快速查詢' : '英雄列表', home ? 'Quick champion lookup' : 'Champions');

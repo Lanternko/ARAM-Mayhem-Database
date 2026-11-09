@@ -1892,6 +1892,35 @@
     .champion-open-toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--accent); }
     .champion-open-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .view-home[data-view="champions"] .champion-table-wrap { display: none; }
+    /* Open-mode tooltip: custom, near-instant (native title waits ~1s). Anchored to the group
+       so both tips share one left-aligned spot under the toggle; the arrow points at the hovered button. */
+    .champion-open-toggle { position: relative; }
+    .champion-open-toggle button { position: static; }
+    .champion-open-toggle button:nth-child(1) { --tip-arrow: 24px; }
+    .champion-open-toggle button:nth-child(2) { --tip-arrow: 70px; }
+    .open-tip {
+        position: absolute; top: calc(100% + 10px); left: 0; z-index: 40;
+        display: flex; flex-direction: column; gap: 3px;
+        width: max-content; max-width: min(280px, calc(100vw - 32px));
+        padding: 9px 12px; border-radius: 2px;
+        background: var(--nfx-fg, var(--text)); color: var(--nfx-on-fg, var(--bg));
+        font-size: 12.5px; line-height: 1.35; text-align: left; white-space: normal;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+        opacity: 0; visibility: hidden; transform: translateY(-3px); pointer-events: none;
+        transition: opacity .1s ease, transform .1s ease, visibility 0s linear .1s;
+    }
+    .open-tip::before {
+        content: ""; position: absolute; top: -5px; left: calc(var(--tip-arrow) - 5px);
+        border: 5px solid transparent; border-top: 0; border-bottom-color: var(--nfx-fg, var(--text));
+    }
+    .open-tip b { font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+    .open-tip > span { opacity: .78; font-weight: 500; }
+    .champion-open-toggle button:hover .open-tip,
+    .champion-open-toggle button:focus-visible .open-tip {
+        opacity: 1; visibility: visible; transform: none;
+        transition: opacity .1s ease .06s, transform .1s ease .06s, visibility 0s linear .06s;
+    }
+    @media (hover: none) { .open-tip { display: none; } }
     .champion-table-wrap { overflow-x: auto; margin-top: 20px; }
     .champion-table-wrap[hidden] { display: none; }
     .champion-table { width: 100%; min-width: 760px; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
