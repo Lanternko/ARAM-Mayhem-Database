@@ -41,6 +41,7 @@ Crawler 通知（Task Scheduler）
 |---|---|---|
 | 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
 | Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0`；另加 1 個 G01 ID-gap producer（watchdog `--id-gap-producers`，0 關閉）：沿 TW gameId 序列查 DB 沒有的 ID，只存 2400／450，`seed_family='id_gap'`，落後即時 4h，cursor 在 `crawl_runtime_state` 的 `id_gap:cursor` |
+| History 來源 | 同上 | 前 `--sgp-producers` 個 snowball producer（目前 1＝W01，`--sgp-min-interval-sec 1.0`）直接打 Riot SGP match-history（`apse1-red.pp.sgp.pvp.net`，bearer＝LCU `/entitlements/v1/token` 的 accessToken），一次拿最近 20 場、每場含 10 人完整 detail：不進 LeagueClient match-history 快取、不逐場讀 LCU detail。任何失敗該次造訪退回 LCU；連 3 次失敗或任一 429 開 5 分鐘 breaker（Retry-After 較長以它為準）。G01 仍走 LCU。Producer log 每位玩家標 `history=sgp|lcu`，每 200 次造訪印 `[sgp] visits=… fallbacks=… rate_limited=…`；`[sgp] circuit open` 表示正退回 LCU |
 | League memory | 同上 | client 記憶體不降載（degrade=restart=4500 MB；leak 是每個新 puuid 固定成本，降載只會變慢）；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
 | System memory | 同上 | commit ≥80% 或 available RAM ≤3072 MB 降為 1 producer；commit ≥90% 或 available RAM ≤1536 MB 暫停收集；連續 3 次 commit ≤70%、available RAM ≥4096 MB 且 client <3500 MB 才恢復 |
 | DB 磁碟空間 | `scripts/mayhem_lcu_watchdog.py` defaults | `games.db` 所在磁碟剩 <5 GB 暫停收集（事件 `pause_workers_disk_full`），≥10 GB 才恢復；暫停期間不做零產出／client 重啟。磁碟滿在下游只會表現成 `WRITER_START_FAILED`／`disk I/O error` |
@@ -116,7 +117,7 @@ Get-Content data/site/model_refresh_state.json
 
 ## 5. Lifecycle 與故障分流
 
-- Keepalive 每分鐘只檢查 watchdog parent；parent 消失會被拉起，parent 再確保 workers、publisher、model refresher 存活。調參後需讓舊 parent 結束並由排程重生，否則仍跑舊 argv。
+- Keepalive 每分鐘只檢查 watchdog parent；parent 消失會被拉起，parent 再確保 workers、publisher、model refresher 存活。調參後需讓舊 parent 結束並由排程重生，否則仍跑舊 argv。新 parent 不比對既有 fleet 的 argv，所以 fleet 參數（例如 `--sgp-producers`）要另外讓 fleet 重起：在 `data/lcu/.games.db.snowball.stop` 寫入 `stop`，fleet 約 15 秒內優雅退出，新 parent 下一輪以新 argv 重起。
 - Watchdog 只在安全 gameflow phase 重啟 League，並記錄 action 時的 League memory、門檻與 LCU status。不要直接啟動 `LeagueClient.exe`；重啟必須經 Riot Client launch／remoting 路徑。
 - `workers alive + Mayhem 不成長`、大量 `target_games=0`、LCU auth 或 seed family 問題：用 `runbooks/crawler-stall.md`；需要換 OPGG page window 時再用 `runbooks/opgg-seed-refresh.md`。
 - Harness 只擁有 routine data publisher：它在 disposable isolated worktree 依成長門檻更新資料，development worktree dirty 不應阻擋或被覆寫。Frontend shell publish 是 task workflow，不是 watchdog child；兩者都只發布 GitHub Pages 靜態檔案，不會重啟 crawler、API、tunnel 或其他 runtime。失敗先看 `data/site/static_publish.err.log`，lane 與操作依 `runbooks/site-deploy.md`；一般 Git／worktree lifecycle 依 `runbooks/git-workflow.md`。
