@@ -194,6 +194,11 @@ def test_maintain_is_skipped_inside_a_batch_and_when_disabled(tmp_path: pathlib.
     assert service.end_batch() is True
     off = WriterService(tmp_path / "off.db", request_retention_sec=0)
     assert off.maintain() == {}
+    # A WAL that cannot be reset pauses pruning instead of feeding it.
+    service._prune_max_wal_bytes = 1
+    assert service.maintain() == {}
+    service._prune_max_wal_bytes = 1 << 40
+    service._maintain_next = 0.0
     assert service.maintain()["requests"] == 1
 
 

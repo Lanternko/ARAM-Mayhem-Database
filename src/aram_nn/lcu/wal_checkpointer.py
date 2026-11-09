@@ -44,7 +44,8 @@ class WalCheckpointer:
         backlog_log_every_sec: float = 600.0,
         truncate_pages: int = 131_072,  # 512 MiB of 4 KiB pages; 0 disables
         truncate_max_backlog_pages: int = 65_536,
-        truncate_busy_retry_sec: float = 300.0,
+        truncate_busy_retry_sec: float = 30.0,
+        truncate_busy_timeout_ms: int = 250,
     ) -> None:
         self._db_path = str(db_path)
         self._interval = max(0.05, float(interval_sec))
@@ -58,7 +59,9 @@ class WalCheckpointer:
         self._truncate_pages = int(truncate_pages)
         self._truncate_max_backlog = int(truncate_max_backlog_pages)
         self._truncate_busy_retry = float(truncate_busy_retry_sec)
+        self._truncate_busy_timeout_ms = int(truncate_busy_timeout_ms)
         self._truncate_not_before = 0.0
+        self._last_busy_log = 0.0
         self.truncations = 0
         self.runs = 0
         self.last_result: tuple[int, int, int] | None = None  # (busy, wal pages, checkpointed)
@@ -118,12 +121,21 @@ class WalCheckpointer:
 
     def _truncate(self, con: sqlite3.Connection, wal_pages: int) -> None:
         started = time.monotonic()
-        row = con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-        elapsed_ms = (time.monotonic() - started) * 1000.0
+        # While this waits for a reader to leave the WAL it holds the write
+        # lock, so keep the wait short and retry on a later pass instead.
+        con.execute(f"PRAGMA busy_timeout={self._truncate_busy_timeout_ms}")
+        try:
+            row = con.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+        finally:
+            con.execute("PRAGMA busy_timeout=1000")
+        finished = time.monotonic()
+        elapsed_ms = (finished - started) * 1000.0
         busy = int(row[0]) if row else 0
         if busy:
-            # A reader is still inside the WAL; do not stall the writer every pass.
-            self._truncate_not_before = time.monotonic() + self._truncate_busy_retry
+            self._truncate_not_before = finished + self._truncate_busy_retry
+            if finished - self._last_busy_log < self._backlog_log_every and self._last_busy_log:
+                return
+            self._last_busy_log = finished
         else:
             self.truncations += 1
         self._emit(

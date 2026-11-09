@@ -126,8 +126,9 @@ Writer 寫入路徑（`writer_service.py`／`writer_supervisor.py`／`wal_checkp
 | `ARAM_WRITER_GROUP_COMMIT` | 1 | 一輪服務的所有請求共用一次 commit（回應仍在 commit 後才送）；0＝每請求各自 commit |
 | `ARAM_WRITER_PENDING_COUNT_TTL_SEC` | 30 | `pending_count` 的快取秒數（只用於進度 log） |
 | `ARAM_WRITER_REQUEST_RETENTION_H` | 24 | `writer_requests` 保留時數；writer 閒置時分批刪舊列與已結束的 claim 列，0＝不清 |
+| `ARAM_WRITER_PRUNE_MAX_WAL_MB` | 4096 | WAL 檔超過此大小時暫停上述清理（清理是最大的 WAL 來源；WAL 被 reader 釘住時不再加碼），0＝不檢查 |
 
-`snowball_writer.log` 新增三種訊息：`wal checkpoint ... backlog=N`（單次 >5 秒，或 WAL 積壓 >1 GiB 時每 10 分鐘一行；積壓不降代表有 reader 長時間握著讀取交易）、`slow batch commit`、`BATCH_LOST`（整批未落盤，該批 producer 都收到 `INTERNAL_ERROR`）。
+`snowball_writer.log` 新增三種訊息：`wal checkpoint ... backlog=N`（單次 >5 秒，或 WAL 積壓 >1 GiB 時每 10 分鐘一行；積壓不降代表有 reader 長時間握著讀取交易）、`wal truncate ... busy=N`（背景 checkpoint 追上後把 WAL 截回 0；`busy=1` 代表有 reader 還在 WAL 裡，30 秒後再試）、`slow batch commit`、`BATCH_LOST`（整批未落盤，該批 producer 都收到 `INTERNAL_ERROR`）。
 
 ## 5. Lifecycle 與故障分流
 

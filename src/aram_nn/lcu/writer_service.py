@@ -223,6 +223,12 @@ class WriterService:
         self._request_retention_sec = float(request_retention_sec)
         self._maintain_next = 0.0
         self._maintain_rows = _MAINTAIN_START_ROWS
+        # Pruning is the heaviest WAL producer.  When a reader pins the WAL
+        # and it cannot be reset, stop feeding it until it shrinks again.
+        self._wal_path = (
+            None if isinstance(db, sqlite3.Connection) or str(db) == ":memory:" else str(db) + "-wal"
+        )
+        self._prune_max_wal_bytes = int(_env_float("ARAM_WRITER_PRUNE_MAX_WAL_MB", 4096.0) * 1024 * 1024)
         self.maintenance_error: str | None = None
         self._claim_count = itertools.count()
         self.ensure_schema()
@@ -710,6 +716,14 @@ class WriterService:
                 return {}
             if self.con.in_transaction:
                 return {}
+            if self._wal_path is not None and self._prune_max_wal_bytes > 0:
+                try:
+                    wal_bytes = os.path.getsize(self._wal_path)
+                except OSError:
+                    wal_bytes = 0
+                if wal_bytes > self._prune_max_wal_bytes:
+                    self._maintain_next = started + 30.0
+                    return {}
             limit = self._maintain_rows
             cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._request_retention_sec)).isoformat()
             claim_cutoff = self._clock_ms() - _MAINTAIN_CLAIM_RETENTION_MS
