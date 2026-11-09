@@ -4,7 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from aram_nn.lcu.id_gap import CURSOR_KEY, IdGapConfig, IdGapSweeper, ProbeResult
+from aram_nn.lcu.id_gap import (
+    BACK_CURSOR_KEY,
+    BACK_DONE_KEY,
+    BACK_PATCH_KEY,
+    CURSOR_KEY,
+    ORIGIN_KEY,
+    IdGapConfig,
+    IdGapSweeper,
+    ProbeResult,
+)
 from aram_nn.lcu.snowball import SnowballWriterFacade
 from aram_nn.lcu.writer_protocol import ProtocolError, validate_message
 from aram_nn.lcu.writer_service import WriterService
@@ -229,3 +238,99 @@ def test_restarted_fleet_worker_does_not_replay_journaled_request_ids(tmp_path: 
     for _ in range(3):
         id_gap.run_id_gap(writer_client=_Channel(service), worker_id="G01")
     assert SnowballWriterFacade(_Channel(service)).runtime_get(CURSOR_KEY) == "1003"
+
+
+# ------------------------------------------------------------------- backfill
+def _versioned(game_id: int, version: str, *, queue: int = 2400) -> ProbeResult:
+    detail = _detail(game_id, queue=queue)
+    detail["gameVersion"] = version
+    return ProbeResult(200, detail)
+
+
+def _caught_up_forward(facade: SnowballWriterFacade, forward: int) -> dict[int, ProbeResult]:
+    """Forward cursor whose first ID is younger than the lag: every batch is caught_up."""
+    facade.runtime_set(CURSOR_KEY, str(forward))
+    return {forward: ProbeResult(200, _detail(forward, created_ms=NOW_MS - HOUR_MS))}
+
+
+def test_cold_start_records_backfill_origin(tmp_path: Path) -> None:
+    service = WriterService(tmp_path / "games.db")
+    _store(service, "500000", NOW_MS - 30 * HOUR_MS)
+    _sweeper(service, _Probe({})).run(max_batches=1)
+    assert SnowballWriterFacade(_Channel(service)).runtime_get(ORIGIN_KEY) == "500001"
+
+
+def test_backfill_walks_down_while_caught_up_and_stops_past_patch_boundary(tmp_path: Path) -> None:
+    service = WriterService(tmp_path / "games.db")
+    facade = SnowballWriterFacade(_Channel(service))
+    facade.runtime_set(ORIGIN_KEY, "1000")
+    _store(service, "997", NOW_MS - 30 * HOUR_MS)
+    answers = _caught_up_forward(facade, 2000)
+    answers.update({
+        999: _versioned(999, "16.22.834"),
+        # 998 -> 404 (default)
+        996: _versioned(996, "16.22.834", queue=420),
+        995: _versioned(995, "16.21.900"),
+        994: _versioned(994, "16.21.900", queue=420),
+        993: _versioned(993, "16.21.900", queue=420),
+        992: _versioned(992, "16.21.900"),
+    })
+    probe = _Probe(answers)
+    sweeper = _sweeper(service, probe, batch_size=5, backfill_older_patch_run=3, caught_up_sleep_sec=300)
+    sweeper.run(max_batches=1)
+
+    # Forward cursor holds at the frontier; backfill probed downward, skipping
+    # the stored 997, and stopped right after the third older-patch game.
+    assert facade.runtime_get(CURSOR_KEY) == "2000"
+    backward = [c for c in probe.calls if c < 2000]
+    assert backward[:6] == [999, 998, 996, 995, 994, 993]
+    assert 997 not in probe.calls
+    assert facade.runtime_get(BACK_CURSOR_KEY) == "992"
+    assert facade.runtime_get(BACK_PATCH_KEY) == "16.22"
+    assert facade.runtime_get(BACK_DONE_KEY).startswith("crossed into the previous patch")
+    rows = dict(service.con.execute("SELECT game_id, seed_family FROM games").fetchall())
+    assert rows == {"997": "match", "999": "id_gap", "995": "id_gap"}
+    assert sweeper.stats.backfill_saved == 2
+
+    # Once done it never probes backward again.
+    probe2 = _Probe(_caught_up_forward(facade, 2000))
+    _sweeper(service, probe2, caught_up_sleep_sec=300).run(max_batches=1)
+    assert all(c >= 2000 for c in probe2.calls)
+
+
+def test_backfill_resumes_from_stored_back_cursor_and_retries_without_skipping(tmp_path: Path) -> None:
+    service = WriterService(tmp_path / "games.db")
+    facade = SnowballWriterFacade(_Channel(service))
+    facade.runtime_set(ORIGIN_KEY, "1000")
+    facade.runtime_set(BACK_CURSOR_KEY, "500")
+    answers = _caught_up_forward(facade, 2000)
+    answers[499] = ProbeResult(503, None)
+    probe = _Probe(answers)
+    _sweeper(service, probe, batch_size=5, caught_up_sleep_sec=300, backfill_max_batches_per_pause=1).run(max_batches=1)
+    assert [c for c in probe.calls if c < 2000][:2] == [500, 499]
+    assert facade.runtime_get(BACK_CURSOR_KEY) == "499"
+    assert facade.runtime_get(BACK_DONE_KEY) is None
+
+
+def test_backfill_stops_at_floor_and_is_off_without_origin(tmp_path: Path) -> None:
+    service = WriterService(tmp_path / "games.db")
+    facade = SnowballWriterFacade(_Channel(service))
+    answers = _caught_up_forward(facade, 2000)
+    probe = _Probe(answers)
+    _sweeper(service, probe, caught_up_sleep_sec=300).run(max_batches=1)
+    assert all(c >= 2000 for c in probe.calls)  # no origin recorded -> no backfill
+
+    facade.runtime_set(ORIGIN_KEY, "103")
+    probe = _Probe(dict(answers))
+    _sweeper(service, probe, batch_size=10, backfill_floor_id=100, caught_up_sleep_sec=300).run(max_batches=1)
+    assert sorted(c for c in probe.calls if c < 2000) == [100, 101, 102]
+    assert facade.runtime_get(BACK_DONE_KEY).startswith("reached floor")
+
+
+def test_backfill_can_be_disabled(tmp_path: Path) -> None:
+    service = WriterService(tmp_path / "games.db")
+    facade = SnowballWriterFacade(_Channel(service))
+    facade.runtime_set(ORIGIN_KEY, "1000")
+    probe = _Probe(_caught_up_forward(facade, 2000))
+    _sweeper(service, probe, backfill=False, caught_up_sleep_sec=300).run(max_batches=1)
+    assert all(c >= 2000 for c in probe.calls)

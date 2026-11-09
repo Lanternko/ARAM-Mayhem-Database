@@ -27,6 +27,18 @@ so 404s and other-queue games never leave claim rows behind.
 It stays ``lag_hours`` behind real time: a game is only probed once a 200 at or
 after its ID shows a creation time older than the lag, so an in-progress game
 (which also answers 404) is never mistaken for a non-LoL ID and skipped.
+
+Backfill
+--------
+The forward cursor cold-starts ``start_lookback_hours`` back, so everything
+before that origin (``id_gap:origin``) is only as complete as snowball made it.
+Whenever the forward sweep is caught up, the idle time between frontier checks
+walks a second, descending cursor (``id_gap:back_cursor``) down from the
+origin, so the forward sweep always keeps priority.  It stops for good
+(``id_gap:back_done``) once it has crossed into the previous patch -- a run of
+``backfill_older_patch_run`` consecutive LoL games older than the first patch
+it saw -- or reached ``backfill_floor_id``.  After that the forward sweep alone
+covers every later patch.
 """
 from __future__ import annotations
 
@@ -47,6 +59,10 @@ from .snowball import (
 )
 
 CURSOR_KEY = "id_gap:cursor"
+ORIGIN_KEY = "id_gap:origin"
+BACK_CURSOR_KEY = "id_gap:back_cursor"
+BACK_PATCH_KEY = "id_gap:back_patch"
+BACK_DONE_KEY = "id_gap:back_done"
 SEED_FAMILY = "id_gap"
 # 2400 Mayhem and 450 ARAM.  Deliberately narrower than the snowball fleet's
 # queue list: sweeping every 4310 經典 game on the platform would multiply the
@@ -88,6 +104,15 @@ class IdGapConfig:
     dead_block_after_pauses: int = 3
     max_transport_errors: int = 5
     reconnect_sleep_sec: float = 15.0
+    # Descending backfill from the forward origin, run only while caught up.
+    backfill: bool = True
+    # Consecutive LoL games (any queue) on an older patch that end the backfill;
+    # IDs are platform-wide, so a few stragglers can straddle a patch boundary.
+    backfill_older_patch_run: int = 50
+    # Never walk below this ID (0 = no floor besides the patch boundary).
+    backfill_floor_id: int = 0
+    # Cap per caught-up pause, besides the caught_up_sleep_sec wall-clock budget.
+    backfill_max_batches_per_pause: int = 20
 
 
 @dataclass
@@ -97,6 +122,7 @@ class IdGapStats:
     not_found: int = 0
     other_queue: int = 0
     saved: int = 0
+    backfill_saved: int = 0
     already_claimed: int = 0
     transport_errors: int = 0
     by_queue: dict[int, int] = field(default_factory=dict)
@@ -104,7 +130,7 @@ class IdGapStats:
     def summary(self) -> str:
         return (
             f"probed={self.probed} known_skipped={self.skipped_known} 404={self.not_found} "
-            f"other_queue={self.other_queue} saved={self.saved} claimed_elsewhere={self.already_claimed} "
+            f"other_queue={self.other_queue} saved={self.saved} backfill_saved={self.backfill_saved} claimed_elsewhere={self.already_claimed} "
             f"transport_errors={self.transport_errors}"
         )
 
@@ -145,6 +171,9 @@ class IdGapSweeper:
         self._not_found_run_last: int | None = None
         self._stalled_at: int | None = None
         self._stalled_count = 0
+        self._older_patch_run = 0
+        self._back_patch: tuple[int, int] | None = None
+        self._backfill_done = not config.backfill
 
     # ------------------------------------------------------------- cursor
     def _now_ms(self) -> int:
@@ -161,6 +190,7 @@ class IdGapSweeper:
             return None
         cursor = anchor + 1
         self.storage.runtime_set(CURSOR_KEY, str(cursor))
+        self.storage.runtime_set(ORIGIN_KEY, str(cursor))
         self.log(f"[id-gap] cold start: cursor={cursor} (latest stored game {self.config.start_lookback_hours:g}h back) worker={self.worker_id}")
         return cursor
 
@@ -241,7 +271,7 @@ class IdGapSweeper:
             self._commit(str(game_id), record, detail)
         return hi + 1, "progress"
 
-    def _commit(self, game_id: str, record: dict, detail: dict) -> None:
+    def _commit(self, game_id: str, record: dict, detail: dict, *, backfill: bool = False) -> None:
         claim = self.storage.claim_game(game_id, claim_timeout_ms=self.config.claim_timeout_ms)
         if claim is None:
             # DONE (a snowball producer stored it since the batch lookup) or
@@ -263,11 +293,13 @@ class IdGapSweeper:
             self._release_quietly(claim)
             return
         self.stats.saved += 1
+        if backfill:
+            self.stats.backfill_saved += 1
         queue_id = int(record["queue_id"])
         self.stats.by_queue[queue_id] = self.stats.by_queue.get(queue_id, 0) + 1
         self.log(
             f"  [saved] q={queue_id:<5} game_id={game_id} patch={record['patch']} "
-            f"total_saved={self.stats.saved} worker={self.worker_id}"
+            f"total_saved={self.stats.saved}{' backfill' if backfill else ''} worker={self.worker_id}"
         )
 
     def _release_quietly(self, claim: Any) -> None:
@@ -275,6 +307,131 @@ class IdGapSweeper:
             self.storage.release_game(claim)
         except Exception:
             pass
+
+    # ------------------------------------------------------------- backfill
+    @staticmethod
+    def _patch_of(detail: dict) -> tuple[int, int] | None:
+        parts = str(detail.get("gameVersion") or "").split(".")
+        if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            return None
+        return int(parts[0]), int(parts[1])
+
+    def load_back_cursor(self) -> int | None:
+        """Next ID the backfill probes (inclusive, descending); None = nothing to do."""
+        if self._backfill_done:
+            return None
+        if self.storage.runtime_get(BACK_DONE_KEY):
+            self._backfill_done = True
+            return None
+        raw = self.storage.runtime_get(BACK_CURSOR_KEY)
+        if raw is not None and raw.strip().isdigit():
+            cursor = int(raw.strip())
+        else:
+            origin = self.storage.runtime_get(ORIGIN_KEY)
+            if origin is None or not origin.strip().isdigit():
+                self.log(f"[id-gap] backfill disabled: no {ORIGIN_KEY} recorded worker={self.worker_id}")
+                self._backfill_done = True
+                return None
+            cursor = int(origin.strip()) - 1
+            self.storage.runtime_set(BACK_CURSOR_KEY, str(cursor))
+            self.log(f"[id-gap] backfill start: back_cursor={cursor} worker={self.worker_id}")
+        if self._back_patch is None:
+            major, _, minor = (self.storage.runtime_get(BACK_PATCH_KEY) or "").partition(".")
+            if major.isdigit() and minor.isdigit():
+                self._back_patch = (int(major), int(minor))
+        if cursor < self._backfill_floor():
+            self._finish_backfill(cursor, "reached floor")
+            return None
+        return cursor
+
+    def _backfill_floor(self) -> int:
+        return max(1, int(self.config.backfill_floor_id))
+
+    def _finish_backfill(self, cursor: int, reason: str) -> None:
+        self._backfill_done = True
+        self.storage.runtime_set(BACK_DONE_KEY, f"{reason} at {cursor}")
+        self.log(f"[id-gap] backfill done ({reason}) at {cursor}; {self.stats.summary()} worker={self.worker_id}")
+
+    def backfill_batch(self, cursor: int) -> tuple[int, str]:
+        """Process [cursor - batch_size + 1, cursor] high to low.
+
+        Returns ``(next_back_cursor, state)`` with state ``progress``,
+        ``patch_boundary``, ``floor``, or ``retry`` / ``lcu_down``
+        (next_back_cursor is then retried, never skipped).
+        """
+        floor = self._backfill_floor()
+        lo = max(floor, cursor - max(1, int(self.config.batch_size)) + 1)
+        known = self.storage.known_game_ids(lo, cursor)
+        gaps = [game_id for game_id in range(cursor, lo - 1, -1) if game_id not in known]
+        self.stats.skipped_known += (cursor + 1 - lo) - len(gaps)
+        executor = ThreadPoolExecutor(max_workers=max(1, int(self.config.concurrency)), thread_name_prefix="id-gap-back")
+        try:
+            for game_id, result in zip(gaps, executor.map(self._throttled_probe, gaps)):
+                if result.status == 404:
+                    # Old IDs: a 404 is final (TFT, customs, unassigned), never
+                    # an in-progress game.
+                    self.stats.probed += 1
+                    self.stats.not_found += 1
+                    self._transport_streak = 0
+                    continue
+                if result.status != 200 or result.body is None:
+                    self.stats.transport_errors += 1
+                    self._transport_streak += 1
+                    if self._transport_streak >= self.config.max_transport_errors:
+                        return game_id, "lcu_down"
+                    self.sleep(min(30.0, 2.0 * self._transport_streak))
+                    return game_id, "retry"
+                self._transport_streak = 0
+                self.stats.probed += 1
+                detail = result.body
+                patch = self._patch_of(detail)
+                if patch is not None:
+                    if self._back_patch is None:
+                        self._back_patch = patch
+                        self.storage.runtime_set(BACK_PATCH_KEY, f"{patch[0]}.{patch[1]}")
+                    self._older_patch_run = self._older_patch_run + 1 if patch < self._back_patch else 0
+                record = _parse_game_detail(detail, set(self.config.target_queues))
+                if record is None:
+                    self.stats.other_queue += 1
+                else:
+                    # Older-patch stragglers are still unseen games: keep them.
+                    self._commit(str(game_id), record, detail, backfill=True)
+                if self._older_patch_run >= self.config.backfill_older_patch_run:
+                    return game_id - 1, "patch_boundary"
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
+        return lo - 1, ("floor" if lo <= floor else "progress")
+
+    def _backfill_during_pause(self, should_stop: Callable[[], bool]) -> None:
+        """Spend a caught-up pause on the backfill, then sleep whatever is left."""
+        budget = float(self.config.caught_up_sleep_sec)
+        started = self.clock()
+        batches = 0
+        while not should_stop() and batches < max(1, int(self.config.backfill_max_batches_per_pause)):
+            if self.clock() - started >= budget:
+                return
+            cursor = self.load_back_cursor()
+            if cursor is None:
+                break
+            next_cursor, state = self.backfill_batch(cursor)
+            batches += 1
+            if next_cursor != cursor:
+                self.storage.runtime_set(BACK_CURSOR_KEY, str(next_cursor))
+            if state == "patch_boundary":
+                self._finish_backfill(next_cursor, "crossed into the previous patch")
+                break
+            if state == "floor":
+                self._finish_backfill(next_cursor, "reached floor")
+                break
+            if state == "lcu_down":
+                self._transport_streak = 0
+                break
+            if batches % 10 == 0:
+                self.log(
+                    f"[id-gap] backfill back_cursor={next_cursor} {self.stats.summary()}"
+                    f"{self._probe_summary()} worker={self.worker_id}"
+                )
+        self._sleep_unless_stopped(max(0.0, budget - (self.clock() - started)), should_stop)
 
     # ----------------------------------------------------------------- loop
     def _sleep_unless_stopped(self, seconds: float, should_stop: Callable[[], bool]) -> None:
@@ -318,7 +475,7 @@ class IdGapSweeper:
                     self.log(f"[id-gap] cursor={cursor} {self.stats.summary()}{self._probe_summary()} worker={self.worker_id}")
                 if state == "caught_up":
                     self.log(f"[id-gap] caught up to the {self.config.lag_hours:g}h lag frontier at {cursor}; {self.stats.summary()}")
-                    self._sleep_unless_stopped(self.config.caught_up_sleep_sec, should_stop)
+                    self._backfill_during_pause(should_stop)
                 elif state == "lcu_down":
                     self.log(f"[id-gap] LCU not answering at {cursor}; reconnecting")
                     self._sleep_unless_stopped(self.config.reconnect_sleep_sec, should_stop)
