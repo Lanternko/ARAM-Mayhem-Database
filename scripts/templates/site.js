@@ -11240,10 +11240,13 @@
     let homeDetailScrollY = 0;
     let championTableSort = 'pick';
     let championTableDirection = 'desc';
-    const CHAMPION_LAYOUT_KEY = 'aram-champion-layout';
-    let championLayout = 'table';
+    // The list (table) layout was retired; champions always render as the portrait grid.
+    const championLayout = 'grid';
+    // Home click behaviour: 'expand' opens the detail inline, 'page' opens the champion page.
+    const CHAMPION_OPEN_KEY = 'aram-champion-open';
+    let championOpenMode = 'expand';
     try {
-        if (localStorage.getItem(CHAMPION_LAYOUT_KEY) === 'grid') championLayout = 'grid';
+        if (localStorage.getItem(CHAMPION_OPEN_KEY) === 'page') championOpenMode = 'page';
     } catch {}
 
     function renderChampionTable() {
@@ -11316,15 +11319,18 @@
         const list = document.getElementById('view-home');
         if (!list) return;
         const home = list.getAttribute('data-view') === 'home';
-        list.setAttribute('data-champion-layout', home ? 'grid' : championLayout);
-        const layoutToggle = document.getElementById('champion-layout-toggle');
-        if (layoutToggle) {
-            layoutToggle.hidden = home;
-            layoutToggle.setAttribute('aria-label', pickLang('英雄佈局', 'Champion layout'));
-            layoutToggle.querySelectorAll('[data-champion-layout]').forEach(button => {
-                const layout = button.getAttribute('data-champion-layout');
-                button.setAttribute('aria-pressed', String(layout === championLayout));
-                const label = layout === 'grid' ? pickLang('頭像佈局', 'Portrait layout') : pickLang('條列佈局', 'List layout');
+        list.setAttribute('data-champion-layout', championLayout);
+        const expandMode = home && championOpenMode === 'expand';
+        const openToggle = document.getElementById('champion-open-toggle');
+        if (openToggle) {
+            openToggle.hidden = !home;
+            openToggle.setAttribute('aria-label', pickLang('點選英雄時', 'When a champion is selected'));
+            openToggle.querySelectorAll('[data-champion-open]').forEach(button => {
+                const mode = button.getAttribute('data-champion-open');
+                button.setAttribute('aria-pressed', String(mode === championOpenMode));
+                const label = mode === 'expand'
+                    ? pickLang('展開式：在此展開增幅與出裝', 'Expand: show augments and builds here')
+                    : pickLang('分頁式：開啟英雄頁面', 'Page: open the champion page');
                 button.setAttribute('aria-label', label);
                 button.title = label;
             });
@@ -11336,14 +11342,12 @@
         else list.setAttribute('aria-labelledby', 'tab-champions');
         const titleEl = document.getElementById('champion-list-title');
         titleEl.textContent = title;
-        titleEl.classList.toggle('sr-only', !home);
+        // Visible heading and hint were retired; the h1 stays for screen readers and SEO.
+        titleEl.classList.add('sr-only');
         const hintEl = document.getElementById('champion-list-hint');
-        hintEl.hidden = !home;
-        hintEl.textContent = pickLang(
-            home ? '點選英雄，在此展開增幅與出裝。' : '點選英雄，查看完整數據與分析。',
-            home ? 'Select a champion to expand augments and builds here.' : 'Select a champion for full stats and analysis.');
+        if (hintEl) hintEl.hidden = true;
         list.querySelectorAll('.champ').forEach(card => {
-            if (home) {
+            if (expandMode) {
                 card.setAttribute('role', 'button');
                 card.setAttribute('aria-expanded', card === homeDetailCard ? 'true' : 'false');
             } else {
@@ -11824,10 +11828,11 @@
 
     document.addEventListener('click', (ev) => {
         const modeMenu = document.getElementById('mode-menu');
-        const layoutButton = ev.target.closest('[data-champion-layout]');
-        if (layoutButton && layoutButton.tagName === 'BUTTON') {
-            championLayout = layoutButton.getAttribute('data-champion-layout') === 'grid' ? 'grid' : 'table';
-            try { localStorage.setItem(CHAMPION_LAYOUT_KEY, championLayout); } catch {}
+        const openButton = ev.target.closest('[data-champion-open]');
+        if (openButton && openButton.tagName === 'BUTTON') {
+            championOpenMode = openButton.getAttribute('data-champion-open') === 'page' ? 'page' : 'expand';
+            try { localStorage.setItem(CHAMPION_OPEN_KEY, championOpenMode); } catch {}
+            if (championOpenMode === 'page') closeHomeDetail();
             syncChampionListChrome();
             return;
         }
@@ -12123,7 +12128,7 @@
         // Cards are real links: modified clicks open a tab via the href.
         if (ev.button > 0 || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey) return;
         ev.preventDefault();
-        if (champ.closest('.view-home[data-view="home"]')) openHomeDetail(champ);
+        if (championOpenMode === 'expand' && champ.closest('.view-home[data-view="home"]')) openHomeDetail(champ);
         else openChampPage(champSlug);
     });
 
