@@ -115,6 +115,20 @@ Get-Content data/site/model_refresh_state.json
 
 首次拜訪車道以 `crawl_seen.process_count > 0` 為 canonical 判斷，透過 SQLite triggers 同步 `crawl_queue.has_been_crawled` 與 partial index。Writer 啟動時依 `first_visit_state_v1` 做一次既有 frontier 回填；後續重開不重掃。這避免領取玩家時逐筆探查整個 revisit backlog，阻塞單一 writer 並引發 RPC 逾時。LCU 健康探測失敗時隔 1 秒再確認一次；只有兩次皆失敗才交給原有恢復流程，state 的 `lcu.probes` 保存各次狀態、耗時與錯誤類型，不保存玩家回應內容。
 
+Writer 寫入路徑（`writer_service.py`／`writer_supervisor.py`／`wal_checkpointer.py`）的可調項都是環境變數，改動後要重啟 fleet 才生效：
+
+| 變數 | 預設 | 作用 |
+|---|---|---|
+| `ARAM_WRITER_CACHE_MB` | 256 | writer 連線的 SQLite page cache |
+| `ARAM_WRITER_JOURNAL_LIMIT_MB` | 1024 | checkpoint 追上後，WAL 檔縮回的大小上限 |
+| `ARAM_WRITER_MMAP_MB` | 0（關） | 這個 SQLite build 上限約 2 GB，只蓋得到檔案前 1%，預設不開 |
+| `ARAM_WRITER_CHECKPOINT_SEC` | 30 | 背景 thread 做 `wal_checkpoint(PASSIVE)` 的週期；0＝退回 SQLite 內建 auto-checkpoint |
+| `ARAM_WRITER_GROUP_COMMIT` | 1 | 一輪服務的所有請求共用一次 commit（回應仍在 commit 後才送）；0＝每請求各自 commit |
+| `ARAM_WRITER_PENDING_COUNT_TTL_SEC` | 30 | `pending_count` 的快取秒數（只用於進度 log） |
+| `ARAM_WRITER_REQUEST_RETENTION_H` | 24 | `writer_requests` 保留時數；writer 閒置時分批刪舊列與已結束的 claim 列，0＝不清 |
+
+`snowball_writer.log` 新增三種訊息：`wal checkpoint ... backlog=N`（單次 >5 秒，或 WAL 積壓 >1 GiB 時每 10 分鐘一行；積壓不降代表有 reader 長時間握著讀取交易）、`slow batch commit`、`BATCH_LOST`（整批未落盤，該批 producer 都收到 `INTERNAL_ERROR`）。
+
 ## 5. Lifecycle 與故障分流
 
 - Keepalive 每分鐘只檢查 watchdog parent；parent 消失會被拉起，parent 再確保 workers、publisher、model refresher 存活。調參後需讓舊 parent 結束並由排程重生，否則仍跑舊 argv。新 parent 不比對既有 fleet 的 argv，所以 fleet 參數（例如 `--sgp-producers`）要另外讓 fleet 重起：在 `data/lcu/.games.db.snowball.stop` 寫入 `stop`，fleet 約 15 秒內優雅退出，新 parent 下一輪以新 argv 重起。

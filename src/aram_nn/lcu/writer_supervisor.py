@@ -13,6 +13,7 @@ from pathlib import Path
 import time
 from typing import Any, Sequence
 
+from .wal_checkpointer import WalCheckpointer
 from .writer_protocol import MAX_FRAME_BYTES, ProtocolError, decode_frame
 from .writer_service import WriterService
 from .writer_transport import (
@@ -35,6 +36,13 @@ _BATCH_MAX_SECONDS = 0.025
 # then crash with WRITER_RESPONSE_TIMEOUT.  Log anything that takes a sizeable
 # share of that so the stalling command shows up before the timeout does.
 _SLOW_REQUEST_MS = float(os.environ.get("ARAM_WRITER_SLOW_MS", "2000"))
+# One SQLite commit per service pass instead of one per request.  Responses
+# are held until that commit, so the acknowledgement boundary is unchanged.
+_GROUP_COMMIT = os.environ.get("ARAM_WRITER_GROUP_COMMIT", "1") != "0"
+# Background WAL checkpoint period; 0 leaves SQLite's inline auto-checkpoint on.
+_CHECKPOINT_SEC = float(os.environ.get("ARAM_WRITER_CHECKPOINT_SEC", "30"))
+# pending_count only feeds progress logs; serve it from a short-lived cache.
+_PENDING_COUNT_TTL_SEC = float(os.environ.get("ARAM_WRITER_PENDING_COUNT_TTL_SEC", "30"))
 
 
 _LOG_STREAM: Any = None  # set in the writer process when a log_path is given
@@ -127,6 +135,25 @@ def _metric_peak(metrics: Any, pending: int) -> None:
         metrics[6] = max(int(metrics[6]), pending)
 
 
+def _flush_outbox(
+    outbox: list[tuple[int, Connection, bytes, str | None, bool]],
+    open_channels: list[bool],
+    metrics: Any,
+) -> None:
+    for index, connection, response, _, _ in outbox:
+        try:
+            connection.send_bytes(response)
+            _metric_add(metrics, 4, len(response))
+        except (BrokenPipeError, EOFError, OSError):
+            open_channels[index] = False
+            _metric_add(metrics, 5)
+            try:
+                connection.close()
+            except OSError:
+                pass
+    outbox.clear()
+
+
 def _writer_process_main(
     db_path: str,
     channels: Sequence[tuple[str, Connection]],
@@ -143,6 +170,7 @@ def _writer_process_main(
         except OSError:
             _LOG_STREAM = None
     service: WriterService | None = None
+    checkpointer: WalCheckpointer | None = None
     open_channels = [True] * len(channels)
     pending: list[deque[tuple[bytes, str | None, str | None, str, float]]] = [deque() for _ in channels]
     cursor = 0
@@ -150,7 +178,12 @@ def _writer_process_main(
     drain_deadline: float | None = None
     quiet_rounds = 0
     try:
-        service = WriterService(db_path)
+        service = WriterService(db_path, pending_count_ttl_sec=_PENDING_COUNT_TTL_SEC)
+        if _CHECKPOINT_SEC > 0 and db_path != ":memory:":
+            # Checkpoint from a side thread, not inside a producer's commit.
+            checkpointer = WalCheckpointer(db_path, interval_sec=_CHECKPOINT_SEC, log=_log)
+            checkpointer.start()
+            service.con.execute("PRAGMA wal_autocheckpoint=0")
         lifecycle.value = STATE_READY
         _control(control, {"state": "READY"})
         lifecycle.value = STATE_RUNNING
@@ -178,6 +211,10 @@ def _writer_process_main(
             batch_count = 0
             batch_bytes = 0
             received_this_round = False
+            # (channel index, connection, response, request_id, handled by service)
+            outbox: list[tuple[int, Connection, bytes, str | None, bool]] = []
+            batch_open = False
+            batch_broken = False
             while (
                 batch_count < _BATCH_MAX_REQUESTS
                 and batch_bytes < _BATCH_MAX_BYTES
@@ -235,20 +272,29 @@ def _writer_process_main(
                 if command is None:
                     response = _error_frame("INVALID_FRAME")
                     _metric_add(metrics, 2)
+                    handled = False
                 elif lifecycle.value >= STATE_STOP_CLAIMS and is_new_player_claim(
                     str(command), operation
                 ):
                     response = _error_frame("CLAIMS_STOPPED", request_id)
                     _metric_add(metrics, 2)
+                    handled = False
                 else:
                     handle_started = time.monotonic()
                     status = "ok"
+                    handled = True
+                    if _GROUP_COMMIT and not batch_open:
+                        service.begin_batch()
+                        batch_open = True
                     try:
-                        # This return is the acknowledgement boundary: the
-                        # service has committed before these bytes are sent.
+                        # The acknowledgement boundary is the commit: without
+                        # group commit that is this call, with it the
+                        # end_batch() below.  Nothing is sent before it.
                         response = service.handle_bytes(frame, channel_id=channels[selected][0])
                         _metric_add(metrics, 1)
                     except Exception:
+                        handled = False
+                        batch_broken = batch_open
                         status = "INTERNAL_ERROR"
                         _log(
                             f"[writer] INTERNAL_ERROR {time.strftime('%Y-%m-%d %H:%M:%S')} command={command} "
@@ -265,18 +311,44 @@ def _writer_process_main(
                         pending=sum(len(queue) for queue in pending),
                         status=status,
                     )
-                try:
-                    connection.send_bytes(response)
-                    _metric_add(metrics, 4, len(response))
-                except (BrokenPipeError, EOFError, OSError):
-                    open_channels[selected] = False
-                    _metric_add(metrics, 5)
-                    try:
-                        connection.close()
-                    except OSError:
-                        pass
+                outbox.append((selected, connection, response, request_id, handled))
                 batch_count += 1
                 batch_bytes += len(frame)
+                if not batch_open:
+                    _flush_outbox(outbox, open_channels, metrics)
+                elif batch_broken:
+                    # Close the batch on the first failure so one bad request
+                    # cannot take later ones down with it.
+                    break
+
+            if batch_open:
+                commit_started = time.monotonic()
+                durable = False
+                try:
+                    durable = service.end_batch()
+                except Exception:
+                    _log(
+                        f"[writer] BATCH_COMMIT_FAILED {time.strftime('%Y-%m-%d %H:%M:%S')} "
+                        f"requests={len(outbox)}\n{traceback.format_exc()}"
+                    )
+                commit_ms = (time.monotonic() - commit_started) * 1000.0
+                if commit_ms >= _SLOW_REQUEST_MS:
+                    _log(
+                        f"[writer] slow batch commit {time.strftime('%Y-%m-%d %H:%M:%S')} "
+                        f"commit_ms={commit_ms:.0f} requests={len(outbox)}"
+                    )
+                if not durable:
+                    # Nothing in the batch reached disk: no producer may see OK.
+                    lost = sum(1 for item in outbox if item[4])
+                    if lost:
+                        _log(f"[writer] BATCH_LOST {time.strftime('%Y-%m-%d %H:%M:%S')} requests={lost}")
+                        _metric_add(metrics, 1, -lost)
+                        _metric_add(metrics, 2, lost)
+                    outbox = [
+                        (index, connection, _error_frame("INTERNAL_ERROR", rid) if handled else response, rid, False)
+                        for index, connection, response, rid, handled in outbox
+                    ]
+            _flush_outbox(outbox, open_channels, metrics)
 
             if lifecycle.value == STATE_DRAINING:
                 any_pending = any(pending)
@@ -290,9 +362,18 @@ def _writer_process_main(
             elif not any(open_channels):
                 break
 
-            if not received_this_round and not any(pending):
+            idle = not received_this_round and not any(pending)
+            swept = service.maintain(idle=idle)
+            if swept.get("error"):
+                _log(
+                    f"[writer] maintenance failed {time.strftime('%Y-%m-%d %H:%M:%S')} "
+                    f"{service.maintenance_error}"
+                )
+            if idle and not any(swept.values()):
                 time.sleep(0.005)
     finally:
+        if checkpointer is not None:
+            checkpointer.stop()
         if service is not None:
             service.close()
         for _, connection in channels:

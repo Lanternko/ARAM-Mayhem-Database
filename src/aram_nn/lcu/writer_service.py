@@ -14,10 +14,11 @@ writer-owned claim/idempotency tables are created here.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import itertools
 import json
 import hashlib
+import os
 from pathlib import Path
 import secrets
 import sqlite3
@@ -40,6 +41,23 @@ _CLAIM_ACTIVE = "in_progress"
 GAME_INDEX_MAX_SPAN = 5_000
 GAME_INDEX_MIN_DIGITS = 6
 GAME_INDEX_MAX_DIGITS = 12
+# Housekeeping (WriterService.maintain).  writer_requests only has to outlive a
+# producer's retry of one request; finished claim rows are never read again.
+_MAINTAIN_MIN_ROWS = 50
+_MAINTAIN_START_ROWS = 200
+_MAINTAIN_MAX_ROWS = 2_000
+_MAINTAIN_TARGET_SEC = 0.25
+_MAINTAIN_BUSY_SEC = 1.0
+_MAINTAIN_IDLE_SEC = 60.0
+_MAINTAIN_CLAIM_RETENTION_MS = 3600_000
+_REQ_SAVEPOINT = "writer_req"
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, "") or default)
+    except ValueError:
+        return default
 
 
 def _utc_now() -> str:
@@ -155,6 +173,8 @@ class WriterService:
         clock_ms: Callable[[], int] | None = None,
         failure_injector: Callable[[str], None] | None = None,
         failure_hook: Callable[[str], None] | None = None,
+        pending_count_ttl_sec: float = 0.0,
+        request_retention_sec: float | None = None,
     ) -> None:
         lease = int(claim_lease_ms)
         if lease <= 0:
@@ -174,6 +194,36 @@ class WriterService:
         self.con.execute("PRAGMA journal_mode=WAL")
         self.con.execute("PRAGMA synchronous=NORMAL")
         self.con.execute("PRAGMA busy_timeout=30000")
+        # The default 2 MB page cache thrashes on a 200 GB file: every claim
+        # and commit walks B-tree pages that were evicted moments earlier.
+        cache_mb = _env_float("ARAM_WRITER_CACHE_MB", 256.0)
+        if cache_mb > 0:
+            self.con.execute(f"PRAGMA cache_size={-int(cache_mb * 1024)}")
+        # Once a checkpoint has caught up, the next commit shrinks the WAL file
+        # back to this size instead of leaving a multi-GB file to seek through.
+        journal_mb = _env_float("ARAM_WRITER_JOURNAL_LIMIT_MB", 1024.0)
+        if journal_mb > 0:
+            self.con.execute(f"PRAGMA journal_size_limit={int(journal_mb * 1024 * 1024)}")
+        # Opt-in: this SQLite build clamps mmap to ~2 GB, about 1% of the live
+        # file, so it is off unless asked for.
+        mmap_mb = _env_float("ARAM_WRITER_MMAP_MB", 0.0)
+        if mmap_mb > 0:
+            self.con.execute(f"PRAGMA mmap_size={int(mmap_mb * 1024 * 1024)}")
+        # Group commit (begin_batch/end_batch) state.
+        self._batch_active = False
+        self._batch_dirty = False
+        self._batch_failed = False
+        self._req_savepoint = False
+        # pending_count cache: (monotonic deadline, count).
+        self._pending_count_ttl = max(0.0, float(pending_count_ttl_sec))
+        self._pending_count_cache: tuple[float, int] | None = None
+        # maintain() pacing.
+        if request_retention_sec is None:
+            request_retention_sec = _env_float("ARAM_WRITER_REQUEST_RETENTION_H", 24.0) * 3600.0
+        self._request_retention_sec = float(request_retention_sec)
+        self._maintain_next = 0.0
+        self._maintain_rows = _MAINTAIN_START_ROWS
+        self.maintenance_error: str | None = None
         self._claim_count = itertools.count()
         self.ensure_schema()
 
@@ -407,53 +457,72 @@ class WriterService:
             raise ProtocolError("INVALID_CHANNEL")
         message = decode_frame(frame_or_message) if isinstance(frame_or_message, (bytes, bytearray, memoryview)) else validate_message(frame_or_message)
         with self._lock:
-            self._active_channel = channel_id
-            if self._closed:
-                return self._error(message, "CLOSED")
-            replay = self._replay(message)
-            if replay is not None:
-                return replay
-            command = str(message["command"])
-            if command == "ping":
-                return self._finish(message, {"ok": True, "status": "PONG"})
-            if command == "ready":
-                return self._finish(message, {"ok": True, "status": "READY"})
-            if command == "shutdown":
-                self._shutdown = True
-                return self._finish(message, {"ok": True, "status": "SHUTDOWN"})
-            if self._shutdown:
-                return self._finish(message, {"ok": False, "status": "SHUTDOWN"})
+            if not self._batch_active:
+                return self._handle_locked(message, channel_id)
+            if self._batch_failed:
+                raise RuntimeError("writer batch already failed")
             try:
-                if command == "player_claim":
-                    return self._player_claim(message, channel_id)
-                if command == "game_claim":
-                    return self._game_claim(message, channel_id)
-                if command == "commit_game":
-                    return self._commit_game(message, channel_id)
-                if command == "release_game":
-                    return self._release_game(message, channel_id)
-                if command == "mark_game_done":
-                    return self._mark_game_done(message, channel_id)
-                if command == "finalize_player":
-                    return self._finalize_player(message, channel_id)
-                if command == "requeue_player":
-                    return self._requeue_player(message, channel_id)
-                if command == "snowball_init":
-                    return self._snowball_init(message, channel_id)
-                if command == "snowball_runtime":
-                    return self._snowball_runtime(message, channel_id)
-                if command == "snowball_queue":
-                    return self._snowball_queue(message, channel_id)
-                if command == "snowball_bridge":
-                    return self._snowball_bridge(message, channel_id)
-                if command == "game_index":
-                    return self._game_index(message, channel_id)
-                if command == "snowball_player":
-                    return self._snowball_player(message, channel_id)
+                return self._handle_locked(message, channel_id)
             except Exception:
-                self.con.rollback()
+                # Undo this request only; the rest of the batch stays intact
+                # unless SQLite already threw the whole transaction away.
+                self._rollback()
+                if self._batch_dirty and not self.con.in_transaction:
+                    self._batch_failed = True
                 raise
-            return self._error(message, "UNKNOWN_COMMAND")
+            finally:
+                if self._req_savepoint:
+                    # A handler returned without finishing or rolling back.
+                    self._rollback()
+
+    def _handle_locked(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
+        self._active_channel = channel_id
+        if self._closed:
+            return self._error(message, "CLOSED")
+        replay = self._replay(message)
+        if replay is not None:
+            return replay
+        command = str(message["command"])
+        if command == "ping":
+            return self._finish(message, {"ok": True, "status": "PONG"})
+        if command == "ready":
+            return self._finish(message, {"ok": True, "status": "READY"})
+        if command == "shutdown":
+            self._shutdown = True
+            return self._finish(message, {"ok": True, "status": "SHUTDOWN"})
+        if self._shutdown:
+            return self._finish(message, {"ok": False, "status": "SHUTDOWN"})
+        try:
+            if command == "player_claim":
+                return self._player_claim(message, channel_id)
+            if command == "game_claim":
+                return self._game_claim(message, channel_id)
+            if command == "commit_game":
+                return self._commit_game(message, channel_id)
+            if command == "release_game":
+                return self._release_game(message, channel_id)
+            if command == "mark_game_done":
+                return self._mark_game_done(message, channel_id)
+            if command == "finalize_player":
+                return self._finalize_player(message, channel_id)
+            if command == "requeue_player":
+                return self._requeue_player(message, channel_id)
+            if command == "snowball_init":
+                return self._snowball_init(message, channel_id)
+            if command == "snowball_runtime":
+                return self._snowball_runtime(message, channel_id)
+            if command == "snowball_queue":
+                return self._snowball_queue(message, channel_id)
+            if command == "snowball_bridge":
+                return self._snowball_bridge(message, channel_id)
+            if command == "game_index":
+                return self._game_index(message, channel_id)
+            if command == "snowball_player":
+                return self._snowball_player(message, channel_id)
+        except Exception:
+            self._rollback()
+            raise
+        return self._error(message, "UNKNOWN_COMMAND")
 
     # Common adapter names.  ``handle_bytes`` is useful for a socket loop; its
     # response is intentionally generic JSON and does not pretend to be a
@@ -499,7 +568,7 @@ class WriterService:
                 self.con.commit()
                 return bool(changed)
             except Exception:
-                self.con.rollback()
+                self._rollback()
                 raise
 
     # -------------------------------------------------------------- idempotency
@@ -523,11 +592,16 @@ class WriterService:
         response = {"version": 1, "request_id": str(message["request_id"]), **dict(body)}
         if commit:
             request_hash = hashlib.sha256(encode_frame(message)).hexdigest()
+            if self._batch_active:
+                self._open_batch_transaction()
             self.con.execute(
                 "INSERT INTO writer_requests(request_id, command, channel_id, request_hash, response_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (str(message["request_id"]), str(message["command"]), self._active_channel, request_hash, _json(response), _utc_now()),
             )
-            self.con.commit()
+            if self._batch_active:
+                self._release_request()
+            else:
+                self.con.commit()
         return response
 
     def _error(self, message: Mapping[str, Any], status: str) -> dict[str, Any]:
@@ -539,7 +613,148 @@ class WriterService:
             self._failure_injector(str(name))
 
     def _begin(self) -> None:
-        self.con.execute("BEGIN IMMEDIATE")
+        if not self._batch_active:
+            self.con.execute("BEGIN IMMEDIATE")
+            return
+        self._open_batch_transaction()
+        self.con.execute(f"SAVEPOINT {_REQ_SAVEPOINT}")
+        self._req_savepoint = True
+
+    def _rollback(self) -> None:
+        """Undo the current request (and only it, inside a batch)."""
+        if not self._batch_active:
+            self.con.rollback()
+            return
+        if not self._req_savepoint:
+            return  # read path that never opened a savepoint
+        self._req_savepoint = False
+        try:
+            self.con.execute(f"ROLLBACK TO {_REQ_SAVEPOINT}")
+            self.con.execute(f"RELEASE {_REQ_SAVEPOINT}")
+        except sqlite3.Error:
+            # The savepoint is gone, so SQLite rolled the transaction back by
+            # itself (disk full, I/O error).  Earlier requests are lost too.
+            self._batch_failed = True
+            if self.con.in_transaction:
+                self.con.rollback()
+
+    def _open_batch_transaction(self) -> None:
+        if not self.con.in_transaction:
+            self.con.execute("BEGIN IMMEDIATE")
+        self._batch_dirty = True
+
+    def _release_request(self) -> None:
+        if self._req_savepoint:
+            self._req_savepoint = False
+            self.con.execute(f"RELEASE {_REQ_SAVEPOINT}")
+
+    # ------------------------------------------------------------ group commit
+    def begin_batch(self) -> None:
+        """Start a group commit: requests handled until :meth:`end_batch`
+        share one transaction.  Each still runs in its own savepoint, so a
+        failing request is undone without touching its neighbours.  Callers
+        must hold every response until ``end_batch`` returns True.
+        """
+        with self._lock:
+            if self._batch_active:
+                raise RuntimeError("writer batch already open")
+            if self.con.in_transaction:
+                self.con.rollback()  # leftover from a handler that never finished
+            self._batch_active = True
+            self._batch_dirty = False
+            self._batch_failed = False
+            self._req_savepoint = False
+
+    def end_batch(self) -> bool:
+        """Commit the batch.  False means nothing in it is durable."""
+        with self._lock:
+            if not self._batch_active:
+                return True
+            failed = self._batch_failed
+            self._batch_active = False
+            self._batch_dirty = False
+            self._batch_failed = False
+            self._req_savepoint = False
+            if failed:
+                if self.con.in_transaction:
+                    self.con.rollback()
+                return False
+            if self.con.in_transaction:
+                try:
+                    self.con.commit()
+                except Exception:
+                    if self.con.in_transaction:
+                        self.con.rollback()
+                    raise
+            return True
+
+    # ------------------------------------------------------------- housekeeping
+    def maintain(self, *, idle: bool = True) -> dict[str, int]:
+        """Delete a bounded slice of dead bookkeeping rows.
+
+        ``writer_requests`` is the idempotency journal: a row matters only
+        while its producer might still retry that request.  Finished claim rows
+        (done/released) are never consulted again; a later claim of the same
+        key just starts a new generation with a new random token.  Both tables
+        otherwise grow by one row per request forever.
+
+        Meant to be called from the writer loop whenever it is idle.  Each call
+        is one short transaction and the slice size adapts to how long the
+        previous one took, so a waiting producer is never held up for long.
+        """
+        with self._lock:
+            if self._closed or self._batch_active or self._request_retention_sec <= 0:
+                return {}
+            started = time.monotonic()
+            if started < self._maintain_next + (0.0 if idle else 30.0):
+                return {}
+            if self.con.in_transaction:
+                return {}
+            limit = self._maintain_rows
+            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self._request_retention_sec)).isoformat()
+            claim_cutoff = self._clock_ms() - _MAINTAIN_CLAIM_RETENTION_MS
+            result = {"requests": 0, "game_claims": 0, "player_claims": 0}
+            try:
+                self.con.execute("BEGIN IMMEDIATE")
+                # rowid order is insertion order, so the oldest slice is a
+                # cheap prefix read; created_at stops it at the retention edge.
+                result["requests"] = self.con.execute(
+                    """DELETE FROM writer_requests
+                       WHERE rowid IN (SELECT rowid FROM writer_requests ORDER BY rowid LIMIT ?)
+                         AND created_at < ?""",
+                    (limit, cutoff),
+                ).rowcount
+                result["game_claims"] = self.con.execute(
+                    """DELETE FROM writer_game_claims WHERE game_id IN (
+                           SELECT game_id FROM writer_game_claims
+                           WHERE status IN ('done','released') AND claimed_at_ms < ? LIMIT ?)""",
+                    (claim_cutoff, limit),
+                ).rowcount
+                result["player_claims"] = self.con.execute(
+                    """DELETE FROM writer_player_claims WHERE puuid IN (
+                           SELECT puuid FROM writer_player_claims
+                           WHERE status IN ('done','released') AND claimed_at_ms < ? LIMIT ?)""",
+                    (claim_cutoff, limit),
+                ).rowcount
+                self.con.commit()
+                self.maintenance_error = None
+            except sqlite3.Error as exc:
+                if self.con.in_transaction:
+                    self.con.rollback()
+                self.maintenance_error = repr(exc)
+                self._maintain_next = time.monotonic() + _MAINTAIN_IDLE_SEC
+                return {"error": 1}
+            finished = time.monotonic()
+            elapsed = finished - started
+            more = max(result.values()) >= limit
+            if elapsed > _MAINTAIN_TARGET_SEC:
+                self._maintain_rows = max(_MAINTAIN_MIN_ROWS, limit // 2)
+            elif more:
+                self._maintain_rows = min(_MAINTAIN_MAX_ROWS, limit * 2)
+            # Leave the loop at least 4x the time this slice took.
+            pause = max(_MAINTAIN_BUSY_SEC, elapsed * 4.0) if more else _MAINTAIN_IDLE_SEC
+            self._maintain_next = finished + pause
+            return result
 
     # ------------------------------------------------------------- claim helpers
     def _claim_token(self) -> str:
@@ -587,7 +802,7 @@ class WriterService:
                     (now,),
                 ).fetchone()
                 if row is None:
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "EMPTY", "mutated": False})
                 puuid = str(row[0])
             else:
@@ -604,12 +819,12 @@ class WriterService:
                         (puuid,),
                     ).fetchone()
                 if row is None or str(row[4]) != "pending" or int(row[5]) > now:
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "BUSY", "mutated": False})
 
             existing = self.con.execute("SELECT generation, status, expires_at_ms FROM writer_player_claims WHERE puuid = ?", (puuid,)).fetchone()
             if existing is not None and str(existing[1]) == _CLAIM_ACTIVE and int(existing[2]) > now:
-                self.con.rollback()
+                self._rollback()
                 return self._finish(message, {"ok": True, "status": "BUSY", "mutated": False, "puuid": puuid})
             generation = (int(existing[0]) if existing is not None else 0) + 1
             token = self._claim_token()
@@ -630,7 +845,7 @@ class WriterService:
             response = {"ok": True, "status": "CLAIMED", "mutated": True, "puuid": puuid, "token": token, "generation": generation, "expires_at_ms": expires}
             return self._finish(message, response)
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _game_claim(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -639,11 +854,11 @@ class WriterService:
         self._begin()
         try:
             if self.con.execute("SELECT 1 FROM games WHERE game_id=?", (game_id,)).fetchone() is not None:
-                self.con.rollback()
+                self._rollback()
                 return self._finish(message, {"ok": True, "status": "DONE", "mutated": False, "game_id": game_id})
             existing = self.con.execute("SELECT generation, status, expires_at_ms FROM writer_game_claims WHERE game_id=?", (game_id,)).fetchone()
             if existing is not None and str(existing[1]) == _CLAIM_ACTIVE and int(existing[2]) > now:
-                self.con.rollback()
+                self._rollback()
                 return self._finish(message, {"ok": True, "status": "BUSY", "mutated": False, "game_id": game_id})
             generation = (int(existing[0]) if existing is not None else 0) + 1
             token = self._claim_token()
@@ -660,7 +875,7 @@ class WriterService:
             response = {"ok": True, "status": "CLAIMED", "mutated": True, "game_id": game_id, "token": token, "generation": generation, "expires_at_ms": expires}
             return self._finish(message, response)
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     # --------------------------------------------------------------- game write
@@ -716,7 +931,7 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_game_claims", game_id, channel_id, token, generation, now):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             participants = record["participants"]
             private = record["participants_private"]
@@ -772,7 +987,7 @@ class WriterService:
             self._checkpoint("game_claim_done")
             return self._finish(message, {"ok": True, "status": "COMMITTED" if inserted else "DUPLICATE", "mutated": bool(inserted or existing is not None), "inserted": inserted, "game_id": game_id, "participant_count": len(puuids), "watermark": watermark})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _release_game(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -781,13 +996,13 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_game_claims", game_id, channel_id, str(message["token"]), int(message["generation"]), now):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             self.con.execute("UPDATE writer_game_claims SET status='released', channel_id='', token='', expires_at_ms=0 WHERE game_id=?", (game_id,))
             self._checkpoint("game_release")
             return self._finish(message, {"ok": True, "status": "RELEASED", "mutated": True, "game_id": game_id})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _mark_game_done(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -796,7 +1011,7 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_game_claims", game_id, channel_id, str(message["token"]), int(message["generation"]), now):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             self.con.execute(
                 """UPDATE writer_game_claims SET status='done', channel_id='', token='', expires_at_ms=0
@@ -806,7 +1021,7 @@ class WriterService:
             self._checkpoint("game_claim_done")
             return self._finish(message, {"ok": True, "status": "DONE", "mutated": True, "game_id": game_id})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     # ------------------------------------------------------------- player write
@@ -816,7 +1031,7 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_player_claims", puuid, channel_id, str(message["token"]), int(message["generation"]), now_ms):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             sb = _snowball()
             now_text = _utc_now()
@@ -978,7 +1193,7 @@ class WriterService:
             self._checkpoint("player_claim_done")
             return self._finish(message, {"ok": True, "status": "REQUEUED" if needs_requeue else "FINALIZED", "mutated": True, "puuid": puuid, "new_games_found": found})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _requeue_player(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -988,7 +1203,7 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_player_claims", puuid, channel_id, str(message["token"]), int(message["generation"]), now_ms):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             now_text = _utc_now()
             self.con.execute("UPDATE crawl_queue SET status='pending', claimed_by=NULL, claimed_at_ms=0, eligible_at_ms=?, updated_at=? WHERE puuid=?", (now_ms + delay, now_text, puuid))
@@ -997,7 +1212,7 @@ class WriterService:
             self._checkpoint("player_requeue")
             return self._finish(message, {"ok": True, "status": "REQUEUED", "mutated": True, "puuid": puuid, "eligible_at_ms": now_ms + delay})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     # ----------------------------------------------------------- snowball API
@@ -1117,7 +1332,7 @@ class WriterService:
                 "migrated": migrated, "purged": purged, "synced": synced, "reclaimed": reclaimed,
             })
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _snowball_runtime(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -1139,7 +1354,7 @@ class WriterService:
                     "SELECT state_value FROM crawl_runtime_state WHERE state_key=?", (key,)
                 ).fetchone()
                 value = str(row[0]) if row and row[0] is not None else None
-                self.con.rollback()
+                self._rollback()
                 return self._finish(message, {"ok": True, "status": "FOUND" if value is not None else "MISSING", "mutated": False, "key": key, "value": value})
             if operation == "delete":
                 before = self.con.total_changes
@@ -1149,7 +1364,7 @@ class WriterService:
             if operation == "family_increment":
                 delta = max(0, _int(message.get("delta")))
                 if delta <= 0:
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "NOOP", "mutated": False, "key": key, "value": 0})
                 old = self.con.execute("SELECT state_value FROM crawl_runtime_state WHERE state_key=?", (key,)).fetchone()
                 try:
@@ -1173,7 +1388,7 @@ class WriterService:
             )
             return self._finish(message, {"ok": True, "status": "UPDATED", "mutated": True, "key": key, "value": value})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _game_index(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -1207,7 +1422,7 @@ class WriterService:
                     text = str(value)
                     if len(text) == digits and text.isdigit() and seg_lo <= int(text) <= seg_hi:
                         known.append(int(text))
-            self.con.rollback()
+            self._rollback()
             return self._finish(message, {"ok": True, "status": "FOUND", "mutated": False, "known": sorted(known)}, commit=False)
         if operation == "latest":
             before = _int(message.get("created_before_ms"), 0)
@@ -1219,9 +1434,9 @@ class WriterService:
                     (str(10 ** (digits - 1)), str(10 ** digits - 1), digits, before),
                 ).fetchone()
                 if row is not None and str(row[0]).isdigit():
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "FOUND", "mutated": False, "game_id": str(row[0])}, commit=False)
-            self.con.rollback()
+            self._rollback()
             return self._finish(message, {"ok": True, "status": "MISSING", "mutated": False}, commit=False)
         return self._error(message, "INVALID_OPERATION")
 
@@ -1235,7 +1450,7 @@ class WriterService:
                 "SELECT riot_id, lcu_puuid FROM riot_id_bridge WHERE public_puuid=?",
                 (public_puuid,),
             ).fetchone()
-            self.con.rollback()
+            self._rollback()
             if row is None:
                 return self._finish(message, {"ok": True, "status": "MISSING", "mutated": False})
             return self._finish(message, {"ok": True, "status": "FOUND", "mutated": False, "riot_id": str(row[0]), "lcu_puuid": str(row[1]) if row[1] else None})
@@ -1256,7 +1471,7 @@ class WriterService:
             )
             return self._finish(message, {"ok": True, "status": "UPDATED", "mutated": True})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _snowball_enqueue_locked(self, message: Mapping[str, Any]) -> str:
@@ -1551,9 +1766,21 @@ class WriterService:
         operation = str(message.get("operation") or "")
         read_ops = {"pending_count", "source_count", "next_wait"}
         if operation in read_ops:
+            # Pure reads: not journaled (same as game_index), so they cost no
+            # write transaction and leave no writer_requests row behind.
             if operation == "pending_count":
-                row = self.con.execute("SELECT COUNT(*) FROM crawl_queue WHERE status='pending'").fetchone()
-                return self._finish(message, {"ok": True, "status": "COUNT", "mutated": False, "count": int(row[0]) if row else 0})
+                # Only feeds progress logging, yet counting several hundred
+                # thousand index entries stalled the writer for tens of
+                # seconds on a cold cache.  Serve a recent answer instead.
+                cached = self._pending_count_cache
+                if cached is not None and time.monotonic() < cached[0]:
+                    count = cached[1]
+                else:
+                    row = self.con.execute("SELECT COUNT(*) FROM crawl_queue WHERE status='pending'").fetchone()
+                    count = int(row[0]) if row else 0
+                    if self._pending_count_ttl > 0:
+                        self._pending_count_cache = (time.monotonic() + self._pending_count_ttl, count)
+                return self._finish(message, {"ok": True, "status": "COUNT", "mutated": False, "count": count}, commit=False)
             if operation == "source_count":
                 source = str(message.get("source") or "")
                 if not source:
@@ -1562,11 +1789,11 @@ class WriterService:
                     "SELECT COUNT(*) FROM crawl_queue WHERE source=? AND status IN ('pending','in_progress')",
                     (source,),
                 ).fetchone()
-                return self._finish(message, {"ok": True, "status": "COUNT", "mutated": False, "count": int(row[0]) if row else 0, "source": source})
+                return self._finish(message, {"ok": True, "status": "COUNT", "mutated": False, "count": int(row[0]) if row else 0, "source": source}, commit=False)
             row = self.con.execute("SELECT MIN(eligible_at_ms) FROM crawl_queue WHERE status='pending'").fetchone()
             if row is None or row[0] is None:
-                return self._finish(message, {"ok": True, "status": "EMPTY", "mutated": False, "wait_ms": None})
-            return self._finish(message, {"ok": True, "status": "WAIT", "mutated": False, "wait_ms": max(0, int(row[0]) - self._clock_ms())})
+                return self._finish(message, {"ok": True, "status": "EMPTY", "mutated": False, "wait_ms": None}, commit=False)
+            return self._finish(message, {"ok": True, "status": "WAIT", "mutated": False, "wait_ms": max(0, int(row[0]) - self._clock_ms())}, commit=False)
 
         self._begin()
         try:
@@ -1595,7 +1822,7 @@ class WriterService:
                     (puuid,),
                 ).fetchone()
                 if row is None or int(row[6] or 0) != 1 or (row[5] is not None and str(row[5]) > cutoff):
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "NOOP", "mutated": False, "result": "noop"})
                 became = self._snowball_upsert_queue_locked(
                     puuid=puuid, depth=int(row[2]), source=str(row[0]), priority=int(row[1]),
@@ -1611,7 +1838,7 @@ class WriterService:
                 cap = max(0, _int(message.get("cap"), 80 if operation == "reseed_recent" else 120))
                 cooldown = max(0, _int(message.get("cooldown_ms"), 0))
                 if cap <= 0:
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(message, {"ok": True, "status": "NOOP", "mutated": False, "count": 0})
                 cutoff = datetime.fromtimestamp(max(0.0, time.time() - cooldown / 1000.0), tz=timezone.utc).isoformat()
                 if operation == "reseed_recent":
@@ -1628,7 +1855,7 @@ class WriterService:
                 else:
                     sources = tuple(str(item) for item in (message.get("sources") or []) if str(item))
                     if not sources:
-                        self.con.rollback()
+                        self._rollback()
                         return self._finish(message, {"ok": True, "status": "NOOP", "mutated": False, "count": 0})
                     placeholders = ",".join("?" for _ in sources)
                     rows = self.con.execute(
@@ -1656,7 +1883,7 @@ class WriterService:
                 return self._finish(message, {"ok": True, "status": "RESEEDED", "mutated": bool(added), "count": added})
             return self._error(message, "INVALID_OPERATION")
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _snowball_player(self, message: Mapping[str, Any], channel_id: str) -> dict[str, Any]:
@@ -1676,7 +1903,7 @@ class WriterService:
         self._begin()
         try:
             if not self._claim_ok("writer_player_claims", puuid, channel_id, token, generation, now):
-                self.con.rollback()
+                self._rollback()
                 return self._stale(message)
             if operation == "defer":
                 seen = self.con.execute(
@@ -1685,7 +1912,7 @@ class WriterService:
                 ).fetchone()
                 process_count = int(seen[0]) if seen else 0
                 if process_count >= _snowball()._EMPTY_HISTORY_RETRY_LIMIT:
-                    self.con.rollback()
+                    self._rollback()
                     return self._finish(
                         message,
                         {
@@ -1711,7 +1938,7 @@ class WriterService:
             self._checkpoint("player_requeue")
             return self._finish(message, {"ok": True, "status": "REQUEUED", "mutated": True, "puuid": puuid, "eligible_at_ms": now + delay})
         except Exception:
-            self.con.rollback()
+            self._rollback()
             raise
 
     def _merge_queue_counts(self, old: str | None, incoming: Any) -> str | None:
