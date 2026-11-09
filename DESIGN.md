@@ -8,17 +8,18 @@ colors:
   text-dark: "#e8eaed"
   text-muted-dark: "#9aa0a6"
   border-dark: "#ffffff17"
-  accent-gold-dark: "#f5c518"
-  accent-gold-soft-dark: "#f5d780"
-  accent-on: "#14110a"
+  accent-orchid-dark: "#c084fc"
+  accent-orchid-soft-dark: "#e2c2ff"
+  accent-on: "#1a0b26"
+  accent-on-light: "#ffffff"
   canvas-light: "#f3f5f9"
   surface-light: "#ffffff"
   surface-soft-light: "#eef0f3"
   text-light: "#1a1e26"
   text-muted-light: "#5b6472"
   border-light: "#0000001a"
-  accent-gold-light: "#e0a500"
-  accent-gold-soft-light: "#9a7100"
+  accent-orchid-light: "#9d4edd"
+  accent-orchid-soft-light: "#7e22ce"
   tier-op: "#d8b8ff"
   tier-t1: "#ff5a3c"
   tier-t2: "#f5c518"
@@ -88,7 +89,7 @@ components:
     rounded: "{rounded.sm}"
     padding: "8px 12px"
   button-primary:
-    backgroundColor: "{colors.accent-gold-dark}"
+    backgroundColor: "{colors.accent-orchid-dark}"
     textColor: "{colors.accent-on}"
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
@@ -140,7 +141,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 - 深色預設、明亮可切換、單一語意 token 系統。
 - 高密度、低干擾、數值優先、細節按需載入。
-- 一個主要金色 accent，tier 與 role 色只負責分類。
+- 一個主要蘭紫 accent，tier 與 role 色只負責分類。
 - 1320px 桌面 rail、56px header、24px page gutter。
 - 五個主要產品分頁，導覽位置與統計語意跨語系一致。
 - 熟悉的 tab、chip、search、panel 與 detail 行為。
@@ -152,19 +153,20 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 ## Colors
 
-色彩以近黑炭灰、冷 slate 與克制金色構成。Dark theme 的核心 token 是 `canvas-dark`、`surface-dark`、`surface-raised-dark`、`text-dark` 與 `accent-gold-dark`；Light theme 以對應的 light token 保留相同層級，不做機械反相。
+色彩以近黑炭灰、冷 slate 與克制蘭紫構成。Dark theme 的核心 token 是 `canvas-dark`、`surface-dark`、`surface-raised-dark`、`text-dark` 與 `accent-orchid-dark`；Light theme 以對應的 light token 保留相同層級，不做機械反相。
 
 ### Primary
 
-- **Signal Gold:** `accent-gold-dark` 用於 active underline、主操作、選取確認與少量品牌互動。Light theme 改用 `accent-gold-light` 以維持對比。
-- **Soft Gold:** `accent-gold-soft-dark` 與 `accent-gold-soft-light` 只用在 accent 文字、次級提示或較安靜的狀態，不作大面積背景。
-- **Ink on Gold:** `accent-on` 是金色填滿元件上的前景色，禁止直接使用白字壓在金色上。
+- **Signal Orchid:** `accent-orchid-dark` 用於 active underline、主操作、選取確認、字標 `meta` 與少量品牌互動。Light theme 改用較淡的 `accent-orchid-light`（白字對比 4.6:1），不用更深的 #9333ea 類深紫。2026-11-09 由金色改為蘭紫，因為金色讀起來像通用 AI 模板。
+- **Soft Orchid:** `accent-orchid-soft-dark` 與 `accent-orchid-soft-light` 只用在 accent 文字、次級提示或較安靜的狀態，不作大面積背景。
+- **Ink on Orchid:** 蘭紫填滿元件的前景色一律用 `var(--accent-on)`：dark theme 為深紫 `accent-on`，light theme 為白色 `accent-on-light`。不可在元件裡寫死深色字，否則 light theme 會變成黑字壓深紫。
+- **Semantic gold stays gold:** 金色稀有度、金錢池、暴擊分類、S 評級與 T2 tier 是遊戲語意色，不跟著品牌色改變。稜彩稀有度 `#d36bff` 與品牌蘭紫相近，同時出現時要靠位置與文字區分。
 
 ### Secondary
 
 - **Win-rate tiers:** `tier-op`、`tier-t1`、`tier-t2`、`tier-t3`、`tier-t4`、`tier-t5` 只編碼勝率分級。OP 可使用低速稜彩邊框；T1 可使用受控的紅橘漸層邊框；T2 至 T5 使用單色。
 - **Champion roles:** Assassin、Fighter、Mage、Marksman、Support、Tank 分別使用 `role-assassin`、`role-fighter`、`role-mage`、`role-marksman`、`role-support`、`role-tank`。角色色只出現在 chip、dot、細邊框或小型標籤，不能染滿 panel。
-- **Augment-pool hues:** 增幅池權重列用低彩度分類色掃讀，不是勝率好壞。`ad` 紅、`ap` 藍、`cd` 天空青、`support` teal、`function` 玫紅、`gold` 琥珀、`tank` 橄欖綠；只出現在權重條、8px swatch 與數值 tint，不染滿列或 panel。通用／未分類維持中性灰。琥珀只編碼金錢池，不能取代品牌金色選取態。冷卻不用橘、坦克不用紫，以免和金錢琥珀、功能玫紅混讀。輔助偏綠、冷卻偏藍，兩個青要能分開。
+- **Augment-pool hues:** 增幅池權重列用低彩度分類色掃讀，不是勝率好壞。`ad` 紅、`ap` 藍、`cd` 天空青、`support` teal、`function` 玫紅、`gold` 琥珀、`tank` 橄欖綠；只出現在權重條、8px swatch 與數值 tint，不染滿列或 panel。通用／未分類維持中性灰。琥珀只編碼金錢池，不能取代品牌蘭紫選取態。冷卻不用橘、坦克不用紫，以免和金錢琥珀、功能玫紅混讀。輔助偏綠、冷卻偏藍，兩個青要能分開。
 
 ### Neutral
 
@@ -179,7 +181,7 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 色彩文件只定義分級的視覺映射，不能定義統計演算法。任何 threshold、sample floor、shrinkage 或 percentile 修改，都必須先改 engine、測試與說明，再由 renderer 輸出 tier。
 
-**The Gold Rarity Rule.** 金色在單一畫面保持稀少，常態目標不超過可視面積的 10%。如果所有重點都是金色，畫面就沒有重點。
+**The Accent Rarity Rule.** 品牌蘭紫在單一畫面保持稀少，常態目標不超過可視面積的 10%。如果所有重點都是紫色，畫面就沒有重點。
 
 **The Classification-Only Rule.** Tier 色、role 色與 augment-pool hue 只作分類，不能兼任 CTA、錯誤訊息或選取狀態。
 
@@ -197,13 +199,13 @@ arammeta 是一套玩家會在選角前、遊戲中或賽後快速掃讀的決�
 
 ### Wordmark
 
-字標固定寫成小寫 `arammeta`，不在 header 加圖示或 patch chip。`aram` 使用 500 weight 與 muted text，`meta` 使用 700 weight 與 primary text；兩者共享 Outfit、緊縮字距與連續基線。`meta` 不改成金色，因為金色保留給互動焦點。整個字標是回到首頁的單一可操作元素，favicon 是另一個資產，不得混入字標。
+字標固定寫成小寫 `arammeta`，不在 header 加圖示或 patch chip。`aram` 使用 500 weight 與 muted text，`meta` 使用 700 weight 與品牌 accent 色（hover 時轉 soft accent）；兩者共享 Outfit、緊縮字距與連續基線。整個字標是回到首頁的單一可操作元素，favicon 是另一個資產，不得混入字標。
 
 桌面字標為 26px，行動版縮為 22px，line-height 固定為 1，letter-spacing 為 -0.035em。不可使用全大寫 `ARAM META`、斜體電競字、描邊、發光或拆成兩個按鈕。
 
 ### Favicon
 
-分頁使用骰子狀圓角方形：炭黑 `#101114` 底、金色 `#f5c518` 雙點沿對角線排列，64px 畫布上方形為 `(3,3)` 到 `(61,61)`、圓角 12px，點中心為 `(21,21)` 與 `(43,43)`。`favicon.svg`、tab PNG、ICO 與 touch icon 使用此形狀；首頁先列圓形 PNG 搜尋候選，再列 `sizes=any` 的 SVG 分頁圖示。搜尋候選 `mayhem-single-die-icon.png` 保留填滿畫布的圓底與 `(23,23)`／`(41,41)` 向內收攏的雙點，圓外透明。Google 沒有搜尋專用 favicon 設定，最終選用仍由 Google 決定，不保證兩個平台一定使用不同圖示。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
+分頁使用骰子狀圓角方形：炭黑 `#101114` 底、蘭紫 `#c084fc` 雙點沿對角線排列，64px 畫布上方形為 `(3,3)` 到 `(61,61)`、圓角 12px，點中心為 `(21,21)` 與 `(43,43)`。`favicon.svg`、tab PNG、ICO 與 touch icon 使用此形狀；首頁先列圓形 PNG 搜尋候選，再列 `sizes=any` 的 SVG 分頁圖示。搜尋候選 `mayhem-single-die-icon.png` 保留填滿畫布的圓底與 `(23,23)`／`(41,41)` 向內收攏的雙點，圓外透明。Google 沒有搜尋專用 favicon 設定，最終選用仍由 Google 決定，不保證兩個平台一定使用不同圖示。Canonical geometry 位於 `src/aram_nn/site/brand_icon.py`。16px 與 32px 為主要驗收尺寸，header 字標維持獨立。
 
 ### Hierarchy
 
@@ -276,7 +278,7 @@ Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、
 
 首頁完整分析的外開圖示對應原生新分頁連結，使用 `target="_blank"` 與 `rel="noopener"`，站內路由不可攔截。首屏僅帶各色前三名的必要數字，完整增幅排行和各輪樣本放英雄 shard；增幅推薦英雄與增幅小遊戲需要的全英雄排行用一份帶版本的共用資料按需載入，未就緒時顯示載入或可重試錯誤，不能把三筆摘要當完整候選池。
 
-Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金色 `--accent`，按鈕以 accessible name 和 tooltip 說明佈局，初次使用預設條列，之後記住瀏覽器內的選擇。列表頁不顯示「英雄列表」標題、點選說明或返回舊佈局提示，保留讀屏標題；首頁快速查詢標題照常顯示。頭像模式沿用 tier 分組，點選英雄仍進入完整分析；切換保留搜尋、角色篩選與表格排序，三語、雙主題與手機都保持同樣操作。
+Champions 左上提供格狀與條列圖示切換，選取圖示使用主題蘭紫 `--accent`，按鈕以 accessible name 和 tooltip 說明佈局，初次使用預設條列，之後記住瀏覽器內的選擇。列表頁不顯示「英雄列表」標題、點選說明或返回舊佈局提示，保留讀屏標題；首頁快速查詢標題照常顯示。頭像模式沿用 tier 分組，點選英雄仍進入完整分析；切換保留搜尋、角色篩選與表格排序，三語、雙主題與手機都保持同樣操作。
 
 - **Theme:** Dark 是預設，Light 透過相同 semantic token 切換。Theme flip 在一個 tick 內停用 transition，避免中途顏色殘留。
 - **Locale:** 繁中使用根路由，英文使用 `/en`，簡中使用 `/zh-cn`。五個主要 view、submode、搜尋索引與 accessible name 一起翻譯。
@@ -286,7 +288,7 @@ Champions 左上提供格狀與條列圖示切換，選取圖示使用主題金�
 
 ### Buttons
 
-- **Primary:** Signal Gold 填滿、Ink on Gold 文字、8px 圓角、10px 14px padding，只用於當下唯一主要動作。
+- **Primary:** Signal Orchid 填滿、Ink on Orchid 文字、8px 圓角、10px 14px padding，只用於當下唯一主要動作。
 - **Quiet:** Raised surface、主要文字、1px hairline，用於 theme、language、close 與次要操作。
 - **Hover:** 只提高亮度、邊界或輕微位移，不造成 layout shift。
 - **Focus:** `focus-visible` 使用 2px accent outline 與足夠 offset，不能只重用 hover。

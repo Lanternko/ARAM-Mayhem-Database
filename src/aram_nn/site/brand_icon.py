@@ -4,7 +4,7 @@ from __future__ import annotations
 from hashlib import sha256
 
 BACKGROUND = "#101114"
-FOREGROUND = "#f5c518"
+FOREGROUND = "#c084fc"
 PIPS = ((21, 21), (43, 43))
 SEARCH_PIPS = ((23, 23), (41, 41))
 PIP_RADIUS = 8

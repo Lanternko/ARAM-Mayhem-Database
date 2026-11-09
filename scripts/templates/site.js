@@ -1149,7 +1149,7 @@
             id: 'how-to-read',
             date: '2026-06-27',
             kicker_zh: '入門', kicker_en: 'Basics',
-            cover_motif: 'tiers', cover_accent: '#f5c518',
+            cover_motif: 'tiers', cover_accent: '#c084fc',
             cover_zh: '先看懂|這三欄', cover_en: 'READ|THIS FIRST',
             title_zh: '如何閱讀這份 Tier List',
             title_en: 'How to read this tier list',
@@ -6293,9 +6293,9 @@
         const radar = compRadarOverlaySvg([
             {
                 axes: allyAxes,
-                stroke: 'var(--accent, #f5c518)',
-                fill: 'color-mix(in srgb, var(--accent, #f5c518) 20%, transparent)',
-                dot: 'var(--accent, #f5c518)',
+                stroke: 'var(--accent, #c084fc)',
+                fill: 'color-mix(in srgb, var(--accent, #c084fc) 20%, transparent)',
+                dot: 'var(--accent, #c084fc)',
             },
             {
                 axes: enemyAxes.length ? enemyAxes : allyAxes.map(a => ({ label: a.label, pct: 0 })),
@@ -8599,9 +8599,9 @@
             },
             {
                 axes: best.axes,
-                stroke: 'var(--accent, #f5c518)',
-                fill: 'color-mix(in srgb, var(--accent, #f5c518) 22%, transparent)',
-                dot: 'var(--accent, #f5c518)',
+                stroke: 'var(--accent, #c084fc)',
+                fill: 'color-mix(in srgb, var(--accent, #c084fc) 22%, transparent)',
+                dot: 'var(--accent, #c084fc)',
             },
         ], analysisTitle);
 
@@ -10606,7 +10606,7 @@
         return '<g>' + out + '</g>';
     }
     function articleCover(a, uid, par) {
-        const acc = a.cover_accent || '#f5c518';
+        const acc = a.cover_accent || '#c084fc';
         const motif = a.cover_motif || 'tiers';
         const hook = articleField(a, 'cover') || articleField(a, 'kicker');
         const kick = String(articleField(a, 'kicker') || '').toUpperCase();
