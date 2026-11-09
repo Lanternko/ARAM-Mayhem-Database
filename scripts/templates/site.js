@@ -4996,7 +4996,6 @@
         const bootInfo = info.boots || {};
         const spellInfo = info.spells || {};
         const itemClusterInfo = info.itemClusters || {};
-        const augTypeInfo = info.augTypes || {};
         const augRankTip = pickLang(
             '依勝率與選用率綜合排序，樣本少的會往後排。「推薦／避開」代表明顯高於／低於這隻英雄的平均勝率。',
             'Ordered by win rate and pick rate together; small samples rank lower. Strong / Avoid mark augments clearly above / below this champion\'s average.'
@@ -5689,7 +5688,6 @@
                     ${buildSetSummary(setTop)}
                 </div>
             </div>
-            ${buildAffinitySection(copy.augTypeSectionTitle, copy.augTypeSectionMeta, augTypeInfo, { augmentPools: true })}
         `;
         const heroHtml = opts.inline
             ? `<div class="detail-head">${info.image ? `<span class="detail-avatar"><img src="${info.image}" alt=""></span>` : ''}<div class="inline-champ-id"><div class="inline-champ-title"><h2 class="cname">${escHtml(champName(info, cid))}</h2>${buildDetailRoleTags(info)}</div><span class="inline-champ-stats"><b>${pct(info.wr)}</b> · ${Number(info.g || 0).toLocaleString()} ${escHtml(pickLang('場', 'games'))}</span></div>${opts.actions || ''}</div>`
