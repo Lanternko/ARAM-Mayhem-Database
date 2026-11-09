@@ -10388,36 +10388,37 @@
     // Official Mayhem augment patch notes, keyed by the public patch number
     // (26.x, see displayPatch).  `id` links to DATA.augs for icon + localized
     // name; augments missing from the payload fall back to `zh` / `en`.
-    // Each change is [label_zh, label_en, before, after]; before === null
-    // marks a new effect.
+    // Each change is [label_zh, label_en, before, after, dir, before_en,
+    // after_en]; before === null marks a new effect.  `en` / *_en carry the
+    // official English patch-note wording (leagueoflegends.com en-us notes).
     const PATCH_NOTES = {
         '26.22': [
-            { id: '3049', zh: '裝甲衝擊', changes: [['傷害', 'Damage', '50 - 125 + 250%額外物防', '25 - 125 + 220%額外物防', 'down']] },
-            { id: '3086', zh: '蜜蜂來襲！！！', changes: [
-                ['基礎傷害成長', 'Base damage scaling', '75 - 200 + 150%額外物攻 + 70%總魔攻', '75 - 140 + 150%額外物攻 + 70%總魔攻', 'down'],
-                ['蜂巢飛行時間', 'Hive travel time', '0.75秒', '1.1秒', 'down'],
+            { id: '3049', zh: '裝甲衝擊', en: 'Armored Impact', changes: [['傷害', 'Damage', '50 - 125 + 250%額外物防', '25 - 125 + 220%額外物防', 'down', '50 - 125 + 250% bonus Armor', '25 - 125 + 220% bonus Armor']] },
+            { id: '3086', zh: '蜜蜂來襲！！！', en: 'BEES!!!', changes: [
+                ['基礎傷害成長', 'Base Damage Scaling', '75 - 200 + 150%額外物攻 + 70%總魔攻', '75 - 140 + 150%額外物攻 + 70%總魔攻', 'down', '75 - 200 + 150% bonus AD + 70% total AP', '75 - 140 + 150% bonus AD + 70% total AP'],
+                ['蜂巢飛行時間', 'Hive Travel Time', '0.75秒', '1.1秒', 'down', '.75s', '1.1s'],
             ] },
-            { id: '3071', zh: '銅管爆破', changes: [
-                ['冷卻時間', 'Cooldown', '75秒', '50秒', 'up'],
-                ['士兵傷害', 'Minion damage', '', '已移除', 'down'],
+            { id: '3071', zh: '銅管爆破', en: 'Brass Blast', changes: [
+                ['冷卻時間', 'Cooldown', '75秒', '50秒', 'up', '75s', '50s'],
+                ['士兵傷害', 'Minion Damage', '', '已移除', 'down', '', 'REMOVED'],
             ] },
-            { id: '3088', zh: '血色鈷石', changes: [['標記視覺特效', 'Mark VFX', '所有玩家可見', '僅限增幅裝置擁有者可見']] },
-            { id: '3060', zh: '一片歌手', changes: [['效果', 'Effect', null, '根據技能加速獲得傷害，但不再受益於技能加速。']] },
-            { id: '2077', zh: '貪婪束縛', changes: [
-                ['額外生命治療係數', 'Bonus Health heal ratio', '0.1', '0.12', 'up'],
-                ['基礎治療量', 'Base heal', '50 - 200', '75 - 300', 'up'],
+            { id: '3088', zh: '血色鈷石', en: 'Crimson Cobalt', changes: [['標記視覺特效', 'Mark VFX', '所有玩家可見', '僅限增幅裝置擁有者可見', undefined, 'Visible to all players', 'Visible only to the augment owner']] },
+            { id: '3060', zh: '一片歌手', en: 'One Hit Wonder', changes: [['效果', 'Effect', null, '根據技能加速獲得傷害，但不再受益於技能加速。', undefined, null, '[Ability] gains increased damage based on your Ability Haste but no longer benefits from Ability Haste.']] },
+            { id: '2077', zh: '貪婪束縛', en: 'Ravenous Bind', changes: [
+                ['額外生命治療係數', 'Bonus Health Heal Ratio', '0.1', '0.12', 'up', '.1', '.12'],
+                ['基礎治療量', 'Base Heal', '50 - 200', '75 - 300', 'up'],
             ] },
-            { id: '3159', zh: '崛起', changes: [['效果', 'Effect', null, '使用大絕擊殺敵方英雄時會重置冷卻時間，最多3次。', 'up']] },
-            { id: '2115', zh: '伸縮手掌黏黏樂', en: 'Squishy Slappy Grab', icon: 'assets/icons/squishyslappygrab_large.png', changes: [['每個拉到的目標獲得的護盾', 'Shield per target pulled', '50 - 200 + 50%額外物防 + 50%額外魔防', '100 - 300 + 70%額外物防 + 70%額外魔防', 'up']] },
-            { id: '1375', zh: '食魂者', changes: [['每層獲得生命', 'Health per stack', '20', '30', 'up']] },
-            { id: '2076', zh: '果斷', changes: [['每次技能命中獲得雙防', 'Resists per ability hit', '等級1 / 7 / 11 - 1 / 2 / 3', '等級1 / 11 - 2 / 3', 'up']] },
-            { id: '3116', zh: '全面擊潰', changes: [['五連擊觸發傷害', 'Five-hit proc damage', '（15 + 5%額外攻速 + 0.15%總技能加速）%已損失生命', '17%已損失生命']] },
-            { id: '1001', zh: '泰坦的決意', changes: [['每級重型武裝所需層數', 'Stacks per Heavy Armament level', '10', '7', 'up']] },
-            { id: '3081', zh: '命定武器', changes: [
-                ['固定物理穿透係數', 'Flat armor pen ratio', '35', '20', 'down'],
-                ['固定魔法穿透係數', 'Flat magic pen ratio', '25', '15', 'down'],
-                ['百分比物理穿透係數', '% armor pen ratio', '0.25', '0.15', 'down'],
-                ['百分比魔法穿透係數', '% magic pen ratio', '0.15', '0.09', 'down'],
+            { id: '3159', zh: '崛起', en: 'RISE!', changes: [['效果', 'Effect', null, '使用大絕擊殺敵方英雄時會重置冷卻時間，最多3次。', 'up', null, 'Killing enemy champions with your Ultimate resets the cooldown, up to 3 times.']] },
+            { id: '2115', zh: '伸縮手掌黏黏樂', en: 'Squishy Slappy Grab', icon: 'assets/icons/squishyslappygrab_large.png', changes: [['每個拉到的目標獲得的護盾', 'Shield per Pulled Target', '50 - 200 + 50%額外物防 + 50%額外魔防', '100 - 300 + 70%額外物防 + 70%額外魔防', 'up', '50 - 200 + 50% bonus Armor + 50% bonus Magic Resistance', '100 - 300 + 70% bonus Armor + 70% bonus Magic Resistance']] },
+            { id: '1375', zh: '食魂者', en: 'Soul Eater', changes: [['每層獲得生命', 'Health Gain per Stack', '20', '30', 'up']] },
+            { id: '2076', zh: '果斷', en: 'Stay Resolute', changes: [['每次技能命中獲得雙防', 'Armor and Magic Resistance per Ability Hit', '等級1 / 7 / 11 - 1 / 2 / 3', '等級1 / 11 - 2 / 3', 'up', 'Level 1 / 7 / 11 - 1 / 2 / 3', 'Level 1 / 11 - 2 / 3']] },
+            { id: '3116', zh: '全面擊潰', en: "Take 'Em Down Down Down", changes: [['五連擊觸發傷害', 'Five-Hit Proc Damage', '（15 + 5%額外攻速 + 0.15%總技能加速）%已損失生命', '17%已損失生命', undefined, '(15 + 5% bonus Attack Speed + 0.15% total Ability Haste)% Missing Health', '17% Missing Health']] },
+            { id: '1001', zh: '泰坦的決意', en: "Titan's Resolve", changes: [['每級重型武裝所需層數', 'Stacks of Juggernauting required for each Juggernauting level', '10', '7', 'up']] },
+            { id: '3081', zh: '命定武器', en: 'Weapon of Destiny', changes: [
+                ['固定物理穿透係數', 'Flat Armor Penetration Scalar', '35', '20', 'down'],
+                ['固定魔法穿透係數', 'Flat Magic Penetration Scalar', '25', '15', 'down'],
+                ['百分比物理穿透係數', 'Percent Armor Penetration Scalar', '0.25', '0.15', 'down'],
+                ['百分比魔法穿透係數', 'Percent Magic Penetration Scalar', '0.15', '0.09', 'down'],
             ] },
         ],
     };
@@ -10436,7 +10437,7 @@
         const loc = s => (currentLang === 'zh-CN' ? t2s(s) : s);
         const cards = notes.map(entry => {
             const aug = entry.id && DATA.augs ? DATA.augs[entry.id] : null;
-            const name = aug ? augName(aug, entry.id) : (currentLang === 'en' && entry.en ? entry.en : loc(entry.zh));
+            const name = currentLang === 'en' && entry.en ? entry.en : (aug ? augName(aug, entry.id) : loc(entry.zh));
             const iconSrc = (aug && aug.icon) || entry.icon || '';
             const icon = iconSrc
                 ? `<img class="item-tip-icon" src="${escHtml(iconSrc)}" alt="" loading="lazy">`
@@ -10445,8 +10446,13 @@
             // nerfs, so a mixed change shows both arrows.
             const dirs = ['up', 'down'].filter(d => entry.changes.some(c => c[4] === d));
             const marks = dirs.map(patchNoteDirIcon).join('');
-            const lines = entry.changes.map(([labelZh, labelEn, before, after]) => {
-                const label = currentLang === 'en' ? labelEn : loc(labelZh);
+            const lines = entry.changes.map(change => {
+                const [labelZh, labelEn] = change;
+                const en = currentLang === 'en';
+                const label = en ? labelEn : loc(labelZh);
+                // Official English values when given; numeric-only rows share zh.
+                const before = en && change.length > 5 ? change[5] : change[2];
+                const after = en && change.length > 6 ? change[6] : change[3];
                 const body = before === null
                     ? `<span class="patch-note-new">${escHtml(pickLang('新增', 'New'))}</span><span class="patch-note-after">${formatDescriptionInlineHtml(loc(after))}</span>`
                     : (before ? `<span class="patch-note-before">${formatDescriptionInlineHtml(loc(before))}</span><span class="patch-note-arrow" aria-hidden="true">→</span>` : '')
@@ -10463,7 +10469,7 @@
                 </article>
             `;
         }).join('');
-        const note = pickLang('官方增幅平衡調整；文字取自更新公告，英文為非官方翻譯。', 'Official augment balance changes; English labels are unofficial translations.');
+        const note = pickLang('官方增幅平衡調整；文字取自更新公告。', 'Official augment balance changes, as worded in the patch notes.');
         return `<div class="patch-notes-grid">${cards}</div><p class="change-note">${escHtml(note)}</p>`;
     }
 
