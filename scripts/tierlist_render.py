@@ -2813,7 +2813,7 @@ def _attach_item_style_fields(entry: dict, meta: dict | None) -> None:
 
 
 def _item_role_overrides_path() -> Path:
-    # Canonical human-labeled map (from exports/item-role-annotator.html).
+    # Canonical human-labeled map (from outputs/exports/item-role-annotator.html).
     return Path(__file__).resolve().parent / "item_role_filter_overrides.json"
 
 

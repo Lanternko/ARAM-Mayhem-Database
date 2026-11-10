@@ -68,8 +68,6 @@ manual/
 scripts/_*.py
 # graphify knowledge-graph output (regenerable from source)
 graphify-out/
-# data/report exports (regenerable, ~3MB)
-exports/
 
 # Publishable review pages
 !docs/semantic-score-review.html
