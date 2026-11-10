@@ -2697,6 +2697,13 @@
         color: #9aa0a6;
         font-family: var(--font-caption);
     }
+    .champ-analysis .champ-analysis-p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--text-muted);
+    }
+    .champ-analysis .champ-analysis-p:last-child { margin-bottom: 0; }
     .comp-fit-empty {
         color: #6b7280;
         font-size: 12px;
@@ -3319,7 +3326,6 @@
         margin: 0 0 12px;
     }
     .item-role-chip,
-    .champ-pool-rarity-chip,
     .item-scope-chip {
         padding: 4px 11px;
         background: #1f2530;
@@ -3335,17 +3341,14 @@
         --role-color: #9aa0a6;
     }
     .item-role-chip:hover,
-    .champ-pool-rarity-chip:hover,
     .item-scope-chip:hover { background: #2a3142; border-color: #3a4252; }
     .item-role-chip.is-active,
-    .champ-pool-rarity-chip.is-active,
     .item-scope-chip.is-active {
         background: var(--role-color);
         color: #0e1116;
         border-color: var(--role-color);
     }
     .item-role-chip:focus-visible,
-    .champ-pool-rarity-chip:focus-visible,
     .item-scope-chip:focus-visible { outline: 2px solid #8ab4ff; outline-offset: 2px; }
     /* Cycling pick-share knob: dots say how many states there are and where
        you are, so a label that silently changes on click still reads as one
@@ -6334,7 +6337,6 @@
     /* Category + rarity filter chips */
     [data-theme="light"] .aug-cat-chip:not(.is-active),
     [data-theme="light"] .item-role-chip:not(.is-active),
-    [data-theme="light"] .champ-pool-rarity-chip:not(.is-active),
     [data-theme="light"] .item-scope-chip:not(.is-active),
     [data-theme="light"] .apool-role-chip:not(.is-active) {
         background: var(--chip-bg);
@@ -6343,7 +6345,6 @@
     }
     [data-theme="light"] .aug-cat-chip:not(.is-active):hover,
     [data-theme="light"] .item-role-chip:not(.is-active):hover,
-    [data-theme="light"] .champ-pool-rarity-chip:not(.is-active):hover,
     [data-theme="light"] .item-scope-chip:not(.is-active):hover,
     [data-theme="light"] .apool-role-chip:not(.is-active):hover {
         background: #e2e6ee;
@@ -9982,9 +9983,8 @@
 
 .champ-pools-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 20px; }
 .champ-pools-purpose-filters { margin-top: 8px; }
-.champ-pool-rarity-chip { --role-color: var(--accent); min-height: 40px; }
 /* Accent-filled chips take the theme's on-accent ink (white on the light purple). */
-.champ-pool-rarity-chip.is-active, .chip[data-role=""].active { color: var(--accent-on); }
+.chip[data-role=""].active { color: var(--accent-on); }
 .champ-pool-category { margin-top: 28px; }
 .champ-pool-category > h3 { display: flex; align-items: baseline; gap: 12px; font-size: 20px; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .champ-pool-category > h3 small { margin-left: auto; color: var(--text-muted); font-weight: 400; font-size: 12px; }
@@ -11121,7 +11121,7 @@ html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg):
 html:not(.nfx-off) .aug-rarity-chip.rarity-kPrismatic.is-active{--nfx-accent:#d36bff}
 html:not(.nfx-off) .aug-rarity-chip.rarity-kSilver.is-active{--nfx-accent:#c0c5cc}
 html:not(.nfx-off) .aug-rarity-chip.rarity-kGold.is-active{--nfx-accent:#f5c518;--nfx-accent-on:#141414}
-html:not(.nfx-off) :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
+html:not(.nfx-off) :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-rarity-chip[data-champ-pool-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
   background:var(--nfx-fg)!important;border-color:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ── Tier list / Pools = one slab split by a slash (esports scoreboard look) ── */
@@ -11156,7 +11156,7 @@ html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:first-child{clip-path:polygo
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%);margin-right:0}
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:hover{color:var(--nfx-strong)!important;background:var(--nfx-slab-hover)!important}
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip.is-active{background:var(--nfx-accent)!important;color:var(--nfx-accent-on)!important}
-html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip[data-rarity=""].is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:is([data-rarity=""],[data-champ-pool-rarity=""]).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and
