@@ -39,7 +39,7 @@ Crawler 通知（Task Scheduler）
 
 | 設定 | Source of truth | 現行 production profile |
 |---|---|---|
-| 排程入口 | `notes/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
+| 排程入口 | `runbooks/task-definitions/MayhemLCUWatchdogKeepalive.xml` | 每分鐘呼叫 hidden VBS |
 | Crawler／publisher／model wrapper | `scripts/watchdog_keepalive.ps1` | 一個 `snowball-workers` fleet（2 producer，degraded 1）；adaptive `games-per-player=0`；另加 1 個 G01 ID-gap producer（watchdog `--id-gap-producers`，0 關閉）：沿 TW gameId 序列查 DB 沒有的 ID，只存 2400／450，`seed_family='id_gap'`，落後即時 4h，cursor 在 `crawl_runtime_state` 的 `id_gap:cursor` |
 | League memory | 同上 | client 記憶體不降載（degrade=restart=4500 MB；leak 是每個新 puuid 固定成本，降載只會變慢）；safe restart 4500 MB（非資源保護造成的 phase 卡住且 45 分沒收場，保留原有重啟例外）；worker start gate 6500 MB |
 | System memory | 同上 | commit ≥80% 或 available RAM ≤3072 MB 降為 1 producer；commit ≥90% 或 available RAM ≤1536 MB 暫停收集；連續 3 次 commit ≤70%、available RAM ≥4096 MB 且 client <3500 MB 才恢復 |
@@ -129,7 +129,7 @@ Get-Content data/site/model_refresh_state.json
 主 crawler keepalive 可由 tracked XML 重建；目前這台機器上的 ARAMMeta API 四個 tasks 可由本機 installer 重建：
 
 ```powershell
-schtasks /create /tn MayhemLCUWatchdogKeepalive /xml notes\task-definitions\MayhemLCUWatchdogKeepalive.xml
+schtasks /create /tn MayhemLCUWatchdogKeepalive /xml runbooks\task-definitions\MayhemLCUWatchdogKeepalive.xml
 powershell -NoProfile -ExecutionPolicy Bypass -File data/site/install_arammeta_tasks.ps1
 ```
 
@@ -138,7 +138,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File data/site/install_arammeta_t
 ## 7. 相關文件
 
 - Repo 全域不變量：`AGENTS.md`
-- 實驗、資料 lineage 與 promotion gate：`notes/agents/experiments-and-data.md`
+- 實驗、資料 lineage 與 promotion gate：`documents/guides/experiments-and-data.md`
 - 網站設計、CSS token 與 visual QA：`DESIGN.md`
 - Crawler stall／LCU recovery：`runbooks/crawler-stall.md`
 - OPGG seed refresh：`runbooks/opgg-seed-refresh.md`
@@ -146,4 +146,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File data/site/install_arammeta_t
 - Tier-list 發布：`runbooks/site-deploy.md`
 - 腳本索引：`scripts/README.md`
 - 現行模型、資料與實驗決策：`MODEL.md`
-- 歷史模型計畫與快照：`PLAN.md`、`notes/archive/`
+- 歷史模型計畫與快照：`documents/archive/PLAN-2026-05-12.md`、`documents/archive/`
