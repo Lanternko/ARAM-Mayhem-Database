@@ -270,17 +270,22 @@ def test_wal_assist_lets_the_log_restart_and_shrink(tmp_path: pathlib.Path, monk
         _claim(service, f"g{index}", f"c{index}")
     wal = pathlib.Path(str(db) + "-wal")
     grown = wal.stat().st_size
-    assert service.wal_assist() is False  # below the default threshold
+    assert service.wal_assist(0) is False  # below the default threshold
     service._wal_assist_bytes = 1
     service._wal_assist_next = 0.0
-    assert service.wal_assist() is True
-    assert service.wal_assist() is False  # paced
+    assert service.wal_assist(0) is True
+    assert service.wal_assist(0) is False  # paced
     _claim(service, "after", "c-after")  # this write rewinds the log
     assert wal.stat().st_size < grown
     service.begin_batch()
     service._wal_assist_next = 0.0
-    assert service.wal_assist() is False
+    assert service.wal_assist(0) is False
     assert service.end_batch() is True
+    # Unknown, stale or large backlog: the copy could be multi-GB, so the
+    # writer leaves it to the background thread.
+    service._wal_assist_next = 0.0
+    assert service.wal_assist(None) is False
+    assert service.wal_assist(8193) is False
 
 
 @pytest.mark.parametrize("group_commit", ["1", "0"])
@@ -322,3 +327,18 @@ def test_supervisor_acks_only_durable_writes_under_concurrency(
         supervisor.shutdown()
     assert _count(db, "writer_game_claims") == 100
     assert _count(db, "writer_requests") == 100
+
+
+def test_wal_checkpointer_reports_recent_backlog(tmp_path: pathlib.Path) -> None:
+    db = tmp_path / "games.db"
+    con = sqlite3.connect(db)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("CREATE TABLE t(x)")
+    con.execute("INSERT INTO t VALUES (1)")
+    con.commit()
+    checkpointer = WalCheckpointer(str(db))
+    assert checkpointer.recent_backlog() is None  # nothing measured yet
+    checkpointer.checkpoint_once(con)
+    assert checkpointer.recent_backlog() == 0
+    assert checkpointer.recent_backlog(max_age_sec=-1.0) is None  # stale
+    con.close()

@@ -698,7 +698,7 @@ class WriterService:
             return True
 
     # ------------------------------------------------------------- housekeeping
-    def wal_assist(self) -> bool:
+    def wal_assist(self, backlog_pages: int | None = None, *, max_backlog_pages: int = 8192) -> bool:
         """Finish the checkpoint on the writer's own connection so the WAL can restart.
 
         SQLite only rewinds the WAL when the writer begins a write with every
@@ -709,7 +709,15 @@ class WriterService:
         requests (about once a second); the next write then restarts the log
         the first time it lands in a gap between readers, and
         ``journal_size_limit`` shrinks the file.  PASSIVE never waits on locks.
+
+        ``backlog_pages`` is what the background checkpointer's last pass left
+        behind (None = unknown or stale).  The writer only steps in when that
+        is small: PASSIVE copies everything it is allowed to in one call, and
+        a reader releasing a long-pinned WAL would otherwise turn this into a
+        multi-GB copy that stalls every producer past its RPC timeout.
         """
+        if backlog_pages is None or backlog_pages > max_backlog_pages:
+            return False
         with self._lock:
             if self._closed or self._batch_active or self._wal_path is None or self._wal_assist_bytes <= 0:
                 return False

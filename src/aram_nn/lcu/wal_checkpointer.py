@@ -66,6 +66,21 @@ class WalCheckpointer:
         self.runs = 0
         self.last_result: tuple[int, int, int] | None = None  # (busy, wal pages, checkpointed)
         self.last_error: str | None = None
+        self._last_backlog: int | None = None
+        self._last_backlog_at = 0.0
+        self._busy_wal_interval = min(self._interval, 5.0)
+
+    def recent_backlog(self, max_age_sec: float = 10.0) -> int | None:
+        """Frames the last PASSIVE pass left behind, or None if that is stale.
+
+        The writer uses this to decide whether finishing the checkpoint itself
+        is cheap.  Without it, a reader letting go of a long-pinned WAL would
+        make the writer copy the whole backlog inside its request loop.
+        """
+        backlog = self._last_backlog
+        if backlog is None or time.monotonic() - self._last_backlog_at > max_age_sec:
+            return None
+        return backlog
 
     def start(self) -> None:
         if self._thread is not None:
@@ -99,6 +114,8 @@ class WalCheckpointer:
         self.last_error = None
         backlog = max(0, result[1] - result[2])
         now = time.monotonic()
+        self._last_backlog = backlog
+        self._last_backlog_at = now
         slow = elapsed_ms >= self._slow_ms
         pinned = (
             backlog >= self._backlog_log_pages
@@ -143,10 +160,18 @@ class WalCheckpointer:
             f"wal_pages={wal_pages} busy={busy}"
         )
 
+    def _next_wait(self) -> float:
+        # A grown WAL is checked more often so the remainder handed to the
+        # writer (or to TRUNCATE) stays a few seconds of writes, not thirty.
+        last = self.last_result
+        if last is not None and self._truncate_pages > 0 and last[1] >= self._truncate_pages:
+            return self._busy_wal_interval
+        return self._interval
+
     def _run(self) -> None:
         con: sqlite3.Connection | None = None
         try:
-            while not self._stop.wait(self._interval):
+            while not self._stop.wait(self._next_wait()):
                 try:
                     if con is None:
                         con = sqlite3.connect(self._db_path, timeout=1.0)

@@ -364,7 +364,7 @@ def _writer_process_main(
 
             idle = not received_this_round and not any(pending)
             if checkpointer is not None:
-                service.wal_assist()
+                service.wal_assist(checkpointer.recent_backlog())
             swept = service.maintain(idle=idle)
             if swept.get("error"):
                 _log(
