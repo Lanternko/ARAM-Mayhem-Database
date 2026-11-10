@@ -10,14 +10,16 @@ match), then re-crops that framing from the full-resolution art:
   docs/assets/champ-icons/{cid}-circle.webp  circle, SIZE px, alpha (anti-aliased)
   docs/assets/champ-icons/manifest.json      per-champion source + match score
 
+The framing is always the old DDragon icon's: the site zooms every icon to
+114-125% exactly as it did with the 120px icons, so only the pixels change.
 Sources, largest first: HD wiki splash (docs/assets/draft-splash-hd, ~5760px),
-Riot Universe splash (often 1920px), DDragon splash (1215px).  The CDragon
-tile -- Riot's own square crop of the *current* base splash -- picks the
-source and vetoes false hits:
-  * a source the tile does not match holds outdated art and is skipped;
-  * the DDragon icon framing (tighter, face centred) is used only when it
-    matches and lands inside the tile framing; otherwise the tile framing;
-  * no source matches -> the 380px tile itself.
+Riot Universe splash (often 1920px), DDragon splash (1215px).  The icon is
+matched in each; the largest source scoring >= GOOD_SCORE wins, else the best.
+Champions whose icon art is in no splash are cropped by hand in
+scripts/champion_icon_crops.json ({cid: {source, cx, cy, side}}, normalised:
+cx/side by width, cy by height; side is what the site should *show*, so it is
+widened by OLD_ZOOM to cancel the site's zoom).  Anything else that does not
+match falls back to the DDragon icon itself.
 
 OpenCV is not a project dependency; run it in an ephemeral env:
 
@@ -49,34 +51,17 @@ CDRAGON_GAME_DATA = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-g
 
 SIZE = 256            # output edge in px (>=2x the largest on-site render)
 ICON_INSET = 0.07     # strip DDragon's baked frame before matching
-TILE_INSET = 0.02
 COARSE_W = 640        # splash width for the scale sweep
 FINE_W = 1600         # splash width for the refinement
-MIN_SCORE = 0.65      # icon match below this is treated as unreliable
-TILE_OK = 0.80        # tile match below this = source holds different (outdated) art
+MIN_SCORE = 0.55      # icon match below this is unreliable (visually checked: >=0.55 all right)
 MIN_HIRES = 128       # source side below this is flagged LOW-RES (2x of a 64px render)
 MIN_FRAC = 0.10       # a match smaller than this fraction of splash height is a false hit
 CIRCLE_SCALE = 1.0    # circle diameter relative to the square crop
 
 
-# (dx, dy, scale) applied to the resolved framing, in units of its side.
-# When the DDragon icon is separate art (no match in the splash), the fallback is
-# Riot's tile framing, which is a waist-up shot 2-4x wider than the icon.  Across
-# the 127 champions whose icon *does* match, the icon is a median 0.50 of the
-# tile's side, centred 0.07 above it (p10-p90 0.36-0.73), so every tile fallback
-# gets that by default to keep the familiar face-close framing.
-TILE_FRAMING = (0.0, -0.07, 0.5)
-# Per-champion overrides for tile fallbacks where the default misses the face.
-FRAMING = {
-    "9": (-0.05, 0.0, 0.6),     # Fiddlesticks: head and jaws below centre
-    "10": (0.03, -0.3, 0.4),    # Kayle: helmet near the top
-    "13": (0.25, -0.33, 0.4),   # Ryze: head at the upper right
-    "44": (-0.05, -0.25, 0.5),  # Taric: face near the top
-    "54": (-0.03, -0.05, 0.45), # Malphite: new splash has no clear face; keep the glowing mouth
-    "101": (-0.03, -0.12, 0.6), # Xerath: core and chains
-    "201": (0.05, -0.2, 0.5),   # Braum: tile centres his torso
-    "203": (0.0, 0.0, 0.75),    # Kindred: keep both Lamb and Wolf
-}
+GOOD_SCORE = 0.80     # icon match this good is the same art; prefer the largest such source
+OLD_ZOOM = 1.14       # site CSS zoom on icons (114%, -7% margin): manual crops are widened by it
+CROPS = ROOT / "scripts" / "champion_icon_crops.json"
 
 
 @dataclass
@@ -187,61 +172,53 @@ def circle(square_src: Image.Image) -> Image.Image:
     return out
 
 
-def inside(icon_m: Match, tile_m: Match) -> bool:
-    """The icon framing sits within Riot's tile framing of the same art."""
-    half = tile_m.side / 2
-    return (abs(icon_m.cx - tile_m.cx) <= half and abs(icon_m.cy - tile_m.cy) <= half
-            and 0.25 * tile_m.side <= icon_m.side <= 1.1 * tile_m.side)
-
-
-def resolve(cid: str, alias: str, version: str) -> tuple[str, Image.Image, Match]:
-    """Pick the largest splash that holds the *current* art, then frame it.
-
-    The CDragon tile is Riot's crop of the current base splash, so it both
-    proves a source is current (outdated wiki art will not match it) and
-    vetoes false icon matches: the DDragon icon framing (tighter, face
-    centred) is used only when it lands inside the tile framing; otherwise
-    the tile framing itself is used.
-    """
-    icon = to_bgr(Image.open(fetch(f"{DDRAGON}/{version}/img/champion/{alias}.png",
-                                   CACHE / "icon" / f"{version}-{alias}.png")))
-    tile_img = Image.open(fetch(cdragon_tile_url(cid), CACHE / "tile" / f"{cid}000.jpg")).convert("RGB")
-    tile = to_bgr(tile_img)
+def resolve(cid: str, alias: str, version: str, manual: dict) -> tuple[str, Image.Image, Match]:
+    """The old icon's framing, from the largest splash that holds the same art."""
+    icon_img = Image.open(fetch(f"{DDRAGON}/{version}/img/champion/{alias}.png",
+                                CACHE / "icon" / f"{version}-{alias}.png")).convert("RGB")
     dd = Image.open(fetch(f"{DDRAGON}/img/champion/splash/{alias}_0.jpg",
                           CACHE / "splash" / f"{alias}_0.jpg")).convert("RGB")
-    sources: list[tuple[str, Image.Image]] = []
+    sources: dict[str, Image.Image] = {}
     hd_path = HD_DIR / f"{cid}.jpg"
     if hd_path.exists():
-        sources.append(("hd", Image.open(hd_path).convert("RGB")))
+        sources["hd"] = Image.open(hd_path).convert("RGB")
     uni_path = universe_splash(alias)
     if uni_path is not None:
         uni = Image.open(uni_path).convert("RGB")
         if uni.width > dd.width:
-            sources.append(("universe", uni))
-    sources.append(("ddragon", dd))
+            sources["universe"] = uni
+    sources["ddragon"] = dd
 
-    for name, img in sources:
-        bgr = to_bgr(img)
-        t = locate(tile, bgr, TILE_INSET)
-        if t.score < TILE_OK:
-            continue  # this source does not hold the current splash art
-        i = locate(icon, bgr, ICON_INSET)
-        sharp = i.side >= 96 or i.side >= t.side  # face >=96px is sharp at on-site sizes (<=48px@2x)
-        if i.score >= MIN_SCORE and inside(i, t) and sharp:
-            return name, img, i
-        return f"{name}+tile", img, t
-    # No splash holds the current art: Riot's own clean square crop, as is.
-    return "tile", tile_img, Match(tile_img.width / 2, tile_img.height / 2, tile_img.width, 1.0)
+    if cid in manual:  # hand crop: side is the visible area, widen it by the site zoom
+        c = manual[cid]
+        name = c["source"]
+        if name == "tile":
+            img = Image.open(fetch(cdragon_tile_url(cid), CACHE / "tile" / f"{cid}000.jpg")).convert("RGB")
+        else:
+            img = sources[name]
+        w, h = img.size
+        return f"{name}+manual", img, Match(c["cx"] * w, c["cy"] * h, c["side"] * w * OLD_ZOOM, 1.0)
+
+    icon = to_bgr(icon_img)
+    best = None
+    for name, img in sources.items():
+        m = locate(icon, to_bgr(img), ICON_INSET)
+        if m.score >= GOOD_SCORE:
+            return name, img, m
+        if best is None or m.score > best[2].score:
+            best = (name, img, m)
+    if best[2].score >= MIN_SCORE:
+        return best
+    # Icon art is in no splash and nobody cropped it: keep the old icon itself.
+    n = icon_img.width
+    return "icon", icon_img, Match(n / 2, n / 2, n, best[2].score)
 
 
-def build_one(cid: str, info: dict, version: str, force: bool) -> dict:
+def build_one(cid: str, info: dict, version: str, force: bool, manual: dict) -> dict:
     alias = info["alias"]
     sq_path = OUT_DIR / f"{cid}.webp"
     ci_path = OUT_DIR / f"{cid}-circle.webp"
-    source, img, m = resolve(cid, alias, version)
-    if "tile" in source:  # tile framing: tighten to icon-like face framing
-        dx, dy, k = FRAMING.get(cid, TILE_FRAMING)
-        m = Match(m.cx + dx * m.side, m.cy + dy * m.side, m.side * k, m.score)
+    source, img, m = resolve(cid, alias, version, manual)
     if force or not sq_path.exists() or not ci_path.exists():
         crop_square(img, m).save(sq_path, "WEBP", quality=88, method=6)
         circle(crop_square(img, m, CIRCLE_SCALE)).save(ci_path, "WEBP", quality=88, method=6)
@@ -261,6 +238,7 @@ def main() -> int:
     champs = json.loads(TIER.read_text(encoding="utf-8"))["champs"]
     version = next(iter(champs.values()))["image"].split("/cdn/")[1].split("/")[0]
     only = set(args.only.split(",")) if args.only else None
+    manual = json.loads(CROPS.read_text(encoding="utf-8")) if CROPS.exists() else {}
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     manifest_path = OUT_DIR / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
@@ -268,7 +246,7 @@ def main() -> int:
     for cid in sorted(champs, key=int):
         if only and cid not in only:
             continue
-        row = build_one(cid, champs[cid], version, args.force)
+        row = build_one(cid, champs[cid], version, args.force, manual)
         manifest[cid] = row
         flags = ("" if row["ok"] else "  LOW-SCORE") + ("" if row["hires"] else "  LOW-RES")
         print(f"{cid:>4} {row['alias']:<14} {row['source']:<12} {row['score']:.3f} "

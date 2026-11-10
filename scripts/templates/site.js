@@ -148,11 +148,7 @@
         const img = ev.target;
         if (!img || img.tagName !== 'IMG') return;
         const fallback = CHAMP_ICON_FALLBACK.get(img.getAttribute('src'));
-        if (fallback) {
-            // DDragon's square has a baked dark frame; CSS trims it only on this class.
-            img.classList.add('ddragon-icon');
-            img.src = fallback;
-        }
+        if (fallback) img.src = fallback;
     }, true);
     const CHAMP_DETAIL_FIELDS = [
         'poolAugments',
