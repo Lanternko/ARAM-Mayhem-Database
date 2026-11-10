@@ -229,6 +229,9 @@ class WriterService:
             None if isinstance(db, sqlite3.Connection) or str(db) == ":memory:" else str(db) + "-wal"
         )
         self._prune_max_wal_bytes = int(_env_float("ARAM_WRITER_PRUNE_MAX_WAL_MB", 4096.0) * 1024 * 1024)
+        self._wal_assist_bytes = int(_env_float("ARAM_WRITER_WAL_ASSIST_MB", 512.0) * 1024 * 1024)
+        self._wal_assist_next = 0.0
+        self.wal_assists = 0
         self.maintenance_error: str | None = None
         self._claim_count = itertools.count()
         self.ensure_schema()
@@ -695,6 +698,38 @@ class WriterService:
             return True
 
     # ------------------------------------------------------------- housekeeping
+    def wal_assist(self) -> bool:
+        """Finish the checkpoint on the writer's own connection so the WAL can restart.
+
+        SQLite only rewinds the WAL when the writer begins a write with every
+        frame already backfilled and no reader inside the log.  A background
+        PASSIVE checkpoint is always a few frames behind a busy writer, so that
+        moment never comes and the file grows without bound.  While the file is
+        over the threshold, this copies the short remainder between two
+        requests (about once a second); the next write then restarts the log
+        the first time it lands in a gap between readers, and
+        ``journal_size_limit`` shrinks the file.  PASSIVE never waits on locks.
+        """
+        with self._lock:
+            if self._closed or self._batch_active or self._wal_path is None or self._wal_assist_bytes <= 0:
+                return False
+            started = time.monotonic()
+            if started < self._wal_assist_next or self.con.in_transaction:
+                return False
+            try:
+                if os.path.getsize(self._wal_path) <= self._wal_assist_bytes:
+                    self._wal_assist_next = started + 5.0
+                    return False
+                self.con.execute("PRAGMA wal_checkpoint(PASSIVE)").fetchone()
+            except (OSError, sqlite3.Error):
+                self._wal_assist_next = time.monotonic() + 10.0
+                return False
+            finished = time.monotonic()
+            # Never spend more than ~10% of the loop here.
+            self._wal_assist_next = finished + max(1.0, (finished - started) * 10.0)
+            self.wal_assists += 1
+            return True
+
     def maintain(self, *, idle: bool = True) -> dict[str, int]:
         """Delete a bounded slice of dead bookkeeping rows.
 

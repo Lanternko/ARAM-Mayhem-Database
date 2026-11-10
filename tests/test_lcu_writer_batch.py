@@ -261,6 +261,28 @@ def test_wal_checkpointer_truncates_a_grown_wal(tmp_path: pathlib.Path) -> None:
         con.close()
 
 
+def test_wal_assist_lets_the_log_restart_and_shrink(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARAM_WRITER_JOURNAL_LIMIT_MB", "0.001")
+    db = tmp_path / "games.db"
+    service = WriterService(db)
+    service.con.execute("PRAGMA wal_autocheckpoint=0")
+    for index in range(200):
+        _claim(service, f"g{index}", f"c{index}")
+    wal = pathlib.Path(str(db) + "-wal")
+    grown = wal.stat().st_size
+    assert service.wal_assist() is False  # below the default threshold
+    service._wal_assist_bytes = 1
+    service._wal_assist_next = 0.0
+    assert service.wal_assist() is True
+    assert service.wal_assist() is False  # paced
+    _claim(service, "after", "c-after")  # this write rewinds the log
+    assert wal.stat().st_size < grown
+    service.begin_batch()
+    service._wal_assist_next = 0.0
+    assert service.wal_assist() is False
+    assert service.end_batch() is True
+
+
 @pytest.mark.parametrize("group_commit", ["1", "0"])
 def test_supervisor_acks_only_durable_writes_under_concurrency(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, group_commit: str
