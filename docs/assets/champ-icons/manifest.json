@@ -67,7 +67,7 @@
   "alias": "Fiddlesticks",
   "source": "hd+tile",
   "score": 0.956,
-  "src_side": 1647,
+  "src_side": 988,
   "ok": true,
   "hires": true
  },
@@ -75,7 +75,7 @@
   "alias": "Kayle",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 152,
   "ok": true,
   "hires": true
  },
@@ -99,7 +99,7 @@
   "alias": "Ryze",
   "source": "hd+tile",
   "score": 0.986,
-  "src_side": 2208,
+  "src_side": 883,
   "ok": true,
   "hires": true
  },
@@ -147,7 +147,7 @@
   "alias": "Warwick",
   "source": "hd+tile",
   "score": 0.982,
-  "src_side": 1281,
+  "src_side": 641,
   "ok": true,
   "hires": true
  },
@@ -195,9 +195,9 @@
   "alias": "Morgana",
   "source": "hd+tile",
   "score": 0.979,
-  "src_side": 214,
+  "src_side": 107,
   "ok": true,
-  "hires": true
+  "hires": false
  },
  "26": {
   "alias": "Zilean",
@@ -227,7 +227,7 @@
   "alias": "Twitch",
   "source": "hd+tile",
   "score": 0.971,
-  "src_side": 1468,
+  "src_side": 734,
   "ok": true,
   "hires": true
  },
@@ -235,9 +235,9 @@
   "alias": "Karthus",
   "source": "hd+tile",
   "score": 0.985,
-  "src_side": 256,
+  "src_side": 128,
   "ok": true,
-  "hires": true
+  "hires": false
  },
  "31": {
   "alias": "Chogath",
@@ -275,7 +275,7 @@
   "alias": "Shaco",
   "source": "hd+tile",
   "score": 0.976,
-  "src_side": 1073,
+  "src_side": 536,
   "ok": true,
   "hires": true
  },
@@ -291,7 +291,7 @@
   "alias": "Sona",
   "source": "hd+tile",
   "score": 0.986,
-  "src_side": 1120,
+  "src_side": 560,
   "ok": true,
   "hires": true
  },
@@ -347,7 +347,7 @@
   "alias": "Taric",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -363,7 +363,7 @@
   "alias": "Trundle",
   "source": "hd+tile",
   "score": 0.982,
-  "src_side": 1398,
+  "src_side": 699,
   "ok": true,
   "hires": true
  },
@@ -395,7 +395,7 @@
   "alias": "Malphite",
   "source": "hd+tile",
   "score": 0.962,
-  "src_side": 1933,
+  "src_side": 870,
   "ok": true,
   "hires": true
  },
@@ -427,7 +427,7 @@
   "alias": "Renekton",
   "source": "hd+tile",
   "score": 0.932,
-  "src_side": 2256,
+  "src_side": 1128,
   "ok": true,
   "hires": true
  },
@@ -499,7 +499,7 @@
   "alias": "Cassiopeia",
   "source": "hd+tile",
   "score": 0.898,
-  "src_side": 1719,
+  "src_side": 859,
   "ok": true,
   "hires": true
  },
@@ -539,7 +539,7 @@
   "alias": "Udyr",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -555,7 +555,7 @@
   "alias": "Gragas",
   "source": "hd+tile",
   "score": 0.987,
-  "src_side": 1417,
+  "src_side": 709,
   "ok": true,
   "hires": true
  },
@@ -603,7 +603,7 @@
   "alias": "Kennen",
   "source": "hd+tile",
   "score": 0.975,
-  "src_side": 569,
+  "src_side": 284,
   "ok": true,
   "hires": true
  },
@@ -667,7 +667,7 @@
   "alias": "Lux",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -675,7 +675,7 @@
   "alias": "Xerath",
   "source": "hd+tile",
   "score": 0.978,
-  "src_side": 1378,
+  "src_side": 827,
   "ok": true,
   "hires": true
  },
@@ -699,7 +699,7 @@
   "alias": "Graves",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -747,7 +747,7 @@
   "alias": "Viktor",
   "source": "universe+tile",
   "score": 0.992,
-  "src_side": 391,
+  "src_side": 195,
   "ok": true,
   "hires": true
  },
@@ -763,7 +763,7 @@
   "alias": "Fiora",
   "source": "hd+tile",
   "score": 0.917,
-  "src_side": 1723,
+  "src_side": 861,
   "ok": true,
   "hires": true
  },
@@ -803,7 +803,7 @@
   "alias": "Khazix",
   "source": "hd+tile",
   "score": 0.93,
-  "src_side": 1660,
+  "src_side": 830,
   "ok": true,
   "hires": true
  },
@@ -811,7 +811,7 @@
   "alias": "Darius",
   "source": "hd+tile",
   "score": 0.981,
-  "src_side": 2259,
+  "src_side": 1129,
   "ok": true,
   "hires": true
  },
@@ -827,7 +827,7 @@
   "alias": "Lissandra",
   "source": "hd+tile",
   "score": 0.977,
-  "src_side": 1073,
+  "src_side": 536,
   "ok": true,
   "hires": true
  },
@@ -859,7 +859,7 @@
   "alias": "AurelionSol",
   "source": "hd+tile",
   "score": 0.937,
-  "src_side": 600,
+  "src_side": 300,
   "ok": true,
   "hires": true
  },
@@ -923,7 +923,7 @@
   "alias": "Yasuo",
   "source": "hd+tile",
   "score": 0.967,
-  "src_side": 1142,
+  "src_side": 571,
   "ok": true,
   "hires": true
  },
@@ -947,7 +947,7 @@
   "alias": "Camille",
   "source": "hd+tile",
   "score": 0.99,
-  "src_side": 1223,
+  "src_side": 612,
   "ok": true,
   "hires": true
  },
@@ -955,7 +955,7 @@
   "alias": "Akshan",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -971,7 +971,7 @@
   "alias": "Braum",
   "source": "hd+tile",
   "score": 0.988,
-  "src_side": 1009,
+  "src_side": 631,
   "ok": true,
   "hires": true
  },
@@ -979,7 +979,7 @@
   "alias": "Jhin",
   "source": "hd+tile",
   "score": 0.982,
-  "src_side": 1580,
+  "src_side": 790,
   "ok": true,
   "hires": true
  },
@@ -987,7 +987,7 @@
   "alias": "Kindred",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 285,
   "ok": true,
   "hires": true
  },
@@ -1155,7 +1155,7 @@
   "alias": "Ivern",
   "source": "hd+tile",
   "score": 0.966,
-  "src_side": 2204,
+  "src_side": 1102,
   "ok": true,
   "hires": true
  },
@@ -1251,7 +1251,7 @@
   "alias": "Yone",
   "source": "hd+tile",
   "score": 0.975,
-  "src_side": 579,
+  "src_side": 289,
   "ok": true,
   "hires": true
  },
@@ -1315,7 +1315,7 @@
   "alias": "Renata",
   "source": "tile",
   "score": 1.0,
-  "src_side": 380,
+  "src_side": 190,
   "ok": true,
   "hires": true
  },
@@ -1347,7 +1347,7 @@
   "alias": "Smolder",
   "source": "hd+tile",
   "score": 0.992,
-  "src_side": 2607,
+  "src_side": 1303,
   "ok": true,
   "hires": true
  },
@@ -1361,11 +1361,11 @@
  },
  "904": {
   "alias": "Zaahen",
-  "source": "ddragon+tile",
-  "score": 0.974,
-  "src_side": 234,
+  "source": "ddragon",
+  "score": 0.977,
+  "src_side": 118,
   "ok": true,
-  "hires": true
+  "hires": false
  },
  "910": {
   "alias": "Hwei",
