@@ -42,12 +42,21 @@ docs/assets/draft-splash-hd/
 # Scratch & local-only artifacts (keep the public repo code-only)
 # build logs, image cache, intermediate JSON, and an embedded Chrome profile w/ creds
 outputs/
-# Portable Markdown reports/architecture are tracked; slide workspaces and exports stay local.
+# Portable Markdown documents are tracked; slide workspaces, exports and report attachments stay local.
 documents/*
 !documents/README.md
-!documents/personal-data-audit.md
 !documents/architecture/
-!documents/architecture/*.md
+documents/architecture/**
+!documents/architecture/**/
+!documents/architecture/**/*.md
+!documents/guides/
+documents/guides/**
+!documents/guides/**/
+!documents/guides/**/*.md
+!documents/archive/
+documents/archive/**
+!documents/archive/**/
+!documents/archive/**/*.md
 !documents/reports/
 documents/reports/*
 !documents/reports/*.md

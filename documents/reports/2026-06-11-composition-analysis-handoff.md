@@ -5,7 +5,7 @@
 **日期:** 2026-06-11
 **範圍:** Open Slide final-project deck 擴充(10→14 頁)+ 7 個 composition-signal ablation
 **主資料源:** `data/raw/mayhem_lcu_ml_compare_2026_05_25_live.parquet`(queue 2400 / Mayhem,patch 16.10)
-**標準切分:** 215,406 train / 46,158 val / 46,158 test(time split,完全重現 `final_project_text_report_2026_05_31.md`)
+**標準切分:** 215,406 train / 46,158 val / 46,158 test(time split,完全重現 `documents/archive/2026-05-31-final-project-text-report.md`)
 
 > ⚠️ 重現 split 一定要用 `..._2026_05_25_live.parquet`。`mayhem_lcu_ml_compare_latest.parquet` 只有 121k 場,給出不同的小 split。
 
@@ -129,7 +129,7 @@
 **新增腳本:** `scripts/ablation_composition_subset.py`、`ablation_pair_synergy_persistence.py`、`ablation_champ_role_persistence.py`、`ablation_additive_vs_nonadditive.py`、`ablation_recommender_backtest.py`
 **輸出:** `outputs/ablation/ablation_*.json`(5 個,recommender 有 base + `_tail`;2026-07-06 起搬進 `outputs/ablation/` 子目錄)
 **投影片:** `documents/open-slide-final-project/slides/aram-mayhem-winrate/index.tsx` + `assets/demo-*.png`
-**原始報告:** `documents/final_project_text_report_2026_05_31.md`(模型對比表的數字來源)
+**原始報告:** `documents/archive/2026-05-31-final-project-text-report.md`(模型對比表的數字來源)
 **記憶:** `~/.claude/projects/.../memory/project_final_slides.md`(deck 位置 + 觀眾約束)
 
 **關鍵基準數字(報告 held-out test):**

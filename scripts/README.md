@@ -26,7 +26,7 @@ python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/
 python scripts/prune_stale_db_snapshots.py
 ```
 
-實驗的 dataset manifest、變因控制與 promotion gate 見 `notes/agents/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
+實驗的 dataset manifest、變因控制與 promotion gate 見 `documents/guides/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
 
 ## 1. 站台 build（tier-list 網站生成/發布）
 - `build_tier_list.py` — Tier-list 網站 build CLI 入口（re-export tierlist_engine + tierlist_render）

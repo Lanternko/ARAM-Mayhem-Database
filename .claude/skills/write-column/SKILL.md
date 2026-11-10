@@ -19,4 +19,4 @@ If the user asks only to write prose, create a reviewable draft outside generate
 3. Propose the content model, route, localization, cover asset, accessibility, performance, and publishing contract before implementation.
 4. Use `../../../runbooks/site-deploy.md` only after the feature is implemented and approved for deployment.
 
-Historical cover conventions are archived at `../../../notes/archive/article-cover-banners.md`; they are evidence, not a current contract.
+Historical cover conventions are archived at `../../../documents/archive/article-cover-banners.md`; they are evidence, not a current contract.

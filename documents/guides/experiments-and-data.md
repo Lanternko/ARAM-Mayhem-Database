@@ -64,7 +64,7 @@ Manifest 可放在 experiment JSON 的 `meta`、輸出旁的 Markdown，或長�
 - Champion one-hot 已隱含大量可加 team attribute；新增 frontline／damage／role sum 若落在相同線性空間，沒有新資訊是合理結果。真正 composition signal 通常來自 ratio、threshold、missing capability 與 interaction。
 - `accuracy >65%`、val 顯著優於 train、跨 split 有重複 `game_id`、或使用 post-game participant stats，任一項都先視為 leakage audit trigger。
 
-現行模型不變量與 promotion policy 見根目錄 `MODEL.md`。`PLAN.md` 只保留 swap-team antisymmetry、`[diff,total]` channel 與 temperature scaling 的歷史推導；其中資料 patch 與規模不可直接複製為 current scope。
+現行模型不變量與 promotion policy 見根目錄 `MODEL.md`。`documents/archive/PLAN-2026-05-12.md` 只保留 swap-team antisymmetry、`[diff,total]` channel 與 temperature scaling 的歷史推導；其中資料 patch 與規模不可直接複製為 current scope。
 
 ## 6. Metrics 與 uncertainty
 
@@ -101,4 +101,4 @@ Manifest 可放在 experiment JSON 的 `meta`、輸出旁的 Markdown，或長�
 - [ ] JSON／CSV／report 保存到 `outputs/<category>/` 或 `documents/reports/`，包含 code commit 與 arguments。
 - [ ] 結論寫成證據支持的強度；觀察性資料不使用因果語氣。
 
-代表性歷史分析可參考 `documents/reports/composition_analysis_handoff_2026_06_11.md`，但引用數字前要核對其 pinned dataset、patch 與 split，不可把舊 benchmark 當現況。
+代表性歷史分析可參考 `documents/reports/2026-06-11-composition-analysis-handoff.md`，但引用數字前要核對其 pinned dataset、patch 與 split，不可把舊 benchmark 當現況。
