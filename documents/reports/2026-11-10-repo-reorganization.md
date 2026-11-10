@@ -405,7 +405,72 @@ Part B：
 
 ### Part A
 
-（執行者填寫：每個 commit 的 sha 與摘要、`MODEL_NOTES` 的 `+` 行處置、移除的失效索引項、捷徑掃描結果、驗證指令輸出、偏離 spec 之處與原因。）
+執行者：Claude Code（Sonnet 5.5）派工 session，2026-11-10。Branch `codex/repo-reorg`，從 `origin/main` 6fc5c659c2 開；沒有 push、沒有開 PR、沒有 merge。
+
+#### Commits
+
+| # | sha | 摘要 | 檔案數 |
+|---|---|---|---|
+| 1 | `a626bf0191` | Docs: add repo hygiene runbook and reorganization spec | 2 |
+| 2 | `6929d3ba00` | Docs: fold notes/ and PLAN.md into documents/, normalize report names（含 `.gitignore` 的 `documents/` 區塊，見偏離 1） | 34 |
+| 3 | `d3e1288d95` | Repo: move launcher and tool exports off the top level | 7 |
+| 4 | `5bf8dd96d4` | Repo: add layout test and repo_audit CLI | 3 |
+| 5 | `34178589b5` | Docs: point OPERATIONS at the new task-definition path（只有 `OPERATIONS.md` L42、L132、L141、L149 四行） | 1 |
+| 6 | 本 commit | Docs: record reorganization execution log（只有本檔 §8 Part A） | 1 |
+
+§3.2 的搬移都用 `git mv`／`git rm`。`git log --follow` 抽查可追到搬移前歷史：`documents/archive/PLAN-2026-05-12.md` 5 個 commit（最舊 2026-05-14）、`documents/archive/MODEL_NOTES-2026-05-20.md` 9 個、`scripts/launchers/start_recommender.bat` 3 個、`runbooks/task-definitions/` 下的 XML 3 個、`documents/guides/experiments-and-data.md` 3 個、`documents/reports/2026-08-10-issue-16-analysis.md` 3 個、`documents/reports/2026-05-15-personal-data-audit.md` 3 個。
+
+#### `MODEL_NOTES` 的 `+` 行處置
+
+完整版 → 舊版的 diff 中，舊版多出的行分三組：
+
+| 舊版行 | 處置 |
+|---|---|
+| `Updated: 2026-05-18` | 略過：完整版是較新的 `Updated: 2026-05-20` |
+| `> **Archived / superseded:** …` banner | 帶入：放在合併檔檔頭，連結改成 `../../MODEL.md`、`PLAN-2026-05-12.md`、`TODO.md`；完整版原有的 `Archived snapshot` banner 保留，其中 guides 連結改為 `../guides/experiments-and-data.md` |
+| `When the user asks for a new ML round (…)` 一行 | 帶入檔尾 `## Lines carried over from MODEL_NOTES.md`：完整版對應句的觸發詞已是亂碼，舊版這行字元完整 |
+
+#### `final_project_text_report_2026_05_31.md` 歸檔確認
+
+照表歸檔，未合併內文；檔頭加 `Superseded by ../reports/2026-06-14-final-project-report.md`。05-31 版有、06-14 版沒有同名標題的段落：`1. Introduction`、`2. Dataset`、`3. Methods`（含 3.1–3.4）、`4. Evaluation Metrics`、`5. Results`、`6. Discussion`、`7. Limitations`、`8. Conclusion`、`Academic Integrity Note`，以及 H1 標題。06-14 版是重新編排章節（`3. Representation and Models`、`4. Headline Benchmark` 等），不是同名刪除；未發現需要搶救的獨有段落，但沒有逐段比對內容。
+
+#### 移除的失效索引項
+
+舊 `documents/reports/README.md` 引用 `augment_sequence_ml_handoff_2026_08_12.md`，`git ls-files` 中沒有這個檔案，新 `documents/README.md` 已省略。
+
+#### 外部捷徑掃描（唯讀）
+
+用 `WScript.Shell.CreateShortcut` 掃使用者的 `.lnk`，0 筆指向 `start_recommender`；未修改任何捷徑。
+
+#### 驗證輸出（worktree 內，`PYTHONPATH=<worktree>\src`）
+
+```
+pytest tests/test_repo_layout.py -q            -> 20 passed
+python -m aram_nn.repo_audit --repo .          -> FAIL=0 WARN=4 INFO=34 (exit 0)
+git ls-tree --name-only HEAD                   -> 19 項：.claude .codex .github .gitignore AGENTS.md CLAUDE.md CONTRIBUTING.md DESIGN.md MODEL.md OPERATIONS.md PRODUCT.md README.md docs documents pyproject.toml runbooks scripts src tests
+git diff --name-only origin/main...HEAD -- docs -> 空
+ast.parse(build_augment_category_editor.py, build_item_role_annotator.py) -> ok
+```
+
+`repo_audit` 的 4 筆 WARN 都是 W3：3 個 `pre-claude-rewrite` bundle（90 天）與 `single-writer-cutover-20260827_215155`（75 天），超過 60 天門檻，留給 owner 決定。§3.5 的 `git grep` 剩餘命中只有本 spec、新檔名、`documents/README.md` 與合併檔內對舊檔名的說明文字、`tests/test_repo_layout.py` 的合成字串；T7 沒有壞掉的相對連結。`tests/test_player_history_transform.py` 只因測試名稱含 "exports" 而命中，與路徑無關，未執行。
+
+#### 偏離 spec 之處
+
+1. **`.gitignore` 的 `documents/` 區塊提前到 commit 2**：原定 commit 3，但 `documents/archive/` 與 `documents/guides/` 在舊規則下是 ignored，新位置檔案無法 `git add`。`exports/` 那行與註解仍在 commit 3 移除。
+2. **`MODEL_NOTES` banner 位置**：放在 H1／`Updated` 行之下，而不是 H1 之前；`Superseded by` 標記同樣在 H1 之下。
+3. **`runbooks/crawler-stall.md` 沒有改**：其中沒有舊路徑；commit 5 只含 `OPERATIONS.md`。
+4. **`scripts/tierlist_render.py` 註解**：只改註解中的 `exports/item-role-annotator.html` 為 `outputs/exports/…`，屬 spec 要求的其他引用處更新；程式行為沒變。
+5. **`repo_audit` 未實作 W1 的 `In use` 行程掃描**：需要起子程序，改輸出一行 INFO，提醒退役前人工確認。T7 不檢查 code span／fenced block 內的連結範例；預設 `--workspace` 在 task worktree 內會解析成該 workspace；連結目標是否存在以 tracked 檔案集合判定。
+6. **只新增 `.claude/skills/repo-hygiene`**：`.codex/skills/` 沒有對應 adapter（該目錄目前只有 `crawler-stall-response`、`opgg-seed-refresh`、`update-mayhem-site`）。
+7. **`runbooks/repo-hygiene.md` 沒有修改**：實作的檢查與它的 Audit 一節一致。
+
+#### 需要 owner 決定的事項
+
+- `.codex/skills/` 是否也要有 `repo-hygiene` adapter。
+- 4 筆 W3 舊備份（見上）要保留、隔離或刪除。
+- 合併後的 `MODEL_NOTES-2026-05-20.md` 內文仍有一行原本就存在的亂碼，未修改。
+- `repo_audit` 是否要補 `In use` 行程檢查（需 Win32_Process 掃描）。
+- 整合到 `main` 時，`OPERATIONS.md` 若與 primary 的未提交修改衝突：commit 5 只動四行，方便手動合併。
 
 ### Part B
 
