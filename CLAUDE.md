@@ -1,4 +1,4 @@
-<!-- lines: 35 -->
+<!-- lines: 36 -->
 # Claude Code Adapter
 
 ## Why

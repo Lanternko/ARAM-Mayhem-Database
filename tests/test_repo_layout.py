@@ -155,6 +155,14 @@ def test_parse_worktrees_porcelain():
     assert [w["worktree"] for w in wts] == ["C:/a", "C:/b"] and wts[0]["branch"] == "refs/heads/main"
 
 
+def test_l1_flags_only_unknown_local_top_level(tmp_path):
+    for name in (".ruff_cache", "outputs", "src", "stray"):
+        (tmp_path / name).mkdir()
+    (tmp_path / "uv.lock").write_text("", encoding="utf-8")
+    msgs = [f.message for f in ra.check_local_top_level(tmp_path, {"src"})]
+    assert msgs == ["untracked top-level orphan: stray"]
+
+
 def test_workspace_age_thresholds(tmp_path):
     (tmp_path / "backups" / "old").mkdir(parents=True)
     (tmp_path / "backups" / "new").mkdir()

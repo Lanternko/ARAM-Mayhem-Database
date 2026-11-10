@@ -472,6 +472,46 @@ ast.parse(build_augment_category_editor.py, build_item_role_annotator.py) -> ok
 - `repo_audit` 是否要補 `In use` 行程檢查（需 Win32_Process 掃描）。
 - 整合到 `main` 時，`OPERATIONS.md` 若與 primary 的未提交修改衝突：commit 5 只動四行，方便手動合併。
 
+#### 驗收後的修正（App session）
+
+- `CLAUDE.md` 檔頭行數由 35 改為 36（Part A 新增一行 routing 但沒更新）。
+- `repo_audit` 的 L1：`.ruff_cache` 加入本機 allowlist；已在 tracked allowlist 內但尚未 tracked 的名稱（目前是 `uv.lock`）不再列為孤兒。補一個對應的合成測試，`runbooks/repo-hygiene.md` 的本機目錄表同步加上 `.pytest_cache/`、`.ruff_cache/`。
+
+#### 整合到 `main` 時要注意
+
+- Primary checkout 有未提交修改、而本 branch 也改到的檔案：`OPERATIONS.md`（四行路徑）、`scripts/tierlist_render.py`（一行註解）。Primary 要更新到含本 branch 的 `main` 之前，這兩個檔案的 WIP 必須先 commit。
+- 與 `origin/main` 9d68b3e757 的 `git merge-tree --write-tree` 無衝突。
+- 尚未 merge 的 branch 中，下列在整合後會讓 layout test 失敗，merge 前要照 `runbooks/repo-hygiene.md` 調整：
+
+| Branch | 需要調整的地方 |
+|---|---|
+| `codex/augment-weight-expansion` | 2 份報告改成 `YYYY-MM-DD-slug.md` 並列入索引；`scripts/study_augment_weights.py` 移到 `scripts/research/` 或加入 baseline |
+| `codex/publisher-performance` | `documents/reports/publisher-performance-2026-10-15.md` 改名並列入索引 |
+| `codex/augment-third-round-20260812` | 6 個新的 `scripts/` 根目錄檔案 |
+| `codex/single-db-writer-merge-20260827` | 修改了 `PLAN.md` 與 `notes/archive/*`（已搬到 `documents/archive/`） |
+
 ### Part B
 
-（由 `backups\reorg-20261110\execution-log.md` 摘要併入。）
+執行者：Claude Code（Sonnet 5.5）派工 session，2026-11-10，約 8 分鐘。完整紀錄、分類依據與每個項目的動作在 `aram-winrate-nn-workspace\backups\reorg-20261110\execution-log.md`；隔離內容與還原指令在 `aram-winrate-nn-workspace\trash\2026-11-10\MANIFEST.md`。
+
+| 項目 | 前 | 後 |
+|---|---|---|
+| Worktree | 34 | 24 |
+| Local branch | 62 | 45 |
+| `outputs\` 根目錄檔案 | 108 | 9（都有被引用） |
+| 隔離區 | 0 | 2.4 GB／6,673 檔 |
+| D 槽剩餘 | 65.1 GB | 64.4 GB |
+
+- **備份**：`all-refs.bundle`（1.2 GB，`git bundle verify` 通過），以及每個 worktree 的 status 快照。
+- **退役 10 個 worktree**（HEAD 都是 `origin/main` 的 ancestor）：`aram-destiny-rec`（untracked 檔 1,994 個／109.5 MB 先搬到 `untracked\aram-destiny-rec\`）、`aug-tip-click-only`、`blitz-description-hover`、`current-draft-splash`、`language-button-label`、`new-patch-augment-descriptions`、`quick-overview-tabs`、`recommender-site-tabs`、`.claude\worktrees\header-role-search`、`aram-wt-augslot`。
+- **搬移 1 個**：`aram-exe-trust` → `worktrees\exe-trust`。
+- **刪除 17 條 local branch**（`git branch -d`，全是 ancestor 且沒有 worktree）。Remote branch 沒動。
+- **保留**：unmerged 7 個（`exe-trust`、`augment-weight-expansion`、`champ-page-default-overview`、`crawler-maintenance-guard`、`hide-game-nav`、`publisher-performance`、`stop-classic-crawl`）；有 tracked 修改 4 個（`champion-difficulty-evidence`、`champion-indexable-content`、`skill-coefficient-clarity`、`yellow-ability-radar`）；7 天內有活動 9 個。
+- **本機檔案**：移除 5 個空目錄；`exports\` 併入 `outputs\exports\`；99 個散檔歸到 `outputs\_archive\2026-11-10-loose\`；7 個報告附件移到 `documents\reports\_attachments\`。
+- **隔離**：`graphify-out`、`artifacts`、`outputs\six_axis_reel`、`six_axis_reel_claude`、`reel_cache`、`marker-preview`、`preview-augch`、`video_edit_2026-07-15`、8 個舊 log。2026-11-24 之前不永久刪除，且需 owner 確認。
+
+與 §4.2 預期清單不同之處：預期為「merged、只有 untracked」的 4 個 worktree 實際有 tracked 修改；`aug-show-all` 當天有活動；7 個 ahead 的 worktree 都不符合 content-merged。全部依規則保留。
+
+未達成的驗收項目：primary 的 `git status --short` 前後只在 `docs/` 不同（開始時 554 行 ` M docs/...`，結束時 0 行），其餘 23 行相同。執行期間 `origin/main` 由 6fc5c659c2 前進到 9d68b3e757；Part B 沒有對 primary 下任何會改 working tree 的 Git 指令，但造成 `docs/` 變化的來源沒有進一步查證。
+
+Live 狀態核對：`data\lcu\games.db` 持續寫入、`models\` 目錄清單不變、`D:\Projects\CODING\arammeta` junction 目標不變、watchdog log 持續更新、primary 仍在 `main`。

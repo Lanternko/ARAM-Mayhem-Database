@@ -42,7 +42,7 @@ BASELINE_RELPATH = "tests/fixtures/scripts_root_baseline.txt"
 
 LOCAL_TOP_LEVEL_ALLOWLIST = frozenset(
     "data models logs outputs manual overwolf .venv dist build .git .claude .codex "
-    ".impeccable .pytest_cache".split()
+    ".impeccable .pytest_cache .ruff_cache".split()
 )
 # Never walked when measuring sizes: lineage/live data and dependency trees.
 SIZE_SKIP_NAMES = frozenset({"data", "models", ".venv", ".git", "node_modules"})
@@ -336,9 +336,11 @@ def default_workspace(repo: Path) -> Path:
 
 
 def check_local_top_level(repo: Path, tracked_tops: set[str]) -> list[Finding]:
+    # An allowlisted tracked name that is not tracked yet (e.g. uv.lock) is not an orphan.
+    known = tracked_tops | LOCAL_TOP_LEVEL_ALLOWLIST | TOP_LEVEL_ALLOWLIST
     found = []
     for entry in sorted(os.scandir(repo), key=lambda e: e.name):
-        if entry.name not in tracked_tops and entry.name not in LOCAL_TOP_LEVEL_ALLOWLIST:
+        if entry.name not in known:
             found.append(Finding("L1", WARN, f"untracked top-level orphan: {entry.name}"))
     return found
 

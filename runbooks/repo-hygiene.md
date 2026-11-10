@@ -72,7 +72,7 @@ Primary checkout 頂層允許的 ignored 目錄：
 | `outputs/` | 研究輸出、工具輸出、暫存媒體 | 見下 |
 | `manual/` | 手寫 override CSV（程式會讀） | 不可 |
 | `overwolf/` | Native app source，另外發佈 | 不可 |
-| `.venv/` `dist/` `build/` | 環境與建置產物 | 可重建 |
+| `.venv/` `dist/` `build/` `.pytest_cache/` `.ruff_cache/` | 環境、建置產物與工具快取 | 可重建 |
 | `.claude/` `.codex/` `.impeccable/` | 工具狀態 | 工具自己管理 |
 
 - `outputs/` 根目錄不放檔案。每個輸出進 `outputs/<category>/`；工具產生的 HTML（editor、annotator）進 `outputs/exports/`；一次性 probe 產物進 `outputs/_archive/<YYYY-MM-DD>-<topic>/` 或直接刪除。
