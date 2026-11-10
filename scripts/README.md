@@ -26,7 +26,7 @@ python scripts/build_tier_list.py --shell-only --site-url "https://arammeta.com/
 python scripts/prune_stale_db_snapshots.py
 ```
 
-實驗的 dataset manifest、變因控制與 promotion gate 見 `notes/agents/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
+實驗的 dataset manifest、變因控制與 promotion gate 見 `documents/guides/experiments-and-data.md`；網站字標、配色、排版、CSS、responsive 與 visual QA 見根目錄 `DESIGN.md`。
 
 ## 1. 站台 build（tier-list 網站生成/發布）
 - `build_tier_list.py` — Tier-list 網站 build CLI 入口（re-export tierlist_engine + tierlist_render）
@@ -39,7 +39,7 @@ python scripts/prune_stale_db_snapshots.py
 - `site_api.py` — FastAPI backend 入口
 - `sync_site_backend.py` — 本機對局同步到 backend API CLI（`--watch` 依上次成功 upload 的 growth watermark 推送）
 - `tier_list.py` — 舊版 LR-solo 權重抽英雄 tier list（CSV 輸出，非現行站台管線）
-- `build_augment_category_editor.py` — 產生 `augment-category-editor.html`（手動修正 augment 分類 → `scripts/augment_category_overrides.json`）
+- `build_augment_category_editor.py` — 產生 `outputs/exports/augment-category-editor.html`（手動修正 augment 分類 → `scripts/augment_category_overrides.json`）
 - `render_augment_cards.py` + `templates/augment_card.html` — 社群用 augment 圖卡（4:5 1080×1350 PNG，讀線上 API、headless Chrome 截圖）；改檔內 `CARDS` 換海克斯，`--out <dir>`
 - `build_augment_pools.py` — 從 CommunityDragon 遊戲資料產生 `docs/api/augment-pools.json`（`/augments/pools/`）；每個 patch 跑一次，不隨 data publisher 自動更新
 

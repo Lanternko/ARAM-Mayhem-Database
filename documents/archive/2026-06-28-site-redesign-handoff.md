@@ -1,5 +1,7 @@
 # ARAM Mayhem 網站改版 — 交接文件 (2026-06-28)
 
+> Superseded by ../../DESIGN.md
+
 > **Archived / superseded:** 本檔描述 2026-06-28 的單檔 builder 與四分頁狀態。現行設計 owner 是根目錄 `../../DESIGN.md`，部署流程是 `../../runbooks/site-deploy.md`，source 已拆成 templates／engine／renderer。
 
 > 把 tier-list 網站從「單頁英雄榜」改成「固定眉頭 + 分頁 SPA + 深淺主題 + 視覺精修」。

@@ -1,10 +1,15 @@
 # Modeling Notes: ARAM / Mayhem Team Composition Learning
 
-Updated: 2026-05-18
+Updated: 2026-05-20
 
 > **Archived / superseded:** This file preserves the 2026-05 Mayhem/LCU modeling
 > snapshot. The current modeling, data, and experiment policy lives in
-> `../../MODEL.md`; `PLAN.md` and `TODO.md` are historical context as well.
+> `../../MODEL.md`; `PLAN-2026-05-12.md` and `TODO.md` are historical context as well.
+
+> **Archived snapshot:** This file preserves the expanded 2026-05-20 modeling,
+> site-ranking, augment, secondary-role, and item-pair rationale. Current policy
+> lives in `../../MODEL.md`; current experiment contracts live in
+> `../guides/experiments-and-data.md`.
 
 ## Core Problem
 
@@ -214,6 +219,230 @@ Important distinction:
 - `total_heal` is an amount of HP restored
 - `total_units_healed` is a count-like field of healed units, not a heal amount
 
+## Site Ranking: Win Rate Vs Pick Rate
+
+The public site has three surfaces that all face the same tension:
+
+- ?梢?撘瑕漲嚗?梢??祈澈撘瑚?撘瘀?
+- augment ?刻嚗?augment 撠?梢??臭??臬末?豢?嚗?- ?航璆哨??拙振?臬???典銝蝔桃瘜?拚?梢?嚗?
+Do not solve all three with the same formula.  Pick rate means different things
+for each surface.
+
+### 1. Champion Strength
+
+Champion tier should stay closest to pure strength.  It uses Bayesian-smoothed
+win rate and does not give a direct bonus for being popular:
+
+```text
+raw_wr = wins / games
+bayes_wr = (wins + 0.5 * 200) / (games + 200)
+```
+
+Tier assignment then uses fixed `bayes_wr` thresholds:
+
+```text
+OP >= 55%
+T1 >= 52%
+T2 >= 50%
+T3 >= 48%
+T4 >= 46%
+T5 otherwise
+```
+
+Interpretation:
+
+- pick rate only affects confidence through sample size
+- popular champions do not get a direct strength bonus
+- low-sample champions shrink toward 50%
+
+This is intentional.  Champion strength answers "does this champion win?", not
+"do players like selecting this champion?"
+
+### 2. Augment Recommendation
+
+Augment ranking is the most statistically mature of the three.  It asks whether
+an augment lifts a champion above that champion's own baseline, then adds a very
+small peer-relative pick-rate signal.
+
+The displayed win rate is a posterior mean:
+
+```text
+posterior = Beta(champion_baseline * k + wins,
+                 (1 - champion_baseline) * k + losses)
+display_wr = posterior_mean
+```
+
+The ranking score uses the conservative lower bound:
+
+```text
+lcb_lift = posterior_10%_lower_bound - champion_baseline
+
+pick_lift = log(champion_pick_rate / peer_pick_rate)
+pick_lift = clamp(pick_lift, -3, +3)
+
+rank_score = lcb_lift + 0.003 * pick_lift
+```
+
+`peer_pick_rate` is not a global popularity number.  It is computed against a
+similar peer group when possible:
+
+- same rarity
+- same role
+- same role + damage profile for augments where that peer scope is useful
+- fallback to broader peer groups when the narrow group is too thin
+
+Interpretation:
+
+- win-rate lift is the main signal
+- pick rate is only a stability nudge
+- low-pick high-WR augments are treated conservatively
+- repeatedly chosen augment fits get a small boost, but cannot dominate
+
+The pick-rate term is deliberately tiny.  With `pick_lift` capped at `+3`, the
+maximum positive pick-rate contribution is about `+0.9%`.
+
+### 3. Secondary Role
+
+Secondary role is not a pure strength ranking.  It is a label inference problem:
+does the champion have a real, data-backed alternate play pattern?
+
+The current site infers alternate roles from item-style affinity rows.  It first
+requires a minimum branch usage:
+
+```text
+candidate role branch: pick_rate >= 6%
+displayed secondary role: pick_rate >= 8%
+```
+
+Then it scores the branch:
+
+```text
+score =
+  lcb_residual
+  + role_need_credit
+  + 0.003 * clamp(pick_lift, -3, +3)
+```
+
+Where:
+
+- `lcb_residual` is the conservative win-rate residual of that item style
+- `role_need_credit` gives a small domain-specific credit to meaningful role
+  branches such as tank/frontline, marksman AD, or mage damage profile
+- `pick_lift` checks whether this champion plays that style more than the
+  global/peer baseline
+
+Interpretation:
+
+- pick rate matters more here than in champion strength
+- the label should not appear for a tiny, lucky, low-sample branch
+- the branch still needs non-negative conservative performance
+- primary role remains curated/stable; data only adds a secondary role
+
+This is a practical UI heuristic, not a calibrated model.
+
+### 4. Item Pair Recommendation
+
+First-two-item recommendations are closer to "what should I actually build?"
+than to an abstract affinity label.  Exact two-item pairs are much sparser than
+single augments, so the formula must avoid two opposite failures:
+
+- tiny pick-rate pair with lucky or misleading relative stats
+- high pick-rate staple pair hidden because its conservative lower bound is only
+  slightly negative
+
+Use champion-specific lift as the main win-rate signal.  Do not rank item pairs
+by residual against the pair's global average; that can surface a bad build just
+because other champions perform even worse with the same pair.
+
+Treat the two item IDs as an unordered pair for aggregation:
+
+```text
+Blackfire Torch + Liandry's Torment
+Liandry's Torment + Blackfire Torch
+```
+
+are one recommendation bucket.  Keep ordered-direction counters only for display.
+When rendering the chip, choose the order with the better smoothed
+champion-specific lift for that champion.  This prevents duplicate recommendations
+while still showing the stronger observed order in the UI.
+
+Current rule:
+
+```text
+lcb_lift = posterior_10%_lower_bound - champion_baseline
+
+pick_credit = 0.006 * log1p(champion_pair_pick_rate / 0.2%)
+pick_credit = min(pick_credit, 1.2%)
+
+rank_score = lcb_lift + pick_credit
+```
+
+Visibility guardrails:
+
+```text
+games >= 30
+champion_pair_pick_rate >= 0.2%
+mean_lift >= -2.0%
+```
+
+Interpretation:
+
+- high pick rate can keep a "good enough" staple build visible
+- pick rate cannot rescue a clearly bad build
+- exact pairs below `0.2%` pick rate are too niche for a "recommended build"
+  label unless this rule is deliberately revisited
+- pick rate is for the exact first-two non-boot core pair, so it will be much
+  lower than single-item popularity when the champion branches into many builds
+- because the DB has final item slots but no purchase timeline, treat the first
+  two non-boot core slots as the best available proxy for first and second item
+- the UI shows at least 2 item builds when at least 2 eligible buckets exist,
+  and at most 3; other affinity chips can still use the "close to first place"
+  display rule
+- the item-build UI always includes the highest-pick eligible pair when one
+  exists, even if it is not in the close-to-first score band
+- tooltip should show human-facing `?詨?? and champion-specific `?? +/-`,
+  not residual / rank internals
+
+### Which Is Best?
+
+There is no single best formula across all three surfaces.
+
+Best by statistical maturity:
+
+```text
+augment recommendation
+```
+
+It has champion baselines, empirical-Bayes shrinkage, conservative lower bounds,
+and peer-relative pick-rate lift.
+
+Best for champion strength:
+
+```text
+Bayesian-smoothed champion win rate without direct pick-rate bonus
+```
+
+Do not add popularity directly to hero tier.  A popular champion is not
+automatically stronger.
+
+Best for secondary role:
+
+```text
+usage-gated heuristic with conservative WR residual
+```
+
+This is right for a UI label because "role" is partly about how players actually
+build and use the champion.
+
+Rule of thumb:
+
+```text
+strength        = conservative win rate
+augment rec     = conservative win-rate lift + tiny peer-pick stability nudge
+item build rec  = conservative win-rate lift + direct pick-rate staple credit
+identity label  = enough usage + non-bad conservative performance
+```
+
 ## LCU Field Map
 
 Current fields captured from LCU participant stats include:
@@ -363,7 +592,7 @@ Subjective/composition feature takeaways:
 
 ## Fresh Benchmark Protocol
 
-When the user asks for a new ML round ("機器學習", "新一輪 ML", "benchmark"),
+When the user asks for a new ML round ("璈摮貊?", "?唬?頛?ML", "benchmark"),
 do not run only the currently strongest NN.  Use this protocol:
 
 1. Run `python scripts/lcu_collector.py metrics`, then export a fresh Mayhem
@@ -488,3 +717,11 @@ when the current 1-4 picked champions are visibly skewed.
 - Does objective/turret damage matter in ARAM/Mayhem, or is it mostly noise?
 - Can explicit conditional features close the log-loss gap against LR?
 - Will these feature gains survive expanding-window validation?
+
+## Lines carried over from MODEL_NOTES.md
+
+The older `MODEL_NOTES.md` (merged into this file on 2026-11-10) differed from this snapshot in one
+content line: the trigger phrases of the "Fresh Benchmark Protocol" intro are mojibake in this
+file (`????`), and intact in the older copy. The intact line is preserved here:
+
+When the user asks for a new ML round ("機器學習", "新一輪 ML", "benchmark"),

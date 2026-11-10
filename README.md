@@ -71,7 +71,7 @@ Mayhem（queue `2400`）的完整對局不由 Riot 公開 API 提供，因此本
 - [對局資料貢獻指南](CONTRIBUTING.md)
 - [開發與常用指令](scripts/README.md)
 - [本機收集服務與維運](OPERATIONS.md)
-- [歷史產品與模型筆記](notes/archive/PRODUCT.md)
+- [歷史產品與模型筆記](documents/archive/PRODUCT.md)
 
 ## Disclaimer
 

@@ -1,6 +1,8 @@
 # Predicting ARAM/Mayhem Match Outcomes from Champion Compositions Using Neural Networks
 
-> **Superseded draft:** 本稿已被 `final_project_report_2026_06_14.md` 取代，只保留早期文字與結果脈絡。
+> Superseded by ../reports/2026-06-14-final-project-report.md
+
+> **Superseded draft:** 本稿已被 `2026-06-14-final-project-report.md` 取代，只保留早期文字與結果脈絡。
 
 Student: Ko Tzu-Chieh, 61447101S
 
