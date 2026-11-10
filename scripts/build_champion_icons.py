@@ -59,11 +59,23 @@ MIN_FRAC = 0.10       # a match smaller than this fraction of splash height is a
 CIRCLE_SCALE = 1.0    # circle diameter relative to the square crop
 
 
-# cid -> (dx, dy, scale) applied to the resolved framing, in units of its side.
-# Only for champions whose icon art is outdated, so the fallback is Riot's
-# tile framing, and that tile crops the face out.
+# (dx, dy, scale) applied to the resolved framing, in units of its side.
+# When the DDragon icon is separate art (no match in the splash), the fallback is
+# Riot's tile framing, which is a waist-up shot 2-4x wider than the icon.  Across
+# the 127 champions whose icon *does* match, the icon is a median 0.50 of the
+# tile's side, centred 0.07 above it (p10-p90 0.36-0.73), so every tile fallback
+# gets that by default to keep the familiar face-close framing.
+TILE_FRAMING = (0.0, -0.07, 0.5)
+# Per-champion overrides for tile fallbacks where the default misses the face.
 FRAMING = {
-    "201": (0.0, -0.24, 0.8),   # Braum: tile centres his torso
+    "9": (-0.05, 0.0, 0.6),     # Fiddlesticks: head and jaws below centre
+    "10": (0.03, -0.3, 0.4),    # Kayle: helmet near the top
+    "13": (0.25, -0.33, 0.4),   # Ryze: head at the upper right
+    "44": (-0.05, -0.25, 0.5),  # Taric: face near the top
+    "54": (-0.03, -0.05, 0.45), # Malphite: new splash has no clear face; keep the glowing mouth
+    "101": (-0.03, -0.12, 0.6), # Xerath: core and chains
+    "201": (0.05, -0.2, 0.5),   # Braum: tile centres his torso
+    "203": (0.0, 0.0, 0.75),    # Kindred: keep both Lamb and Wolf
 }
 
 
@@ -227,8 +239,8 @@ def build_one(cid: str, info: dict, version: str, force: bool) -> dict:
     sq_path = OUT_DIR / f"{cid}.webp"
     ci_path = OUT_DIR / f"{cid}-circle.webp"
     source, img, m = resolve(cid, alias, version)
-    if cid in FRAMING:  # hand-tuned: tile framing that misses the face
-        dx, dy, k = FRAMING[cid]
+    if "tile" in source:  # tile framing: tighten to icon-like face framing
+        dx, dy, k = FRAMING.get(cid, TILE_FRAMING)
         m = Match(m.cx + dx * m.side, m.cy + dy * m.side, m.side * k, m.score)
     if force or not sq_path.exists() or not ci_path.exists():
         crop_square(img, m).save(sq_path, "WEBP", quality=88, method=6)

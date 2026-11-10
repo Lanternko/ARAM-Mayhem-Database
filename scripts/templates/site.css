@@ -1700,7 +1700,8 @@
         border-radius: 6px;
     }
     /* Clip only the portrait so role tooltips and the tier frame remain visible.
-       DDragon squares include a dark rim; the approved 114% crop removes it. */
+       Local HD icons are frameless and shown whole; only a DDragon fallback
+       (.ddragon-icon, dark baked rim) keeps the approved 114% crop. */
     .champ-portrait {
         position: absolute;
         inset: 0;
@@ -1711,13 +1712,19 @@
     .champ .champ-portrait img,
     .draft-champ .champ-portrait img,
     .champ-hero-avatar img {
-        width: 114%;
-        height: 114%;
+        width: 100%;
+        height: 100%;
         max-width: none;
-        margin: -7%;
         object-fit: cover;
         display: block;
         border-radius: 0;
+    }
+    .champ .champ-portrait img.ddragon-icon,
+    .draft-champ .champ-portrait img.ddragon-icon,
+    .champ-hero-avatar img.ddragon-icon {
+        width: 114%;
+        height: 114%;
+        margin: -7%;
     }
     .alt-role-badge {
         --badge-color: #e2c2ff;
@@ -1956,7 +1963,8 @@
         background: linear-gradient(var(--surface), var(--surface)) padding-box,
             var(--tier-op-frame) border-box;
     }
-    .champion-table-avatar img { width: 125%; height: 125%; margin: -12.5%; max-width: none; object-fit: cover; }
+    .champion-table-avatar img { width: 100%; height: 100%; max-width: none; object-fit: cover; }
+    .champion-table-avatar img.ddragon-icon { width: 125%; height: 125%; margin: -12.5%; }
     .champion-table :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
     @media (max-width: 700px) {
         .champion-table th,
@@ -2098,12 +2106,12 @@
     }
     .detail-avatar img {
         display: block;
-        width: 125%;
-        height: 125%;
+        width: 100%;
+        height: 100%;
         max-width: none;
-        margin: -12.5%;
         object-fit: cover;
     }
+    .detail-avatar img.ddragon-icon { width: 125%; height: 125%; margin: -12.5%; }
     .detail-avatar::after {
         content: "";
         position: absolute;
