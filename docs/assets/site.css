@@ -6695,6 +6695,9 @@
     .item-float-tip::before { content: ""; position: absolute; top: 100%; inset-inline: 0; height: 12px; }
     .item-float-tip.flip-below::before { top: auto; bottom: 100%; }
     .item-float-tip.is-scrollable .item-tip-card::after { display: none; }
+    /* Viewport-centred (augment) tips point at nothing: no arrow, no bridge. */
+    .item-float-tip.is-centered .item-tip-card::after,
+    .item-float-tip.is-centered::before { display: none; }
     .item-tip-head {
         display: flex;
         align-items: center;
@@ -11104,6 +11107,11 @@ html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap) svg{
   width:18px!important;height:18px!important;left:14px!important;stroke-width:2.6;color:var(--nfx-search-icon)!important}
 html:not(.nfx-off) :is(.search-wrap,.draft-search-wrap):focus-within svg{color:var(--nfx-strong)!important}
 html:not(.nfx-off) :is(.header-search-input,.apool-search){padding-left:14px!important}
+/* champion-page search: the wrap is a <label> (inline), so its fill only covered a ~28px
+   line box around the 40px input. Block it, then a taller, squarer field. */
+.champ-page-search .search-wrap{display:block}
+html:not(.nfx-off) .champ-page-search .search-wrap{border-radius:6px!important}
+html:not(.nfx-off) .champ-page-search .search-wrap .search{height:48px!important;font-size:16px!important}
 html:not(.nfx-off) :is(.search,.header-search-input,.apool-search){color:var(--nfx-strong)!important;caret-color:var(--nfx-strong)}
 html:not(.nfx-off) :is(.search,.header-search-input,.apool-search)::placeholder{color:var(--nfx-placeholder)!important}
 html:not(.nfx-off) .header-search-panel{background:var(--nfx-panel)!important;border:1px solid var(--nfx-line-soft)!important;border-radius:4px!important}

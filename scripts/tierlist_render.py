@@ -4148,7 +4148,10 @@ def render_html(
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
-                f"<span class='champ-portrait'><img loading='lazy' src='{r['image']}' alt=''></span>"
+                # HD crop from scripts/build_champion_icons.py; DDragon if missing.
+                f"<span class='champ-portrait'><img loading='lazy' "
+                f"src='assets/champ-icons/{r['champion_id']}.webp' "
+                f"onerror=\"this.onerror=null;this.src='{r['image']}'\" alt=''></span>"
                 f"<span class='alt-role-badge' data-alt-role='{html.escape(primary_role)}' "
                 "title='' aria-label='' hidden></span>"
                 # The English alias is rendered as screen-reader-only text so

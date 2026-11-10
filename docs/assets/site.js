@@ -130,6 +130,28 @@ const feedbackFab = document.querySelector('.feedback-fab');
     // Desktop recommender WebView page: one champion's detail, nothing else.
     const IS_EMBED = document.documentElement.getAttribute('data-embed') === 'champion';
     const DATA = await loadSitePayload(__BUILD.payload || 'api/tier-list.json');
+    // Champion icons: clean HD crops cut from the original splash
+    // (scripts/build_champion_icons.py) replace DDragon's 120px square, whose
+    // baked dark frame shows as chipped edges once rounded.  `image` is the
+    // square, `imageCircle` the matching pre-cut circle; `imageDdragon` keeps
+    // the CDN URL, and a champion with no local icon yet falls back to it.
+    const CHAMP_ICON_FALLBACK = new Map();
+    for (const [cid, info] of Object.entries(DATA.champs || {})) {
+        if (!info || !info.image || info.imageDdragon) continue;
+        const square = `assets/champ-icons/${cid}.webp`;
+        const round = `assets/champ-icons/${cid}-circle.webp`;
+        CHAMP_ICON_FALLBACK.set(square, info.image);
+        CHAMP_ICON_FALLBACK.set(round, info.image);
+        info.imageDdragon = info.image;
+        info.image = square;
+        info.imageCircle = round;
+    }
+    document.addEventListener('error', (ev) => {
+        const img = ev.target;
+        if (!img || img.tagName !== 'IMG') return;
+        const fallback = CHAMP_ICON_FALLBACK.get(img.getAttribute('src'));
+        if (fallback) img.src = fallback;
+    }, true);
     const CHAMP_DETAIL_FIELDS = [
         'poolAugments',
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
@@ -2482,7 +2504,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
-        el.classList.remove('is-visible', 'is-pinned', 'flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.classList.remove('is-visible', 'is-pinned', 'flip-below', 'align-left', 'align-right', 'is-scrollable', 'is-centered');
         el.style.maxHeight = '';
         el.innerHTML = '';
     }
@@ -2497,12 +2519,28 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const vh = window.innerHeight || document.documentElement.clientHeight || 0;
 
         // Measure natural height, then choose a side and constrain to its space.
-        el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable', 'is-centered');
         el.style.maxHeight = '';
         el.style.left = '0px';
         el.style.top = '0px';
 
         let tipRect = el.getBoundingClientRect();
+
+        // Augment cards/rows open their tip on click, and the tip (pick-round
+        // chart included) is taller than the room above or below a mid-page
+        // row.  Centre it in the viewport so it reads whole without scrolling.
+        if (anchor.matches('.aug-pick-card, .aug-tier-row')) {
+            const maxCenteredH = Math.max(1, vh - margin * 2);
+            if (tipRect.height > maxCenteredH) {
+                el.style.maxHeight = maxCenteredH + 'px';
+                el.classList.add('is-scrollable');
+                tipRect = el.getBoundingClientRect();
+            }
+            el.style.left = Math.round(Math.max(margin, (vw - tipRect.width) / 2)) + 'px';
+            el.style.top = Math.round(Math.max(margin, (vh - tipRect.height) / 2)) + 'px';
+            el.classList.add('is-centered');
+            return;
+        }
         const spaceAbove = Math.max(0, rect.top - margin - gap);
         const spaceBelow = Math.max(0, vh - rect.bottom - margin - gap);
         const flipBelow = tipRect.height > spaceAbove
@@ -4654,7 +4692,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const tier = draftAssignTier(info.wr);
         const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
         const tierColor = (tierColors[tier] && tierColors[tier].color) || 'var(--accent)';
-        const key = String(info.image || '').split('/').pop().replace(/\.png$/i, '');
+        const key = String(info.imageDdragon || info.image || '').split('/').pop().replace(/\.png$/i, '');
         const splash = key ? `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${encodeURIComponent(key)}_0.jpg` : '';
         const name = champName(info, cid);
         const rank = (r) => (
@@ -6895,7 +6933,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 champ.className = 'player-history-champion';
                 const info = (DATA && DATA.champs && DATA.champs[String(row.champion_id)]) || null;
                 const name = info ? champName(info, row.champion_id) : `#${row.champion_id}`;
-                if (info && typeof info.image === 'string' && /^https?:\/\//i.test(info.image)) {
+                if (info && typeof info.image === 'string' && info.image) {
                     const image = document.createElement('img');
                     image.src = info.image;
                     image.alt = '';
@@ -7217,7 +7255,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         }
         return (
             `<span class="${cls}" title="${escHtml(name)}">`
-            + `<img loading="lazy" src="${escHtml(info.image)}" alt="${escHtml(name)}">`
+            + `<img loading="lazy" src="${escHtml(info.imageCircle || info.image)}" alt="${escHtml(name)}">`
             + `</span>`
         );
     }
@@ -8926,7 +8964,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const c = (DATA.champs || {})[augDraft.champId] || {};
         return (
             `<div class="aug-champ-badge" data-champ-id="${escHtml(augDraft.champId)}">`
-            + `<img src="${escHtml(c.image || '')}" alt="" loading="lazy">`
+            + `<img src="${escHtml(c.imageCircle || c.image || '')}" alt="" loading="lazy">`
             + `<span>${escHtml(champName(c, augDraft.champId))}</span>`
             + `</div>`
         );
@@ -9267,7 +9305,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `</div>`
             + `<div class="game-settle-avg-sub">${escHtml(copy.augGameSettleSub || '')}</div>`
             + `<div class="aug-settle-champ">`
-            + `<img src="${escHtml(champ.image || '')}" alt="" loading="lazy">`
+            + `<img src="${escHtml(champ.imageCircle || champ.image || '')}" alt="" loading="lazy">`
             + `<span>${escHtml(champName(champ, augDraft.champId))}</span>`
             + `<span class="aug-settle-total">${escHtml(copy.augGameTotalLift || 'Total lift')} `
             + `<b class="${totalLift >= 0 ? 'is-good' : 'is-bad'}">${escHtml(signed(totalLift))}</b></span>`
@@ -9823,7 +9861,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         teamPicks.forEach(cid => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const image = info && info.image ? info.image : '';
+            const image = info && info.image ? (info.imageCircle || info.image) : '';
             chips.push(
                 `<button class="pick-chip" type="button" data-remove-cid="${cid}" title="${escHtml(copy.removePick(name))}">` +
                 (image ? `<img loading="lazy" src="${image}" alt="">` : '') +
@@ -11331,7 +11369,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const slug = champSlugForCid(cid);
         if (!info || !slug) return '';
         return `<a class="${cls}" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">`
-            + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+            + (info.image ? `<img src="${info.imageCircle || info.image}" alt="" loading="lazy">` : '')
             + `<span>${escHtml(champName(info, cid))}</span></a>`;
     }
     function renderChampRecent(currentCid) {
