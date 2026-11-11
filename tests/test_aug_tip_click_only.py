@@ -151,3 +151,21 @@ def test_tile_click_is_routed_to_detail_row_not_tip_pin():
     assert "toggleAugTile(augTile);" in js
     # role=button hosts are skipped by the tip-pinning click handler.
     assert "closest('button, a, [role=\"button\"]')" in js
+
+
+def test_tile_tip_and_detail_row_carry_the_pick_round_strip():
+    js = _js()
+    css = _css()
+    assert "buildAugSlotStrip(e, false, { tile: true })" in _between(js, "const tipHtml = `", "return `\n                    <div class=\"aug-tile has-item-tip")
+    # touch has no tip, so the detail row clones the strip out of the tip source
+    assert "item-tip-src .aug-slots" in _between(js, "function toggleAugTile", "const augGridObserver")
+    strip = _between(js, "function buildAugSlotStrip", "// ----- Champion page")
+    assert "pickLang('第幾選的勝率', 'Win rate by pick')" in strip
+    # a round the augment never appears in is "not offered", not just a dash
+    assert "pickLang('未開放', 'N/A')" in strip and "aug-na" in strip
+    # other callers keep the original markup: the new parts are tile-only
+    assert "const tile = !!opts.tile;" in strip
+    # colours are wr tokens and every rule is scoped to the tile strip
+    assert "var(--wr-5)" in css and ".aug-slots.is-tile .aug-pt.wr-1" in css
+    scoped = _between(css, "/* 第幾選 block inside a tile's hover tip", "@media (prefers-reduced-motion")
+    assert not re.search(r"#[0-9a-fA-F]{3,6}\b", scoped)

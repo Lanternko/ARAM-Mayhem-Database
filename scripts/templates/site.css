@@ -10530,6 +10530,29 @@
     .aug-tip-stats b.wr-3 { color: var(--wr-3); }
     .aug-tip-stats b.wr-2 { color: var(--wr-2); }
     .aug-tip-stats b.wr-1 { color: var(--wr-1); }
+    /* 第幾選 block inside a tile's hover tip and detail row: same wr-tier
+       colours as the tile numbers, neutral grey structure, scoped so the 增幅榜
+       board tip keeps its own look. */
+    .aug-detail .aug-slots { --tip-surface: color-mix(in oklab, var(--rar) 8%, var(--bg)); }
+    .aug-detail .aug-slots.is-tile { max-width: 340px; }
+    .aug-slots.is-tile { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .aug-slots.is-tile .aug-slots-head { margin-bottom: 4px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+    .aug-slots.is-tile .aug-curve-base { stroke: var(--text-muted); stroke-opacity: 0.5; stroke-width: 1.5; }
+    .aug-slots.is-tile .aug-curve-line { stroke: var(--text-muted); stroke-opacity: 0.8; stroke-width: 1.5; }
+    .aug-slots.is-tile .aug-pt { --slot-ink: var(--wr-3); }
+    .aug-slots.is-tile .aug-pt.wr-5 { --slot-ink: var(--wr-5); }
+    .aug-slots.is-tile .aug-pt.wr-4 { --slot-ink: var(--wr-4); }
+    .aug-slots.is-tile .aug-pt.wr-3 { --slot-ink: var(--text); }
+    .aug-slots.is-tile .aug-pt.wr-2 { --slot-ink: var(--wr-2); }
+    .aug-slots.is-tile .aug-pt.wr-1 { --slot-ink: var(--wr-1); }
+    .aug-slots.is-tile .aug-pt text { font-size: 12.5px; font-weight: 600; }
+    .aug-slots.is-tile .aug-pt.is-coarse circle { stroke: var(--text-muted); }
+    .aug-slots.is-tile .aug-pt-label { font-size: 11px; fill: var(--text-muted); }
+    .aug-slots.is-tile .aug-pt-label.is-empty { opacity: 0.55; }
+    .aug-slots.is-tile .aug-na rect { fill: var(--text-muted); fill-opacity: 0.07; }
+    .aug-slots.is-tile .aug-na path { fill: none; stroke: var(--text-muted); stroke-opacity: 0.22; stroke-width: 1; }
+    .aug-slots.is-tile .aug-na text { fill: var(--text-muted); font-size: 10.5px; font-weight: 600; }
+    .aug-slots.is-tile .aug-slots-foot { margin-top: 4px; color: var(--text-muted); font-size: 10.5px; }
     @media (prefers-reduced-motion: reduce) {
         .aug-tile { transition: none; }
     }
