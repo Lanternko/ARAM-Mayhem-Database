@@ -3574,6 +3574,12 @@ def render_html(
                 "id": int(_destiny["item_id"]),
                 "lift": round(float(_destiny["lift"]), 3),
             }
+            _destiny_alt = _destiny.get("alt")
+            if isinstance(_destiny_alt, dict) and _destiny_alt.get("item_id"):
+                _destiny_payload["alt"] = {
+                    "id": int(_destiny_alt["item_id"]),
+                    "lift": round(float(_destiny_alt["lift"]), 3),
+                }
             if _destiny.get("prev"):
                 _destiny_payload["prev"] = True
             js_champs[str(cid)]["destinyItem"] = _destiny_payload
@@ -4677,7 +4683,11 @@ def _run_shell_only(
     champ_destiny_items = {
         int(cid_s): {"item_id": int(c["destinyItem"]["id"]),
                      "lift": float(c["destinyItem"]["lift"]),
-                     "prev": bool(c["destinyItem"].get("prev"))}
+                     "prev": bool(c["destinyItem"].get("prev")),
+                     **({"alt": {"item_id": int(c["destinyItem"]["alt"]["id"]),
+                                 "lift": float(c["destinyItem"]["alt"]["lift"])}}
+                        if isinstance(c["destinyItem"].get("alt"), dict)
+                        and c["destinyItem"]["alt"].get("id") else {})}
         for cid_s, c in champs.items()
         if isinstance(c.get("destinyItem"), dict) and c["destinyItem"].get("id")
     }
