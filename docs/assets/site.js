@@ -3048,14 +3048,16 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `</div>`;
     }
 
-    // ----- Champion page 增幅裝置: one rarity at a time, as a vertical table ---
+    // ----- Champion page 增幅裝置: one rarity at a time, as a tile grid ---
     // Rarity + sort persist across champions so the next lookup opens the same way.
     let champAugRarity = 'kGold';
     let champAugSort = 'rank';
-    // The list holds every pair past the sample floor; show the first
-    // CHAMP_AUG_COLLAPSED (podium included) until the reader expands it.
+    // The grid holds every pair past the sample floor; show the first
+    // CHAMP_AUG_COLLAPSED tiles (about three desktop rows) until the reader expands it.
     let champAugExpanded = false;
-    const CHAMP_AUG_COLLAPSED = 16;
+    const CHAMP_AUG_COLLAPSED = 24;
+    // Tiles with a rarity-coloured border while sorted by recommendation.
+    const CHAMP_AUG_PODIUM = 3;
     // Plain-language verdict per augment: 推薦 when the lift clears its 80%
     // sampling interval above zero, 避開 when it clears it below, else no chip.
     // Casual players read the word; the interval math stays out of sight.
@@ -3088,11 +3090,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
             const on = key === champAugRarity;
             return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}"><span class="aug-tier-seg-text">${escHtml(copy.rarityLabels[key])}</span></button>`;
         }).join('');
-        const sortBtn = (key, label, cls) => {
+        const sortBtn = (key, label) => {
             const on = key === champAugSort;
-            return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
+            return `<button type="button" class="aug-tile-sort${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
         };
-        const games = (g) => pickLang(`${fmtInt(g)} 場`, `${fmtInt(g)} games`);
         const augView = (e) => {
             const aug = DATA.augs[e.id];
             return {
@@ -3138,77 +3139,61 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const cardIcon = (e, v) => (isDestiny(e) ? destinyIcon(v) : iconHtml(v));
         const destinyNote = (e) => (isDestiny(e) ? destinyText() : '');
         const withDestiny = (e, label) => (isDestiny(e) ? `${label} · ${destinyText()}` : label);
-        // Each rarity pane repeats the sort header so it sits right above its list.
+        // Each rarity pane repeats the sort chips so they sit right above its grid.
         const head = `
-            <div class="aug-tier-head">
-                <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
-                <div class="aug-tier-rank-head">
-                    ${sortBtn('rank', pickLang('推薦順序', 'Recommended'), 'col-name')}
-                    ${extraHtml}
+            <div class="aug-tile-sorts">
+                <div class="aug-tile-sort-group" role="group" aria-label="${escHtml(pickLang('排序', 'Sort'))}">
+                    ${sortBtn('rank', pickLang('推薦順序', 'Recommended'))}
+                    ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'))}
+                    ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'))}
                 </div>
-                ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
-                ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+                <span class="aug-tile-extra">${extraHtml}</span>
             </div>`;
         const panes = RARITIES.map(r => {
             const entries = top[r.key] || [];
-            // Pick bars share one scale per rarity so their lengths compare.
-            const maxPick = Math.max(0, ...entries.map(e => Number(e.pick || 0))) || 1;
-            // Podium: the three strongest picks, as big cards.
-            const podium = entries.slice(0, 3).map((e, idx) => {
-                const v = augView(e);
-                const verdict = champAugVerdict(e);
-                return `
-                    <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0" data-aug-id="${escHtml(String(e.id))}"
-                        aria-label="${escHtml(withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc)))}">
-                        <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
-                        <span class="aug-pick-icon rarity-${r.css}">${cardIcon(e, v)}</span>
-                        <span class="aug-pick-name">${escHtml(v.name)}</span>
-                        ${isDestiny(e) ? `<span class="aug-pick-destiny">${destinyTextHtml()}</span>` : ''}
-                        ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
-                        <span class="aug-pick-foot">
-                            <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
-                        </span>
-                        ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
-                    </li>`;
-            }).join('');
-            // Every entry gets a row: the podium three hide while sorted by
-            // recommendation and rejoin the list when sorted by pick or WR, so
-            // those sorts cover the whole ranking.
-            const rows = entries.length > 3 ? entries.map((e, idx) => {
+            const tiles = entries.map((e, idx) => {
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
                 const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc));
+                const badge = champAugBadge(verdict);
+                // Detail row content, shown when the tile is opened.
+                const detail = `
+                    <div class="aug-detail-head">
+                        <b class="aug-detail-name">${escHtml(v.name)}</b>
+                        ${v.setName ? `<em class="aug-detail-set">${escHtml(v.setName)}</em>` : ''}
+                        ${badge}
+                    </div>
+                    ${v.desc ? `<p class="aug-detail-desc">${formatDescriptionInlineHtml(v.desc)}</p>` : ''}
+                    ${isDestiny(e) ? `<p class="aug-detail-destiny">${destinyTextHtml()}</p>` : ''}
+                    <dl class="aug-detail-stats">
+                        <div class="wr-${wrToneTier(e)}"><dt>${escHtml(pickLang('勝率', 'Win rate'))}</dt><dd>${pct(e.wr)}</dd></div>
+                        <div><dt>${escHtml(pickLang('選用率', 'Pick rate'))}</dt><dd>${pct(pickRate)}</dd></div>
+                        <div><dt>${escHtml(pickLang('場次', 'Games'))}</dt><dd>${escHtml(fmtInt(e.g))}</dd></div>
+                    </dl>`;
                 return `
-                    <li class="aug-tier-row has-item-tip is-${verdict}${idx < 3 ? ' is-podium' : ''}" tabindex="0"
+                    <div class="aug-tile has-item-tip rarity-${r.css} is-${verdict}" role="button" tabindex="0" aria-expanded="false"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
-                        <span class="aug-tier-idx" aria-hidden="true"></span>
-                        <span class="aug-tier-name">
-                            ${cardIcon(e, v)}
-                            <span class="aug-tier-text">
-                                <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
-                                ${isDestiny(e) ? `<span class="aug-tier-destiny">${destinyTextHtml()}</span>` : ''}
-                                ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
-                            </span>
-                        </span>
-                        <span class="aug-tier-pick">
-                            <b>${pct(pickRate)}</b><small>${escHtml(games(e.g))}</small>
-                            <i class="aug-tier-bar" style="--w:${(pickRate / maxPick).toFixed(4)}" aria-hidden="true"></i>
-                        </span>
-                        <span class="aug-tier-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b>${champAugBadge(verdict)}</span>
+                        <span class="aug-tile-rank" aria-hidden="true"></span>
+                        ${badge ? `<span class="aug-tile-badge">${badge}</span>` : ''}
+                        <span class="aug-tile-icon rarity-${r.css}">${cardIcon(e, v)}</span>
+                        <span class="aug-tile-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
+                        <span class="aug-tile-name">${escHtml(v.name)}</span>
+                        <span class="aug-tile-pick">${escHtml(pickLang('選用', 'Pick'))} ${pct(pickRate)}</span>
                         ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
-                    </li>`;
-            }).join('') : '';
-            const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
+                        <div class="aug-detail-src" hidden>${detail}</div>
+                    </div>`;
+            }).join('');
             const more = entries.length > CHAMP_AUG_COLLAPSED
                 ? `<button type="button" class="tool-btn aug-tier-more" data-aug-expand data-total="${entries.length}"></button>`
                 : '';
+            // Three or fewer pairs past the sample floor reads as "not enough data".
+            const enough = entries.length > 3;
             return `
                 <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
-                    ${podium ? `<ol class="aug-pick-cards">${podium}</ol>` : ''}
-                    ${rows || !entries.length ? `${head}<ol class="aug-tier-list" start="4" data-rarity="${r.key}">${body}</ol>${more}` : ''}
+                    ${enough ? `${head}<div class="aug-tile-grid" data-rarity="${r.key}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
                 </div>`;
         }).join('');
         return `
@@ -3236,27 +3221,23 @@ const feedbackFab = document.querySelector('.feedback-fab');
             table.querySelectorAll('.aug-tier-pane').forEach(pane => {
                 pane.hidden = pane.getAttribute('data-rarity') !== champAugRarity;
             });
-            table.querySelectorAll('.aug-tier-list').forEach(list => {
-                const rows = Array.from(list.querySelectorAll('.aug-tier-row'));
-                rows.sort((a, b) => {
+            table.querySelectorAll('.aug-tile-grid').forEach(grid => {
+                closeAugDetail(grid);
+                const tiles = Array.from(grid.querySelectorAll('.aug-tile'));
+                tiles.sort((a, b) => {
                     const av = Number(a.getAttribute(attr) || 0);
                     const bv = Number(b.getAttribute(attr) || 0);
                     // Strength rank is ascending (0 = strongest); rates descend.
                     if (av !== bv) return champAugSort === 'rank' ? av - bv : bv - av;
                     return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
                 });
-                rows.forEach(row => list.appendChild(row));
-                const full = champAugSort !== 'rank';
-                list.classList.toggle('is-full', full);
-                list.setAttribute('start', full ? '1' : '4');
-                const limit = full ? CHAMP_AUG_COLLAPSED : CHAMP_AUG_COLLAPSED - 3;
-                let shown = 0;
-                rows.forEach(row => {
-                    const podium = !full && row.classList.contains('is-podium');
-                    row.hidden = podium || (!champAugExpanded && shown >= limit);
-                    if (!podium) shown += 1;
+                tiles.forEach((tile, i) => {
+                    grid.appendChild(tile);
+                    tile.hidden = !champAugExpanded && i >= CHAMP_AUG_COLLAPSED;
+                    tile.classList.toggle('is-podium', champAugSort === 'rank' && i < CHAMP_AUG_PODIUM);
+                    tile.querySelector('.aug-tile-rank').textContent = String(i + 1);
                 });
-                const more = list.parentElement && list.parentElement.querySelector('[data-aug-expand]');
+                const more = grid.parentElement && grid.parentElement.querySelector('[data-aug-expand]');
                 if (more) {
                     const total = Number(more.getAttribute('data-total') || 0);
                     more.textContent = champAugExpanded
@@ -3267,6 +3248,49 @@ const feedbackFab = document.querySelector('.feedback-fab');
             });
         });
     }
+    /** Remove the open detail row (and reset aria-expanded) in one tile grid. */
+    function closeAugDetail(grid) {
+        grid.querySelectorAll('.aug-detail').forEach(d => d.remove());
+        grid.querySelectorAll('.aug-tile[aria-expanded="true"]').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    }
+    /** Seat the detail row under the last visible tile that shares `tile`'s visual row. */
+    function placeAugDetail(grid, tile) {
+        const detail = grid.querySelector('.aug-detail');
+        if (!detail) return;
+        const top = tile.offsetTop;
+        let last = tile;
+        for (let el = tile.nextElementSibling; el; el = el.nextElementSibling) {
+            if (!el.classList.contains('aug-tile') || el.hidden) continue;
+            if (el.offsetTop !== top) break;
+            last = el;
+        }
+        if (last.nextElementSibling !== detail) last.after(detail);
+    }
+    /** Click / Enter / Space on a tile: open its detail row, or close it if already open. */
+    function toggleAugTile(tile) {
+        const grid = tile.closest('.aug-tile-grid');
+        if (!grid) return;
+        const wasOpen = tile.getAttribute('aria-expanded') === 'true';
+        closeAugDetail(grid);
+        hideItemFloatTip();
+        if (wasOpen) return;
+        const src = tile.querySelector('.aug-detail-src');
+        const detail = document.createElement('div');
+        detail.className = 'aug-detail ' + Array.from(tile.classList).filter(c => /^rarity-/.test(c)).join(' ');
+        detail.setAttribute('role', 'region');
+        detail.setAttribute('aria-label', tile.querySelector('.aug-tile-name').textContent);
+        detail.innerHTML = src ? src.innerHTML : '';
+        grid.appendChild(detail);
+        tile.setAttribute('aria-expanded', 'true');
+        placeAugDetail(grid, tile);
+    }
+    // A viewport resize changes the column count, so re-seat any open detail row.
+    window.addEventListener('resize', () => {
+        document.querySelectorAll('.aug-tile[aria-expanded="true"]').forEach(tile => {
+            const grid = tile.closest('.aug-tile-grid');
+            if (grid) placeAugDetail(grid, tile);
+        });
+    }, { passive: true });
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
     const AUG_HOT_PICK = 0.20;
@@ -11753,6 +11777,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
             trackEvent('recommendations_close', { source: 'panel', picks: teamPicks.length });
             return;
         }
+        const augTile = ev.target.closest('.aug-tile');
+        if (augTile && !ev.target.closest('.aug-detail')) {
+            toggleAugTile(augTile);
+            return;
+        }
         const augRarityBtn = ev.target.closest('[data-aug-rarity]');
         if (augRarityBtn) {
             champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
@@ -12521,7 +12550,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const t = ev.target;
         if (!t || !t.classList) return;
         if (t.matches('a.champ') && (t.getAttribute('role') !== 'button' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey)) return;
-        if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card')) {
+        if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card') || t.classList.contains('aug-tile')) {
             ev.preventDefault();
             t.click();
         }
@@ -12542,14 +12571,16 @@ const feedbackFab = document.querySelector('.feedback-fab');
 
     // Rich item float-tip: show on hover/focus of any .has-item-tip host.
     document.addEventListener('pointermove', () => { _itemFloatTipDismissed = false; }, { passive: true });
+    let _augTouchInput = false;
+    document.addEventListener('pointerdown', ev => { _augTouchInput = ev.pointerType === 'touch'; }, { passive: true, capture: true });
     document.addEventListener('mouseover', (ev) => {
         if (_itemFloatTipPinned || _itemFloatTipDismissed) return;
         if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
-        // Augment cards and rows open their tip on click; hovering must not
-        // raise a panel that would cover the rarity buttons above them.
-        if (host.matches('.aug-pick-card, .aug-tier-row')) return;
+        // An open tile shows its detail row instead of the tip, and touch input
+        // never hovers (a layout shift can fire a stray mouseover after a tap).
+        if (host.matches('.aug-tile') && (_augTouchInput || host.getAttribute('aria-expanded') === 'true')) return;
         // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
         showItemFloatTip(host);
     }, { passive: true });
@@ -12565,6 +12596,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
     document.addEventListener('focusin', (ev) => {
         _itemFloatTipDismissed = false;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        // A touch tap focuses an augment tile, but its detail row replaces the tip.
+        if (host && host.matches('.aug-tile') && !host.matches(':focus-visible')) return;
         if (host) showItemFloatTip(host);
     });
     document.addEventListener('focusout', (ev) => {
