@@ -83,15 +83,32 @@ def test_augment_hosts_show_pointer_cursor():
 
 def test_champion_augments_render_as_tile_grid_with_detail_row():
     js, css = _js(), _css()
-    for gone in ("aug-pick-card", "aug-pick-cards", "aug-tier-row", "aug-tier-head", "is-podium' : ''}"):
+    for gone in ("aug-pick-card", "aug-pick-cards", "aug-tier-row", "aug-tier-head", "champAugSort === 'rank' && i < CHAMP_AUG_PODIUM"):
         assert gone not in js, gone
-    assert "const CHAMP_AUG_COLLAPSED = 24;" in js
+    for gone in (".aug-tier-seg-btn.is-active::before", "--grain", "--plate"):
+        assert gone not in css, gone
     assert 'aria-expanded="false"' in _between(js, "function buildChampAugTable", "function syncChampAugTable")
-    assert "aria-expanded" in _between(js, "function toggleAugTile", "window.addEventListener('resize'")
+    assert "aria-expanded" in _between(js, "function toggleAugTile", "const augGridObserver")
     grid = re.search(r"\.aug-tile-grid\s*\{([^}]*)\}", css)
-    assert grid and "repeat(auto-fill, minmax(104px, 1fr))" in grid.group(1)
+    assert grid and "/ 8 - 0.5px)), 1fr))" in grid.group(1), "at most 8 columns"
     detail = re.search(r"\.aug-detail\s*\{([^}]*)\}", css)
     assert detail and "grid-column: 1 / -1;" in detail.group(1)
+
+
+def test_top_three_of_every_sort_are_featured_and_the_rest_fade():
+    js, css = _js(), _css()
+    assert "tile.classList.toggle('is-podium', i < CHAMP_AUG_PODIUM);" in js
+    assert ".aug-tile-grid.is-wide-podium .aug-tile.is-podium { grid-column: span 2; }" in css
+    fade = re.search(r"\.aug-tile:not\(\.is-podium\):not\(\.is-good\) \.aug-tile-icon\s*\{([^}]*)\}", css)
+    assert fade and "opacity: .6;" in fade.group(1)
+
+
+def test_tile_tip_sits_beside_the_tile_and_stays_in_view():
+    js = _js()
+    pos = _between(js, "function positionAugTileTip", "function positionItemFloatTip")
+    assert "'right'" in pos and "'left'" in pos
+    assert ".aug-tier-top" in pos and ".aug-tile-sorts" in pos
+    assert "if (anchor.matches('.aug-tile')) {" in _between(js, "function positionItemFloatTip", "function showItemFloatTip")
 
 
 def test_tile_click_is_routed_to_detail_row_not_tip_pin():
