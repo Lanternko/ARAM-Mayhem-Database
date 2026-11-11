@@ -33,7 +33,7 @@ import urllib.request
 from collections.abc import Callable
 from typing import Any
 
-from aram_nn.site.augment_pool_observed import PatchCounts, classify
+from aram_nn.site.augment_pool_observed import PatchCounts, classify, find_added
 
 CDRAGON_BASE = "https://raw.communitydragon.org"
 GROUPS_PATH = "game/maps/modespecificdata/augmentgroups.bin.json"
@@ -43,6 +43,9 @@ MAP12_PATH = "game/data/maps/shipping/map12/map12.bin.json"
 AUGS_PATH = "plugins/rcp-be-lol-game-data/global/{locale}/v1/cherry-augments.json"
 CHAMPS_PATH = "plugins/rcp-be-lol-game-data/global/{locale}/v1/champion-summary.json"
 META_PATH = "content-metadata.json"
+# augmentNameId prefixes of augments that are only granted by another
+# augment, never drawn from a pool.
+GRANTED_ONLY_PREFIXES = ("GoH_PentakillAug",)
 
 # Unnamed bin fields/types (CDragon has no names for them yet).
 _GROUP_TYPE = "{fead7e9b}"
@@ -332,6 +335,11 @@ def build_payload(
     from ``augment_pool_observed.count_patch``.  With it, augments no game ever
     shows are dropped from the pools, and champion-specific blocks are listed
     under ``observed.blocked`` for the page to subtract.
+
+    When the games come from patches newer than the pool file (the pools went
+    server-side in 16.19), pass ``observed["counts"]`` = [PatchCounts, ...]
+    instead of cur/prev: every patch is checked against ``version``'s pools,
+    and augments no pool lists but games show go to ``observed.added``.
     """
     cur = _snapshot(fetch, version)
     prev = _snapshot(fetch, prev_version, cur["ids"]) if prev_version else None
@@ -347,12 +355,38 @@ def build_payload(
     def cid_of(alias: str) -> int | None:
         return alias_to_id.get(alias.lower())
 
+    zh_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="zh_tw"))}
+    en_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="default"))}
+
     verdict = None
+    added: dict[int, list[int]] = {}
     if observed:
-        evidence: list[tuple[PatchCounts, dict[int, set[int]]]] = [(observed["cur"], _reach(cur, cid_of))]
-        if observed.get("prev") is not None and prev is not None:
-            evidence.append((observed["prev"], _reach(prev, cid_of)))
+        newer = observed.get("counts")
+        if newer is not None:
+            reach = _reach(cur, cid_of)
+            evidence: list[tuple[PatchCounts, dict[int, set[int]]]] = [(c, reach) for c in newer]
+        else:
+            evidence = [(observed["cur"], _reach(cur, cid_of))]
+            if observed.get("prev") is not None and prev is not None:
+                evidence.append((observed["prev"], _reach(prev, cid_of)))
         verdict = classify(evidence)
+        if newer is not None:
+            # Names of augments added after ``version`` only exist in newer strings.
+            for locale, rows in (("zh_tw", zh_rows), ("default", en_rows)):
+                for a in fetch("latest", AUGS_PATH.format(locale=locale)):
+                    rows.setdefault(int(a["id"]), a)
+            pooled = {aid for augs in cur["pools"].values() for aid in augs}
+            # Mode-event picks are not pool draws, an augment the strings do
+            # not name cannot be shown, and granted-only riders (16.22's
+            # GoH_PentakillAug_Q/W/E/R, recorded in slots 0-1) are never offered.
+            skip = {aid for aid, row in en_rows.items()
+                    if row.get("rarity") == "kEventChoice" or not str(row.get("nameTRA") or "").strip()
+                    or str(row.get("augmentNameId") or "").startswith(GRANTED_ONLY_PREFIXES)}
+            skip |= {aid for (_c, aid) in (p for c in newer for p in c.pairs) if aid not in en_rows}
+            known = set(_reach(cur, cid_of))
+            added = {aid: [c for c in champs if c in known]
+                     for aid, champs in find_added(newer, pooled, skip=skip).items()}
+            added = {aid: champs for aid, champs in added.items() if champs}
         dead = set(verdict["dead"])
         for snap in (cur, prev):
             if snap is not None:
@@ -382,9 +416,7 @@ def build_payload(
             meta["family"] = "unused"
         pools_out.append({"id": pid, **meta, "augs": augs, "champs": members.get(pid, 0)})
 
-    aug_ids = sorted({a for pid, p in cur["pools"].items() if pid not in empty for a in p})
-    zh_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="zh_tw"))}
-    en_rows = {int(a["id"]): a for a in fetch(version, AUGS_PATH.format(locale="default"))}
+    aug_ids = sorted({a for pid, p in cur["pools"].items() if pid not in empty for a in p} | set(added))
 
     def aug_row(aid: int) -> dict:
         zh, en = zh_rows.get(aid, {}), en_rows.get(aid, {})
@@ -419,6 +451,9 @@ def build_payload(
                 if str(c) in champs_out and (kept := [a for a in augs if str(a) in augs_out])
             },
         }
+        if added:
+            # Augment id -> champion ids seen with it; pool and weight unknown.
+            payload["observed"]["added"] = {str(aid): champs for aid, champs in added.items()}
     if prev is not None:
         payload["diff"] = diff_snapshots(prev, cur, cid_of)
         payload["diff"]["prev_version"] = prev_version

@@ -32,7 +32,13 @@ const catalogue = JSON.parse(fs.readFileSync('docs/api/tier-list.json', 'utf8'))
 const pools = Object.fromEntries(data.pools.map(p => [p.id, p]));
 let champions = 0;
 for (const cid of Object.keys(data.champs)) {
-    const rows = context.championPoolEntries(cid, data, catalogue);
+    const all = context.championPoolEntries(cid, data, catalogue);
+    // Augments added after the pool file come last with unknown weight.
+    const addedIds = Object.keys((data.observed || {}).added || {}).filter(aid => data.observed.added[aid].map(String).includes(cid));
+    const rows = all.filter(r => !r.added);
+    const extra = all.filter(r => r.added);
+    assert.ok(all.slice(rows.length).every(r => r.added));
+    assert.ok(extra.every(r => r.weight === null && addedIds.includes(r.id)));
     const expected = new Map();
     const blocked = new Set(((data.observed || {}).blocked || {})[cid] || []);
     for (const [pid, w] of data.champs[cid]) {
@@ -52,6 +58,7 @@ for (const cid of Object.keys(data.champs)) {
         // No silent "unclassified": every pool augment carries a curated purpose.
         assert.ok(context.augmentCats(row.id, catalogue).some(cat => detailed.includes(cat)), `augment ${row.id} has no purpose category`);
     });
+    assert.equal(extra.length, addedIds.filter(aid => !expected.has(aid)).length);
     champions++;
 }
 assert.equal(context.championPoolCategory(['new']), taxonomy.fallback);
@@ -61,6 +68,11 @@ assert.equal(context.championPoolEntries('missing',data,catalogue).length,0);
 {
     const toy = {pools: [{id: 'p1', augs: [1, 2, 3]}], champs: {'7': [['p1', 150]]}, observed: {blocked: {'7': [2]}}};
     assert.equal(context.championPoolEntries('7', toy, {}).map(r => r.id).join(), '1,3');
+    toy.observed.added = {'9': [7, 8], '3': [7]};
+    const withAdded = context.championPoolEntries('7', toy, {});
+    assert.equal(withAdded.map(r => r.id).join(), '1,3,9');
+    assert.equal(withAdded[2].weight, null);
+    assert.equal(withAdded[2].added, true);
 }
 console.log(`Verified unique membership, max weight, ordering and source provenance for ${champions} champions.`);
 
