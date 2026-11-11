@@ -95,6 +95,19 @@ def test_champion_augments_render_as_tile_grid_with_detail_row():
     assert detail and "grid-column: 1 / -1;" in detail.group(1)
 
 
+def test_rarity_buttons_are_square_hextech_plates():
+    css = _css()
+    base = re.search(r"\.aug-tier-seg-btn\s*\{([^}]*)\}", css)
+    assert base, "missing .aug-tier-seg-btn rule"
+    body = base.group(1)
+    assert "border-radius: 0;" in body and "linear-gradient(to bottom" in body
+    assert body.count("inset") >= 3, "inner line, sheen and lip are inset shadows"
+    assert "--hx-rim: 70 76 86;" in body, "unselected plate is the overlay's LOW_KEY"
+    assert "--hx-rim: 236 210 158;" in css, "gold plate is the overlay's champagne theme"
+    assert "text-decoration" not in body and "border-bottom" not in body
+    assert not re.search(r"\[data-theme=\"light\"\]\s*\.aug-tier-seg-btn", css), "plates stay dark in light theme"
+
+
 def test_top_three_of_every_sort_are_featured_and_the_rest_fade():
     js, css = _js(), _css()
     assert "tile.classList.toggle('is-podium', i < CHAMP_AUG_PODIUM);" in js

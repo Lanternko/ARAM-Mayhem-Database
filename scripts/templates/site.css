@@ -10198,48 +10198,77 @@
     html[data-embed] .champ-page-host { padding: 12px 14px 24px; }
     html[data-embed] .detail-page .detail-main-tabs > .detail-tab-rail { display: none; }
 
-    /* 增幅裝置 on the champion page: rarity tabs + tile grid.  The tabs share the
-       flat language of .draft-mode-tab (text + underline); rarity is only a colour. */
+    /* 增幅裝置 on the champion page: rarity plates + tile grid.  The plates are the
+       desktop overlay's square hextech buttons (augment_overlay.py LOW_KEY and the
+       _highlight themes) in pure CSS: 1px rim (brighter on top), 1px inner line,
+       top→bottom body, sheen under the top edge, darker lip along the bottom.
+       They stay dark in the light theme, like the overlay they copy. */
     .aug-tier-table { margin-top: 10px; }
     .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
     .aug-tier-seg {
         display: flex;
         align-items: center;
-        gap: 22px;
+        gap: 8px;
         flex: 1 1 auto;
-        border-bottom: 1px solid var(--border);
     }
     .aug-tier-seg-btn {
-        --rar-text: var(--text-muted);
-        position: relative;
-        min-height: 32px;
-        padding: 0 2px;
-        border: 0;
-        background: transparent;
-        color: color-mix(in oklab, var(--rar-text) 62%, var(--text-muted));
+        --hx-rim: 70 76 86;
+        --hx-rim-hi: 98 104 114;
+        --hx-inner: 6 8 10;
+        --hx-top: 22 25 30;
+        --hx-bottom: 9 11 14;
+        --hx-sheen: 32 36 42;
+        --hx-lip: 5 7 8;
+        --hx-glow: transparent;
+        --hx-ink: 150 152 160;
+        height: 32px;
+        padding: 0 16px;
+        border: 1px solid rgb(var(--hx-rim));
+        border-top-color: rgb(var(--hx-rim-hi));
+        border-radius: 0;
+        background: linear-gradient(to bottom, rgb(var(--hx-top)), rgb(var(--hx-bottom)));
+        box-shadow:
+            inset 0 0 0 1px rgb(var(--hx-inner)),
+            inset 0 2px 0 0 rgb(var(--hx-sheen)),
+            inset 0 -3px 0 0 rgb(var(--hx-lip)),
+            0 0 7px var(--hx-glow);
+        color: rgb(var(--hx-ink));
         font: inherit;
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 700;
+        letter-spacing: .02em;
         cursor: pointer;
+        transition: border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
     }
-    .aug-tier-seg-btn.rarity-silver { --rar-text: #c9d1dc; }
-    .aug-tier-seg-btn.rarity-gold { --rar-text: #f0c14b; }
-    .aug-tier-seg-btn.rarity-prismatic { --rar-text: #d7a8ff; }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-silver { --rar-text: #667385; }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-gold { --rar-text: #a8740a; }
-    [data-theme="light"] .aug-tier-seg-btn.rarity-prismatic { --rar-text: #8a3fd1; }
-    .aug-tier-seg-btn::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: -1px;
-        height: 2px;
-        background: transparent;
+    .aug-tier-seg-btn:hover {
+        border-color: rgb(var(--hx-rim-hi));
+        color: rgb(240 230 200);
     }
-    .aug-tier-seg-btn:hover { color: var(--rar-text); }
-    .aug-tier-seg-btn.is-active { color: var(--rar-text); }
-    .aug-tier-seg-btn.is-active::after { background: var(--rar-text); }
+    /* Selected plate = _highlight(): tinted fill, pastel rim, tight glow. */
+    .aug-tier-seg-btn.is-active {
+        --hx-inner: 14 11 6;
+        --hx-lip: 24 19 11;
+        --hx-glow: rgb(var(--hx-rim) / .45);
+        border-color: rgb(var(--hx-rim));
+        border-top-color: rgb(var(--hx-rim-hi));
+        color: rgb(var(--hx-ink));
+    }
+    /* Gold = THEMES["champagne"]; silver and prismatic reuse its structure
+       (the overlay has no cool-grey or pure-purple theme of its own). */
+    .aug-tier-seg-btn.rarity-gold.is-active {
+        --hx-rim: 236 210 158; --hx-rim-hi: 252 236 200; --hx-top: 84 68 42; --hx-bottom: 40 32 18;
+        --hx-sheen: 110 90 58; --hx-ink: 240 224 190;
+    }
+    .aug-tier-seg-btn.rarity-silver.is-active {
+        --hx-rim: 176 190 204; --hx-rim-hi: 214 224 234; --hx-top: 58 66 76; --hx-bottom: 26 30 36;
+        --hx-sheen: 84 94 106; --hx-ink: 226 232 240;
+        --hx-inner: 9 11 13; --hx-lip: 16 18 22;
+    }
+    .aug-tier-seg-btn.rarity-prismatic.is-active {
+        --hx-rim: 190 150 255; --hx-rim-hi: 222 200 255; --hx-top: 66 48 96; --hx-bottom: 30 20 46;
+        --hx-sheen: 96 74 134; --hx-ink: 232 220 255;
+        --hx-inner: 11 7 16; --hx-lip: 18 12 28;
+    }
     .aug-tier-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
     /* Tile grid: every augment is one same-size square.  Priority is rank =
@@ -10344,6 +10373,32 @@
     .aug-tile.is-podium .aug-tile-icon img,
     .aug-tile.is-podium .aug-tile-icon .aicon-ph,
     .aug-tile.is-podium .aug-tile-icon .destiny-icon { width: 64px; height: 64px; }
+    /* Two columns wide the tile is as tall as its row (a plain tile, ~142px):
+       a big icon beside win rate + pick, the name underneath, so the content
+       fills the height instead of floating in it. */
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium {
+        grid-template-areas: "icon wr" "icon pick" "name name";
+        grid-template-rows: auto auto auto;
+        align-content: center;
+        row-gap: 0;
+        padding: 14px 40px 14px 26px;
+    }
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-wr {
+        align-self: end;
+        font-size: 34px;
+    }
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-pick {
+        align-self: start;
+        font-size: 12px;
+    }
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-name {
+        margin-top: 6px;
+        font-size: 15px;
+    }
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon,
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon img,
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon .aicon-ph,
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon .destiny-icon { width: 84px; height: 84px; }
     /* Everything not recommended steps back: icon, name and pick fade, the win
        rate stays at full strength.  Looking at a tile brings it back. */
     .aug-tile:not(.is-podium):not(.is-good) {
