@@ -2196,19 +2196,25 @@
         outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
         outline-offset: -2px;
     }
-    /* Divider before a tab that opens a new group (增幅裝置 | 增幅池). */
+    /* Sister tabs (增幅裝置 | 增幅池): no list gap between them, 8px inner padding each side,
+       and a short "|" centered on the boundary. Outer sides keep the normal 12px. */
+    .detail-tab-label:has(+ .is-group-start) {
+        padding-right: 8px;
+    }
     .detail-tab-label.is-group-start {
         position: relative;
+        margin-left: -6px;
+        padding-left: 8px;
     }
-    /* Centered in the list gap; bottom offset spans the 2px underline so it matches the active box. */
     .detail-tab-label.is-group-start::before {
         content: "";
         position: absolute;
-        left: -3.5px;
-        top: 0;
-        bottom: -2px;
+        left: 0;
+        top: 50%;
+        height: 13px;
+        transform: translateY(-50%);
         width: 1px;
-        background: rgba(255,255,255,0.16);
+        background: rgba(255,255,255,0.28);
         pointer-events: none;
     }
     .detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
@@ -6409,7 +6415,7 @@
         background: rgba(0, 0, 0, 0.03);
     }
     [data-theme="light"] .detail-tab-label.is-group-start::before {
-        background: var(--border);
+        background: color-mix(in srgb, var(--text-muted) 55%, transparent);
     }
     [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(1):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(1),
     [data-theme="light"] .detail-tabset > .detail-tab-input:nth-of-type(2):checked ~ .detail-tab-rail .detail-tab-list .detail-tab-label:nth-child(2),
@@ -10530,6 +10536,29 @@
     .aug-tip-stats b.wr-3 { color: var(--wr-3); }
     .aug-tip-stats b.wr-2 { color: var(--wr-2); }
     .aug-tip-stats b.wr-1 { color: var(--wr-1); }
+    /* 第幾選 block inside a tile's hover tip and detail row: same wr-tier
+       colours as the tile numbers, neutral grey structure, scoped so the 增幅榜
+       board tip keeps its own look. */
+    .aug-detail .aug-slots { --tip-surface: color-mix(in oklab, var(--rar) 8%, var(--bg)); }
+    .aug-detail .aug-slots.is-tile { max-width: 340px; }
+    .aug-slots.is-tile { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+    .aug-slots.is-tile .aug-slots-head { margin-bottom: 4px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
+    .aug-slots.is-tile .aug-curve-base { stroke: var(--text-muted); stroke-opacity: 0.5; stroke-width: 1.5; }
+    .aug-slots.is-tile .aug-curve-line { stroke: var(--text-muted); stroke-opacity: 0.8; stroke-width: 1.5; }
+    .aug-slots.is-tile .aug-pt { --slot-ink: var(--wr-3); }
+    .aug-slots.is-tile .aug-pt.wr-5 { --slot-ink: var(--wr-5); }
+    .aug-slots.is-tile .aug-pt.wr-4 { --slot-ink: var(--wr-4); }
+    .aug-slots.is-tile .aug-pt.wr-3 { --slot-ink: var(--text); }
+    .aug-slots.is-tile .aug-pt.wr-2 { --slot-ink: var(--wr-2); }
+    .aug-slots.is-tile .aug-pt.wr-1 { --slot-ink: var(--wr-1); }
+    .aug-slots.is-tile .aug-pt text { font-size: 12.5px; font-weight: 600; }
+    .aug-slots.is-tile .aug-pt.is-coarse circle { stroke: var(--text-muted); }
+    .aug-slots.is-tile .aug-pt-label { font-size: 11px; fill: var(--text-muted); }
+    .aug-slots.is-tile .aug-pt-label.is-empty { opacity: 0.55; }
+    .aug-slots.is-tile .aug-na rect { fill: var(--text-muted); fill-opacity: 0.07; }
+    .aug-slots.is-tile .aug-na path { fill: none; stroke: var(--text-muted); stroke-opacity: 0.22; stroke-width: 1; }
+    .aug-slots.is-tile .aug-na text { fill: var(--text-muted); font-size: 10.5px; font-weight: 600; }
+    .aug-slots.is-tile .aug-slots-foot { margin-top: 4px; color: var(--text-muted); font-size: 10.5px; }
     @media (prefers-reduced-motion: reduce) {
         .aug-tile { transition: none; }
     }

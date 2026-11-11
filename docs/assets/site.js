@@ -3025,9 +3025,16 @@ const feedbackFab = document.querySelector('.feedback-fab');
         return cells;
     }
 
-    function buildAugSlotStrip(entry, onBoard) {
+    // opts.tile = the champion-page tile tip / detail row: titled block, wr-tier
+    // number colours, and a "not offered" column for a round the augment never
+    // appears in (its all-champion slot is null).  Other callers get the
+    // original markup.
+    function buildAugSlotStrip(entry, onBoard, opts = {}) {
+        const tile = !!opts.tile;
         const cells = augSlotCells(entry, onBoard);
         if (!cells.some(Boolean)) return '';
+        const globalSlots = Array.isArray((DATA.augs[entry.id] || {}).slots) ? DATA.augs[entry.id].slots : [];
+        const notOffered = cells.map((c, i) => tile && !c && !(Array.isArray(globalSlots[i]) && Number(globalSlots[i][0]) > 0));
         const anyCoarse = cells.some(c => c && c.coarse);
         const anyPrev = cells.some(c => c && c.prev > 0);
         // Pick-order curve: x = round, y = deviation from the augment's own
@@ -3053,8 +3060,27 @@ const feedbackFab = document.querySelector('.feedback-fab');
             const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
             return `<text class="aug-pt-label${c ? '' : ' is-empty'}" x="${xs(i)}" y="11" text-anchor="middle">${escHtml(label)}</text>`;
         }).join('');
+        // Round never offered: a faint dark column with diagonal hatching (plain
+        // lines, since a shared <pattern> id breaks inside hidden tip sources).
+        const naWord = pickLang('未開放', 'N/A');
+        const naColumn = i => {
+            const x0 = xs(i) - DX / 2;
+            const hatch = [];
+            const RH = H - 16;
+            for (let k = 10; k < DX + RH; k += 10) {
+                const a = Math.max(0, k - RH), b = Math.min(DX, k);
+                hatch.push(`M${x0 + a} ${16 + k - a}L${x0 + b} ${16 + k - b}`);
+            }
+            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            return `<g class="aug-na"><title>${escHtml(`${label}${pickLang('：', ': ')}${naWord}`)}</title>`
+                + `<rect x="${x0}" y="16" width="${DX}" height="${H - 16}" rx="3"/>`
+                + `<path d="${hatch.join('')}"/>`
+                + `<text x="${xs(i)}" y="${BASE + 20}" text-anchor="middle">${escHtml(naWord)}</text></g>`;
+        };
+        const toneOf = dev => (dev >= 0.03 ? 5 : dev >= 0.01 ? 4 : dev > -0.01 ? 3 : dev > -0.03 ? 2 : 1);
         const marks = pts.map((p, i) => {
             const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            if (!p && notOffered[i]) return naColumn(i);
             if (!p) return `<text class="aug-pt-none" x="${xs(i)}" y="${BASE + 4}" text-anchor="middle">–</text>`;
             const c = p.c;
             const tone = p.t >= 0 ? 'is-up' : 'is-down';
@@ -3064,7 +3090,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
             const title = c.coarse
                 ? pickLang(`${label}：樣本不足，位置依全英雄趨勢`, `${label}: thin sample, position from all champions`)
                 : `${label}: ${pct(c.wr)} · ${pickLang('比同輪平均', 'vs round avg')} ${signed(c.lift)} · ${pickLang('比它自己平均', 'vs its own avg')} ${signed(c.dev)} · ${fmtInt(c.g)}${pickLang(' 場', ' games')}`;
-            return `<g class="aug-pt ${tone}${c.coarse ? ' is-coarse' : ''}" style="--slot-k:${strength}%"><title>${escHtml(title)}</title>`
+            const toneCls = tile ? ` wr-${toneOf(c.dev)}` : '';
+            return `<g class="aug-pt ${tone}${toneCls}${c.coarse ? ' is-coarse' : ''}" style="--slot-k:${strength}%"><title>${escHtml(title)}</title>`
                 + `<circle cx="${p.x}" cy="${p.y.toFixed(1)}" r="4.5"/>`
                 + (num ? `<text x="${p.x}" y="${numY.toFixed(1)}" text-anchor="middle">${escHtml(num)}</text>` : '')
                 + `</g>`;
@@ -3072,8 +3099,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const notes = [];
         if (anyPrev) notes.push(pickLang('* 含上一版樣本', '* includes last patch'));
         if (anyCoarse) notes.push(pickLang('空心點＝樣本不足，位置依全英雄趨勢', 'Hollow dot = thin sample, shape from all champions'));
-        const aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
-        return `<div class="aug-slots">`
+        let aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
+        notOffered.forEach((na, i) => {
+            if (na) aria += pickLang(`；第${i + 1}選：未開放`, `; Pick ${i + 1}: N/A`);
+        });
+        return `<div class="aug-slots${tile ? ' is-tile' : ''}">`
+            + (tile ? `<div class="aug-slots-head">${escHtml(pickLang('第幾選的勝率', 'Win rate by pick'))}</div>` : '')
             + `<svg class="aug-curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escHtml(aria)}">`
             + `<line class="aug-curve-base" x1="12" x2="${W - 12}" y1="${BASE}" y2="${BASE}"/>`
             + (path ? `<path class="aug-curve-line" d="${path}"/>` : '')
@@ -3232,6 +3263,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
                             <span>${escHtml(pickLang('場次', 'Games'))} <b>${escHtml(fmtInt(e.g))}</b></span>
                         </div>
                         ${isDestiny(e) ? `<div class="item-tip-note">${escHtml(destinyText())}</div>` : ''}
+                        ${buildAugSlotStrip(e, false, { tile: true })}
                     </div>`;
                 return `
                     <div class="aug-tile has-item-tip rarity-${r.css} is-${verdict}" role="button" tabindex="0" aria-expanded="false"
@@ -3375,6 +3407,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
         detail.setAttribute('role', 'region');
         detail.setAttribute('aria-label', tile.querySelector('.aug-tile-name').textContent);
         detail.innerHTML = src ? src.innerHTML : '';
+        // The pick-round strip lives once in the hover-tip source; touch has no
+        // tip, so the detail row borrows a copy of it.
+        const slots = tile.querySelector('.item-tip-src .aug-slots');
+        if (slots) detail.appendChild(slots.cloneNode(true));
         grid.appendChild(detail);
         tile.setAttribute('aria-expanded', 'true');
         placeAugDetail(grid, tile);
