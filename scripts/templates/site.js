@@ -3299,9 +3299,15 @@
         const destiny = destinyItem && destinyItem.id ? destinyItem : null;
         const isDestiny = (e) => !!destiny && String(e.id) === '3081';
         const destinyItemName = () => (destiny ? itemDisplayName({ id: destiny.id }) : '');
+        // A second item (`alt`) is shown only when its synergy is statistically
+        // indistinguishable from the first; the icon always stays the main pick.
+        const destinyAlt = destiny && destiny.alt && destiny.alt.id ? destiny.alt : null;
+        const destinyAltPart = () => (destinyAlt
+            ? ` ${pickLang('／', '/')} ${itemDisplayName({ id: destinyAlt.id })} ${signed(Number(destinyAlt.lift || 0))}`
+            : '');
         const destinyLine = () => pickLang(
-            `推薦：${destinyItemName()} ${signed(Number(destiny.lift || 0))}`,
-            `Recommended: ${destinyItemName()} ${signed(Number(destiny.lift || 0))}`
+            `推薦：${destinyItemName()} ${signed(Number(destiny.lift || 0))}${destinyAltPart()}`,
+            `Recommended: ${destinyItemName()} ${signed(Number(destiny.lift || 0))}${destinyAltPart()}`
         );
         // A pick carried over from the previous patch keeps the raw text (the
         // recommendation line, then the caveat) so it reads correctly both in
@@ -3377,7 +3383,7 @@
                             ${cardIcon(e, v)}
                             <span class="aug-tier-text">
                                 <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
-                                ${isDestiny(e) ? `<span class="aug-tier-destiny">${destinyTextHtml()}</span>` : ''}
+                                ${isDestiny(e) ? `<span class="aug-tier-destiny${destinyAlt ? ' has-alt' : ''}">${destinyTextHtml()}</span>` : ''}
                                 ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
                             </span>
                         </span>

@@ -566,11 +566,14 @@ def main(
         cache_dir=Path("data/cache"),
     )
     destiny_prev_n = sum(1 for rec in destiny_items.values() if rec.get("prev"))
+    destiny_alt_n = sum(1 for rec in destiny_items.values() if rec.get("alt"))
     click.echo(
         f"[tierlist] {len(destiny_items)} champions have a 命定武器 item recommendation "
         f"({len(destiny_legendary_ids)} legendary items considered, "
         f"n >= {DESTINY_MIN_DESTINY_GAMES} with / {DESTINY_MIN_SIDE_GAMES} without 3081, "
-        f"LCB lift > 0; {destiny_prev_n} carried over from {destiny_prev_prefix or 'n/a'})"
+        f"item-count-stratified WR gain with 3081 LCB > 0, ranked by synergy LCB; "
+        f"{destiny_alt_n} with a second item; "
+        f"{destiny_prev_n} carried over from {destiny_prev_prefix or 'n/a'})"
     )
     spell_affinity = compute_champ_spell_affinities(
         db,

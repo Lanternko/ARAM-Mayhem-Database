@@ -155,10 +155,12 @@ ITEM_MIN_TOTAL_GOLD = 1800
 ITEM_BOOT_MIN_TOTAL_GOLD = 900
 # 「命定武器」(Weapon of Destiny) is the one augment whose value depends entirely
 # on which item you hold, so the champion page names that item instead of only
-# showing the augment.  The stat is champion-stratified: among players of the same
-# champion, WR with (3081 AND the item) minus WR with (the item, no 3081), which
-# removes both the champion's own strength and who buys the item.  Compared with a
-# 95% interval and only recommended when the lower bound clears 0.
+# showing the augment.  An item qualifies only when, among 3081 holders of that
+# champion with the same number of legendary items, holding it beats not holding
+# it (a Mantel-Haenszel 95% lower bound above 0): a big with/without-3081 delta
+# on an item that still loses is not a recommendation.  Qualifying items rank by
+# the lower bound of synergy = gate - base, where base is the same stratified
+# difference among players without 3081.
 DESTINY_AUGMENT_ID = 3081
 DESTINY_ITEM_MIN_GOLD = 2200          # legendary tier, same floor as the item stats
 DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without 3081)
@@ -3798,6 +3800,38 @@ def compute_champ_boot_item_affinities(
     )
 
 
+def _mh_stratified_diff(
+    tot: list[int], held: list[int], offset: int
+) -> tuple[float, float] | None:
+    """Held-vs-not-held win-rate difference stratified over item-count layers.
+
+    ``tot`` is a champion's per-layer ``[w_no, n_no, w_yes, n_yes]`` repeated for
+    k = 0..6 (flattened, length 28); ``held`` the same layout for one item.
+    ``offset`` is 0 for players without 3081 and 2 for players with it.  Layers
+    are weighted ``n1*n0/(n1+n0)`` (Mantel-Haenszel); layers with an empty arm
+    are skipped.  Returns ``(diff, 95% half-width)`` or ``None`` without a layer.
+    """
+    sw = sd = sv = 0.0
+    for k in range(7):
+        j = 4 * k + offset
+        n1 = held[j + 1]
+        n0 = tot[j + 1] - n1
+        if n1 <= 0 or n0 <= 0:
+            continue
+        w1 = held[j]
+        w0 = tot[j] - w1
+        p1 = w1 / n1
+        p0 = w0 / n0
+        w = n1 * n0 / (n1 + n0)
+        pbar = (w1 + w0) / (n1 + n0)
+        sw += w
+        sd += w * (p1 - p0)
+        sv += w * w * pbar * (1 - pbar) * (1 / n1 + 1 / n0)
+    if sw <= 0:
+        return None
+    return sd / sw, 1.96 * math.sqrt(sv) / sw
+
+
 def compute_champ_destiny_items(
     db_path: Path,
     queue_id: int,
@@ -3809,20 +3843,24 @@ def compute_champ_destiny_items(
 ) -> dict[int, dict]:
     """Best legendary item to hold alongside 命定武器, per champion.
 
-    For champion ``c`` and item ``i`` the statistic is the champion-stratified
-    difference ``WR(c, i, 3081) - WR(c, i, no 3081)`` over the patch; champion
-    identity cancels out, so the number answers "does this item make the augment
-    pay off?" rather than "is this item good".  The without-3081 side needs
-    ``min_side_games`` (the augment is rare, so that side is cheap to fill) and
-    the with-3081 side needs the stricter ``min_destiny_games``; the interval is
-    the pooled-rate 95% half-width.
+    Players are stratified by champion and by how many legendary items they hold
+    (capped at 6), so "has the item" is not confounded with "survived long enough
+    to build full".  For item ``i``: ``gate`` is the stratified (Mantel-Haenszel)
+    win-rate difference holding vs not holding ``i`` among 3081 holders and
+    ``base`` is the same among non-holders of 3081.  An item qualifies only when
+    the ``gate`` lower bound is above 0 - a large with/without-3081 delta is not
+    enough if holding the item with the augment still loses - and qualifying
+    items rank by the lower bound of ``synergy = gate - base``.  Sample floors:
+    ``min_destiny_games`` with 3081 and ``min_side_games`` without, per item.
 
-    Returns ``{champion_id: {"item_id", "lift", "lcb"}}`` for champions where the
-    best item's lower bound clears 0.  Champions with no qualifying item are
-    simply absent — the site then renders the augment card as it always has.
+    Returns ``{champion_id: {"item_id", "lift", "lcb", "synergy", "synergy_lcb",
+    "alt"?}}`` where ``lift``/``lcb`` are the gate and its lower bound.  ``alt``
+    (same keys) is the runner-up when its synergy reaches the winner's
+    ``synergy_lcb``, i.e. the two cannot be told apart.  Champions with no
+    qualifying item are absent, and the site renders the augment card as before.
 
     ``participants_json`` is streamed row by row (never materialised) because the
-    patch is hundreds of thousands of games; the tally is only champ×item cells.
+    patch is hundreds of thousands of games; the tally is compact int lists.
     """
     items_ok = {int(i) for i in legendary_ids or ()}
     if not items_ok:
@@ -3833,7 +3871,9 @@ def compute_champ_destiny_items(
         sql += " AND patch LIKE ?"
         params.append(f"{patch_prefix}%")
 
-    # (champion_id, item_id) -> [wins_without, games_without, wins_with, games_with]
+    # Flat layout [w_no, n_no, w_yes, n_yes] x k=0..6 (28 ints): per champion for
+    # all players, per (champion, item) for holders of that item.
+    totals: dict[int, list[int]] = {}
     cells: dict[tuple[int, int], list[int]] = {}
     con = sqlite3.connect(str(db_path))
     try:
@@ -3859,31 +3899,55 @@ def compute_champ_destiny_items(
                     )
                     if int(i) in items_ok
                 }
-                base = 2 if has_destiny else 0
+                j = 4 * min(len(held), 6) + (2 if has_destiny else 0)
+                tot = totals.get(cid)
+                if tot is None:
+                    tot = totals[cid] = [0] * 28
+                tot[j] += won
+                tot[j + 1] += 1
                 for item_id in held:
-                    cell = cells.setdefault((cid, item_id), [0, 0, 0, 0])
-                    cell[base] += won
-                    cell[base + 1] += 1
+                    cell = cells.get((cid, item_id))
+                    if cell is None:
+                        cell = cells[(cid, item_id)] = [0] * 28
+                    cell[j] += won
+                    cell[j + 1] += 1
     finally:
         con.close()
 
-    best: dict[int, dict] = {}
-    for (cid, item_id), (w_no, n_no, w_yes, n_yes) in cells.items():
+    ranked: dict[int, list[dict]] = {}
+    for (cid, item_id), held in cells.items():
+        n_yes = sum(held[4 * k + 3] for k in range(7))
+        n_no = sum(held[4 * k + 1] for k in range(7))
         if n_yes < min_destiny_games or n_no < min_side_games:
             continue
-        lift = w_yes / n_yes - w_no / n_no
-        pooled = (w_yes + w_no) / (n_yes + n_no)
-        half = 1.96 * math.sqrt(pooled * (1 - pooled) * (1 / n_yes + 1 / n_no))
-        lcb = lift - half
-        if lcb <= 0:
+        tot = totals[cid]
+        gate = _mh_stratified_diff(tot, held, 2)
+        base = _mh_stratified_diff(tot, held, 0)
+        if gate is None or base is None:
             continue
-        cur = best.get(cid)
-        # argmax lcb; ties go to the lower item id so the payload is deterministic
-        # regardless of database row order.
-        if cur is None or lcb > cur["lcb"] or (
-            lcb == cur["lcb"] and item_id < cur["item_id"]
-        ):
-            best[cid] = {"item_id": item_id, "lift": lift, "lcb": lcb}
+        gate_diff, gate_half = gate
+        gate_lcb = gate_diff - gate_half
+        if gate_lcb <= 0:
+            continue
+        synergy = gate_diff - base[0]
+        synergy_lcb = synergy - math.sqrt(gate_half ** 2 + base[1] ** 2)
+        ranked.setdefault(cid, []).append({
+            "item_id": item_id,
+            "lift": gate_diff,
+            "lcb": gate_lcb,
+            "synergy": synergy,
+            "synergy_lcb": synergy_lcb,
+        })
+
+    best: dict[int, dict] = {}
+    for cid, recs in ranked.items():
+        # ties go to the lower item id so the payload is deterministic regardless
+        # of database row order.
+        recs.sort(key=lambda r: (-r["synergy_lcb"], r["item_id"]))
+        top = dict(recs[0])
+        if len(recs) > 1 and recs[1]["synergy"] >= top["synergy_lcb"]:
+            top["alt"] = dict(recs[1])
+        best[cid] = top
     return best
 
 
@@ -3915,27 +3979,35 @@ def merge_destiny_items_with_previous(
     prev_rows = _ddragon_item_rows(previous_version, cache_dir)
     if not cur_rows or not prev_rows:
         return merged
+    def _item_unchanged(item_id: int) -> bool:
+        cur_row = cur_rows.get(str(item_id))
+        prev_row = prev_rows.get(str(item_id))
+        if not isinstance(cur_row, dict) or not isinstance(prev_row, dict):
+            return False
+        return (
+            cur_row.get("description") == prev_row.get("description")
+            and (cur_row.get("stats") or {}) == (prev_row.get("stats") or {})
+            and (cur_row.get("gold") or {}).get("total")
+            == (prev_row.get("gold") or {}).get("total")
+        )
+
     for cid, rec in previous.items():
         if cid in merged:
             continue
         item_id = int(rec["item_id"])
-        cur_row = cur_rows.get(str(item_id))
-        prev_row = prev_rows.get(str(item_id))
-        if not isinstance(cur_row, dict) or not isinstance(prev_row, dict):
+        if not _item_unchanged(item_id):
             continue
-        if (
-            cur_row.get("description") != prev_row.get("description")
-            or (cur_row.get("stats") or {}) != (prev_row.get("stats") or {})
-            or (cur_row.get("gold") or {}).get("total")
-            != (prev_row.get("gold") or {}).get("total")
-        ):
-            continue
-        merged[cid] = {
-            "item_id": item_id,
-            "lift": float(rec["lift"]),
-            "lcb": float(rec.get("lcb", 0.0)),
-            "prev": True,
-        }
+        carried = {k: v for k, v in rec.items() if k != "alt"}
+        carried.update(
+            item_id=item_id,
+            lift=float(rec["lift"]),
+            lcb=float(rec.get("lcb", 0.0)),
+            prev=True,
+        )
+        alt = rec.get("alt")
+        if isinstance(alt, dict) and alt.get("item_id") and _item_unchanged(int(alt["item_id"])):
+            carried["alt"] = dict(alt)
+        merged[cid] = carried
     return merged
 
 

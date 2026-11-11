@@ -10596,6 +10596,12 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+    /* Two recommended items may not fit on one line. */
+    .aug-tier-destiny.has-alt {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
     .aug-pick-icon .destiny-icon { width: 64px; height: 64px; border-radius: var(--r-sm); }
     /* .aug-pick-icon img pins every child image to 64px; the badge must stay small. */
     .aug-pick-icon .destiny-icon .destiny-badge { width: 45%; height: 45%; }
