@@ -99,8 +99,16 @@ def test_rarity_switch_reuses_the_shared_slash_slab():
     js, css = _js(), _css()
     build = _between(js, "function buildChampAugTable", "function syncChampAugTable")
     assert 'class="aug-cat-bar aug-rarity-bar aug-tier-seg"' in build
-    assert "aug-cat-chip aug-rarity-chip rarity-${key}" in build and "data-aug-rarity" in build
-    assert "['kSilver', 'kGold', 'kPrismatic']" in build, "three cells, no All"
+    assert "aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}" in build and "data-aug-rarity" in build
+    # four cells in the 增幅池 filter's order and wording; the empty key is "All"
+    assert "[['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]" in build
+    # "All" is one merged grid ranked by the cross-rarity score, each id once
+    assert "seenIds" in build and 'data-score="${Number(e.score || 0)}"' in build
+    assert "'data-score'" in _between(js, "function syncChampAugTable", "function champAugCollapsedCount")
+    assert "getAttribute('data-aug-rarity') || ''" in js, "All must not fall back to Gold"
+    # the shared white "All" active state covers this row's data attribute; no 270px override left
+    assert css.count('[data-aug-rarity=""]') == 2
+    assert "270px" not in css
     for gone in (".aug-tier-seg-btn", "--hx-", "hextech"):
         assert gone not in css, gone
     assert "aug-tier-seg-btn" not in js

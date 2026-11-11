@@ -10199,7 +10199,7 @@
     html[data-embed] .detail-page .detail-main-tabs > .detail-tab-rail { display: none; }
 
     /* 增幅裝置 on the champion page.  The header row holds the rarity slab (the
-       shared .aug-rarity-bar look, three cells) on the left and the sort control
+       shared .aug-rarity-bar look, four cells) on the left and the sort control
        on the right; below it the tile grid.  Tiles: rank = icon = win rate >
        name > pick rate; description and games live in the hover tip and in the
        detail row a click opens under the tile's row. */
@@ -10211,8 +10211,7 @@
         gap: 8px 16px;
         margin-bottom: 10px;
     }
-    .aug-tier-top .aug-tier-seg { flex: 0 1 270px; margin: 0; }
-    html:not(.nfx-off) .aug-tier-top .aug-tier-seg.aug-rarity-bar { width: 270px; }
+    .aug-tier-top .aug-tier-seg { flex: 0 1 360px; margin: 0; }
     /* Sort, not filter: icon + label, then plain-text options split by hairlines;
        the chosen one is bright and carries a ↓ (high to low). */
     .aug-tile-sorts {
@@ -10997,7 +10996,7 @@ html:not(.nfx-off) :is(.aug-cat-chip,.chip.role-seg,.apool-role-chip,.role-seg):
 html:not(.nfx-off) .aug-rarity-chip.rarity-kPrismatic.is-active{--nfx-accent:#d36bff}
 html:not(.nfx-off) .aug-rarity-chip.rarity-kSilver.is-active{--nfx-accent:#c0c5cc}
 html:not(.nfx-off) .aug-rarity-chip.rarity-kGold.is-active{--nfx-accent:#f5c518;--nfx-accent-on:#141414}
-html:not(.nfx-off) :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-rarity-chip[data-champ-pool-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
+html:not(.nfx-off) :is([data-role-seg=""],.chip[data-role=""],.aug-rarity-chip[data-rarity=""],.aug-rarity-chip[data-champ-pool-rarity=""],.aug-rarity-chip[data-aug-rarity=""],.aug-cat-all,[data-apool-role=""]):is(.is-active,.active){
   background:var(--nfx-fg)!important;border-color:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ── Tier list / Pools = one slab split by a slash (esports scoreboard look) ── */
@@ -11032,7 +11031,7 @@ html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:first-child{clip-path:polygo
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:last-child{clip-path:polygon(14px 0,100% 0,100% 100%,0 100%);margin-right:0}
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:hover{color:var(--nfx-strong)!important;background:var(--nfx-slab-hover)!important}
 html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip.is-active{background:var(--nfx-accent)!important;color:var(--nfx-accent-on)!important}
-html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:is([data-rarity=""],[data-champ-pool-rarity=""]).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
+html:not(.nfx-off) .aug-rarity-bar .aug-rarity-chip:is([data-rarity=""],[data-champ-pool-rarity=""],[data-aug-rarity=""]).is-active{background:var(--nfx-fg)!important;color:var(--nfx-on-fg)!important}
 
 /* ===== Player history lookup =====
        One quiet secondary panel on Home. It uses the shared theme tokens and

@@ -3392,11 +3392,11 @@
 
     function buildChampAugTable(top, extraHtml = '', destinyItem = null) {
         const copy = tr();
-        const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
-            const r = RARITIES.find(x => x.key === key);
+        // Same slash slab and wording as the 增幅池 rarity filter; the empty key is
+        // "All" (every rarity in one grid, ranked together).
+        const seg = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']].map(([key, zh, en]) => {
             const on = key === champAugRarity;
-            // Same slash slab as the 增幅榜 rarity row (.aug-rarity-bar), minus "All".
-            return `<button type="button" class="aug-cat-chip aug-rarity-chip rarity-${key}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
+            return `<button type="button" class="aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(pickLang(zh, en))}</button>`;
         }).join('');
         const sortBtn = (key, label) => {
             const on = key === champAugSort;
@@ -3455,9 +3455,20 @@
                 ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'))}
                 <span class="aug-tile-extra">${extraHtml}</span>
             </div>`;
-        const panes = RARITIES.map(r => {
-            const entries = top[r.key] || [];
-            const tiles = entries.map((e, idx) => {
+        // "All" merges the three rarities, strongest first by the same shrunk
+        // score the per-rarity order uses (it is relative to this champion's
+        // average, so it compares across rarities); an id appears only once.
+        const seenIds = new Set();
+        const allItems = RARITIES.flatMap(r => (top[r.key] || []).map(e => ({ e, r })))
+            .filter(({ e }) => !seenIds.has(e.id) && seenIds.add(e.id))
+            .sort((a, b) => Number(b.e.score || 0) - Number(a.e.score || 0));
+        const paneSpecs = [
+            { key: '', items: allItems },
+            ...RARITIES.map(r => ({ key: r.key, items: (top[r.key] || []).map(e => ({ e, r })) })),
+        ];
+        const panes = paneSpecs.map(({ key: paneKey, items }) => {
+            const entries = items.map(it => it.e);
+            const tiles = items.map(({ e, r }, idx) => {
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
@@ -3491,7 +3502,7 @@
                 return `
                     <div class="aug-tile has-item-tip rarity-${r.css} is-${verdict}" role="button" tabindex="0" aria-expanded="false"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
-                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
+                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}" data-score="${Number(e.score || 0)}"
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tile-rank" aria-hidden="true"></span>
                         <span class="aug-tile-icon rarity-${r.css}">${cardIcon(e, v)}</span>
@@ -3509,8 +3520,8 @@
             // Three or fewer pairs past the sample floor reads as "not enough data".
             const enough = entries.length > 3;
             return `
-                <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
-                    ${enough ? `<div class="aug-tile-grid" data-rarity="${r.key}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
+                <div class="aug-tier-pane" data-rarity="${paneKey}"${paneKey === champAugRarity ? '' : ' hidden'}>
+                    ${enough ? `<div class="aug-tile-grid" data-rarity="${paneKey}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
                 </div>`;
         }).join('');
         return `
@@ -3535,18 +3546,21 @@
                 btn.classList.toggle('is-active', on);
                 btn.setAttribute('aria-pressed', String(on));
             });
-            const attr = 'data-' + champAugSort;
+            // Strength order inside one rarity is the data order; the merged "All"
+            // grid has to order by the score that order came from.
+            const sortAttr = (grid) => (champAugSort === 'rank' && grid.getAttribute('data-rarity') === '' ? 'data-score' : 'data-' + champAugSort);
             table.querySelectorAll('.aug-tier-pane').forEach(pane => {
                 pane.hidden = pane.getAttribute('data-rarity') !== champAugRarity;
             });
             table.querySelectorAll('.aug-tile-grid').forEach(grid => {
                 closeAugDetail(grid);
                 const tiles = Array.from(grid.querySelectorAll('.aug-tile'));
+                const attr = sortAttr(grid);
                 tiles.sort((a, b) => {
                     const av = Number(a.getAttribute(attr) || 0);
                     const bv = Number(b.getAttribute(attr) || 0);
-                    // Strength rank is ascending (0 = strongest); rates descend.
-                    if (av !== bv) return champAugSort === 'rank' ? av - bv : bv - av;
+                    // Strength rank is ascending (0 = strongest); scores and rates descend.
+                    if (av !== bv) return attr === 'data-rank' ? av - bv : bv - av;
                     return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
                 });
                 tiles.forEach((tile, i) => {
@@ -12202,7 +12216,7 @@
         }
         const augRarityBtn = ev.target.closest('[data-aug-rarity]');
         if (augRarityBtn) {
-            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
+            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || '';
             syncChampAugTable();
             trackEvent('aug_rarity_select', { rarity: champAugRarity });
             return;
