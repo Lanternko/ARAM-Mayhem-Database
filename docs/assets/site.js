@@ -3821,6 +3821,18 @@ const feedbackFab = document.querySelector('.feedback-fab');
     function apoolBlocked(data, cid) {
         return new Set((((data.observed || {}).blocked || {})[cid] || []).map(String));
     }
+    // Augments added after the frozen pool file that games show this champion
+    // holding. Their pool and weight are unknown (weight null on the page).
+    function apoolAdded(data, cid) {
+        const added = ((data || {}).observed || {}).added || {};
+        return Object.keys(added).filter(aid => (added[aid] || []).some(c => String(c) === String(cid)));
+    }
+    function apoolObservedPatch(data) {
+        const patches = (((data || {}).observed || {}).patches || []).slice();
+        return patches.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0] || '';
+    }
+    // Sort key for a pool weight; unknown (null) sorts after every real weight.
+    function apoolWeightRank(w) { return w == null ? -1 : w; }
     function championPoolEntries(cid, data, catalogue) {
         const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
         const blocked = apoolBlocked(data, cid);
@@ -3839,7 +3851,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 if (!entry.sources.some(source => source.pool.id === pool.id)) entry.sources.push({pool, weight});
             }
         }
-        return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
+        for (const aid of apoolAdded(data, cid)) {
+            if (!entries.has(aid)) entries.set(aid, {
+                id: aid, weight: null, added: true, category: championPoolCategory(augmentCats(aid, catalogue)), sources: [],
+            });
+        }
+        return [...entries.values()].sort((a, b) => apoolWeightRank(b.weight) - apoolWeightRank(a.weight) || Number(a.id) - Number(b.id));
     }
     function championPoolComplexity(cid, data, catalogue) {
         const count = championPoolEntries(cid, data, catalogue).length;
@@ -3920,7 +3937,7 @@ const feedbackFab = document.querySelector('.feedback-fab');
             }
             const grouped = new Map();
             list.forEach(e => {
-                const weight = apoolGrantRatio(e.weight);
+                const weight = e.added ? 1 : apoolGrantRatio(e.weight);
                 grouped.set(weight, (grouped.get(weight) || 0) + 1);
             });
             const groups = [...grouped].sort((a, b) => a[0] - b[0]);
@@ -3935,7 +3952,9 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 if (apoolEncounterCache.size >= 128) apoolEncounterCache.delete(apoolEncounterCache.keys().next().value);
                 apoolEncounterCache.set(cacheKey, byWeight);
             }
-            list.forEach(e => rates.set(e.id, byWeight.get(apoolGrantRatio(e.weight))));
+            // An added augment still competes for draws (assumed weight 100), but
+            // its own weight is unknown, so the page shows no cap for it.
+            list.forEach(e => { if (!e.added) rates.set(e.id, byWeight.get(apoolGrantRatio(e.weight))); });
         }
         return rates;
     }
@@ -3953,7 +3972,12 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const tags = augmentPurposeTags(augmentCats(entry.id, DATA.augs || {})).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
-        const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
+        const seenIn = apoolObservedPatch(augPools.data);
+        const sourceHtml = entry.added
+            ? `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><p>${escHtml(pickLang(
+                `池子公開資料之後才新增，所屬池子與權重未公開；${seenIn} 版對局中這位英雄拿過它。`,
+                `Added after the last published pool data; its pool and weight are unknown. This champion held it in patch ${seenIn} matches.`))}</p></div>`
+            : `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
         const baseTip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc}).trim();
         const tip = baseTip.replace('class="item-tip-card"', 'class="item-tip-card champ-pool-tip"')
             .replace('<div class="item-tip-desc">', statHtml + '<div class="item-tip-desc">')
@@ -4000,11 +4024,14 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
             const members = visibleEntries.filter(e => e.category === cat);
             if (!members.length) return '';
-            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => b - a);
+            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => apoolWeightRank(b) - apoolWeightRank(a));
             return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
                 + weights.map(weight => {
                     const list = members.filter(e => e.weight === weight).sort((a, b) => championPoolSort(a, b, statsById));
-                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById, offerRates)).join('')}</ul></div>`;
+                    const head = weight == null
+                        ? `${escHtml(pickLang('新增增幅', 'Added augments'))} <b>${escHtml(pickLang('權重未公開', 'weight unknown'))}</b>`
+                        : `${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b>`;
+                    return `<div class="champ-pool-weight-group${weight == null ? ' is-added' : ''}"><h4>${head}</h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById, offerRates)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         const complexity = championPoolComplexity(cid, d, DATA.augs || {});
@@ -4182,6 +4209,8 @@ const feedbackFab = document.querySelector('.feedback-fab');
         const blocked = apoolBlocked(d, cid);
         const union = new Set();
         rows.forEach(r => r.p.augs.forEach(a => { if (!blocked.has(String(a))) union.add(String(a)); }));
+        const addedIds = apoolAdded(d, cid).filter(a => !union.has(a));
+        addedIds.forEach(a => union.add(a));
         const c = apoolChamp(cid);
         // 175 sits too close to 150/200 to label on a phone; each row prints its value.
         const ticks = [75, 100, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
@@ -4195,15 +4224,17 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 + `</button>`
                 + (open ? apoolAugListHtml(r.p, blocked) : '')
                 + `</li>`;
-        }).join('');
+        }).join('') + apoolAddedRowHtml(addedIds);
         return `<div class="apool-detail-head">`
             + (c.image ? `<img src="${escHtml(c.image)}" alt="" width="44" height="44">` : '')
             + `<div><h3 class="apool-detail-name">${escHtml(c.name)}</h3>`
             + `<p class="apool-detail-sub">${escHtml(pickLang(
                 `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`
-                    + (blocked.size ? `（已扣除 ${blocked.size} 種伺服器不給的）` : ''),
+                    + (blocked.size ? `（已扣除 ${blocked.size} 種伺服器不給的）` : '')
+                    + (addedIds.length ? `，含 ${addedIds.length} 種池子未公開的新增增幅` : ''),
                 `${rows.length} pools · up to ${union.size} augments`
-                    + (blocked.size ? ` (${blocked.size} the server withholds removed)` : '')))}</p></div></div>`
+                    + (blocked.size ? ` (${blocked.size} the server withholds removed)` : '')
+                    + (addedIds.length ? `, incl. ${addedIds.length} added augments with unknown pools` : '')))}</p></div></div>`
             + `<p class="apool-footnote">${escHtml(pickLang("權重越高，越容易抽到該池；數值不是機率。點選池子查看增幅。", "Higher weights favor a pool; values are not probabilities. Select a pool to see its augments."))}</p>`
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
@@ -4211,6 +4242,18 @@ const feedbackFab = document.querySelector('.feedback-fab');
             + `<p class="apool-footnote">${escHtml(pickLang(
                 '點任一列可展開該池的增幅，滑過或點增幅可看說明。',
                 'Select a row to list that pool’s augments; hover or tap an augment for its description.'))}</p>`;
+    }
+    function apoolAddedRowHtml(ids) {
+        if (!ids.length) return '';
+        const open = augPools.openRow === 'added';
+        return `<li class="apool-row-item apool-row-added${open ? ' is-open' : ''}">`
+            + `<button type="button" class="apool-row" data-apool-row="added" aria-expanded="${open}">`
+            + `<span class="apool-row-name">${escHtml(pickLang('池子公開後新增', 'Added since'))}<span class="apool-tag">${escHtml(pickLang('池子未公開', 'pool unknown'))}</span></span>`
+            + `<span class="apool-bar apool-bar-unknown"></span>`
+            + `<span class="apool-w">?<span class="apool-chevron" aria-hidden="true">${open ? "−" : "+"}</span></span>`
+            + `</button>`
+            + (open ? apoolAugListHtml({augs: ids}) : '')
+            + `</li>`;
     }
     function apoolPoolBtnHtml(p) {
         const on = p.id === augPools.openPool;
@@ -4276,7 +4319,19 @@ const feedbackFab = document.querySelector('.feedback-fab');
                     + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang(zh, en))}<span class="apool-family-count">${list.length}</span></span><span class="apool-family-desc">${escHtml(pickLang(dzh, den))}</span></summary>`
                     + `<div class="apool-family-body">` + inner + (open ? apoolPoolDetailHtml(open) : '')
                     + `</div></details>`;
-            }).join('');
+            }).join('') + apoolAddedFamilyHtml(d);
+    }
+    function apoolAddedFamilyHtml(d) {
+        const added = ((d || {}).observed || {}).added || {};
+        const ids = Object.keys(added).sort((a, b) => apoolAug(a).name.localeCompare(apoolAug(b).name));
+        if (!ids.length) return '';
+        const patch = apoolObservedPatch(d);
+        return `<details class="apool-family" data-apool-family="added">`
+            + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang('池子公開後新增', 'Added since'))}<span class="apool-family-count">${ids.length}</span></span>`
+            + `<span class="apool-family-desc">${escHtml(pickLang(
+                `${d.patch} 版之後才出現的增幅，不屬於任何公開池子；依 ${patch} 版對局列出，權重未知。`,
+                `Augments that appeared after patch ${d.patch} and belong to no published pool; listed from patch ${patch} matches, weights unknown.`))}</span></summary>`
+            + `<div class="apool-family-body">${apoolAugListHtml({augs: ids})}</div></details>`;
     }
     function apoolDiffHtml(d) {
         const df = d.diff;
@@ -4317,7 +4372,18 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (!since) return '';
         return `<p class="apool-frozen">${escHtml(pickLang(
             `Riot 從 ${since} 版起不再把增幅池和權重放進遊戲檔，改由伺服器決定，所以這頁停在最後一份公開資料（${d.patch} 版）。之後的改動無法從遊戲檔得知，實際抽到的增幅可能已經不同。`,
-            `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`;
+            `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`
+            + apoolObservedNoteHtml(d);
+    }
+    // Present when the frozen pools were re-checked against newer matches.
+    function apoolObservedNoteHtml(d) {
+        const obs = (d || {}).observed || {};
+        const patch = apoolObservedPatch(d);
+        if (!patch || patch === d.patch) return '';
+        const dead = (obs.dead || []).length, added = Object.keys(obs.added || {}).length;
+        return `<p class="apool-frozen">${escHtml(pickLang(
+            `已用 ${patch} 版對局校正：移除 ${dead} 個已不再出現的增幅，另列 ${added} 個之後新增的增幅（只知道哪些英雄拿得到，不知道權重）。`,
+            `Checked against patch ${patch} matches: ${dead} augments that no longer appear are removed, and ${added} augments added since are listed (who can get them is known, their weight is not).`))}</p>`;
     }
     function apoolNotesHtml(d, champion = false) {
         // All interpolated data is escaped before adding emphasis.
@@ -4340,6 +4406,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
                 + text(' 場 Mayhem；排除 ', ' Mayhem matches; excluded ')
                 + strong(Number(pairs).toLocaleString()) + text(' 組疑似受限搭配', ' likely restricted pairs')
                 + (dead ? text('、', ' and ') + strong(dead) + text(' 個失效增幅。', ' obsolete augments.') : text('。', '.'))]);
+            const added = Object.keys(obs.added || {}).length;
+            if (added) notes.push([pickLang('新增增幅', 'Added augments'),
+                strong(added) + text(' 個增幅不在公開池子裡，依對局列出拿得到的英雄；權重未知，不計算出現上界。',
+                    ' augments are in no published pool; champions are listed from matches. Weight unknown, so no encounter cap is computed.')]);
         }
         notes.push([pickLang('清單限制', 'List limits'), text(obs
             ? '樣本不足的搭配仍保留，冷門英雄的清單可能偏多。'

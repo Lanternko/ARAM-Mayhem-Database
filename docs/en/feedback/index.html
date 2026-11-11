@@ -7372,6 +7372,7 @@
     .apool-row-name .apool-tag { display: inline-block; margin-left: 6px; }
     .apool-bar { position: relative; height: 8px; overflow: hidden; border-radius: 4px; background: var(--apool-track); }
     .apool-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--apool-bar); }
+    .apool-bar-unknown { background: repeating-linear-gradient(135deg, var(--apool-track) 0 4px, transparent 4px 8px); }
     .apool-w { white-space: nowrap; font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
     .apool-row[data-hue] .apool-w {
         color: color-mix(in oklab, var(--apool-bar) 70%, var(--text));
@@ -9992,6 +9993,7 @@
 .champ-pool-weight-group { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
 .champ-pool-weight-group > h4 { margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: var(--text-muted); }
 .champ-pool-weight-group > h4 b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.champ-pool-weight-group.is-added > h4 b { font-size: 13px; color: var(--text-muted); }
 .champ-pool-weight-group > ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px 12px; list-style: none; margin: 0; padding: 0; }
 .champ-pool-augment { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 48px; text-align: left; padding: 6px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
 .champ-pool-augment img { flex: 0 0 32px; width: 32px; height: 32px; }
