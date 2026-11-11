@@ -169,3 +169,14 @@ def test_tile_tip_and_detail_row_carry_the_pick_round_strip():
     assert "var(--wr-5)" in css and ".aug-slots.is-tile .aug-pt.wr-1" in css
     scoped = _between(css, "/* 第幾選 block inside a tile's hover tip", "@media (prefers-reduced-motion")
     assert not re.search(r"#[0-9a-fA-F]{3,6}\b", scoped)
+
+
+def test_sister_tabs_sit_close_with_a_short_divider():
+    css = _css()
+    block = _between(css, "/* Sister tabs (增幅裝置 | 增幅池)", ".detail-tabset > .detail-tab-input:nth-of-type(1):focus-visible")
+    # no list gap between the pair, 8px inner padding on both sides
+    assert ".detail-tab-label:has(+ .is-group-start)" in block and "padding-right: 8px" in block
+    assert "margin-left: -6px" in block and "padding-left: 8px" in block
+    # the "|" is short and vertically centered, not the full tab height
+    divider = _between(block, ".detail-tab-label.is-group-start::before", "}")
+    assert "height: 13px" in divider and "top: 50%" in divider and "bottom" not in divider
