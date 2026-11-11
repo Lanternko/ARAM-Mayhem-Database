@@ -168,6 +168,9 @@ DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without
 # item actually pays off; 60 games there let a short streak flip the pick.  150
 # keeps most of the champion coverage while making the sign stable.
 DESTINY_MIN_DESTINY_GAMES = 150
+# Never recommended next to 命定武器, though they still count toward the
+# legendary-item strata: 究極九頭蛇 (226668) is not a pick players can aim for.
+DESTINY_EXCLUDED_ITEM_IDS = frozenset({226668})
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "oblivion orb",
@@ -3916,6 +3919,8 @@ def compute_champ_destiny_items(
 
     ranked: dict[int, list[dict]] = {}
     for (cid, item_id), held in cells.items():
+        if item_id in DESTINY_EXCLUDED_ITEM_IDS:
+            continue
         n_yes = sum(held[4 * k + 3] for k in range(7))
         n_no = sum(held[4 * k + 1] for k in range(7))
         if n_yes < min_destiny_games or n_no < min_side_games:
