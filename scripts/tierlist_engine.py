@@ -169,8 +169,9 @@ DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without
 # keeps most of the champion coverage while making the sign stable.
 DESTINY_MIN_DESTINY_GAMES = 150
 # Never recommended next to 命定武器, though they still count toward the
-# legendary-item strata: 究極九頭蛇 (226668) is not a pick players can aim for.
-DESTINY_EXCLUDED_ITEM_IDS = frozenset({226668})
+# legendary-item strata: these 6000-gold upgraded items (究極九頭蛇 226668,
+# 虛空獻祭 223069, 烏莉特的法帽 228002) are not picks players can aim for.
+DESTINY_EXCLUDED_ITEM_IDS = frozenset({223069, 226668, 228002})
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "oblivion orb",
