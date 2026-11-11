@@ -2780,7 +2780,7 @@
         let topLimit = margin;
         const table = anchor.closest('.aug-tier-table');
         if (table) {
-            table.querySelectorAll('.aug-tier-top, .aug-tier-pane:not([hidden]) .aug-tile-sorts').forEach(bar => {
+            table.querySelectorAll('.aug-tier-top').forEach(bar => {
                 const b = bar.getBoundingClientRect();
                 if (b.height && b.bottom <= rect.top + 1 && b.bottom > topLimit - 4) topLimit = b.bottom + 4;
             });
@@ -3383,10 +3383,11 @@
         mid: ['普通', 'Fine'],
         bad: ['避開', 'Avoid'],
     };
-    function champAugBadge(verdict) {
+    /** Plain-text verdict word for good / bad (the tile itself shows it as material, not a badge). */
+    function champAugVerdictWord(verdict) {
         if (verdict !== 'good' && verdict !== 'bad') return '';
-        const words = CHAMP_AUG_VERDICT_WORDS[verdict] || CHAMP_AUG_VERDICT_WORDS.mid;
-        return `<span class="aug-verdict is-${verdict}">${escHtml(pickLang(words[0], words[1]))}</span>`;
+        const words = CHAMP_AUG_VERDICT_WORDS[verdict];
+        return pickLang(words[0], words[1]);
     }
 
     function buildChampAugTable(top, extraHtml = '', destinyItem = null) {
@@ -3394,11 +3395,12 @@
         const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
             const r = RARITIES.find(x => x.key === key);
             const on = key === champAugRarity;
-            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
+            // Same slash slab as the 增幅榜 rarity row (.aug-rarity-bar), minus "All".
+            return `<button type="button" class="aug-cat-chip aug-rarity-chip rarity-${key}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(copy.rarityLabels[key])}</button>`;
         }).join('');
         const sortBtn = (key, label) => {
             const on = key === champAugSort;
-            return `<button type="button" class="aug-tile-sort${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
+            return `<button type="button" class="aug-tile-sort${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}<span class="aug-sort-dir" aria-hidden="true">↓</span></button>`;
         };
         const augView = (e) => {
             const aug = DATA.augs[e.id];
@@ -3444,14 +3446,13 @@
         };
         const cardIcon = (e, v) => (isDestiny(e) ? destinyIcon(v) : iconHtml(v));
         const withDestiny = (e, label) => (isDestiny(e) ? `${label} · ${destinyText()}` : label);
-        // Each rarity pane repeats the sort chips so they sit right above its grid.
-        const head = `
-            <div class="aug-tile-sorts">
-                <div class="aug-tile-sort-group" role="group" aria-label="${escHtml(pickLang('排序', 'Sort'))}">
-                    ${sortBtn('rank', pickLang('推薦順序', 'Recommended'))}
-                    ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'))}
-                    ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'))}
-                </div>
+        // One sort control for the whole table, at the right end of the rarity row.
+        const sorts = `
+            <div class="aug-tile-sorts" role="group" aria-label="${escHtml(pickLang('排序', 'Sort'))}">
+                <span class="aug-sort-label"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5v11M1.8 11.3 4 13.5l2.2-2.2M10 3h5M10 7h3.5M10 11h2"/></svg>${escHtml(pickLang('排序', 'Sort'))}</span>
+                ${sortBtn('rank', pickLang('推薦順序', 'Recommended'))}
+                ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'))}
+                ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'))}
                 <span class="aug-tile-extra">${extraHtml}</span>
             </div>`;
         const panes = RARITIES.map(r => {
@@ -3460,14 +3461,14 @@
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
-                const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc));
-                const badge = champAugBadge(verdict);
+                const verdictWord = champAugVerdictWord(verdict);
+                const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc)) + (verdictWord ? ` · ${verdictWord}` : '');
                 // Detail row content, shown when the tile is opened.
                 const detail = `
                     <div class="aug-detail-head">
                         <b class="aug-detail-name">${escHtml(v.name)}</b>
                         ${v.setName ? `<em class="aug-detail-set">${escHtml(v.setName)}</em>` : ''}
-                        ${badge}
+                        ${verdictWord ? `<span class="aug-detail-verdict is-${verdict}">${escHtml(verdictWord)}</span>` : ''}
                     </div>
                     ${v.desc ? `<p class="aug-detail-desc">${formatDescriptionInlineHtml(v.desc)}</p>` : ''}
                     ${isDestiny(e) ? `<p class="aug-detail-destiny">${destinyTextHtml()}</p>` : ''}
@@ -3493,7 +3494,6 @@
                         data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
                         aria-label="${escHtml(ariaLabel)}">
                         <span class="aug-tile-rank" aria-hidden="true"></span>
-                        ${badge ? `<span class="aug-tile-badge">${badge}</span>` : ''}
                         <span class="aug-tile-icon rarity-${r.css}">${cardIcon(e, v)}</span>
                         <span class="aug-tile-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
                         <span class="aug-tile-name">${escHtml(v.name)}</span>
@@ -3510,13 +3510,14 @@
             const enough = entries.length > 3;
             return `
                 <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
-                    ${enough ? `${head}<div class="aug-tile-grid" data-rarity="${r.key}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
+                    ${enough ? `<div class="aug-tile-grid" data-rarity="${r.key}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
                 </div>`;
         }).join('');
         return `
             <div class="aug-tier-table">
                 <div class="aug-tier-top">
-                    <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                    <div class="aug-cat-bar aug-rarity-bar aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                    ${sorts}
                 </div>
                 ${panes}
             </div>`;

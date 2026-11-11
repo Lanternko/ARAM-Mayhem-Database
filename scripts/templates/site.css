@@ -10198,114 +10198,62 @@
     html[data-embed] .champ-page-host { padding: 12px 14px 24px; }
     html[data-embed] .detail-page .detail-main-tabs > .detail-tab-rail { display: none; }
 
-    /* 增幅裝置 on the champion page: rarity plates + tile grid.  The plates are the
-       desktop overlay's square hextech buttons (augment_overlay.py LOW_KEY and the
-       _highlight themes) in pure CSS: 1px rim (brighter on top), 1px inner line,
-       top→bottom body, sheen under the top edge, darker lip along the bottom.
-       They stay dark in the light theme, like the overlay they copy. */
+    /* 增幅裝置 on the champion page.  The header row holds the rarity slab (the
+       shared .aug-rarity-bar look, three cells) on the left and the sort control
+       on the right; below it the tile grid.  Tiles: rank = icon = win rate >
+       name > pick rate; description and games live in the hover tip and in the
+       detail row a click opens under the tile's row. */
     .aug-tier-table { margin-top: 10px; }
-    .aug-tier-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .aug-tier-seg {
+    .aug-tier-top {
         display: flex;
         align-items: center;
-        gap: 8px;
-        flex: 1 1 auto;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-bottom: 10px;
     }
-    .aug-tier-seg-btn {
-        --hx-rim: 70 76 86;
-        --hx-rim-hi: 98 104 114;
-        --hx-inner: 6 8 10;
-        --hx-top: 22 25 30;
-        --hx-bottom: 9 11 14;
-        --hx-sheen: 32 36 42;
-        --hx-lip: 5 7 8;
-        --hx-glow: transparent;
-        --hx-ink: 150 152 160;
-        height: 32px;
-        padding: 0 16px;
-        border: 1px solid rgb(var(--hx-rim));
-        border-top-color: rgb(var(--hx-rim-hi));
-        border-radius: 0;
-        background: linear-gradient(to bottom, rgb(var(--hx-top)), rgb(var(--hx-bottom)));
-        box-shadow:
-            inset 0 0 0 1px rgb(var(--hx-inner)),
-            inset 0 2px 0 0 rgb(var(--hx-sheen)),
-            inset 0 -3px 0 0 rgb(var(--hx-lip)),
-            0 0 7px var(--hx-glow);
-        color: rgb(var(--hx-ink));
-        font: inherit;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: .02em;
-        cursor: pointer;
-        transition: border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
-    }
-    .aug-tier-seg-btn:hover {
-        border-color: rgb(var(--hx-rim-hi));
-        color: rgb(240 230 200);
-    }
-    /* Selected plate = _highlight(): tinted fill, pastel rim, tight glow. */
-    .aug-tier-seg-btn.is-active {
-        --hx-inner: 14 11 6;
-        --hx-lip: 24 19 11;
-        --hx-glow: rgb(var(--hx-rim) / .45);
-        border-color: rgb(var(--hx-rim));
-        border-top-color: rgb(var(--hx-rim-hi));
-        color: rgb(var(--hx-ink));
-    }
-    /* Gold = THEMES["champagne"]; silver and prismatic reuse its structure
-       (the overlay has no cool-grey or pure-purple theme of its own). */
-    .aug-tier-seg-btn.rarity-gold.is-active {
-        --hx-rim: 236 210 158; --hx-rim-hi: 252 236 200; --hx-top: 84 68 42; --hx-bottom: 40 32 18;
-        --hx-sheen: 110 90 58; --hx-ink: 240 224 190;
-    }
-    .aug-tier-seg-btn.rarity-silver.is-active {
-        --hx-rim: 176 190 204; --hx-rim-hi: 214 224 234; --hx-top: 58 66 76; --hx-bottom: 26 30 36;
-        --hx-sheen: 84 94 106; --hx-ink: 226 232 240;
-        --hx-inner: 9 11 13; --hx-lip: 16 18 22;
-    }
-    .aug-tier-seg-btn.rarity-prismatic.is-active {
-        --hx-rim: 190 150 255; --hx-rim-hi: 222 200 255; --hx-top: 66 48 96; --hx-bottom: 30 20 46;
-        --hx-sheen: 96 74 134; --hx-ink: 232 220 255;
-        --hx-inner: 11 7 16; --hx-lip: 18 12 28;
-    }
-    .aug-tier-seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-    /* Tile grid: every augment is one same-size square.  Priority is rank =
-       icon = win rate > name > pick rate; description and games live in the
-       hover tip and in the detail row a click opens under the tile's row. */
+    .aug-tier-top .aug-tier-seg { flex: 0 1 270px; margin: 0; }
+    html:not(.nfx-off) .aug-tier-top .aug-tier-seg.aug-rarity-bar { width: 270px; }
+    /* Sort, not filter: icon + label, then plain-text options split by hairlines;
+       the chosen one is bright and carries a ↓ (high to low). */
     .aug-tile-sorts {
         position: relative;
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 8px;
-        margin: 0 0 10px;
+        gap: 2px 0;
+        margin-left: auto;
     }
-    .aug-tile-sort-group { display: flex; flex-wrap: wrap; gap: 6px; }
+    .aug-sort-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-right: 10px;
+        color: var(--text-dim);
+        font-size: 12px;
+    }
     .aug-tile-sort {
-        min-height: 30px;
-        padding: 0 12px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
+        min-height: 28px;
+        padding: 0 11px;
+        border: 0;
+        border-left: 1px solid var(--border);
+        border-radius: 0;
         background: transparent;
         color: var(--text-muted);
         font: inherit;
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 12.5px;
+        font-weight: 600;
         cursor: pointer;
     }
-    .aug-tile-sort:hover { border-color: var(--border-strong); color: var(--text); }
-    .aug-tile-sort.is-active {
-        border-color: var(--accent);
-        background: color-mix(in oklab, var(--accent) 14%, transparent);
-        color: var(--accent);
-    }
-    [data-theme="light"] .aug-tile-sort.is-active { color: var(--accent-soft); }
-    .aug-tile-extra { display: inline-flex; align-items: center; }
-    /* Even an invisible centered tooltip can widen the viewport. */
+    .aug-tile-sort:hover { color: var(--text); }
+    .aug-tile-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .aug-tile-sort.is-active { color: var(--text); font-weight: 800; }
+    .aug-sort-dir { display: none; margin-left: 3px; }
+    .aug-tile-sort.is-active .aug-sort-dir { display: inline; }
+    .aug-tile-extra { display: inline-flex; align-items: center; margin-left: 4px; }
+    /* The help bubble now sits at the right edge: open it leftwards from there. */
     .aug-tile-extra .meta-help-tip {
-        left: 0;
+        left: auto;
+        right: 0;
         transform: none;
         max-width: calc(100vw - 24px);
     }
@@ -10338,6 +10286,14 @@
     .aug-tile.rarity-silver { --rar: #c9d1dc; }
     .aug-tile.rarity-gold { --rar: #f0c14b; }
     .aug-tile.rarity-prismatic { --rar: #d7a8ff; }
+    /* The verdict is carried by the tile's material, not a sticker: recommended
+       tiles are a touch brighter and greener, avoid tiles sink (see below). */
+    .aug-tile.is-good {
+        border-color: color-mix(in srgb, var(--wr-5) 40%, transparent);
+        background: linear-gradient(to bottom,
+            color-mix(in oklab, var(--wr-5) 10%, var(--surface)),
+            color-mix(in oklab, var(--wr-5) 5%, var(--surface)));
+    }
     .aug-tile:hover { border-color: color-mix(in oklab, var(--rar) 45%, var(--border)); }
     .aug-tile:focus-visible {
         outline: 2px solid var(--accent);
@@ -10425,6 +10381,24 @@
     .aug-tile:not(.is-podium):not(.is-good):is(:hover, :focus-visible, [aria-expanded="true"]) .aug-tile-pick {
         color: var(--text-muted);
     }
+    /* Avoid: sunk deeper than the neutral plate: flatter and darker with a hint
+       of red, fainter icon and text, and a dim rank number as the quiet mark.
+       The win rate keeps its own red.  Looking at the tile lifts it again. */
+    .aug-tile.is-bad:not(.is-podium) {
+        border-color: color-mix(in srgb, var(--border) 30%, transparent);
+        background: color-mix(in oklab, var(--wr-1) 5%, color-mix(in oklab, var(--bg) 45%, var(--surface)));
+    }
+    .aug-tile.is-bad:not(.is-podium) .aug-tile-icon { opacity: .45; filter: saturate(.3); }
+    .aug-tile.is-bad:not(.is-podium) .aug-tile-name,
+    .aug-tile.is-bad:not(.is-podium) .aug-tile-rank {
+        color: color-mix(in oklab, var(--text-muted) 65%, var(--surface));
+    }
+    .aug-tile.is-bad:not(.is-podium):is(:hover, :focus-visible, [aria-expanded="true"]) {
+        background: var(--surface);
+    }
+    .aug-tile.is-bad:not(.is-podium):is(:hover, :focus-visible, [aria-expanded="true"]) .aug-tile-rank {
+        color: var(--text-muted);
+    }
     .aug-tile-rank {
         position: absolute;
         top: 5px;
@@ -10435,8 +10409,6 @@
         font-variant-numeric: tabular-nums;
         line-height: 1;
     }
-    .aug-tile-badge { position: absolute; top: 3px; right: 3px; line-height: 1; }
-    .aug-tile-badge .aug-verdict { padding: 1px 5px; font-size: 10px; line-height: 1.4; }
     .aug-tile-icon {
         display: grid;
         place-items: center;
@@ -10505,6 +10477,9 @@
         font-style: normal;
         font-weight: 600;
     }
+    .aug-detail-verdict { color: var(--text-muted); font-size: 12px; font-weight: 700; }
+    .aug-detail-verdict.is-good { color: var(--wr-5); }
+    .aug-detail-verdict.is-bad { color: var(--wr-1); }
     .aug-detail-desc {
         margin: 6px 0 0;
         color: var(--text-muted);
@@ -10573,8 +10548,6 @@
         color: var(--text-muted);
         background: color-mix(in oklab, var(--text-muted) 14%, transparent);
     }
-    .aug-verdict.is-good { color: var(--wr-5); background: color-mix(in oklab, var(--wr-5) 16%, transparent); }
-    .aug-verdict.is-bad { color: var(--wr-1); background: color-mix(in oklab, var(--wr-1) 16%, transparent); }
     /* 命定武器 (3081): the recommended legendary item fills the icon slot and the
        augment sits on top as a small badge.  The badge is deliberately allowed to
        hang a few px past the frame (badge/insignia reading, not a second tile). */

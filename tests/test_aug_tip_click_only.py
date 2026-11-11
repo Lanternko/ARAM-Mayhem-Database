@@ -95,17 +95,31 @@ def test_champion_augments_render_as_tile_grid_with_detail_row():
     assert detail and "grid-column: 1 / -1;" in detail.group(1)
 
 
-def test_rarity_buttons_are_square_hextech_plates():
-    css = _css()
-    base = re.search(r"\.aug-tier-seg-btn\s*\{([^}]*)\}", css)
-    assert base, "missing .aug-tier-seg-btn rule"
-    body = base.group(1)
-    assert "border-radius: 0;" in body and "linear-gradient(to bottom" in body
-    assert body.count("inset") >= 3, "inner line, sheen and lip are inset shadows"
-    assert "--hx-rim: 70 76 86;" in body, "unselected plate is the overlay's LOW_KEY"
-    assert "--hx-rim: 236 210 158;" in css, "gold plate is the overlay's champagne theme"
-    assert "text-decoration" not in body and "border-bottom" not in body
-    assert not re.search(r"\[data-theme=\"light\"\]\s*\.aug-tier-seg-btn", css), "plates stay dark in light theme"
+def test_rarity_switch_reuses_the_shared_slash_slab():
+    js, css = _js(), _css()
+    build = _between(js, "function buildChampAugTable", "function syncChampAugTable")
+    assert 'class="aug-cat-bar aug-rarity-bar aug-tier-seg"' in build
+    assert "aug-cat-chip aug-rarity-chip rarity-${key}" in build and "data-aug-rarity" in build
+    assert "['kSilver', 'kGold', 'kPrismatic']" in build, "three cells, no All"
+    for gone in (".aug-tier-seg-btn", "--hx-", "hextech"):
+        assert gone not in css, gone
+    assert "aug-tier-seg-btn" not in js
+
+
+def test_verdict_is_material_not_badge_and_sort_sits_beside_rarity():
+    js, css = _js(), _css()
+    build = _between(js, "function buildChampAugTable", "function syncChampAugTable")
+    assert "champAugBadge" not in js and "aug-tile-badge" not in js + css
+    assert "aug-verdict" not in build
+    assert "const verdictWord = champAugVerdictWord(verdict);" in build
+    assert "(verdictWord ? ` · ${verdictWord}` : '')" in build, "verdict stays in the aria-label"
+    for sel in (".aug-tile.is-good {", ".aug-tile.is-bad:not(.is-podium) {"):
+        assert sel in css, sel
+    # sort lives inside the single header row, once per table, as a labelled group
+    top = build[build.index('<div class="aug-tier-top">'):]
+    assert "${sorts}" in top.split("${panes}")[0]
+    assert build.count('class="aug-tile-sorts"') == 1 and 'role="group"' in build
+    assert "aug-sort-dir" in build and "aria-pressed" in build
 
 
 def test_top_three_of_every_sort_are_featured_and_the_rest_fade():
@@ -120,7 +134,7 @@ def test_tile_tip_sits_beside_the_tile_and_stays_in_view():
     js = _js()
     pos = _between(js, "function positionAugTileTip", "function positionItemFloatTip")
     assert "'right'" in pos and "'left'" in pos
-    assert ".aug-tier-top" in pos and ".aug-tile-sorts" in pos
+    assert ".aug-tier-top" in pos
     assert "if (anchor.matches('.aug-tile')) {" in _between(js, "function positionItemFloatTip", "function showItemFloatTip")
 
 
