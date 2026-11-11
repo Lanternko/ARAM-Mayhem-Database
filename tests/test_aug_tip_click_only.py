@@ -1,4 +1,4 @@
-"""Augment tips open on click only and never steal pointer input while hovered."""
+"""Champion-page augment tiles: hover tip for mouse, detail row for click/touch; tips never steal pointer input."""
 import re
 from pathlib import Path
 
@@ -23,18 +23,24 @@ def _between(text, start, end):
     return text[i:j]
 
 
-def test_hover_handler_skips_augment_hosts_and_respects_pinning():
+def test_hover_handler_skips_touch_and_open_tiles_and_respects_pinning():
     hover = _between(
         _js(),
         "// Rich item float-tip: show on hover/focus of any .has-item-tip host.",
         "document.addEventListener('mouseout'",
     )
     assert "if (_itemFloatTipPinned || _itemFloatTipDismissed) return;" in hover
-    assert "if (host.matches('.aug-pick-card, .aug-tier-row')) return;" in hover
+    skip = "if (host.matches('.aug-tile') && (_augTouchInput || host.getAttribute('aria-expanded') === 'true')) return;"
+    assert skip in hover
     # The skip must happen before the tip is shown.
-    assert hover.index("host.matches('.aug-pick-card, .aug-tier-row')") < hover.index(
-        "showItemFloatTip(host)"
-    )
+    assert hover.index(skip) < hover.index("showItemFloatTip(host)")
+
+
+def test_tile_focus_only_shows_tip_for_keyboard_focus():
+    js = _js()
+    start = js.index("host.matches('.aug-tile') && !host.matches(':focus-visible')")
+    focus = js[start:js.index("document.addEventListener('focusout'", start)]
+    assert "host.matches('.aug-tile') && !host.matches(':focus-visible')" in focus
 
 
 def test_click_handler_pins_and_hide_unpins():
@@ -70,6 +76,26 @@ def test_no_other_visible_tip_rule_reenables_pointer_events():
 
 def test_augment_hosts_show_pointer_cursor():
     css = _css()
-    rule = re.search(r"\.aug-pick-card\.has-item-tip,\s*\.aug-tier-row\.has-item-tip\s*\{([^}]*)\}", css)
-    assert rule, "missing aug cursor rule"
+    rule = re.search(r"\.aug-tile\s*\{([^}]*)\}", css)
+    assert rule, "missing .aug-tile rule"
     assert "cursor: pointer;" in rule.group(1)
+
+
+def test_champion_augments_render_as_tile_grid_with_detail_row():
+    js, css = _js(), _css()
+    for gone in ("aug-pick-card", "aug-pick-cards", "aug-tier-row", "aug-tier-head", "is-podium' : ''}"):
+        assert gone not in js, gone
+    assert "const CHAMP_AUG_COLLAPSED = 24;" in js
+    assert 'aria-expanded="false"' in _between(js, "function buildChampAugTable", "function syncChampAugTable")
+    assert "aria-expanded" in _between(js, "function toggleAugTile", "window.addEventListener('resize'")
+    grid = re.search(r"\.aug-tile-grid\s*\{([^}]*)\}", css)
+    assert grid and "repeat(auto-fill, minmax(104px, 1fr))" in grid.group(1)
+    detail = re.search(r"\.aug-detail\s*\{([^}]*)\}", css)
+    assert detail and "grid-column: 1 / -1;" in detail.group(1)
+
+
+def test_tile_click_is_routed_to_detail_row_not_tip_pin():
+    js = _js()
+    assert "toggleAugTile(augTile);" in js
+    # role=button hosts are skipped by the tip-pinning click handler.
+    assert "closest('button, a, [role=\"button\"]')" in js
