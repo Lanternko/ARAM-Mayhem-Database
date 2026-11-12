@@ -10360,6 +10360,10 @@
     .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon img,
     .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon .aicon-ph,
     .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon .destiny-icon { width: 84px; height: 84px; }
+    /* The podium rules above size every img in the icon, the 命定武器 badge
+       included; without this the augment badge covers the recommended item. */
+    .aug-tile.is-podium .aug-tile-icon .destiny-icon .destiny-badge,
+    .aug-tile-grid.is-wide-podium .aug-tile.is-podium .aug-tile-icon .destiny-icon .destiny-badge { width: 45%; height: 45%; }
     /* Everything not recommended steps back: icon, name and pick fade, the win
        rate stays at full strength.  Looking at a tile brings it back. */
     .aug-tile:not(.is-podium):not(.is-good) {
