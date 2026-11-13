@@ -71,8 +71,11 @@ $argsList = @(
     # LCU (~1.5s/ID) the sweep managed ~9k/h and fell a day behind.  SGP answers
     # the same 404/200 verdicts in ~0.2s, so 4 rps x 6 in flight (~14.4k IDs/h)
     # outpaces allocation and lets the cursor catch up to the lag frontier.
+    # 2026-11-14: 4 -> 6.  At 4 rps the forward sweep alone used the whole budget
+    # at evening peak (fell to 4.6h behind), so the descending backfill stalled;
+    # sgp_429 had stayed 0 at ~6 rps total SGP.  Watch sgp_429/lcu_fallback.
     "--id-gap-source", "sgp",
-    "--id-gap-rps", "4",
+    "--id-gap-rps", "6",
     "--id-gap-concurrency", "6",
     # 6500, raised from 4200.  This gate only blocks STARTING workers; ones already
     # running are left alone, so the old value created a trap -- workers were
