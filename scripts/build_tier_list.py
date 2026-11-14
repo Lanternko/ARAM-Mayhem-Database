@@ -205,10 +205,10 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
 @click.option("--reuse-model-artifacts", is_flag=True, default=False,
               help="Refresh current-patch statistics while reusing cached empirical profiles "
                    "and team-score artifacts; useful when only the data payload changed.")
-@click.option("--patch-extract", "use_patch_extract", is_flag=True, default=False,
+@click.option("--patch-extract/--no-patch-extract", "use_patch_extract", default=True,
               help="Scan the current patch from an incrementally synced slim local replica "
-                   "(data/cache/patch_extract) instead of re-reading games.db on every pass. "
-                   "Falls back to games.db if the replica cannot be synced.")
+                   "(data/cache/patch_extract) instead of re-reading games.db on every pass "
+                   "(default on). Falls back to games.db if the replica cannot be synced.")
 @click.option("--skip-patch-comparison", is_flag=True, default=False,
               help="Skip the expensive item/augment version-comparison tables for a data-only refresh.")
 @click.option(
