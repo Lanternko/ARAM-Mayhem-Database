@@ -11,7 +11,7 @@
 | 類型 | 用途 | Branch／生命週期 | Owner |
 |---|---|---|---|
 | Primary checkout | `main`、live harness anchor、整合與觀測 | 長期存在；保持可辨識，不拿來堆新 feature WIP | Repository owner |
-| Task worktree | 一個明確 source／docs／experiment change | 一個 `codex/<task>` branch；工作完成後驗證再清理 | 建立該 task 的 human／agent |
+| Task worktree | 一個明確 source／docs／experiment change | 一個 `<agent>/<task>` branch（`codex/` 或 `claude/`，依實際做事的工具）；工作完成後驗證再清理 | 建立該 task 的 human／agent |
 | Disposable automation worktree | 原子 build／publish | 從 `origin/main` detached 建立；單次結束即移除 | Harness only |
 
 Primary checkout 會被本機 watchdog、scripts 與資料路徑使用；直接在這裡改 source 可能讓 live process 載入未完成程式。一般修改優先放 task worktree。所有 task worktree 集中在 primary checkout 之外的 sibling workspace `D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\<task>`：在 repository 內會讓 nested repo 被工具或測試掃入，散在 `D:\Projects\CODING\` 頂層則會把 project root 洗成幾十個近似名稱的目錄。同一個 workspace 另外放 `backups\`（bundle／cutover 快照）與 history-rewrite clone，它們都不屬於 primary checkout 的 Git scope。
@@ -44,8 +44,9 @@ git log --oneline --decorate -5
 從最新 `origin/main` 建立一個 branch 對應一個 task：
 
 ```powershell
+$agent = "claude"   # 實際做事的工具：codex 或 claude
 $taskName = "short-task-name"
-$taskBranch = "codex/$taskName"
+$taskBranch = "$agent/$taskName"
 $taskWorktree = "D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\$taskName"
 
 git fetch --prune origin
@@ -92,7 +93,7 @@ git commit -m "Describe the intentional change"
 第一次發布 task branch：
 
 ```powershell
-git push -u origin codex/short-task-name
+git push -u origin <agent>/short-task-name
 ```
 
 後續只有在 relevant verification 通過、commit scope 沒有 DB、cache、log、credential 或 unrelated WIP 時才 `git push`。Push 被拒絕時回到 fetch＋rebase／merge decision，不 force push。
@@ -104,7 +105,7 @@ Source、docs、model 或 UI change 進 `main` 前必須完成 scope review 與�
 ```powershell
 git switch main
 git pull --ff-only origin main
-git merge --no-ff codex/short-task-name
+git merge --no-ff <agent>/short-task-name
 git status --short
 ```
 
@@ -118,7 +119,7 @@ Worktree cleanup 與 branch deletion 是兩個不同決策。先證明 worktree 
 
 ```powershell
 $taskWorktree = "D:\Projects\CODING\aram-winrate-nn-workspace\worktrees\short-task-name"
-$taskBranch = "codex/short-task-name"
+$taskBranch = "<agent>/short-task-name"
 
 git fetch --prune origin
 git -C $taskWorktree status --short

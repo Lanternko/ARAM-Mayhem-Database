@@ -67,7 +67,7 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 
 ## Operations and Change Control
 - 先辨識 canonical source、資料 owner 與正在跑的 process，再修改；生成檔、live SQLite、ignored local service assets 與使用者 WIP 有不同風險邊界。
-- 一個 task 使用一個 `codex/<task>` worktree；mutation 前先查 status 與現有 worktrees，因為 primary checkout 是 live harness anchor，dirty／stale worktree 不可被自動重用或清理。
+- 一個 task 使用一個 `<agent>/<task>` worktree（`<agent>` 是實際做事的工具：`codex` 或 `claude`，讓 branch 名稱反映作者）；mutation 前先查 status 與現有 worktrees，因為 primary checkout 是 live harness anchor，dirty／stale worktree 不可被自動重用或清理。
 - 研究輸出進 `outputs/<category>/`，長期報告進 `documents/reports/`，共用程式進 `src/aram_nn/`；放置與整理規則見 `runbooks/repo-hygiene.md`；不要讓 scratch script 變成隱性 production dependency。
 - Site publish 分 routine data、frontend shell、generator／schema 三條 lane；明確的 deploy／publish／ship／上線要求已授權相符的 build、commit、push，不再二次確認。GitHub Pages 是靜態發布，不會重啟 crawler、backend 或其他 runtime。
 - 變更驗證按風險分層：純文件做連結／結構檢查；資料與模型做 invariant＋held-out evidence；UI 做 code test＋雙 theme／多 viewport visual QA；live harness 變更再核對 task argv、state 與 recovery log。
