@@ -27,7 +27,7 @@ from urllib.parse import unquote
 FAIL, WARN, INFO = "FAIL", "WARN", "INFO"
 
 TOP_LEVEL_ALLOWLIST = frozenset(
-    ".claude .codex .github .gitignore AGENTS.md CLAUDE.md CONTRIBUTING.md DESIGN.md "
+    ".claude .codex .github .gitignore AGENTS.md CLAUDE.md CONTRIBUTING.md DESIGN.md LICENSE "
     "MODEL.md OPERATIONS.md PRODUCT.md README.md docs documents pyproject.toml uv.lock "
     "runbooks scripts src tests".split()
 )

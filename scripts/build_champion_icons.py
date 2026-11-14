@@ -16,7 +16,7 @@ Sources, largest first: HD wiki splash (docs/assets/draft-splash-hd, ~5760px),
 Riot Universe splash (often 1920px), DDragon splash (1215px).  The icon is
 matched in each; the largest source scoring >= GOOD_SCORE wins, else the best.
 Champions whose icon art is in no splash are cropped by hand in
-scripts/champion_icon_crops.json ({cid: {source, cx, cy, side}}, normalised:
+scripts/site_data/champion_icon_crops.json ({cid: {source, cx, cy, side}}, normalised:
 cx/side by width, cy by height; side is what the site should *show*, so it is
 widened by OLD_ZOOM to cancel the site's zoom).  Anything else that does not
 match falls back to the DDragon icon itself.
@@ -61,7 +61,7 @@ CIRCLE_SCALE = 1.0    # circle diameter relative to the square crop
 
 GOOD_SCORE = 0.80     # icon match this good is the same art; prefer the largest such source
 OLD_ZOOM = 1.14       # site CSS zoom on icons (114%, -7% margin): manual crops are widened by it
-CROPS = ROOT / "scripts" / "champion_icon_crops.json"
+CROPS = ROOT / "scripts" / "site_data" / "champion_icon_crops.json"
 
 
 @dataclass

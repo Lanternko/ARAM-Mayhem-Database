@@ -17,6 +17,7 @@
 | `README.md` `AGENTS.md` `CLAUDE.md` `CONTRIBUTING.md` | 入口與 agent context |
 | `PRODUCT.md` `MODEL.md` `DESIGN.md` `OPERATIONS.md` | 四份 owner 文件 |
 | `pyproject.toml` `uv.lock` `.gitignore` | 專案設定 |
+| `LICENSE` | MIT 授權（GitHub 只認頂層位置） |
 | `src/` | 共用程式（`aram_nn` package） |
 | `scripts/` | CLI 入口與 launcher |
 | `tests/` | 測試 |
