@@ -14,6 +14,7 @@ import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
+from aram_nn.site.patch_extract import register_scan_db, sync_patch_extract  # noqa: E402
 from aram_nn.site.static_publish import (  # noqa: E402
     DEFAULT_CF_ANALYTICS_TOKEN as PRODUCTION_CF_ANALYTICS_TOKEN,
 )
@@ -204,6 +205,10 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
 @click.option("--reuse-model-artifacts", is_flag=True, default=False,
               help="Refresh current-patch statistics while reusing cached empirical profiles "
                    "and team-score artifacts; useful when only the data payload changed.")
+@click.option("--patch-extract", "use_patch_extract", is_flag=True, default=False,
+              help="Scan the current patch from an incrementally synced slim local replica "
+                   "(data/cache/patch_extract) instead of re-reading games.db on every pass. "
+                   "Falls back to games.db if the replica cannot be synced.")
 @click.option("--skip-patch-comparison", is_flag=True, default=False,
               help="Skip the expensive item/augment version-comparison tables for a data-only refresh.")
 @click.option(
@@ -240,6 +245,7 @@ def main(
     payload_url: str,
     shell_only: bool,
     reuse_model_artifacts: bool,
+    use_patch_extract: bool,
     skip_patch_comparison: bool,
     meta_pick_api_url: str,
     player_history_api_url: str,
@@ -284,6 +290,22 @@ def main(
             player_history_api_url=player_history_api_url,
         )
         return
+
+    # Current-patch scans read a slim local replica when asked to; the stats
+    # replica feeds the empirical champion profiles.  A cache, never a
+    # dependency: any failure leaves every scan on the source DB.
+    empirical_db = db
+    if use_patch_extract and patch_prefix:
+        try:
+            extract = sync_patch_extract(
+                db, queue_id=queue_id, patch_prefix=patch_prefix, log=click.echo
+            )
+            register_scan_db(db, queue_id, patch_prefix, extract.lean_db)
+            empirical_db = extract.stats_db
+        except Exception as exc:  # noqa: BLE001 - fall back, do not fail the build
+            click.echo(
+                f"[tierlist] WARN: patch extract unavailable ({exc!r}); scanning {db} directly"
+            )
 
     version, champ_meta = load_champion_metadata(ddragon_version)
     click.echo(f"[tierlist] data dragon version: {version}")
@@ -431,7 +453,7 @@ def main(
         click.echo("[tierlist] reusing cached empirical profiles and team-score artifact")
     else:
         refresh_empirical_champion_profiles(
-            db=db,
+            db=empirical_db,
             queue_id=queue_id,
             patch_prefix=patch_prefix,
         )
@@ -552,11 +574,14 @@ def main(
     destiny_items = merge_destiny_items_with_previous(
         destiny_items,
         (
-            compute_champ_destiny_items(
+            # Closed patch: frozen tallies (re-settled on +10% growth) instead of
+            # re-reading every game of the previous patch on every build.
+            settled_champ_destiny_items(
                 db,
                 queue_id,
                 destiny_prev_prefix,
                 legendary_item_ids(destiny_prev_version, cache_dir=Path("data/cache")),
+                log=click.echo,
             )
             if destiny_prev_version
             else {}

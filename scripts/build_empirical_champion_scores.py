@@ -22,6 +22,8 @@ from typing import Any, Iterable
 
 import click
 
+from aram_nn.site.patch_extract import patch_range
+
 
 COMBAT_COLUMNS = ("damage_score", "cc_score", "frontline_score")
 
@@ -54,7 +56,8 @@ def percentile_scores(values: dict[int, float]) -> dict[int, float]:
 def patch_where_clause(patch_prefix: str) -> tuple[str, list[Any]]:
     if not patch_prefix:
         return "", []
-    return " AND patch LIKE ?", [f"{patch_prefix}.%"]
+    # Range, not LIKE: LIKE cannot seek (queue_id, patch, created_ms).
+    return " AND patch >= ? AND patch < ?", list(patch_range(f"{patch_prefix}."))
 
 
 def load_semantic_rows(path: Path) -> tuple[list[dict[str, str]], dict[int, dict[str, str]]]:
