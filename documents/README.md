@@ -22,6 +22,7 @@ Current owners：產品決策在 [`../PRODUCT.md`](../PRODUCT.md)，網站設計
 - [`reports/2026-10-15-crawler-throughput.md`](reports/2026-10-15-crawler-throughput.md) — Crawler 降速診斷與修正（單一 SQLite writer 與 LCU 探測重啟行為）。
 - [`reports/2026-10-09-recommender-release.md`](reports/2026-10-09-recommender-release.md) — Windows 自動更新版 recommender 的發布與驗證結果。
 - [`reports/2026-10-09-augment-encounter-bound.md`](reports/2026-10-09-augment-encounter-bound.md) — 增幅整場出現上界的模型與決策範圍。
+- [`reports/2026-10-03-augment-weight-expansion.md`](reports/2026-10-03-augment-weight-expansion.md) — 增幅池權重是否等於發放機率倍數（16.18＋16.19，約 2 倍量級；歷史存檔）。
 - [`reports/2026-10-03-search-discovery.md`](reports/2026-10-03-search-discovery.md) — arammeta 搜尋曝光與收錄基礎。
 - [`reports/2026-09-30-workspace-consolidation.md`](reports/2026-09-30-workspace-consolidation.md) — 2026-09-30 工作區整合與發布紀錄；內文描述當時狀態，路徑可能已過期。
 - [`reports/2026-08-10-issue-16-analysis.md`](reports/2026-08-10-issue-16-analysis.md) — Issue #16 的研究分析（玩家專精與動態海克斯資料）；結論需和 `MODEL.md` 的現行 policy 一起解讀。
