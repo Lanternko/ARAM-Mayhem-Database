@@ -322,6 +322,12 @@ def write_favicon_assets(out_dir: Path, source_path: Path = SITE_ICON_SOURCE) ->
     ico_path = out_dir / "favicon.ico"
     icon_image(256).save(ico_path, format="ICO", sizes=[(16, 16), (32, 32), (48, 48)])
     outputs.append(ico_path)
+    # Desktop recommender (window, taskbar, exe) shares the site mark; it needs the
+    # larger Explorer/taskbar sizes that the browser favicon.ico omits.
+    app_ico_path = out_dir / "recommender-app-icon.ico"
+    icon_image(256).save(app_ico_path, format="ICO", sizes=[
+        (16, 16), (20, 20), (24, 24), (32, 32), (40, 40), (48, 48), (64, 64), (128, 128), (256, 256)])
+    outputs.append(app_ico_path)
     return outputs
 
 
