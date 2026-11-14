@@ -10,7 +10,7 @@ map ``{aid: [cats]}`` that can be fed back into the build.
 Run:
     python scripts/build_augment_category_editor.py
 
-Output: augment-category-editor.html  (open by double-clicking; icons load from
+Output: outputs/exports/augment-category-editor.html  (open by double-clicking; icons load from
 the GitHub Pages site so no local server is needed).
 """
 from __future__ import annotations
@@ -538,7 +538,7 @@ def main() -> None:
     ap.add_argument(
         "--out",
         type=Path,
-        default=Path("augment-category-editor.html"),
+        default=Path("outputs/exports/augment-category-editor.html"),
         help="Output HTML path.",
     )
     ap.add_argument(
@@ -552,6 +552,7 @@ def main() -> None:
     data = build_data(args.tier_list, args.cache_dir)
     data_json = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     html = TEMPLATE.replace("__DATA__", data_json)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(html, encoding="utf-8")
     n = len(data["augments"])
     uncat = sum(1 for a in data["augments"] if not a["cats"])

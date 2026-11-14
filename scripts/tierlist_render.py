@@ -2362,6 +2362,7 @@ def write_spa_path_shells(
     total_games: int | None = None,
     patch_prefix: str | None = None,
     champion_records=(),
+    write_analysis_json: bool = False,
 ) -> list[Path]:
     """Write deep-link shells + 404.html for clean path URLs on GH Pages.
 
@@ -2530,7 +2531,12 @@ def write_spa_path_shells(
     # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
     routes_by_slug = {route["slug"]: route for route in champion_routes}
-    records_by_cid = {str(record["champion_id"]): record for record in champion_records}
+    # Rank by Bayesian win rate so the analysis prose can say "#k of N".
+    ranked = sorted(champion_records, key=lambda r: -float(r.get("bayes_wr") or 0))
+    records_by_cid = {
+        str(record["champion_id"]): {**record, "rank": index + 1, "rank_total": len(ranked)}
+        for index, record in enumerate(ranked)
+    }
     if champion_routes:
         assets = root / "assets"
         assets.mkdir(parents=True, exist_ok=True)
@@ -2582,6 +2588,38 @@ def write_spa_path_shells(
         written.append(dest)
     if champion_routes:
         written.extend([shell_path, loader_path, embed_path])
+        # Data file (api/), so only data builds write it; shell-only builds must
+        # leave the published snapshot byte-identical.
+        if write_analysis_json:
+            written.extend(_write_champion_analysis(root, champion_routes, records_by_cid, full_shell))
+    return written
+
+
+def _write_champion_analysis(root: Path, champion_routes, records_by_cid: dict, full_shell: str) -> list[Path]:
+    """api/champions/analysis/<cid>.json: the page prose, for the Other tab."""
+    from aram_nn.site.champion_analysis import champion_analysis
+    from aram_nn.site.champion_shell import _BUILD_RE
+
+    match = _BUILD_RE.search(full_shell)
+    patch_label = str((json.loads(match[1]) if match else {}).get("patchLabel") or "").strip()
+    out_dir = root / "api" / "champions" / "analysis"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    seen: set[str] = set()
+    for route in champion_routes:
+        cid = str(route["cid"])
+        if cid in seen:
+            continue
+        seen.add(cid)
+        payload = champion_analysis(
+            route=route, record=records_by_cid.get(cid, {}), api_dir=root / "api",
+            patch_label=patch_label,
+        )
+        if not payload:
+            continue
+        dest = out_dir / f"{cid}.json"
+        dest.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        written.append(dest)
     return written
 
 
@@ -2775,7 +2813,7 @@ def _attach_item_style_fields(entry: dict, meta: dict | None) -> None:
 
 
 def _item_role_overrides_path() -> Path:
-    # Canonical human-labeled map (from exports/item-role-annotator.html).
+    # Canonical human-labeled map (from outputs/exports/item-role-annotator.html).
     return Path(__file__).resolve().parent / "item_role_filter_overrides.json"
 
 
@@ -3578,6 +3616,18 @@ def render_html(
         for aid in used_aug_ids
         if aid in aug_meta
     }
+    # Champion 增幅池 lists every augment in the champion's pools, including ones
+    # with no stats in this window (so absent from js_augs).  Ship their curated
+    # categories too, or the pool page has nothing to group them by.
+    aug_pool_cats = {}
+    for aid in sorted(load_augment_pool_infos()):
+        if str(aid) in js_augs:
+            continue
+        cats = resolve_augment_categories(
+            aid, aug_meta.get(aid), new_aug_ids, aug_cat_overrides
+        )
+        if cats:
+            aug_pool_cats[str(aid)] = cats
     # Merge the global per-augment win-rate / pick share into the augment payload
     # the frontend already ships.  The 增幅榜 tier itself is computed client-side
     # (within-rarity percentile of wr) so it can be tuned without a rebuild.
@@ -3644,6 +3694,7 @@ def render_html(
             "order": list(AUGMENT_CATEGORY_ORDER),
             "labels": AUGMENT_CATEGORY_LABELS,
             "newPatch": display_patch or "",
+            "poolCats": aug_pool_cats,
         },
         "tiers": {
             "order": list(TIER_ORDER),
@@ -4103,7 +4154,10 @@ def render_html(
                 f"data-raw-wr='{r['raw_wr']*100:.1f}%' "
                 f"aria-label=\"{aria_label}\" "
                 f"title=\"{title}\">"
-                f"<span class='champ-portrait'><img loading='lazy' src='{r['image']}' alt=''></span>"
+                # HD crop from scripts/build_champion_icons.py; DDragon if missing.
+                f"<span class='champ-portrait'><img loading='lazy' "
+                f"src='assets/champ-icons/{r['champion_id']}.webp' "
+                f"onerror=\"this.onerror=null;this.src='{r['image']}'\" alt=''></span>"
                 f"<span class='alt-role-badge' data-alt-role='{html.escape(primary_role)}' "
                 "title='' aria-label='' hidden></span>"
                 # The English alias is rendered as screen-reader-only text so

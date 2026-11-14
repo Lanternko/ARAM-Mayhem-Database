@@ -3,7 +3,7 @@
 
 Usage:
   python scripts/build_item_role_annotator.py
-  # → exports/item-role-annotator.html
+  # → outputs/exports/item-role-annotator.html
 
 Open the HTML in a browser, correct roles, then Export JSON.
 Saved annotations also persist in localStorage.
@@ -559,7 +559,7 @@ def main() -> None:
         .replace("__ROLE_COLOR__", json.dumps(ROLE_COLOR, ensure_ascii=False))
         .replace("__SEED_ANNOTATIONS__", json.dumps(seed, ensure_ascii=False, separators=(",", ":")))
     )
-    out = ROOT / "exports" / "item-role-annotator.html"
+    out = ROOT / "outputs" / "exports" / "item-role-annotator.html"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     print(f"wrote {out} ({len(items)} items, {sum(1 for i in items if i['inLut'])} in itemLut)")

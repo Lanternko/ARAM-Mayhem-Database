@@ -541,9 +541,15 @@ def build_split_site(
 ) -> None:
     command = [
         sys.executable,
+        # Unbuffered: the build runs for a long time with its output piped to a
+        # log file; block buffering hides which stage it is in until it exits.
+        "-u",
         "scripts/build_tier_list.py",
         "--db",
         str(db),
+        # Current-patch scans read the incrementally synced slim replica
+        # (aram_nn.site.patch_extract) instead of games.db on every pass.
+        "--patch-extract",
         "--site-url",
         site_url,
         "--payload-out",

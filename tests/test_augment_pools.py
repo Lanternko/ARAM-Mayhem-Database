@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from aram_nn.site.augment_pool_observed import PatchCounts, classify
+from aram_nn.site.augment_pool_observed import PatchCounts, classify, find_added
 from aram_nn.site.augment_pools import (
     AUGS_PATH,
     CHAMPS_PATH,
@@ -54,6 +54,14 @@ FILES = {
             A + "Two": {"AugmentPlatformId": 102, "__type": "AugmentData"},
         },
         CHAMPS_PATH.format(locale="default"): [{"id": -1, "alias": "None"}, {"id": 13, "alias": "Ryze"}],
+        "latest:" + AUGS_PATH.format(locale="default"): [
+            {"id": 101, "nameTRA": "One renamed", "rarity": "kSilver"},
+            {"id": 301, "nameTRA": "Fresh", "rarity": "kGold"},
+            {"id": 302, "nameTRA": "Pick a side", "rarity": "kEventChoice"},
+            {"id": 303, "nameTRA": " ", "rarity": "kGold"},
+            {"id": 304, "nameTRA": "HEAVY", "augmentNameId": "GoH_PentakillAug_Q", "rarity": "kGold"},
+        ],
+        "latest:" + AUGS_PATH.format(locale="zh_tw"): [{"id": 301, "nameTRA": "新"}],
         AUGS_PATH.format(locale="zh_tw"): [{"id": 101, "nameTRA": "甲"}, {"id": 102, "nameTRA": "乙"}],
         AUGS_PATH.format(locale="default"): [
             {"id": 101, "nameTRA": "One", "rarity": "kSilver",
@@ -65,6 +73,8 @@ FILES = {
 
 
 def fake_fetch(version: str, path: str):
+    if version == "latest" and "latest:" + path in FILES["shared"]:
+        return FILES["shared"]["latest:" + path]
     for bucket in (version, "shared"):
         if path in FILES[bucket]:
             return FILES[bucket][path]
@@ -209,6 +219,25 @@ class ObservedFilterTests(unittest.TestCase):
         self.assertEqual(p["observed"]["blocked"], {})
         self.assertEqual(p["diff"]["pools"], [])  # stripped from both snapshots: no fake "added"
         self.assertEqual(public_payload(p)["observed"], p["observed"])
+
+    def test_find_added_needs_volume_and_skips_pooled(self) -> None:
+        c = _counts({1: 500, 2: 500, 3: 500},
+                    {(1, 301): 90, (2, 301): 30, (3, 301): 1, (1, 101): 400, (1, 9): 40, (2, 9): 40})
+        self.assertEqual(find_added([c], pooled={101}), {301: [1, 2]})  # 9 has only 80; 3's single row is noise
+        self.assertEqual(find_added([c], pooled={101}, skip={301}), {})
+
+    def test_build_payload_with_newer_games_lists_added(self) -> None:
+        newer = _counts({13: 1000, 77: 1000},
+                        {(13, 101): 300, (13, 301): 200, (77, 301): 50, (13, 302): 500, (13, 303): 500, (13, 304): 500, (13, 404): 500})
+        observed = {"counts": [newer], "patches": ["new"], "games": 200}
+        p = build_payload(fake_fetch, "cur", "prev", observed=observed)
+        # 302 is a mode event, 303 has no name, 304 is a granted-only rider, 404 is unknown to the strings; 77 has no pools.
+        self.assertEqual(p["observed"]["added"], {"301": [13]})
+        self.assertEqual(p["augs"]["301"]["zh"], "新")
+        self.assertEqual(p["augs"]["301"]["rarity"], "kGold")
+        self.assertEqual(p["augs"]["101"]["en"], "One")  # the pinned patch's strings still win
+        self.assertEqual([d["id"] for d in p["observed"]["dead"]], [102])
+        self.assertEqual(public_payload(p)["observed"]["added"], {"301": [13]})
 
     def test_build_payload_without_observed_is_unchanged(self) -> None:
         p = build_payload(fake_fetch, "cur", "prev")

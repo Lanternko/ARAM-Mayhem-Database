@@ -34,6 +34,7 @@ import click
 import httpx
 
 from aram_nn import patch_snapshot
+from aram_nn.site.patch_extract import patch_range, scan_db
 from aram_nn.site.augment_strings import augment_description_text
 from aram_nn.site.item_families import canonical_item_id, item_families_payload
 from aram_nn.site.augment_taxonomy import (
@@ -168,6 +169,10 @@ DESTINY_MIN_SIDE_GAMES = 60           # per item, on EACH side (with and without
 # item actually pays off; 60 games there let a short streak flip the pick.  150
 # keeps most of the champion coverage while making the sign stable.
 DESTINY_MIN_DESTINY_GAMES = 150
+# Never recommended next to 命定武器, though they still count toward the
+# legendary-item strata: these 6000-gold upgraded items (究極九頭蛇 226668,
+# 虛空獻祭 223069, 烏莉特的法帽 228002) are not picks players can aim for.
+DESTINY_EXCLUDED_ITEM_IDS = frozenset({223069, 226668, 228002})
 GUARDIAN_STARTER_ITEM_IDS = frozenset({2051, 3112, 3177, 3184})
 ANTIHEAL_COMPONENT_NAME_KEYWORDS = (
     "oblivion orb",
@@ -1457,12 +1462,12 @@ def _scan_patch_counters(
     frozen as counters and re-derived without re-reading hundreds of thousands
     of rows; see ``aram_nn.patch_snapshot`` for the settle / re-settle rules.
     """
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ?",
-            (queue_id, f"{patch_prefix}%"),
+            "WHERE queue_id=? AND patch >= ? AND patch < ?",
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         rows = con.execute(
@@ -1888,12 +1893,12 @@ def count_patch_games(
     patch_prefix: str | None,
 ) -> int:
     """Return the total number of games in the requested queue / patch scope."""
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     try:
         if patch_prefix:
             row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ?",
-                (queue_id, f"{patch_prefix}%"),
+                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch >= ? AND patch < ?",
+                (queue_id, *patch_range(patch_prefix)),
             ).fetchone()
         else:
             row = con.execute(
@@ -1917,13 +1922,13 @@ def count_participant_games(
     dividing by the full game count would deflate every augment uniformly.  We
     count games where augments are observable instead.
     """
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     try:
         if patch_prefix:
             row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch LIKE ? "
+                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch >= ? AND patch < ? "
                 "AND participants_json IS NOT NULL AND participants_json != ''",
-                (queue_id, f"{patch_prefix}%"),
+                (queue_id, *patch_range(patch_prefix)),
             ).fetchone()
         else:
             row = con.execute(
@@ -3411,12 +3416,12 @@ def compute_champ_category_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
-            (queue_id, f"{patch_prefix}%"),
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL",
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         rows = con.execute(
@@ -3529,13 +3534,13 @@ def compute_champ_item_pair_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
             "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         rows = con.execute(
@@ -3664,13 +3669,13 @@ def _compute_champ_item_slot_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
             "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         rows = con.execute(
@@ -3832,50 +3837,31 @@ def _mh_stratified_diff(
     return sd / sw, 1.96 * math.sqrt(sv) / sw
 
 
-def compute_champ_destiny_items(
+SNAPSHOT_DESTINY_SECTION = "destiny_item_counters"
+
+
+def _scan_destiny_counters(
     db_path: Path,
     queue_id: int,
     patch_prefix: str | None,
-    legendary_ids: set[int] | frozenset[int],
-    *,
-    min_side_games: int = DESTINY_MIN_SIDE_GAMES,
-    min_destiny_games: int = DESTINY_MIN_DESTINY_GAMES,
-) -> dict[int, dict]:
-    """Best legendary item to hold alongside 命定武器, per champion.
+    items_ok: set[int] | frozenset[int],
+) -> tuple[dict[int, list[int]], dict[tuple[int, int], list[int]]]:
+    """One pass over a patch -> the raw tallies ``compute_champ_destiny_items`` ranks.
 
-    Players are stratified by champion and by how many legendary items they hold
-    (capped at 6), so "has the item" is not confounded with "survived long enough
-    to build full".  For item ``i``: ``gate`` is the stratified (Mantel-Haenszel)
-    win-rate difference holding vs not holding ``i`` among 3081 holders and
-    ``base`` is the same among non-holders of 3081.  An item qualifies only when
-    the ``gate`` lower bound is above 0 - a large with/without-3081 delta is not
-    enough if holding the item with the augment still loses - and qualifying
-    items rank by the lower bound of ``synergy = gate - base``.  Sample floors:
-    ``min_destiny_games`` with 3081 and ``min_side_games`` without, per item.
-
-    Returns ``{champion_id: {"item_id", "lift", "lcb", "synergy", "synergy_lcb",
-    "alt"?}}`` where ``lift``/``lcb`` are the gate and its lower bound.  ``alt``
-    (same keys) is the runner-up when its synergy reaches the winner's
-    ``synergy_lcb``, i.e. the two cannot be told apart.  Champions with no
-    qualifying item are absent, and the site renders the augment card as before.
-
-    ``participants_json`` is streamed row by row (never materialised) because the
-    patch is hundreds of thousands of games; the tally is compact int lists.
+    Split out so a closed patch's tallies can be frozen (``settled_champ_destiny_items``)
+    instead of re-read on every build.
     """
-    items_ok = {int(i) for i in legendary_ids or ()}
-    if not items_ok:
-        return {}
     sql = "SELECT blue_wins, participants_json FROM games WHERE queue_id=?"
     params: list[object] = [queue_id]
     if patch_prefix:
-        sql += " AND patch LIKE ?"
-        params.append(f"{patch_prefix}%")
+        sql += " AND patch >= ? AND patch < ?"
+        params.extend(patch_range(patch_prefix))
 
     # Flat layout [w_no, n_no, w_yes, n_yes] x k=0..6 (28 ints): per champion for
     # all players, per (champion, item) for holders of that item.
     totals: dict[int, list[int]] = {}
     cells: dict[tuple[int, int], list[int]] = {}
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     try:
         for blue_wins, participants_json in con.execute(sql, params):
             if not participants_json:
@@ -3913,9 +3899,112 @@ def compute_champ_destiny_items(
                     cell[j + 1] += 1
     finally:
         con.close()
+    return totals, cells
+
+
+def _destiny_fingerprint(items_ok: set[int] | frozenset[int]) -> str:
+    raw = f"{DESTINY_AUGMENT_ID}|" + ",".join(str(i) for i in sorted(int(i) for i in items_ok))
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def settled_champ_destiny_items(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    legendary_ids: set[int] | frozenset[int],
+    *,
+    snapshot_dir: Path | None = None,
+    live_games: int | None = None,
+    log=None,
+) -> dict[int, dict]:
+    """``compute_champ_destiny_items`` for a closed patch, from its snapshot.
+
+    Only for non-current patches -- same rule as settled_patch_counters.  The
+    tallies are frozen, the ranking is re-derived, so threshold / exclusion-list
+    changes still take effect without a rescan; a changed legendary catalogue
+    changes the fingerprint and forces one.
+    """
+    items_ok = {int(i) for i in legendary_ids or ()}
+    if not items_ok:
+        return {}
+    total = count_patch_games(db_path, queue_id, patch_prefix) if live_games is None else live_games
+    payload, status = patch_snapshot.load_section(
+        patch_prefix,
+        queue_id=queue_id,
+        section=SNAPSHOT_DESTINY_SECTION,
+        live_games=total,
+        fingerprint=_destiny_fingerprint(items_ok),
+        snapshot_dir=snapshot_dir,
+    )
+    if log:
+        log(f"[settle] {patch_prefix} destiny-item counters: {status.describe()}")
+    if payload is not None:
+        totals = {int(cid): [int(v) for v in row] for cid, row in payload["totals"].items()}
+        cells = {
+            (int(key.split(":")[0]), int(key.split(":")[1])): [int(v) for v in row]
+            for key, row in payload["cells"].items()
+        }
+    else:
+        totals, cells = _scan_destiny_counters(db_path, queue_id, patch_prefix, items_ok)
+        patch_snapshot.save_section(
+            patch_prefix,
+            queue_id=queue_id,
+            section=SNAPSHOT_DESTINY_SECTION,
+            payload={
+                "totals": {str(cid): row for cid, row in totals.items()},
+                "cells": {f"{cid}:{item_id}": row for (cid, item_id), row in cells.items()},
+            },
+            live_games=total,
+            fingerprint=_destiny_fingerprint(items_ok),
+            snapshot_dir=snapshot_dir,
+        )
+    return compute_champ_destiny_items(
+        db_path, queue_id, patch_prefix, items_ok, counters=(totals, cells)
+    )
+
+
+def compute_champ_destiny_items(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    legendary_ids: set[int] | frozenset[int],
+    *,
+    min_side_games: int = DESTINY_MIN_SIDE_GAMES,
+    min_destiny_games: int = DESTINY_MIN_DESTINY_GAMES,
+    counters: tuple[dict[int, list[int]], dict[tuple[int, int], list[int]]] | None = None,
+) -> dict[int, dict]:
+    """Best legendary item to hold alongside 命定武器, per champion.
+
+    Players are stratified by champion and by how many legendary items they hold
+    (capped at 6), so "has the item" is not confounded with "survived long enough
+    to build full".  For item ``i``: ``gate`` is the stratified (Mantel-Haenszel)
+    win-rate difference holding vs not holding ``i`` among 3081 holders and
+    ``base`` is the same among non-holders of 3081.  An item qualifies only when
+    the ``gate`` lower bound is above 0 - a large with/without-3081 delta is not
+    enough if holding the item with the augment still loses - and qualifying
+    items rank by the lower bound of ``synergy = gate - base``.  Sample floors:
+    ``min_destiny_games`` with 3081 and ``min_side_games`` without, per item.
+
+    Returns ``{champion_id: {"item_id", "lift", "lcb", "synergy", "synergy_lcb",
+    "alt"?}}`` where ``lift``/``lcb`` are the gate and its lower bound.  ``alt``
+    (same keys) is the runner-up when its synergy reaches the winner's
+    ``synergy_lcb``, i.e. the two cannot be told apart.  Champions with no
+    qualifying item are absent, and the site renders the augment card as before.
+
+    ``participants_json`` is streamed row by row (never materialised) because the
+    patch is hundreds of thousands of games; the tally is compact int lists.
+    """
+    items_ok = {int(i) for i in legendary_ids or ()}
+    if not items_ok:
+        return {}
+    totals, cells = counters if counters is not None else _scan_destiny_counters(
+        db_path, queue_id, patch_prefix, items_ok
+    )
 
     ranked: dict[int, list[dict]] = {}
     for (cid, item_id), held in cells.items():
+        if item_id in DESTINY_EXCLUDED_ITEM_IDS:
+            continue
         n_yes = sum(held[4 * k + 3] for k in range(7))
         n_no = sum(held[4 * k + 1] for k in range(7))
         if n_yes < min_destiny_games or n_no < min_side_games:
@@ -4032,13 +4121,13 @@ def compute_champ_spell_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
             "AND participants_json LIKE '%\"spells\"%'",
-            (queue_id, f"{patch_prefix}%"),
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         rows = con.execute(
@@ -4285,13 +4374,13 @@ def _scan_core_item_counters(
     # this champion had *with any core item*, i.e. the same population the
     # champ_item numerators are drawn from.
     champ_games_stats: dict[int, float] = defaultdict(float)
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     try:
         rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
             "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
+            (queue_id, *patch_range(patch_prefix)),
         )
         for blue_wins, participants_json in rows:
             if not participants_json:
@@ -4886,13 +4975,13 @@ def compute_champ_item_build_clusters(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         sql_rows = con.execute(
             "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL "
+            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
             "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, f"{patch_prefix}%"),
+            (queue_id, *patch_range(patch_prefix)),
         )
     else:
         sql_rows = con.execute(
@@ -5513,13 +5602,13 @@ def compute_champ_set_affinity(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     if patch_prefix:
         rows = list(
             con.execute(
                 "SELECT blue_wins, participants_json FROM games "
-                "WHERE queue_id=? AND patch LIKE ? AND participants_json IS NOT NULL",
-                (queue_id, f"{patch_prefix}%"),
+                "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL",
+                (queue_id, *patch_range(patch_prefix)),
             )
         )
     else:

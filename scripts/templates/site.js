@@ -128,6 +128,28 @@
     // Desktop recommender WebView page: one champion's detail, nothing else.
     const IS_EMBED = document.documentElement.getAttribute('data-embed') === 'champion';
     const DATA = __PAYLOAD__;
+    // Champion icons: clean HD crops cut from the original splash
+    // (scripts/build_champion_icons.py) replace DDragon's 120px square, whose
+    // baked dark frame shows as chipped edges once rounded.  `image` is the
+    // square, `imageCircle` the matching pre-cut circle; `imageDdragon` keeps
+    // the CDN URL, and a champion with no local icon yet falls back to it.
+    const CHAMP_ICON_FALLBACK = new Map();
+    for (const [cid, info] of Object.entries(DATA.champs || {})) {
+        if (!info || !info.image || info.imageDdragon) continue;
+        const square = `assets/champ-icons/${cid}.webp`;
+        const round = `assets/champ-icons/${cid}-circle.webp`;
+        CHAMP_ICON_FALLBACK.set(square, info.image);
+        CHAMP_ICON_FALLBACK.set(round, info.image);
+        info.imageDdragon = info.image;
+        info.image = square;
+        info.imageCircle = round;
+    }
+    document.addEventListener('error', (ev) => {
+        const img = ev.target;
+        if (!img || img.tagName !== 'IMG') return;
+        const fallback = CHAMP_ICON_FALLBACK.get(img.getAttribute('src'));
+        if (fallback) img.src = fallback;
+    }, true);
     const CHAMP_DETAIL_FIELDS = [
         'poolAugments',
         'bot', 'sets', 'items', 'singleItems', 'boots', 'spells',
@@ -757,8 +779,48 @@
                 </div>
                 ${adviceHtml}
             </div>
+            <div class="detail-section champ-analysis" data-champ-analysis="${escHtml(String(cid))}"></div>
         `;
     }
+    // Data-written analysis prose (same text as the static champion page HTML),
+    // fetched per champion from api/champions/analysis/<cid>.json.
+    const champAnalysisCache = new Map();
+    function champAnalysisLang() {
+        return currentLang === 'en' ? 'en' : currentLang === 'zh-CN' ? 'zh-Hans' : 'zh-Hant';
+    }
+    function champAnalysisHtml(doc) {
+        const block = doc && doc[champAnalysisLang()];
+        if (!block || !Array.isArray(block.paragraphs)) return '';
+        const prefix = currentLang === 'en' ? '/en' : currentLang === 'zh-CN' ? '/zh-cn' : '';
+        const about = block.about || {};
+        return `<div class="detail-section-head"><h3>${escHtml(block.title || '')}</h3></div>`
+            + block.paragraphs.map(p => `<p class="champ-analysis-p">${escHtml(p)}</p>`).join('')
+            + (about.label ? `<p class="champ-analysis-p"><a href="${escHtml(prefix + '/about/')}">${escHtml(about.label)}</a></p>` : '');
+    }
+    function renderChampionAnalysis() {
+        if (!DATA.detailBase) return;
+        document.querySelectorAll('[data-champ-analysis]').forEach(host => {
+            const cid = host.dataset.champAnalysis;
+            if (host.dataset.lang === champAnalysisLang() && host.childElementCount) return;
+            let load = champAnalysisCache.get(cid);
+            if (!load) {
+                const base = String(DATA.detailBase).replace(/\/$/, '');
+                const version = DATA.detailVersion ? `?v=${encodeURIComponent(String(DATA.detailVersion))}` : '';
+                load = loadSitePayload(`${base}/analysis/${encodeURIComponent(cid)}.json${version}`)
+                    .catch(() => null);
+                champAnalysisCache.set(cid, load);
+            }
+            load.then(doc => {
+                if (!host.isConnected) return;
+                host.innerHTML = champAnalysisHtml(doc);
+                host.dataset.lang = champAnalysisLang();
+                host.hidden = !host.childElementCount;
+            });
+        });
+    }
+    document.addEventListener('change', ev => {
+        if (ev.target.matches && ev.target.matches('.detail-tab-input[id$="-compfit"]')) renderChampionAnalysis();
+    });
     const ROLE_LABELS = __ROLE_LABELS__;
     // itemId → Assassin|Fighter|Mage|Marksman|Support|Tank  (shell-injected from
     // CDragon item styles; empty object when catalogue unavailable).
@@ -2708,9 +2770,52 @@
         const el = _itemFloatTipEl || document.getElementById('item-float-tip');
         if (!el) return;
         el.hidden = true;
-        el.classList.remove('is-visible', 'is-pinned', 'flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.classList.remove('is-visible', 'is-pinned', 'flip-below', 'align-left', 'align-right', 'is-scrollable', 'is-centered', 'is-side');
         el.style.maxHeight = '';
         el.innerHTML = '';
+    }
+
+    function positionAugTileTip(el, anchor, rect, vw, vh, margin, gap) {
+        // The bars above the grid: a tip lower than them must not slide under.
+        let topLimit = margin;
+        const table = anchor.closest('.aug-tier-table');
+        if (table) {
+            table.querySelectorAll('.aug-tier-top').forEach(bar => {
+                const b = bar.getBoundingClientRect();
+                if (b.height && b.bottom <= rect.top + 1 && b.bottom > topLimit - 4) topLimit = b.bottom + 4;
+            });
+        }
+        const availH = Math.max(1, vh - margin - topLimit);
+        let tipRect = el.getBoundingClientRect();
+        if (tipRect.height > availH) {
+            el.style.maxHeight = availH + 'px';
+            el.classList.add('is-scrollable');
+            tipRect = el.getBoundingClientRect();
+        }
+        const spaceRight = vw - rect.right - gap - margin;
+        const spaceLeft = rect.left - gap - margin;
+        let left;
+        let top;
+        let side = '';
+        if (tipRect.width <= spaceRight) side = 'right';
+        else if (tipRect.width <= spaceLeft) side = 'left';
+        if (side) {
+            left = side === 'right' ? rect.right + gap : rect.left - gap - tipRect.width;
+            top = rect.top + rect.height / 2 - tipRect.height / 2;
+            top = Math.max(topLimit, Math.min(top, vh - tipRect.height - margin));
+        } else {
+            const spaceBelow = vh - rect.bottom - gap - margin;
+            const spaceAbove = rect.top - gap - topLimit;
+            const below = tipRect.height <= spaceBelow || spaceBelow >= spaceAbove;
+            left = rect.left + rect.width / 2 - tipRect.width / 2;
+            top = below ? rect.bottom + gap : rect.top - gap - tipRect.height;
+            top = Math.max(topLimit, Math.min(top, vh - tipRect.height - margin));
+            el.classList.toggle('flip-below', below);
+        }
+        left = Math.max(margin, Math.min(left, vw - tipRect.width - margin));
+        el.style.left = Math.round(left) + 'px';
+        el.style.top = Math.round(top) + 'px';
+        el.classList.add('is-side');
     }
 
     function positionItemFloatTip(anchor) {
@@ -2723,12 +2828,20 @@
         const vh = window.innerHeight || document.documentElement.clientHeight || 0;
 
         // Measure natural height, then choose a side and constrain to its space.
-        el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable');
+        el.classList.remove('flip-below', 'align-left', 'align-right', 'is-scrollable', 'is-centered', 'is-side');
         el.style.maxHeight = '';
         el.style.left = '0px';
         el.style.top = '0px';
 
         let tipRect = el.getBoundingClientRect();
+
+        // Champion-page augment tiles: sit beside the tile (right, else left) so
+        // the neighbours stay readable, then below/above on a very narrow
+        // window.  Never cover the rarity / sort bars, never leave the viewport.
+        if (anchor.matches('.aug-tile')) {
+            positionAugTileTip(el, anchor, rect, vw, vh, margin, gap);
+            return;
+        }
         const spaceAbove = Math.max(0, rect.top - margin - gap);
         const spaceBelow = Math.max(0, vh - rect.bottom - margin - gap);
         const flipBelow = tipRect.height > spaceAbove
@@ -3178,9 +3291,16 @@
         return cells;
     }
 
-    function buildAugSlotStrip(entry, onBoard) {
+    // opts.tile = the champion-page tile tip / detail row: titled block, wr-tier
+    // number colours, and a "not offered" column for a round the augment never
+    // appears in (its all-champion slot is null).  Other callers get the
+    // original markup.
+    function buildAugSlotStrip(entry, onBoard, opts = {}) {
+        const tile = !!opts.tile;
         const cells = augSlotCells(entry, onBoard);
         if (!cells.some(Boolean)) return '';
+        const globalSlots = Array.isArray((DATA.augs[entry.id] || {}).slots) ? DATA.augs[entry.id].slots : [];
+        const notOffered = cells.map((c, i) => tile && !c && !(Array.isArray(globalSlots[i]) && Number(globalSlots[i][0]) > 0));
         const anyCoarse = cells.some(c => c && c.coarse);
         const anyPrev = cells.some(c => c && c.prev > 0);
         // Pick-order curve: x = round, y = deviation from the augment's own
@@ -3206,8 +3326,27 @@
             const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
             return `<text class="aug-pt-label${c ? '' : ' is-empty'}" x="${xs(i)}" y="11" text-anchor="middle">${escHtml(label)}</text>`;
         }).join('');
+        // Round never offered: a faint dark column with diagonal hatching (plain
+        // lines, since a shared <pattern> id breaks inside hidden tip sources).
+        const naWord = pickLang('未開放', 'N/A');
+        const naColumn = i => {
+            const x0 = xs(i) - DX / 2;
+            const hatch = [];
+            const RH = H - 16;
+            for (let k = 10; k < DX + RH; k += 10) {
+                const a = Math.max(0, k - RH), b = Math.min(DX, k);
+                hatch.push(`M${x0 + a} ${16 + k - a}L${x0 + b} ${16 + k - b}`);
+            }
+            const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            return `<g class="aug-na"><title>${escHtml(`${label}${pickLang('：', ': ')}${naWord}`)}</title>`
+                + `<rect x="${x0}" y="16" width="${DX}" height="${H - 16}" rx="3"/>`
+                + `<path d="${hatch.join('')}"/>`
+                + `<text x="${xs(i)}" y="${BASE + 20}" text-anchor="middle">${escHtml(naWord)}</text></g>`;
+        };
+        const toneOf = dev => (dev >= 0.03 ? 5 : dev >= 0.01 ? 4 : dev > -0.01 ? 3 : dev > -0.03 ? 2 : 1);
         const marks = pts.map((p, i) => {
             const label = pickLang(`第${i + 1}選`, `Pick ${i + 1}`);
+            if (!p && notOffered[i]) return naColumn(i);
             if (!p) return `<text class="aug-pt-none" x="${xs(i)}" y="${BASE + 4}" text-anchor="middle">–</text>`;
             const c = p.c;
             const tone = p.t >= 0 ? 'is-up' : 'is-down';
@@ -3217,7 +3356,8 @@
             const title = c.coarse
                 ? pickLang(`${label}：樣本不足，位置依全英雄趨勢`, `${label}: thin sample, position from all champions`)
                 : `${label}: ${pct(c.wr)} · ${pickLang('比同輪平均', 'vs round avg')} ${signed(c.lift)} · ${pickLang('比它自己平均', 'vs its own avg')} ${signed(c.dev)} · ${fmtInt(c.g)}${pickLang(' 場', ' games')}`;
-            return `<g class="aug-pt ${tone}${c.coarse ? ' is-coarse' : ''}" style="--slot-k:${strength}%"><title>${escHtml(title)}</title>`
+            const toneCls = tile ? ` wr-${toneOf(c.dev)}` : '';
+            return `<g class="aug-pt ${tone}${toneCls}${c.coarse ? ' is-coarse' : ''}" style="--slot-k:${strength}%"><title>${escHtml(title)}</title>`
                 + `<circle cx="${p.x}" cy="${p.y.toFixed(1)}" r="4.5"/>`
                 + (num ? `<text x="${p.x}" y="${numY.toFixed(1)}" text-anchor="middle">${escHtml(num)}</text>` : '')
                 + `</g>`;
@@ -3225,8 +3365,12 @@
         const notes = [];
         if (anyPrev) notes.push(pickLang('* 含上一版樣本', '* includes last patch'));
         if (anyCoarse) notes.push(pickLang('空心點＝樣本不足，位置依全英雄趨勢', 'Hollow dot = thin sample, shape from all champions'));
-        const aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
-        return `<div class="aug-slots">`
+        let aria = pickLang('第幾個選它的勝率', 'Win rate by pick round');
+        notOffered.forEach((na, i) => {
+            if (na) aria += pickLang(`；第${i + 1}選：未開放`, `; Pick ${i + 1}: N/A`);
+        });
+        return `<div class="aug-slots${tile ? ' is-tile' : ''}">`
+            + (tile ? `<div class="aug-slots-head">${escHtml(pickLang('第幾選的勝率', 'Win rate by pick'))}</div>` : '')
             + `<svg class="aug-curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escHtml(aria)}">`
             + `<line class="aug-curve-base" x1="12" x2="${W - 12}" y1="${BASE}" y2="${BASE}"/>`
             + (path ? `<path class="aug-curve-line" d="${path}"/>` : '')
@@ -3236,14 +3380,21 @@
             + `</div>`;
     }
 
-    // ----- Champion page 增幅裝置: one rarity at a time, as a vertical table ---
+    // ----- Champion page 增幅裝置: one rarity at a time, as a tile grid ---
     // Rarity + sort persist across champions so the next lookup opens the same way.
     let champAugRarity = 'kGold';
     let champAugSort = 'rank';
-    // The list holds every pair past the sample floor; show the first
-    // CHAMP_AUG_COLLAPSED (podium included) until the reader expands it.
+    // The grid holds every pair past the sample floor; until the reader expands
+    // it, show whole rows only (see champAugCollapsedCount).
     let champAugExpanded = false;
-    const CHAMP_AUG_COLLAPSED = 16;
+    // The top three of the current sort are featured tiles (wide, horizontal).
+    const CHAMP_AUG_PODIUM = 3;
+    // Desktop shows about three rows; a phone shows the three featured rows
+    // plus five rows of plain tiles.
+    const CHAMP_AUG_COLLAPSED_ROWS = 3;
+    const CHAMP_AUG_COLLAPSED_PLAIN_ROWS = 5;
+    // Below this many columns a featured tile takes a whole row.
+    const CHAMP_AUG_WIDE_MIN_COLS = 6;
     // Plain-language verdict per augment: 推薦 when the lift clears its 80%
     // sampling interval above zero, 避開 when it clears it below, else no chip.
     // Casual players read the word; the interval math stays out of sight.
@@ -3263,24 +3414,25 @@
         mid: ['普通', 'Fine'],
         bad: ['避開', 'Avoid'],
     };
-    function champAugBadge(verdict) {
+    /** Plain-text verdict word for good / bad (the tile itself shows it as material, not a badge). */
+    function champAugVerdictWord(verdict) {
         if (verdict !== 'good' && verdict !== 'bad') return '';
-        const words = CHAMP_AUG_VERDICT_WORDS[verdict] || CHAMP_AUG_VERDICT_WORDS.mid;
-        return `<span class="aug-verdict is-${verdict}">${escHtml(pickLang(words[0], words[1]))}</span>`;
+        const words = CHAMP_AUG_VERDICT_WORDS[verdict];
+        return pickLang(words[0], words[1]);
     }
 
     function buildChampAugTable(top, extraHtml = '', destinyItem = null) {
         const copy = tr();
-        const seg = ['kSilver', 'kGold', 'kPrismatic'].map(key => {
-            const r = RARITIES.find(x => x.key === key);
+        // Same slash slab and wording as the 增幅池 rarity filter; the empty key is
+        // "All" (every rarity in one grid, ranked together).
+        const seg = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']].map(([key, zh, en]) => {
             const on = key === champAugRarity;
-            return `<button type="button" class="aug-tier-seg-btn rarity-${r.css}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}"><span class="aug-tier-seg-text">${escHtml(copy.rarityLabels[key])}</span></button>`;
+            return `<button type="button" class="aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}${on ? ' is-active' : ''}" data-aug-rarity="${key}" aria-pressed="${on}">${escHtml(pickLang(zh, en))}</button>`;
         }).join('');
-        const sortBtn = (key, label, cls) => {
+        const sortBtn = (key, label) => {
             const on = key === champAugSort;
-            return `<button type="button" class="aug-tier-sort ${cls}${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}</button>`;
+            return `<button type="button" class="aug-tile-sort${on ? ' is-active' : ''}" data-aug-sort="${key}" aria-pressed="${on}">${escHtml(label)}<span class="aug-sort-dir" aria-hidden="true">↓</span></button>`;
         };
-        const games = (g) => pickLang(`${fmtInt(g)} 場`, `${fmtInt(g)} games`);
         const augView = (e) => {
             const aug = DATA.augs[e.id];
             return {
@@ -3330,85 +3482,91 @@
                 + `</span>`;
         };
         const cardIcon = (e, v) => (isDestiny(e) ? destinyIcon(v) : iconHtml(v));
-        const destinyNote = (e) => (isDestiny(e) ? destinyText() : '');
         const withDestiny = (e, label) => (isDestiny(e) ? `${label} · ${destinyText()}` : label);
-        // Each rarity pane repeats the sort header so it sits right above its list.
-        const head = `
-            <div class="aug-tier-head">
-                <span class="aug-tier-idx col-idx" aria-hidden="true">#</span>
-                <div class="aug-tier-rank-head">
-                    ${sortBtn('rank', pickLang('推薦順序', 'Recommended'), 'col-name')}
-                    ${extraHtml}
-                </div>
-                ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'), 'col-pick')}
-                ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'), 'col-wr')}
+        // One sort control for the whole table, at the right end of the rarity row.
+        const sorts = `
+            <div class="aug-tile-sorts" role="group" aria-label="${escHtml(pickLang('排序', 'Sort'))}">
+                <span class="aug-sort-label"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5v11M1.8 11.3 4 13.5l2.2-2.2M10 3h5M10 7h3.5M10 11h2"/></svg>${escHtml(pickLang('排序', 'Sort'))}</span>
+                ${sortBtn('rank', pickLang('推薦順序', 'Recommended'))}
+                ${sortBtn('pick', copy.augSortPick || pickLang('選用率', 'Pick rate'))}
+                ${sortBtn('wr', copy.augSortWr || pickLang('勝率', 'Win rate'))}
+                <span class="aug-tile-extra">${extraHtml}</span>
             </div>`;
-        const panes = RARITIES.map(r => {
-            const entries = top[r.key] || [];
-            // Pick bars share one scale per rarity so their lengths compare.
-            const maxPick = Math.max(0, ...entries.map(e => Number(e.pick || 0))) || 1;
-            // Podium: the three strongest picks, as big cards.
-            const podium = entries.slice(0, 3).map((e, idx) => {
-                const v = augView(e);
-                const verdict = champAugVerdict(e);
-                return `
-                    <li class="aug-pick-card has-item-tip is-${verdict}" tabindex="0" data-aug-id="${escHtml(String(e.id))}"
-                        aria-label="${escHtml(withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc)))}">
-                        <span class="aug-pick-rank" aria-hidden="true">${idx + 1}</span>
-                        <span class="aug-pick-icon rarity-${r.css}">${cardIcon(e, v)}</span>
-                        <span class="aug-pick-name">${escHtml(v.name)}</span>
-                        ${isDestiny(e) ? `<span class="aug-pick-destiny">${destinyTextHtml()}</span>` : ''}
-                        ${v.desc ? `<span class="aug-pick-desc">${formatDescriptionInlineHtml(v.desc)}</span>` : ''}
-                        <span class="aug-pick-foot">
-                            <span class="aug-pick-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b></span>
-                        </span>
-                        ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
-                    </li>`;
-            }).join('');
-            // Every entry gets a row: the podium three hide while sorted by
-            // recommendation and rejoin the list when sorted by pick or WR, so
-            // those sorts cover the whole ranking.
-            const rows = entries.length > 3 ? entries.map((e, idx) => {
+        // "All" merges the three rarities, strongest first by the same shrunk
+        // score the per-rarity order uses (it is relative to this champion's
+        // average, so it compares across rarities); an id appears only once.
+        const seenIds = new Set();
+        const allItems = RARITIES.flatMap(r => (top[r.key] || []).map(e => ({ e, r })))
+            .filter(({ e }) => !seenIds.has(e.id) && seenIds.add(e.id))
+            .sort((a, b) => Number(b.e.score || 0) - Number(a.e.score || 0));
+        const paneSpecs = [
+            { key: '', items: allItems },
+            ...RARITIES.map(r => ({ key: r.key, items: (top[r.key] || []).map(e => ({ e, r })) })),
+        ];
+        const panes = paneSpecs.map(({ key: paneKey, items }) => {
+            const entries = items.map(it => it.e);
+            const tiles = items.map(({ e, r }, idx) => {
                 const v = augView(e);
                 const pickRate = Number(e.pick || 0);
                 const verdict = champAugVerdict(e);
-                const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc));
+                const verdictWord = champAugVerdictWord(verdict);
+                const ariaLabel = withDestiny(e, copy.augAria(v.name, pct(e.wr), signed(e.lift), e.g, v.desc)) + (verdictWord ? ` · ${verdictWord}` : '');
+                // Detail row content, shown when the tile is opened.
+                const detail = `
+                    <div class="aug-detail-head">
+                        <b class="aug-detail-name">${escHtml(v.name)}</b>
+                        ${v.setName ? `<em class="aug-detail-set">${escHtml(v.setName)}</em>` : ''}
+                        ${verdictWord ? `<span class="aug-detail-verdict is-${verdict}">${escHtml(verdictWord)}</span>` : ''}
+                    </div>
+                    ${v.desc ? `<p class="aug-detail-desc">${formatDescriptionInlineHtml(v.desc)}</p>` : ''}
+                    ${isDestiny(e) ? `<p class="aug-detail-destiny">${destinyTextHtml()}</p>` : ''}
+                    <dl class="aug-detail-stats">
+                        <div class="wr-${wrToneTier(e)}"><dt>${escHtml(pickLang('勝率', 'Win rate'))}</dt><dd>${pct(e.wr)}</dd></div>
+                        <div><dt>${escHtml(pickLang('選用率', 'Pick rate'))}</dt><dd>${pct(pickRate)}</dd></div>
+                        <div><dt>${escHtml(pickLang('場次', 'Games'))}</dt><dd>${escHtml(fmtInt(e.g))}</dd></div>
+                    </dl>`;
+                const tipHtml = `
+                    <div class="item-tip-card aug-tile-tip">
+                        <div class="item-tip-name">${escHtml(v.name)}</div>
+                        ${v.desc ? `<div class="item-tip-desc">${formatDescriptionInlineHtml(v.desc)}</div>` : ''}
+                        <div class="aug-tip-stats">
+                            <span>${escHtml(pickLang('勝率', 'Win rate'))} <b class="wr-${wrToneTier(e)}">${pct(e.wr)}</b></span>
+                            <span>${escHtml(pickLang('選用率', 'Pick rate'))} <b>${pct(pickRate)}</b></span>
+                            <span>${escHtml(pickLang('場次', 'Games'))} <b>${escHtml(fmtInt(e.g))}</b></span>
+                        </div>
+                        ${isDestiny(e) ? `<div class="item-tip-note">${escHtml(destinyText())}</div>` : ''}
+                        ${buildAugSlotStrip(e, false, { tile: true })}
+                    </div>`;
                 return `
-                    <li class="aug-tier-row has-item-tip is-${verdict}${idx < 3 ? ' is-podium' : ''}" tabindex="0"
+                    <div class="aug-tile has-item-tip rarity-${r.css} is-${verdict}" role="button" tabindex="0" aria-expanded="false"
                         data-aug-id="${escHtml(String(e.id))}" data-rank="${idx}"
-                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}"
+                        data-wr="${Number(e.wr || 0)}" data-pick="${pickRate}" data-score="${Number(e.score || 0)}"
                         aria-label="${escHtml(ariaLabel)}">
-                        <span class="aug-tier-idx" aria-hidden="true"></span>
-                        <span class="aug-tier-name">
-                            ${cardIcon(e, v)}
-                            <span class="aug-tier-text">
-                                <span class="aug-tier-title">${escHtml(v.name)}${v.setName ? `<em class="aug-tier-set">${escHtml(v.setName)}</em>` : ''}</span>
-                                ${isDestiny(e) ? `<span class="aug-tier-destiny${destinyAlt ? ' has-alt' : ''}">${destinyTextHtml()}</span>` : ''}
-                                ${v.desc ? `<span class="aug-tier-desc">${escHtml(v.desc)}</span>` : ''}
-                            </span>
-                        </span>
-                        <span class="aug-tier-pick">
-                            <b>${pct(pickRate)}</b><small>${escHtml(games(e.g))}</small>
-                            <i class="aug-tier-bar" style="--w:${(pickRate / maxPick).toFixed(4)}" aria-hidden="true"></i>
-                        </span>
-                        <span class="aug-tier-wr wr-${wrToneTier(e)}"><b>${pct(e.wr)}</b>${champAugBadge(verdict)}</span>
-                        ${itemTipSource(buildAugTipHtml(e, false, destinyNote(e)))}
-                    </li>`;
-            }).join('') : '';
-            const body = rows || `<li class="aug-list-empty">${copy.insufficient}</li>`;
-            const more = entries.length > CHAMP_AUG_COLLAPSED
+                        <span class="aug-tile-rank" aria-hidden="true"></span>
+                        <span class="aug-tile-icon rarity-${r.css}">${cardIcon(e, v)}</span>
+                        <span class="aug-tile-wr wr-${wrToneTier(e)}">${pct(e.wr)}</span>
+                        <span class="aug-tile-name">${escHtml(v.name)}</span>
+                        <span class="aug-tile-pick">${escHtml(pickLang('選用', 'Pick'))} ${pct(pickRate)}</span>
+                        ${itemTipSource(tipHtml)}
+                        <div class="aug-detail-src" hidden>${detail}</div>
+                    </div>`;
+            }).join('');
+            // JS hides the button again when the collapsed count already shows everything.
+            const more = entries.length > CHAMP_AUG_PODIUM + 1
                 ? `<button type="button" class="tool-btn aug-tier-more" data-aug-expand data-total="${entries.length}"></button>`
                 : '';
+            // Three or fewer pairs past the sample floor reads as "not enough data".
+            const enough = entries.length > 3;
             return `
-                <div class="aug-tier-pane" data-rarity="${r.key}"${r.key === champAugRarity ? '' : ' hidden'}>
-                    ${podium ? `<ol class="aug-pick-cards">${podium}</ol>` : ''}
-                    ${rows || !entries.length ? `${head}<ol class="aug-tier-list" start="4" data-rarity="${r.key}">${body}</ol>${more}` : ''}
+                <div class="aug-tier-pane" data-rarity="${paneKey}"${paneKey === champAugRarity ? '' : ' hidden'}>
+                    ${enough ? `<div class="aug-tile-grid" data-rarity="${paneKey}">${tiles}</div>${more}` : `<ul class="aug-tile-empty-list"><li class="aug-list-empty">${copy.insufficient}</li></ul>`}
                 </div>`;
         }).join('');
         return `
             <div class="aug-tier-table">
                 <div class="aug-tier-top">
-                    <div class="aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                    <div class="aug-cat-bar aug-rarity-bar aug-tier-seg" role="group" aria-label="${escHtml(pickLang('增幅稀有度', 'Augment rarity'))}">${seg}</div>
+                    ${sorts}
                 </div>
                 ${panes}
             </div>`;
@@ -3426,41 +3584,117 @@
                 btn.classList.toggle('is-active', on);
                 btn.setAttribute('aria-pressed', String(on));
             });
-            const attr = 'data-' + champAugSort;
+            // Strength order inside one rarity is the data order; the merged "All"
+            // grid has to order by the score that order came from.
+            const sortAttr = (grid) => (champAugSort === 'rank' && grid.getAttribute('data-rarity') === '' ? 'data-score' : 'data-' + champAugSort);
             table.querySelectorAll('.aug-tier-pane').forEach(pane => {
                 pane.hidden = pane.getAttribute('data-rarity') !== champAugRarity;
             });
-            table.querySelectorAll('.aug-tier-list').forEach(list => {
-                const rows = Array.from(list.querySelectorAll('.aug-tier-row'));
-                rows.sort((a, b) => {
+            table.querySelectorAll('.aug-tile-grid').forEach(grid => {
+                closeAugDetail(grid);
+                const tiles = Array.from(grid.querySelectorAll('.aug-tile'));
+                const attr = sortAttr(grid);
+                tiles.sort((a, b) => {
                     const av = Number(a.getAttribute(attr) || 0);
                     const bv = Number(b.getAttribute(attr) || 0);
-                    // Strength rank is ascending (0 = strongest); rates descend.
-                    if (av !== bv) return champAugSort === 'rank' ? av - bv : bv - av;
+                    // Strength rank is ascending (0 = strongest); scores and rates descend.
+                    if (av !== bv) return attr === 'data-rank' ? av - bv : bv - av;
                     return Number(a.getAttribute('data-rank')) - Number(b.getAttribute('data-rank'));
                 });
-                rows.forEach(row => list.appendChild(row));
-                const full = champAugSort !== 'rank';
-                list.classList.toggle('is-full', full);
-                list.setAttribute('start', full ? '1' : '4');
-                const limit = full ? CHAMP_AUG_COLLAPSED : CHAMP_AUG_COLLAPSED - 3;
-                let shown = 0;
-                rows.forEach(row => {
-                    const podium = !full && row.classList.contains('is-podium');
-                    row.hidden = podium || (!champAugExpanded && shown >= limit);
-                    if (!podium) shown += 1;
+                tiles.forEach((tile, i) => {
+                    grid.appendChild(tile);
+                    tile.classList.toggle('is-podium', i < CHAMP_AUG_PODIUM);
+                    tile.querySelector('.aug-tile-rank').textContent = String(i + 1);
                 });
-                const more = list.parentElement && list.parentElement.querySelector('[data-aug-expand]');
-                if (more) {
-                    const total = Number(more.getAttribute('data-total') || 0);
-                    more.textContent = champAugExpanded
-                        ? pickLang('收合', 'Show less')
-                        : pickLang(`顯示全部 ${fmtInt(total)} 個`, `Show all ${fmtInt(total)}`);
-                    more.setAttribute('aria-expanded', String(champAugExpanded));
-                }
+                layoutChampAugGrid(grid);
             });
         });
     }
+    /** Tiles shown while collapsed: whole rows, featured tiles' columns counted. */
+    function champAugCollapsedCount(cols, wide) {
+        const cells = wide
+            ? CHAMP_AUG_COLLAPSED_ROWS * cols - CHAMP_AUG_PODIUM * 2
+            : CHAMP_AUG_COLLAPSED_PLAIN_ROWS * cols;
+        return CHAMP_AUG_PODIUM + cells;
+    }
+    /** Column-dependent layout of one visible grid: featured width, collapsing, show-all button. */
+    function layoutChampAugGrid(grid) {
+        augGridObserver.observe(grid);
+        const pane = grid.parentElement;
+        // A grid in a hidden tab / pane has no column count yet; the observer
+        // calls back with its real width once it is shown.
+        if (!pane || pane.hidden || !grid.offsetWidth) return;
+        grid._augWidth = grid.offsetWidth;
+        const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').length);
+        const wide = cols >= CHAMP_AUG_WIDE_MIN_COLS;
+        grid.classList.toggle('is-wide-podium', wide);
+        const tiles = Array.from(grid.querySelectorAll('.aug-tile'));
+        const limit = champAugCollapsedCount(cols, wide);
+        tiles.forEach((tile, i) => {
+            const hide = !champAugExpanded && i >= limit;
+            if (hide && tile.getAttribute('aria-expanded') === 'true') closeAugDetail(grid);
+            tile.hidden = hide;
+        });
+        const more = pane.querySelector('[data-aug-expand]');
+        if (more) {
+            const total = Number(more.getAttribute('data-total') || 0);
+            more.hidden = total <= limit;
+            more.textContent = champAugExpanded
+                ? pickLang('收合', 'Show less')
+                : pickLang(`顯示全部 ${fmtInt(total)} 個`, `Show all ${fmtInt(total)}`);
+            more.setAttribute('aria-expanded', String(champAugExpanded));
+        }
+        const open = grid.querySelector('.aug-tile[aria-expanded="true"]');
+        if (open) placeAugDetail(grid, open);
+    }
+    /** Remove the open detail row (and reset aria-expanded) in one tile grid. */
+    function closeAugDetail(grid) {
+        grid.querySelectorAll('.aug-detail').forEach(d => d.remove());
+        grid.querySelectorAll('.aug-tile[aria-expanded="true"]').forEach(t => t.setAttribute('aria-expanded', 'false'));
+    }
+    /** Seat the detail row under the last visible tile that shares `tile`'s visual row. */
+    function placeAugDetail(grid, tile) {
+        const detail = grid.querySelector('.aug-detail');
+        if (!detail) return;
+        const top = tile.offsetTop;
+        let last = tile;
+        for (let el = tile.nextElementSibling; el; el = el.nextElementSibling) {
+            if (!el.classList.contains('aug-tile') || el.hidden) continue;
+            if (el.offsetTop !== top) break;
+            last = el;
+        }
+        if (last.nextElementSibling !== detail) last.after(detail);
+    }
+    /** Click / Enter / Space on a tile: open its detail row, or close it if already open. */
+    function toggleAugTile(tile) {
+        const grid = tile.closest('.aug-tile-grid');
+        if (!grid) return;
+        const wasOpen = tile.getAttribute('aria-expanded') === 'true';
+        closeAugDetail(grid);
+        hideItemFloatTip();
+        if (wasOpen) return;
+        const src = tile.querySelector('.aug-detail-src');
+        const detail = document.createElement('div');
+        detail.className = 'aug-detail ' + Array.from(tile.classList).filter(c => /^rarity-/.test(c)).join(' ');
+        detail.setAttribute('role', 'region');
+        detail.setAttribute('aria-label', tile.querySelector('.aug-tile-name').textContent);
+        detail.innerHTML = src ? src.innerHTML : '';
+        // The pick-round strip lives once in the hover-tip source; touch has no
+        // tip, so the detail row borrows a copy of it.
+        const slots = tile.querySelector('.item-tip-src .aug-slots');
+        if (slots) detail.appendChild(slots.cloneNode(true));
+        grid.appendChild(detail);
+        tile.setAttribute('aria-expanded', 'true');
+        placeAugDetail(grid, tile);
+    }
+    // A width change (resize, or the tab being shown) changes the column count,
+    // so redo the row-dependent layout.
+    const augGridObserver = new ResizeObserver(entries => {
+        entries.forEach(entry => {
+            const grid = entry.target;
+            if (grid.isConnected && grid.offsetWidth !== grid._augWidth) layoutChampAugGrid(grid);
+        });
+    });
 
     // Champion-relative pick rate (0-1) at or above this flags an augment as 熱門.
     const AUG_HOT_PICK = 0.20;
@@ -3671,9 +3905,15 @@
     function augCatMeta() {
         return {...AUGMENT_TAXONOMY, newPatch: ((DATA && DATA.augCategories) || {}).newPatch || ''};
     }
+    // Pool-only augments (no stats this window, so absent from DATA.augs) still
+    // carry their curated categories in augCategories.poolCats.
+    function augmentCats(aid, catalogue) {
+        const own = (catalogue[aid] || {}).cats;
+        if (Array.isArray(own)) return own;
+        return (((DATA && DATA.augCategories) || {}).poolCats || {})[aid] || [];
+    }
     function augmentPurposeTags(cats) {
-        const tags = (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
-        return tags.some(cat => cat !== 'new' && cat !== 'other') ? tags.filter(cat => cat !== 'other') : [...new Set([...tags, 'other'])];
+        return (Array.isArray(cats) ? cats : []).filter(cat => AUGMENT_TAXONOMY.order.includes(cat));
     }
     function augCatLabel(cat) {
         const lbl = (augCatMeta().labels || {})[cat];
@@ -3978,13 +4218,25 @@
     }
     // Pool groups are the compact view of the same detailed filter taxonomy.
     function championPoolCategory(cats) {
-        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || 'other';
+        const category = AUGMENT_TAXONOMY.primaryPriority.find(cat => cats.includes(cat)) || AUGMENT_TAXONOMY.fallback;
         return AUGMENT_TAXONOMY.groups.find(group => group.categories.includes(category)).id;
     }
     // Augments this champion's pools hold but games show the server never offers it.
     function apoolBlocked(data, cid) {
         return new Set((((data.observed || {}).blocked || {})[cid] || []).map(String));
     }
+    // Augments added after the frozen pool file that games show this champion
+    // holding. Their pool and weight are unknown (weight null on the page).
+    function apoolAdded(data, cid) {
+        const added = ((data || {}).observed || {}).added || {};
+        return Object.keys(added).filter(aid => (added[aid] || []).some(c => String(c) === String(cid)));
+    }
+    function apoolObservedPatch(data) {
+        const patches = (((data || {}).observed || {}).patches || []).slice();
+        return patches.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0] || '';
+    }
+    // Sort key for a pool weight; unknown (null) sorts after every real weight.
+    function apoolWeightRank(w) { return w == null ? -1 : w; }
     function championPoolEntries(cid, data, catalogue) {
         const pools = new Map((data.pools || []).map(p => [String(p.id), p]));
         const blocked = apoolBlocked(data, cid);
@@ -3996,14 +4248,19 @@
             for (const aid of new Set((pool.augs || []).map(String))) {
                 if (blocked.has(aid)) continue;
                 if (!entries.has(aid)) entries.set(aid, {
-                    id: aid, weight, category: championPoolCategory((catalogue[aid] || {}).cats || []), sources: [],
+                    id: aid, weight, category: championPoolCategory(augmentCats(aid, catalogue)), sources: [],
                 });
                 const entry = entries.get(aid);
                 entry.weight = Math.max(entry.weight, weight);
                 if (!entry.sources.some(source => source.pool.id === pool.id)) entry.sources.push({pool, weight});
             }
         }
-        return [...entries.values()].sort((a, b) => b.weight - a.weight || Number(a.id) - Number(b.id));
+        for (const aid of apoolAdded(data, cid)) {
+            if (!entries.has(aid)) entries.set(aid, {
+                id: aid, weight: null, added: true, category: championPoolCategory(augmentCats(aid, catalogue)), sources: [],
+            });
+        }
+        return [...entries.values()].sort((a, b) => apoolWeightRank(b.weight) - apoolWeightRank(a.weight) || Number(a.id) - Number(b.id));
     }
     function championPoolComplexity(cid, data, catalogue) {
         const count = championPoolEntries(cid, data, catalogue).length;
@@ -4084,7 +4341,7 @@
             }
             const grouped = new Map();
             list.forEach(e => {
-                const weight = apoolGrantRatio(e.weight);
+                const weight = e.added ? 1 : apoolGrantRatio(e.weight);
                 grouped.set(weight, (grouped.get(weight) || 0) + 1);
             });
             const groups = [...grouped].sort((a, b) => a[0] - b[0]);
@@ -4099,7 +4356,9 @@
                 if (apoolEncounterCache.size >= 128) apoolEncounterCache.delete(apoolEncounterCache.keys().next().value);
                 apoolEncounterCache.set(cacheKey, byWeight);
             }
-            list.forEach(e => rates.set(e.id, byWeight.get(apoolGrantRatio(e.weight))));
+            // An added augment still competes for draws (assumed weight 100), but
+            // its own weight is unknown, so the page shows no cap for it.
+            list.forEach(e => { if (!e.added) rates.set(e.id, byWeight.get(apoolGrantRatio(e.weight))); });
         }
         return rates;
     }
@@ -4114,10 +4373,15 @@
                 .map(([label, value]) => `<div><dt>${escHtml(label)}</dt><dd>${value != null && Number.isFinite(Number(value)) ? escHtml(pct(value)) : '—'}</dd></div>`).join('')
             + '</dl><p class="champ-pool-tip-note">' + escHtml(pickLang('預估上界：完成 4 輪、每輪看滿 6 張，排除所有已看過選項，依色彩組合機率加權。', 'Estimated upper bound: complete all 4 rounds and see 6 cards per round, excluding every previously seen option; weighted by colour-sequence probabilities.')) + '</p></div>';
         const rarity = (tr().rarityLabels || {})[aug.rarity] || '';
-        const tags = augmentPurposeTags((DATA.augs[entry.id] || {}).cats).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
+        const tags = augmentPurposeTags(augmentCats(entry.id, DATA.augs || {})).filter(cat => cat !== 'new').map(augCatLabel).join(' · ');
         const sources = [...entry.sources].sort((a, b) => b.weight - a.weight).map(({pool, weight}) =>
             `<li><span>${escHtml(apoolLabel(pool))}${apoolTag(pool)}</span><b>${weight}</b></li>`).join('');
-        const sourceHtml = `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
+        const seenIn = apoolObservedPatch(augPools.data);
+        const sourceHtml = entry.added
+            ? `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><p>${escHtml(pickLang(
+                `池子公開資料之後才新增，所屬池子與權重未公開；${seenIn} 版對局中這位英雄拿過它。`,
+                `Added after the last published pool data; its pool and weight are unknown. This champion held it in patch ${seenIn} matches.`))}</p></div>`
+            : `<div class="champ-pool-tip-sources"><strong>${escHtml(pickLang('來源池與權重', 'Source pools and weights'))}</strong><ul>${sources}</ul></div>`;
         const baseTip = buildItemTipHtml({name: aug.name, icons: aug.icon ? [aug.icon] : [], subtitle: [rarity, tags].filter(Boolean).join(' · '), desc: aug.desc}).trim();
         const tip = baseTip.replace('class="item-tip-card"', 'class="item-tip-card champ-pool-tip"')
             .replace('<div class="item-tip-desc">', statHtml + '<div class="item-tip-desc">')
@@ -4156,17 +4420,22 @@
         ].map(row => [String(row.id), row]));
         const offerRates = championPoolOfferRates(entries, d);
         const filters = [['', '全部', 'All'], ['kSilver', '銀色', 'Silver'], ['kGold', '金色', 'Gold'], ['kPrismatic', '棱彩', 'Prismatic']]
-            .map(([key, zh, en]) => `<button type="button" class="champ-pool-rarity-chip${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
+            // Same slash slab as the 增幅榜 rarity row (.aug-rarity-bar); data-rarity
+            // is left off so the tier-list handler never claims these clicks.
+            .map(([key, zh, en]) => `<button type="button" class="aug-cat-chip aug-rarity-chip${key ? ' rarity-' + key : ''}${key === rarity ? ' is-active' : ''}" data-champ-pool-rarity="${key}" aria-pressed="${key === rarity}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const purposeFilters = [{id: '', zh: '全部', en: 'All'}, ...AUGMENT_TAXONOMY.groups.filter(group => entries.some(e => e.category === group.id))]
-            .map(({id, zh, en}) => `<button type="button" class="champ-pool-rarity-chip${id === purpose ? ' is-active' : ''}" data-champ-pool-purpose="${id}" aria-pressed="${id === purpose}">${escHtml(pickLang(zh, en))}</button>`).join('');
+            .map(({id, zh, en}) => `<button type="button" class="aug-cat-chip${id ? '' : ' aug-cat-all'}${id === purpose ? ' is-active' : ''}" data-champ-pool-purpose="${id}" aria-pressed="${id === purpose}">${escHtml(pickLang(zh, en))}</button>`).join('');
         const groups = AUGMENT_TAXONOMY.groups.map(({id: cat, zh, en}) => {
             const members = visibleEntries.filter(e => e.category === cat);
             if (!members.length) return '';
-            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => b - a);
+            const weights = [...new Set(members.map(e => e.weight))].sort((a, b) => apoolWeightRank(b) - apoolWeightRank(a));
             return `<section class="champ-pool-category"><h3>${escHtml(pickLang(zh, en))}<small>${members.length} ${escHtml(pickLang('種增幅', 'augments'))}</small></h3>`
                 + weights.map(weight => {
                     const list = members.filter(e => e.weight === weight).sort((a, b) => championPoolSort(a, b, statsById));
-                    return `<div class="champ-pool-weight-group"><h4>${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b></h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById, offerRates)).join('')}</ul></div>`;
+                    const head = weight == null
+                        ? `${escHtml(pickLang('新增增幅', 'Added augments'))} <b>${escHtml(pickLang('權重未公開', 'weight unknown'))}</b>`
+                        : `${escHtml(pickLang('權重', 'Weight'))} <b>${weight}</b>`;
+                    return `<div class="champ-pool-weight-group${weight == null ? ' is-added' : ''}"><h4>${head}</h4><ul>${list.map(entry => championPoolAugHtml(entry, cid, statsById, offerRates)).join('')}</ul></div>`;
                 }).join('') + '</section>';
         }).join('');
         const complexity = championPoolComplexity(cid, d, DATA.augs || {});
@@ -4185,8 +4454,8 @@
             </div>
         </div>`;
         return `<p class="champ-pools-summary">${escHtml(pickLang(`${entries.length} 種增幅`, `${entries.length} augments`))} <button type="button" class="champ-pools-rank has-item-tip" aria-label="${escHtml(rankLabel)}">#${complexity.rank}/${complexity.total}${itemTipSource(rankTip)}</button></p>`
-            + `<div class="champ-pools-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
-            + `<div class="champ-pools-filters champ-pools-purpose-filters" role="group" aria-label="${escHtml(pickLang('篩選增幅用途', 'Filter augment purpose'))}">${purposeFilters}</div>`
+            + `<div class="champ-pools-filters aug-cat-bar aug-rarity-bar" role="group" aria-label="${escHtml(pickLang('篩選增幅稀有度', 'Filter augment rarity'))}">${filters}</div>`
+            + `<div class="champ-pools-filters champ-pools-purpose-filters aug-cat-bar" role="group" aria-label="${escHtml(pickLang('篩選增幅用途', 'Filter augment purpose'))}">${purposeFilters}</div>`
             + (groups || `<p class="champ-pools-status" role="status">${escHtml(pickLang('此篩選組合沒有可用增幅，請切換稀有度或用途。', 'No augments match. Try another rarity or purpose.'))}</p>`)
             + `<details class="champ-pools-help"><summary>${escHtml(pickLang('權重是什麼', 'What is weight?'))}</summary><p>${escHtml(pickLang('同一個增幅裝置可以出現在多個池子中，但出現機率依最高權重的來源池計算，不會將各池權重相加。這裡顯示的權重不是百分比。點增幅可查看所有來源池與權重。', 'An augment can belong to multiple pools. Its chance of appearing uses the highest-weight source pool; weights from different pools are not added together. The weight shown here is not a percentage. Select an augment to see all source pools and weights.'))}</p></details>`
             + championPoolFrequencyHtml()
@@ -4344,6 +4613,8 @@
         const blocked = apoolBlocked(d, cid);
         const union = new Set();
         rows.forEach(r => r.p.augs.forEach(a => { if (!blocked.has(String(a))) union.add(String(a)); }));
+        const addedIds = apoolAdded(d, cid).filter(a => !union.has(a));
+        addedIds.forEach(a => union.add(a));
         const c = apoolChamp(cid);
         // 175 sits too close to 150/200 to label on a phone; each row prints its value.
         const ticks = [75, 100, 150, 200].map(v => `<span style="left:${v / 2}%">${v}</span>`).join('');
@@ -4357,15 +4628,17 @@
                 + `</button>`
                 + (open ? apoolAugListHtml(r.p, blocked) : '')
                 + `</li>`;
-        }).join('');
+        }).join('') + apoolAddedRowHtml(addedIds);
         return `<div class="apool-detail-head">`
             + (c.image ? `<img src="${escHtml(c.image)}" alt="" width="44" height="44">` : '')
             + `<div><h3 class="apool-detail-name">${escHtml(c.name)}</h3>`
             + `<p class="apool-detail-sub">${escHtml(pickLang(
                 `所屬 ${rows.length} 個池子 · 可能抽到 ${union.size} 種增幅`
-                    + (blocked.size ? `（已扣除 ${blocked.size} 種伺服器不給的）` : ''),
+                    + (blocked.size ? `（已扣除 ${blocked.size} 種伺服器不給的）` : '')
+                    + (addedIds.length ? `，含 ${addedIds.length} 種池子未公開的新增增幅` : ''),
                 `${rows.length} pools · up to ${union.size} augments`
-                    + (blocked.size ? ` (${blocked.size} the server withholds removed)` : '')))}</p></div></div>`
+                    + (blocked.size ? ` (${blocked.size} the server withholds removed)` : '')
+                    + (addedIds.length ? `, incl. ${addedIds.length} added augments with unknown pools` : '')))}</p></div></div>`
             + `<p class="apool-footnote">${escHtml(pickLang("權重越高，越容易抽到該池；數值不是機率。點選池子查看增幅。", "Higher weights favor a pool; values are not probabilities. Select a pool to see its augments."))}</p>`
             + `<div class="apool-scale" aria-hidden="true"><span class="apool-scale-label">${escHtml(pickLang('池子與權重', 'Pool and weight'))}</span>`
             + `<span class="apool-scale-track">${ticks}</span></div>`
@@ -4373,6 +4646,18 @@
             + `<p class="apool-footnote">${escHtml(pickLang(
                 '點任一列可展開該池的增幅，滑過或點增幅可看說明。',
                 'Select a row to list that pool’s augments; hover or tap an augment for its description.'))}</p>`;
+    }
+    function apoolAddedRowHtml(ids) {
+        if (!ids.length) return '';
+        const open = augPools.openRow === 'added';
+        return `<li class="apool-row-item apool-row-added${open ? ' is-open' : ''}">`
+            + `<button type="button" class="apool-row" data-apool-row="added" aria-expanded="${open}">`
+            + `<span class="apool-row-name">${escHtml(pickLang('池子公開後新增', 'Added since'))}<span class="apool-tag">${escHtml(pickLang('池子未公開', 'pool unknown'))}</span></span>`
+            + `<span class="apool-bar apool-bar-unknown"></span>`
+            + `<span class="apool-w">?<span class="apool-chevron" aria-hidden="true">${open ? "−" : "+"}</span></span>`
+            + `</button>`
+            + (open ? apoolAugListHtml({augs: ids}) : '')
+            + `</li>`;
     }
     function apoolPoolBtnHtml(p) {
         const on = p.id === augPools.openPool;
@@ -4438,7 +4723,19 @@
                     + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang(zh, en))}<span class="apool-family-count">${list.length}</span></span><span class="apool-family-desc">${escHtml(pickLang(dzh, den))}</span></summary>`
                     + `<div class="apool-family-body">` + inner + (open ? apoolPoolDetailHtml(open) : '')
                     + `</div></details>`;
-            }).join('');
+            }).join('') + apoolAddedFamilyHtml(d);
+    }
+    function apoolAddedFamilyHtml(d) {
+        const added = ((d || {}).observed || {}).added || {};
+        const ids = Object.keys(added).sort((a, b) => apoolAug(a).name.localeCompare(apoolAug(b).name));
+        if (!ids.length) return '';
+        const patch = apoolObservedPatch(d);
+        return `<details class="apool-family" data-apool-family="added">`
+            + `<summary class="apool-family-head"><span class="apool-family-title">${escHtml(pickLang('池子公開後新增', 'Added since'))}<span class="apool-family-count">${ids.length}</span></span>`
+            + `<span class="apool-family-desc">${escHtml(pickLang(
+                `${d.patch} 版之後才出現的增幅，不屬於任何公開池子；依 ${patch} 版對局列出，權重未知。`,
+                `Augments that appeared after patch ${d.patch} and belong to no published pool; listed from patch ${patch} matches, weights unknown.`))}</span></summary>`
+            + `<div class="apool-family-body">${apoolAugListHtml({augs: ids})}</div></details>`;
     }
     function apoolDiffHtml(d) {
         const df = d.diff;
@@ -4479,7 +4776,18 @@
         if (!since) return '';
         return `<p class="apool-frozen">${escHtml(pickLang(
             `Riot 從 ${since} 版起不再把增幅池和權重放進遊戲檔，改由伺服器決定，所以這頁停在最後一份公開資料（${d.patch} 版）。之後的改動無法從遊戲檔得知，實際抽到的增幅可能已經不同。`,
-            `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`;
+            `From patch ${since}, Riot no longer ships augment pools or weights in the game files; the server decides them. This page stays on the last published data (patch ${d.patch}). Later changes cannot be read from the game files, so what you are actually offered may differ.`))}</p>`
+            + apoolObservedNoteHtml(d);
+    }
+    // Present when the frozen pools were re-checked against newer matches.
+    function apoolObservedNoteHtml(d) {
+        const obs = (d || {}).observed || {};
+        const patch = apoolObservedPatch(d);
+        if (!patch || patch === d.patch) return '';
+        const dead = (obs.dead || []).length, added = Object.keys(obs.added || {}).length;
+        return `<p class="apool-frozen">${escHtml(pickLang(
+            `已用 ${patch} 版對局校正：移除 ${dead} 個已不再出現的增幅，另列 ${added} 個之後新增的增幅（只知道哪些英雄拿得到，不知道權重）。`,
+            `Checked against patch ${patch} matches: ${dead} augments that no longer appear are removed, and ${added} augments added since are listed (who can get them is known, their weight is not).`))}</p>`;
     }
     function apoolNotesHtml(d, champion = false) {
         // All interpolated data is escaped before adding emphasis.
@@ -4502,6 +4810,10 @@
                 + text(' 場 Mayhem；排除 ', ' Mayhem matches; excluded ')
                 + strong(Number(pairs).toLocaleString()) + text(' 組疑似受限搭配', ' likely restricted pairs')
                 + (dead ? text('、', ' and ') + strong(dead) + text(' 個失效增幅。', ' obsolete augments.') : text('。', '.'))]);
+            const added = Object.keys(obs.added || {}).length;
+            if (added) notes.push([pickLang('新增增幅', 'Added augments'),
+                strong(added) + text(' 個增幅不在公開池子裡，依對局列出拿得到的英雄；權重未知，不計算出現上界。',
+                    ' augments are in no published pool; champions are listed from matches. Weight unknown, so no encounter cap is computed.')]);
         }
         notes.push([pickLang('清單限制', 'List limits'), text(obs
             ? '樣本不足的搭配仍保留，冷門英雄的清單可能偏多。'
@@ -4878,7 +5190,7 @@
         const tier = draftAssignTier(info.wr);
         const tierColors = ((DATA && DATA.tiers) || {}).colors || {};
         const tierColor = (tierColors[tier] && tierColors[tier].color) || 'var(--accent)';
-        const key = String(info.image || '').split('/').pop().replace(/\.png$/i, '');
+        const key = String(info.imageDdragon || info.image || '').split('/').pop().replace(/\.png$/i, '');
         const splash = key ? `https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${encodeURIComponent(key)}_0.jpg` : '';
         const name = champName(info, cid);
         const rank = (r) => (
@@ -7119,7 +7431,7 @@
                 champ.className = 'player-history-champion';
                 const info = (DATA && DATA.champs && DATA.champs[String(row.champion_id)]) || null;
                 const name = info ? champName(info, row.champion_id) : `#${row.champion_id}`;
-                if (info && typeof info.image === 'string' && /^https?:\/\//i.test(info.image)) {
+                if (info && typeof info.image === 'string' && info.image) {
                     const image = document.createElement('img');
                     image.src = info.image;
                     image.alt = '';
@@ -7441,7 +7753,7 @@
         }
         return (
             `<span class="${cls}" title="${escHtml(name)}">`
-            + `<img loading="lazy" src="${escHtml(info.image)}" alt="${escHtml(name)}">`
+            + `<img loading="lazy" src="${escHtml(info.imageCircle || info.image)}" alt="${escHtml(name)}">`
             + `</span>`
         );
     }
@@ -9150,7 +9462,7 @@
         const c = (DATA.champs || {})[augDraft.champId] || {};
         return (
             `<div class="aug-champ-badge" data-champ-id="${escHtml(augDraft.champId)}">`
-            + `<img src="${escHtml(c.image || '')}" alt="" loading="lazy">`
+            + `<img src="${escHtml(c.imageCircle || c.image || '')}" alt="" loading="lazy">`
             + `<span>${escHtml(champName(c, augDraft.champId))}</span>`
             + `</div>`
         );
@@ -9491,7 +9803,7 @@
             + `</div>`
             + `<div class="game-settle-avg-sub">${escHtml(copy.augGameSettleSub || '')}</div>`
             + `<div class="aug-settle-champ">`
-            + `<img src="${escHtml(champ.image || '')}" alt="" loading="lazy">`
+            + `<img src="${escHtml(champ.imageCircle || champ.image || '')}" alt="" loading="lazy">`
             + `<span>${escHtml(champName(champ, augDraft.champId))}</span>`
             + `<span class="aug-settle-total">${escHtml(copy.augGameTotalLift || 'Total lift')} `
             + `<b class="${totalLift >= 0 ? 'is-good' : 'is-bad'}">${escHtml(signed(totalLift))}</b></span>`
@@ -10047,7 +10359,7 @@
         teamPicks.forEach(cid => {
             const info = DATA.champs[cid];
             const name = info ? champName(info, cid) : ('#' + cid);
-            const image = info && info.image ? info.image : '';
+            const image = info && info.image ? (info.imageCircle || info.image) : '';
             chips.push(
                 `<button class="pick-chip" type="button" data-remove-cid="${cid}" title="${escHtml(copy.removePick(name))}">` +
                 (image ? `<img loading="lazy" src="${image}" alt="">` : '') +
@@ -11435,6 +11747,7 @@
                 renderChampionPools();
                 loadAugPools();
             }
+            if (tab === 'compfit') renderChampionAnalysis();
             if (filterState.q.trim()) applySearchHighlights(host);
         }).catch(err => {
             if (token !== homeDetailToken) return;
@@ -11554,7 +11867,7 @@
         const slug = champSlugForCid(cid);
         if (!info || !slug) return '';
         return `<a class="${cls}" href="${escHtml(pathForRoute('champ', slug))}" data-champ-page="${escHtml(slug)}">`
-            + (info.image ? `<img src="${info.image}" alt="" loading="lazy">` : '')
+            + (info.image ? `<img src="${info.imageCircle || info.image}" alt="" loading="lazy">` : '')
             + `<span>${escHtml(champName(info, cid))}</span></a>`;
     }
     function renderChampRecent(currentCid) {
@@ -11618,6 +11931,7 @@
                 renderChampionPools();
                 loadAugPools();
             }
+            if (tab === 'compfit') renderChampionAnalysis();
         }).catch(err => {
             if (token !== champPageToken) return;
             console.error('champion page load failed', cid, err);
@@ -11937,9 +12251,14 @@
             trackEvent('recommendations_close', { source: 'panel', picks: teamPicks.length });
             return;
         }
+        const augTile = ev.target.closest('.aug-tile');
+        if (augTile && !ev.target.closest('.aug-detail')) {
+            toggleAugTile(augTile);
+            return;
+        }
         const augRarityBtn = ev.target.closest('[data-aug-rarity]');
         if (augRarityBtn) {
-            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || 'kGold';
+            champAugRarity = augRarityBtn.getAttribute('data-aug-rarity') || '';
             syncChampAugTable();
             trackEvent('aug_rarity_select', { rarity: champAugRarity });
             return;
@@ -12705,7 +13024,7 @@
         const t = ev.target;
         if (!t || !t.classList) return;
         if (t.matches('a.champ') && (t.getAttribute('role') !== 'button' || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey)) return;
-        if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card')) {
+        if (t.classList.contains('champ') || t.classList.contains('aug') || t.classList.contains('article-card') || t.classList.contains('aug-tile')) {
             ev.preventDefault();
             t.click();
         }
@@ -12726,14 +13045,16 @@
 
     // Rich item float-tip: show on hover/focus of any .has-item-tip host.
     document.addEventListener('pointermove', () => { _itemFloatTipDismissed = false; }, { passive: true });
+    let _augTouchInput = false;
+    document.addEventListener('pointerdown', ev => { _augTouchInput = ev.pointerType === 'touch'; }, { passive: true, capture: true });
     document.addEventListener('mouseover', (ev) => {
         if (_itemFloatTipPinned || _itemFloatTipDismissed) return;
         if (ev.sourceCapabilities && ev.sourceCapabilities.firesTouchEvents) return;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
         if (!host) return;
-        // Augment cards and rows open their tip on click; hovering must not
-        // raise a panel that would cover the rarity buttons above them.
-        if (host.matches('.aug-pick-card, .aug-tier-row')) return;
+        // An open tile shows its detail row instead of the tip, and touch input
+        // never hovers (a layout shift can fire a stray mouseover after a tap).
+        if (host.matches('.aug-tile') && (_augTouchInput || host.getAttribute('aria-expanded') === 'true')) return;
         // Prefer the deepest host under the cursor (e.g. core icon inside cg-head).
         showItemFloatTip(host);
     }, { passive: true });
@@ -12749,6 +13070,8 @@
     document.addEventListener('focusin', (ev) => {
         _itemFloatTipDismissed = false;
         const host = ev.target.closest && ev.target.closest('.has-item-tip');
+        // A touch tap focuses an augment tile, but its detail row replaces the tip.
+        if (host && host.matches('.aug-tile') && !host.matches(':focus-visible')) return;
         if (host) showItemFloatTip(host);
     });
     document.addEventListener('focusout', (ev) => {

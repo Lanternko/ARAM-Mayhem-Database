@@ -9,8 +9,8 @@
 ## Scope and ownership
 
 - 本檔是現行模型方向、資料切分與 promotion gate 的唯一 canonical 文件。
-- `notes/agents/experiments-and-data.md` 定義每次實驗必備的 manifest、變因控制與報告格式。
-- `PLAN.md`、`notes/archive/MODEL_NOTES.md`、`notes/archive/TODO.md` 是歷史設計與實驗快照，不可拿來覆蓋本檔。
+- `documents/guides/experiments-and-data.md` 定義每次實驗必備的 manifest、變因控制與報告格式。
+- `documents/archive/PLAN-2026-05-12.md`、`documents/archive/MODEL_NOTES-2026-05-20.md`、`documents/archive/TODO.md` 是歷史設計與實驗快照，不可拿來覆蓋本檔。
 - 執行指令只放在 `scripts/README.md` 與各 CLI 的 `--help`；本檔只定義決策規則。
 
 ## Data contract
@@ -55,7 +55,7 @@ LR baseline 必跑。若神經網路只提高 train 指標、未改善時間外 
 - Accuracy、log loss、Brier score、ECE，以及相對 constant/LR baseline 的 delta。
 - 依 patch、時間、樣本量與常見／長尾英雄組合切片的 failure analysis。
 
-完整執行模板與 promotion gate 見 `notes/agents/experiments-and-data.md`。
+完整執行模板與 promotion gate 見 `documents/guides/experiments-and-data.md`。
 
 ## Promotion gate
 
@@ -71,9 +71,9 @@ LR baseline 必跑。若神經網路只提高 train 指標、未改善時間外 
 
 ## Evidence map
 
-- `notes/issue-16-analysis.md`：特定研究問題的分析與限制。
-- `documents/reports/composition_analysis_handoff_2026_06_11.md`：composition 實驗證據補充。
-- `documents/reports/final_project_report_2026_06_14.md`：2026-06 的 final report 快照。
-- `notes/archive/README.md`：歷史模型、產品與設計文件索引。
+- `documents/reports/2026-08-10-issue-16-analysis.md`：特定研究問題的分析與限制。
+- `documents/reports/2026-06-11-composition-analysis-handoff.md`：composition 實驗證據補充。
+- `documents/reports/2026-06-14-final-project-report.md`：2026-06 的 final report 快照。
+- `documents/README.md`（Archive 小節）：歷史模型、產品與設計文件索引。
 
 數字結論以綁定 dataset manifest 的報告為準；本檔只保存不隨單次跑次變動的決策規則。

@@ -1,4 +1,4 @@
-<!-- lines: 117 -->
+<!-- lines: 118 -->
 # aram-winrate-nn — Mayhem 資料、勝率推估、推薦與公開產品，Python / PyTorch
 
 ## Why
@@ -40,7 +40,7 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 - **Privacy** — PUUID、Riot ID、summoner name 與 private frontier 永不進 public payload；網站只發布去識別化聚合統計。
 - **Statistical reliability** — 小樣本不可直接按 raw win rate 排名。公開數字使用 sample floor、Bayesian/empirical-Bayes shrinkage、confidence-aware ordering，並同時呈現樣本數與版本。
 
-細部 dataset contract、實驗 manifest 與驗收流程見 `notes/agents/experiments-and-data.md`。
+細部 dataset contract、實驗 manifest 與驗收流程見 `documents/guides/experiments-and-data.md`。
 
 ## Experiment Doctrine
 - 每次實驗先固定：decision、hypothesis、experimental unit、treatment、control、資料範圍、split、primary metric、guardrail 與 promotion rule；結果出來後不可改題目配答案。
@@ -68,7 +68,7 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 ## Operations and Change Control
 - 先辨識 canonical source、資料 owner 與正在跑的 process，再修改；生成檔、live SQLite、ignored local service assets 與使用者 WIP 有不同風險邊界。
 - 一個 task 使用一個 `codex/<task>` worktree；mutation 前先查 status 與現有 worktrees，因為 primary checkout 是 live harness anchor，dirty／stale worktree 不可被自動重用或清理。
-- 研究輸出進 `outputs/<category>/`，長期報告進 `documents/reports/`，共用程式進 `src/aram_nn/`；不要讓 scratch script 變成隱性 production dependency。
+- 研究輸出進 `outputs/<category>/`，長期報告進 `documents/reports/`，共用程式進 `src/aram_nn/`；放置與整理規則見 `runbooks/repo-hygiene.md`；不要讓 scratch script 變成隱性 production dependency。
 - Site publish 分 routine data、frontend shell、generator／schema 三條 lane；明確的 deploy／publish／ship／上線要求已授權相符的 build、commit、push，不再二次確認。GitHub Pages 是靜態發布，不會重啟 crawler、backend 或其他 runtime。
 - 變更驗證按風險分層：純文件做連結／結構檢查；資料與模型做 invariant＋held-out evidence；UI 做 code test＋雙 theme／多 viewport visual QA；live harness 變更再核對 task argv、state 與 recovery log。
 - Runtime tuning 以 wrapper 的 production argv 為準，不以 Python generic defaults 或舊文件猜測。任何自動 recovery 都要留下 action、threshold、LCU status 與當時 memory，才能讓下一次決策基於證據。
@@ -83,7 +83,8 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 - GitHub Pages routine data／frontend shell／generator-schema publish：`runbooks/site-deploy.md`。
 - Git／worktree 建立、更新、整合、push 與清理：`runbooks/git-workflow.md`。
 - 外部資料貢獻與 share 驗證：`CONTRIBUTING.md`。
-- 實驗執行與 dataset manifest：`notes/agents/experiments-and-data.md`。
+- 實驗執行與 dataset manifest：`documents/guides/experiments-and-data.md`。
+- 檔案放置、文件歸檔、worktree 與本機檔案整理：`runbooks/repo-hygiene.md`。
 - UI preview、CSS 修改與 visual QA：`DESIGN.md`。
 
 ## NEVER
@@ -102,11 +103,11 @@ Mayhem 是產品與研究預設。ARAM（450）是歷史路徑；2450／4310 目
 - Never use `git add .`／`git add -A` or force-push；只 stage 已 review 的明確 path，已發布 history 以 merge 保留，因為工作樹常含 unrelated WIP。
 
 ## Scoped Rules
-- `notes/agents/experiments-and-data.md` — dataset contract、變因控制、統計與 promotion checklist。
+- `documents/guides/experiments-and-data.md` — dataset contract、變因控制、統計與 promotion checklist。
 - `MODEL.md` — 現行研究問題、資料 contract、baseline ladder、模型不變量與 promotion gate。
 - `DESIGN.md` — 品牌字標、product hierarchy、頁數、顯示模式、CSS token、美學、responsive、a11y、performance 與 visual QA。
 - `OPERATIONS.md` — live harness 拓撲、production profile、狀態、log 與 recovery routing。
-- `PLAN.md`、`notes/archive/` — 歷史決策與實驗快照；不可覆蓋 current owner。
+- `documents/archive/`（含 `PLAN-2026-05-12.md`） — 歷史決策與實驗快照；不可覆蓋 current owner。
 - `scripts/README.md` — command／script index；`runbooks/` — agent-neutral 高風險操作 SOP。
 
 ## How to edit this file

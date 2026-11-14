@@ -18,6 +18,13 @@ pair is only called blocked when the evidence is strong: at the augment's
 reach ``MIN_EXPECTED``.  At 10, P(0 | not blocked) is about 5e-5.  An augment
 nobody gets is tested the same way, using the 10th-percentile rate over all
 observed pairs.  Everything below that bar is left in the pools.
+
+From 16.19 the pools are server-side, so the last published pool file falls
+behind: Riot keeps adding augments that no pool in it lists.  Because pool
+membership is a strict necessary condition (16.18: 0 of 20.6M picks fell
+outside), every champion that shows such an augment in a game can draw it.
+``find_added`` lists those augments and the champions observed with them; the
+pool and the weight they come through stay unknown.
 """
 from __future__ import annotations
 
@@ -28,6 +35,10 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 MIN_EXPECTED = 10.0
+# An augment outside every pool needs this many occurrences to count as added,
+# and a champion this many to count as reaching it (guards against bad rows).
+MIN_ADDED_TOTAL = 100
+MIN_ADDED_PAIR = 2
 # Champions with fewer games give noisy rates; they still count as exposure.
 MIN_RATE_GAMES = 200
 # Per-augment floor needs this many champions with a nonzero rate, else the
@@ -129,3 +140,31 @@ def classify(
         if games * floor[aid] >= min_expected:
             blocked.setdefault(champ, []).append(aid)
     return {"dead": dead, "blocked": blocked, "global_floor": global_floor}
+
+
+def find_added(
+    counts: Iterable[PatchCounts],
+    pooled: set[int],
+    *,
+    skip: set[int] = frozenset(),
+    min_total: int = MIN_ADDED_TOTAL,
+    min_pair: int = MIN_ADDED_PAIR,
+) -> dict[int, list[int]]:
+    """Augments no pool lists but games show -> champions observed with them.
+
+    ``pooled`` is every augment id any pool lists (dead ones included, so an
+    augment that only went quiet is not mistaken for a new one).
+    """
+    pairs: Counter[tuple[int, int]] = Counter()
+    for c in counts:
+        pairs.update(c.pairs)
+    total: Counter[int] = Counter()
+    for (_champ, aid), n in pairs.items():
+        if aid not in pooled and aid not in skip:
+            total[aid] += n
+    out: dict[int, list[int]] = {}
+    for aid in sorted(a for a, n in total.items() if n >= min_total):
+        champs = sorted(c for (c, a), n in pairs.items() if a == aid and n >= min_pair)
+        if champs:
+            out[aid] = champs
+    return out

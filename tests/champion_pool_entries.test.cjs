@@ -14,13 +14,31 @@ for (const group of taxonomy.groups) {
     for (const cat of group.categories) assert.equal(context.AUGMENT_TAXONOMY.labels[cat] !== undefined, true);
 }
 
+assert.equal(taxonomy.groups.some(group => group.id === 'other'), false);
+assert.ok(taxonomy.groups.some(group => group.id === taxonomy.fallback));
 vm.runInContext(source.slice(start, end), context);
+{
+    const catsStart = source.indexOf('    function augmentCats(');
+    vm.runInContext(source.slice(catsStart, source.indexOf('    function augmentPurposeTags(', catsStart)), context);
+    context.DATA = {augCategories: {poolCats: {'9': ['gold']}}};
+    const cats = (aid, catalogue) => JSON.stringify(context.augmentCats(aid, catalogue));
+    assert.equal(cats('1', {'1': {cats: ['ad']}}), '["ad"]');
+    assert.equal(cats('9', {}), '["gold"]');
+    assert.equal(cats('8', {}), '[]');
+    context.DATA = {augCategories: {poolCats: JSON.parse(fs.readFileSync('docs/api/tier-list.json', 'utf8')).augCategories.poolCats || {}}};
+}
 const data = JSON.parse(fs.readFileSync('docs/api/augment-pools.json', 'utf8'));
 const catalogue = JSON.parse(fs.readFileSync('docs/api/tier-list.json', 'utf8')).augs;
 const pools = Object.fromEntries(data.pools.map(p => [p.id, p]));
 let champions = 0;
 for (const cid of Object.keys(data.champs)) {
-    const rows = context.championPoolEntries(cid, data, catalogue);
+    const all = context.championPoolEntries(cid, data, catalogue);
+    // Augments added after the pool file come last with unknown weight.
+    const addedIds = Object.keys((data.observed || {}).added || {}).filter(aid => data.observed.added[aid].map(String).includes(cid));
+    const rows = all.filter(r => !r.added);
+    const extra = all.filter(r => r.added);
+    assert.ok(all.slice(rows.length).every(r => r.added));
+    assert.ok(extra.every(r => r.weight === null && addedIds.includes(r.id)));
     const expected = new Map();
     const blocked = new Set(((data.observed || {}).blocked || {})[cid] || []);
     for (const [pid, w] of data.champs[cid]) {
@@ -37,16 +55,24 @@ for (const cid of Object.keys(data.champs)) {
         assert.ok(i === 0 || rows[i-1].weight >= row.weight);
         assert.equal(row.sources.length, new Set(row.sources.map(s => s.pool.id)).size);
         assert.ok(row.sources.every(s => s.weight <= row.weight));
+        // No silent "unclassified": every pool augment carries a curated purpose.
+        assert.ok(context.augmentCats(row.id, catalogue).some(cat => detailed.includes(cat)), `augment ${row.id} has no purpose category`);
     });
+    assert.equal(extra.length, addedIds.filter(aid => !expected.has(aid)).length);
     champions++;
 }
-assert.equal(context.championPoolCategory(['new']), 'other');
+assert.equal(context.championPoolCategory(['new']), taxonomy.fallback);
 assert.equal(context.championPoolCategory(['crit', 'amp']), 'damage');
 assert.equal(context.championPoolCategory(['ad', 'gold']), 'gold');
 assert.equal(context.championPoolEntries('missing',data,catalogue).length,0);
 {
     const toy = {pools: [{id: 'p1', augs: [1, 2, 3]}], champs: {'7': [['p1', 150]]}, observed: {blocked: {'7': [2]}}};
     assert.equal(context.championPoolEntries('7', toy, {}).map(r => r.id).join(), '1,3');
+    toy.observed.added = {'9': [7, 8], '3': [7]};
+    const withAdded = context.championPoolEntries('7', toy, {});
+    assert.equal(withAdded.map(r => r.id).join(), '1,3,9');
+    assert.equal(withAdded[2].weight, null);
+    assert.equal(withAdded[2].added, true);
 }
 console.log(`Verified unique membership, max weight, ordering and source provenance for ${champions} champions.`);
 

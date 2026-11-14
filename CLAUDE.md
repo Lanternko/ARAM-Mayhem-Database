@@ -1,4 +1,4 @@
-<!-- lines: 35 -->
+<!-- lines: 36 -->
 # Claude Code Adapter
 
 ## Why
@@ -9,7 +9,7 @@
 
 - Product、model、design、operations 的 owner 依序是 `PRODUCT.md`、`MODEL.md`、`DESIGN.md`、`OPERATIONS.md`。
 - 精確高風險操作在 `runbooks/`；`.claude/skills/` 只負責把自然語言意圖導向相同 runbook。
-- `docs/` 是網站生成產物；手寫 Markdown 放根目錄、`notes/`、`documents/` 或 `runbooks/`。
+- `docs/` 是網站生成產物；手寫 Markdown 放根目錄、`documents/` 或 `runbooks/`。
 
 ## Commands
 
@@ -25,6 +25,7 @@
 
 - 網站發布：`.claude/skills/deploy-tier-list/SKILL.md` 或 `.claude/skills/deploy-shell/SKILL.md` → `runbooks/site-deploy.md`。
 - 尚未發布的 Articles/column feature：`.claude/skills/write-column/SKILL.md` 只提供 dormant guard，不可修改舊單檔 `ARTICLES` contract。
+- 整理專案、檔案該放哪、worktree 退役：`.claude/skills/repo-hygiene/SKILL.md` → `runbooks/repo-hygiene.md`。
 - 其他自動發現 skill 可以補充任務流程，但不能重新定義 root project policy。
 
 ## How to edit this file

@@ -7,7 +7,11 @@ not on every data publish:
     python scripts/build_augment_pools.py --version 16.18 --prev 16.17
 
 From 16.19 the client ships empty pool files, so ``latest`` fails; pin the last
-patch that has them and the page is marked as frozen at that patch.
+patch that has them and the page is marked as frozen at that patch.  Check the
+frozen pools against current games so removed augments drop out and augments
+added since then are listed with the champions seen holding them:
+
+    python scripts/build_augment_pools.py --version 16.18 --prev 16.17         --observed-patch latest --observed-db D:/Projects/CODING/aram-winrate-nn/data/lcu/games.db
 
 With games.db present, the pools are checked against real Mayhem games of this
 patch and the previous one: stale augments are dropped and champion-specific
@@ -46,14 +50,41 @@ def resolve_patch(version: str) -> str:
 
 
 def frozen_since(version: str) -> str | None:
-    """Patch label of CDragon latest when it ships no pools but ``version`` does.
+    """First patch after ``version`` that ships no pools, when latest ships none.
 
     From 16.19 Riot stopped shipping the pool tables in the client, so the page
-    has to say its data stops at the last patch that had them.
+    has to say its data stops at the last patch that had them.  The label is
+    the first empty patch, not CDragon latest, so it stays put across patches.
     """
     if version == "latest" or parse_pools(fetch_json("latest", GROUPS_PATH)):
         return None
-    return resolve_patch("latest")
+    latest = resolve_patch("latest")
+    major, minor = (int(x) for x in version.split(".")[:2])
+    while f"{major}.{minor + 1}" != latest:
+        try:
+            if not parse_pools(fetch_json(f"{major}.{minor + 1}", GROUPS_PATH)):
+                break
+        except Exception:  # missing patch folder (e.g. a year rollover)
+            break
+        minor += 1
+    return f"{major}.{minor + 1}"
+
+
+def latest_db_patch(db: Path, queue: int) -> str:
+    """Major.minor patch of the most recently captured games of ``queue``."""
+    import sqlite3
+    from collections import Counter
+
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        rows = con.execute(
+            "SELECT patch FROM games WHERE queue_id=? ORDER BY rowid DESC LIMIT 2000", (queue,)
+        ).fetchall()
+    finally:
+        con.close()
+    if not rows:
+        raise SystemExit(f"no queue {queue} games in {db}")
+    return Counter(".".join(str(r[0]).split(".")[:2]) for r in rows).most_common(1)[0][0]
 
 
 def previous_patch(patch: str) -> str | None:
@@ -92,6 +123,12 @@ def main(argv: list[str] | None = None) -> int:
                     help="games.db to check pools against (a worktree has none: pass the primary checkout's)")
     ap.add_argument("--no-observed", action="store_true", help="publish the raw file pools")
     ap.add_argument("--queue", type=int, default=2400)
+    ap.add_argument("--observed-patch", default="pool",
+                    help="patch whose games check the pools: 'pool' (same as --version), 'latest' "
+                         "(newest in the DB) or a label like 16.22")
+    ap.add_argument("--observed-prev", default="auto",
+                    help="extra earlier patch of games; 'auto' (the pool's --prev patch when "
+                         "--observed-patch is 'pool', else none), 'none' or a label")
     args = ap.parse_args(argv)
 
     patch = resolve_patch(args.version)
@@ -102,13 +139,23 @@ def main(argv: list[str] | None = None) -> int:
     elif not args.observed_db.exists():
         print(f"WARNING: {args.observed_db} missing; publishing unchecked pools", file=sys.stderr)
     else:
-        counts = [count_patch(args.observed_db, args.queue, p) if p else None for p in (patch, prev)]
-        observed = {
-            "cur": counts[0],
-            "prev": counts[1],
-            "patches": [p for p in (patch, prev) if p],
-            "games": sum(sum(c.games.values()) for c in counts if c) // 10,
-        }
+        if args.observed_patch == "pool":
+            obs_patch = patch
+        elif args.observed_patch == "latest":
+            obs_patch = latest_db_patch(args.observed_db, args.queue)
+        else:
+            obs_patch = args.observed_patch
+        if args.observed_prev == "auto":
+            obs_prev = prev if obs_patch == patch else None
+        else:
+            obs_prev = None if args.observed_prev == "none" else args.observed_prev
+        labels = [p for p in (obs_patch, obs_prev) if p]
+        counts = [count_patch(args.observed_db, args.queue, p) for p in labels]
+        observed = {"patches": labels, "games": sum(sum(c.games.values()) for c in counts) // 10}
+        if obs_patch == patch:
+            observed |= {"cur": counts[0], "prev": counts[1] if len(counts) > 1 else None}
+        else:
+            observed["counts"] = counts
         print(f"observed: {observed['games']} games in {observed['patches']} (queue {args.queue})")
     internal = build_payload(fetch_json, args.version, prev, observed=observed)
     payload = public_payload(internal)  # the page must not show raw pool names
@@ -116,14 +163,16 @@ def main(argv: list[str] | None = None) -> int:
     since = frozen_since(args.version)
     if since:
         payload["frozen"] = {"since": since}
-        print(f"frozen: CDragon latest ({since}) ships no pools; page will say data stops at {patch}")
+        print(f"frozen: no pools from {since} on; page will say data stops at {patch}")
     n_desc = attach_descriptions(payload["augs"])
     print(f"descriptions: {n_desc}/{len(payload['augs'])} augments")
     obs = payload.get("observed")
     if obs:
         print(
             f"observed: dead={len(obs['dead'])} ({', '.join(d['en'] for d in obs['dead'])}) "
-            f"blocked_pairs={sum(len(v) for v in obs['blocked'].values())} over {len(obs['blocked'])} champs"
+            f"blocked_pairs={sum(len(v) for v in obs['blocked'].values())} over {len(obs['blocked'])} champs "
+            f"added={len(obs.get('added') or {})} "
+            f"({', '.join(payload['augs'][a]['en'] for a in (obs.get('added') or {}))})"
         )
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

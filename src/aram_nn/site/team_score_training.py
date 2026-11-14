@@ -37,6 +37,7 @@ from scipy.optimize import minimize
 from sklearn.metrics import log_loss, roc_auc_score
 
 from .meta_pick import team_composition
+from .patch_extract import patch_range, scan_db
 
 
 TRAIN_FRACTION = 0.70
@@ -98,14 +99,14 @@ def load_team_games(
     patch_prefix: str | None,
 ) -> list[TeamGame]:
     """Load structurally valid 5v5 rows in chronological order."""
-    con = sqlite3.connect(str(db_path))
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
     try:
         if patch_prefix:
             rows = con.execute(
                 "SELECT created_ms, blue_champs, red_champs, blue_wins "
-                "FROM games WHERE queue_id=? AND patch LIKE ? "
+                "FROM games WHERE queue_id=? AND patch >= ? AND patch < ? "
                 "ORDER BY created_ms, game_id",
-                (queue_id, f"{patch_prefix}%"),
+                (queue_id, *patch_range(patch_prefix)),
             )
         else:
             rows = con.execute(

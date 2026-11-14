@@ -79,8 +79,20 @@ const membershipSource = source.slice(source.indexOf('    function championPoolC
 const built = fs.readFileSync('docs/assets/site.js', 'utf8');
 ctx.AUGMENT_TAXONOMY = JSON.parse(built.match(/const AUGMENT_TAXONOMY = (.*);/)[1]);
 ctx.apoolWeight = weight => weight || 100;
+ctx.DATA = {};
+const catsStart = source.indexOf('    function augmentCats(');
+vm.runInContext(source.slice(catsStart, source.indexOf('    function augmentPurposeTags(', catsStart)), ctx);
 vm.runInContext(membershipSource, ctx);
-rows = ctx.championPoolEntries('63', pool, catalogue);
+const withAdded = ctx.championPoolEntries('63', pool, catalogue);
+{
+    // Augments added after the pool file compete for draws but get no cap of
+    // their own, so the known caps sum to less than the 24 cards seen.
+    const added = withAdded.filter(r => r.added);
+    const partial = ctx.championPoolOfferRates(withAdded, pool);
+    assert.ok(added.every(r => !partial.has(r.id)));
+    if (added.length) assert.ok([...partial.values()].reduce((sum, rate) => sum + rate, 0) < 24 - 1e-6);
+}
+rows = withAdded.filter(r => !r.added);
 const before = performance.now();
 rates = ctx.championPoolOfferRates(rows, pool);
 const coldMs = performance.now() - before;

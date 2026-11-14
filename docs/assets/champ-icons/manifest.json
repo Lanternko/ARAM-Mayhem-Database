@@ -1,0 +1,1386 @@
+{
+ "1": {
+  "alias": "Annie",
+  "source": "hd",
+  "score": 0.768,
+  "src_side": 1069,
+  "ok": true,
+  "hires": true
+ },
+ "2": {
+  "alias": "Olaf",
+  "source": "hd",
+  "score": 0.923,
+  "src_side": 779,
+  "ok": true,
+  "hires": true
+ },
+ "3": {
+  "alias": "Galio",
+  "source": "hd",
+  "score": 0.95,
+  "src_side": 384,
+  "ok": true,
+  "hires": true
+ },
+ "4": {
+  "alias": "TwistedFate",
+  "source": "hd",
+  "score": 0.933,
+  "src_side": 993,
+  "ok": true,
+  "hires": true
+ },
+ "5": {
+  "alias": "XinZhao",
+  "source": "universe",
+  "score": 0.987,
+  "src_side": 237,
+  "ok": true,
+  "hires": true
+ },
+ "6": {
+  "alias": "Urgot",
+  "source": "hd",
+  "score": 0.949,
+  "src_side": 815,
+  "ok": true,
+  "hires": true
+ },
+ "7": {
+  "alias": "Leblanc",
+  "source": "ddragon",
+  "score": 0.96,
+  "src_side": 141,
+  "ok": true,
+  "hires": true
+ },
+ "8": {
+  "alias": "Vladimir",
+  "source": "hd",
+  "score": 0.809,
+  "src_side": 572,
+  "ok": true,
+  "hires": true
+ },
+ "9": {
+  "alias": "Fiddlesticks",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 1413,
+  "ok": true,
+  "hires": true
+ },
+ "10": {
+  "alias": "Kayle",
+  "source": "universe+manual",
+  "score": 1.0,
+  "src_side": 157,
+  "ok": true,
+  "hires": true
+ },
+ "11": {
+  "alias": "MasterYi",
+  "source": "ddragon",
+  "score": 0.784,
+  "src_side": 141,
+  "ok": true,
+  "hires": true
+ },
+ "12": {
+  "alias": "Alistar",
+  "source": "ddragon",
+  "score": 0.797,
+  "src_side": 261,
+  "ok": true,
+  "hires": true
+ },
+ "13": {
+  "alias": "Ryze",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 1007,
+  "ok": true,
+  "hires": true
+ },
+ "14": {
+  "alias": "Sion",
+  "source": "hd",
+  "score": 0.878,
+  "src_side": 675,
+  "ok": true,
+  "hires": true
+ },
+ "15": {
+  "alias": "Sivir",
+  "source": "hd",
+  "score": 0.98,
+  "src_side": 524,
+  "ok": true,
+  "hires": true
+ },
+ "16": {
+  "alias": "Soraka",
+  "source": "hd",
+  "score": 0.972,
+  "src_side": 468,
+  "ok": true,
+  "hires": true
+ },
+ "17": {
+  "alias": "Teemo",
+  "source": "hd",
+  "score": 0.978,
+  "src_side": 1496,
+  "ok": true,
+  "hires": true
+ },
+ "18": {
+  "alias": "Tristana",
+  "source": "hd",
+  "score": 0.89,
+  "src_side": 441,
+  "ok": true,
+  "hires": true
+ },
+ "19": {
+  "alias": "Warwick",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 743,
+  "ok": true,
+  "hires": true
+ },
+ "20": {
+  "alias": "Nunu",
+  "source": "hd",
+  "score": 0.907,
+  "src_side": 391,
+  "ok": true,
+  "hires": true
+ },
+ "21": {
+  "alias": "MissFortune",
+  "source": "hd",
+  "score": 0.99,
+  "src_side": 163,
+  "ok": true,
+  "hires": true
+ },
+ "22": {
+  "alias": "Ashe",
+  "source": "hd",
+  "score": 0.953,
+  "src_side": 536,
+  "ok": true,
+  "hires": true
+ },
+ "23": {
+  "alias": "Tryndamere",
+  "source": "hd",
+  "score": 0.891,
+  "src_side": 742,
+  "ok": true,
+  "hires": true
+ },
+ "24": {
+  "alias": "Jax",
+  "source": "hd",
+  "score": 0.975,
+  "src_side": 1251,
+  "ok": true,
+  "hires": true
+ },
+ "25": {
+  "alias": "Morgana",
+  "source": "universe+manual",
+  "score": 1.0,
+  "src_side": 122,
+  "ok": true,
+  "hires": false
+ },
+ "26": {
+  "alias": "Zilean",
+  "source": "hd",
+  "score": 0.732,
+  "src_side": 708,
+  "ok": true,
+  "hires": true
+ },
+ "27": {
+  "alias": "Singed",
+  "source": "hd",
+  "score": 0.968,
+  "src_side": 1064,
+  "ok": true,
+  "hires": true
+ },
+ "28": {
+  "alias": "Evelynn",
+  "source": "hd",
+  "score": 0.981,
+  "src_side": 410,
+  "ok": true,
+  "hires": true
+ },
+ "29": {
+  "alias": "Twitch",
+  "source": "hd",
+  "score": 0.634,
+  "src_side": 851,
+  "ok": true,
+  "hires": true
+ },
+ "30": {
+  "alias": "Karthus",
+  "source": "hd",
+  "score": 0.992,
+  "src_side": 93,
+  "ok": true,
+  "hires": false
+ },
+ "31": {
+  "alias": "Chogath",
+  "source": "hd",
+  "score": 0.804,
+  "src_side": 2075,
+  "ok": true,
+  "hires": true
+ },
+ "32": {
+  "alias": "Amumu",
+  "source": "ddragon",
+  "score": 0.837,
+  "src_side": 293,
+  "ok": true,
+  "hires": true
+ },
+ "33": {
+  "alias": "Rammus",
+  "source": "hd",
+  "score": 0.892,
+  "src_side": 1489,
+  "ok": true,
+  "hires": true
+ },
+ "34": {
+  "alias": "Anivia",
+  "source": "hd",
+  "score": 0.791,
+  "src_side": 916,
+  "ok": true,
+  "hires": true
+ },
+ "35": {
+  "alias": "Shaco",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 640,
+  "ok": true,
+  "hires": true
+ },
+ "36": {
+  "alias": "DrMundo",
+  "source": "hd",
+  "score": 0.978,
+  "src_side": 756,
+  "ok": true,
+  "hires": true
+ },
+ "37": {
+  "alias": "Sona",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 590,
+  "ok": true,
+  "hires": true
+ },
+ "38": {
+  "alias": "Kassadin",
+  "source": "hd",
+  "score": 0.957,
+  "src_side": 298,
+  "ok": true,
+  "hires": true
+ },
+ "39": {
+  "alias": "Irelia",
+  "source": "hd",
+  "score": 0.968,
+  "src_side": 387,
+  "ok": true,
+  "hires": true
+ },
+ "40": {
+  "alias": "Janna",
+  "source": "hd",
+  "score": 0.932,
+  "src_side": 607,
+  "ok": true,
+  "hires": true
+ },
+ "41": {
+  "alias": "Gangplank",
+  "source": "hd",
+  "score": 0.779,
+  "src_side": 796,
+  "ok": true,
+  "hires": true
+ },
+ "42": {
+  "alias": "Corki",
+  "source": "hd",
+  "score": 0.862,
+  "src_side": 133,
+  "ok": true,
+  "hires": true
+ },
+ "43": {
+  "alias": "Karma",
+  "source": "hd",
+  "score": 0.951,
+  "src_side": 491,
+  "ok": true,
+  "hires": true
+ },
+ "44": {
+  "alias": "Taric",
+  "source": "tile+manual",
+  "score": 1.0,
+  "src_side": 154,
+  "ok": true,
+  "hires": true
+ },
+ "45": {
+  "alias": "Veigar",
+  "source": "hd",
+  "score": 0.823,
+  "src_side": 1222,
+  "ok": true,
+  "hires": true
+ },
+ "48": {
+  "alias": "Trundle",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 850,
+  "ok": true,
+  "hires": true
+ },
+ "50": {
+  "alias": "Swain",
+  "source": "hd",
+  "score": 0.861,
+  "src_side": 204,
+  "ok": true,
+  "hires": true
+ },
+ "51": {
+  "alias": "Caitlyn",
+  "source": "hd",
+  "score": 0.972,
+  "src_side": 733,
+  "ok": true,
+  "hires": true
+ },
+ "53": {
+  "alias": "Blitzcrank",
+  "source": "hd",
+  "score": 0.902,
+  "src_side": 774,
+  "ok": true,
+  "hires": true
+ },
+ "54": {
+  "alias": "Malphite",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 1039,
+  "ok": true,
+  "hires": true
+ },
+ "55": {
+  "alias": "Katarina",
+  "source": "hd",
+  "score": 0.802,
+  "src_side": 536,
+  "ok": true,
+  "hires": true
+ },
+ "56": {
+  "alias": "Nocturne",
+  "source": "hd",
+  "score": 0.842,
+  "src_side": 903,
+  "ok": true,
+  "hires": true
+ },
+ "57": {
+  "alias": "Maokai",
+  "source": "hd",
+  "score": 0.866,
+  "src_side": 1334,
+  "ok": true,
+  "hires": true
+ },
+ "58": {
+  "alias": "Renekton",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 1748,
+  "ok": true,
+  "hires": true
+ },
+ "59": {
+  "alias": "JarvanIV",
+  "source": "ddragon",
+  "score": 0.716,
+  "src_side": 137,
+  "ok": true,
+  "hires": true
+ },
+ "60": {
+  "alias": "Elise",
+  "source": "hd",
+  "score": 0.956,
+  "src_side": 484,
+  "ok": true,
+  "hires": true
+ },
+ "61": {
+  "alias": "Orianna",
+  "source": "hd",
+  "score": 0.667,
+  "src_side": 1104,
+  "ok": true,
+  "hires": true
+ },
+ "62": {
+  "alias": "MonkeyKing",
+  "source": "hd",
+  "score": 0.97,
+  "src_side": 873,
+  "ok": true,
+  "hires": true
+ },
+ "63": {
+  "alias": "Brand",
+  "source": "hd",
+  "score": 0.873,
+  "src_side": 559,
+  "ok": true,
+  "hires": true
+ },
+ "64": {
+  "alias": "LeeSin",
+  "source": "hd",
+  "score": 0.688,
+  "src_side": 106,
+  "ok": true,
+  "hires": false
+ },
+ "67": {
+  "alias": "Vayne",
+  "source": "hd",
+  "score": 0.911,
+  "src_side": 634,
+  "ok": true,
+  "hires": true
+ },
+ "68": {
+  "alias": "Rumble",
+  "source": "ddragon",
+  "score": 0.708,
+  "src_side": 212,
+  "ok": true,
+  "hires": true
+ },
+ "69": {
+  "alias": "Cassiopeia",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 980,
+  "ok": true,
+  "hires": true
+ },
+ "72": {
+  "alias": "Skarner",
+  "source": "ddragon",
+  "score": 0.732,
+  "src_side": 239,
+  "ok": true,
+  "hires": true
+ },
+ "74": {
+  "alias": "Heimerdinger",
+  "source": "hd",
+  "score": 0.94,
+  "src_side": 2182,
+  "ok": true,
+  "hires": true
+ },
+ "75": {
+  "alias": "Nasus",
+  "source": "hd",
+  "score": 0.681,
+  "src_side": 469,
+  "ok": true,
+  "hires": true
+ },
+ "76": {
+  "alias": "Nidalee",
+  "source": "hd",
+  "score": 0.967,
+  "src_side": 547,
+  "ok": true,
+  "hires": true
+ },
+ "77": {
+  "alias": "Udyr",
+  "source": "hd",
+  "score": 0.886,
+  "src_side": 716,
+  "ok": true,
+  "hires": true
+ },
+ "78": {
+  "alias": "Poppy",
+  "source": "hd",
+  "score": 0.959,
+  "src_side": 895,
+  "ok": true,
+  "hires": true
+ },
+ "79": {
+  "alias": "Gragas",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 788,
+  "ok": true,
+  "hires": true
+ },
+ "80": {
+  "alias": "Pantheon",
+  "source": "hd",
+  "score": 0.974,
+  "src_side": 827,
+  "ok": true,
+  "hires": true
+ },
+ "81": {
+  "alias": "Ezreal",
+  "source": "hd",
+  "score": 0.837,
+  "src_side": 602,
+  "ok": true,
+  "hires": true
+ },
+ "82": {
+  "alias": "Mordekaiser",
+  "source": "hd",
+  "score": 0.756,
+  "src_side": 480,
+  "ok": true,
+  "hires": true
+ },
+ "83": {
+  "alias": "Yorick",
+  "source": "hd",
+  "score": 0.971,
+  "src_side": 698,
+  "ok": true,
+  "hires": true
+ },
+ "84": {
+  "alias": "Akali",
+  "source": "hd",
+  "score": 0.674,
+  "src_side": 491,
+  "ok": true,
+  "hires": true
+ },
+ "85": {
+  "alias": "Kennen",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 326,
+  "ok": true,
+  "hires": true
+ },
+ "86": {
+  "alias": "Garen",
+  "source": "hd",
+  "score": 0.959,
+  "src_side": 819,
+  "ok": true,
+  "hires": true
+ },
+ "89": {
+  "alias": "Leona",
+  "source": "ddragon",
+  "score": 0.978,
+  "src_side": 104,
+  "ok": true,
+  "hires": false
+ },
+ "90": {
+  "alias": "Malzahar",
+  "source": "hd",
+  "score": 0.823,
+  "src_side": 954,
+  "ok": true,
+  "hires": true
+ },
+ "91": {
+  "alias": "Talon",
+  "source": "ddragon",
+  "score": 0.68,
+  "src_side": 140,
+  "ok": true,
+  "hires": true
+ },
+ "92": {
+  "alias": "Riven",
+  "source": "hd",
+  "score": 0.745,
+  "src_side": 345,
+  "ok": true,
+  "hires": true
+ },
+ "96": {
+  "alias": "KogMaw",
+  "source": "ddragon",
+  "score": 0.716,
+  "src_side": 431,
+  "ok": true,
+  "hires": true
+ },
+ "98": {
+  "alias": "Shen",
+  "source": "hd",
+  "score": 0.682,
+  "src_side": 718,
+  "ok": true,
+  "hires": true
+ },
+ "99": {
+  "alias": "Lux",
+  "source": "hd",
+  "score": 0.993,
+  "src_side": 607,
+  "ok": true,
+  "hires": true
+ },
+ "101": {
+  "alias": "Xerath",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 609,
+  "ok": true,
+  "hires": true
+ },
+ "102": {
+  "alias": "Shyvana",
+  "source": "universe",
+  "score": 0.97,
+  "src_side": 255,
+  "ok": true,
+  "hires": true
+ },
+ "103": {
+  "alias": "Ahri",
+  "source": "universe",
+  "score": 0.978,
+  "src_side": 204,
+  "ok": true,
+  "hires": true
+ },
+ "104": {
+  "alias": "Graves",
+  "source": "hd",
+  "score": 0.831,
+  "src_side": 916,
+  "ok": true,
+  "hires": true
+ },
+ "105": {
+  "alias": "Fizz",
+  "source": "hd",
+  "score": 0.946,
+  "src_side": 907,
+  "ok": true,
+  "hires": true
+ },
+ "106": {
+  "alias": "Volibear",
+  "source": "hd",
+  "score": 0.855,
+  "src_side": 739,
+  "ok": true,
+  "hires": true
+ },
+ "107": {
+  "alias": "Rengar",
+  "source": "hd",
+  "score": 0.801,
+  "src_side": 993,
+  "ok": true,
+  "hires": true
+ },
+ "110": {
+  "alias": "Varus",
+  "source": "universe",
+  "score": 0.754,
+  "src_side": 218,
+  "ok": true,
+  "hires": true
+ },
+ "111": {
+  "alias": "Nautilus",
+  "source": "hd",
+  "score": 0.854,
+  "src_side": 1072,
+  "ok": true,
+  "hires": true
+ },
+ "112": {
+  "alias": "Viktor",
+  "source": "universe+manual",
+  "score": 1.0,
+  "src_side": 223,
+  "ok": true,
+  "hires": true
+ },
+ "113": {
+  "alias": "Sejuani",
+  "source": "hd",
+  "score": 0.906,
+  "src_side": 469,
+  "ok": true,
+  "hires": true
+ },
+ "114": {
+  "alias": "Fiora",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 958,
+  "ok": true,
+  "hires": true
+ },
+ "115": {
+  "alias": "Ziggs",
+  "source": "hd",
+  "score": 0.952,
+  "src_side": 996,
+  "ok": true,
+  "hires": true
+ },
+ "117": {
+  "alias": "Lulu",
+  "source": "hd",
+  "score": 0.969,
+  "src_side": 645,
+  "ok": true,
+  "hires": true
+ },
+ "119": {
+  "alias": "Draven",
+  "source": "hd",
+  "score": 0.907,
+  "src_side": 480,
+  "ok": true,
+  "hires": true
+ },
+ "120": {
+  "alias": "Hecarim",
+  "source": "hd",
+  "score": 0.973,
+  "src_side": 436,
+  "ok": true,
+  "hires": true
+ },
+ "121": {
+  "alias": "Khazix",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 798,
+  "ok": true,
+  "hires": true
+ },
+ "122": {
+  "alias": "Darius",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 882,
+  "ok": true,
+  "hires": true
+ },
+ "126": {
+  "alias": "Jayce",
+  "source": "ddragon",
+  "score": 0.748,
+  "src_side": 105,
+  "ok": true,
+  "hires": false
+ },
+ "127": {
+  "alias": "Lissandra",
+  "source": "hd",
+  "score": 0.577,
+  "src_side": 415,
+  "ok": true,
+  "hires": true
+ },
+ "131": {
+  "alias": "Diana",
+  "source": "hd",
+  "score": 0.948,
+  "src_side": 590,
+  "ok": true,
+  "hires": true
+ },
+ "133": {
+  "alias": "Quinn",
+  "source": "hd",
+  "score": 0.872,
+  "src_side": 687,
+  "ok": true,
+  "hires": true
+ },
+ "134": {
+  "alias": "Syndra",
+  "source": "hd",
+  "score": 0.837,
+  "src_side": 664,
+  "ok": true,
+  "hires": true
+ },
+ "136": {
+  "alias": "AurelionSol",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 342,
+  "ok": true,
+  "hires": true
+ },
+ "141": {
+  "alias": "Kayn",
+  "source": "hd",
+  "score": 0.854,
+  "src_side": 375,
+  "ok": true,
+  "hires": true
+ },
+ "142": {
+  "alias": "Zoe",
+  "source": "hd",
+  "score": 0.861,
+  "src_side": 1113,
+  "ok": true,
+  "hires": true
+ },
+ "143": {
+  "alias": "Zyra",
+  "source": "hd",
+  "score": 0.921,
+  "src_side": 371,
+  "ok": true,
+  "hires": true
+ },
+ "145": {
+  "alias": "Kaisa",
+  "source": "hd",
+  "score": 0.972,
+  "src_side": 476,
+  "ok": true,
+  "hires": true
+ },
+ "147": {
+  "alias": "Seraphine",
+  "source": "hd",
+  "score": 0.924,
+  "src_side": 447,
+  "ok": true,
+  "hires": true
+ },
+ "150": {
+  "alias": "Gnar",
+  "source": "hd",
+  "score": 0.958,
+  "src_side": 2006,
+  "ok": true,
+  "hires": true
+ },
+ "154": {
+  "alias": "Zac",
+  "source": "hd",
+  "score": 0.915,
+  "src_side": 1466,
+  "ok": true,
+  "hires": true
+ },
+ "157": {
+  "alias": "Yasuo",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 662,
+  "ok": true,
+  "hires": true
+ },
+ "161": {
+  "alias": "Velkoz",
+  "source": "hd",
+  "score": 0.862,
+  "src_side": 1424,
+  "ok": true,
+  "hires": true
+ },
+ "163": {
+  "alias": "Taliyah",
+  "source": "ddragon",
+  "score": 0.701,
+  "src_side": 179,
+  "ok": true,
+  "hires": true
+ },
+ "164": {
+  "alias": "Camille",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 697,
+  "ok": true,
+  "hires": true
+ },
+ "166": {
+  "alias": "Akshan",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 834,
+  "ok": true,
+  "hires": true
+ },
+ "200": {
+  "alias": "Belveth",
+  "source": "hd",
+  "score": 0.983,
+  "src_side": 524,
+  "ok": true,
+  "hires": true
+ },
+ "201": {
+  "alias": "Braum",
+  "source": "ddragon",
+  "score": 0.665,
+  "src_side": 119,
+  "ok": true,
+  "hires": false
+ },
+ "202": {
+  "alias": "Jhin",
+  "source": "ddragon",
+  "score": 0.608,
+  "src_side": 141,
+  "ok": true,
+  "hires": true
+ },
+ "203": {
+  "alias": "Kindred",
+  "source": "hd+manual",
+  "score": 1.0,
+  "src_side": 755,
+  "ok": true,
+  "hires": true
+ },
+ "221": {
+  "alias": "Zeri",
+  "source": "hd",
+  "score": 0.983,
+  "src_side": 1110,
+  "ok": true,
+  "hires": true
+ },
+ "222": {
+  "alias": "Jinx",
+  "source": "hd",
+  "score": 0.748,
+  "src_side": 572,
+  "ok": true,
+  "hires": true
+ },
+ "223": {
+  "alias": "TahmKench",
+  "source": "hd",
+  "score": 0.898,
+  "src_side": 2825,
+  "ok": true,
+  "hires": true
+ },
+ "233": {
+  "alias": "Briar",
+  "source": "hd",
+  "score": 0.766,
+  "src_side": 426,
+  "ok": true,
+  "hires": true
+ },
+ "234": {
+  "alias": "Viego",
+  "source": "hd",
+  "score": 0.969,
+  "src_side": 555,
+  "ok": true,
+  "hires": true
+ },
+ "235": {
+  "alias": "Senna",
+  "source": "hd",
+  "score": 0.959,
+  "src_side": 1018,
+  "ok": true,
+  "hires": true
+ },
+ "236": {
+  "alias": "Lucian",
+  "source": "hd",
+  "score": 0.839,
+  "src_side": 592,
+  "ok": true,
+  "hires": true
+ },
+ "238": {
+  "alias": "Zed",
+  "source": "hd",
+  "score": 0.83,
+  "src_side": 662,
+  "ok": true,
+  "hires": true
+ },
+ "240": {
+  "alias": "Kled",
+  "source": "hd",
+  "score": 0.887,
+  "src_side": 1366,
+  "ok": true,
+  "hires": true
+ },
+ "245": {
+  "alias": "Ekko",
+  "source": "hd",
+  "score": 0.808,
+  "src_side": 716,
+  "ok": true,
+  "hires": true
+ },
+ "246": {
+  "alias": "Qiyana",
+  "source": "hd",
+  "score": 0.917,
+  "src_side": 602,
+  "ok": true,
+  "hires": true
+ },
+ "254": {
+  "alias": "Vi",
+  "source": "hd",
+  "score": 0.975,
+  "src_side": 583,
+  "ok": true,
+  "hires": true
+ },
+ "266": {
+  "alias": "Aatrox",
+  "source": "hd",
+  "score": 0.912,
+  "src_side": 764,
+  "ok": true,
+  "hires": true
+ },
+ "267": {
+  "alias": "Nami",
+  "source": "hd",
+  "score": 0.925,
+  "src_side": 677,
+  "ok": true,
+  "hires": true
+ },
+ "268": {
+  "alias": "Azir",
+  "source": "hd",
+  "score": 0.947,
+  "src_side": 437,
+  "ok": true,
+  "hires": true
+ },
+ "350": {
+  "alias": "Yuumi",
+  "source": "ddragon",
+  "score": 0.756,
+  "src_side": 340,
+  "ok": true,
+  "hires": true
+ },
+ "360": {
+  "alias": "Samira",
+  "source": "hd",
+  "score": 0.96,
+  "src_side": 840,
+  "ok": true,
+  "hires": true
+ },
+ "412": {
+  "alias": "Thresh",
+  "source": "hd",
+  "score": 0.955,
+  "src_side": 799,
+  "ok": true,
+  "hires": true
+ },
+ "420": {
+  "alias": "Illaoi",
+  "source": "hd",
+  "score": 0.991,
+  "src_side": 687,
+  "ok": true,
+  "hires": true
+ },
+ "421": {
+  "alias": "RekSai",
+  "source": "hd",
+  "score": 0.808,
+  "src_side": 1276,
+  "ok": true,
+  "hires": true
+ },
+ "427": {
+  "alias": "Ivern",
+  "source": "ddragon",
+  "score": 0.566,
+  "src_side": 239,
+  "ok": true,
+  "hires": true
+ },
+ "429": {
+  "alias": "Kalista",
+  "source": "hd",
+  "score": 0.902,
+  "src_side": 606,
+  "ok": true,
+  "hires": true
+ },
+ "432": {
+  "alias": "Bard",
+  "source": "hd",
+  "score": 0.919,
+  "src_side": 566,
+  "ok": true,
+  "hires": true
+ },
+ "497": {
+  "alias": "Rakan",
+  "source": "hd",
+  "score": 0.718,
+  "src_side": 552,
+  "ok": true,
+  "hires": true
+ },
+ "498": {
+  "alias": "Xayah",
+  "source": "hd",
+  "score": 0.936,
+  "src_side": 552,
+  "ok": true,
+  "hires": true
+ },
+ "516": {
+  "alias": "Ornn",
+  "source": "hd",
+  "score": 0.839,
+  "src_side": 980,
+  "ok": true,
+  "hires": true
+ },
+ "517": {
+  "alias": "Sylas",
+  "source": "hd",
+  "score": 0.915,
+  "src_side": 593,
+  "ok": true,
+  "hires": true
+ },
+ "518": {
+  "alias": "Neeko",
+  "source": "hd",
+  "score": 0.791,
+  "src_side": 827,
+  "ok": true,
+  "hires": true
+ },
+ "523": {
+  "alias": "Aphelios",
+  "source": "hd",
+  "score": 0.901,
+  "src_side": 804,
+  "ok": true,
+  "hires": true
+ },
+ "526": {
+  "alias": "Rell",
+  "source": "hd",
+  "score": 0.979,
+  "src_side": 367,
+  "ok": true,
+  "hires": true
+ },
+ "555": {
+  "alias": "Pyke",
+  "source": "hd",
+  "score": 0.906,
+  "src_side": 643,
+  "ok": true,
+  "hires": true
+ },
+ "711": {
+  "alias": "Vex",
+  "source": "hd",
+  "score": 0.941,
+  "src_side": 782,
+  "ok": true,
+  "hires": true
+ },
+ "777": {
+  "alias": "Yone",
+  "source": "hd",
+  "score": 0.926,
+  "src_side": 670,
+  "ok": true,
+  "hires": true
+ },
+ "799": {
+  "alias": "Ambessa",
+  "source": "universe",
+  "score": 0.981,
+  "src_side": 173,
+  "ok": true,
+  "hires": true
+ },
+ "800": {
+  "alias": "Mel",
+  "source": "ddragon",
+  "score": 0.779,
+  "src_side": 133,
+  "ok": true,
+  "hires": true
+ },
+ "804": {
+  "alias": "Yunara",
+  "source": "universe",
+  "score": 0.981,
+  "src_side": 213,
+  "ok": true,
+  "hires": true
+ },
+ "805": {
+  "alias": "Locke",
+  "source": "universe",
+  "score": 0.991,
+  "src_side": 197,
+  "ok": true,
+  "hires": true
+ },
+ "875": {
+  "alias": "Sett",
+  "source": "ddragon",
+  "score": 0.803,
+  "src_side": 113,
+  "ok": true,
+  "hires": false
+ },
+ "876": {
+  "alias": "Lillia",
+  "source": "hd",
+  "score": 0.978,
+  "src_side": 538,
+  "ok": true,
+  "hires": true
+ },
+ "887": {
+  "alias": "Gwen",
+  "source": "hd",
+  "score": 0.982,
+  "src_side": 689,
+  "ok": true,
+  "hires": true
+ },
+ "888": {
+  "alias": "Renata",
+  "source": "hd",
+  "score": 0.794,
+  "src_side": 556,
+  "ok": true,
+  "hires": true
+ },
+ "893": {
+  "alias": "Aurora",
+  "source": "hd",
+  "score": 0.962,
+  "src_side": 873,
+  "ok": true,
+  "hires": true
+ },
+ "895": {
+  "alias": "Nilah",
+  "source": "hd",
+  "score": 0.973,
+  "src_side": 745,
+  "ok": true,
+  "hires": true
+ },
+ "897": {
+  "alias": "KSante",
+  "source": "hd",
+  "score": 0.979,
+  "src_side": 753,
+  "ok": true,
+  "hires": true
+ },
+ "901": {
+  "alias": "Smolder",
+  "source": "hd",
+  "score": 0.553,
+  "src_side": 1168,
+  "ok": true,
+  "hires": true
+ },
+ "902": {
+  "alias": "Milio",
+  "source": "hd",
+  "score": 0.99,
+  "src_side": 553,
+  "ok": true,
+  "hires": true
+ },
+ "904": {
+  "alias": "Zaahen",
+  "source": "universe",
+  "score": 0.976,
+  "src_side": 189,
+  "ok": true,
+  "hires": true
+ },
+ "910": {
+  "alias": "Hwei",
+  "source": "hd",
+  "score": 0.976,
+  "src_side": 1161,
+  "ok": true,
+  "hires": true
+ },
+ "950": {
+  "alias": "Naafiri",
+  "source": "hd",
+  "score": 0.797,
+  "src_side": 2138,
+  "ok": true,
+  "hires": true
+ }
+}

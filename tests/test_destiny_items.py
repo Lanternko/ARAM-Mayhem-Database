@@ -183,6 +183,26 @@ class DestinyItemSelectionTests(unittest.TestCase):
         self.assertEqual(rec["item_id"], 2)
         self.assertEqual(rec["alt"]["item_id"], 3)
 
+    def test_excluded_item_is_never_recommended_but_still_counts_as_held(self) -> None:
+        hydra = 226668
+        # Hydra would clearly win; item 1 still clears the gate against the
+        # hydra and item-2 holders in the same one-item stratum.
+        players = (
+            _both(1, (hydra,), 400, 320, 400, 200)
+            + _both(1, (1,), 400, 280, 400, 200)
+            + _both(1, (2,), 400, 160, 400, 200)
+        )
+        _write_games(self.db_path, players)
+        args = (self.db_path, 2400, "16.21", {1, 2, hydra})
+        kwargs = {"min_side_games": 60, "min_destiny_games": 60}
+        with mock.patch.object(engine, "DESTINY_EXCLUDED_ITEM_IDS", frozenset()):
+            self.assertEqual(
+                tier_list.compute_champ_destiny_items(*args, **kwargs)[1]["item_id"], hydra
+            )
+        rec = tier_list.compute_champ_destiny_items(*args, **kwargs)[1]
+        self.assertEqual(rec["item_id"], 1)
+        self.assertNotIn("alt", rec)
+
     def test_clear_winner_has_no_alt(self) -> None:
         # Among 3081 holders item 1 gains +25pp and item 2 +10pp, equal without
         # it: item 2's synergy sits far below item 1's lower bound.
