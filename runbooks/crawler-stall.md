@@ -29,6 +29,14 @@ Get-ScheduledTaskInfo -TaskName MayhemLCUWatchdogKeepalive | Format-List LastRun
 
 依事件時間窗查 System log 的 Kernel-General 開關機、Kernel-Power／Power-Troubleshooter 睡眠與恢復，以及 TaskScheduler Operational（若已啟用）的執行結果。`Interactive`／`InteractiveToken` 需要已登入 session；每分鐘 trigger 不代表登入前也會執行。Log 空窗只證明缺少紀錄，不能單獨證明整段未登入、睡眠或斷電；Kernel-Power 41 也不能單獨判定是哪種非正常關機原因。確認事實、推論與未知部分分開回報，不因這個發現就改成 SYSTEM 或自動登入。
 
+### 官方維護期間
+
+先查 LCU `/lol-service-status/v1/ticker-messages`。`current-summoner` 回 200、queue 顯示 Available，仍可能處於官方不開放遊玩的維護期間；client 版本也可能已前進，但新 patch 尚無對局。
+
+`src/aram_nn/lcu/maintenance.py` 只接受繁中 ticker 明示「正在進行維護／期間遊戲暫不開放遊玩」且附 `預計 YYYY/MM/DD HH:MM GMT±HH 結束` 的有效公告，截止時間最多在未來 8 小時。Watchdog 在 LCU 不健康時記錄 `pause_workers_maintenance`、停止 fleet 並暫停 client 重啟；LCU 健康時繼續按原資源門檻收集，僅略過以停收時間觸發的重啟，因為公告可能在提前開服後仍未撤下。記憶體保護、publisher 與 model refresher 仍依原規則運作。Stall alert 保留原停收狀態但不重複發紅色通知，不宣告收集恢復。
+
+私有 `data/monitor/lcu_maintenance.json` 保存已確認公告，讓 LCU 暫時不通時仍能辨識維護；公告被移除或截止時間一到就恢復原有健康／資源／告警流程，不把過期、無截止時間或未知文案當成維護。開服不等於已有新收場，仍以 scoped growth 驗收；若維護延長，必須有新的有效公告才能延長等待。
+
 ### 仍在停收時
 
 從 live repo root 記錄同一時間點的證據；若只是解釋已恢復的歷史告警，可使用既有同時段 metrics，避免重跑昂貴統計：

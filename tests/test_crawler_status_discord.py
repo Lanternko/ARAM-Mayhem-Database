@@ -618,3 +618,26 @@ def test_rate_is_reported_per_minute() -> None:
     field = next(f for f in embed["fields"] if f["name"].startswith("近 6 小時"))
     assert "約 38.7 場/分" in field["value"]
     assert "場/時" not in field["value"]
+
+
+def test_stall_alert_is_quiet_during_maintenance_then_resumes(monkeypatch, tmp_path):
+    now = dt.datetime(2026, 10, 21, 1, 30, tzinfo=dt.timezone.utc)
+    state = tmp_path / "stall.json"
+    previous = {"alerting": True, "since": "2026-10-20T23:50:00+00:00", "last_notified_at": "2026-10-21T00:35:00+00:00"}
+    state.write_text(json.dumps(previous))
+    monkeypatch.setattr(STATUS, "utc_now", lambda: now)
+    monkeypatch.setattr(STATUS, "latest_capture_age_min_fast", lambda db: 145)
+    monkeypatch.setattr(STATUS, "append_breadcrumb", lambda *a: None)
+    monkeypatch.setattr(STATUS, "net_breadcrumb", lambda: {})
+    posted = []
+    monkeypatch.setattr(STATUS, "post_webhook", lambda *a: posted.append(a))
+    monkeypatch.setattr(STATUS, "probe_maintenance", lambda *a: {"ends_at": "2026-10-21T11:00:00+08:00"})
+    kwargs = dict(db=tmp_path / "unused.db", webhook="unused", state_path=state, stall_minutes=45, renotify_minutes=45, dry_run=False)
+    STATUS.run_stall_alert(**kwargs)
+    assert posted == []
+    assert json.loads(state.read_text())["alerting"] is True
+    assert json.loads(state.read_text())["since"] == previous["since"]
+    monkeypatch.setattr(STATUS, "probe_maintenance", lambda *a: None)
+    STATUS.run_stall_alert(**kwargs)
+    assert len(posted) == 1
+    assert posted[0][1]["embeds"][0]["title"] == "🔴 爬蟲停擺"

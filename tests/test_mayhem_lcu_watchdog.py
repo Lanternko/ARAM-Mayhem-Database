@@ -19,6 +19,11 @@ WATCHDOG = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(WATCHDOG)
 
 
+@pytest.fixture(autouse=True)
+def no_live_maintenance(monkeypatch):
+    monkeypatch.setattr(WATCHDOG, "probe_maintenance", lambda *a, **k: None)
+
+
 def test_lcu_health_does_not_retry_a_healthy_probe(monkeypatch):
     calls = []
 
@@ -1032,3 +1037,39 @@ def test_restart_keeps_warm_relaunch_when_ux_close_disabled(monkeypatch, tmp_pat
     assert any(a["action"] == "restart_league_client" for a in record["actions"])
     assert closed_riot == []
     assert ux_calls == []
+
+
+def test_maintenance_pauses_fleet_without_client_restart_and_resumes_after_expiry(monkeypatch, tmp_path):
+    args, current, stopped, started, closed = _stub_check_once(
+        monkeypatch, tmp_path, restart_client=True,
+        workers=[{"pid": 101, "cmdline": ["pythonw.exe", "--workers", "2"]}],
+        sample=_resource_sample(commit_percent=50.0),
+    )
+    notice = {"ends_at": "2026-10-21T11:00:00+08:00"}
+    monkeypatch.setattr(WATCHDOG, "probe_maintenance", lambda *a, **k: notice)
+    monkeypatch.setattr(WATCHDOG, "lcu_health", lambda: {"ok": False, "phase": "None"})
+    record = WATCHDOG.check_once(args)
+    assert stopped == [1] and not started and not closed
+    assert record["maintenance"] == notice
+    assert record["desired_worker_count"] == 0
+    assert record["actual_worker_count"] == 0
+    assert record["actions"][-1]["action"] == "pause_workers_maintenance"
+    monkeypatch.setattr(WATCHDOG, "probe_maintenance", lambda *a, **k: None)
+    monkeypatch.setattr(WATCHDOG, "lcu_health", lambda: {"ok": True, "phase": "None"})
+    WATCHDOG.check_once(args)
+    assert started == [1] and not closed
+
+
+def test_healthy_lcu_keeps_collecting_despite_lingering_maintenance_notice(monkeypatch, tmp_path):
+    args, current, stopped, started, closed = _stub_check_once(
+        monkeypatch, tmp_path, restart_client=True,
+        workers=[{"pid": 101, "cmdline": ["pythonw.exe", "--workers", "2"]}],
+        sample=_resource_sample(commit_percent=50.0),
+    )
+    args.worker_stall_min = 30
+    monkeypatch.setattr(WATCHDOG, "probe_maintenance", lambda *a, **k: {"ends_at": "2026-10-21T11:00:00+08:00"})
+    record = WATCHDOG.check_once(args)
+    assert record["actual_worker_count"] == 2
+    assert record["maintenance"]
+    assert not stopped and not started and not closed
+    assert "restart_workers_capture_stalled" not in [a["action"] for a in record["actions"]]

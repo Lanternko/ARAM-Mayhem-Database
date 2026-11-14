@@ -30,6 +30,11 @@ from typing import Any
 import psutil
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
+
+from aram_nn.lcu.maintenance import probe_maintenance  # noqa: E402
+
 DEFAULT_DB = ROOT / "data" / "lcu" / "games.db"
 DEFAULT_STATE = ROOT / "data" / "monitor" / "mayhem_lcu_watchdog.jsonl"
 DEFAULT_WEBHOOK_FILE = ROOT / "data" / "monitor" / "discord_crawler_webhook.txt"
@@ -735,6 +740,14 @@ def run_stall_alert(
         return 0
 
     is_stalled = age > stall_minutes
+    maintenance = probe_maintenance(ROOT / "data/monitor/lcu_maintenance.json", now)
+    if is_stalled and maintenance:
+        # Preserve the outage state: maintenance is not evidence of collection
+        # recovering. At expiry, normal alerts resume unless captures grow.
+        if not dry_run:
+            save_stall_state(state_path, {**state, "maintenance": maintenance})
+        print(f"ok stall-alert maintenance until={maintenance['ends_at']} age={age}")
+        return 0
 
     if not is_stalled:
         if was_alerting:

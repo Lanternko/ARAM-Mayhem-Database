@@ -26,6 +26,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from aram_nn.lcu.maintenance import probe_maintenance  # noqa: E402
 from aram_nn.memory_forensics import MemoryPressureRecorder  # noqa: E402
 from aram_nn.resource_guard import (  # noqa: E402
     ResourceGuard,
@@ -1401,6 +1402,26 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    maintenance = probe_maintenance(ROOT / "data/monitor/lcu_maintenance.json")
+    if maintenance and not health["ok"]:
+        stopped = stop_snowball_workers() if workers else []
+        workers = snowball_workers()
+        _STALL_STATE["consecutive_restarts"] = 0
+        _STALL_STATE["last_restart_monotonic"] = time.monotonic()
+        actions.append({"action": "pause_workers_maintenance", "pids": stopped,
+                        "maintenance": maintenance})
+        record = {
+            "ts": iso_now(), "league_main_mb": main_mb, "lcu": health,
+            "workers": workers, "latest_capture_age_min": latest_age,
+            "maintenance": maintenance, "resource_guard": resource_decision.as_dict(),
+            "disk": disk, "actual_worker_count": fleet_worker_count(workers),
+            "desired_worker_count": 0, "static_site_publishers": static_site_publishers(),
+            "model_refreshers": model_refreshers(), "model_refresh_health": refresh_health,
+            "actions": actions,
+        }
+        append_state(args.state_file, record)
+        return record
+
     if workers and not health["ok"]:
         stopped = stop_snowball_workers()
         workers = snowball_workers()
@@ -1418,6 +1439,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
     stall_force_client_restart = False
     if (
         not resource_decision.capture_suppressed
+        and not maintenance
         and args.worker_stall_min > 0
         and latest_age is not None
     ):
@@ -1452,7 +1474,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         args,
         health,
         main_mb,
-        None if resource_decision.capture_suppressed else latest_age,
+        None if resource_decision.capture_suppressed or maintenance else latest_age,
         blocked_client_idle_min(args, health, main_mb),
         riot_client_mb=float(riot_metrics["pressure_mb"]) if riot_metrics else None,
     )
@@ -1594,6 +1616,7 @@ def check_once(args: argparse.Namespace) -> dict[str, Any]:
         "model_refresh_health": refresh_health,
         "latest_capture_age_min": latest_age,
         "riot_client_metrics": riot_metrics,
+        "maintenance": maintenance,
         "resource_guard": resource_decision.as_dict(),
         "disk": disk,
         "actual_worker_count": fleet_worker_count(workers),
@@ -1708,7 +1731,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-refresher", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--model-refresh-threshold", type=int, default=0)
     parser.add_argument("--model-refresh-growth-ratio", type=float, default=0.25)
-    parser.add_argument("--model-refresh-interval-sec", type=int, default=600)
+    parser.add_argument("--model-refresh-interval-sec", type=int, default=1800)
     parser.add_argument("--model-refresh-min-current-games", type=int, default=15000)
     parser.add_argument("--model-refresh-state", type=Path, default=DEFAULT_MODEL_REFRESH_STATE)
     parser.add_argument("--model-refresh-log-dir", type=Path, default=DEFAULT_MODEL_REFRESH_LOG_DIR)
