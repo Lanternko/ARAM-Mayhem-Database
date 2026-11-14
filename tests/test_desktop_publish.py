@@ -62,8 +62,29 @@ def test_latest_channel_follows_new_app_even_without_model_change(tmp_path, monk
     assert release.publish_refreshed_models(**options, tag="latest")
     assert not release.publish_refreshed_models(**options, tag="latest")
     latest[0] = "recommender-v2026.10.10.1"
-    assert release.publish_refreshed_models(**options, tag="latest")
+    assert release.publish_refreshed_models(**options, tag="latest", recheck_sec=0)
     assert published == ["recommender-v2026.10.09.2", "recommender-v2026.10.10.1"]
+
+
+def test_unchanged_model_rechecks_latest_release_only_after_delay(tmp_path, monkeypatch):
+    options = inputs(tmp_path)
+    clock = [1_000_000.0]
+    monkeypatch.setattr(release.time, "time", lambda: clock[0])
+    resolved = []
+    monkeypatch.setattr(release, "resolve_release_tag",
+                        lambda tag: resolved.append(tag) or "recommender-v2026.10.09.2")
+    monkeypatch.setattr(release, "publish_data", lambda *a, **k: None)
+    assert release.publish_refreshed_models(**options, tag="latest")
+    resolved.clear()
+    clock[0] += release.RELEASE_RECHECK_SEC - 1
+    assert not release.publish_refreshed_models(**options, tag="latest")
+    assert resolved == []
+    clock[0] += 2
+    assert not release.publish_refreshed_models(**options, tag="latest")
+    assert resolved == ["latest"]
+    resolved.clear()
+    assert not release.publish_refreshed_models(**options, tag="latest")
+    assert resolved == []
 
 
 def test_release_rollover_during_publish_does_not_advance_watermark(tmp_path, monkeypatch):
@@ -88,6 +109,19 @@ def test_latest_rejects_incomplete_or_unrelated_releases(monkeypatch, bad):
     with pytest.raises(ValueError, match="complete stable"):
         release.resolve_release_tag("latest")
 
+
+def test_gh_never_opens_a_console_window(monkeypatch):
+    # pythonw watchers otherwise spawn a visible terminal for every gh call.
+    import subprocess
+    calls = []
+    monkeypatch.setattr(release.subprocess, "run", lambda *a, **k: calls.append((a, k)))
+    release.gh("api", "repos/x/releases/latest", check=True)
+    [(args, kwargs)] = calls
+    assert args == (["gh", "api", "repos/x/releases/latest"],)
+    assert kwargs["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    assert kwargs["check"] is True
+    # gh's detached telemetry child opens its own console window otherwise.
+    assert kwargs["env"]["GH_TELEMETRY"] == "0"
 
 def test_retry_after_asset_upload_reuses_immutable_archive(tmp_path, monkeypatch):
     import hashlib

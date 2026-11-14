@@ -10,7 +10,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .release import asset_info
+from .release import asset_info, gh
 from .update import (DATA_FILES, REPO, atomic_json, download, fetch_manifest, install_data,
                      read_json, validate_data, validate_manifest, version_key)
 
@@ -64,19 +64,19 @@ def publish(dist: Path, source: str) -> str:
         "程式尚未簽章，SmartScreen 可能顯示提示；確認檔案來自本專案後，"
         "可選「其他資訊 → 仍要執行」。\n\n"
         f"Source: {source}\n", encoding="utf-8")
-    command = ["gh", "release", "view", tag, "--repo", REPO, "--json", "isDraft,targetCommitish"]
-    existing = subprocess.run(command, capture_output=True, text=True, encoding="utf-8")
+    existing = gh("release", "view", tag, "--repo", REPO, "--json", "isDraft,targetCommitish",
+                  capture_output=True, text=True, encoding="utf-8")
     if existing.returncode == 0:
         release = json.loads(existing.stdout)
         if not release["isDraft"] or release["targetCommitish"] != source:
             raise ValueError("Release tag is already owned by another build")
     else:
-        subprocess.run(["gh", "release", "create", tag, "--repo", REPO, "--draft", "--target", source,
-                        "--title", f"ARAM Recommender {version}", "--notes-file", str(notes)], check=True)
+        gh("release", "create", tag, "--repo", REPO, "--draft", "--target", source,
+           "--title", f"ARAM Recommender {version}", "--notes-file", str(notes), check=True)
     assets = [executable, dist / "ARAMRecommender-windows.zip", data, dist / "recommender-manifest.json"]
-    subprocess.run(["gh", "release", "upload", tag, *map(str, assets), "--repo", REPO, "--clobber"], check=True)
-    result = subprocess.run(["gh", "release", "view", tag, "--repo", REPO, "--json", "assets"],
-                            capture_output=True, text=True, encoding="utf-8", check=True)
+    gh("release", "upload", tag, *map(str, assets), "--repo", REPO, "--clobber", check=True)
+    result = gh("release", "view", tag, "--repo", REPO, "--json", "assets",
+                capture_output=True, text=True, encoding="utf-8", check=True)
     uploaded = {a["name"]: a for a in json.loads(result.stdout)["assets"]}
     for path in assets:
         expected = asset_info(path, tag)
@@ -86,7 +86,7 @@ def publish(dist: Path, source: str) -> str:
     latest = fetch_manifest()
     if latest["app"] != current["app"] or latest["data"] != current["data"]:
         raise ValueError("Stable channel changed during upload; rerun instead of rolling it back")
-    subprocess.run(["gh", "release", "edit", tag, "--repo", REPO, "--draft=false", "--latest"], check=True)
+    gh("release", "edit", tag, "--repo", REPO, "--draft=false", "--latest", check=True)
     return tag
 
 

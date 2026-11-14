@@ -3,20 +3,36 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
+import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .update import DATA_FILES, REPO, SCHEMA, atomic_json, read_json, validate_data
 
+# An unchanged model only needs to follow new app releases; checking GitHub every
+# watcher cycle cost ~144 gh calls a day for a channel that moves a few times a month.
+RELEASE_RECHECK_SEC = 6 * 3600
+
+
+def gh(*args: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run gh without a console window; pythonw parents otherwise pop a terminal.
+
+    Telemetry is off because gh spawns a detached `gh send-telemetry`, whose tzutil
+    child opens its own console window even when gh itself has none.
+    """
+    env = {**(kwargs.pop("env", None) or os.environ), "GH_TELEMETRY": "0"}
+    return subprocess.run(["gh", *args], creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), env=env, **kwargs)
+
 
 def resolve_release_tag(tag: str) -> str:
     """Use the same latest channel as installed clients, excluding incomplete releases."""
     if tag != "latest":
         return tag
-    result = subprocess.run(["gh", "api", f"repos/{REPO}/releases/latest"],
-                            capture_output=True, text=True, encoding="utf-8", check=True)
+    result = gh("api", f"repos/{REPO}/releases/latest",
+                capture_output=True, text=True, encoding="utf-8", check=True)
     release = json.loads(result.stdout)
     required = {"ARAMRecommender.exe", "ARAMRecommender-windows.zip", "recommender-manifest.json"}
     if (release.get("draft") or release.get("prerelease")
@@ -138,14 +154,14 @@ def publish_data(model_dir: Path, names: Path, tier: Path, output: Path, *, regi
     """
     channel = tag
     tag = resolve_release_tag(tag)
-    result = subprocess.run(["gh", "release", "view", tag, "--repo", REPO, "--json", "assets"],
-                            capture_output=True, text=True, encoding="utf-8", check=True)
+    result = gh("release", "view", tag, "--repo", REPO, "--json", "assets",
+                capture_output=True, text=True, encoding="utf-8", check=True)
     assets = json.loads(result.stdout)["assets"]
     if not any(a["name"] == "recommender-manifest.json" for a in assets):
         raise ValueError("Publish a complete desktop release before updating data")
     output.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["gh", "release", "download", tag, "--repo", REPO, "--pattern",
-                    "recommender-manifest.json", "--dir", str(output), "--clobber"], check=True)
+    gh("release", "download", tag, "--repo", REPO, "--pattern",
+       "recommender-manifest.json", "--dir", str(output), "--clobber", check=True)
     manifest = read_json(output / "recommender-manifest.json")
     metadata = export_data(model_dir, names, tier, output / "dataset", region=region, time_cutoff=time_cutoff)
     archive = output / "data.zip"
@@ -164,25 +180,27 @@ def publish_data(model_dir: Path, names: Path, tier: Path, output: Path, *, regi
         if existing.get("digest") != f"sha256:{info['sha256']}" or existing.get("size") != info["size"]:
             raise ValueError("An immutable data asset with different content already exists")
     else:
-        subprocess.run(["gh", "release", "upload", tag, str(archive), "--repo", REPO], check=True)
+        gh("release", "upload", tag, str(archive), "--repo", REPO, check=True)
     if channel == "latest" and resolve_release_tag(channel) != tag:
         raise ValueError("Latest application changed during data upload; retry next cycle")
     atomic_json(output / "recommender-manifest.json", manifest)
-    subprocess.run(["gh", "release", "upload", tag, str(output / "recommender-manifest.json"),
-                    "--repo", REPO, "--clobber"], check=True)
+    gh("release", "upload", tag, str(output / "recommender-manifest.json"),
+       "--repo", REPO, "--clobber", check=True)
     return manifest
 
 
 def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
-                             region: str, output: Path, names: Path, tier: Path) -> bool:
+                             region: str, output: Path, names: Path, tier: Path,
+                             recheck_sec: float = RELEASE_RECHECK_SEC) -> bool:
     """Retry independent public publishing even when the training gate is closed.
 
     A local refresh remains successful if GitHub is temporarily unavailable.
-    The publish watermark moves only after the manifest is uploaded.
+    The publish watermark moves only after the manifest is uploaded. With an
+    unchanged model the latest channel is re-resolved at most every recheck_sec,
+    so a new app release is followed within that delay.
     """
     import pyarrow.parquet as pq
     channel = tag
-    tag = resolve_release_tag(tag)
     inputs = [model_dir / name for name in ("model.pkl", "summary.json", "lr_weights.json", "champ_to_idx.json",
                                             "role_synergy.json", "single_team_calibration.json")]
     inputs.extend([names, tier])
@@ -194,10 +212,18 @@ def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
     state_path = output / "publish-state.json"
     try:
         previous = read_json(state_path)
-        if previous.get("source_hash") == identity and previous.get("tag") == tag:
-            return False
     except (OSError, ValueError):
-        pass
+        previous = {}
+    unchanged = previous.get("source_hash") == identity
+    checked_at = time.time()
+    if (unchanged and channel == "latest"
+            and checked_at - float(previous.get("release_checked_at_unix") or 0) < recheck_sec):
+        return False
+    tag = resolve_release_tag(tag)
+    if unchanged and previous.get("tag") == tag:
+        if channel == "latest":
+            atomic_json(state_path, {**previous, "release_checked_at_unix": checked_at})
+        return False
     summary = read_json(model_dir / "summary.json")
     file = pq.ParquetFile(parquet)
     if file.metadata.num_rows != summary["shipped_model_rows"]:
@@ -213,5 +239,6 @@ def publish_refreshed_models(*, model_dir: Path, parquet: Path, tag: str,
     publish_data(model_dir, names, tier, output, region=region, time_cutoff=cutoff, tag=tag)
     if channel == "latest" and resolve_release_tag(channel) != tag:
         raise ValueError("Latest application changed during publication; retry next cycle")
-    atomic_json(state_path, {"source_hash": identity, "time_cutoff": cutoff, "tag": tag})
+    atomic_json(state_path, {"source_hash": identity, "time_cutoff": cutoff, "tag": tag,
+                             "release_checked_at_unix": checked_at})
     return True
