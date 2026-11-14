@@ -116,6 +116,32 @@ def exclusive_lock(path: Path):
 
 _active = ContextVar('heavy_job', default=None)
 
+# events.jsonl reached 1 GiB on the 16 GB-free system drive by 2026-11-10: every
+# 1 s poll wrote the full argv twice plus thresholds. The poll still runs every
+# second for must_stop; only the log is throttled, and peaks ride on child_exit.
+CHILD_SAMPLE_LOG_SEC = 60
+EVENTS_ROTATE_BYTES = 64 * 1024 * 1024
+_SECRET_FLAG_WORDS = ('token', 'secret', 'password', 'passwd', 'api-key', 'apikey')
+
+
+def _is_secret_flag(arg: str) -> bool:
+    return arg.startswith('-') and any(word in arg.lower() for word in _SECRET_FLAG_WORDS)
+
+
+def redact_command(command) -> list[str]:
+    """Mask values of --*token*/--*secret*-style flags, in `--f v` and `--f=v` forms."""
+    out, hide_next = [], False
+    for arg in map(str, command):
+        if hide_next:
+            out.append('***')
+            hide_next = False
+        elif '=' in arg and _is_secret_flag(arg.split('=', 1)[0]):
+            out.append(arg.split('=', 1)[0] + '=***')
+        else:
+            out.append(arg)
+            hide_next = _is_secret_flag(arg)
+    return out
+
 
 class HeavyJob:
     def __init__(self, name: str, directory: Path | None = None, limits: Limits = Limits()):
@@ -125,9 +151,20 @@ class HeavyJob:
 
     def event(self, action: str, **fields):
         self.directory.mkdir(parents=True, exist_ok=True)
+        if 'command' in fields:
+            fields['command'] = redact_command(fields['command'])
+        for child in fields.get('children') or ():
+            if child.get('command'):
+                child['command'] = redact_command(child['command'])
         row = dict(time=time.time(), action=action, job=self.name,
                    pid=os.getpid(), thresholds=asdict(self.limits), **fields)
-        with (self.directory / 'events.jsonl').open('a', encoding='utf-8') as stream:
+        path = self.directory / 'events.jsonl'
+        try:
+            if path.stat().st_size >= EVENTS_ROTATE_BYTES:
+                os.replace(path, path.with_name('events.jsonl.1'))
+        except OSError:
+            pass  # missing file, or another process holds it open this instant
+        with path.open('a', encoding='utf-8') as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + '\n')
 
     def warn_starved(self, sample: ResourceSample, waited: float):
@@ -260,6 +297,10 @@ def run_command(command, cwd=None):
     with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
         process = subprocess.Popen(command, cwd=cwd, stdout=stdout, stderr=stderr,
                                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        next_log = 0.0
+        peak_private_mb = 0.0
+        min_available_mb = None
+        max_commit_percent = None
         try:
             while True:
                 sample = sample_resources()
@@ -278,14 +319,28 @@ def run_command(command, cwd=None):
                             pass
                 except psutil.NoSuchProcess:
                     pass
-                job.event('child_sample', command=list(command), children=telemetry,
-                          sample=sample.as_dict())
+                peak_private_mb = max(peak_private_mb,
+                                      sum(c['private_mb'] or 0 for c in telemetry))
+                if sample.available_mb is not None:
+                    min_available_mb = (sample.available_mb if min_available_mb is None
+                                        else min(min_available_mb, sample.available_mb))
+                if sample.commit_percent is not None:
+                    max_commit_percent = (sample.commit_percent if max_commit_percent is None
+                                          else max(max_commit_percent, sample.commit_percent))
+                now = time.monotonic()
+                if now >= next_log:
+                    job.event('child_sample', children=telemetry, sample=sample.as_dict())
+                    next_log = now + CHILD_SAMPLE_LOG_SEC
                 if must_stop(sample, job.limits):
-                    job.event('abort', command=list(command), sample=sample.as_dict())
+                    job.event('abort', command=list(command), children=telemetry,
+                              sample=sample.as_dict())
                     raise ResourcePressure('analysis stopped: system memory pressure or unavailable counters')
                 try:
                     process.wait(timeout=job.limits.poll_sec)
-                    job.event('child_exit', child_pid=process.pid, returncode=process.returncode)
+                    job.event('child_exit', child_pid=process.pid, returncode=process.returncode,
+                              command=list(command), peak_private_mb=round(peak_private_mb, 1),
+                              min_available_mb=min_available_mb,
+                              max_commit_percent=max_commit_percent)
                     break
                 except subprocess.TimeoutExpired:
                     pass

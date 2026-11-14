@@ -236,6 +236,40 @@ def test_model_refresh_floor_keeps_commit_reserve():
     assert not jobs.must_stop(ResourceSample(10000, 46000, 50308, 91.4), limits)
 
 
+def test_redact_command_masks_secret_flag_values():
+    command = ['py', 'build.py', '--cloudflare-analytics-token', 'abc123', '--db', 'x.db',
+               '--api-key=k1', '--password', 'p', '--patch-prefix', '16.22']
+    assert jobs.redact_command(command) == [
+        'py', 'build.py', '--cloudflare-analytics-token', '***', '--db', 'x.db',
+        '--api-key=***', '--password', '***', '--patch-prefix', '16.22']
+
+
+def test_child_samples_are_throttled_redacted_and_peaks_recorded(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setattr(jobs, 'sample_resources', lambda: HEALTHY)
+    monkeypatch.setattr(jobs, 'CHILD_SAMPLE_LOG_SEC', 3600)
+    code = 'import time; time.sleep(3)'
+    with jobs.HeavyJob('test', tmp_path, jobs.Limits(healthy_samples=1, poll_sec=0.2)).admitted():
+        result = jobs.run_command([sys.executable, '-c', code, '--token', 'SECRET'])
+    assert result.returncode == 0
+    text = (tmp_path / 'events.jsonl').read_text()
+    assert 'SECRET' not in text
+    rows = [json.loads(line) for line in text.splitlines()]
+    assert sum(r['action'] == 'child_sample' for r in rows) == 1
+    exit_row = next(r for r in rows if r['action'] == 'child_exit')
+    assert exit_row['peak_private_mb'] > 0
+    assert exit_row['min_available_mb'] == HEALTHY.available_mb
+
+
+def test_events_log_rotates_when_large(monkeypatch, tmp_path):
+    monkeypatch.setattr(jobs, 'EVENTS_ROTATE_BYTES', 100)
+    job = jobs.HeavyJob('test', tmp_path)
+    (tmp_path / 'events.jsonl').write_text('x' * 200)
+    job.event('admitted')
+    assert (tmp_path / 'events.jsonl.1').read_text() == 'x' * 200
+    assert '"admitted"' in (tmp_path / 'events.jsonl').read_text()
+
+
 def test_admission_rechecks_after_lock(monkeypatch, tmp_path):
     samples = iter([HEALTHY, PRESSURE, HEALTHY, HEALTHY])
     monkeypatch.setattr(jobs, 'sample_resources', lambda: next(samples))
