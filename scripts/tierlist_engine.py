@@ -4992,7 +4992,14 @@ def compute_champ_item_build_clusters(
         )
 
     champ_total: Counter[int] = Counter()
-    champ_builds: dict[int, list[tuple[tuple[int, ...], int, int]]] = defaultdict(list)
+    # Identical (core, boot) inventories are merged into one [games, wins] cell
+    # instead of one entry per participant: memory scales with the number of
+    # DISTINCT builds, not with patch size (the per-participant list reached
+    # ~12 GB on 16.22 and got the publish killed by the memory guard).  Every
+    # statistic below is a sum over participants, so weighting each distinct
+    # build by its game count gives identical numbers.  Dict insertion order is
+    # first-occurrence order, so iteration-dependent tie-breaks are unchanged.
+    champ_builds: dict[int, dict[tuple[tuple[int, ...], int], list[int]]] = defaultdict(dict)
     try:
         for blue_wins, participants_json in sql_rows:
             if not participants_json:
@@ -5018,7 +5025,9 @@ def compute_champ_item_build_clusters(
                 # signal even though they cannot form a 3-item core themselves.
                 boots = [item_id for item_id in route_ids if _is_boot_item(item_meta.get(item_id))]
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                champ_builds[cid].append((tuple(core), boots[0] if boots else 0, player_won))
+                cell = champ_builds[cid].setdefault((tuple(core), boots[0] if boots else 0), [0, 0])
+                cell[0] += 1
+                cell[1] += player_won
     finally:
         con.close()
 
@@ -5026,17 +5035,17 @@ def compute_champ_item_build_clusters(
     out: dict[int, dict] = {}
     for cid, builds in champ_builds.items():
         total = champ_total.get(cid, 0)
-        if total < min_games or len(builds) < core_min_games:
+        if total < min_games or sum(g for g, _w in builds.values()) < core_min_games:
             continue
         baseline = baseline_by_champ.get(cid, 0.5)
 
         item_games: Counter[int] = Counter()
         item_size_sum: Counter[int] = Counter()
-        for build_core, _boot, _won in builds:
+        for (build_core, _boot), (bg, _bw) in builds.items():
             size = len(build_core)
             for item_id in build_core:
-                item_games[item_id] += 1
-                item_size_sum[item_id] += size
+                item_games[item_id] += bg
+                item_size_sum[item_id] += size * bg
         item_count = sum(item_games.values())
         global_mean_size = (sum(item_size_sum.values()) / item_count) if item_count else float(max_items)
 
@@ -5064,18 +5073,18 @@ def compute_champ_item_build_clusters(
         option_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_wins: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
         option_full_games: dict[tuple[int, int], Counter[int]] = defaultdict(Counter)
-        route_builds: dict[tuple[int, int], list[frozenset[int]]] = defaultdict(list)
+        route_builds: dict[tuple[int, int], Counter[frozenset[int]]] = defaultdict(Counter)
         route_boot_games: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
         route_boot_wins: dict[tuple[tuple[int, int], int], Counter[int]] = defaultdict(Counter)
-        for build_core, boot, won in builds:
+        for (build_core, boot), (bg, won) in builds.items():
             if len(build_core) < 2:
                 continue
             ranked_core = sorted(build_core, key=earliness_key)  # earliest built first
             core_pair = (ranked_core[0], ranked_core[1])
-            group_games[core_pair] += 1
+            group_games[core_pair] += bg
             group_wins[core_pair] += won
             if boot:
-                route_boot_games[(core_pair, 0)][boot] += 1
+                route_boot_games[(core_pair, 0)][boot] += bg
                 route_boot_wins[(core_pair, 0)][boot] += won
             # Canonical 6-item completion: keep the earliest items up to the 6
             # inventory slots (+ boot), dropping whatever is built latest, so the
@@ -5086,15 +5095,15 @@ def compute_champ_item_build_clusters(
             # invalid inventory with more than six items is never truncated
             # into one.
             if len(build_core) + bool(boot) <= max_items:
-                route_builds[core_pair].append(frozenset(build_core))
+                route_builds[core_pair][frozenset(build_core)] += bg
             for follow in route_ranked[option_index:]:
-                option_games[core_pair][follow] += 1
+                option_games[core_pair][follow] += bg
                 option_wins[core_pair][follow] += won
                 if boot:
-                    route_boot_games[(core_pair, follow)][boot] += 1
+                    route_boot_games[(core_pair, follow)][boot] += bg
                     route_boot_wins[(core_pair, follow)][boot] += won
                 if is_full:
-                    option_full_games[core_pair][follow] += 1
+                    option_full_games[core_pair][follow] += bg
 
         def smoothed_lift(wins_: int, games_: int) -> tuple[float, float, float]:
             smoothed = (wins_ + baseline * ITEM_CORE_BUILD_PRIOR_GAMES) / (
@@ -5205,15 +5214,20 @@ def compute_champ_item_build_clusters(
             chain = list(quick_ids)
             observed = 0
             if third and route_boot:
-                pool = [b for b in route_builds[core_pair] if third["id"] in b]
+                # Distinct inventories weighted by how many games held them.
+                pool = {b: n for b, n in route_builds[core_pair].items() if third["id"] in b}
                 while len(chain) < max_items - 1:
-                    follow_games = Counter(i for b in pool for i in b if i not in chain)
+                    follow_games: Counter[int] = Counter()
+                    for b, n in pool.items():
+                        for i in b:
+                            if i not in chain:
+                                follow_games[i] += n
                     follow, fg = max(follow_games.items(), key=lambda e: (e[1], -e[0]), default=(0, 0))
                     if fg < min_confirm_games:
                         break
                     chain.append(follow)
                     observed = fg
-                    pool = [b for b in pool if follow in b]
+                    pool = {b: n for b, n in pool.items() if follow in b}
             completion = tuple(chain + [route_boot["id"]]) if observed else ()
             groups_out.append({
                 **names,
