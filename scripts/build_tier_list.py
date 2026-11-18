@@ -14,6 +14,7 @@ import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
+from aram_nn.heavy_jobs import lower_priority  # noqa: E402
 from aram_nn.site.patch_extract import (  # noqa: E402
     closed_patch_replica,
     register_lazy_scan_db,
@@ -50,7 +51,17 @@ def refresh_empirical_champion_profiles(
         "--patch-prefix",
         str(patch_prefix),
     ]
-    result = _subprocess.run(command, check=False)
+    # The child must import this checkout's aram_nn, not whichever checkout the
+    # interpreter's editable install points at (the publisher builds in a
+    # worktree that can be ahead of it).
+    env = dict(_os.environ)
+    env["PYTHONPATH"] = _os.pathsep.join(
+        part for part in (_os.path.join(_ROOT_DIR, "src"), env.get("PYTHONPATH", "")) if part
+    )
+    result = _subprocess.run(
+        command, check=False, env=env,
+        creationflags=getattr(_subprocess, "CREATE_NO_WINDOW", 0),
+    )
     if result.returncode != 0:
         click.echo(
             "[tierlist] WARN: empirical champion-profile refresh failed; "
@@ -284,6 +295,8 @@ def main(
     else:
         patch_prefix = patch_prefix or None
     click.echo(f"[tierlist] db={db}  queue={queue_id}  patch_prefix={patch_prefix}")
+    # A site build is never urgent: stay below whatever the user is running.
+    lower_priority()
 
     if shell_only:
         payload_url, cloudflare_analytics_token = resolve_production_shell_settings(
@@ -905,7 +918,9 @@ def main(
                 for (pending_queue, patch), sections in sorted(pending.items())
                 if pending_queue == queue_id
             ],
-            cwd=Path.cwd(),
+            # This checkout may be the publisher's throwaway worktree: the
+            # worker gets its own copy of the code and runs where data/ lives.
+            source_root=Path(__file__).resolve().parents[1],
             log=click.echo,
         )
 

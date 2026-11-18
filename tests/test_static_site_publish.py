@@ -206,6 +206,49 @@ class StaticSitePublishTests(unittest.TestCase):
         self.assertEqual(classic_cmd[classic_cmd.index("--recent-patches") + 1], "2")
         self.assertEqual(classic_cmd[classic_cmd.index("--db") + 1], str(db))
 
+    def test_memory_pressure_in_an_optional_stage_does_not_discard_the_publish(self) -> None:
+        from aram_nn.heavy_jobs import ResourcePressure
+
+        commands: list[list[str]] = []
+
+        def runner(command: Sequence[str]) -> CommandResult:
+            cmd = list(command)
+            commands.append(cmd)
+            if cmd[:4] == ["git", "rev-parse", "--abbrev-ref", "HEAD"]:
+                return CommandResult(0, "main\n")
+            if cmd[:3] == ["git", "status", "--short"]:
+                return CommandResult(0, "")
+            if cmd[:3] == ["git", "diff", "--quiet"]:
+                return CommandResult(1, "")
+            if any("build_champ_archetype_fit.py" in part for part in cmd):
+                # What heavy_jobs.run_command does when it kills the child.
+                raise ResourcePressure("commit 98% >= 98%")
+            return CommandResult(0, "")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "games.db"
+            insert_public_games(db, [game_row("TW_1")])
+            parquet = Path(tmp) / "pool.parquet"
+            parquet.write_bytes(b"")
+            result = publish_static_site_once(
+                db=db,
+                state_path=Path(tmp) / "state.json",
+                threshold=1,
+                dry_run=True,
+                comp_fit_parquet=parquet,
+                runner=runner,
+            )
+
+        # The tier list that was already built still goes out...
+        self.assertEqual(result["reason"], "dry run")
+        self.assertEqual(result["comp_fit"]["built"], False)
+        # ...with the previous radar artifact, not a half-written one.
+        self.assertIn(
+            ["git", "checkout", "HEAD", "--", str(Path("docs/api/champ-archetype-fit.json"))],
+            commands,
+        )
+        self.assertTrue(any("build_classic_page.py" in part for cmd in commands for part in cmd))
+
     def test_failed_classic_build_restores_pages_and_still_publishes(self) -> None:
         commands: list[list[str]] = []
 

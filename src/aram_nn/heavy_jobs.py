@@ -114,6 +114,40 @@ def exclusive_lock(path: Path):
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+_IDLE_PRIORITY_CLASS = 0x00000040
+_BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
+_PROCESS_MODE_BACKGROUND_BEGIN = 0x00100000
+
+
+def lower_priority(*, idle: bool = False, background_io: bool = False) -> None:
+    """Step this process out of the way of whatever the user is doing.
+
+    Below-normal CPU priority by default, idle with *idle*; *background_io* also
+    drops disk and memory priority to the lowest class (Windows background
+    mode), for work that may take as long as it likes.  Only ever lowers, and
+    never raises: a failure here must not stop the job.
+    """
+    try:
+        if os.name != 'nt':
+            os.nice(19 if idle else 10)
+            return
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel32.GetPriorityClass.argtypes = [ctypes.c_void_p]
+        kernel32.GetPriorityClass.restype = ctypes.c_uint32
+        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        handle = kernel32.GetCurrentProcess()
+        if idle:
+            kernel32.SetPriorityClass(handle, _IDLE_PRIORITY_CLASS)
+        elif kernel32.GetPriorityClass(handle) != _IDLE_PRIORITY_CLASS:
+            kernel32.SetPriorityClass(handle, _BELOW_NORMAL_PRIORITY_CLASS)
+        if background_io:
+            kernel32.SetPriorityClass(handle, _PROCESS_MODE_BACKGROUND_BEGIN)
+    except Exception:  # noqa: BLE001 - best effort
+        pass
+
+
 _active = ContextVar('heavy_job', default=None)
 
 # events.jsonl reached 1 GiB on the 16 GB-free system drive by 2026-11-10: every

@@ -7,6 +7,7 @@ keeps slicing until the settle reports done -- without starting a real process.
 """
 import contextlib
 import json
+import os
 import sqlite3
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
@@ -22,7 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import settle_patch  # noqa: E402
 import tierlist_engine as engine  # noqa: E402
 from aram_nn import patch_snapshot  # noqa: E402
-from aram_nn.heavy_jobs import ResourcePressure  # noqa: E402
+from aram_nn.heavy_jobs import ResourcePressure, exclusive_lock  # noqa: E402
 from aram_nn.site import chunk_cache, patch_extract, settle_background  # noqa: E402
 
 BLUE = [1, 2, 3, 4, 5]
@@ -342,6 +344,71 @@ class WorkerTests(unittest.TestCase):
             self.assertTrue(kwargs["creationflags"] & subprocess.CREATE_NO_WINDOW)
         self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
         self.assertTrue(settle_background.log_path(self.dir).exists())
+
+    def _fake_checkout(self) -> tuple[Path, Path]:
+        """A throwaway 'worktree' with code, and a separate project owning data/."""
+        source = self.dir / "worktree"
+        (source / "src" / "aram_nn" / "site").mkdir(parents=True)
+        (source / "src" / "aram_nn" / "__init__.py").write_text("X = 1\n", encoding="utf-8")
+        (source / "src" / "aram_nn" / "site" / "mod.py").write_text("Y = 2\n", encoding="utf-8")
+        (source / "src" / "aram_nn" / "__pycache__").mkdir()
+        (source / "src" / "aram_nn" / "__pycache__" / "junk.pyc").write_bytes(b"x")
+        (source / "scripts" / "nested").mkdir(parents=True)
+        (source / "scripts" / "settle_patch.py").write_text("# settle\n", encoding="utf-8")
+        (source / "scripts" / "overrides.json").write_text("{}", encoding="utf-8")
+        (source / "scripts" / "nested" / "skip.py").write_text("", encoding="utf-8")
+        snapshots = self.dir / "project" / "data" / "patch_snapshots"
+        snapshots.mkdir(parents=True)
+        return source, snapshots
+
+    def test_worker_runs_from_its_own_copy_in_the_project_that_owns_data(self) -> None:
+        source, snapshots = self._fake_checkout()
+        calls: list[tuple[list[str], dict]] = []
+        for _ in range(2):  # a second spawn replaces the copy cleanly
+            command = settle_background.spawn_background_settle(
+                "ignored.py", db="data/lcu/games.db", queue_id=2400, patches=["16.22"],
+                source_root=source, snapshot_dir=snapshots,
+                popen=lambda cmd, **kw: calls.append((cmd, kw)),
+            )
+        runtime = snapshots.resolve() / "runtime"
+        argv, kwargs = calls[-1]
+        self.assertEqual(argv, command)
+        self.assertEqual(Path(argv[1]), runtime / "scripts" / "settle_patch.py")
+        self.assertEqual(Path(kwargs["cwd"]), (self.dir / "project").resolve())
+        self.assertEqual(Path(kwargs["env"]["PYTHONPATH"]), runtime / "src")
+        if sys.platform == "win32":
+            self.assertTrue(kwargs["creationflags"] & subprocess.IDLE_PRIORITY_CLASS)
+        # Byte-identical code (the checkpoints are keyed on its hash), no junk.
+        self.assertEqual(
+            (runtime / "src" / "aram_nn" / "site" / "mod.py").read_bytes(),
+            (source / "src" / "aram_nn" / "site" / "mod.py").read_bytes(),
+        )
+        self.assertTrue((runtime / "scripts" / "overrides.json").exists())
+        self.assertFalse((runtime / "src" / "aram_nn" / "__pycache__").exists())
+        self.assertFalse((runtime / "scripts" / "nested").exists())
+        self.assertFalse(runtime.with_name("runtime.new").exists())
+        # Nothing of the worker's depends on the worktree surviving.
+        self.assertNotIn(str(source), " ".join(argv))
+
+    def test_a_running_worker_is_left_alone(self) -> None:
+        source, snapshots = self._fake_checkout()
+        with exclusive_lock(settle_background.lock_path(snapshots)) as acquired:
+            self.assertTrue(acquired)
+            self.assertIsNone(settle_background.spawn_background_settle(
+                "s.py", db="d", queue_id=2400, patches=["16.22"], source_root=source,
+                snapshot_dir=snapshots, popen=lambda *a, **k: self.fail("spawned"),
+                log=self.lines.append,
+            ))
+        # ...and the code it is running from was not swapped out under it.
+        self.assertFalse((snapshots / "runtime").exists())
+        self.assertTrue(any("already running" in line for line in self.lines))
+
+    def test_the_environment_switch_keeps_a_test_build_from_spawning(self) -> None:
+        with mock.patch.dict(os.environ, {settle_background.DISABLE_ENV: "1"}):
+            self.assertIsNone(settle_background.spawn_background_settle(
+                "s.py", db="d", queue_id=2400, patches=["16.22"], snapshot_dir=self.dir,
+                popen=lambda *a, **k: self.fail("spawned"),
+            ))
 
     def test_spawn_never_raises(self) -> None:
         def broken(*_args, **_kwargs):

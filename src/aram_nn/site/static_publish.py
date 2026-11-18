@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from aram_nn.heavy_jobs import guarded_pipeline, run_command
+from aram_nn.heavy_jobs import ResourcePressure, guarded_pipeline, run_command
 
 from .db import count_games
 
@@ -585,6 +585,24 @@ def resolve_comp_fit_parquet(parquet: Path | None) -> Path | None:
     return None
 
 
+def _run_optional(
+    runner: CommandRunner, command: Sequence[str], *, outputs: Sequence[Path] = ()
+) -> CommandResult:
+    """Run a non-fatal build stage; memory pressure is a failure, not a crash.
+
+    The heavy-job monitor kills the stage and raises when the machine runs short
+    of memory.  Letting that escape would throw away a tier list that has already
+    been built, so it is reported like any other failed optional stage -- after
+    putting back the outputs the killed stage may have left half written.
+    """
+    try:
+        return runner(command)
+    except ResourcePressure as exc:
+        if outputs:
+            runner(["git", "checkout", "HEAD", "--", *(str(path) for path in outputs)])
+        return CommandResult(1, "", f"stopped for memory pressure: {exc}")
+
+
 def build_champ_archetype_fit(
     *,
     runner: CommandRunner,
@@ -621,7 +639,7 @@ def build_champ_archetype_fit(
         "--out",
         str(out),
     ]
-    result = runner(command)
+    result = _run_optional(runner, command, outputs=[out])
     if result.returncode != 0:
         detail = (result.stderr.strip() or result.stdout.strip())[:500]
         print(
@@ -668,7 +686,7 @@ def build_champ_empirical_axes(
         "--out",
         str(out),
     ]
-    result = runner(command)
+    result = _run_optional(runner, command, outputs=[out])
     if result.returncode != 0:
         detail = (result.stderr.strip() or result.stdout.strip())[:500]
         print(
@@ -712,7 +730,7 @@ def build_classic_page(
         "--recent-patches",
         str(recent_patches),
     ]
-    result = runner(command)
+    result = _run_optional(runner, command)
     if result.returncode != 0:
         detail = (result.stderr.strip() or result.stdout.strip())[:500]
         runner(["git", "checkout", "HEAD", "--", *(str(path) for path in CLASSIC_PAGE_OUTPUTS)])

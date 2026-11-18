@@ -48,6 +48,7 @@ from tierlist_engine import (  # noqa: E402
 )
 
 from aram_nn import patch_snapshot  # noqa: E402
+from aram_nn.heavy_jobs import lower_priority  # noqa: E402
 from aram_nn.site import chunk_cache, settle_background  # noqa: E402
 from aram_nn.site.db import SITE_PATCH_MIN_GAMES, latest_patch_prefix  # noqa: E402
 from aram_nn.site.patch_extract import closed_patch_replica, register_lazy_scan_db  # noqa: E402
@@ -172,6 +173,9 @@ def main(
         targets = [(patch, (SNAPSHOT_CHAMP_SECTION,)) for patch, _ in targets]
         click.echo("[settle] champion counters only (--skip-items)")
     deadline = time.monotonic() + max_seconds if resumable and max_seconds > 0 else None
+    if resumable:
+        # Background work: idle CPU, lowest disk and memory priority.
+        lower_priority(idle=True, background_io=True)
 
     for target, sections in targets:
         if not target:

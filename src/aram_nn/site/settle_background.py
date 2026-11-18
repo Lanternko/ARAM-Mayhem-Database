@@ -18,6 +18,7 @@ most the window it was folding, and the next one continues from the store.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -42,6 +43,8 @@ PAUSE_SEC = 90
 PRESSURE_PAUSE_SEC = 300
 MAX_RUNTIME_SEC = 24 * 3600
 MAX_FAILURES = 3
+# Set (to anything) to keep a build from starting the worker, e.g. a test build.
+DISABLE_ENV = "ARAM_NO_BACKGROUND_SETTLE"
 
 Log = Callable[[str], Any]
 
@@ -69,6 +72,48 @@ def lock_path(snapshot_dir: Path | None = None) -> Path:
 
 def log_path(snapshot_dir: Path | None = None) -> Path:
     return state_dir(snapshot_dir) / "settle-background.log"
+
+
+def project_root(snapshot_dir: Path | None = None) -> Path:
+    """The checkout that really owns ``data/`` (links resolved).
+
+    The publisher builds in a throwaway worktree whose ``data`` is a link into
+    the primary checkout; that worktree is deleted right after the publish, so a
+    worker must not live in it.
+    """
+    return state_dir(snapshot_dir).resolve().parents[1]
+
+
+def runtime_dir(snapshot_dir: Path | None = None) -> Path:
+    return state_dir(snapshot_dir).resolve() / "runtime"
+
+
+def install_runtime(source_root: Path | str, runtime: Path) -> Path:
+    """Copy the code a worker needs to *runtime*; returns its settle script.
+
+    The worker outlives the worktree that started it, so it runs from its own
+    copy (``src/aram_nn`` plus the top-level scripts the engine imports and
+    fingerprints) rather than from files that are about to disappear.
+    """
+    source_root = Path(source_root)
+    staging = runtime.with_name(runtime.name + ".new")
+    shutil.rmtree(staging, ignore_errors=True)
+    shutil.copytree(
+        source_root / "src" / "aram_nn", staging / "src" / "aram_nn",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "graphify-out"),
+    )
+    (staging / "scripts").mkdir(parents=True)
+    for pattern in ("*.py", "*.json"):
+        for path in sorted((source_root / "scripts").glob(pattern)):
+            shutil.copy2(path, staging / "scripts" / path.name)
+    shutil.rmtree(runtime, ignore_errors=True)
+    staging.rename(runtime)
+    return runtime / "scripts" / "settle_patch.py"
+
+
+def worker_running(snapshot_dir: Path | None = None) -> bool:
+    with exclusive_lock(lock_path(snapshot_dir)) as acquired:
+        return not acquired
 
 
 def worker_python(executable: str | None = None) -> str:
@@ -119,26 +164,47 @@ def spawn_background_settle(
     queue_id: int,
     patches: Sequence[str],
     cwd: Path | str | None = None,
+    source_root: Path | str | None = None,
     snapshot_dir: Path | None = None,
     popen: Callable[..., Any] = subprocess.Popen,
     log: Log | None = None,
 ) -> list[str] | None:
     """Start the detached worker for *patches*; returns its command line.
 
-    Safe to call on every build: a second worker finds the lock taken and exits.
+    With *source_root* the worker runs from a private copy of that checkout's
+    code (see ``install_runtime``) and *script* is ignored.  Safe to call on
+    every build: nothing is started while a worker already holds the lock.
     Never raises -- a failed spawn only means the next build asks again.
     """
     patches = [str(p) for p in dict.fromkeys(patches) if p]
     if not patches:
         return None
-    command = worker_command(script, db=db, queue_id=queue_id, patches=patches)
+    if os.environ.get(DISABLE_ENV):
+        if log:
+            log(f"[settle] background settle not started ({DISABLE_ENV} is set)")
+        return None
     try:
+        if worker_running(snapshot_dir):
+            if log:
+                log("[settle] background settle already running; left it alone")
+            return None
+        env = None
+        if source_root is not None:
+            # Run from a private copy, in the checkout that owns data/.
+            runtime = runtime_dir(snapshot_dir)
+            script = install_runtime(source_root, runtime)
+            env = dict(os.environ, PYTHONPATH=str(runtime / "src"))
+            if cwd is None:
+                cwd = project_root(snapshot_dir)
+        command = worker_command(script, db=db, queue_id=queue_id, patches=patches)
         destination = log_path(snapshot_dir)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        # Idle priority is inherited by the slices the worker starts.
         flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0)
-                 | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+                 | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                 | getattr(subprocess, "IDLE_PRIORITY_CLASS", 0))
         with destination.open("ab") as stream:
-            popen(command, cwd=str(cwd) if cwd is not None else None,
+            popen(command, cwd=str(cwd) if cwd is not None else None, env=env,
                   stdin=subprocess.DEVNULL, stdout=stream, stderr=stream,
                   creationflags=flags, close_fds=True)
     except Exception as exc:  # noqa: BLE001 - the build must not fail over this
