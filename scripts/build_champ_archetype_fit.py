@@ -26,7 +26,9 @@ from pathlib import Path
 
 import click
 import numpy as np
+from aram_nn import heavy_jobs, parquet_batches
 from aram_nn.parquet_batches import TEAM_COLUMNS
+from aram_nn.site import stage_memo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ablation_champ_archetype_persistence import (  # noqa: E402
@@ -35,6 +37,11 @@ from ablation_champ_archetype_persistence import (  # noqa: E402
 )
 
 SCHEMA_KIND = "champ_archetype_fit"
+_SCRIPTS = Path(__file__).resolve().parent
+# Every source file whose edit can change the artifact (see stage_memo).
+MEMO_CODE = (Path(__file__), _SCRIPTS / "ablation_champ_archetype_persistence.py",
+             _SCRIPTS / "analyze_composition_signals.py",
+             Path(parquet_batches.__file__), Path(stage_memo.__file__))
 
 
 class TeamArrays:
@@ -196,47 +203,72 @@ def _loo_scores(team: np.ndarray, cap: np.ndarray, has: np.ndarray, archetype: s
     return out
 
 
+def _threshold(dataset: TeamArrays, blue: np.ndarray, red: np.ndarray, quantile) -> float:
+    """Membership cut: quantile over every real slot's leave-one-out team score."""
+    return float(np.quantile(np.concatenate([blue[dataset.blue >= 0], red[dataset.red >= 0]]),
+                             quantile))
+
+
 def calibrate_thresholds(dataset: TeamArrays, idx_to_cid, cap_pct, quantile):
     """Vectorized ablation calibrate_thresholds: per-archetype quantile over every
     real slot's leave-one-out team score.  One archetype at a time keeps the peak at
     one (games x 10) float64 array, not 60 Python floats per game."""
     cap, has = _cap_table(idx_to_cid, cap_pct)
-    out = {}
-    for a in COMP_FIT_DEFS:
-        vals = np.concatenate([
-            _loo_scores(dataset.blue, cap, has, a)[dataset.blue >= 0],
-            _loo_scores(dataset.red, cap, has, a)[dataset.red >= 0],
-        ])
-        out[a] = float(np.quantile(vals, quantile))
-        del vals
-    return out
+    return {a: _threshold(dataset, _loo_scores(dataset.blue, cap, has, a),
+                          _loo_scores(dataset.red, cap, has, a), quantile)
+            for a in COMP_FIT_DEFS}
+
+
+class _Cells:
+    """Signed-residual sums / counts per (champion-idx, archetype).  Slots are
+    flattened in the ablation loop's order (game, blue then red, slot) and
+    np.bincount adds sequentially, so each cell sums the same residuals in the
+    same order."""
+
+    def __init__(self, dataset: TeamArrays, residual, n_champs: int):
+        self.n_champs = n_champs
+        self.team = np.stack([dataset.blue, dataset.red], axis=1)  # (n, 2, width)
+        self.signed = np.broadcast_to(
+            np.asarray(residual, dtype=np.float64)[:, None, None]
+            * np.array([1.0, -1.0])[None, :, None], self.team.shape)
+        self.ssum: dict[tuple[int, str], float] = {}
+        self.cnt: dict[tuple[int, str], int] = {}
+
+    def add(self, archetype: str, blue: np.ndarray, red: np.ndarray, threshold: float) -> None:
+        hit = (np.stack([blue, red], axis=1) >= threshold) & (self.team >= 0)
+        idx = self.team[hit]
+        sums = np.bincount(idx, weights=self.signed[hit], minlength=self.n_champs)
+        counts = np.bincount(idx, minlength=self.n_champs)
+        for c in np.flatnonzero(counts):
+            self.ssum[(int(c), archetype)] = float(sums[c])
+            self.cnt[(int(c), archetype)] = int(counts[c])
 
 
 def accumulate(dataset: TeamArrays, residual, idx_to_cid, cap_pct, thresholds):
     """Vectorized ablation accumulate (ssum/cnt; the unused continuous variant is
-    dropped).  Slots are flattened in the loop's order (game, blue then red, slot)
-    and np.bincount adds sequentially, so each cell sums the same residuals in the
-    same order."""
+    dropped)."""
     cap, has = _cap_table(idx_to_cid, cap_pct)
-    n_champs = len(idx_to_cid)
-    team = np.stack([dataset.blue, dataset.red], axis=1)  # (n, 2, width)
-    signed = np.broadcast_to(
-        np.asarray(residual, dtype=np.float64)[:, None, None] * np.array([1.0, -1.0])[None, :, None],
-        team.shape)
-    ssum: dict[tuple[int, str], float] = {}
-    cnt: dict[tuple[int, str], int] = {}
+    cells = _Cells(dataset, residual, len(idx_to_cid))
     for a in COMP_FIT_DEFS:
-        score = np.stack([_loo_scores(dataset.blue, cap, has, a),
-                          _loo_scores(dataset.red, cap, has, a)], axis=1)
-        hit = (score >= thresholds[a]) & (team >= 0)
-        del score
-        idx = team[hit]
-        sums = np.bincount(idx, weights=signed[hit], minlength=n_champs)
-        counts = np.bincount(idx, minlength=n_champs)
-        for c in np.flatnonzero(counts):
-            ssum[(int(c), a)] = float(sums[c])
-            cnt[(int(c), a)] = int(counts[c])
-    return ssum, cnt, None
+        cells.add(a, _loo_scores(dataset.blue, cap, has, a),
+                  _loo_scores(dataset.red, cap, has, a), thresholds[a])
+    return cells.ssum, cells.cnt, None
+
+
+def thresholds_and_cells(dataset: TeamArrays, residual, idx_to_cid, cap_pct, quantile):
+    """calibrate_thresholds + accumulate on the SAME dataset in one pass.  The
+    leave-one-out scores are by far the costliest step (8 of this script's 9
+    minutes on 4M games) and both need exactly the same ones; computing them once
+    per archetype halves that, with identical thresholds and cells."""
+    cap, has = _cap_table(idx_to_cid, cap_pct)
+    cells = _Cells(dataset, residual, len(idx_to_cid))
+    thresholds = {}
+    for a in COMP_FIT_DEFS:
+        blue = _loo_scores(dataset.blue, cap, has, a)
+        red = _loo_scores(dataset.red, cap, has, a)
+        thresholds[a] = _threshold(dataset, blue, red, quantile)
+        cells.add(a, blue, red, thresholds[a])
+    return thresholds, cells.ssum, cells.cnt
 
 
 @click.command()
@@ -257,9 +289,22 @@ def accumulate(dataset: TeamArrays, residual, idx_to_cid, cap_pct, thresholds):
 @click.option("--out", default=Path("docs/api/champ-archetype-fit.json"),
               type=click.Path(path_type=Path), show_default=True)
 def main(data, patches, payload, membership_quantile, shrink_k, persistence_factor, min_cell, out):
+    heavy_jobs.lower_priority()
     patch_set = [p.strip() for p in patches.split(",") if p.strip()]
     print("[1/4] comp vectors + percentile norm ...", flush=True)
     comp_by_cid = load_comp_vectors(payload)
+    import sklearn
+
+    # Between two model refreshes neither the parquet nor the comp vectors move,
+    # so nearly every publish cycle can reuse the last artifact.
+    memo_key = stage_memo.stage_key(
+        code=MEMO_CODE, data=str(data), parquet=stage_memo.file_identity(data),
+        patches=patch_set, comp={str(c): v for c, v in comp_by_cid.items()},
+        params=[membership_quantile, shrink_k, persistence_factor, min_cell],
+        libs=[np.__version__, sklearn.__version__])
+    if stage_memo.restore(SCHEMA_KIND, memo_key, out):
+        print(f"inputs unchanged since the last build; reused the stored artifact: {out}")
+        return
     cap_pct = build_cap_pct(comp_by_cid)
     champ_meta = json.loads(Path(payload).read_text(encoding="utf-8")).get("champs", {})
     names = {int(k): (v.get("alias") or v.get("name") or k) for k, v in champ_meta.items()}
@@ -274,8 +319,8 @@ def main(data, patches, payload, membership_quantile, shrink_k, persistence_fact
                 - model.predict_proba(sparse_champion_matrix(full, n_champs))[:, 1])
 
     print("[3/4] thresholds + accumulating champion x archetype cells ...", flush=True)
-    thresholds = calibrate_thresholds(full, idx_to_cid, cap_pct, membership_quantile)
-    ssum, cnt, _ = accumulate(full, res_full, idx_to_cid, cap_pct, thresholds)
+    thresholds, ssum, cnt = thresholds_and_cells(full, res_full, idx_to_cid, cap_pct,
+                                                 membership_quantile)
 
     print("[4/4] shrink + persistence haircut -> artifact ...", flush=True)
     champs_out: dict[str, dict] = {}
@@ -314,6 +359,7 @@ def main(data, patches, payload, membership_quantile, shrink_k, persistence_fact
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    stage_memo.store(SCHEMA_KIND, memo_key, out)
 
     n_qual_champ = sum(1 for v in champs_out.values() if v["qualified"])
     print(f"\npatches={patch_list}  games={n_games}  champs={len(champs_out)}  "

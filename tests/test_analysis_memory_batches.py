@@ -126,3 +126,46 @@ def test_train_only_profiles_parity(data, tmp_path):
         assert actual[cid].physical_dpm == pytest.approx(expected[cid].physical_dpm)
         assert actual[cid].magic_dpm == pytest.approx(expected[cid].magic_dpm)
         assert actual[cid].true_dpm == pytest.approx(expected[cid].true_dpm)
+
+
+def test_single_pass_matches_separate_threshold_and_accumulate():
+    rng = np.random.default_rng(7)
+    n, champs = 400, 14
+    blue = np.stack([rng.permutation(champs)[:5] for _ in range(n)]).astype(np.int32)
+    red = np.stack([rng.permutation(champs)[:5] for _ in range(n)]).astype(np.int32)
+    blue[::17, 4] = -1  # short teams keep their padding out of every score
+    data_set = fit.TeamArrays(blue, red, rng.integers(0, 2, n).astype(np.float32))
+    residual = rng.normal(size=n)
+    idx_to_cid = {i: 100 + i for i in range(champs)}
+    cap_pct = {100 + i: {k: float(rng.random()) for k in fit.COMP_STAT_KEYS}
+               for i in range(champs - 1)}  # one champion without a comp vector
+    thresholds = fit.calibrate_thresholds(data_set, idx_to_cid, cap_pct, 0.667)
+    ssum, cnt, _ = fit.accumulate(data_set, residual, idx_to_cid, cap_pct, thresholds)
+    assert fit.thresholds_and_cells(data_set, residual, idx_to_cid, cap_pct, 0.667) == (
+        thresholds, ssum, cnt)
+    assert cnt
+
+
+def test_axes_reuses_artifact_until_an_input_changes(data, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    Path("docs/api").mkdir(parents=True)
+    Path("docs/api/tier-list.json").write_text('{"champs": {}}')
+    runner = CliRunner()
+
+    def build(*extra):
+        result = runner.invoke(axes.main, ["--data", str(data), "--min-bucket", "1",
+                                           "--out", "axes.json", *extra])
+        assert result.exit_code == 0, result.output + str(result.exception)
+        return "reused the stored artifact" in result.output, Path("axes.json").read_bytes()
+
+    reused, first = build()
+    assert not reused
+    Path("axes.json").unlink()
+    assert build() == (True, first)
+    reused, other = build("--min-games", "1")  # a parameter is part of the key
+    assert not reused and other != first
+    pl.read_parquet(data).head(12).write_parquet(data)  # so is the parquet itself
+    reused, shorter = build("--min-games", "1")
+    assert not reused and shorter != other
+    monkeypatch.setenv("ARAM_NO_STAGE_MEMO", "1")
+    assert build("--min-games", "1") == (False, shorter)

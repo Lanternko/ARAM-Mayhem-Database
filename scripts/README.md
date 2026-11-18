@@ -110,8 +110,8 @@ python scripts/prune_stale_db_snapshots.py
 
 ## 6. 英雄評分 / radar / skill 特徵
 - `build_champion_radar.py` — 產生 `docs/champion-radar.html`，職業內百分位 6 軸雷達 + 玩家 OVR 模式
-- `build_champ_archetype_fit.py` — 產生「英雄 × team-archetype」comp-fit 正式 artifact（Q3 訊號 productionize）
-- `build_champ_empirical_axes.py` — 每英雄實測 scaling/snowball 軸（取代舊 engage/poke bars）
+- `build_champ_archetype_fit.py` — 產生「英雄 × team-archetype」comp-fit 正式 artifact（Q3 訊號 productionize）；輸入（pooled parquet、comp 向量、參數、程式碼）沒變時直接沿用 `data/cache/stage_memo/` 裡上次的產物，只有模型刷新重寫 parquet 後才重算
+- `build_champ_empirical_axes.py` — 每英雄實測 scaling/snowball 軸（取代舊 engage/poke bars）；同樣走 `data/cache/stage_memo/`（parquet 沒變就不重掃 participants_json）；設 `ARAM_NO_STAGE_MEMO=1` 可強制兩支都重算
 - `build_empirical_champion_scores.py` — 用 LCU 實測 participant 數據覆寫 damage/cc/frontline/sustain score
 - `build_semantic_ability_scores.py` — 從技能文字 heuristic 產生 0..3 語意能力分數
 - `build_skill_semantic_features.py` — 建立可 review 的 skill-level 語意特徵表（Data Dragon → semantic 中間層）

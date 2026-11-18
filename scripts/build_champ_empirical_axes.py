@@ -21,7 +21,9 @@ from collections import defaultdict
 from pathlib import Path
 
 import click
+from aram_nn import heavy_jobs, parquet_batches
 from aram_nn.parquet_batches import iter_parquet_rows
+from aram_nn.site import stage_memo
 
 SCHEMA_KIND = "champ_empirical_axes"
 SNOWBALL_SPREE_W = 0.6
@@ -49,7 +51,19 @@ EARLY_MAX_SEC = 16 * 60
 @click.option("--out", default=Path("docs/api/champ-empirical-axes.json"),
               type=click.Path(path_type=Path), show_default=True)
 def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games, out):
+    heavy_jobs.lower_priority()
     patch_set = {p.strip() for p in patches.split(",") if p.strip()}
+    # The artifact depends only on the parquet, these parameters and this code
+    # (tier-list.json below feeds the console summary alone), so an unchanged
+    # parquet -- every cycle between two model refreshes -- skips the 10+ minute
+    # JSON pass over every participant.
+    memo_key = stage_memo.stage_key(
+        code=(Path(__file__), Path(parquet_batches.__file__), Path(stage_memo.__file__)),
+        data=str(data), parquet=stage_memo.file_identity(data), patches=sorted(patch_set),
+        params=[min_duration, late_min, early_max, min_bucket, min_games])
+    if stage_memo.restore(SCHEMA_KIND, memo_key, out):
+        print(f"inputs unchanged since the last build; reused the stored artifact: {out}")
+        return
     print("[1/3] streaming games in batches of 256 ...", flush=True)
     dur = []
 
@@ -145,6 +159,7 @@ def main(data, patches, min_duration, late_min, early_max, min_bucket, min_games
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding="utf-8")
+    stage_memo.store(SCHEMA_KIND, memo_key, out)
 
     def top(metric, rev, n=8):
         rows = [(names.get(int(c), c), v[metric]) for c, v in champs_out.items() if v[metric] is not None]
