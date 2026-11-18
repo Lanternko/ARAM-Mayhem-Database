@@ -279,3 +279,123 @@ def test_settled_destiny_items_reuse_frozen_counters(source: Path, tmp_path: Pat
         engine.settled_champ_destiny_items(
             source, QUEUE, PATCH, items_ok | {9999}, snapshot_dir=snapshot_dir
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-chunk scan cache (aram_nn.site.chunk_cache)
+# ---------------------------------------------------------------------------
+
+
+def _gens(db: Path) -> dict[int, int]:
+    con = sqlite3.connect(str(db))
+    try:
+        return dict(con.execute("SELECT chunk, gen FROM extract_chunk_gen"))
+    finally:
+        con.close()
+
+
+@pytest.fixture()
+def small_chunks(monkeypatch):
+    monkeypatch.setattr(px, "CHUNK_ROWS", 16)
+
+
+def test_every_row_change_bumps_its_chunks(source: Path, tmp_path: Path, small_chunks) -> None:
+    lean = _sync(source, tmp_path).lean_db
+    con = sqlite3.connect(str(lean))
+    before = dict(con.execute("SELECT chunk, gen FROM extract_chunk_gen"))
+    assert set(before) == {0, 1, 2, 3}  # rowids 1..60
+    cols = [r[1] for r in con.execute("PRAGMA table_info(games)")]
+    row = con.execute(f"SELECT {','.join(cols)} FROM games WHERE rowid=2").fetchone()
+    # INSERT OR REPLACE deletes rowid 2 (no DELETE trigger fires) and appends
+    # at rowid 61: both chunk 0 and chunk 3 must change.
+    con.execute(f"INSERT OR REPLACE INTO games({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", row)
+    con.commit()
+    after = dict(con.execute("SELECT chunk, gen FROM extract_chunk_gen"))
+    assert after[0] == before[0] + 1 and after[3] == before[3] + 1
+    assert after[1] == before[1] and after[2] == before[2]
+    con.execute("UPDATE games SET blue_wins = 1 - blue_wins WHERE rowid=20")
+    con.execute("DELETE FROM games WHERE rowid=40")
+    con.commit()
+    final = dict(con.execute("SELECT chunk, gen FROM extract_chunk_gen"))
+    con.close()
+    assert final[1] > after[1] and final[2] == after[2] + 1
+    assert final[0] == after[0] and final[3] == after[3]
+
+
+def test_unchanged_poor_rows_are_not_rewritten(source: Path, tmp_path: Path, small_chunks) -> None:
+    con = sqlite3.connect(str(source))
+    _insert(con, "TW_poor", seed=7, participants=_participants(7, with_stats=False))
+    con.commit()
+    con.close()
+    lean = _sync(source, tmp_path).lean_db
+    before = _gens(lean)
+    result = _sync(source, tmp_path)
+    # Still poor, re-read, identical: no write, no chunk invalidated.
+    assert result.rechecked == 0 and _gens(lean) == before
+    assert "TW_poor" in _ids(lean)
+
+
+def test_chunked_scans_match_plain_and_reuse_partials(
+    source: Path, tmp_path: Path, small_chunks, capsys
+) -> None:
+    from aram_nn.site import chunk_cache
+
+    item_meta = {
+        item_id: {"name": f"I{item_id}", "name_zh": f"I{item_id}", "into": [], "gold": {"total": 3000},
+                  "tags": ["Damage"], "maps": {"12": True}}
+        for item_id in ITEMS
+    }
+    champ_records = [{"champion_id": cid, "raw_wr": 0.4 + cid / 100} for cid in range(1, 24)]
+
+    def run() -> tuple:
+        return (
+            engine.count_participant_games(source, QUEUE, PATCH),
+            engine._scan_patch_counters(source, QUEUE, PATCH),
+            engine._scan_destiny_counters(source, QUEUE, PATCH, set(ITEMS)),
+            engine._scan_core_item_counters(source, QUEUE, PATCH, item_meta),
+            engine.compute_champ_item_pair_affinities(
+                source, QUEUE, PATCH, item_meta, champ_records, min_games=1
+            ),
+            engine.compute_champ_spell_affinities(source, QUEUE, PATCH, {}, champ_records, min_games=1),
+            engine.compute_champ_item_build_clusters(
+                source, QUEUE, PATCH, item_meta, champ_records, {}, min_games=1, core_min_games=1
+            ),
+        )
+
+    plain = run()
+    result = _sync(source, tmp_path)
+    px.register_scan_db(source, QUEUE, PATCH, result.lean_db)
+    assert px.replica_tracks_chunks(result.lean_db)
+    capsys.readouterr()
+    assert run() == plain
+    cold = capsys.readouterr().out
+    assert "[chunks] patch_counters: 4 folded, 0 reused" in cold
+    assert run() == plain
+    warm = capsys.readouterr().out
+    assert "[chunks] patch_counters: 0 folded, 4 reused" in warm
+    assert " folded, " in warm and "1 folded" not in warm
+
+    # New games land in the tail chunk(s) only; the result tracks the source.
+    con = sqlite3.connect(str(source))
+    for i in range(60, 70):
+        _insert(con, f"TW_{i}", seed=i)
+    con.commit()
+    con.close()
+    _sync(source, tmp_path)
+    grown = run()
+    log = capsys.readouterr().out
+    assert "[chunks] patch_counters: 2 folded, 3 reused" in log  # chunk 3 grew, chunk 4 is new
+    px.clear_scan_dbs()
+    assert grown == run()
+
+    # A cache keyed to another replica file is never reused.
+    rebuilt = _sync(source, tmp_path, prune_other_patches=False)
+    con = sqlite3.connect(str(rebuilt.lean_db))
+    con.execute("UPDATE extract_meta SET value='other' WHERE key=?", (px.REPLICA_ID_KEY,))
+    con.commit()
+    con.close()
+    px.register_scan_db(source, QUEUE, PATCH, rebuilt.lean_db)
+    capsys.readouterr()
+    assert run() == grown
+    assert "[chunks] patch_counters: 5 folded, 0 reused" in capsys.readouterr().out
+    assert chunk_cache.merge_into("a", "b") == "b"

@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -72,6 +73,11 @@ STATS_KEEP_KEYS = frozenset(
 STATS_PARTICIPANT_KEYS = ("championId", "teamId")
 
 FULL_TEAM_SIZE = 10
+
+# Rowid chunk size for the per-chunk scan cache (aram_nn.site.chunk_cache).
+# The triggers below bake it in; changing it needs EXTRACT_VERSION bumped.
+CHUNK_ROWS = 131_072
+REPLICA_ID_KEY = "replica_id"
 POOR_RECHECK_LIMIT = 50_000
 _BATCH = 2_000
 
@@ -105,6 +111,42 @@ CREATE TABLE IF NOT EXISTS {schema}.games (
 CREATE INDEX IF NOT EXISTS {schema}.idx_games_queue_patch_created
 ON games(queue_id, patch, created_ms);
 """
+
+# Every row change bumps its chunk's generation, so a cached per-chunk partial
+# is valid exactly while (replica_id, chunk, gen) is unchanged.  INSERT OR
+# REPLACE of an existing game_id deletes the old row without firing DELETE
+# triggers (recursive_triggers is off by default, and older code never turns it
+# on), so the BEFORE INSERT trigger bumps the chunk of the row it will replace.
+_CHUNK_TRIGGERS_TEMPLATE = """
+CREATE TABLE IF NOT EXISTS extract_chunk_gen (
+    chunk INTEGER PRIMARY KEY,
+    gen   INTEGER NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS games_chunk_replace BEFORE INSERT ON games BEGIN
+    INSERT INTO extract_chunk_gen(chunk, gen)
+        SELECT rowid / {chunk_rows}, 1 FROM games WHERE game_id = NEW.game_id
+        ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
+END;
+CREATE TRIGGER IF NOT EXISTS games_chunk_insert AFTER INSERT ON games BEGIN
+    INSERT INTO extract_chunk_gen(chunk, gen) VALUES (NEW.rowid / {chunk_rows}, 1)
+        ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
+END;
+CREATE TRIGGER IF NOT EXISTS games_chunk_delete AFTER DELETE ON games BEGIN
+    INSERT INTO extract_chunk_gen(chunk, gen) VALUES (OLD.rowid / {chunk_rows}, 1)
+        ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
+END;
+CREATE TRIGGER IF NOT EXISTS games_chunk_update AFTER UPDATE ON games BEGIN
+    INSERT INTO extract_chunk_gen(chunk, gen) VALUES (OLD.rowid / {chunk_rows}, 1)
+        ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
+    INSERT INTO extract_chunk_gen(chunk, gen) VALUES (NEW.rowid / {chunk_rows}, 1)
+        ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
+END;
+"""
+
+
+def _chunk_triggers() -> str:
+    return _CHUNK_TRIGGERS_TEMPLATE.format(chunk_rows=int(CHUNK_ROWS))
+
 
 Log = Callable[[str], Any]
 
@@ -221,6 +263,35 @@ def extract_paths(
     return base / f"{stem}.lean.db", base / f"{stem}.stats.db"
 
 
+def partials_path(lean_db: Path) -> Path:
+    """Chunk-partial cache beside a lean replica (``.sqlite``: the stale-replica
+    prune below matches ``*.db`` only)."""
+    lean_db = Path(lean_db)
+    stem = lean_db.name[: -len(".lean.db")] if lean_db.name.endswith(".lean.db") else lean_db.stem
+    return lean_db.with_name(f"{stem}.partials.sqlite")
+
+
+def replica_tracks_chunks(path: Path | str) -> bool:
+    """True for a registered lean replica that carries chunk generations."""
+    path = Path(path)
+    if path not in set(_ROUTES.values()) or not path.exists():
+        return False
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            has_table = con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='extract_chunk_gen'"
+            ).fetchone()
+            has_id = con.execute(
+                "SELECT 1 FROM extract_meta WHERE key=?", (REPLICA_ID_KEY,)
+            ).fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return False
+    return bool(has_table and has_id)
+
+
 def _unlink(path: Path) -> None:
     for candidate in (path, Path(str(path) + "-journal"), Path(str(path) + "-wal"), Path(str(path) + "-shm")):
         try:
@@ -241,6 +312,7 @@ def _open_replica(lean_db: Path, stats_db: Path) -> sqlite3.Connection:
     con.executescript(_SCHEMA.format(schema="st"))
     con.execute("CREATE TABLE IF NOT EXISTS extract_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     con.execute("CREATE TABLE IF NOT EXISTS extract_poor (game_id TEXT PRIMARY KEY)")
+    con.executescript(_chunk_triggers())
     con.commit()
     return con
 
@@ -257,8 +329,28 @@ def _write_meta(con: sqlite3.Connection, meta: dict[str, Any]) -> None:
     )
 
 
-def _apply_rows(con: sqlite3.Connection, rows: Iterable[tuple], *, log: Log, label: str) -> int:
-    """Upsert source rows into both copies; returns how many rows were written."""
+def _apply_rows(
+    con: sqlite3.Connection,
+    rows: Iterable[tuple],
+    *,
+    log: Log,
+    label: str,
+    in_place: bool = False,
+) -> int:
+    """Upsert source rows into both copies; returns how many rows were written.
+
+    *in_place* (the poor re-check) touches a game only when its slimmed copy
+    actually changed, and then UPDATEs it where it is: an INSERT OR REPLACE
+    would move every re-checked game to the tail and so invalidate two cached
+    scan chunks per game even when nothing changed.
+    """
+    update = (
+        "UPDATE {table} SET " + ", ".join(f"{c}=?" for c in _COLUMNS[1:]) + " WHERE game_id=?"
+    )
+    current = (
+        "SELECT l." + ", l.".join(_COLUMNS[1:]) + ", s.participants_json "
+        "FROM main.games AS l JOIN st.games AS s ON s.game_id = l.game_id WHERE l.game_id=?"
+    )
     insert = (
         "INSERT OR REPLACE INTO {table} (" + ", ".join(_COLUMNS) + ") VALUES ("
         + ", ".join("?" for _ in _COLUMNS) + ")"
@@ -286,9 +378,19 @@ def _apply_rows(con: sqlite3.Connection, rows: Iterable[tuple], *, log: Log, lab
     for row in rows:
         head = row[1:-1]
         lean_json, stats_json, poor = slim_participants(row[-1])
+        (poor_add if poor else poor_drop).append((str(row[1]),))
+        if in_place:
+            have = con.execute(current, (head[0],)).fetchone()
+            if have is not None:
+                if tuple(have) != (*head[1:], lean_json, stats_json):
+                    con.execute(update.format(table="main.games"), (*head[1:], lean_json, head[0]))
+                    con.execute(update.format(table="st.games"), (*head[1:], stats_json, head[0]))
+                    written += 1
+                if len(poor_add) + len(poor_drop) >= _BATCH:
+                    flush()
+                continue
         lean_batch.append((*head, lean_json))
         stats_batch.append((*head, stats_json))
-        (poor_add if poor else poor_drop).append((str(row[1]),))
         written += 1
         if len(lean_batch) >= _BATCH:
             flush()
@@ -395,11 +497,20 @@ def sync_patch_extract(
                         if row is not None:
                             yield row
 
-                rechecked = _apply_rows(con, _poor_rows(), log=log, label="recheck")
+                rechecked = _apply_rows(
+                    con, _poor_rows(), log=log, label="recheck", in_place=True
+                )
             replica_games = int(con.execute("SELECT COUNT(*) FROM main.games").fetchone()[0])
             stats_games = int(con.execute("SELECT COUNT(*) FROM st.games").fetchone()[0])
             if replica_games == source_games == stats_games:
-                _write_meta(con, {**identity, "max_rowid": max_rowid, "games": source_games})
+                extra = {} if meta.get(REPLICA_ID_KEY) and not rebuilt else {
+                    # New file (or one created before chunk tracking): partials
+                    # cached against any other replica must never match it.
+                    REPLICA_ID_KEY: uuid.uuid4().hex
+                }
+                _write_meta(
+                    con, {**identity, "max_rowid": max_rowid, "games": source_games, **extra}
+                )
                 con.commit()
                 con.close()
                 break
@@ -422,6 +533,10 @@ def sync_patch_extract(
             if stale not in (lean_db, stats_db):
                 _unlink(stale)
                 log(f"[extract] removed stale replica {stale.name}")
+        for stale in lean_db.parent.glob(f"q{queue_id}-*.partials.sqlite"):
+            if stale != partials_path(lean_db):
+                _unlink(stale)
+                log(f"[extract] removed stale chunk partials {stale.name}")
 
     seconds = time.monotonic() - started
     log(

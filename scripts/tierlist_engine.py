@@ -76,6 +76,66 @@ except Exception:  # pragma: no cover - scipy is installed through sklearn local
     betaln = None
     betaincinv = None
 
+from aram_nn.site import augment_taxonomy as _augment_taxonomy_mod
+from aram_nn.site import chunk_cache
+from aram_nn.site import item_families as _item_families_mod
+
+# Folds below call helpers from these files; any edit to them must drop the
+# cached per-chunk partials (see aram_nn.site.chunk_cache).
+chunk_cache.register_code_files(
+    Path(__file__),
+    Path(__file__).with_name("champion_roles.py"),
+    Path(_item_families_mod.__file__),
+    Path(_augment_taxonomy_mod.__file__),
+)
+
+
+def _patch_scope_sql(queue_id: int, patch_prefix: str | None) -> tuple[str, tuple]:
+    if patch_prefix:
+        return "queue_id=? AND patch >= ? AND patch < ?", (queue_id, *patch_range(patch_prefix))
+    return "queue_id=?", (queue_id,)
+
+
+def _fold_patch(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str | None,
+    *,
+    scan: str,
+    select: str,
+    fold,
+    extra_where: str = "",
+    inputs: tuple = (),
+    merge=None,
+):
+    """Fold *fold* over this scope's games, chunk-cached on the patch replica.
+
+    *fold* maps an iterable of ``select`` rows to an additive state (see
+    ``chunk_cache.merge_into``); *inputs* is every non-row value the fold reads,
+    so cached partials are reused only while those are unchanged.  On anything
+    but a tracked replica this is a single plain pass, as before.
+    """
+    where, params = _patch_scope_sql(queue_id, patch_prefix)
+    sql = f"SELECT {select} FROM games WHERE {where}{extra_where}"
+    return chunk_cache.fold_scan(
+        scan_db(db_path, queue_id, patch_prefix),
+        scan=scan,
+        fp_parts=(queue_id, patch_prefix, select, extra_where, *inputs),
+        sql=sql,
+        params=params,
+        fold=fold,
+        merge=merge,
+        log=lambda line: print(line, flush=True),
+    )
+
+
+_HAS_PARTICIPANTS = " AND participants_json IS NOT NULL"
+_HAS_ITEMS = (
+    _HAS_PARTICIPANTS
+    + " AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')"
+)
+_HAS_SPELLS = _HAS_PARTICIPANTS + " AND participants_json LIKE '%\"spells\"%'"
+
 TIER_ORDER = ["OP", "T1", "T2", "T3", "T4", "T5"]
 TIER_COLOR = {
     "OP": "#d8b8ff",
@@ -1462,20 +1522,16 @@ def _scan_patch_counters(
     frozen as counters and re-derived without re-reading hundreds of thousands
     of rows; see ``aram_nn.patch_snapshot`` for the settle / re-settle rules.
     """
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ?",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_champs, red_champs, blue_wins, participants_json FROM games "
-            "WHERE queue_id=?",
-            (queue_id,),
-        )
+    return _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="patch_counters",
+        select="blue_champs, red_champs, blue_wins, participants_json",
+        fold=_fold_patch_counters,
+        inputs=(sorted(NON_PICK_AUGMENT_IDS),),
+    )
 
+
+def _fold_patch_counters(rows) -> dict[str, Counter]:
     games: Counter[int] = Counter()
     wins: Counter[int] = Counter()
     ca_games: Counter[tuple[int, int]] = Counter()
@@ -1485,51 +1541,48 @@ def _scan_patch_counters(
     cp_games: Counter[tuple[int, int]] = Counter()
     cp_wins: Counter[tuple[int, int]] = Counter()
 
-    try:
-        for blue, red, bw, pj in rows:
-            bw_bool = bool(bw)
-            blue_team = json.loads(blue)
-            red_team = json.loads(red)
-            for team, team_won in ((blue_team, bw_bool), (red_team, not bw_bool)):
-                for c in team:
-                    games[c] += 1
-                    if team_won:
-                        wins[c] += 1
-                # Ordered anchor -> teammate rows: recommendation is conditioned on
-                # the already-picked champions, so we preserve "given anchor A,
-                # how much does teammate B help?" rather than collapsing to an
-                # undirected pair too early.
-                for c in team:
-                    for teammate in team:
-                        if teammate == c:
-                            continue
-                        cp_games[(c, teammate)] += 1
-                        if team_won:
-                            cp_wins[(c, teammate)] += 1
-            if not pj:
-                continue
-            for p in json.loads(pj):
-                cid = int(p.get("championId", 0))
-                if cid <= 0:
-                    continue
-                player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
-                picked = [
-                    int(a) for a in (p.get("augments") or [])
-                    if int(a) not in NON_PICK_AUGMENT_IDS
-                ]
-                for slot, a in enumerate(picked, start=1):
-                    if a <= 0:
+    for blue, red, bw, pj in rows:
+        bw_bool = bool(bw)
+        blue_team = json.loads(blue)
+        red_team = json.loads(red)
+        for team, team_won in ((blue_team, bw_bool), (red_team, not bw_bool)):
+            for c in team:
+                games[c] += 1
+                if team_won:
+                    wins[c] += 1
+            # Ordered anchor -> teammate rows: recommendation is conditioned on
+            # the already-picked champions, so we preserve "given anchor A,
+            # how much does teammate B help?" rather than collapsing to an
+            # undirected pair too early.
+            for c in team:
+                for teammate in team:
+                    if teammate == c:
                         continue
-                    ca_games[(cid, a)] += 1
-                    ca_wins[(cid, a)] += player_won
-                    # The LCU list preserves pick order.  The public draft has
-                    # four rounds, so later/internal entries are deliberately
-                    # excluded from the site estimate.
-                    if slot <= 4:
-                        ca_slot_games[(cid, a, slot)] += 1
-                        ca_slot_wins[(cid, a, slot)] += player_won
-    finally:
-        con.close()
+                    cp_games[(c, teammate)] += 1
+                    if team_won:
+                        cp_wins[(c, teammate)] += 1
+        if not pj:
+            continue
+        for p in json.loads(pj):
+            cid = int(p.get("championId", 0))
+            if cid <= 0:
+                continue
+            player_won = 1 if (int(p.get("teamId", 0)) == 100) == bw_bool else 0
+            picked = [
+                int(a) for a in (p.get("augments") or [])
+                if int(a) not in NON_PICK_AUGMENT_IDS
+            ]
+            for slot, a in enumerate(picked, start=1):
+                if a <= 0:
+                    continue
+                ca_games[(cid, a)] += 1
+                ca_wins[(cid, a)] += player_won
+                # The LCU list preserves pick order.  The public draft has
+                # four rounds, so later/internal entries are deliberately
+                # excluded from the site estimate.
+                if slot <= 4:
+                    ca_slot_games[(cid, a, slot)] += 1
+                    ca_slot_wins[(cid, a, slot)] += player_won
 
     return {
         "games": games,
@@ -1922,23 +1975,13 @@ def count_participant_games(
     dividing by the full game count would deflate every augment uniformly.  We
     count games where augments are observable instead.
     """
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    try:
-        if patch_prefix:
-            row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? AND patch >= ? AND patch < ? "
-                "AND participants_json IS NOT NULL AND participants_json != ''",
-                (queue_id, *patch_range(patch_prefix)),
-            ).fetchone()
-        else:
-            row = con.execute(
-                "SELECT COUNT(*) FROM games WHERE queue_id=? "
-                "AND participants_json IS NOT NULL AND participants_json != ''",
-                (queue_id,),
-            ).fetchone()
-        return int(row[0]) if row else 0
-    finally:
-        con.close()
+    return int(_fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="participant_games",
+        select="1",
+        extra_where=" AND participants_json IS NOT NULL AND participants_json != ''",
+        fold=lambda rows: sum(1 for _row in rows),
+    ) or 0)
 
 RARITY_ORDER = ["kPrismatic", "kGold", "kSilver"]
 
@@ -3171,6 +3214,32 @@ def estimate_category_prior_strength(rows: list[dict]) -> float:
         pass
     return CATEGORY_PRIOR_DEFAULT
 
+def _category_rollup(
+    cs_games: Counter,
+    cs_wins: Counter,
+    baseline_by_champ: dict[int, float],
+) -> tuple[Counter, Counter, Counter, Counter]:
+    """(champ, slug) tallies -> baseline mass and per-slug totals.
+
+    The baseline is each player's champion win rate, summed over the players
+    in a cell; it is the same for every player of a champion, so it is
+    ``games * baseline`` and stays out of the cached per-chunk fold (the win
+    rates move with every build, the per-chunk tallies do not).
+    """
+    cs_baseline_games: Counter = Counter()
+    category_games: Counter = Counter()
+    category_wins: Counter = Counter()
+    category_baseline_games: Counter = Counter()
+    for key, games in cs_games.items():
+        cid, slug = key[0], key[1]
+        baseline = games * baseline_by_champ.get(cid, 0.5)
+        cs_baseline_games[key] = baseline
+        category_games[slug] += games
+        category_wins[slug] += cs_wins.get(key, 0)
+        category_baseline_games[slug] += baseline
+    return cs_baseline_games, category_games, category_wins, category_baseline_games
+
+
 def _finalize_category_affinity(
     cs_games: Counter[tuple[int, str]],
     cs_wins: Counter[tuple[int, str]],
@@ -3416,19 +3485,6 @@ def compute_champ_category_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL",
-            (queue_id,),
-        )
 
     # The game's own pools when the per-patch payload is available; the keyword
     # classifier only as a fallback so a missing payload degrades the labels
@@ -3438,33 +3494,33 @@ def compute_champ_category_affinities(
             return augment_group_infos.get(aid) or []
         return augment_category_infos(aid, meta, augment_category_overrides)
 
+    # Everything the fold needs from augment metadata, resolved once (and the
+    # exact input the chunk cache keys on).
+    aug_lookup = {
+        int(aid): (list(meta.get("sets") or []), list(_augment_group_of(int(aid), meta)))
+        for aid, meta in aug_meta.items()
+        if meta
+    }
     dims = ("sets", "items", "augtypes")
-    cs_games = {dim: Counter() for dim in dims}
-    cs_wins = {dim: Counter() for dim in dims}
-    cs_baseline_games = {dim: Counter() for dim in dims}
-    champ_total_games = Counter()
-    category_games = {dim: Counter() for dim in dims}
-    category_wins = {dim: Counter() for dim in dims}
-    category_baseline_games = {dim: Counter() for dim in dims}
-    category_names: dict[str, dict[str, dict[str, str]]] = {dim: {} for dim in dims}
 
-    def add(dim: str, cid: int, player_won: int, baseline: float, infos: list[dict[str, str]]) -> None:
-        seen = {str(info.get("slug") or ""): info for info in infos if info.get("slug")}
-        for slug, info in seen.items():
-            key = (cid, slug)
-            cs_games[dim][key] += 1
-            cs_wins[dim][key] += player_won
-            cs_baseline_games[dim][key] += baseline
-            category_games[dim][slug] += 1
-            category_wins[dim][slug] += player_won
-            category_baseline_games[dim][slug] += baseline
-            category_names[dim][slug] = {
-                "name": str(info.get("name") or slug),
-                "name_zh": str(info.get("name_zh") or info.get("name") or slug),
-                "name_en": str(info.get("name_en") or info.get("name") or slug),
-            }
+    def fold(rows):
+        cs_games = {dim: Counter() for dim in dims}
+        cs_wins = {dim: Counter() for dim in dims}
+        champ_total_games = Counter()
+        category_names: dict[str, dict[str, dict[str, str]]] = {dim: {} for dim in dims}
 
-    try:
+        def add(dim: str, cid: int, player_won: int, infos: list[dict[str, str]]) -> None:
+            seen = {str(info.get("slug") or ""): info for info in infos if info.get("slug")}
+            for slug, info in seen.items():
+                key = (cid, slug)
+                cs_games[dim][key] += 1
+                cs_wins[dim][key] += player_won
+                category_names[dim][slug] = {
+                    "name": str(info.get("name") or slug),
+                    "name_zh": str(info.get("name_zh") or info.get("name") or slug),
+                    "name_en": str(info.get("name_en") or info.get("name") or slug),
+                }
+
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
@@ -3475,25 +3531,50 @@ def compute_champ_category_affinities(
                 if cid <= 0 or team_id not in (100, 200):
                     continue
                 champ_total_games[cid] += 1
-                baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 set_infos: list[dict[str, str]] = []
                 aug_type_infos: list[dict[str, str]] = []
                 for augment_id in participant.get("augments") or []:
-                    meta = aug_meta.get(int(augment_id))
-                    if not meta:
+                    hit = aug_lookup.get(int(augment_id))
+                    if hit is None:
                         continue
-                    set_infos.extend(meta.get("sets") or [])
-                    aug_type_infos.extend(_augment_group_of(int(augment_id), meta))
+                    set_infos.extend(hit[0])
+                    aug_type_infos.extend(hit[1])
                 item_infos = _participant_item_infos(
                     participant.get("items") or participant.get("itemSlots") or [],
                     item_meta,
                 )
-                add("sets", cid, player_won, baseline, set_infos)
-                add("items", cid, player_won, baseline, item_infos)
-                add("augtypes", cid, player_won, baseline, aug_type_infos)
-    finally:
-        con.close()
+                add("sets", cid, player_won, set_infos)
+                add("items", cid, player_won, item_infos)
+                add("augtypes", cid, player_won, aug_type_infos)
+        return {
+            "cs_games": cs_games,
+            "cs_wins": cs_wins,
+            "champ_total_games": champ_total_games,
+            "names": category_names,
+        }
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="category_affinities",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_PARTICIPANTS,
+        fold=fold,
+        inputs=(aug_lookup, item_meta),
+    )
+    champ_total_games = state["champ_total_games"]
+    cs_games = state["cs_games"]
+    cs_wins = state["cs_wins"]
+    category_names = state["names"]
+    cs_baseline_games = {}
+    category_games = {}
+    category_wins = {}
+    category_baseline_games = {}
+    for dim in dims:
+        (
+            cs_baseline_games[dim], category_games[dim],
+            category_wins[dim], category_baseline_games[dim],
+        ) = _category_rollup(cs_games[dim], cs_wins[dim], baseline_by_champ)
 
     augtype_groups = None
     if champ_profiles:
@@ -3534,35 +3615,13 @@ def compute_champ_item_pair_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
 
-    cs_games: Counter[tuple[int, str]] = Counter()
-    cs_wins: Counter[tuple[int, str]] = Counter()
-    cs_baseline_games: Counter[tuple[int, str]] = Counter()
-    champ_total_games = Counter()
-    category_games: Counter[str] = Counter()
-    category_wins: Counter[str] = Counter()
-    category_baseline_games: Counter[str] = Counter()
-    category_names: dict[str, dict[str, object]] = {}
-    ordered_games: Counter[tuple[int, str, str]] = Counter()
-    ordered_wins: Counter[tuple[int, str, str]] = Counter()
-    ordered_baseline_games: Counter[tuple[int, str, str]] = Counter()
-
-    try:
+    def fold(rows):
+        cs_games: Counter[tuple[int, str]] = Counter()
+        cs_wins: Counter[tuple[int, str]] = Counter()
+        champ_total_games = Counter()
+        ordered_games: Counter[tuple[int, str, str]] = Counter()
+        ordered_wins: Counter[tuple[int, str, str]] = Counter()
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
@@ -3581,29 +3640,49 @@ def compute_champ_item_pair_affinities(
                     continue
                 slug = _item_pair_slug(core_ids, ordered=False)
                 ordered_slug = _item_pair_slug(core_ids, ordered=True)
-                baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 key = (cid, slug)
                 cs_games[key] += 1
                 cs_wins[key] += player_won
-                cs_baseline_games[key] += baseline
                 order_key = (cid, slug, ordered_slug)
                 ordered_games[order_key] += 1
                 ordered_wins[order_key] += player_won
-                ordered_baseline_games[order_key] += baseline
-                category_games[slug] += 1
-                category_wins[slug] += player_won
-                category_baseline_games[slug] += baseline
-                if slug not in category_names:
-                    items = _item_pair_payload(sorted(core_ids), item_meta)
-                    category_names[slug] = {
-                        "name": _item_pair_name(items, "name_zh"),
-                        "name_zh": _item_pair_name(items, "name_zh"),
-                        "name_en": _item_pair_name(items, "name_en"),
-                        "items": items,
-                    }
-    finally:
-        con.close()
+        return {
+            "cs_games": cs_games,
+            "cs_wins": cs_wins,
+            "champ_total_games": champ_total_games,
+            "ordered_games": ordered_games,
+            "ordered_wins": ordered_wins,
+        }
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="item_pair_affinities",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_ITEMS,
+        fold=fold,
+        inputs=(item_meta,),
+    )
+    cs_games = state["cs_games"]
+    cs_wins = state["cs_wins"]
+    champ_total_games = state["champ_total_games"]
+    ordered_games = state["ordered_games"]
+    ordered_wins = state["ordered_wins"]
+    cs_baseline_games, category_games, category_wins, category_baseline_games = _category_rollup(
+        cs_games, cs_wins, baseline_by_champ
+    )
+    ordered_baseline_games: Counter[tuple[int, str, str]] = Counter({
+        key: games * baseline_by_champ.get(key[0], 0.5) for key, games in ordered_games.items()
+    })
+    category_names: dict[str, dict[str, object]] = {}
+    for slug in category_games:
+        items = _item_pair_payload([int(part) for part in slug.split("+")], item_meta)
+        category_names[slug] = {
+            "name": _item_pair_name(items, "name_zh"),
+            "name_zh": _item_pair_name(items, "name_zh"),
+            "name_en": _item_pair_name(items, "name_en"),
+            "items": items,
+        }
 
     best_order_by_pair: dict[tuple[int, str], list[int]] = {}
     order_candidates: dict[tuple[int, str], list[tuple[float, int, str]]] = defaultdict(list)
@@ -3669,32 +3748,11 @@ def _compute_champ_item_slot_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
 
-    cs_games: Counter[tuple[int, str]] = Counter()
-    cs_wins: Counter[tuple[int, str]] = Counter()
-    cs_baseline_games: Counter[tuple[int, str]] = Counter()
-    champ_total_games = Counter()
-    category_games: Counter[str] = Counter()
-    category_wins: Counter[str] = Counter()
-    category_baseline_games: Counter[str] = Counter()
-    category_names: dict[str, dict[str, object]] = {}
-
-    try:
+    def fold(rows):
+        cs_games: Counter[tuple[int, str]] = Counter()
+        cs_wins: Counter[tuple[int, str]] = Counter()
+        champ_total_games = Counter()
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
@@ -3711,29 +3769,38 @@ def _compute_champ_item_slot_affinities(
                 )
                 if not selected_ids:
                     continue
-                baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
                 for item_id in selected_ids:
-                    slug = str(item_id)
-                    key = (cid, slug)
+                    key = (cid, str(item_id))
                     cs_games[key] += 1
                     cs_wins[key] += player_won
-                    cs_baseline_games[key] += baseline
-                    category_games[slug] += 1
-                    category_wins[slug] += player_won
-                    category_baseline_games[slug] += baseline
-                    if slug not in category_names:
-                        items = _item_pair_payload([item_id], item_meta)
-                        if not items:
-                            continue
-                        category_names[slug] = {
-                            "name": _item_pair_name(items, "name_zh"),
-                            "name_zh": _item_pair_name(items, "name_zh"),
-                            "name_en": _item_pair_name(items, "name_en"),
-                            "items": items,
-                        }
-    finally:
-        con.close()
+        return {"cs_games": cs_games, "cs_wins": cs_wins, "champ_total_games": champ_total_games}
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan=f"item_slot_affinities:{item_selector.__name__}",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_ITEMS,
+        fold=fold,
+        inputs=(item_selector.__name__, item_meta),
+    )
+    cs_games = state["cs_games"]
+    cs_wins = state["cs_wins"]
+    champ_total_games = state["champ_total_games"]
+    cs_baseline_games, category_games, category_wins, category_baseline_games = _category_rollup(
+        cs_games, cs_wins, baseline_by_champ
+    )
+    category_names: dict[str, dict[str, object]] = {}
+    for slug in category_games:
+        items = _item_pair_payload([int(slug)], item_meta)
+        if not items:
+            continue
+        category_names[slug] = {
+            "name": _item_pair_name(items, "name_zh"),
+            "name_zh": _item_pair_name(items, "name_zh"),
+            "name_en": _item_pair_name(items, "name_en"),
+            "items": items,
+        }
 
     return _finalize_category_affinity(
         cs_games,
@@ -3851,19 +3918,14 @@ def _scan_destiny_counters(
     Split out so a closed patch's tallies can be frozen (``settled_champ_destiny_items``)
     instead of re-read on every build.
     """
-    sql = "SELECT blue_wins, participants_json FROM games WHERE queue_id=?"
-    params: list[object] = [queue_id]
-    if patch_prefix:
-        sql += " AND patch >= ? AND patch < ?"
-        params.extend(patch_range(patch_prefix))
+    items_ok = frozenset(int(i) for i in items_ok)
 
-    # Flat layout [w_no, n_no, w_yes, n_yes] x k=0..6 (28 ints): per champion for
-    # all players, per (champion, item) for holders of that item.
-    totals: dict[int, list[int]] = {}
-    cells: dict[tuple[int, int], list[int]] = {}
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    try:
-        for blue_wins, participants_json in con.execute(sql, params):
+    def fold(rows):
+        # Flat layout [w_no, n_no, w_yes, n_yes] x k=0..6 (28 ints): per champion
+        # for all players, per (champion, item) for holders of that item.
+        totals: dict[int, list[int]] = {}
+        cells: dict[tuple[int, int], list[int]] = {}
+        for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
@@ -3897,10 +3959,26 @@ def _scan_destiny_counters(
                         cell = cells[(cid, item_id)] = [0] * 28
                     cell[j] += won
                     cell[j + 1] += 1
-    finally:
-        con.close()
-    return totals, cells
+        return totals, cells
 
+    def merge(acc, part):
+        for into, more in zip(acc, part):
+            for key, vec in more.items():
+                have = into.get(key)
+                if have is None:
+                    into[key] = vec
+                else:
+                    into[key] = [x + y for x, y in zip(have, vec)]
+        return acc
+
+    return _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="destiny_counters",
+        select="blue_wins, participants_json",
+        fold=fold,
+        merge=merge,
+        inputs=(DESTINY_AUGMENT_ID, sorted(items_ok)),
+    )
 
 def _destiny_fingerprint(items_ok: set[int] | frozenset[int]) -> str:
     raw = f"{DESTINY_AUGMENT_ID}|" + ",".join(str(i) for i in sorted(int(i) for i in items_ok))
@@ -4121,32 +4199,11 @@ def compute_champ_spell_affinities(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
-            "AND participants_json LIKE '%\"spells\"%'",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND participants_json LIKE '%\"spells\"%'",
-            (queue_id,),
-        )
 
-    cs_games: Counter[tuple[int, str]] = Counter()
-    cs_wins: Counter[tuple[int, str]] = Counter()
-    cs_baseline_games: Counter[tuple[int, str]] = Counter()
-    champ_total_games: Counter[int] = Counter()
-    category_games: Counter[str] = Counter()
-    category_wins: Counter[str] = Counter()
-    category_baseline_games: Counter[str] = Counter()
-    category_names: dict[str, dict[str, object]] = {}
-
-    try:
+    def fold(rows):
+        cs_games: Counter[tuple[int, str]] = Counter()
+        cs_wins: Counter[tuple[int, str]] = Counter()
+        champ_total_games: Counter[int] = Counter()
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
@@ -4166,37 +4223,45 @@ def compute_champ_spell_affinities(
                 if chosen[0] <= 0 or chosen[0] == chosen[1]:
                     continue
                 champ_total_games[cid] += 1
-                baseline = baseline_by_champ.get(cid, 0.5)
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                slug = "+".join(str(spell_id) for spell_id in chosen)
-                key = (cid, slug)
+                key = (cid, "+".join(str(spell_id) for spell_id in chosen))
                 cs_games[key] += 1
                 cs_wins[key] += player_won
-                cs_baseline_games[key] += baseline
-                category_games[slug] += 1
-                category_wins[slug] += player_won
-                category_baseline_games[slug] += baseline
-                if slug not in category_names:
-                    spells: list[dict[str, object]] = []
-                    for spell_id in chosen:
-                        meta = spell_meta.get(spell_id) or {}
-                        name_zh = str(meta.get("name_zh") or meta.get("name") or f"#{spell_id}")
-                        name_en = str(meta.get("name_en") or name_zh)
-                        spells.append({
-                            "id": spell_id,
-                            "name": name_zh,
-                            "name_zh": name_zh,
-                            "name_en": name_en,
-                            "icon": str(meta.get("icon") or ""),
-                        })
-                    category_names[slug] = {
-                        "name": _item_pair_name(spells, "name_zh"),
-                        "name_zh": _item_pair_name(spells, "name_zh"),
-                        "name_en": _item_pair_name(spells, "name_en"),
-                        "items": spells,
-                    }
-    finally:
-        con.close()
+        return {"cs_games": cs_games, "cs_wins": cs_wins, "champ_total_games": champ_total_games}
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="spell_affinities",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_SPELLS,
+        fold=fold,
+    )
+    cs_games = state["cs_games"]
+    cs_wins = state["cs_wins"]
+    champ_total_games = state["champ_total_games"]
+    cs_baseline_games, category_games, category_wins, category_baseline_games = _category_rollup(
+        cs_games, cs_wins, baseline_by_champ
+    )
+    category_names: dict[str, dict[str, object]] = {}
+    for slug in category_games:
+        spells: list[dict[str, object]] = []
+        for spell_id in (int(part) for part in slug.split("+")):
+            meta = spell_meta.get(spell_id) or {}
+            name_zh = str(meta.get("name_zh") or meta.get("name") or f"#{spell_id}")
+            name_en = str(meta.get("name_en") or name_zh)
+            spells.append({
+                "id": spell_id,
+                "name": name_zh,
+                "name_zh": name_zh,
+                "name_en": name_en,
+                "icon": str(meta.get("icon") or ""),
+            })
+        category_names[slug] = {
+            "name": _item_pair_name(spells, "name_zh"),
+            "name_zh": _item_pair_name(spells, "name_zh"),
+            "name_en": _item_pair_name(spells, "name_en"),
+            "items": spells,
+        }
 
     return _finalize_category_affinity(
         cs_games,
@@ -4363,25 +4428,17 @@ def _scan_core_item_counters(
     _core_item_fingerprint) without re-invalidating on every unrelated Data
     Dragon addition.
     """
-    item_stats: dict[int, dict[str, float]] = defaultdict(
-        lambda: {"games": 0.0, "wins": 0.0}
-    )
-    champ_item_stats: dict[tuple[int, int], dict[str, float]] = defaultdict(
-        lambda: {"games": 0.0, "wins": 0.0}
-    )
-    observed_item_ids: set[int] = set()
-    # Denominator for the relative (pick-share) floor on 版本變動: how many games
-    # this champion had *with any core item*, i.e. the same population the
-    # champ_item numerators are drawn from.
-    champ_games_stats: dict[int, float] = defaultdict(float)
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    try:
-        rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, *patch_range(patch_prefix)),
-        )
+
+    def fold(rows):
+        item_games: Counter[int] = Counter()
+        item_wins: Counter[int] = Counter()
+        champ_item_games: Counter[tuple[int, int]] = Counter()
+        champ_item_wins: Counter[tuple[int, int]] = Counter()
+        # Denominator for the relative (pick-share) floor on 版本變動: how many
+        # games this champion had *with any core item*, i.e. the same population
+        # the champ_item numerators are drawn from.
+        champ_games: Counter[int] = Counter()
+        observed_item_ids: set[int] = set()
         for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
@@ -4415,23 +4472,52 @@ def _scan_core_item_counters(
                 if not selected_ids:
                     continue
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                champ_games_stats[cid] += 1
+                champ_games[cid] += 1
                 for item_id in selected_ids:
-                    item_bucket = item_stats[item_id]
-                    item_bucket["games"] += 1
-                    item_bucket["wins"] += player_won
-                    champ_bucket = champ_item_stats[(cid, item_id)]
-                    champ_bucket["games"] += 1
-                    champ_bucket["wins"] += player_won
-    finally:
-        con.close()
+                    item_games[item_id] += 1
+                    item_wins[item_id] += player_won
+                    champ_item_games[(cid, item_id)] += 1
+                    champ_item_wins[(cid, item_id)] += player_won
+        return {
+            "item_games": item_games,
+            "item_wins": item_wins,
+            "champ_item_games": champ_item_games,
+            "champ_item_wins": champ_item_wins,
+            "champ_games": champ_games,
+            "observed": observed_item_ids,
+        }
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="core_item_counters",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_ITEMS,
+        fold=fold,
+        inputs=(item_meta,),
+    )
+    item_stats: dict[int, dict[str, float]] = defaultdict(
+        lambda: {"games": 0.0, "wins": 0.0}
+    )
+    for item_id, games in state["item_games"].items():
+        item_stats[item_id] = {
+            "games": float(games), "wins": float(state["item_wins"].get(item_id, 0)),
+        }
+    champ_item_stats: dict[tuple[int, int], dict[str, float]] = defaultdict(
+        lambda: {"games": 0.0, "wins": 0.0}
+    )
+    for key, games in state["champ_item_games"].items():
+        champ_item_stats[key] = {
+            "games": float(games), "wins": float(state["champ_item_wins"].get(key, 0)),
+        }
+    champ_games_stats: dict[int, float] = defaultdict(float)
+    for cid, games in state["champ_games"].items():
+        champ_games_stats[cid] = float(games)
     return {
         "item": item_stats,
         "champ_item": champ_item_stats,
         "champ_games": champ_games_stats,
-        "observed_item_ids": sorted(observed_item_ids),
+        "observed_item_ids": sorted(state["observed"]),
     }
-
 
 def _core_item_fingerprint(observed_item_ids, item_meta: dict[int, dict]) -> str:
     """Identity of the core-item FILTER as applied to one patch's observed items.
@@ -4975,33 +5061,18 @@ def compute_champ_item_build_clusters(
         int(row["champion_id"]): float(row.get("raw_wr", 0.5))
         for row in champ_records
     }
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
-    if patch_prefix:
-        sql_rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND patch >= ? AND patch < ? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id, *patch_range(patch_prefix)),
-        )
-    else:
-        sql_rows = con.execute(
-            "SELECT blue_wins, participants_json FROM games "
-            "WHERE queue_id=? AND participants_json IS NOT NULL "
-            "AND (participants_json LIKE '%\"items\"%' OR participants_json LIKE '%\"itemSlots\"%')",
-            (queue_id,),
-        )
 
-    champ_total: Counter[int] = Counter()
-    # Identical (core, boot) inventories are merged into one [games, wins] cell
-    # instead of one entry per participant: memory scales with the number of
-    # DISTINCT builds, not with patch size (the per-participant list reached
-    # ~12 GB on 16.22 and got the publish killed by the memory guard).  Every
-    # statistic below is a sum over participants, so weighting each distinct
-    # build by its game count gives identical numbers.  Dict insertion order is
-    # first-occurrence order, so iteration-dependent tie-breaks are unchanged.
-    champ_builds: dict[int, dict[tuple[tuple[int, ...], int], list[int]]] = defaultdict(dict)
-    try:
-        for blue_wins, participants_json in sql_rows:
+    def fold(rows):
+        champ_total: Counter[int] = Counter()
+        # Identical (core, boot) inventories are merged into one cell instead of
+        # one entry per participant: memory scales with the number of DISTINCT
+        # builds, not with patch size (the per-participant list reached ~12 GB
+        # on 16.22 and got the publish killed by the memory guard).  Every
+        # statistic below is a sum over participants, so weighting each
+        # distinct build by its game count gives identical numbers.
+        build_games: Counter[tuple[int, tuple[int, ...], int]] = Counter()
+        build_wins: Counter[tuple[int, tuple[int, ...], int]] = Counter()
+        for blue_wins, participants_json in rows:
             if not participants_json:
                 continue
             blue_won = bool(blue_wins)
@@ -5025,11 +5096,28 @@ def compute_champ_item_build_clusters(
                 # signal even though they cannot form a 3-item core themselves.
                 boots = [item_id for item_id in route_ids if _is_boot_item(item_meta.get(item_id))]
                 player_won = 1 if (team_id == 100) == blue_won else 0
-                cell = champ_builds[cid].setdefault((tuple(core), boots[0] if boots else 0), [0, 0])
-                cell[0] += 1
-                cell[1] += player_won
-    finally:
-        con.close()
+                key = (cid, tuple(core), boots[0] if boots else 0)
+                build_games[key] += 1
+                build_wins[key] += player_won
+        return {"champ_total": champ_total, "build_games": build_games, "build_wins": build_wins}
+
+    state = _fold_patch(
+        db_path, queue_id, patch_prefix,
+        scan="item_build_clusters",
+        select="blue_wins, participants_json",
+        extra_where=_HAS_ITEMS,
+        fold=fold,
+        inputs=(item_meta,),
+    )
+    champ_total: Counter[int] = state["champ_total"]
+    # Sorted, not first-seen, order: the tie-breaks below iterate these dicts,
+    # and chunk-merged counters have no meaningful first-seen order.
+    champ_builds: dict[int, dict[tuple[tuple[int, ...], int], list[int]]] = defaultdict(dict)
+    for key in sorted(state["build_games"]):
+        cid, core, boot = key
+        champ_builds[cid][(core, boot)] = [
+            state["build_games"][key], state["build_wins"].get(key, 0),
+        ]
 
     full_core_len = max_items - 1
     out: dict[int, dict] = {}
