@@ -14,7 +14,12 @@ import tierlist_engine as _eng  # noqa: E402,F401
 import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
-from aram_nn.site.patch_extract import register_scan_db, sync_patch_extract  # noqa: E402
+from aram_nn.site.patch_extract import (  # noqa: E402
+    extract_paths,
+    register_lazy_scan_db,
+    register_scan_db,
+    sync_patch_extract,
+)
 from aram_nn.site.static_publish import (  # noqa: E402
     DEFAULT_CF_ANALYTICS_TOKEN as PRODUCTION_CF_ANALYTICS_TOKEN,
 )
@@ -158,6 +163,32 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
     return (player_history_api_url or "").strip().rstrip("/")
 
 
+
+def _closed_patch_replica(db: Path, queue_id: int, patch_prefix: str) -> Path | None:
+    """The closed patch's replica, synced on first use, or None for the source.
+
+    Only one kept from when the patch was current is used; building one from
+    scratch would cost the same full pass over the source as the scans it serves.
+    Most builds never call this: the closed patch is read from settled snapshots.
+    """
+    lean_db, _stats_db = extract_paths(queue_id, patch_prefix)
+    if not lean_db.exists():
+        return None
+    try:
+        return sync_patch_extract(
+            db,
+            queue_id=queue_id,
+            patch_prefix=patch_prefix,
+            log=click.echo,
+            prune_other_patches=False,
+            allow_rebuild=False,
+        ).lean_db
+    except Exception as exc:  # noqa: BLE001 - fall back, do not fail the build
+        click.echo(
+            f"[tierlist] WARN: {patch_prefix} replica unusable ({exc!r}); scanning {db} directly"
+        )
+        return None
+
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"))
 @click.option("--queue", "queue_id", type=int, default=2400, help="450=ARAM, 2400=Mayhem")
@@ -296,15 +327,27 @@ def main(
     # dependency: any failure leaves every scan on the source DB.
     empirical_db = db
     if use_patch_extract and patch_prefix:
+        closed_prefix = previous_patch_prefix(patch_prefix)
         try:
             extract = sync_patch_extract(
-                db, queue_id=queue_id, patch_prefix=patch_prefix, log=click.echo
+                db,
+                queue_id=queue_id,
+                patch_prefix=patch_prefix,
+                log=click.echo,
+                # Keep the previous patch's replica past the flip: its settle
+                # scans read it (and its cached partials) instead of the source.
+                keep_patch_prefixes=(closed_prefix,) if closed_prefix else (),
             )
             register_scan_db(db, queue_id, patch_prefix, extract.lean_db)
             empirical_db = extract.stats_db
         except Exception as exc:  # noqa: BLE001 - fall back, do not fail the build
             click.echo(
                 f"[tierlist] WARN: patch extract unavailable ({exc!r}); scanning {db} directly"
+            )
+        if closed_prefix:
+            register_lazy_scan_db(
+                db, queue_id, closed_prefix,
+                lambda: _closed_patch_replica(db, queue_id, closed_prefix),
             )
 
     version, champ_meta = load_champion_metadata(ddragon_version)

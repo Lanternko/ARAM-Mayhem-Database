@@ -463,3 +463,71 @@ def test_stats_copy_without_id_gets_one_on_next_sync(source: Path, tmp_path: Pat
     assert not px.file_tracks_chunks(stats)
     result = _sync(source, tmp_path)
     assert not result.rebuilt and px.file_tracks_chunks(stats)
+
+
+def _sync_patch(source: Path, tmp_path: Path, patch: str, **kwargs) -> px.PatchExtract:
+    return px.sync_patch_extract(
+        source, queue_id=QUEUE, patch_prefix=patch, extract_dir=tmp_path / "extract",
+        log=lambda _msg: None, **kwargs,
+    )
+
+
+def test_patch_flip_keeps_the_closed_patch_replica(source: Path, tmp_path: Path) -> None:
+    closed = _sync(source, tmp_path)
+    (px.partials_path(closed.lean_db)).write_bytes(b"")
+    _sync_patch(source, tmp_path, "16.23", keep_patch_prefixes=(PATCH,))
+    assert closed.lean_db.exists() and closed.stats_db.exists()
+    assert px.partials_path(closed.lean_db).exists()
+    # A patch later the closed one is no longer kept.
+    _sync_patch(source, tmp_path, "16.24", keep_patch_prefixes=("16.23",))
+    assert not closed.lean_db.exists() and not closed.stats_db.exists()
+    assert not px.partials_path(closed.lean_db).exists()
+
+
+def test_no_rebuild_mode_refuses_a_full_pass(source: Path, tmp_path: Path) -> None:
+    with pytest.raises(px.ReplicaRebuildRequired):
+        _sync(source, tmp_path, allow_rebuild=False)
+    first = _sync(source, tmp_path)
+    con = sqlite3.connect(str(source))
+    for i in range(60, 64):
+        _insert(con, f"TW_{i}", seed=i)
+    con.commit()
+    con.close()
+    tail = _sync(source, tmp_path, allow_rebuild=False, prune_other_patches=False)
+    assert not tail.rebuilt and tail.added == 4
+    con = sqlite3.connect(str(first.lean_db))
+    con.execute("UPDATE extract_meta SET value='0' WHERE key='version'")
+    con.commit()
+    con.close()
+    with pytest.raises(px.ReplicaRebuildRequired):
+        _sync(source, tmp_path, allow_rebuild=False)
+    assert first.lean_db.exists()  # left alone, not wiped
+
+
+def test_lazy_route_resolves_once_and_only_for_real_scans(source: Path, tmp_path: Path) -> None:
+    replica = _sync(source, tmp_path).lean_db
+    calls = []
+
+    def resolve():
+        calls.append(1)
+        return replica
+
+    px.register_lazy_scan_db(source, QUEUE, PATCH, resolve)
+    assert px.scan_db(source, QUEUE, PATCH, resolve_lazy=False) == source
+    assert not px.replica_tracks_chunks(replica)
+    assert engine.count_patch_games(source, QUEUE, PATCH) == 60
+    assert calls == []
+    assert px.scan_db(source, QUEUE, PATCH) == replica
+    assert px.scan_db(source, QUEUE, PATCH) == replica
+    assert calls == [1]
+    assert px.replica_tracks_chunks(replica)
+
+
+def test_failed_lazy_route_falls_back_to_source(source: Path) -> None:
+    def boom():
+        raise RuntimeError("no replica")
+
+    px.register_lazy_scan_db(source, QUEUE, PATCH, boom)
+    assert px.scan_db(source, QUEUE, PATCH) == source
+    px.register_lazy_scan_db(source, QUEUE, "16.21", lambda: None)
+    assert px.scan_db(source, QUEUE, "16.21") == source

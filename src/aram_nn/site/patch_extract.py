@@ -172,6 +172,9 @@ def patch_range(patch_prefix: str) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 _ROUTES: dict[tuple[str, int, str], Path] = {}
+# Scopes whose replica is brought up to date only when a scan first asks for it
+# (the closed previous patch: most builds read it from settled snapshots only).
+_LAZY_ROUTES: dict[tuple[str, int, str], Callable[[], Path | None]] = {}
 
 
 def _route_key(db_path: Path | str, queue_id: int, patch_prefix: str) -> tuple[str, int, str]:
@@ -185,15 +188,52 @@ def register_scan_db(
     _ROUTES[_route_key(db_path, queue_id, patch_prefix)] = Path(replica)
 
 
+def register_lazy_scan_db(
+    db_path: Path | str,
+    queue_id: int,
+    patch_prefix: str,
+    resolve: Callable[[], Path | str | None],
+) -> None:
+    """Route this scope to the replica *resolve* returns, called on first use.
+
+    *resolve* runs at most once; ``None`` (or an exception) leaves the scope on
+    the source DB for the rest of the process.
+    """
+    _LAZY_ROUTES[_route_key(db_path, queue_id, patch_prefix)] = resolve
+
+
 def clear_scan_dbs() -> None:
     _ROUTES.clear()
+    _LAZY_ROUTES.clear()
 
 
-def scan_db(db_path: Path | str, queue_id: int, patch_prefix: str | None) -> Path:
-    """The file to open for a scan of this scope: a registered replica, else *db_path*."""
+def scan_db(
+    db_path: Path | str,
+    queue_id: int,
+    patch_prefix: str | None,
+    *,
+    resolve_lazy: bool = True,
+) -> Path:
+    """The file to open for a scan of this scope: a registered replica, else *db_path*.
+
+    ``resolve_lazy=False`` is for cheap index-only reads (a COUNT) that should
+    not pay for syncing a lazily routed replica.
+    """
     if not patch_prefix:
         return Path(db_path)
-    return _ROUTES.get(_route_key(db_path, queue_id, patch_prefix), Path(db_path))
+    key = _route_key(db_path, queue_id, patch_prefix)
+    if key in _ROUTES:
+        return _ROUTES[key]
+    if resolve_lazy and key in _LAZY_ROUTES:
+        resolve = _LAZY_ROUTES.pop(key)
+        try:
+            replica = resolve()
+        except Exception:  # noqa: BLE001 - a cache, never a dependency
+            replica = None
+        if replica is not None:
+            _ROUTES[key] = Path(replica)
+            return _ROUTES[key]
+    return Path(db_path)
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +295,10 @@ class PatchExtract:
     rechecked: int
     rebuilt: bool
     seconds: float
+
+
+class ReplicaRebuildRequired(RuntimeError):
+    """The replica cannot be brought up to date incrementally."""
 
 
 def extract_paths(
@@ -432,11 +476,17 @@ def sync_patch_extract(
     extract_dir: Path | None = None,
     log: Log = print,
     prune_other_patches: bool = True,
+    keep_patch_prefixes: Iterable[str] = (),
+    allow_rebuild: bool = True,
 ) -> PatchExtract:
     """Bring the (queue, patch) replica up to date with *source_db* and return it.
 
     Raises on any inconsistency it cannot repair; the caller falls back to the
-    source DB.
+    source DB.  ``allow_rebuild=False`` raises ReplicaRebuildRequired instead of
+    building from scratch (for a closed patch, a full pass costs as much as the
+    scans it would serve).  The prune keeps *keep_patch_prefixes*' replicas and
+    partials: the previous patch's, so its settle scans after a patch flip read
+    the replica instead of the whole source DB.
     """
     started = time.monotonic()
     source_db = Path(source_db)
@@ -475,6 +525,10 @@ def sync_patch_extract(
             if attempt == "full" or not usable or watermark < 0 or watermark > max_rowid:
                 if con is not None:
                     con.close()
+                if not allow_rebuild:
+                    raise ReplicaRebuildRequired(
+                        f"{lean_db.name} needs a full rebuild ({attempt} attempt)"
+                    )
                 _unlink(lean_db)
                 _unlink(stats_db)
                 con = _open_replica(lean_db, stats_db)
@@ -560,12 +614,17 @@ def sync_patch_extract(
         src.close()
 
     if prune_other_patches:
+        keep = {lean_db, stats_db, partials_path(lean_db)}
+        for prefix in keep_patch_prefixes:
+            if prefix:
+                kept_lean, kept_stats = extract_paths(queue_id, prefix, extract_dir)
+                keep |= {kept_lean, kept_stats, partials_path(kept_lean)}
         for stale in lean_db.parent.glob(f"q{queue_id}-*.db"):
-            if stale not in (lean_db, stats_db):
+            if stale not in keep:
                 _unlink(stale)
                 log(f"[extract] removed stale replica {stale.name}")
         for stale in lean_db.parent.glob(f"q{queue_id}-*.partials.sqlite"):
-            if stale != partials_path(lean_db):
+            if stale not in keep:
                 _unlink(stale)
                 log(f"[extract] removed stale chunk partials {stale.name}")
 

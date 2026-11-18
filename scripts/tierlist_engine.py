@@ -1946,7 +1946,8 @@ def count_patch_games(
     patch_prefix: str | None,
 ) -> int:
     """Return the total number of games in the requested queue / patch scope."""
-    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
+    # An index-only COUNT: never worth syncing a lazily routed replica for.
+    con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix, resolve_lazy=False)))
     try:
         if patch_prefix:
             row = con.execute(
