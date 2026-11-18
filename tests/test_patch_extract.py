@@ -399,3 +399,67 @@ def test_chunked_scans_match_plain_and_reuse_partials(
     assert run() == grown
     assert "[chunks] patch_counters: 5 folded, 0 reused" in capsys.readouterr().out
     assert chunk_cache.merge_into("a", "b") == "b"
+
+
+def test_stats_copy_tracks_chunks_for_empirical_profiles(
+    source: Path, tmp_path: Path, small_chunks, capsys
+) -> None:
+    import build_empirical_champion_scores as emp
+
+    result = _sync(source, tmp_path)
+    stats = result.stats_db
+    # The empirical script gets the stats copy by path in a subprocess: no
+    # route, but the file itself carries generations and its own replica id.
+    assert not px.replica_tracks_chunks(stats)
+    assert px.file_tracks_chunks(stats)
+    assert px.partials_path(stats) == px.partials_path(result.lean_db)
+    assert set(_gens(stats)) == {0, 1, 2, 3}
+
+    def plain() -> dict:
+        where, params = emp.patch_where_clause(PATCH)
+        con = sqlite3.connect(str(stats))
+        try:
+            return emp.collect_empirical_stats_from_rows(con.execute(
+                "SELECT blue_wins, duration_sec, participants_json FROM games WHERE queue_id = ?"
+                " AND duration_sec >= ? AND participants_json IS NOT NULL" + where,
+                [QUEUE, 300, *params],
+            ))
+        finally:
+            con.close()
+
+    def chunked() -> dict:
+        return emp.collect_empirical_stats(stats, queue=QUEUE, patch_prefix=PATCH, min_duration=300)
+
+    def close(a: dict, b: dict) -> bool:
+        return a.keys() == b.keys() and all(
+            a[c][k] == pytest.approx(b[c][k], rel=1e-12) for c in a for k in a[c]
+        )
+
+    reference = plain()
+    assert reference
+    capsys.readouterr()
+    assert close(chunked(), reference)
+    assert "[chunks] empirical_stats: 4 folded, 0 reused" in capsys.readouterr().out
+    assert close(chunked(), reference)
+    assert "[chunks] empirical_stats: 0 folded, 4 reused" in capsys.readouterr().out
+
+    con = sqlite3.connect(str(source))
+    for i in range(60, 70):
+        _insert(con, f"TW_{i}", seed=i)
+    con.commit()
+    con.close()
+    _sync(source, tmp_path)
+    assert close(chunked(), plain())
+    assert "[chunks] empirical_stats: 2 folded, 3 reused" in capsys.readouterr().out
+
+
+def test_stats_copy_without_id_gets_one_on_next_sync(source: Path, tmp_path: Path) -> None:
+    """A stats copy written before it had triggers must not be trusted as is."""
+    stats = _sync(source, tmp_path).stats_db
+    con = sqlite3.connect(str(stats))
+    con.execute("DELETE FROM extract_meta WHERE key=?", (px.REPLICA_ID_KEY,))
+    con.commit()
+    con.close()
+    assert not px.file_tracks_chunks(stats)
+    result = _sync(source, tmp_path)
+    assert not result.rebuilt and px.file_tracks_chunks(stats)

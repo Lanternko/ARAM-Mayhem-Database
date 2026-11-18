@@ -117,25 +117,28 @@ ON games(queue_id, patch, created_ms);
 # REPLACE of an existing game_id deletes the old row without firing DELETE
 # triggers (recursive_triggers is off by default, and older code never turns it
 # on), so the BEFORE INSERT trigger bumps the chunk of the row it will replace.
+# Both copies carry their own set (lean in ``main``, stats in ``st``): a
+# trigger's body resolves unqualified names in the trigger's own schema, and
+# the stats file is scanned on its own by build_empirical_champion_scores.py.
 _CHUNK_TRIGGERS_TEMPLATE = """
-CREATE TABLE IF NOT EXISTS extract_chunk_gen (
+CREATE TABLE IF NOT EXISTS {schema}.extract_chunk_gen (
     chunk INTEGER PRIMARY KEY,
     gen   INTEGER NOT NULL
 );
-CREATE TRIGGER IF NOT EXISTS games_chunk_replace BEFORE INSERT ON games BEGIN
+CREATE TRIGGER IF NOT EXISTS {schema}.games_chunk_replace BEFORE INSERT ON games BEGIN
     INSERT INTO extract_chunk_gen(chunk, gen)
         SELECT rowid / {chunk_rows}, 1 FROM games WHERE game_id = NEW.game_id
         ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
 END;
-CREATE TRIGGER IF NOT EXISTS games_chunk_insert AFTER INSERT ON games BEGIN
+CREATE TRIGGER IF NOT EXISTS {schema}.games_chunk_insert AFTER INSERT ON games BEGIN
     INSERT INTO extract_chunk_gen(chunk, gen) VALUES (NEW.rowid / {chunk_rows}, 1)
         ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
 END;
-CREATE TRIGGER IF NOT EXISTS games_chunk_delete AFTER DELETE ON games BEGIN
+CREATE TRIGGER IF NOT EXISTS {schema}.games_chunk_delete AFTER DELETE ON games BEGIN
     INSERT INTO extract_chunk_gen(chunk, gen) VALUES (OLD.rowid / {chunk_rows}, 1)
         ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
 END;
-CREATE TRIGGER IF NOT EXISTS games_chunk_update AFTER UPDATE ON games BEGIN
+CREATE TRIGGER IF NOT EXISTS {schema}.games_chunk_update AFTER UPDATE ON games BEGIN
     INSERT INTO extract_chunk_gen(chunk, gen) VALUES (OLD.rowid / {chunk_rows}, 1)
         ON CONFLICT(chunk) DO UPDATE SET gen = gen + 1;
     INSERT INTO extract_chunk_gen(chunk, gen) VALUES (NEW.rowid / {chunk_rows}, 1)
@@ -144,8 +147,8 @@ END;
 """
 
 
-def _chunk_triggers() -> str:
-    return _CHUNK_TRIGGERS_TEMPLATE.format(chunk_rows=int(CHUNK_ROWS))
+def _chunk_triggers(schema: str = "main") -> str:
+    return _CHUNK_TRIGGERS_TEMPLATE.format(schema=schema, chunk_rows=int(CHUNK_ROWS))
 
 
 Log = Callable[[str], Any]
@@ -263,18 +266,36 @@ def extract_paths(
     return base / f"{stem}.lean.db", base / f"{stem}.stats.db"
 
 
-def partials_path(lean_db: Path) -> Path:
-    """Chunk-partial cache beside a lean replica (``.sqlite``: the stale-replica
-    prune below matches ``*.db`` only)."""
-    lean_db = Path(lean_db)
-    stem = lean_db.name[: -len(".lean.db")] if lean_db.name.endswith(".lean.db") else lean_db.stem
-    return lean_db.with_name(f"{stem}.partials.sqlite")
+def partials_path(replica: Path) -> Path:
+    """Chunk-partial cache beside a replica (``.sqlite``: the stale-replica
+    prune below matches ``*.db`` only).  The lean and stats copies of one patch
+    share it; their scans have distinct names."""
+    replica = Path(replica)
+    stem = replica.stem
+    for suffix in (".lean.db", ".stats.db"):
+        if replica.name.endswith(suffix):
+            stem = replica.name[: -len(suffix)]
+    return replica.with_name(f"{stem}.partials.sqlite")
 
 
 def replica_tracks_chunks(path: Path | str) -> bool:
     """True for a registered lean replica that carries chunk generations."""
     path = Path(path)
-    if path not in set(_ROUTES.values()) or not path.exists():
+    if path not in set(_ROUTES.values()):
+        return False
+    return file_tracks_chunks(path)
+
+
+def file_tracks_chunks(path: Path | str) -> bool:
+    """True when *path* carries chunk generations and a replica id, i.e. a
+    replica (lean or stats copy) written with the chunk triggers in place.
+
+    No route check: build_empirical_champion_scores.py runs as a subprocess
+    and is handed the stats copy by path.  Generations and the replica id make
+    cached partials exact whatever the caller is.
+    """
+    path = Path(path)
+    if not path.exists():
         return False
     try:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -311,8 +332,10 @@ def _open_replica(lean_db: Path, stats_db: Path) -> sqlite3.Connection:
     con.executescript(_SCHEMA.format(schema="main"))
     con.executescript(_SCHEMA.format(schema="st"))
     con.execute("CREATE TABLE IF NOT EXISTS extract_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    con.execute("CREATE TABLE IF NOT EXISTS st.extract_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     con.execute("CREATE TABLE IF NOT EXISTS extract_poor (game_id TEXT PRIMARY KEY)")
-    con.executescript(_chunk_triggers())
+    con.executescript(_chunk_triggers("main"))
+    con.executescript(_chunk_triggers("st"))
     con.commit()
     return con
 
@@ -321,9 +344,9 @@ def _read_meta(con: sqlite3.Connection) -> dict[str, str]:
     return {str(k): str(v) for k, v in con.execute("SELECT key, value FROM extract_meta")}
 
 
-def _write_meta(con: sqlite3.Connection, meta: dict[str, Any]) -> None:
+def _write_meta(con: sqlite3.Connection, meta: dict[str, Any], *, schema: str = "main") -> None:
     con.executemany(
-        "INSERT INTO extract_meta(key, value) VALUES (?, ?) "
+        f"INSERT INTO {schema}.extract_meta(key, value) VALUES (?, ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
         [(k, str(v)) for k, v in meta.items()],
     )
@@ -511,6 +534,14 @@ def sync_patch_extract(
                 _write_meta(
                     con, {**identity, "max_rowid": max_rowid, "games": source_games, **extra}
                 )
+                # The stats copy gets its own id the same way.  A copy made
+                # before it had triggers has no id yet, so nothing cached can
+                # match it until the triggers were in place for every write.
+                st_has_id = con.execute(
+                    "SELECT 1 FROM st.extract_meta WHERE key=?", (REPLICA_ID_KEY,)
+                ).fetchone()
+                if rebuilt or not st_has_id:
+                    _write_meta(con, {REPLICA_ID_KEY: uuid.uuid4().hex}, schema="st")
                 con.commit()
                 con.close()
                 break

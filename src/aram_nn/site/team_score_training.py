@@ -27,16 +27,17 @@ import hashlib
 import json
 import math
 import sqlite3
-from collections import Counter, defaultdict
+from array import array
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 import numpy as np
 from scipy.optimize import minimize
 from sklearn.metrics import log_loss, roc_auc_score
 
-from .meta_pick import team_composition
+from .meta_pick import _ad_bin, _count_group, _front_group
 from .patch_extract import patch_range, scan_db
 
 
@@ -60,11 +61,29 @@ TABLE_NAMES = (
 
 
 @dataclass(frozen=True)
-class TeamGame:
-    created_ms: int
-    blue: tuple[int, ...]
-    red: tuple[int, ...]
-    blue_wins: int
+class TeamGames:
+    """Structurally valid 5v5 games as arrays, in chronological order.
+
+    Arrays instead of one object per game: a 4M-game patch as ``TeamGame``
+    objects was ~1.2 GB, and every training step is a column operation.
+    Team rows are sorted champion ids (as ``_parse_team`` always did).
+    """
+
+    created_ms: np.ndarray  # (n,) int64
+    blue: np.ndarray  # (n, 5) int64
+    red: np.ndarray  # (n, 5) int64
+    blue_wins: np.ndarray  # (n,) float64, 0/1
+
+    def __len__(self) -> int:
+        return int(self.created_ms.shape[0])
+
+    def slice(self, start: int, stop: int) -> "TeamGames":
+        return TeamGames(
+            self.created_ms[start:stop],
+            self.blue[start:stop],
+            self.red[start:stop],
+            self.blue_wins[start:stop],
+        )
 
 
 def _clip_probability(value: float, eps: float = 1e-6) -> float:
@@ -74,6 +93,14 @@ def _clip_probability(value: float, eps: float = 1e-6) -> float:
 def _logit(value: float) -> float:
     p = _clip_probability(value)
     return math.log(p / (1.0 - p))
+
+
+def _logit_array(values: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+    """``_logit`` element-wise, bit-identical: numpy's SIMD log is not always
+    correctly rounded, so the log itself stays ``math.log``."""
+    p = np.minimum(1.0 - eps, np.maximum(eps, np.asarray(values, dtype=np.float64)))
+    ratio = p / (1.0 - p)
+    return np.fromiter(map(math.log, ratio.tolist()), dtype=np.float64, count=ratio.shape[0])
 
 
 def _sigmoid_array(values: np.ndarray) -> np.ndarray:
@@ -88,6 +115,12 @@ def _sigmoid_array(values: np.ndarray) -> np.ndarray:
 
 def _parse_team(raw: Any) -> tuple[int, ...]:
     if isinstance(raw, str):
+        if raw.startswith("[") and raw.endswith("]"):
+            try:
+                # Fast path for the stored "[1,2,3,4,5]" form.
+                return tuple(sorted(int(part) for part in raw[1:-1].split(",")))
+            except ValueError:
+                pass
         raw = json.loads(raw)
     return tuple(sorted(int(cid) for cid in (raw or [])))
 
@@ -97,9 +130,13 @@ def load_team_games(
     *,
     queue_id: int,
     patch_prefix: str | None,
-) -> list[TeamGame]:
+) -> TeamGames:
     """Load structurally valid 5v5 rows in chronological order."""
     con = sqlite3.connect(str(scan_db(db_path, queue_id, patch_prefix)))
+    created = array("q")
+    blue_ids = array("q")
+    red_ids = array("q")
+    wins = array("b")
     try:
         if patch_prefix:
             rows = con.execute(
@@ -114,7 +151,6 @@ def load_team_games(
                 "FROM games WHERE queue_id=? ORDER BY created_ms, game_id",
                 (queue_id,),
             )
-        games: list[TeamGame] = []
         for created_ms, blue_raw, red_raw, blue_wins in rows:
             try:
                 blue = _parse_team(blue_raw)
@@ -123,151 +159,275 @@ def load_team_games(
                 continue
             if len(blue) != 5 or len(red) != 5:
                 continue
-            games.append(
-                TeamGame(
-                    created_ms=int(created_ms or 0),
-                    blue=blue,
-                    red=red,
-                    blue_wins=1 if bool(blue_wins) else 0,
-                )
-            )
-        return games
+            created.append(int(created_ms or 0))
+            blue_ids.extend(blue)
+            red_ids.extend(red)
+            wins.append(1 if bool(blue_wins) else 0)
     finally:
         con.close()
+    return TeamGames(
+        created_ms=np.frombuffer(created, dtype=np.int64).copy() if created else np.zeros(0, np.int64),
+        blue=np.frombuffer(blue_ids, dtype=np.int64).reshape(-1, 5).copy() if blue_ids else np.zeros((0, 5), np.int64),
+        red=np.frombuffer(red_ids, dtype=np.int64).reshape(-1, 5).copy() if red_ids else np.zeros((0, 5), np.int64),
+        blue_wins=np.frombuffer(wins, dtype=np.int8).astype(np.float64),
+    )
 
 
-def chronological_split(
-    games: Sequence[TeamGame],
-) -> tuple[list[TeamGame], list[TeamGame], list[TeamGame]]:
+def chronological_split(games: TeamGames) -> tuple[TeamGames, TeamGames, TeamGames]:
     n = len(games)
     train_end = max(1, min(n - 2, int(n * TRAIN_FRACTION)))
     val_end = max(train_end + 1, min(n - 1, int(n * (TRAIN_FRACTION + VALIDATION_FRACTION))))
-    return list(games[:train_end]), list(games[train_end:val_end]), list(games[val_end:])
+    return games.slice(0, train_end), games.slice(train_end, val_end), games.slice(val_end, n)
 
 
-def _iter_sides(games: Iterable[TeamGame]) -> Iterable[tuple[tuple[int, ...], int]]:
-    for game in games:
-        yield game.blue, game.blue_wins
-        yield game.red, 1 - game.blue_wins
+# Team edges in the order the per-team loops visited them: (0,1), (0,2), ...
+_EDGES = tuple((i, j) for i in range(5) for j in range(i + 1, 5))
 
 
-def _solo_and_pair_stats(
-    games: Sequence[TeamGame],
-) -> tuple[dict[int, float], dict[tuple[int, int], tuple[float, int]]]:
-    champ_games: Counter[int] = Counter()
-    champ_wins: Counter[int] = Counter()
-    pair_games: Counter[tuple[int, int]] = Counter()
-    pair_wins: Counter[tuple[int, int]] = Counter()
+@dataclass(frozen=True)
+class _Index:
+    """Dense champion index; ascending, so (a < b) <=> (idx a < idx b)."""
 
-    for team, won in _iter_sides(games):
-        for cid in team:
-            champ_games[cid] += 1
-            champ_wins[cid] += won
-        for i, cid in enumerate(team):
-            for teammate in team[i + 1 :]:
-                key = (cid, teammate) if cid < teammate else (teammate, cid)
-                pair_games[key] += 1
-                pair_wins[key] += won
+    cids: np.ndarray  # (k,) sorted champion ids
 
-    raw_wr = {
-        cid: champ_wins[cid] / games_n
-        for cid, games_n in champ_games.items()
-        if games_n > 0
-    }
-    solo_wr = {
-        cid: (champ_wins[cid] + 0.5 * SOLO_PRIOR_GAMES) / (games_n + SOLO_PRIOR_GAMES)
-        for cid, games_n in champ_games.items()
-        if games_n > 0
-    }
+    @property
+    def size(self) -> int:
+        return int(self.cids.shape[0])
+
+    def of(self, teams: np.ndarray) -> np.ndarray:
+        return np.searchsorted(self.cids, teams)
+
+
+def _champion_index(games: TeamGames) -> _Index:
+    return _Index(np.unique(np.concatenate([games.blue.ravel(), games.red.ravel()])))
+
+
+def _sides(games: TeamGames, index: _Index) -> tuple[np.ndarray, np.ndarray]:
+    """Team sides interleaved blue, red per game (the old ``_iter_sides``
+    order, which fixes every floating-point summation order below)."""
+    n = len(games)
+    # int32 halves the biggest training array (2 sides x 4M games x 5).
+    teams = np.empty((2 * n, 5), dtype=np.int32)
+    teams[0::2] = index.of(games.blue)
+    teams[1::2] = index.of(games.red)
+    won = np.empty(2 * n, dtype=np.float64)
+    won[0::2] = games.blue_wins
+    won[1::2] = 1.0 - games.blue_wins
+    return teams, won
+
+
+def _builtin_sum(columns: list[np.ndarray]) -> np.ndarray:
+    """Element-wise ``sum([c0, c1, ...])`` exactly as CPython >= 3.12 adds
+    floats: left to right with Neumaier compensation (bltinmodule.c).
+
+    The per-team loops this replaced used ``sum()``; plain sequential or
+    pairwise numpy sums differ in the last bits, which moves the L-BFGS
+    intercept fit.  The production interpreter is 3.13.
+    """
+    total = columns[0].astype(np.float64, copy=True)
+    comp = np.zeros_like(total)
+    for column in columns[1:]:
+        t = total + column
+        comp += np.where(np.abs(total) >= np.abs(column), (total - t) + column, (column - t) + total)
+        total = t
+    return np.where((comp != 0) & np.isfinite(comp), total + comp, total)
+
+
+@dataclass(frozen=True)
+class _SoloPair:
+    solo_wr: np.ndarray  # (k,) shrunk solo win rate; 0.5 for unseen champions
+    pair_lift: dict[tuple[int, int], tuple[float, int]]  # (cid a < cid b) -> (lift, games)
+
+
+def _solo_and_pair_stats(teams: np.ndarray, won: np.ndarray, index: _Index) -> _SoloPair:
+    # Counts are integers, so accumulating one column (or edge) at a time is
+    # exact and avoids (sides x 10) temporaries -- 640 MB at 4M games.
+    k = index.size
+    champ_games = np.zeros(k, dtype=np.int64)
+    champ_wins = np.zeros(k, dtype=np.int64)
+    for col in range(5):
+        champ_games += np.bincount(teams[:, col], minlength=k)
+        champ_wins += np.bincount(teams[:, col], weights=won, minlength=k).astype(np.int64)
+    seen = champ_games > 0
+    safe_games = np.where(seen, champ_games, 1)
+    raw_wr = np.where(seen, champ_wins / safe_games, 0.5)
+    solo_wr = np.where(
+        seen,
+        (champ_wins + 0.5 * SOLO_PRIOR_GAMES) / (champ_games + SOLO_PRIOR_GAMES),
+        0.5,
+    )
+    pair_games = np.zeros(k * k, dtype=np.int64)
+    pair_wins = np.zeros(k * k, dtype=np.int64)
+    for i, j in _EDGES:
+        # Sorted teams: column i holds the smaller champion id of the pair.
+        flat = teams[:, i].astype(np.int64) * k + teams[:, j]
+        pair_games += np.bincount(flat, minlength=k * k)
+        pair_wins += np.bincount(flat, weights=won, minlength=k * k).astype(np.int64)
+
     global_wr = 0.5  # both sides are emitted for every match
-    pair_stats: dict[tuple[int, int], tuple[float, int]] = {}
-    for key, games_n in pair_games.items():
-        cid, teammate = key
-        pair_wr = pair_wins[key] / games_n
+    pair_lift: dict[tuple[int, int], tuple[float, int]] = {}
+    raw_list = raw_wr.tolist()
+    cids = index.cids.tolist()
+    for flat_key in np.flatnonzero(pair_games).tolist():
+        a, b = divmod(flat_key, k)
+        games_n = int(pair_games[flat_key])
+        pair_wr = int(pair_wins[flat_key]) / games_n
         expected = 1.0 / (
             1.0
             + math.exp(
                 -(
-                    _logit(raw_wr.get(cid, global_wr))
-                    + _logit(raw_wr.get(teammate, global_wr))
+                    _logit(raw_list[a])
+                    + _logit(raw_list[b])
                     - _logit(global_wr)
                 )
             )
         )
-        pair_stats[key] = (pair_wr - expected, games_n)
-    return solo_wr, pair_stats
+        lift = pair_wr - expected
+        pair_lift[(cids[a], cids[b])] = (lift, games_n)
+    return _SoloPair(solo_wr, pair_lift)
 
 
-def _mean_solo(team: Sequence[int], solo_wr: dict[int, float]) -> float:
-    values = [solo_wr.get(int(cid), 0.5) for cid in team]
-    return sum(values) / len(values) if values else 0.5
+def _mean_solo(teams: np.ndarray, solo_wr: np.ndarray) -> np.ndarray:
+    values = solo_wr[teams]
+    return _builtin_sum([values[:, col] for col in range(5)]) / 5
 
 
-def _composition_keys(team: Sequence[int], snapshot: dict[str, Any]) -> dict[str, str]:
-    comp = team_composition([str(cid) for cid in team], snapshot)
-    return {
-        "ad_front": f"{comp['frontGroup']}|{comp['adBin']}",
-        "poke_front": f"{comp['frontGroup']}|{comp['pokeGroup']}",
-        "wave_engage": f"{comp['waveGroup']}|{comp['engageGroup']}",
-        "all_lacks": str(comp["allLacksGroup"]),
-        "mage_ad": f"{comp['mageGroup']}|{comp['adBin']}",
-        "marksman_ad": f"{comp['marksmanGroup']}|{comp['adBin']}",
+# --- composition keys ------------------------------------------------------
+
+_SUM_KEYS = ("phys", "magic", "true", "wave", "cc", "engage", "damage", "poke", "sustain", "front")
+_LACK_KEYS = ("wave", "cc", "engage", "damage", "poke", "sustain", "front")
+_COUNT_LABELS = tuple(_count_group(float(v)) for v in (0, 1, 2))
+_FRONT_LABELS = tuple(_front_group(float(v)) for v in (0, 1, 2))
+_AD_CUTS = (0.35, 0.45, 0.55, 0.65)
+_AD_LABELS = tuple(_ad_bin(v) for v in (0.0, 0.4, 0.5, 0.6, 0.7))
+_LACK_LABELS = {
+    "wave": ("wave ok", "wave lack"),
+    "engage": ("engage ok", "engage lack"),
+    "poke": ("poke ok", "poke lack"),
+}
+# Per table: (label of each code).  Codes are built in _composition_codes.
+_TABLE_LABELS: dict[str, tuple[str, ...]] = {
+    "ad_front": tuple(f"{f}|{a}" for f in _FRONT_LABELS for a in _AD_LABELS),
+    "poke_front": tuple(f"{f}|{p}" for f in _FRONT_LABELS for p in _LACK_LABELS["poke"]),
+    "wave_engage": tuple(
+        f"{w}|{e}" for w in _LACK_LABELS["wave"] for e in _LACK_LABELS["engage"]
+    ),
+    "all_lacks": _COUNT_LABELS,
+    "mage_ad": tuple(f"{m}|{a}" for m in _COUNT_LABELS for a in _AD_LABELS),
+    "marksman_ad": tuple(f"{m}|{a}" for m in _COUNT_LABELS for a in _AD_LABELS),
+}
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return None
+
+
+def _count_code(count: np.ndarray) -> np.ndarray:
+    """``_count_group`` thresholds as codes 0 / 1 / 2 (labels _COUNT_LABELS)."""
+    return np.where(count < 0.5, 0, np.where(count < 1.5, 1, 2))
+
+
+def _composition_codes(teams: np.ndarray, snapshot: dict[str, Any], index: _Index) -> dict[str, np.ndarray]:
+    """``meta_pick.team_composition`` keys for every 5-champion side, as codes.
+
+    Same arithmetic in the same order: per-champion sums start at 0.0 and add
+    team members left to right (an unparsable value, or a champion missing
+    from the snapshot, adds nothing -- here it adds an exact 0.0).  Teams are
+    always 5 wide, so the size projection is 1.  Pinned by a test against
+    ``team_composition`` itself.
+    """
+    champs = snapshot.get("champs") or {}
+    thresholds_raw = (snapshot.get("recommendation_composition") or {}).get("lack_thresholds") or {}
+    k = index.size
+    addends = np.zeros((k, len(_SUM_KEYS)), dtype=np.float64)
+    is_front = np.zeros(k, dtype=np.int8)
+    n_mage = np.zeros(k, dtype=np.int8)
+    n_marksman = np.zeros(k, dtype=np.int8)
+    for i, cid in enumerate(index.cids.tolist()):
+        info = champs.get(str(cid))
+        if not info:
+            continue
+        comp = info.get("comp") or {}
+        for j, key in enumerate(_SUM_KEYS):
+            value = _float_or_none(comp.get(key))
+            if value is not None:
+                addends[i, j] = value
+        front = _float_or_none(comp.get("front"))
+        is_front[i] = 1 if front is not None and front >= 2.0 else 0
+        tags = info.get("tags") or []
+        n_mage[i] = sum(1 for tag in tags if tag == "Mage")
+        n_marksman[i] = sum(1 for tag in tags if tag == "Marksman")
+
+    def team_sum(j: int) -> np.ndarray:
+        # One key at a time: a (sides x 10) float block is 640 MB at 4M games.
+        column = addends[:, j]
+        total = column[teams[:, 0]]
+        for member in range(1, 5):
+            total = total + column[teams[:, member]]
+        return total
+
+    col = {key: team_sum(j) for j, key in enumerate(_SUM_KEYS) if key != "true"}
+    ad_den = col["phys"] + col["magic"]
+    positive = ad_den > 0
+    ad_share = np.full(teams.shape[0], 0.5)
+    np.divide(col["phys"], ad_den, out=ad_share, where=positive)
+    ad_code = np.searchsorted(np.asarray(_AD_CUTS), ad_share, side="right")
+    lacks: dict[str, np.ndarray] = {}
+    for key in _LACK_KEYS:
+        threshold = _float_or_none(thresholds_raw.get(key))
+        threshold = 0.0 if threshold is None else threshold
+        if threshold > 0:
+            lacks[key] = col[key] < threshold * 1.0
+        else:
+            lacks[key] = np.zeros(teams.shape[0], dtype=bool)
+    all_lacks = np.zeros(teams.shape[0], dtype=np.int8)
+    for key in _LACK_KEYS:
+        all_lacks += lacks[key]
+    front_code = _count_code(is_front[teams].sum(axis=1))
+    mage_code = _count_code(n_mage[teams].sum(axis=1))
+    marksman_code = _count_code(n_marksman[teams].sum(axis=1))
+    n_ad = len(_AD_LABELS)
+    codes = {
+        "ad_front": front_code * n_ad + ad_code,
+        "poke_front": front_code * 2 + lacks["poke"],
+        "wave_engage": lacks["wave"] * 2 + lacks["engage"],
+        "all_lacks": _count_code(all_lacks),
+        "mage_ad": mage_code * n_ad + ad_code,
+        "marksman_ad": marksman_code * n_ad + ad_code,
     }
+    # Every table has <= 15 cells; int8 keeps 6 code arrays at 8 MB per 1M sides.
+    return {name: values.astype(np.int8) for name, values in codes.items()}
 
 
 def fit_composition_tables(
-    games: Sequence[TeamGame],
+    teams: np.ndarray,
+    won: np.ndarray,
+    codes: dict[str, np.ndarray],
     *,
-    solo_wr: dict[int, float],
-    snapshot: dict[str, Any],
+    solo_wr: np.ndarray,
     prior_games: float = COMPOSITION_CELL_PRIOR_GAMES,
 ) -> dict[str, dict[str, float]]:
     """Fit centered, empirical-Bayes residual tables for one patch."""
-    sums: dict[str, defaultdict[str, float]] = {
-        name: defaultdict(float) for name in TABLE_NAMES
-    }
-    counts: dict[str, Counter[str]] = {name: Counter() for name in TABLE_NAMES}
-    residual_sum = 0.0
-    residual_n = 0
-    for team, won in _iter_sides(games):
-        residual = float(won) - _mean_solo(team, solo_wr)
-        residual_sum += residual
-        residual_n += 1
-    global_residual = residual_sum / residual_n if residual_n else 0.0
-    for team, won in _iter_sides(games):
-        residual = float(won) - _mean_solo(team, solo_wr)
-        keys = _composition_keys(team, snapshot)
-        centered = residual - global_residual
-        for name, key in keys.items():
-            sums[name][key] += centered
-            counts[name][key] += 1
-
+    residual = won - _mean_solo(teams, solo_wr)
+    # Sequential running sum, as the old ``residual_sum += residual`` loop.
+    global_residual = float(np.cumsum(residual)[-1]) / residual.shape[0] if residual.shape[0] else 0.0
+    centered = residual - global_residual
     tables: dict[str, dict[str, float]] = {}
     for name in TABLE_NAMES:
+        labels = _TABLE_LABELS[name]
+        # bincount accumulates in input order, like ``sums[key] += centered``.
+        sums = np.bincount(codes[name], weights=centered, minlength=len(labels))
+        counts = np.bincount(codes[name], minlength=len(labels))
         table: dict[str, float] = {}
-        for key in sorted(counts[name]):
-            n = counts[name][key]
-            value = sums[name][key] / (n + max(0.0, prior_games))
-            table[key] = round(float(value), 6)
+        for code in sorted(np.flatnonzero(counts).tolist(), key=lambda c: labels[c]):
+            n = int(counts[code])
+            value = float(sums[code]) / (n + max(0.0, prior_games))
+            table[labels[code]] = round(float(value), 6)
         tables[name] = table
     return tables
-
-
-def _table_components(
-    team: Sequence[int],
-    *,
-    snapshot: dict[str, Any],
-    tables: dict[str, dict[str, float]],
-    table_weights: dict[str, float],
-    clamp: float,
-) -> tuple[float, dict[str, float]]:
-    keys = _composition_keys(team, snapshot)
-    components = {
-        name: float(tables.get(name, {}).get(key, 0.0))
-        for name, key in keys.items()
-    }
-    score = sum(float(table_weights.get(name, 0.0)) * value for name, value in components.items())
-    return max(-clamp, min(clamp, score)), components
 
 
 def _selected_pairs(
@@ -296,92 +456,61 @@ def _selected_pairs(
     return selected
 
 
-def _pair_score(
-    team: Sequence[int],
-    *,
-    pair_stats: dict[tuple[int, int], tuple[float, int]],
-    selected: set[tuple[int, int]],
-    prior_games: float,
-) -> float:
-    if len(team) < 2:
-        return 0.0
-    total = 0.0
-    edges = 0
-    for i, cid in enumerate(team):
-        for teammate in team[i + 1 :]:
-            edges += 1
-            key = (cid, teammate) if cid < teammate else (teammate, cid)
-            if key not in selected:
-                continue
-            lift, games_n = pair_stats.get(key, (0.0, 0))
-            if games_n + prior_games > 0:
-                total += lift * games_n / (games_n + prior_games)
-    return total / edges if edges else 0.0
-
-
 def _base_and_composition_diffs(
-    games: Sequence[TeamGame],
+    games: TeamGames,
+    codes: dict[str, np.ndarray],
+    teams: np.ndarray,
     *,
-    solo_wr: dict[int, float],
-    snapshot: dict[str, Any],
+    solo_wr: np.ndarray,
     tables: dict[str, dict[str, float]],
     table_weights: dict[str, float],
     clamp: float,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    base_diff = np.empty(len(games), dtype=np.float64)
-    comp_diff = np.empty(len(games), dtype=np.float64)
-    labels = np.empty(len(games), dtype=np.float64)
-    for i, game in enumerate(games):
-        blue_base = _mean_solo(game.blue, solo_wr)
-        red_base = _mean_solo(game.red, solo_wr)
-        blue_comp, _ = _table_components(
-            game.blue,
-            snapshot=snapshot,
-            tables=tables,
-            table_weights=table_weights,
-            clamp=clamp,
-        )
-        red_comp, _ = _table_components(
-            game.red,
-            snapshot=snapshot,
-            tables=tables,
-            table_weights=table_weights,
-            clamp=clamp,
-        )
-        base_diff[i] = _logit(blue_base) - _logit(red_base)
-        comp_diff[i] = blue_comp - red_comp
-        labels[i] = game.blue_wins
-    return base_diff, comp_diff, labels
+    """Per game: blue-minus-red base logit, composition score, label.
+
+    *teams*/*codes* are the interleaved sides of *games* (blue rows 0::2).
+    """
+    terms = []
+    for name in TABLE_NAMES:  # the old components dict order
+        labels = _TABLE_LABELS[name]
+        table = tables.get(name, {})
+        lookup = np.asarray([float(table.get(label, 0.0)) for label in labels], dtype=np.float64)
+        terms.append(float(table_weights.get(name, 0.0)) * lookup[codes[name]])
+    score = _builtin_sum(terms)
+    side_comp = np.maximum(-clamp, np.minimum(clamp, score))
+    side_base = _logit_array(_mean_solo(teams, solo_wr))
+    base_diff = side_base[0::2] - side_base[1::2]
+    comp_diff = side_comp[0::2] - side_comp[1::2]
+    return base_diff, comp_diff, games.blue_wins.astype(np.float64)
 
 
 def _pair_diff_array(
-    games: Sequence[TeamGame],
+    teams: np.ndarray,
     *,
-    pair_stats: dict[tuple[int, int], tuple[float, int]],
+    stats: _SoloPair,
+    index: _Index,
     min_games: int,
     prior_games: float,
 ) -> np.ndarray:
     selected = _selected_pairs(
-        pair_stats,
+        stats.pair_lift,
         min_games=min_games,
         prior_games=prior_games,
     )
-    values = np.empty(len(games), dtype=np.float64)
-    for i, game in enumerate(games):
-        blue = _pair_score(
-            game.blue,
-            pair_stats=pair_stats,
-            selected=selected,
-            prior_games=prior_games,
-        )
-        red = _pair_score(
-            game.red,
-            pair_stats=pair_stats,
-            selected=selected,
-            prior_games=prior_games,
-        )
-        values[i] = blue - red
-    return values
+    k = index.size
+    adjusted = np.zeros(k * k, dtype=np.float64)
+    position = {int(cid): i for i, cid in enumerate(index.cids.tolist())}
+    for a, b in selected:
+        lift, games_n = stats.pair_lift.get((a, b), (0.0, 0))
+        if games_n + prior_games > 0:
+            adjusted[position[a] * k + position[b]] = lift * games_n / (games_n + prior_games)
+    total = None
+    for i, j in _EDGES:
+        term = adjusted[teams[:, i] * k + teams[:, j]]
+        total = term if total is None else total + term
+    assert total is not None
+    side = total / len(_EDGES)
+    return side[0::2] - side[1::2]
 
 
 def _binary_log_loss(labels: np.ndarray, logits: np.ndarray) -> float:
@@ -506,7 +635,7 @@ def _score_version(
     *,
     patch_prefix: str | None,
     queue_id: int,
-    games: Sequence[TeamGame],
+    games: TeamGames,
     pair_prior_games: float,
     pair_weight: float,
     composition_weight: float,
@@ -516,7 +645,7 @@ def _score_version(
         "patch": patch_prefix or "all",
         "queue": queue_id,
         "games": len(games),
-        "latest_ms": max((game.created_ms for game in games), default=0),
+        "latest_ms": int(games.created_ms.max()) if len(games) else 0,
         "pair_prior": round(pair_prior_games, 6),
         "pair_weight": round(pair_weight, 8),
         "composition_weight": round(composition_weight, 8),
@@ -591,16 +720,31 @@ def train_team_score_bundle(
         champ_meta=champ_meta,
         lack_thresholds=lack_thresholds,
     )
-    train_solo, train_pairs = _solo_and_pair_stats(train)
+    index = _champion_index(games)
+    # Sides of every game (blue, red interleaved) and their composition codes,
+    # computed once; the chronological splits are contiguous row slices.
+    all_teams, all_won = _sides(games, index)
+    all_codes = _composition_codes(all_teams, snapshot, index)
+    train_rows = slice(0, 2 * len(train))
+    val_rows = slice(2 * len(train), 2 * (len(train) + len(validation)))
+    test_rows = slice(2 * (len(train) + len(validation)), 2 * len(games))
+
+    def codes_of(rows: slice) -> dict[str, np.ndarray]:
+        return {name: values[rows] for name, values in all_codes.items()}
+
+    train_stats = _solo_and_pair_stats(all_teams[train_rows], all_won[train_rows], index)
+    train_solo = train_stats.solo_wr
     train_tables = fit_composition_tables(
-        train,
+        all_teams[train_rows],
+        all_won[train_rows],
+        codes_of(train_rows),
         solo_wr=train_solo,
-        snapshot=snapshot,
     )
     val_base, val_comp, val_labels = _base_and_composition_diffs(
         validation,
+        codes_of(val_rows),
+        all_teams[val_rows],
         solo_wr=train_solo,
-        snapshot=snapshot,
         tables=train_tables,
         table_weights=table_weights,
         clamp=composition_clamp,
@@ -609,8 +753,9 @@ def train_team_score_bundle(
     pair_by_prior: dict[float, np.ndarray] = {}
     for prior_games in PAIR_PRIOR_CANDIDATES:
         pair_by_prior[prior_games] = _pair_diff_array(
-            validation,
-            pair_stats=train_pairs,
+            all_teams[val_rows],
+            stats=train_stats,
+            index=index,
             min_games=min_synergy_games,
             prior_games=prior_games,
         )
@@ -627,15 +772,17 @@ def train_team_score_bundle(
 
     test_base, test_comp, test_labels = _base_and_composition_diffs(
         test,
+        codes_of(test_rows),
+        all_teams[test_rows],
         solo_wr=train_solo,
-        snapshot=snapshot,
         tables=train_tables,
         table_weights=table_weights,
         clamp=composition_clamp,
     )
     test_pair = _pair_diff_array(
-        test,
-        pair_stats=train_pairs,
+        all_teams[test_rows],
+        stats=train_stats,
+        index=index,
         min_games=min_synergy_games,
         prior_games=pair_prior_games,
     )
@@ -664,11 +811,12 @@ def train_team_score_bundle(
 
     # Standard production refit: the validation/test protocol above fixes all
     # hyperparameters; final public tables then use every current-patch game.
-    full_solo, _full_pairs = _solo_and_pair_stats(games)
+    full_solo = _solo_and_pair_stats(all_teams, all_won, index).solo_wr
     full_tables = fit_composition_tables(
-        games,
+        all_teams,
+        all_won,
+        all_codes,
         solo_wr=full_solo,
-        snapshot=snapshot,
     )
     version = _score_version(
         patch_prefix=patch_prefix,
@@ -696,9 +844,9 @@ def train_team_score_bundle(
                 "train_games": len(train),
                 "validation_games": len(validation),
                 "test_games": len(test),
-                "train_end_ms": train[-1].created_ms,
-                "validation_end_ms": validation[-1].created_ms,
-                "test_end_ms": test[-1].created_ms,
+                "train_end_ms": int(train.created_ms[-1]),
+                "validation_end_ms": int(validation.created_ms[-1]),
+                "test_end_ms": int(test.created_ms[-1]),
             },
             "metrics": metrics,
         },

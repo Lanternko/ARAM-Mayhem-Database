@@ -22,8 +22,12 @@ from typing import Any, Iterable
 
 import click
 
-from aram_nn.site.patch_extract import patch_range
+from aram_nn.site import chunk_cache
+from aram_nn.site.patch_extract import file_tracks_chunks, patch_range
 
+# The fold below (and the helpers it calls) lives in this file; editing it
+# drops the cached per-chunk partials.
+chunk_cache.register_code_files(Path(__file__))
 
 COMBAT_COLUMNS = ("damage_score", "cc_score", "frontline_score")
 
@@ -214,9 +218,11 @@ def finalize_empirical_stats(agg: dict[int, dict[str, float]]) -> dict[int, dict
     return out
 
 
-def collect_empirical_stats_from_rows(
+def fold_empirical_rows(
     rows: Iterable[tuple[bool | int, float | int, str | None]],
 ) -> dict[int, dict[str, float]]:
+    """Per-champion sums over *rows*.  Plain dicts so a chunk's result pickles
+    and merges key-wise (every value is an additive float sum)."""
     agg: dict[int, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for blue_wins, duration_sec, participants_json in rows:
         add_match_to_agg(
@@ -225,7 +231,13 @@ def collect_empirical_stats_from_rows(
             duration_sec=duration_sec,
             participants_json=participants_json,
         )
-    return finalize_empirical_stats(agg)
+    return {cid: dict(row) for cid, row in agg.items()}
+
+
+def collect_empirical_stats_from_rows(
+    rows: Iterable[tuple[bool | int, float | int, str | None]],
+) -> dict[int, dict[str, float]]:
+    return finalize_empirical_stats(fold_empirical_rows(rows))
 
 
 def collect_empirical_stats(
@@ -243,6 +255,19 @@ def collect_empirical_stats(
     )
     params: list[Any] = [queue, min_duration, *patch_params]
 
+    if file_tracks_chunks(db):
+        # The patch's stats replica: only chunks that changed since the last
+        # build are parsed again (see aram_nn.site.chunk_cache).
+        agg = chunk_cache.chunked_fold(
+            db,
+            scan="empirical_stats",
+            fp=chunk_cache.fingerprint("empirical_stats", queue, min_duration, patch_prefix),
+            sql=sql,
+            params=tuple(params),
+            fold=fold_empirical_rows,
+            log=click.echo,
+        )
+        return finalize_empirical_stats(agg or {})
     with sqlite3.connect(db) as con:
         return collect_empirical_stats_from_rows(con.execute(sql, params))
 
