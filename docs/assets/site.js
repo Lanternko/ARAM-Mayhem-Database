@@ -10444,6 +10444,15 @@ const feedbackFab = document.querySelector('.feedback-fab');
     // after_en]; before === null marks a new effect.  `en` / *_en carry the
     // official English patch-note wording (leagueoflegends.com en-us notes).
     const PATCH_NOTES = {
+        '26.23': [
+            { id: '3265', zh: '全面強化', en: 'Fortified', changes: [['效果', 'Effect', null, '獲得20物防，接著額外物防提高25%。', undefined, null, 'Gain 20 Armor, then increase your bonus Armor by 25%.']] },
+            { id: '3264', zh: '祕術衛士', en: 'Mystic Guard', changes: [['效果', 'Effect', null, '獲得20魔防，接著額外魔防提高25%。', undefined, null, 'Gain 20 Magic Resist, then increase your bonus Magic Resist by 25%.']] },
+            { id: '3262', zh: '史萊姆時間', en: 'Slime Time', changes: [['效果', 'Effect', null, '每隔幾秒自動施放，從身上噴出一團史萊姆，對鄰近敵軍造成魔法傷害。若命中英雄，會分泌一團黏液，踩過時為你回復生命。', undefined, null, 'Every few seconds, Autocast a burst of slime from your body, dealing magic damage to nearby enemies. If you hit a champion, secrete a blob that heals you when walked over.']] },
+            { id: '3263', zh: '亦加堅定', en: 'Steadfaster Presence', changes: [['效果', 'Effect', null, '獲得額外物防、魔防和韌性。生命低於40%最大生命時，此加成會提高。', undefined, null, "Gain bonus Armor, Magic Resist, and Tenacity. This bonus increases when you're below 40% maximum Health."]] },
+            { id: '3078', zh: '轟鳴低音', en: 'Boom and the Bass', changes: [['傷害', 'Damage', '50 - 200 + 50%物攻 + 30%魔攻', '50 - 175 + 40%物攻 + 25%魔攻', 'down', '50 - 200 + 50% AD + 30% AP', '50 - 175 + 40% AD + 25% AP']] },
+            { id: '3048', zh: '彈跳蜜蜂', en: 'Bouncing Bees', changes: [['普攻傷害百分比', 'Basic Attack Damage Percent', '50 - 100%', '60%', 'down']] },
+            { id: '3039', zh: '救贖', en: 'Salvation', changes: [['冷卻時間', 'Cooldown', '90秒', '70秒', 'up', '90s', '70s']] },
+        ],
         '26.22': [
             { id: '3049', zh: '裝甲衝擊', en: 'Armored Impact', changes: [['傷害', 'Damage', '50 - 125 + 250%額外物防', '25 - 125 + 220%額外物防', 'down', '50 - 125 + 250% bonus Armor', '25 - 125 + 220% bonus Armor']] },
             { id: '3086', zh: '蜜蜂來襲！！！', en: 'BEES!!!', changes: [
