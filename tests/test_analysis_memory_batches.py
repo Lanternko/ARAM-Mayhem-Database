@@ -78,14 +78,16 @@ def test_batches_select_exact_rows(data):
 def test_archetype_projection_parity(data, tmp_path, monkeypatch):
     old = legacy("build_champ_archetype_fit", tmp_path)
     expected = old.load_all(data, ["16.11"])
-    read = pl.read_parquet
-    def projected(*args, **kwargs):
+    import pyarrow.parquet as pq
+    batches = pq.ParquetFile.iter_batches
+    def projected(self, *args, **kwargs):
         assert kwargs["columns"] == TEAM_COLUMNS
-        return read(*args, **kwargs)
-    monkeypatch.setattr(pl, "read_parquet", projected)
+        return batches(self, *args, **kwargs)
+    monkeypatch.setattr(pq.ParquetFile, "iter_batches", projected)
     actual = fit.load_all(data, ["16.11"])
     for a, b in zip(actual[:3], expected[:3]):
-        assert a.blue == b.blue and a.red == b.red
+        np.testing.assert_array_equal(a.blue, np.asarray(b.blue))
+        np.testing.assert_array_equal(a.red, np.asarray(b.red))
         np.testing.assert_array_equal(a.labels, b.labels)
     assert actual[3:] == expected[3:]
 
