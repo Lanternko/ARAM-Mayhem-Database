@@ -643,3 +643,35 @@ def sync_patch_extract(
         rebuilt=rebuilt,
         seconds=seconds,
     )
+
+
+def closed_patch_replica(
+    source_db: Path | str,
+    queue_id: int,
+    patch_prefix: str,
+    *,
+    extract_dir: Path | None = None,
+    log: Log = print,
+) -> Path | None:
+    """The closed patch's replica, synced on first use, or None for the source.
+
+    Only one kept from when the patch was current is used; building one from
+    scratch would cost the same full pass over the source as the scans it serves.
+    Most builds never call this: the closed patch is read from settled snapshots.
+    """
+    lean_db, _stats_db = extract_paths(queue_id, patch_prefix, extract_dir)
+    if not lean_db.exists():
+        return None
+    try:
+        return sync_patch_extract(
+            source_db,
+            queue_id=queue_id,
+            patch_prefix=patch_prefix,
+            extract_dir=extract_dir,
+            log=log,
+            prune_other_patches=False,
+            allow_rebuild=False,
+        ).lean_db
+    except Exception as exc:  # noqa: BLE001 - fall back, do not fail the caller
+        log(f"[extract] WARN: {patch_prefix} replica unusable ({exc!r}); scanning {source_db} directly")
+        return None

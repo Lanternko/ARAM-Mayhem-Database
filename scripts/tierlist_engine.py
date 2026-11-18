@@ -126,6 +126,8 @@ def _fold_patch(
         fold=fold,
         merge=merge,
         log=lambda line: print(line, flush=True),
+        # Lets a background settle checkpoint a source-DB pass window by window.
+        scope=(where, params),
     )
 
 
@@ -1818,6 +1820,71 @@ def _derive_winrate_records(
 SNAPSHOT_CHAMP_SECTION = "champ_counters"
 SNAPSHOT_ITEM_SECTION = "core_item_counters"
 
+# Settle deferral.  A closed patch with no usable snapshot and no kept replica
+# can only be settled by a pass over the source DB -- hours on flip day, and it
+# used to block the whole publish.  With deferral on, the build does not scan:
+# it serves the outgrown snapshot if there is one (stale-growth), nothing
+# otherwise, and records the patch so the caller can settle it in the
+# background (aram_nn.site.settle_background).  Off by default: the settle CLI
+# and the tests want the scan.
+_DEFER_SETTLE = False
+_DEFERRED_SETTLES: dict[tuple[int, str], dict[str, str]] = {}
+
+
+def set_settle_deferral(enabled: bool) -> None:
+    global _DEFER_SETTLE
+    _DEFER_SETTLE = bool(enabled)
+    _DEFERRED_SETTLES.clear()
+
+
+def deferred_settles() -> dict[tuple[int, str], dict[str, str]]:
+    """``{(queue_id, patch): {section: "stale" | "empty"}}`` deferred this run."""
+    return {key: dict(sections) for key, sections in _DEFERRED_SETTLES.items()}
+
+
+def settle_unavailable(
+    queue_id: int, patch_prefix: str, section: str = SNAPSHOT_CHAMP_SECTION
+) -> bool:
+    """True when this run served *nothing* for the section (settle still pending)."""
+    return _DEFERRED_SETTLES.get((int(queue_id), str(patch_prefix)), {}).get(section) == "empty"
+
+
+def _deferred_payload(
+    db_path: Path,
+    queue_id: int,
+    patch_prefix: str,
+    section: str,
+    status,
+    *,
+    snapshot_dir: Path | None,
+    log,
+) -> tuple[bool, dict | None]:
+    """``(deferred, payload)`` for a section whose snapshot is not fresh.
+
+    Not deferred when deferral is off, or when the patch still has a tracked
+    replica: that scan is chunk-cached and cheap enough to run inline.
+    """
+    if not _DEFER_SETTLE:
+        return False, None
+    if chunk_cache.replica_tracks_chunks(scan_db(db_path, queue_id, patch_prefix)):
+        return False, None
+    stored = None
+    if status.state == "stale-growth":
+        # Outgrown, not wrong: the same counters a build served yesterday.
+        record = patch_snapshot.read_section(
+            patch_prefix, queue_id=queue_id, section=section, snapshot_dir=snapshot_dir
+        )
+        stored = (record or {}).get("payload")
+    verdict = "stale" if stored is not None else "empty"
+    _DEFERRED_SETTLES.setdefault((int(queue_id), str(patch_prefix)), {})[section] = verdict
+    if log:
+        log(
+            f"[settle] {patch_prefix} {section}: deferred to the background settle "
+            + ("(serving the previous snapshot meanwhile)" if stored is not None
+               else "(left empty until it finishes)")
+        )
+    return True, stored
+
 
 def _encode_champ_counters(counters: dict[str, Counter]) -> dict:
     """Counters -> JSON.  Tuple keys become flat rows; ints stay ints."""
@@ -1901,6 +1968,12 @@ def settled_patch_counters(
         log(f"[settle] {patch_prefix} champ counters: {status.describe()}")
     if payload is not None:
         return _decode_champ_counters(payload)
+    deferred, stored = _deferred_payload(
+        db_path, queue_id, patch_prefix, SNAPSHOT_CHAMP_SECTION, status,
+        snapshot_dir=snapshot_dir, log=log,
+    )
+    if deferred:
+        return _decode_champ_counters(stored or {})
     counters = _scan_patch_counters(db_path, queue_id, patch_prefix)
     patch_snapshot.save_section(
         patch_prefix,
@@ -3174,6 +3247,10 @@ def derive_recent_augment_ids(
             # that patch's settled snapshot instead of a full rescan -- this walk
             # used to re-read entire 500k-game patches on every build.
             prev_rows = compute_settled_winrates(db, queue_id, prev_prefix, log=log)[1]
+        if settle_unavailable(queue_id, prev_prefix):
+            # Baseline still being settled in the background: an empty one would
+            # flag every augment of the newer patch as 新.  Stop the walk here.
+            break
         new_ids |= set(derive_new_augment_ids(cur_rows, prev_rows))
         cur_rows = prev_rows
         cur_prefix = prev_prefix
@@ -4017,6 +4094,14 @@ def settled_champ_destiny_items(
     )
     if log:
         log(f"[settle] {patch_prefix} destiny-item counters: {status.describe()}")
+    deferred = False
+    if payload is None:
+        deferred, payload = _deferred_payload(
+            db_path, queue_id, patch_prefix, SNAPSHOT_DESTINY_SECTION, status,
+            snapshot_dir=snapshot_dir, log=log,
+        )
+        if deferred and payload is None:
+            payload = {"totals": {}, "cells": {}}
     if payload is not None:
         totals = {int(cid): [int(v) for v in row] for cid, row in payload["totals"].items()}
         cells = {
@@ -4607,6 +4692,14 @@ def settled_core_item_patch_stats(
         log(f"[settle] {patch_prefix} core-item counters: {status.describe()}")
     if payload is not None:
         return _apply_core_item_baselines(_decode_core_item_counters(payload), champ_records)
+    deferred, stored_payload = _deferred_payload(
+        db_path, queue_id, patch_prefix, SNAPSHOT_ITEM_SECTION, status,
+        snapshot_dir=snapshot_dir, log=log,
+    )
+    if deferred:
+        return _apply_core_item_baselines(
+            _decode_core_item_counters(stored_payload or {}), champ_records
+        )
     counters = _scan_core_item_counters(db_path, queue_id, patch_prefix, item_meta)
     patch_snapshot.save_section(
         patch_prefix,

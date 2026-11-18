@@ -26,6 +26,12 @@ a scan whose fold is not additive at all must not use this.
 
 Scans of anything other than a tracked replica (the source DB, a settled older
 patch) take the plain path: one fold over the whole query, exactly as before.
+
+The one exception is a background settle of a closed patch (``configure_resume``):
+a plain pass over the source DB can take hours and used to restart from zero
+every time memory pressure killed it.  There the scan is cut into fixed
+``created_ms`` windows and each window's partial is checkpointed, so a killed
+or time-sliced run continues where it stopped (``windowed_fold``).
 """
 from __future__ import annotations
 
@@ -45,8 +51,37 @@ CACHE_VERSION = 1
 # Partials not used by any build for this long are deleted.
 PARTIAL_TTL_SEC = 3 * 86400
 
+# Width of one checkpointed window of a resumable source-DB scan.
+WINDOW_MS = 6 * 3600 * 1000
+
 _CODE_FILES: tuple[Path, ...] = ()
 _code_digest: str | None = None
+
+# Resumable-scan state, set per process by ``configure_resume``.
+_resume_store: Path | None = None
+_deadline: float | None = None
+
+
+class FoldInterrupted(RuntimeError):
+    """The time budget ran out; everything folded so far is checkpointed."""
+
+
+def configure_resume(store: Path | str | None, *, deadline: float | None = None) -> None:
+    """Checkpoint plain (non-replica) scans in *store*; stop at *deadline*.
+
+    *deadline* is a ``time.monotonic()`` value.  Once it passes, the scan that
+    just checkpointed a window (or a replica chunk) raises ``FoldInterrupted``
+    instead of starting the next one -- always after at least one unit of new
+    work, so repeated short runs cannot stall.  ``configure_resume(None)``
+    restores the default single-pass behaviour.
+    """
+    global _resume_store, _deadline
+    _resume_store = Path(store) if store is not None else None
+    _deadline = deadline
+
+
+def _out_of_time() -> bool:
+    return _deadline is not None and time.monotonic() >= _deadline
 
 Fold = Callable[[Iterable[tuple]], Any]
 Merge = Callable[[Any, Any], Any]
@@ -208,6 +243,11 @@ def chunked_fold(
                 )
                 store.commit()
                 folded += 1
+                if _out_of_time() and chunk < max_rowid // chunk_rows:
+                    raise FoldInterrupted(
+                        f"{scan}: time budget reached at chunk {chunk + 1}"
+                        f"/{max_rowid // chunk_rows + 1}"
+                    )
             acc = part if acc is None else merge(acc, part)
         # A scan may run under several fingerprints in one build (different
         # arguments), so superseded ones age out instead of being dropped at once.
@@ -230,6 +270,96 @@ def chunked_fold(
     return acc
 
 
+def windowed_fold(
+    target: Path,
+    *,
+    store_path: Path,
+    scan: str,
+    fp: str,
+    sql: str,
+    params: tuple,
+    scope: tuple[str, tuple],
+    fold: Fold,
+    merge: Merge | None = None,
+    log: Callable[[str], Any] | None = None,
+) -> Any:
+    """Fold ``sql`` over *target* one ``created_ms`` window at a time, resumably.
+
+    *scope* is the ``(where, params)`` that selects the games being scanned,
+    without any content predicate: it is counted per window straight from the
+    (queue_id, patch, created_ms) index, and a checkpointed window is reused
+    only while that count is unchanged -- so a straggler that arrives between
+    two runs re-folds its window instead of being silently dropped.
+    """
+    merge = merge or merge_into
+    where, scope_params = scope
+    if " FROM games WHERE " not in sql:
+        raise ValueError("windowed scans need 'SELECT ... FROM games WHERE ...'")
+    window = f"COALESCE(created_ms, 0) / {int(WINDOW_MS)}"
+    window_sql = f"{sql} AND {window} = ?"
+    started = time.monotonic()
+    src = sqlite3.connect(str(target), timeout=60.0)
+    store = _open_partials(Path(store_path))
+    origin = f"window:{Path(target).resolve()}"
+    reused = folded = 0
+    try:
+        src.execute("PRAGMA query_only=1")
+        src.execute("BEGIN")  # one snapshot: window counts and rows agree
+        windows = [
+            (int(key), int(count))
+            for key, count in src.execute(
+                f"SELECT {window}, COUNT(*) FROM games WHERE {where} GROUP BY 1 ORDER BY 1",
+                tuple(scope_params),
+            )
+        ]
+        cached = {
+            int(chunk): (rid, int(gen), blob)
+            for chunk, rid, gen, blob in store.execute(
+                "SELECT chunk, replica, gen, state FROM partials WHERE scan=? AND fp=?",
+                (scan, fp),
+            )
+        }
+        acc: Any = None
+        for index, (key, count) in enumerate(windows):
+            hit = cached.get(key)
+            if hit is not None and hit[0] == origin and hit[1] == count:
+                part = pickle.loads(hit[2])
+                reused += 1
+            else:
+                part = fold(src.execute(window_sql, (*params, key)))
+                store.execute(
+                    "INSERT OR REPLACE INTO partials(scan, fp, replica, chunk, gen, state, used_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (scan, fp, origin, key, count,
+                     pickle.dumps(part, protocol=pickle.HIGHEST_PROTOCOL), time.time()),
+                )
+                store.commit()
+                folded += 1
+                if _out_of_time() and index < len(windows) - 1:
+                    if log is not None:
+                        log(
+                            f"[windows] {scan}: paused at {index + 1}/{len(windows)} "
+                            f"({folded} folded, {reused} reused this run)"
+                        )
+                    raise FoldInterrupted(
+                        f"{scan}: time budget reached at window {index + 1}/{len(windows)}"
+                    )
+            acc = part if acc is None else merge(acc, part)
+        if acc is None:
+            # No games at all: the state a plain fold over nothing returns.
+            acc = fold(iter(()))
+    finally:
+        src.rollback()
+        src.close()
+        store.close()
+    if log is not None:
+        log(
+            f"[windows] {scan}: {folded} folded, {reused} reused "
+            f"in {time.monotonic() - started:.1f}s"
+        )
+    return acc
+
+
 def fold_scan(
     target: Path,
     *,
@@ -240,12 +370,23 @@ def fold_scan(
     fold: Fold,
     merge: Merge | None = None,
     log: Callable[[str], Any] | None = None,
+    scope: tuple[str, tuple] | None = None,
 ) -> Any:
-    """Chunk-cached fold when *target* is a tracked replica, else one plain pass."""
+    """Chunk-cached fold when *target* is a tracked replica, else one plain pass.
+
+    With ``configure_resume`` active and a *scope* given, the plain pass becomes
+    a checkpointed ``windowed_fold`` instead.
+    """
     if replica_tracks_chunks(target):
         return chunked_fold(
             target, scan=scan, fp=fingerprint(scan, *fp_parts), sql=sql,
             params=params, fold=fold, merge=merge, log=log,
+        )
+    if _resume_store is not None and scope is not None:
+        return windowed_fold(
+            target, store_path=_resume_store, scan=scan,
+            fp=fingerprint("windowed", int(WINDOW_MS), scan, *fp_parts),
+            sql=sql, params=params, scope=scope, fold=fold, merge=merge, log=log,
         )
     con = sqlite3.connect(str(target))
     try:

@@ -15,7 +15,7 @@ import tierlist_render as _rnd  # noqa: E402,F401
 for _m in (_eng, _rnd):
     globals().update({_k: _v for _k, _v in vars(_m).items() if not _k.startswith('__')})
 from aram_nn.site.patch_extract import (  # noqa: E402
-    extract_paths,
+    closed_patch_replica,
     register_lazy_scan_db,
     register_scan_db,
     sync_patch_extract,
@@ -164,31 +164,6 @@ def resolve_player_history_api_url(site_url: str, player_history_api_url: str) -
 
 
 
-def _closed_patch_replica(db: Path, queue_id: int, patch_prefix: str) -> Path | None:
-    """The closed patch's replica, synced on first use, or None for the source.
-
-    Only one kept from when the patch was current is used; building one from
-    scratch would cost the same full pass over the source as the scans it serves.
-    Most builds never call this: the closed patch is read from settled snapshots.
-    """
-    lean_db, _stats_db = extract_paths(queue_id, patch_prefix)
-    if not lean_db.exists():
-        return None
-    try:
-        return sync_patch_extract(
-            db,
-            queue_id=queue_id,
-            patch_prefix=patch_prefix,
-            log=click.echo,
-            prune_other_patches=False,
-            allow_rebuild=False,
-        ).lean_db
-    except Exception as exc:  # noqa: BLE001 - fall back, do not fail the build
-        click.echo(
-            f"[tierlist] WARN: {patch_prefix} replica unusable ({exc!r}); scanning {db} directly"
-        )
-        return None
-
 @click.command()
 @click.option("--db", type=click.Path(path_type=Path), default=Path("data/lcu/games.db"))
 @click.option("--queue", "queue_id", type=int, default=2400, help="450=ARAM, 2400=Mayhem")
@@ -240,6 +215,11 @@ def _closed_patch_replica(db: Path, queue_id: int, patch_prefix: str) -> Path | 
               help="Scan the current patch from an incrementally synced slim local replica "
                    "(data/cache/patch_extract) instead of re-reading games.db on every pass "
                    "(default on). Falls back to games.db if the replica cannot be synced.")
+@click.option("--defer-settle/--no-defer-settle", "defer_settle", default=True,
+              help="When a closed patch has no usable snapshot and no kept replica, publish "
+                   "without it (version-comparison tables empty, or the outgrown snapshot's "
+                   "values) and settle it in the background instead of scanning games.db "
+                   "inline (default on). --no-defer-settle restores the blocking scan.")
 @click.option("--skip-patch-comparison", is_flag=True, default=False,
               help="Skip the expensive item/augment version-comparison tables for a data-only refresh.")
 @click.option(
@@ -277,6 +257,7 @@ def main(
     shell_only: bool,
     reuse_model_artifacts: bool,
     use_patch_extract: bool,
+    defer_settle: bool,
     skip_patch_comparison: bool,
     meta_pick_api_url: str,
     player_history_api_url: str,
@@ -347,8 +328,13 @@ def main(
         if closed_prefix:
             register_lazy_scan_db(
                 db, queue_id, closed_prefix,
-                lambda: _closed_patch_replica(db, queue_id, closed_prefix),
+                lambda: closed_patch_replica(db, queue_id, closed_prefix, log=click.echo),
             )
+
+    # A closed patch whose snapshot is unusable and that has no kept replica is
+    # not scanned here: the build publishes without it and the settle runs in
+    # the background (started at the end of this build).
+    set_settle_deferral(defer_settle)
 
     version, champ_meta = load_champion_metadata(ddragon_version)
     click.echo(f"[tierlist] data dragon version: {version}")
@@ -904,6 +890,24 @@ def main(
     if not nojekyll.exists():
         nojekyll.write_text("", encoding="utf-8")
         click.echo(f"[tierlist] wrote {nojekyll}")
+
+    # Everything this build served stale or empty gets settled in the background;
+    # the next build after it finishes picks the snapshot up on its own.
+    pending = deferred_settles()
+    if pending:
+        from aram_nn.site.settle_background import spawn_background_settle
+        spawn_background_settle(
+            Path(__file__).with_name("settle_patch.py").resolve(),
+            db=db,
+            queue_id=queue_id,
+            patches=[
+                f"{patch}:{','.join(sorted(sections))}"
+                for (pending_queue, patch), sections in sorted(pending.items())
+                if pending_queue == queue_id
+            ],
+            cwd=Path.cwd(),
+            log=click.echo,
+        )
 
 if __name__ == "__main__":
     main()
