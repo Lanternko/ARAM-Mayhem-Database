@@ -128,6 +128,9 @@ DEFAULT_DOC_PATHS = (
     # above they drift out of the publish and the live pages show an ever-older
     # date.  Same fix -- track them so they commit with the rest.
     Path("docs/about"),
+    # Static article pages (aram_nn.site.column).  The /en and /zh-cn mirrors
+    # are already covered by docs/en and docs/zh-cn above.
+    Path("docs/column"),
     Path("docs/privacy"),
     Path("docs/contact"),
     # Feature feedback has localized static routes and must ship atomically

@@ -262,7 +262,7 @@ Panel 使用 8px、12px、16px 三級圓角。8px 屬於 button、input、tile �
 4. 小遊戲 / Game
 5. 版本變動 / Patch Changes
 
-遊戲模式使用 header 右側的次級下拉選單，顯示目前模式並提供 Mayhem／Classic 切換，不計入第六個主要分頁。切換器與 theme、language 同層級：透明底、中性文字、hairline 邊框與 8px 圓角，hover／展開才提高對比；金色只保留給選單內目前模式的小標記及鍵盤 focus，不作常態黃底。Home、About、Privacy、Contact 不加入產品 tab。尚未發布的 Articles / 專欄不計入頁數，也不能預留空白 tab。
+遊戲模式使用 header 右側的次級下拉選單，顯示目前模式並提供 Mayhem／Classic 切換，不計入第六個主要分頁。切換器與 theme、language 同層級：透明底、中性文字、hairline 邊框與 8px 圓角，hover／展開才提高對比；金色只保留給選單內目前模式的小標記及鍵盤 focus，不作常態黃底。Home、About、Privacy、Contact 不加入產品 tab。Articles / 專欄是獨立的靜態文章頁（`/column/`，沿用站務資訊頁的版型），不是 app view：不加入產品 tab，只從頁尾站務連結與資訊頁導覽進入。各產品分頁在 active view 下方有一段該路由自己的說明文字（`.route-intro`），屬於閱讀內容而非 chrome，文字 owner 是 `src/aram_nn/site/route_intro.py`。
 
 Logo 返回首頁（`/`）：點英雄頭像，在同一排下方展開增幅、出裝與增幅池，收合後保留搜尋、篩選與捲動位置。選取金框貼齊頭像原框，角色標籤使用中性文字。展開區提供「查看完整英雄分析」入口。Champions（`/champions/`）使用可排序的英雄表格，欄位為英雄、勝率（實際對局未校正值）、出場率、場數、兩件推薦核心裝與兩個推薦增幅圖示，預設按出場率排序；搜尋和角色篩選與首頁一致。核心裝沿用詳細頁第一組核心，增幅沿用既有推薦分數，圖示支援 hover、鍵盤與點擊說明。核心裝 ID 以精簡 shell 設定帶入，不額外下載所有英雄 detail shards。點頭像或名稱進入獨立詳細頁（`/champions/<slug>/`），提供完整概覽、出裝、增幅、增幅池與能力分析。首頁不選取產品 tab，表格與詳細頁選取 Champions；三語路由、桌面與手機使用相同規則。英雄增幅前三名只顯示在大卡片區，下方清單從第四名開始，切換排序亦不重複前三名。
 

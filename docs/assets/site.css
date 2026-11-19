@@ -3819,6 +3819,24 @@
         text-align: center;
         line-height: 1.7;
     }
+    /* Per-route explanation under the active view: reading text, not chrome. */
+    .route-intro {
+        max-width: 760px;
+        margin: 48px auto 0;
+        padding: 24px 16px 0;
+        border-top: 1px solid var(--border, #1f2530);
+        color: var(--text-muted, #8d96a0);
+        font-size: 14px;
+        line-height: 1.8;
+    }
+    .route-intro:not(:has(section:not([hidden]))) { display: none; }
+    .route-intro h2 {
+        margin: 0 0 10px;
+        color: var(--text, #e6e8eb);
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .route-intro p { margin: 0 0 12px; }
     .footer .cutoffs {
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.02em;

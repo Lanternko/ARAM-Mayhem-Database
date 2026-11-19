@@ -153,6 +153,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/assets/site.js",
                 "docs/assets/site.css",
                 "docs/assets/app-shell.html",
+                "docs/embed/champion/index.html",
                 "docs/assets/champion-shell.js",
                 "docs/classic.html",
                 # Clean-path deep-link shells, locale mirrors, share thumbnail and
@@ -170,6 +171,7 @@ class StaticSitePublishTests(unittest.TestCase):
                 "docs/p/player-history",
                 "docs/og-image.png",
                 "docs/about",
+                "docs/column",
                 "docs/privacy",
                 "docs/contact",
                 "docs/feedback",

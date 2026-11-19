@@ -1,0 +1,205 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Skill-scaling: who rewards skill, who farms low elo | arammeta</title><meta name='description' content='The same champion, split by lobby skill: Vayne climbs +5.0pp in strong lobbies, Sion drops −4.3pp. Who rewards good play, and who just farms weak games.'><link rel='canonical' href='https://arammeta.com/en/column/skill-scaling/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/skill-scaling/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/skill-scaling/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/skill-scaling/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/skill-scaling/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "Skill-scaling: who rewards skill, who farms low elo", "description": "The same champion, split by lobby skill: Vayne climbs +5.0pp in strong lobbies, Sion drops −4.3pp. Who rewards good play, and who just farms weak games.", "datePublished": "2026-06-28", "inLanguage": "en", "mainEntityOfPage": "https://arammeta.com/en/column/skill-scaling/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav></div></header><main><p class='eyebrow'>Skill-scaling</p><h1>Skill-scaling: who rewards skill, who farms low elo</h1><p class='lede'>The same champion, split by lobby skill: Vayne climbs +5.0pp in strong lobbies, Sion drops −4.3pp. Who rewards good play, and who just farms weak games.</p><p class='updated'>Published: 2026-06-28</p><article class='art-body'><p>ARAM hands you random champions and matchmaking drags every win rate back toward 50% — so "rank" gets ground flat: everyone copies the same build, and you don't pick your champ. Is there still a skill gap? Yes — it doesn't live in <i>what you pick</i>, but in <i>how much you squeeze out of the same champion</i>.</p>
+<p>I split every game by average player efficiency into a <b>high-skill half (top 25%)</b> and a <b>low-skill half (bottom 25%)</b>, then measured each champion's win-rate gap between them. That gap is the <b>skill-scaling</b> coefficient:</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>Skill-scaling = WR(high-skill lobbies) − WR(low-skill lobbies)</b></p>
+<p>Positive = <b>rewards skill</b> (stronger in good hands); negative = <b>stomps low elo</b> (farms weak games, exposed against good players). In every row below, <b>the left number is the low-skill-lobby win rate, the right is the high-skill-lobby win rate</b>.</p>
+<h2>Rewards skill the most</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="Vayne"><div class="art-meta"><div class="nm">Vayne</div><div class="sb">55.0% → 60.0% · 23,659 games</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">46.1% → 50.6% · 9,704 games</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="Taliyah"><div class="art-meta"><div class="nm">Taliyah</div><div class="sb">46.3% → 50.5% · 7,804 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="Vladimir"><div class="art-meta"><div class="nm">Vladimir</div><div class="sb">46.5% → 50.7% · 12,907 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="Smolder"><div class="art-meta"><div class="nm">Smolder</div><div class="sb">45.6% → 49.8% · 23,583 games</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="Quinn"><div class="art-meta"><div class="nm">Quinn</div><div class="sb">43.8% → 48.1% · 6,628 games</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<h2>Farms low elo the most</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="Wukong"><div class="art-meta"><div class="nm">Wukong</div><div class="sb">51.9% → 47.4% · 9,927 games</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">61.3% → 57.0% · 18,598 games</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="Jax"><div class="art-meta"><div class="nm">Jax</div><div class="sb">53.8% → 49.6% · 10,341 games</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="Nasus"><div class="art-meta"><div class="nm">Nasus</div><div class="sb">53.0% → 49.2% · 13,004 games</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="Swain"><div class="art-meta"><div class="nm">Swain</div><div class="sb">49.5% → 45.9% · 20,924 games</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="Karthus"><div class="art-meta"><div class="nm">Karthus</div><div class="sb">52.3% → 48.8% · 24,173 games</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
+<h2>What it says</h2>
+<p>The ranking tracks common sense: the <b>rewards-skill</b> end is mechanically demanding, high-ceiling carries (Vayne, Smolder, Bel'Veth) plus the carry-dependent <b>Lulu</b> — they only pay off in good hands. The <b>low-elo</b> end is simple frontline bruisers (Sion, Nasus, Wukong): point-and-click value that stomps messy games, but gets exposed once enemies flash and focus-fire.</p>
+<p>Sion is the most dramatic case: <b>61.3%</b> win rate in low-skill lobbies (one of the highest of any champion), falling to 57.0% in high-skill ones — still strong, just with the free-win cushion stripped away.</p>
+<h2>One honest caveat</h2>
+<p>The signal is <b>real</b> (patch-stable, statistically significant) but <b>small</b> — at most ±5pp. It tells you whether a champion rewards skill; it <b>cannot</b> be flipped around to read a player's rank, because ARAM outcomes are too noisy and individual scores regress to the middle. Use it to pick a champ or decide what to practice — not as a ladder rating.</p>
+<p>Data: matches collected by arammeta · queue 2400 (Mayhem) · patches 16.11–16.13 · lobby skill = players' champ-controlled damage/gold efficiency, top vs bottom 25%, ≥800 games per champion · skill-scaling cross-patch correlation r≈0.5.</p></article><section><h2>More articles</h2><ul><li><a href='/en/column/sprees-not-snowball/'>Kill sprees do not equal snowballing</a></li><li><a href='/en/column/scaling-snowball/'>Late game × snowball: a champion map</a></li><li><a href='/en/column/draw-your-sword/'>Draw Your Sword: who abuses it, and how to build</a></li><li><a href='/en/column/how-to-read/'>How to read this tier list</a></li></ul><p><a href='/en/column/'>All articles</a></p></section><section><h2>Check the live data</h2><ul class='art-links'><li><a href='/en/'>Champion tier list</a></li><li><a href='/en/augments/'>Augment win rates</a></li><li><a href='/en/draft/'>Draft analysis</a></li><li><a href='/en/changes/'>Patch changes</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav><p>arammeta isn&#x27;t endorsed by Riot Games and doesn&#x27;t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</p></div></footer></body></html>

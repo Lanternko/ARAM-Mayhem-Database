@@ -1,4 +1,4 @@
-<!doctype html><html lang='en' data-feedback-locale='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Feedback | arammeta</title><meta name='description' content='Share an idea, report a problem, or get in touch.'><link rel='canonical' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/feedback/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/feedback/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'><script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+<!doctype html><html lang='en' data-feedback-locale='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Feedback | arammeta</title><meta name='description' content='Share an idea, report a problem, or get in touch.'><link rel='canonical' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/feedback/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/feedback/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/feedback/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/feedback/'><link rel='icon' href='/favicon.svg' type='image/svg+xml'><link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+TC:wght@400;500;600;700&amp;display=swap'><script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script><style>
     /* Classic's retired public URLs share the site's theme and brand. */
     .classic-status-page { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.65 var(--font-ui); }
     .classic-status-page .site-header-inner { justify-content: space-between; }
@@ -3819,6 +3819,24 @@
         text-align: center;
         line-height: 1.7;
     }
+    /* Per-route explanation under the active view: reading text, not chrome. */
+    .route-intro {
+        max-width: 760px;
+        margin: 48px auto 0;
+        padding: 24px 16px 0;
+        border-top: 1px solid var(--border, #1f2530);
+        color: var(--text-muted, #8d96a0);
+        font-size: 14px;
+        line-height: 1.8;
+    }
+    .route-intro:not(:has(section:not([hidden]))) { display: none; }
+    .route-intro h2 {
+        margin: 0 0 10px;
+        color: var(--text, #e6e8eb);
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .route-intro p { margin: 0 0 12px; }
     .footer .cutoffs {
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.02em;

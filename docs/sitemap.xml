@@ -1428,6 +1428,48 @@
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/changes/" />
   </url>
   <url>
+    <loc>https://arammeta.com/column/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/column/draw-your-sword/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/draw-your-sword/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/column/how-to-read/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/how-to-read/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/column/scaling-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/scaling-snowball/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/column/skill-scaling/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/skill-scaling/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/column/sprees-not-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/sprees-not-snowball/" />
+  </url>
+  <url>
     <loc>https://arammeta.com/draft/</loc>
     <lastmod>2026-11-19</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/draft/" />
@@ -2858,6 +2900,48 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/changes/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/changes/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/changes/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/draw-your-sword/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/draw-your-sword/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/how-to-read/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/how-to-read/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/scaling-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/scaling-snowball/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/skill-scaling/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/skill-scaling/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/column/sprees-not-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/sprees-not-snowball/" />
   </url>
   <url>
     <loc>https://arammeta.com/en/draft/</loc>
@@ -4323,6 +4407,48 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/changes/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/changes/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/changes/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/draw-your-sword/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/draw-your-sword/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/draw-your-sword/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/how-to-read/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/how-to-read/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/how-to-read/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/scaling-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/scaling-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/scaling-snowball/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/skill-scaling/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/skill-scaling/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/skill-scaling/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/column/sprees-not-snowball/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/column/sprees-not-snowball/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/column/sprees-not-snowball/" />
   </url>
   <url>
     <loc>https://arammeta.com/zh-cn/draft/</loc>

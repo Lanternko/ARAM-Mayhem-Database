@@ -1,0 +1,213 @@
+<!doctype html><html lang='zh-Hans'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>如何阅读这份 Tier List | arammeta</title><meta name='description' content='胜率、贝氏修正、样本数与分级门槛怎么算、怎么读，以及这些数字不能回答什么。'><link rel='canonical' href='https://arammeta.com/zh-cn/column/how-to-read/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/how-to-read/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/how-to-read/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/how-to-read/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/how-to-read/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "如何阅读这份 Tier List", "description": "胜率、贝氏修正、样本数与分级门槛怎么算、怎么读，以及这些数字不能回答什么。", "datePublished": "2026-06-27", "inLanguage": "zh-Hans", "mainEntityOfPage": "https://arammeta.com/zh-cn/column/how-to-read/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav></div></header><main><p class='eyebrow'>入门</p><h1>如何阅读这份 Tier List</h1><p class='lede'>胜率、贝氏修正、样本数与分级门槛怎么算、怎么读，以及这些数字不能回答什么。</p><p class='updated'>发布日期：2026-06-27</p><article class='art-body'><p>这份 tier list 把英雄依“贝氏修正后的胜率”分级，而不是单纯的原始胜率。原因很简单：小样本的原始胜率非常不稳。这篇说明每个数字怎么算、该怎么读，以及它不能回答什么问题。</p>
+<h2>资料从哪里来</h2>
+<p>Riot 的公开 API 不提供 Mayhem 大乱斗（queue 2400）的对局，所以一般的统计网站拿不到这个模式的资料。arammeta 的对局由玩家在自己电脑上的 League Client 收集，再整理成汇总统计。每一场记录双方各五位玩家的英雄、海克斯、装备与胜负，并用 Riot 的对局编号去除重复，同一场不会因为被多位玩家贡献而重复计算。网站只发布汇总后的数字，不公开任何玩家的身分资讯。</p>
+<h2>三个关键栏位</h2>
+<ul><li><b>胜率</b>：经贝氏收缩后的估计值，样本越少越会被拉回整体基准。</li>
+<li><b>场次</b>：样本数，决定你该多相信这个数字。</li>
+<li><b>原始胜率</b>：未修正的真实胜率，和上面对照看落差。</li></ul>
+<p>当原始胜率很高、但场次很低时，修正后的胜率会明显被往下压 — 这是刻意的保守，避免你追到只打了几场的假强势。</p>
+<h2>为什么不直接用原始胜率</h2>
+<p>胜负是机率事件。一只真实胜率 50% 的英雄，只打 100 场时，光靠运气就可能落在 40% 到 60% 之间；打到 10,000 场，范围才会缩到大约 49% 到 51%。如果直接照原始胜率排名，榜首永远是“刚好手气好的冷门英雄”，而不是真的强的英雄。</p>
+<p>贝氏收缩的做法是替每只英雄加上一批“假想场次”，这些场次的胜率等于基准值：</p>
+<p><code>修正胜率 =（实际胜场 + 假想场次 × 基准胜率）÷（实际场次 + 假想场次）</code></p>
+<p>举例：假想场次设为 350、基准 50%。一只打了 100 场、赢 62 场的英雄，原始胜率 62%，修正后是（62 + 175）÷（100 + 350）≈ 52.7%。同样 62% 但打了 10,000 场的英雄，修正后仍有 61.6%。样本够大时，修正几乎不改变数字；样本小时，它挡住杂讯。</p>
+<p>新版本刚上线、对局还不多的时候，英雄的基准会暂时参考上一个版本的表现；等本版累积到足够场次，就完全以本版资料为准，避免旧版本盖掉真正的平衡改动。</p>
+<h2>分级门槛</h2>
+<ul><li><b>OP</b>：修正胜率 55% 以上</li>
+<li><b>T1</b>：52% 以上</li>
+<li><b>T2</b>：50% 以上</li>
+<li><b>T3</b>：48% 以上</li>
+<li><b>T4</b>：46% 以上</li>
+<li><b>T5</b>：低于 46%</li></ul>
+<p>门槛是固定的胜率数字，不是“前几名”。因此每一级的英雄数量会随版本变动：一个版本可能有很多 OP，另一个版本可能一只都没有。相邻两级之间的差距只有 2 个百分点，贴著门槛的英雄换一批资料就可能升降一级，不必过度解读。</p>
+<h2>海克斯的数字怎么读</h2>
+<p>英雄页里的海克斯不是看“拿了这个海克斯的胜率”，而是看它相对于该英雄自身基准的差距（lift）。一只本来就 56% 胜率的英雄，任何海克斯看起来都很强；只有扣掉英雄本身的胜率，才看得出海克斯自己贡献了多少。</p>
+<p>海克斯另外有一个方向问题：有些海克斯是在“已经赢的局”才容易被选到或发挥，胜率高不代表选了就会赢。排名因此同时看修正后的差距与选取率，样本太少的组合不会列出来。</p>
+<h2>这些数字不能回答什么</h2>
+<ul><li><b>单场胜负</b>：55% 的意思是 100 场大约赢 55 场，不是这一场会赢。</li>
+<li><b>你个人的表现</b>：数字是所有玩家的平均。高操作门槛的英雄，平均胜率会低估熟练玩家的表现。</li>
+<li><b>因果关系</b>：统计描述的是历史对局中的关联。队伍组成、对手阵容、海克斯选择都会同时影响结果。</li>
+<li><b>跨版本比较</b>：每个数字都标示版本。平衡改动后，上一版的结论不一定成立。</li></ul>
+<h2>实际使用建议</h2>
+<p>先看分级，再看场次。OP 与 T1 的英雄在这个模式的平均表现明显较好；T3 上下的英雄差异很小，选自己熟的通常比追半个百分点有用。点开英雄页后，优先看差距大、场次也多的海克斯与装备；差距大但场次少的组合，把它当成值得一试的假设，而不是结论。</p></article><section><h2>其他文章</h2><ul><li><a href='/zh-cn/column/sprees-not-snowball/'>你以为的滚雪球，不是滚雪球</a></li><li><a href='/zh-cn/column/skill-scaling/'>操作系数：谁吃操作，谁专屠低分</a></li><li><a href='/zh-cn/column/scaling-snowball/'>后期 × 滚雪球：英雄定位图</a></li><li><a href='/zh-cn/column/draw-your-sword/'>拔剑吧：谁用最强，怎么出装</a></li></ul><p><a href='/zh-cn/column/'>所有文章</a></p></section><section><h2>接著看数据</h2><ul class='art-links'><li><a href='/zh-cn/'>英雄榜</a></li><li><a href='/zh-cn/augments/'>海克斯胜率</a></li><li><a href='/zh-cn/draft/'>选角分析</a></li><li><a href='/zh-cn/changes/'>版本变动</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav><p>arammeta 并未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 与其相关资产为 Riot Games, Inc. 的商标或注册商标。</p></div></footer></body></html>
