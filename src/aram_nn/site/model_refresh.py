@@ -56,6 +56,14 @@ DEFAULT_MIN_CURRENT_GAMES = 15000
 
 _TOTAL_KEY = "last_refreshed_total"
 
+# The export is ~50 minutes and none of the later steps can change it.  Until
+# 2026-11-19 every retry re-exported: 18 straight training aborts each paid for
+# a fresh export, and each rewrite also invalidated the publisher's stage memo
+# (keyed on the parquet's identity).  A finished export is now remembered in
+# the state file and reused by retries for this long.
+_EXPORT_KEY = "exported_parquet"
+EXPORT_REUSE_MAX_AGE_SEC = 24 * 3600
+
 # Inputs the pipeline reads but never regenerates.  `data/` is gitignored, so a
 # deleted cache file is unrecoverable from git and every tick dies instantly
 # inside click's `exists=True` -- which is exactly how this refresher
@@ -222,6 +230,35 @@ def pipeline_commands(
          "--out", str(out_dir / "role_synergy.json"),
          "--scores-csv", str(score_csv)],
     ]
+
+
+def _parquet_identity(parquet: Path) -> dict[str, int] | None:
+    try:
+        stat = Path(parquet).stat()
+    except OSError:
+        return None
+    return {"size": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+
+
+def reusable_export(
+    state: dict[str, Any], *, parquet: Path, pool: list[str], now: float | None = None
+) -> dict[str, Any] | None:
+    """The marker of a finished export that a retry may train on, else None.
+
+    Reusable means: same patch pool, the file on disk is byte-for-byte the one
+    the marker describes (size + mtime), and it is recent enough that training
+    on it is still a refresh rather than a replay of old data.
+    """
+    marker = state.get(_EXPORT_KEY)
+    if not isinstance(marker, dict) or marker.get("pool") != list(pool):
+        return None
+    identity = _parquet_identity(parquet)
+    if identity is None or any(marker.get(k) != v for k, v in identity.items()):
+        return None
+    age = (time.time() if now is None else now) - float(marker.get("exported_at_unix") or 0)
+    if not 0 <= age <= EXPORT_REUSE_MAX_AGE_SEC:
+        return None
+    return marker
 
 
 def _consecutive_failures(state: dict[str, Any], *, patch_prefix: str | None) -> int:
@@ -408,19 +445,39 @@ def _refresh_models_once(
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     started = time.time()
-    for cmd in pipeline_commands(
+    export_cmd, *model_cmds = pipeline_commands(
         db=db, parquet=parquet, out_dir=out_dir, pool=pool, baseline=baseline,
         prev=prev, current=current, half_life_days=half_life_days,
         score_csv=score_csv,
-    ):
+    )
+    export = reusable_export(state, parquet=parquet, pool=pool)
+    reused_export = export is not None
+    if export is None:
+        _run_checked(runner, export_cmd)
+        # Saved before training starts, so an abort in any later step leaves a
+        # retry something to resume from.
+        export = {
+            "pool": list(pool),
+            "local_total": decision.local_total,
+            "exported_at_unix": time.time(),
+            **(_parquet_identity(parquet) or {}),
+        }
+        state[_EXPORT_KEY] = export
+        save_state(state_path, state)
+    for cmd in model_cmds:
         _run_checked(runner, cmd)
     elapsed = round(time.time() - started, 1)
+    # The models hold what the parquet held: a reused export is from an earlier
+    # attempt, so the growth gate restarts from that attempt's count.
+    refreshed_total = _state_int(export.get("local_total")) or decision.local_total
+    # The next refresh is triggered by new games and must export them.
+    state.pop(_EXPORT_KEY, None)
 
     _record_patch_state(
         state,
         patch_prefix=current,
         payload={
-            _TOTAL_KEY: decision.local_total,
+            _TOTAL_KEY: refreshed_total,
             "last_refresh_at_unix": time.time(),
             "last_pool": pool,
             "last_current_patch": current,
@@ -438,6 +495,7 @@ def _refresh_models_once(
     return {
         **base_info,
         "refreshed": True,
+        "reused_export": reused_export,
         "elapsed_sec": elapsed,
         "out_dir": str(out_dir),
         "baseline_patch": baseline,

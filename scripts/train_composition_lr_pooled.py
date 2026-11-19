@@ -34,12 +34,13 @@ from typing import Any
 import click
 import numpy as np
 import polars as pl
+from aram_nn.lr_matrix import RowMask, champion_vocab, chunked_csr, masked_weights
 from aram_nn.parquet_batches import SOURCE_ROW, iter_parquet_rows, read_team_frame
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_ability_nn import TeamDataset, build_vocab  # noqa: E402
+from train_ability_nn import TeamDataset  # noqa: E402
 from analyze_composition_signals import build_champion_profiles, champion_matrix  # noqa: E402
 from train_composition_lr import (  # noqa: E402
     C_GRID, build_feature_blocks, build_team_profiles, metrics, select_blocks,
@@ -64,29 +65,46 @@ def filter_known(d: pl.DataFrame, known: set[int]) -> pl.DataFrame:
 
 
 def raw_wr(df: pl.DataFrame, pp: str) -> dict[int, tuple[float, int]]:
-    sub = df.filter(pl.col("pp") == pp)
-    g = {}
-    for blue, red, bw in zip(sub["blue_champions"].to_list(), sub["red_champions"].to_list(),
-                             sub["blue_wins"].to_list()):
-        for c in blue:
-            a = g.setdefault(int(c), [0, 0]); a[0] += 1; a[1] += int(bw)
-        for c in red:
-            a = g.setdefault(int(c), [0, 0]); a[0] += 1; a[1] += int(not bw)
-    return {c: (w / n, n) for c, (n, w) in g.items()}
+    sub = df.filter(pl.col("pp") == pp).select(
+        "blue_champions", "red_champions", pl.col("blue_wins").cast(pl.Boolean).alias("bw"))
+    sides = pl.concat([
+        sub.select(pl.col("blue_champions").alias("c"), pl.col("bw").cast(pl.Int64).alias("w")),
+        sub.select(pl.col("red_champions").alias("c"), (~pl.col("bw")).cast(pl.Int64).alias("w")),
+    ]).explode("c").drop_nulls("c")
+    g = sides.group_by("c").agg(pl.len().alias("n"), pl.col("w").sum())
+    return {int(c): (int(w) / int(n), int(n)) for c, n, w in g.iter_rows()}
 
 
-def build_x(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs):
+def feature_chunk(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs):
+    """Dense features for one slice of games: champion identity + composition blocks."""
     ds = TeamDataset(df, champ_to_idx)
     champ = champion_matrix(ds, n_champs)
     blue, red = build_team_profiles(ds, idx_to_cid, profiles)
     blocks = build_feature_blocks(blue, red)
     comp_blocks, names = select_blocks(blocks, feature_set)
-    x = np.concatenate([champ, *comp_blocks], axis=1)
-    y = ds.labels.astype(np.float64)
-    return x, y, names
+    return np.concatenate([champ, *comp_blocks], axis=1), names
+
+
+def build_x(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs):
+    """CSR features for every game in *df*, built a slice at a time.
+
+    The dense matrix and the per-team profile objects only ever exist for one
+    slice, so peak memory follows the sparse result, not the pool size.
+    """
+    names: list[str] = []
+
+    def chunk(start: int, stop: int) -> np.ndarray:
+        x, chunk_names = feature_chunk(df.slice(start, stop - start), champ_to_idx,
+                                       idx_to_cid, profiles, feature_set, n_champs)
+        names[:] = chunk_names
+        return x
+
+    return chunked_csr(df.height, chunk), names
 
 
 def fit_c(x_tr, y_tr, x_va, y_va, w_tr=None):
+    """Tune C on val, then fit.  ``w_tr`` may be zero on rows of ``x_tr`` that
+    are not part of this fit (see ``masked_weights``)."""
     best_c, best_ll = C_GRID[0], float("inf")
     for c in C_GRID:
         m = LogisticRegression(C=c, max_iter=2000, solver="lbfgs")
@@ -139,34 +157,16 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
     val_df = non_cur.tail(val_size)
     train_df = pl.concat([non_cur.head(non_cur.height - val_size), early_cur]).sort("game_creation_ms")
 
-    champ_to_idx = build_vocab(train_df)
+    champ_to_idx = champion_vocab(train_df)
     known = set(champ_to_idx)
     idx_to_cid = {i: c for c, i in champ_to_idx.items()}
     n_champs = len(champ_to_idx)
     val_df = filter_known(val_df, known)
     test_df = filter_known(test_df, known)
+    n_tr, n_va, n_te = train_df.height, val_df.height, test_df.height
 
-    click.echo(f"train={train_df.height} (pool {non_cur.height - val_size} + early-{current_patch} {early_cur.height})  "
-               f"val={val_df.height}  test={test_df.height}  champs={n_champs}")
-
-    # Empirical champion profiles from TRAIN ONLY (no leakage; includes early current patch).
-    profiles = build_champion_profiles(score_csv=score_csv, train_df=train_df,
-                                       min_games=empirical_min_games, replace_sustain=True,
-                                       empirical_rows=iter_parquet_rows(
-                                           data, ["blue_wins", "duration_sec", "participants_json"],
-                                           selected_rows=set(train_df[SOURCE_ROW].to_list()),
-                                       ))
-
-    x_tr, y_tr, feat_names = build_x(train_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
-    x_va, y_va, _ = build_x(val_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
-    x_te, y_te, _ = build_x(test_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
-    feature_names = [f"champion:{idx_to_cid[i]}" for i in range(n_champs)] + feat_names
-
-    # recency weights on train
-    t = train_df["game_creation_ms"].to_numpy().astype(np.float64)
-    t_ref = t.max()
-    w = np.exp(-(t_ref - t) / (half_life_days * DAY_MS))
-    w *= len(w) / w.sum()
+    click.echo(f"train={n_tr} (pool {non_cur.height - val_size} + early-{current_patch} {early_cur.height})  "
+               f"val={n_va}  test={n_te}  champs={n_champs}")
 
     # movers (raw WR drift prev->current) for the diagnostic subset
     wr0, wr1 = raw_wr(df, prev_patch), raw_wr(df, current_patch)
@@ -177,11 +177,45 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
                                           test_df["red_champions"].to_list())])
     click.echo(f"movers(|dWR|>={mover_min_drift}pp)={len(movers)}  test mover-game coverage={test_mask.mean()*100:.0f}%\n")
 
+    # Everything the fits need from the frames, as arrays -- the frames are
+    # then released so the long participant pass and the fits run without them.
+    # Rows are kept in one [train, val, test] block: the fits pick their rows
+    # with zero sample weights instead of holding a copy per split.
+    feature_cols = ["blue_champions", "red_champions", "blue_wins"]
+    all_df = pl.concat([d.select(feature_cols) for d in (train_df, val_df, test_df)])
+    y_all = all_df["blue_wins"].cast(pl.Float32).to_numpy().astype(np.float64)
+    t = train_df["game_creation_ms"].to_numpy().astype(np.float64)
+    t_all = np.concatenate([t, *(d["game_creation_ms"].to_numpy().astype(np.float64)
+                                 for d in (val_df, test_df))])
+    base_rows = np.flatnonzero((train_df["pp"] == baseline_patch).to_numpy())
+    train_rows = RowMask(train_df[SOURCE_ROW].to_numpy())
+    del df, cur, non_cur, early_cur, train_df, val_df, test_df
+
+    # Empirical champion profiles from TRAIN ONLY (no leakage; includes early current patch).
+    profiles = build_champion_profiles(score_csv=score_csv, train_df=None,
+                                       min_games=empirical_min_games, replace_sustain=True,
+                                       empirical_rows=iter_parquet_rows(
+                                           data, ["blue_wins", "duration_sec", "participants_json"],
+                                           selected_rows=train_rows,
+                                       ))
+
+    x_all, feat_names = build_x(all_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
+    del all_df
+    feature_names = [f"champion:{idx_to_cid[i]}" for i in range(n_champs)] + feat_names
+    y_tr = y_all[:n_tr]
+    x_va, y_va = x_all[n_tr:n_tr + n_va], y_all[n_tr:n_tr + n_va]
+    x_te, y_te = x_all[n_tr + n_va:], y_all[n_tr + n_va:]
+    is_train = np.arange(len(y_all)) < n_tr
+
+    # recency weights on train
+    t_ref = t.max()
+    w = np.exp(-(t_ref - t) / (half_life_days * DAY_MS))
+    w *= len(w) / w.sum()
+
     # baseline: train on baseline_patch rows only (single-patch regime), uniform
-    base_mask = (train_df["pp"] == baseline_patch).to_numpy()
-    m_base, c_base = fit_c(x_tr[base_mask], y_tr[base_mask], x_va, y_va)
-    m_flat, c_flat = fit_c(x_tr, y_tr, x_va, y_va)
-    m_rec, c_rec = fit_c(x_tr, y_tr, x_va, y_va, w_tr=w)
+    m_base, c_base = fit_c(x_all[base_rows], y_tr[base_rows], x_va, y_va)
+    m_flat, c_flat = fit_c(x_all, y_all, x_va, y_va, w_tr=masked_weights(is_train))
+    m_rec, c_rec = fit_c(x_all, y_all, x_va, y_va, w_tr=masked_weights(is_train, w))
 
     rows = []
     for name, m, c in [(f"baseline_{baseline_patch}", m_base, c_base),
@@ -205,12 +239,7 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
     # Production artifact: refit on ALL rows (train+val+test) with recency weights,
     # reusing the val-tuned C.  The metrics above are the held-out verification; a
     # shipped model must not waste the most-recent ~27k games (which recency weights
-    # value most).  Reuses the already-built feature matrices, so it's just one fit.
-    t_va = val_df["game_creation_ms"].to_numpy().astype(np.float64)
-    t_te = test_df["game_creation_ms"].to_numpy().astype(np.float64)
-    x_all = np.vstack([x_tr, x_va, x_te])
-    y_all = np.concatenate([y_tr, y_va, y_te])
-    t_all = np.concatenate([t, t_va, t_te])
+    # value most).  Same matrix as above with every row weighted, so it's just one fit.
     t_ref_all = t_all.max()
     w_all = np.exp(-(t_ref_all - t_all) / (half_life_days * DAY_MS))
     w_all *= len(w_all) / w_all.sum()
@@ -228,7 +257,7 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
     summary = {
         "data": str(data), "current_patch": current_patch, "baseline_patch": baseline_patch,
         "half_life_days": half_life_days, "feature_set": feature_set,
-        "train_rows": train_df.height, "val_rows": val_df.height, "test_rows": test_df.height,
+        "train_rows": n_tr, "val_rows": n_va, "test_rows": n_te,
         "n_champs": n_champs, "best_C": c_rec, "movers": len(movers),
         "results": {name: {"all": a, "mover_games": mv} for name, c, a, mv in rows},
         "candidate_minus_baseline_logloss": rec_ll - base_ll,

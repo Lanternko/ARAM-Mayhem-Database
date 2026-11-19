@@ -20,6 +20,20 @@ def read_team_frame(path: Path) -> pl.DataFrame:
     return pl.read_parquet(path, columns=TEAM_COLUMNS).with_row_index(SOURCE_ROW)
 
 
+def _batches(parquet: pq.ParquetFile, batch_size: int, columns: list[str]):
+    """Batches in file order, one reader per row group.
+
+    A single ``iter_batches`` over the whole file keeps every row group it has
+    decoded allocated until the reader closes (pyarrow 2026-11: the arrow pool
+    grew by the full size of ``participants_json``, ~7GB over a 4.3M-game
+    pool, while each batch was dropped immediately).  A reader scoped to one
+    row group returns its memory when that row group is done.
+    """
+    for row_group in range(parquet.metadata.num_row_groups):
+        yield from parquet.iter_batches(batch_size=batch_size, row_groups=[row_group],
+                                        columns=columns, use_threads=False)
+
+
 def iter_parquet_rows(path: Path, columns: Sequence[str], *,
                       selected_rows=None, batch_size: int = 256) -> Iterator[tuple]:
     """Decode at most one batch, selecting exact source offsets before Python conversion.
@@ -31,8 +45,7 @@ def iter_parquet_rows(path: Path, columns: Sequence[str], *,
         raise ValueError("batch_size must be positive")
     offset = 0
     with pq.ParquetFile(path) as parquet:
-        for batch in parquet.iter_batches(batch_size=batch_size, columns=list(columns),
-                                          use_threads=False):
+        for batch in _batches(parquet, batch_size, list(columns)):
             frame = pl.from_arrow(batch)
             if selected_rows is not None:
                 frame = frame.filter(pl.Series([

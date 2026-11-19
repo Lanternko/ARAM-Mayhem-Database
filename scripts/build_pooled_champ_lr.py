@@ -22,11 +22,12 @@ from pathlib import Path
 import click
 import numpy as np
 import polars as pl
+from aram_nn.lr_matrix import champion_vocab, chunked_csr, masked_weights
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_ability_nn import TeamDataset, build_vocab  # noqa: E402
+from train_ability_nn import TeamDataset  # noqa: E402
 from analyze_composition_signals import champion_matrix  # noqa: E402
 from train_composition_lr import C_GRID  # noqa: E402
 
@@ -34,8 +35,12 @@ DAY_MS = 86_400_000
 
 
 def identity(df, champ_to_idx, n):
-    ds = TeamDataset(df, champ_to_idx)
-    return champion_matrix(ds, n), ds.labels.astype(np.float64)
+    """Signed champion identity as CSR (10 non-zeros a game), built a slice at
+    a time -- dense, this was ~3GB at 4M games and was built twice."""
+    return chunked_csr(
+        df.height,
+        lambda start, stop: champion_matrix(
+            TeamDataset(df.slice(start, stop - start), champ_to_idx), n))
 
 
 @click.command()
@@ -58,30 +63,31 @@ def main(data, current_patch, val_size, half_life_days, out_dir):
         pl.col("patch").str.split(".").list.slice(0, 2).list.join(".").alias("pp")
     ).sort("game_creation_ms")
 
-    champ_to_idx = build_vocab(df)
+    champ_to_idx = champion_vocab(df)
     n = len(champ_to_idx)
-    non_cur = df.filter(pl.col("pp") != current_patch)
-    cur = df.filter(pl.col("pp") == current_patch)
-    val_df = non_cur.tail(val_size)
-    trainc_df = pl.concat([non_cur.head(non_cur.height - val_size), cur]).sort("game_creation_ms")
+    # One matrix over every game.  The C-tuning fits leave the held-out late
+    # pre-current games out with zero sample weights rather than a second copy.
+    is_val = np.zeros(df.height, dtype=bool)
+    is_val[np.flatnonzero((df["pp"] != current_patch).to_numpy())[-val_size:]] = True
+    y_all = df["blue_wins"].cast(pl.Float32).to_numpy().astype(np.float64)
+    t_all = df["game_creation_ms"].to_numpy().astype(np.float64)
+    x_all = identity(df.select("blue_champions", "red_champions", "blue_wins"), champ_to_idx, n)
+    del df
 
     # Tune C on the held-out late pre-current val, training weighted.
-    x_tc, y_tc = identity(trainc_df, champ_to_idx, n)
-    x_va, y_va = identity(val_df, champ_to_idx, n)
-    t_ref = df["game_creation_ms"].max()
-    w_tc = np.exp(-(t_ref - trainc_df["game_creation_ms"].to_numpy().astype(np.float64)) / (half_life_days * DAY_MS))
+    x_va, y_va = x_all[is_val], y_all[is_val]
+    w_tc = np.exp(-(t_all.max() - t_all[~is_val]) / (half_life_days * DAY_MS))
     w_tc *= len(w_tc) / w_tc.sum()
+    w_tune = masked_weights(~is_val, w_tc)
     best_c, best_ll = C_GRID[0], float("inf")
     for c in C_GRID:
         m = LogisticRegression(C=c, max_iter=2000, solver="lbfgs")
-        m.fit(x_tc, y_tc, sample_weight=w_tc)
+        m.fit(x_all, y_all, sample_weight=w_tune)
         ll = log_loss(y_va, m.predict_proba(x_va)[:, 1])
         if ll < best_ll:
             best_ll, best_c = ll, c
 
     # Final fit on ALL rows, recency-weighted.
-    x_all, y_all = identity(df, champ_to_idx, n)
-    t_all = df["game_creation_ms"].to_numpy().astype(np.float64)
     w_all = np.exp(-(t_all.max() - t_all) / (half_life_days * DAY_MS))
     w_all *= len(w_all) / w_all.sum()
     final = LogisticRegression(C=best_c, max_iter=2000, solver="lbfgs")

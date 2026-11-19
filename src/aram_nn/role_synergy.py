@@ -28,7 +28,7 @@ import math
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Iterator
 
 SCHEMA_KIND = "champ_role_synergy"
 
@@ -78,7 +78,7 @@ def _team_rows_from_parquet(
     data_path: Path,
     *,
     min_duration_sec: int,
-) -> tuple[list[tuple[list[int], int]], int]:
+) -> tuple[Iterator[tuple[list[int], int]], int]:
     import polars as pl  # local import: keeps the GUI loader free of polars
 
     # The pooled parquet carries participants_json, which dwarfs the four columns
@@ -90,16 +90,19 @@ def _team_rows_from_parquet(
     df = pl.read_parquet(data_path, columns=[c for c in wanted if c in present])
     if min_duration_sec and "duration_sec" in df.columns:
         df = df.filter(pl.col("duration_sec") >= min_duration_sec)
-    blue = df["blue_champions"].to_list()
-    red = df["red_champions"].to_list()
-    wins = df["blue_wins"].to_list()
 
-    team_rows: list[tuple[list[int], int]] = []
-    for b, r, bw in zip(blue, red, wins):
-        won = 1 if bw else 0
-        team_rows.append(([int(c) for c in b], won))
-        team_rows.append(([int(c) for c in r], 1 - won))
-    return team_rows, len(blue)
+    def team_rows() -> Iterator[tuple[list[int], int]]:
+        # Python lists for a slice at a time: materialising every team of a 4M
+        # game pool at once costs several GB for a single counting pass.
+        for part in df.iter_slices(50_000):
+            for b, r, bw in zip(part["blue_champions"].to_list(),
+                                part["red_champions"].to_list(),
+                                part["blue_wins"].to_list()):
+                won = 1 if bw else 0
+                yield [int(c) for c in b], won
+                yield [int(c) for c in r], 1 - won
+
+    return team_rows(), df.height
 
 
 def build_role_rows_from_team_rows(

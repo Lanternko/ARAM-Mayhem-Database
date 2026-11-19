@@ -169,3 +169,15 @@ def test_axes_reuses_artifact_until_an_input_changes(data, tmp_path, monkeypatch
     assert not reused and shorter != other
     monkeypatch.setenv("ARAM_NO_STAGE_MEMO", "1")
     assert build("--min-games", "1") == (False, shorter)
+
+
+def test_row_offsets_continue_across_row_groups(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    data = tmp_path / "many_groups.parquet"
+    pq.write_table(pa.table({"v": list(range(11))}), data, row_group_size=4)
+    assert pq.ParquetFile(data).metadata.num_row_groups == 3
+    assert [v for (v,) in iter_parquet_rows(data, ["v"], batch_size=3)] == list(range(11))
+    assert [v for (v,) in iter_parquet_rows(data, ["v"], batch_size=3,
+                                            selected_rows={0, 3, 4, 7, 10})] == [0, 3, 4, 7, 10]

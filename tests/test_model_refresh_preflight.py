@@ -147,3 +147,70 @@ def test_failed_command_retains_exit_code_and_both_output_streams():
     assert "exit=137" in message
     assert "last completed patch" in message
     assert "allocation failed" in message
+
+
+def _export_writing_runner(env, launched, *, fail_on: str | None = None):
+    """Fake pipeline: the export step writes the parquet, one step may fail."""
+    def runner(cmd):
+        launched.append(cmd[1])
+        if "export_pooled_parquet" in cmd[1]:
+            env["parquet"].write_bytes(b"parquet-%d" % len(launched))
+        if fail_on and fail_on in cmd[1]:
+            return CommandResult(1, "", "resource pressure")
+        return CommandResult(0, "", "")
+    return runner
+
+
+def test_retry_after_training_abort_reuses_the_finished_export(env):
+    env["score_csv"].write_text("champion_id,x\n", encoding="utf-8")
+    first: list[str] = []
+    with pytest.raises(RuntimeError):
+        _run(env, _export_writing_runner(env, first, fail_on="train_composition"))
+    assert [Path(c).stem for c in first] == ["export_pooled_parquet", "train_composition_lr_pooled"]
+    exported = env["parquet"].stat()
+
+    retry: list[str] = []
+    result = _run(env, _export_writing_runner(env, retry))
+
+    assert result["refreshed"] is True and result["reused_export"] is True
+    assert [Path(c).stem for c in retry] == [
+        "train_composition_lr_pooled", "build_pooled_champ_lr",
+        "build_single_team_calibration", "build_role_synergy"]
+    # Untouched file: the publisher's stage memo stays valid across retries.
+    assert env["parquet"].stat().st_mtime_ns == exported.st_mtime_ns
+    state = json.loads(env["state"].read_text(encoding="utf-8"))
+    assert state["last_refreshed_total"] == 40_000
+    assert "exported_parquet" not in state  # next growth-triggered refresh exports afresh
+
+
+@pytest.mark.parametrize("spoil", ["rewritten", "stale", "other_pool", "deleted"])
+def test_export_is_not_reused_when_it_is_not_the_recorded_one(env, spoil):
+    env["score_csv"].write_text("champion_id,x\n", encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        _run(env, _export_writing_runner(env, [], fail_on="train_composition"))
+    state = json.loads(env["state"].read_text(encoding="utf-8"))
+    assert state["exported_parquet"]["pool"] == ["16.16"]
+
+    if spoil == "rewritten":
+        env["parquet"].write_bytes(b"someone else wrote this file")
+    elif spoil == "deleted":
+        env["parquet"].unlink()
+    elif spoil == "stale":
+        state["exported_parquet"]["exported_at_unix"] -= mr.EXPORT_REUSE_MAX_AGE_SEC + 60
+    elif spoil == "other_pool":
+        state["exported_parquet"]["pool"] = ["16.15", "16.16"]
+    env["state"].write_text(json.dumps(state), encoding="utf-8")
+
+    retry: list[str] = []
+    result = _run(env, _export_writing_runner(env, retry))
+
+    assert result["reused_export"] is False
+    assert Path(retry[0]).stem == "export_pooled_parquet" and len(retry) == 5
+
+
+def test_successful_refresh_does_not_leave_an_export_to_reuse(env):
+    env["score_csv"].write_text("champion_id,x\n", encoding="utf-8")
+    _run(env, _export_writing_runner(env, []))
+    again: list[str] = []
+    result = _run(env, _export_writing_runner(env, again), force=True)
+    assert result["reused_export"] is False and len(again) == 5
