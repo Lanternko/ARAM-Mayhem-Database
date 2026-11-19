@@ -15,6 +15,12 @@ loads via aram_nn.recommend.load_lr.
 """
 from __future__ import annotations
 
+import os
+
+# Before polars loads: its allocator otherwise keeps freed frame memory
+# committed (1.4GB at 4.4M games) while the matrices are built beside it.
+os.environ.setdefault("MIMALLOC_PURGE_DELAY", "0")
+
 import json
 import sys
 from pathlib import Path
@@ -22,7 +28,7 @@ from pathlib import Path
 import click
 import numpy as np
 import polars as pl
-from aram_nn.lr_matrix import champion_vocab, chunked_csr, masked_weights
+from aram_nn.lr_matrix import champion_vocab, chunked_csr, masked_weights, patch_rows
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
@@ -53,24 +59,28 @@ def main(data, current_patch, val_size, half_life_days, out_dir):
     # participants_json is ~8.5GB of the pooled parquet in memory and nothing
     # here reads it; leaving it out keeps this step off the OOM edge that the
     # export used to fall over.
+    #
+    # Rows stay in file order.  Nothing below depends on their order except
+    # "the latest pre-current games", which is picked by timestamp; sorting the
+    # frame instead copied every champion list (≈5GB at 4.4M games on the
+    # refresher's polars, most of this step's peak).
     df = (
         pl.scan_parquet(data)
-        .drop("participants_json", strict=False)
         .filter(pl.col("duration_sec") >= 300)
+        .select("patch", "game_creation_ms", "blue_champions", "red_champions", "blue_wins")
         .collect()
     )
-    df = df.with_columns(
-        pl.col("patch").str.split(".").list.slice(0, 2).list.join(".").alias("pp")
-    ).sort("game_creation_ms")
 
     champ_to_idx = champion_vocab(df)
     n = len(champ_to_idx)
-    # One matrix over every game.  The C-tuning fits leave the held-out late
-    # pre-current games out with zero sample weights rather than a second copy.
-    is_val = np.zeros(df.height, dtype=bool)
-    is_val[np.flatnonzero((df["pp"] != current_patch).to_numpy())[-val_size:]] = True
     y_all = df["blue_wins"].cast(pl.Float32).to_numpy().astype(np.float64)
     t_all = df["game_creation_ms"].to_numpy().astype(np.float64)
+    # One matrix over every game.  The C-tuning fits leave the held-out late
+    # pre-current games out with zero sample weights rather than a second copy.
+    earlier = np.flatnonzero(df["patch"].is_not_null().to_numpy()
+                             & ~patch_rows(df["patch"], current_patch))
+    is_val = np.zeros(df.height, dtype=bool)
+    is_val[earlier[np.argsort(t_all[earlier], kind="stable")[max(len(earlier) - val_size, 0):]]] = True
     x_all = identity(df.select("blue_champions", "red_champions", "blue_wins"), champ_to_idx, n)
     del df
 

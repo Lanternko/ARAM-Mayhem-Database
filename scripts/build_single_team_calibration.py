@@ -15,6 +15,12 @@ from recent games, recency-weighted, and a Newton fit.
 """
 from __future__ import annotations
 
+import os
+
+# Before polars loads: its allocator otherwise keeps freed frame memory
+# committed (1.4GB at 4.4M games) while the matrices are built beside it.
+os.environ.setdefault("MIMALLOC_PURGE_DELAY", "0")
+
 import json
 import sys
 from pathlib import Path
@@ -36,16 +42,21 @@ DAY_MS = 86_400_000
 @click.option("--half-life-days", default=7.0, show_default=True)
 def main(data, model_dir, sample, half_life_days):
     model = load_composition_lr(Path(model_dir))
-    # Same reason as build_pooled_champ_lr: this step never opens
-    # participants_json, and it is ~8.5GB of the pooled parquet.
+    # Only the newest `sample` games are used, so find their time boundary from
+    # the one timestamp column and load just those rows.  Sorting the whole
+    # pool to take its tail held every game's champion lists twice (4.4GB at
+    # 4.4M games on the refresher's polars) for an 80k-game fit.
+    games = pl.scan_parquet(data).filter(pl.col("duration_sec") >= 300)
+    times = games.select("game_creation_ms").collect()["game_creation_ms"]
+    newest = times.top_k(sample).min() if len(times) else None
+    del times
     df = (
-        pl.scan_parquet(data)
-        .drop("participants_json", strict=False)
-        .filter(pl.col("duration_sec") >= 300)
-        .sort("game_creation_ms")
+        games.filter(pl.col("game_creation_ms") >= newest)
+        .select("game_creation_ms", "blue_champions", "red_champions", "blue_wins")
         .collect()
+        .sort("game_creation_ms")
+        .tail(sample)
     )
-    df = df.tail(sample)
 
     contribs, labels, weights = [], [], []
     t = df["game_creation_ms"].to_numpy().astype(np.float64)

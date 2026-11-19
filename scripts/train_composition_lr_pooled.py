@@ -25,6 +25,12 @@ train_composition_lr) so recommend_gui can load it unchanged.
 """
 from __future__ import annotations
 
+import os
+
+# Before polars loads: its allocator otherwise keeps freed frame memory
+# committed (1.4GB at 4.4M games) while the matrices are built beside it.
+os.environ.setdefault("MIMALLOC_PURGE_DELAY", "0")
+
 import json
 import pickle
 import sys
@@ -34,7 +40,9 @@ from typing import Any
 import click
 import numpy as np
 import polars as pl
-from aram_nn.lr_matrix import RowMask, champion_vocab, chunked_csr, masked_weights
+from aram_nn.lr_matrix import (
+    RowMask, champion_vocab, chunked_csr, masked_weights, patch_rows, time_split,
+)
 from aram_nn.parquet_batches import SOURCE_ROW, iter_parquet_rows, read_team_frame
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
@@ -64,8 +72,8 @@ def filter_known(d: pl.DataFrame, known: set[int]) -> pl.DataFrame:
     return d.filter(mask)
 
 
-def raw_wr(df: pl.DataFrame, pp: str) -> dict[int, tuple[float, int]]:
-    sub = df.filter(pl.col("pp") == pp).select(
+def raw_wr(sub: pl.DataFrame) -> dict[int, tuple[float, int]]:
+    sub = sub.select(
         "blue_champions", "red_champions", pl.col("blue_wins").cast(pl.Boolean).alias("bw"))
     sides = pl.concat([
         sub.select(pl.col("blue_champions").alias("c"), pl.col("bw").cast(pl.Int64).alias("w")),
@@ -144,32 +152,38 @@ def ev(model, x, y, mask=None):
 def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, val_size,
          half_life_days, feature_set, empirical_min_games, mover_min_drift, out, seed):
     np.random.seed(seed)
+    # One frame, in file order.  The splits below are row-index arrays over it
+    # and only the feature columns are ever gathered -- once.  Filtering and
+    # re-sorting whole frames per split copied every champion list five times
+    # over (most of this step's 8GB at 4.4M games on the refresher's polars).
     df = read_team_frame(data).filter(pl.col("duration_sec") >= 300)
-    df = patch_prefix_col(df).sort("game_creation_ms")
+    created = df["game_creation_ms"].to_numpy()
+    is_cur = patch_rows(df["patch"], current_patch)
+    is_non_cur = df["patch"].is_not_null().to_numpy() & ~is_cur
+    n_cur, n_non_cur = int(is_cur.sum()), int(is_non_cur.sum())
+    if n_cur <= holdout + 100:
+        raise click.ClickException(f"{current_patch} has {n_cur} games (<= holdout)")
+    train_idx, val_idx, test_idx = time_split(created, is_cur, is_non_cur,
+                                              holdout=holdout, val_size=val_size)
+    del is_non_cur
 
-    cur = df.filter(pl.col("pp") == current_patch)
-    non_cur = df.filter(pl.col("pp") != current_patch)
-    if cur.height <= holdout + 100:
-        raise click.ClickException(f"{current_patch} has {cur.height} games (<= holdout)")
-
-    test_df = cur.tail(holdout)
-    early_cur = cur.head(cur.height - holdout)
-    val_df = non_cur.tail(val_size)
-    train_df = pl.concat([non_cur.head(non_cur.height - val_size), early_cur]).sort("game_creation_ms")
-
+    feature_cols = ["blue_champions", "red_champions", "blue_wins"]
+    train_df = df.select(feature_cols)[train_idx]
     champ_to_idx = champion_vocab(train_df)
     known = set(champ_to_idx)
     idx_to_cid = {i: c for c, i in champ_to_idx.items()}
     n_champs = len(champ_to_idx)
-    val_df = filter_known(val_df, known)
-    test_df = filter_known(test_df, known)
+    val_df = filter_known(df[val_idx], known)
+    test_df = filter_known(df[test_idx], known)
     n_tr, n_va, n_te = train_df.height, val_df.height, test_df.height
 
-    click.echo(f"train={n_tr} (pool {non_cur.height - val_size} + early-{current_patch} {early_cur.height})  "
+    click.echo(f"train={n_tr} (pool {n_non_cur - val_size} + early-{current_patch} {n_cur - holdout})  "
                f"val={n_va}  test={n_te}  champs={n_champs}")
 
     # movers (raw WR drift prev->current) for the diagnostic subset
-    wr0, wr1 = raw_wr(df, prev_patch), raw_wr(df, current_patch)
+    teams = df.select(feature_cols)
+    wr0 = raw_wr(teams.filter(pl.Series(patch_rows(df["patch"], prev_patch))))
+    wr1 = raw_wr(teams.filter(pl.Series(is_cur)))
     movers = {c for c in wr1 if c in wr0 and wr0[c][1] >= 300 and wr1[c][1] >= 300
               and abs((wr1[c][0] - wr0[c][0]) * 100) >= mover_min_drift}
     test_mask = np.array([any(int(c) in movers for c in (b + r))
@@ -181,15 +195,14 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
     # then released so the long participant pass and the fits run without them.
     # Rows are kept in one [train, val, test] block: the fits pick their rows
     # with zero sample weights instead of holding a copy per split.
-    feature_cols = ["blue_champions", "red_champions", "blue_wins"]
-    all_df = pl.concat([d.select(feature_cols) for d in (train_df, val_df, test_df)])
+    all_df = pl.concat([train_df, val_df.select(feature_cols), test_df.select(feature_cols)])
     y_all = all_df["blue_wins"].cast(pl.Float32).to_numpy().astype(np.float64)
-    t = train_df["game_creation_ms"].to_numpy().astype(np.float64)
+    t = created[train_idx].astype(np.float64)
     t_all = np.concatenate([t, *(d["game_creation_ms"].to_numpy().astype(np.float64)
                                  for d in (val_df, test_df))])
-    base_rows = np.flatnonzero((train_df["pp"] == baseline_patch).to_numpy())
-    train_rows = RowMask(train_df[SOURCE_ROW].to_numpy())
-    del df, cur, non_cur, early_cur, train_df, val_df, test_df
+    base_rows = np.flatnonzero(patch_rows(df["patch"], baseline_patch)[train_idx])
+    train_rows = RowMask(df[SOURCE_ROW].to_numpy()[train_idx])
+    del df, teams, created, is_cur, train_idx, val_idx, test_idx, train_df, val_df, test_df
 
     # Empirical champion profiles from TRAIN ONLY (no leakage; includes early current patch).
     profiles = build_champion_profiles(score_csv=score_csv, train_df=None,
