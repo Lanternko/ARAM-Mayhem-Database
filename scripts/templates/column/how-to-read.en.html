@@ -1,0 +1,32 @@
+<p>This tier list ranks champions by a <b>Bayesian-shrunk win rate</b>, not the raw win rate. The reason is simple: raw win rate is very noisy on small samples. This article explains how each number is computed, how to read it, and which questions it cannot answer.</p>
+<h2>Where the data comes from</h2>
+<p>Riot's public API does not expose ARAM Mayhem (queue 2400) matches, so ordinary stats sites cannot see this mode. arammeta's matches are collected by players from the League Client on their own computers and then aggregated. Each match records the champion, augments, items and result for all five players on both teams, and is de-duplicated by Riot's game ID, so one match is never counted twice even when several contributors saw it. The site publishes aggregate statistics only and never exposes player identities.</p>
+<h2>Three columns that matter</h2>
+<ul><li><b>Win rate</b>: the shrunk estimate; the fewer the games, the more it is pulled back toward the overall baseline.</li>
+<li><b>Games</b>: the sample size — how much to trust the number.</li>
+<li><b>Raw win rate</b>: the unadjusted figure; compare it against the shrunk one.</li></ul>
+<p>When the raw win rate is high but games are few, the shrunk win rate is pushed down noticeably — a deliberate caution that keeps you from chasing a few-game mirage.</p>
+<h2>Why not just use the raw win rate</h2>
+<p>A match result is a random event. A champion whose true win rate is 50% can land anywhere between roughly 40% and 60% over 100 games on luck alone; it takes 10,000 games before that range tightens to about 49%–51%. Rank by raw win rate and the top of the list is always whichever rarely played champion happened to get lucky, not the champion that is actually strong.</p>
+<p>Bayesian shrinkage gives every champion a block of imaginary games played at the baseline win rate:</p>
+<p><code>shrunk win rate = (wins + prior games × baseline) ÷ (games + prior games)</code></p>
+<p>Take 350 prior games at a 50% baseline. A champion with 62 wins in 100 games has a raw win rate of 62%, but a shrunk win rate of (62 + 175) ÷ (100 + 350) ≈ 52.7%. A champion at the same 62% over 10,000 games still shows 61.6%. With a large sample the adjustment barely moves the number; with a small one it filters out noise.</p>
+<p>Right after a patch ships, while games are still scarce, a champion's baseline temporarily leans on its previous-patch performance. Once the current patch has enough games, only current-patch data is used, so old results cannot hide a real balance change.</p>
+<h2>Tier thresholds</h2>
+<ul><li><b>OP</b>: shrunk win rate of 55% or higher</li>
+<li><b>T1</b>: 52% or higher</li>
+<li><b>T2</b>: 50% or higher</li>
+<li><b>T3</b>: 48% or higher</li>
+<li><b>T4</b>: 46% or higher</li>
+<li><b>T5</b>: below 46%</li></ul>
+<p>The thresholds are fixed win rates, not "the top N". The number of champions in each tier therefore changes with the patch: one patch may have many OP champions and another none. Adjacent tiers are only two percentage points apart, so a champion sitting on a threshold can move a tier with the next data refresh. Do not read too much into that.</p>
+<h2>How to read augment numbers</h2>
+<p>On a champion page, augments are not ranked by "win rate when holding this augment" but by the gap against that champion's own baseline (lift). On a champion that already wins 56% of games, every augment looks strong; only after subtracting the champion's own win rate can you see what the augment itself adds.</p>
+<p>Augments also carry a direction problem: some are mostly picked, or mostly pay off, in games that are already being won, so a high win rate does not mean picking it causes the win. Rankings therefore weigh the shrunk gap together with pick rate, and combinations with too few games are not listed.</p>
+<h2>What these numbers cannot tell you</h2>
+<ul><li><b>A single match</b>: 55% means about 55 wins in 100 games, not that this game is won.</li>
+<li><b>Your own results</b>: the figures average over all players. For mechanically demanding champions the average understates what a practiced player gets.</li>
+<li><b>Cause and effect</b>: the statistics describe associations in past games. Team composition, the enemy lineup and augment choices all move the result at the same time.</li>
+<li><b>Other patches</b>: every number is labelled with its patch. After balance changes, last patch's conclusion may no longer hold.</li></ul>
+<h2>Practical use</h2>
+<p>Read the tier first, then the game count. OP and T1 champions perform clearly better on average in this mode; around T3 the differences are small, and playing a champion you know usually beats chasing half a percentage point. On a champion page, favour augments and items with both a large gap and a large sample. Treat a large gap on a small sample as a hypothesis worth trying, not a conclusion.</p>

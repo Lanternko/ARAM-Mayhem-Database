@@ -1,0 +1,204 @@
+<!doctype html><html lang='zh-Hans'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>拔剑吧：谁用最强，怎么出装 | arammeta</title><meta name='description' content='依 lift（已扣除英雄本身强度）排名，煞蜜拉以 +20.7pp 居首；附实测最佳出装与“双开不拖”的证据。'><link rel='canonical' href='https://arammeta.com/zh-cn/column/draw-your-sword/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/draw-your-sword/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/draw-your-sword/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/draw-your-sword/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/draw-your-sword/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "拔剑吧：谁用最强，怎么出装", "description": "依 lift（已扣除英雄本身强度）排名，煞蜜拉以 +20.7pp 居首；附实测最佳出装与“双开不拖”的证据。", "datePublished": "2026-06-28", "inLanguage": "zh-Hans", "mainEntityOfPage": "https://arammeta.com/zh-cn/column/draw-your-sword/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav></div></header><main><p class='eyebrow'>海克斯深入</p><h1>拔剑吧：谁用最强，怎么出装</h1><p class='lede'>依 lift（已扣除英雄本身强度）排名，煞蜜拉以 +20.7pp 居首；附实测最佳出装与“双开不拖”的证据。</p><p class='updated'>发布日期：2026-06-28</p><article class='art-body'><p><b>拔剑吧</b>（Draw Your Sword）：附近没有敌人时蓄力，下次攻击向前突进斩击、造成额外伤害。本质是“进场 ＋ 收割”的爆发型海克斯。</p>
+<p>下面依 <b>lift</b> 排名 —— 也就是“装了这个海克斯后，胜率比该英雄平常高多少”，已扣除英雄本身的强度，所以衡量的是“这个海克斯成就了谁”，而不是谁本来就强。</p>
+<h2>最强使用者（依 lift）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="莎弥拉"><div class="art-meta"><div class="nm">莎弥拉</div><div class="sb">46.4% → 67.1% · 2,171 场</div></div><span class="lf">+20.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="厄斐琉斯"><div class="art-meta"><div class="nm">厄斐琉斯</div><div class="sb">52.3% → 67.9% · 589 场</div></div><span class="lf">+15.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="格雷福斯"><div class="art-meta"><div class="nm">格雷福斯</div><div class="sb">50.7% → 65.2% · 5,283 场</div></div><span class="lf">+14.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="凯特琳"><div class="art-meta"><div class="nm">凯特琳</div><div class="sb">52.5% → 67.1% · 1,330 场</div></div><span class="lf">+14.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="韦鲁斯"><div class="art-meta"><div class="nm">韦鲁斯</div><div class="sb">48.6% → 62.0% · 1,044 场</div></div><span class="lf">+13.3<small>pp</small></span></div>
+<p>煞蜜拉登顶的原因很直觉：她本体胜率只有 46%、偏弱，痛点正是“进不去”；拔剑吧的突进刚好补足进场，于是胜率直接喷到 67%。这个海克斯不是锦上添花，而是补她的命门。</p>
+<h2>推荐核心出装</h2>
+<p>全都是实测正向的单品，依建议顺序：</p>
+<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="搜集者"><div class="it-nm">搜集者</div><div class="it-tag">①核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="无尽之刃"><div class="it-nm">无尽之刃</div><div class="it-tag">②核心</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="贪婪护胫"><div class="it-nm">贪婪护胫</div><div class="it-tag">③鞋</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="傲慢"><div class="it-nm">傲慢</div><div class="it-tag">④滚雪球</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="多明尼克的问候"><div class="it-nm">多明尼克</div><div class="it-tag">⑤破甲</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="死亡之舞"><div class="it-nm">死亡之舞</div><div class="it-tag">⑥防爆</div></div></div>
+<ul><li><b>① 搜集者</b> — 最便宜、斩杀 ＋ 暴击，最快成战力</li>
+<li><b>② 无尽之刃</b> — 暴击乘区核心</li>
+<li><b>③ 贪婪护胫</b> — 补移速 ＋ 击杀叠吸血（被风筝凶可提前）</li>
+<li><b>④ 傲慢</b> — 靠击杀滚 AD，越早越强</li>
+<li><b>⑤ 多明尼克的问候</b> — 对面有坦克／高护甲再提前</li>
+<li><b>⑥ 死亡之舞</b> — 后期防爆收尾</li></ul>
+<h2>三个关键心得</h2>
+<ul><li><b>搜集者 ＋ 傲慢双开不拖节奏。</b>四象限实测双开 67.4% 是最高，平均时长只比单开多约 30 秒 —— 两件都是中价位即战力，战力曲线连续上升，没有空窗。</li>
+<li><b>不要叠两件吸血。</b>嗜血者（61.9%）与无尽饥渴（60.9%）在骨架上都明显低于基准；爆发流要的是伤害，不是续航。</li>
+<li><b>鞋子要出，首选贪婪护胫（67.2%）。</b>“不出鞋胜率较高”是反向因果（赢太快来不及买第六件），不是策略；对面 AP／控制多时改水星之靴。</li></ul>
+<p><b>lift</b> ＝ 装此海克斯后胜率 − 该英雄不带此海克斯的胜率（pp）。资料：arammeta 收集的对局 · queue 2400（Mayhem）· patch 16.12 · 每英雄带此海克斯 ≥150 场。</p></article><section><h2>其他文章</h2><ul><li><a href='/zh-cn/column/sprees-not-snowball/'>你以为的滚雪球，不是滚雪球</a></li><li><a href='/zh-cn/column/skill-scaling/'>操作系数：谁吃操作，谁专屠低分</a></li><li><a href='/zh-cn/column/scaling-snowball/'>后期 × 滚雪球：英雄定位图</a></li><li><a href='/zh-cn/column/how-to-read/'>如何阅读这份 Tier List</a></li></ul><p><a href='/zh-cn/column/'>所有文章</a></p></section><section><h2>接著看数据</h2><ul class='art-links'><li><a href='/zh-cn/'>英雄榜</a></li><li><a href='/zh-cn/augments/'>海克斯胜率</a></li><li><a href='/zh-cn/draft/'>选角分析</a></li><li><a href='/zh-cn/changes/'>版本变动</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav><p>arammeta 并未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 与其相关资产为 Riot Games, Inc. 的商标或注册商标。</p></div></footer></body></html>

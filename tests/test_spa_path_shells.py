@@ -366,11 +366,18 @@ class SpaPathShellTests(unittest.TestCase):
                 site_url="https://arammeta.com/",
                 build_date="2026-07-15",
             )
-            self.assertEqual(len(written), 10)
+            self.assertEqual(
+                len([path for path in written if "column" not in path.parts]), 10,
+            )
             privacy = (root / "privacy" / "index.html").read_text(encoding="utf-8")
             self.assertIn("Google AdSense", privacy)
             self.assertIn("Meta Pick 排行榜", privacy)
-            self.assertIn("ca-pub-8593280194977470", privacy)
+            # Utility pages carry no ad code; the About page (content) does.
+            self.assertNotIn("ca-pub-8593280194977470", privacy)
+            self.assertIn(
+                "ca-pub-8593280194977470",
+                (root / "about" / "index.html").read_text(encoding="utf-8"),
+            )
             self.assertIn("最後更新：2026-07-15", privacy)
             self.assertTrue((root / "about" / "index.html").is_file())
             self.assertTrue((root / "contact" / "index.html").is_file())

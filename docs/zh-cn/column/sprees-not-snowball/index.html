@@ -1,0 +1,218 @@
+<!doctype html><html lang='zh-Hans'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>你以为的滚雪球，不是滚雪球 | arammeta</title><meta name='description' content='连杀榜和“把比赛提早收掉”的相关性 ρ=−0.03，趋近于零。最快关门的是约瑞科和一排零连杀辅助；连杀王图奇、劫反而赢得慢。'><link rel='canonical' href='https://arammeta.com/zh-cn/column/sprees-not-snowball/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/sprees-not-snowball/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/sprees-not-snowball/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/sprees-not-snowball/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/sprees-not-snowball/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "你以为的滚雪球，不是滚雪球", "description": "连杀榜和“把比赛提早收掉”的相关性 ρ=−0.03，趋近于零。最快关门的是约瑞科和一排零连杀辅助；连杀王图奇、劫反而赢得慢。", "datePublished": "2026-07-07", "inLanguage": "zh-Hans", "mainEntityOfPage": "https://arammeta.com/zh-cn/column/sprees-not-snowball/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav></div></header><main><p class='eyebrow'>功率曲线</p><h1>你以为的滚雪球，不是滚雪球</h1><p class='lede'>连杀榜和“把比赛提早收掉”的相关性 ρ=−0.03，趋近于零。最快关门的是约瑞科和一排零连杀辅助；连杀王图奇、劫反而赢得慢。</p><p class='updated'>发布日期：2026-07-07</p><article class='art-body'><p>上一篇〈英雄定位图〉的 X 轴叫“滚雪球”——平均最大连杀与多杀的加权。当时我们埋了一句但书：“滚雪球量的是人头爆发，不直接等于把比赛提早结束”。这次直接把这句话抓来验证，结果但书才是主角。</p>
+<p>先定义“收官速度”：</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>收官速度 ＝ 该英雄胜局的中位时长 − 全体胜局中位（17.6 分）</b></p>
+<p>负值代表赢得比平均快。如果连杀真的会滚成提早胜利，连杀轴和收官速度应该高度相关 —— 实测 <b>Spearman ρ = −0.03</b>（n=173），<b>两者完全无关</b>。连杀榜量的是“个人击杀高光”，收官是“全队”的事，资料说这是两个独立的能力。</p>
+<h2>谁真的把胜利收得快</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="约里克"><div class="art-meta"><div class="nm">约里克</div><div class="sb">胜局中位 16.7 分 · 42% 在 16 分内收掉 · 16,413 场</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="亚索"><div class="art-meta"><div class="nm">亚索</div><div class="sb">胜局中位 16.9 分 · 40% 在 16 分内 · 80,180 场</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="金克丝"><div class="art-meta"><div class="nm">金克丝</div><div class="sb">胜局中位 16.9 分 · 40% 在 16 分内 · 94,147 场</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="格温"><div class="art-meta"><div class="nm">格温</div><div class="sb">胜局中位 17.0 分 · 39% 在 16 分内 · 28,063 场</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="塞拉斯"><div class="art-meta"><div class="nm">塞拉斯</div><div class="sb">胜局中位 17.0 分 · 38% 在 16 分内 · 59,989 场</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
+<p>榜首是<b>约里克</b> —— 连杀榜第 147 名。他推塔、不收人头，但他的胜局比全体中位快了近一分钟。在大乱斗，把兵线和塔滚起来，比把人头滚起来收得快。吉茵珂丝是榜上唯一的连杀大户（第 20 名）：她是少数两边都占的例外，不是规则。</p>
+<h2>连杀王，却赢得慢</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="图奇"><div class="art-meta"><div class="nm">图奇</div><div class="sb">连杀榜 #21 · 胜局中位 18.1 分 · 82,953 场</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="普朗克"><div class="art-meta"><div class="nm">普朗克</div><div class="sb">连杀榜 #9 · 胜局中位 17.9 分 · 70,797 场</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="劫"><div class="art-meta"><div class="nm">劫</div><div class="sb">连杀榜 #18 · 胜局中位 17.9 分 · 78,616 场</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="泰隆"><div class="art-meta"><div class="nm">泰隆</div><div class="sb">连杀榜 #22 · 胜局中位 17.9 分 · 40,747 场</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="梅尔"><div class="art-meta"><div class="nm">梅尔</div><div class="sb">连杀榜 #3 · 胜局中位 17.8 分 · 85,538 场</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
+<p>刺客和收割型射手农得出大连杀，但连杀没有转换成节奏 —— 他们的胜局反而拖得比平均长。最极端的是<b>萨科</b>：连杀不低（前 1/4），却是全英雄倒数第 2 慢（+54s），而且等一下他还会在“最后期”榜再出现一次。</p>
+<h2>零连杀、最快关门的辅助</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="塔里克"><div class="art-meta"><div class="nm">塔里克</div><div class="sb">连杀榜 #166／173 · 胜局中位 17.1 分 · 21,564 场</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="娑娜"><div class="art-meta"><div class="nm">娑娜</div><div class="sb">连杀榜 #162 · 胜局中位 17.1 分 · 55,464 场</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="艾翁"><div class="art-meta"><div class="nm">艾翁</div><div class="sb">连杀榜 #171 · 胜局中位 17.1 分 · 20,796 场</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="璐璐"><div class="art-meta"><div class="nm">璐璐</div><div class="sb">连杀榜 #172 · 胜局中位 17.3 分 · 39,842 场</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="迦娜"><div class="art-meta"><div class="nm">迦娜</div><div class="sb">连杀榜 #169 · 胜局中位 17.4 分 · 41,546 场</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
+<p>这排是整篇的关键证据：塔里克、索娜、埃尔文的连杀全在倒数 12 名内，但他们的胜局收得比全体快 —— 因为<b>被辅助喂起来的队伍会快速关门，连杀记在队友头上</b>。“滚雪球”是队伍的事，连杀榜只记个人。</p>
+<h2>那，真正的前期怪／后期怪是谁？</h2>
+<p>比较干净的量法是把两头直接拉开：<b>左边是 16 分内结束的局的胜率，右边是拖过 22 分的局的胜率</b>（中间段刻意丢掉）。</p>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="奥恩"><div class="art-meta"><div class="nm">奥恩</div><div class="sb">41.0% → 57.1% · 22,905 场</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="萨科"><div class="art-meta"><div class="nm">萨科</div><div class="sb">38.0% → 51.0% · 40,300 场</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="图奇"><div class="art-meta"><div class="nm">图奇</div><div class="sb">41.6% → 54.4% · 38,266 场</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="萨勒芬妮"><div class="art-meta"><div class="nm">萨勒芬妮</div><div class="sb">63.4% → 50.1% · 40,015 场</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="彗"><div class="art-meta"><div class="nm">彗</div><div class="sb">61.8% → 49.3% · 27,456 场</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="赛恩"><div class="art-meta"><div class="nm">赛恩</div><div class="sb">63.6% → 51.9% · 31,327 场</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
+<p><b>奥恩</b>是全场最大爬坡：他的神器升级等于白送队友上千金的装备属性，快局 41% 惨输、拖过 22 分变 57.1%，而且他同时是全场第 4 慢收官（+48s）—— 标准的“拖到后期才赢”。经典模式的大型资料集（8M 场、钻石以上）也把鄂尔标成平手局爬坡最猛的英雄之一，两个完全不同的资料集对到同一只。<b>萨勒芬妮</b>则是最大前期怪：16 分内结束的局她赢将近三分之二（63.4%），拖过 22 分就掉回五五波。而<b>萨科、图奇</b>在这张榜再次出现 —— 连杀农得多、赢得慢、越后期越强，三个讯号指向同一个结论：他们的连杀是“拖出来的”，不是“滚出来的”。</p>
+<h2>一个诚实的但书</h2>
+<p>收官速度的效果量<b>不大</b>：全英雄的胜局中位只在全体中位 ±1 分钟内晃 —— 时长是 10 个人共同决定的，单一英雄的影响天生会被稀释。它也是<b>描述性</b>统计：长局不一定是他“拖”出来的，可能只是势均力敌的局才拖得长。另外，前后期倾向会随版本窗口变：卡萨丁上个窗口读起来近乎平坦，这个窗口是 −3.3pp 的轻微前期倾向 —— 整条轴跨版本很稳（r≈0.86–0.93），但中期尖峰型的个别英雄要小心读。</p>
+<p>资料：arammeta 收集的对局 · queue 2400（Mayhem）· 版本 16.11–16.13 · 951,931 场（收集器边跑边写，两次扫描差 38 场）· 每英雄胜、败局各 ≥500 场 · 收官速度＝胜局中位时长 − 全体胜局中位 17.6 分 · 连杀轴 vs 收官速度 Spearman ρ=−0.03 · 前后期＝WR(≥22 分) − WR(≤16 分)。</p></article><section><h2>其他文章</h2><ul><li><a href='/zh-cn/column/skill-scaling/'>操作系数：谁吃操作，谁专屠低分</a></li><li><a href='/zh-cn/column/scaling-snowball/'>后期 × 滚雪球：英雄定位图</a></li><li><a href='/zh-cn/column/draw-your-sword/'>拔剑吧：谁用最强，怎么出装</a></li><li><a href='/zh-cn/column/how-to-read/'>如何阅读这份 Tier List</a></li></ul><p><a href='/zh-cn/column/'>所有文章</a></p></section><section><h2>接著看数据</h2><ul class='art-links'><li><a href='/zh-cn/'>英雄榜</a></li><li><a href='/zh-cn/augments/'>海克斯胜率</a></li><li><a href='/zh-cn/draft/'>选角分析</a></li><li><a href='/zh-cn/changes/'>版本变动</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav><p>arammeta 并未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 与其相关资产为 Riot Games, Inc. 的商标或注册商标。</p></div></footer></body></html>

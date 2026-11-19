@@ -1,0 +1,218 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Kill sprees do not equal snowballing | arammeta</title><meta name='description' content='Correlation between the kill-spree axis and actually closing games early: rho = −0.03, essentially zero. The fastest closers are Yorick and a row of zero-spree supports, while spree kings like Twitch and Zed win slow.'><link rel='canonical' href='https://arammeta.com/en/column/sprees-not-snowball/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/sprees-not-snowball/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/sprees-not-snowball/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/sprees-not-snowball/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/sprees-not-snowball/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "Kill sprees do not equal snowballing", "description": "Correlation between the kill-spree axis and actually closing games early: rho = −0.03, essentially zero. The fastest closers are Yorick and a row of zero-spree supports, while spree kings like Twitch and Zed win slow.", "datePublished": "2026-07-07", "inLanguage": "en", "mainEntityOfPage": "https://arammeta.com/en/column/sprees-not-snowball/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav></div></header><main><p class='eyebrow'>Power curve</p><h1>Kill sprees do not equal snowballing</h1><p class='lede'>Correlation between the kill-spree axis and actually closing games early: rho = −0.03, essentially zero. The fastest closers are Yorick and a row of zero-spree supports, while spree kings like Twitch and Zed win slow.</p><p class='updated'>Published: 2026-07-07</p><article class='art-body'><p>The previous champion-map article used an X axis called "snowball" — a weighted average of largest killing spree and multi-kill. We buried a caveat back then: "snowball measures kill bursts, it does not directly mean ending games early." This time we put that sentence on trial, and the caveat turned out to be the whole story.</p>
+<p>First, define win tempo:</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>Win tempo = median duration of that champion's WINS − global median win (17.6 min)</b></p>
+<p>Negative = wins faster than average. If sprees really rolled into early wins, the spree axis and win tempo should correlate strongly. Measured: <b>Spearman rho = −0.03</b> (n=173) — <b>no relationship at all</b>. The spree axis measures personal kill highlights; closing a game is a team property. The data says these are two independent skills.</p>
+<h2>Who actually closes games fast</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yorick.png" alt="Yorick"><div class="art-meta"><div class="nm">Yorick</div><div class="sb">median win 16.7 min · 42% closed by 16 min · 16,413 games</div></div><span class="lf" style="color:#3aa0ff">−52<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Yasuo.png" alt="Yasuo"><div class="art-meta"><div class="nm">Yasuo</div><div class="sb">median win 16.9 min · 40% by 16 min · 80,180 games</div></div><span class="lf" style="color:#3aa0ff">−40<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jinx.png" alt="Jinx"><div class="art-meta"><div class="nm">Jinx</div><div class="sb">median win 16.9 min · 40% by 16 min · 94,147 games</div></div><span class="lf" style="color:#3aa0ff">−38<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gwen.png" alt="Gwen"><div class="art-meta"><div class="nm">Gwen</div><div class="sb">median win 17.0 min · 39% by 16 min · 28,063 games</div></div><span class="lf" style="color:#3aa0ff">−34<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sylas.png" alt="Sylas"><div class="art-meta"><div class="nm">Sylas</div><div class="sb">median win 17.0 min · 38% by 16 min · 59,989 games</div></div><span class="lf" style="color:#3aa0ff">−33<small>s</small></span></div>
+<p>The fastest closer is <b>Yorick</b> — spree rank 147. He pushes towers, not kill feeds, and his wins land almost a full minute under the global median. In ARAM, snowballing waves and towers closes games faster than snowballing kills. Jinx is the one big spree champ on the list (rank 20): she is the exception that holds both ends, not the rule.</p>
+<h2>Spree kings who win slow</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">spree rank #21 · median win 18.1 min · 82,953 games</div></div><span class="lf" style="color:#e2574b">+33<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Gangplank.png" alt="Gangplank"><div class="art-meta"><div class="nm">Gangplank</div><div class="sb">spree rank #9 · median win 17.9 min · 70,797 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Zed.png" alt="Zed"><div class="art-meta"><div class="nm">Zed</div><div class="sb">spree rank #18 · median win 17.9 min · 78,616 games</div></div><span class="lf" style="color:#e2574b">+23<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Talon.png" alt="Talon"><div class="art-meta"><div class="nm">Talon</div><div class="sb">spree rank #22 · median win 17.9 min · 40,747 games</div></div><span class="lf" style="color:#e2574b">+20<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Mel.png" alt="Mel"><div class="art-meta"><div class="nm">Mel</div><div class="sb">spree rank #3 · median win 17.8 min · 85,538 games</div></div><span class="lf" style="color:#e2574b">+16<small>s</small></span></div>
+<p>Assassins and cleanup carries farm huge sprees, but the sprees do not convert into tempo — their wins actually run longer than average. The extreme case is <b>Shaco</b>: top-quarter sprees, yet the 2nd-slowest closer of all champions (+54s) — and he is about to show up again on the late-game board below.</p>
+<h2>Zero sprees, fastest closers: the supports</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taric.png" alt="Taric"><div class="art-meta"><div class="nm">Taric</div><div class="sb">spree rank #166 of 173 · median win 17.1 min · 21,564 games</div></div><span class="lf" style="color:#3aa0ff">−30<small>s</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sona.png" alt="Sona"><div class="art-meta"><div class="nm">Sona</div><div class="sb">spree rank #162 · median win 17.1 min · 55,464 games</div></div><span class="lf" style="color:#3aa0ff">−28<small>s</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ivern.png" alt="Ivern"><div class="art-meta"><div class="nm">Ivern</div><div class="sb">spree rank #171 · median win 17.1 min · 20,796 games</div></div><span class="lf" style="color:#3aa0ff">−24<small>s</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="Lulu"><div class="art-meta"><div class="nm">Lulu</div><div class="sb">spree rank #172 · median win 17.3 min · 39,842 games</div></div><span class="lf" style="color:#3aa0ff">−15<small>s</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Janna.png" alt="Janna"><div class="art-meta"><div class="nm">Janna</div><div class="sb">spree rank #169 · median win 17.4 min · 41,546 games</div></div><span class="lf" style="color:#3aa0ff">−12<small>s</small></span></div>
+<p>This row is the key evidence: Taric, Sona and Ivern all sit in the bottom 12 of the spree board, yet their wins close faster than average — because <b>a team fed by its enchanter closes fast while the kills land on someone else's scoreboard</b>. Snowballing is a team property; the spree board only credits individuals.</p>
+<h2>So who are the real early and late champions?</h2>
+<p>The cleaner measure pulls the two ends apart directly: <b>the left number is the win rate in games that end by 16 minutes, the right is in games past 22 minutes</b> (the middle is dropped on purpose).</p>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Ornn.png" alt="Ornn"><div class="art-meta"><div class="nm">Ornn</div><div class="sb">41.0% → 57.1% · 22,905 games</div></div><span class="lf" style="color:#3aa0ff">+16.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Shaco.png" alt="Shaco"><div class="art-meta"><div class="nm">Shaco</div><div class="sb">38.0% → 51.0% · 40,300 games</div></div><span class="lf" style="color:#3aa0ff">+13.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Twitch.png" alt="Twitch"><div class="art-meta"><div class="nm">Twitch</div><div class="sb">41.6% → 54.4% · 38,266 games</div></div><span class="lf" style="color:#3aa0ff">+12.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Seraphine.png" alt="Seraphine"><div class="art-meta"><div class="nm">Seraphine</div><div class="sb">63.4% → 50.1% · 40,015 games</div></div><span class="lf" style="color:#e2574b">−13.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Hwei.png" alt="Hwei"><div class="art-meta"><div class="nm">Hwei</div><div class="sb">61.8% → 49.3% · 27,456 games</div></div><span class="lf" style="color:#e2574b">−12.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="Sion"><div class="art-meta"><div class="nm">Sion</div><div class="sb">63.6% → 51.9% · 31,327 games</div></div><span class="lf" style="color:#e2574b">−11.7<small>pp</small></span></div>
+<p><b>Ornn</b> is the biggest climber in the game: his Masterwork upgrades hand teammates a thousand gold of free item stats, so he loses short games hard (41%) and wins long ones (57.1%) — and he is also the 4th-slowest closer (+48s). A classic "wins by dragging it out" profile. The big Summoner's Rift dataset (8M games, Diamond+) also flags Ornn as one of the strongest even-state climbers — two completely different datasets landing on the same champion. <b>Seraphine</b> is the biggest early-game monster: she wins nearly two thirds (63.4%) of games that end by 16 minutes, then falls back to a coin flip past 22. And <b>Shaco and Twitch</b> reappear here — big sprees, slow wins, stronger the later it gets. Three signals, one conclusion: their sprees are farmed in long games, not rolled into fast ones.</p>
+<h2>One honest caveat</h2>
+<p>The win-tempo effect is <b>small</b>: every champion's median win sits within about ±1 minute of the global median — game length is decided by ten players, so any one champion's influence is diluted by construction. It is also <b>descriptive</b>: a long game is not necessarily one he dragged out; even matchups simply run longer. And the early/late tilt shifts with the patch window: Kassadin read as nearly flat in the previous window and −3.3pp mildly early in this one — the axis is very stable across patches overall (r≈0.86–0.93), but read individual mid-game-spike champions with care.</p>
+<p>Data: matches collected by arammeta · queue 2400 (Mayhem) · patches 16.11–16.13 · 951,931 games (collector writes while we scan; the two passes differ by 38 games) · ≥500 wins and ≥500 losses per champion · win tempo = median win duration − global median win 17.6 min · spree axis vs win tempo Spearman rho = −0.03 · early/late = WR(≥22 min) − WR(≤16 min).</p></article><section><h2>More articles</h2><ul><li><a href='/en/column/skill-scaling/'>Skill-scaling: who rewards skill, who farms low elo</a></li><li><a href='/en/column/scaling-snowball/'>Late game × snowball: a champion map</a></li><li><a href='/en/column/draw-your-sword/'>Draw Your Sword: who abuses it, and how to build</a></li><li><a href='/en/column/how-to-read/'>How to read this tier list</a></li></ul><p><a href='/en/column/'>All articles</a></p></section><section><h2>Check the live data</h2><ul class='art-links'><li><a href='/en/'>Champion tier list</a></li><li><a href='/en/augments/'>Augment win rates</a></li><li><a href='/en/draft/'>Draft analysis</a></li><li><a href='/en/changes/'>Patch changes</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav><p>arammeta isn&#x27;t endorsed by Riot Games and doesn&#x27;t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</p></div></footer></body></html>

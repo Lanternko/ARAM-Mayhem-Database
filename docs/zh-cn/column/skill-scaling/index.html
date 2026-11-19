@@ -1,0 +1,205 @@
+<!doctype html><html lang='zh-Hans'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>操作系数：谁吃操作，谁专屠低分 | arammeta</title><meta name='description' content='同一只英雄，在高手局和菜鸡局的胜率差多少？泛 +5.0pp、赛恩 −4.3pp —— 一张表看谁吃操作、谁只会屠低分。'><link rel='canonical' href='https://arammeta.com/zh-cn/column/skill-scaling/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/skill-scaling/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/skill-scaling/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/skill-scaling/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/skill-scaling/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "操作系数：谁吃操作，谁专屠低分", "description": "同一只英雄，在高手局和菜鸡局的胜率差多少？泛 +5.0pp、赛恩 −4.3pp —— 一张表看谁吃操作、谁只会屠低分。", "datePublished": "2026-06-28", "inLanguage": "zh-Hans", "mainEntityOfPage": "https://arammeta.com/zh-cn/column/skill-scaling/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav></div></header><main><p class='eyebrow'>操作系数</p><h1>操作系数：谁吃操作，谁专屠低分</h1><p class='lede'>同一只英雄，在高手局和菜鸡局的胜率差多少？泛 +5.0pp、赛恩 −4.3pp —— 一张表看谁吃操作、谁只会屠低分。</p><p class='updated'>发布日期：2026-06-28</p><article class='art-body'><p>大乱斗随机发英雄，又靠配对把胜率拉回五五波，所以“牌位”几乎被磨平 —— 出装大家抄一样的、英雄又不能选。那 ARAM 还有没有高低手之分？有，只是它不藏在“选什么”，而藏在“同一只英雄，你榨得出多少”。</p>
+<p>我把每一场依玩家平均效率分成<b>高分局（前 25%）</b>与<b>低分局（后 25%）</b>，再看每只英雄在这两种局里的胜率差。这个差就是<b>操作系数</b>：</p>
+<p style="text-align:center;font-size:15px;margin:16px 0"><b>操作系数 ＝ 高分局胜率 − 低分局胜率</b></p>
+<p>正值代表<b>吃操作</b> —— 高手手上更强；负值代表<b>低分强势</b> —— 在弱局屠杀、遇到高手就现形。下面每一列，<b>箭头左边是低分局胜率、右边是高分局胜率</b>。</p>
+<h2>最吃操作（高手手上更强）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vayne.png" alt="薇恩"><div class="art-meta"><div class="nm">薇恩</div><div class="sb">55.0% → 60.0% · 23,659 场</div></div><span class="lf" style="color:#3aa0ff">+5.0<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Lulu.png" alt="璐璐"><div class="art-meta"><div class="nm">璐璐</div><div class="sb">46.1% → 50.6% · 9,704 场</div></div><span class="lf" style="color:#3aa0ff">+4.4<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Taliyah.png" alt="塔莉垭"><div class="art-meta"><div class="nm">塔莉垭</div><div class="sb">46.3% → 50.5% · 7,804 场</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Vladimir.png" alt="弗拉基米尔"><div class="art-meta"><div class="nm">弗拉基米尔</div><div class="sb">46.5% → 50.7% · 12,907 场</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Smolder.png" alt="斯莫德"><div class="art-meta"><div class="nm">斯莫德</div><div class="sb">45.6% → 49.8% · 23,583 场</div></div><span class="lf" style="color:#3aa0ff">+4.1<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Quinn.png" alt="奎因"><div class="art-meta"><div class="nm">奎因</div><div class="sb">43.8% → 48.1% · 6,628 场</div></div><span class="lf" style="color:#3aa0ff">+4.2<small>pp</small></span></div>
+<h2>最低分强势（专屠弱局）</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/MonkeyKing.png" alt="孙悟空"><div class="art-meta"><div class="nm">孙悟空</div><div class="sb">51.9% → 47.4% · 9,927 场</div></div><span class="lf" style="color:#e2574b">−4.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Sion.png" alt="赛恩"><div class="art-meta"><div class="nm">赛恩</div><div class="sb">61.3% → 57.0% · 18,598 场</div></div><span class="lf" style="color:#e2574b">−4.3<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Jax.png" alt="贾克斯"><div class="art-meta"><div class="nm">贾克斯</div><div class="sb">53.8% → 49.6% · 10,341 场</div></div><span class="lf" style="color:#e2574b">−4.2<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Nasus.png" alt="内瑟斯"><div class="art-meta"><div class="nm">内瑟斯</div><div class="sb">53.0% → 49.2% · 13,004 场</div></div><span class="lf" style="color:#e2574b">−3.8<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Swain.png" alt="斯维因"><div class="art-meta"><div class="nm">斯维因</div><div class="sb">49.5% → 45.9% · 20,924 场</div></div><span class="lf" style="color:#e2574b">−3.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">6</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Karthus.png" alt="卡尔萨斯"><div class="art-meta"><div class="nm">卡尔萨斯</div><div class="sb">52.3% → 48.8% · 24,173 场</div></div><span class="lf" style="color:#e2574b">−3.5<small>pp</small></span></div>
+<h2>读出来的故事</h2>
+<p>排行几乎照著老常识走：<b>吃操作</b>那端清一色是机制难、上限高的后排 carry（泛、史矛德、贝尔薇斯）跟要搭 carry 的<b>璐璐</b> —— 高手才喂得动、站得稳。<b>低分强势</b>那端则是好上手的前排战坦（赛恩、纳瑟斯、悟空）：点一点就有贡献，在乱打的局里屠杀，一旦对手会闪、会集火，就被针对。</p>
+<p>赛恩是最戏剧化的例子：低分局他有 <b>61.3%</b> 胜率（全英雄数一数二），到高分局掉到 57.0% —— 还是强，但“躺赢”那一截被抽掉了。</p>
+<h2>一个诚实的但书</h2>
+<p>这个讯号是<b>真的</b>（跨版本稳定、统计显著），但<b>不大</b> —— 最极端也就 ±5pp 上下。它能告诉你“这只吃不吃操作”，却<b>不能</b>反推某个玩家的牌位：大乱斗胜负杂讯太大，个人分数会被拉回中段。把它当“选角／练哪只”的参考刚刚好，别当天梯分。</p>
+<p>资料：arammeta 收集的对局 · queue 2400（Mayhem）· 版本 16.11–16.13 · 对局水平＝玩家“同英雄伤害／经济效率”，高低分各取前后 25%，每英雄样本 ≥800 场 · 操作系数跨版本相关 r≈0.5。</p></article><section><h2>其他文章</h2><ul><li><a href='/zh-cn/column/sprees-not-snowball/'>你以为的滚雪球，不是滚雪球</a></li><li><a href='/zh-cn/column/scaling-snowball/'>后期 × 滚雪球：英雄定位图</a></li><li><a href='/zh-cn/column/draw-your-sword/'>拔剑吧：谁用最强，怎么出装</a></li><li><a href='/zh-cn/column/how-to-read/'>如何阅读这份 Tier List</a></li></ul><p><a href='/zh-cn/column/'>所有文章</a></p></section><section><h2>接著看数据</h2><ul class='art-links'><li><a href='/zh-cn/'>英雄榜</a></li><li><a href='/zh-cn/augments/'>海克斯胜率</a></li><li><a href='/zh-cn/draft/'>选角分析</a></li><li><a href='/zh-cn/changes/'>版本变动</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/zh-cn/'>首页</a><a href='/zh-cn/column/' aria-current='page'>专栏</a><a href='/about/'>关于</a><a href='/zh-cn/feedback/'>回馈与联络</a></nav><p>arammeta 并未获 Riot Games 认可，也不代表 Riot Games 或任何正式参与管理 Riot Games 相关资产者的观点。Riot Games 与其相关资产为 Riot Games, Inc. 的商标或注册商标。</p></div></footer></body></html>

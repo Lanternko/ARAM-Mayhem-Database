@@ -1,22 +1,23 @@
 ---
 name: write-column
-description: "Dormant guard for the unpublished ARAMMeta Articles/column feature. Use only when the user explicitly asks to revive, design, or write a site column/article; do not assume the old ARTICLES array still exists."
+description: "Write or edit an ARAMMeta column article (專欄). Use when the user asks to write, revise, or add a site article; articles are static pages built from scripts/templates/column/, not an app view."
 metadata:
-  version: "2.0"
-  last_updated: "2026-08-12"
-  status: dormant
+  version: "3.0"
+  last_updated: "2026-11-19"
+  status: active
   scope: project
 ---
 
-# Articles feature is dormant
+# Column articles
 
-The old skill edited an `ARTICLES` array inside a single-file `scripts/build_tier_list.py`. That architecture and the four-tab site description are superseded; Articles are not part of the current published information architecture.
+Articles are static, crawlable pages at `/column/<id>/` with `/en` and `/zh-cn` mirrors. The page builder is `src/aram_nn/site/column.py`; it owns the content contract (read its module docstring first). Do not edit generated `docs/` and do not revive the old `ARTICLES` array in `site.js`.
 
-If the user asks only to write prose, create a reviewable draft outside generated `docs/` and do not wire it into production. If the user explicitly asks to revive the product feature:
+To add or change an article:
 
-1. Read `../../../PRODUCT.md` and `../../../DESIGN.md`.
-2. Inspect the current template/engine/renderer split and confirm the current page inventory.
-3. Propose the content model, route, localization, cover asset, accessibility, performance, and publishing contract before implementation.
-4. Use `../../../runbooks/site-deploy.md` only after the feature is implemented and approved for deployment.
+1. Read `../../../PRODUCT.md` and `../../../DESIGN.md` for tone and evidence rules.
+2. Edit `scripts/templates/column/articles.json` (metadata, newest first) and the `<id>.zh.html` / `<id>.en.html` body fragments. zh-Hans is derived from zh-Hant at build time; never hand-write it.
+3. State the metric, the sample, the patch range and the limits in the article itself. Use the real publication date; do not re-date old analysis.
+4. Run `tests/test_column_pages.py` (it enforces both languages and a minimum length).
+5. Deploy only through `../../../runbooks/site-deploy.md` (frontend shell lane) after the user approves.
 
 Historical cover conventions are archived at `../../../documents/archive/article-cover-banners.md`; they are evidence, not a current contract.
