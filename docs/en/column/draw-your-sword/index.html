@@ -1,0 +1,204 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Draw Your Sword: who abuses it, and how to build | arammeta</title><meta name='description' content='Ranked by lift (champion strength removed): Samira tops at +20.7pp, plus the data-backed core build.'><link rel='canonical' href='https://arammeta.com/en/column/draw-your-sword/'><link rel='icon' href='/favicon.svg?v=d0f0770a0681' type='image/svg+xml'><link rel='alternate' hreflang='zh-Hant' href='https://arammeta.com/column/draw-your-sword/'><link rel='alternate' hreflang='zh-Hans' href='https://arammeta.com/zh-cn/column/draw-your-sword/'><link rel='alternate' hreflang='en' href='https://arammeta.com/en/column/draw-your-sword/'><link rel='alternate' hreflang='x-default' href='https://arammeta.com/column/draw-your-sword/'><script type='application/ld+json'>{"@context": "https://schema.org", "@type": "Article", "headline": "Draw Your Sword: who abuses it, and how to build", "description": "Ranked by lift (champion strength removed): Samira tops at +20.7pp, plus the data-backed core build.", "datePublished": "2026-06-28", "inLanguage": "en", "mainEntityOfPage": "https://arammeta.com/en/column/draw-your-sword/", "author": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/about/"}, "publisher": {"@type": "Organization", "name": "arammeta", "url": "https://arammeta.com/"}}</script><script async src='https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8593280194977470' crossorigin='anonymous'></script><style>
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.975 0.006 250);
+  --surface: oklch(0.995 0.004 250);
+  --text: oklch(0.245 0.018 250);
+  --muted: oklch(0.49 0.018 250);
+  --border: oklch(0.88 0.012 250);
+  --accent: oklch(0.58 0.14 151);
+  --accent-soft: oklch(0.94 0.035 151);
+  --focus: oklch(0.68 0.15 151);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --surface: oklch(0.205 0.014 250);
+    --text: oklch(0.91 0.009 250);
+    --muted: oklch(0.69 0.015 250);
+    --border: oklch(0.31 0.016 250);
+    --accent: oklch(0.71 0.14 151);
+    --accent-soft: oklch(0.25 0.04 151);
+    --focus: oklch(0.76 0.14 151);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  text-rendering: optimizeLegibility;
+}
+a { color: var(--accent); text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--focus) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklch, var(--surface) 92%, transparent);
+}
+.topbar-inner {
+  width: min(100% - 32px, 980px);
+  min-height: 64px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.brand {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  text-decoration: none;
+}
+.brand span { color: var(--accent); }
+.topnav { display: flex; align-items: center; gap: 18px; }
+.topnav a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav a:hover,
+.topnav a[aria-current="page"] { color: var(--text); }
+main {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 72px 0 88px;
+}
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+h1, h2 { line-height: 1.25; letter-spacing: -0.025em; }
+h1 { margin: 0; font-size: 38px; }
+h2 { margin: 0 0 14px; font-size: 22px; }
+.lede {
+  max-width: 62ch;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1.7;
+}
+.updated { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+section { margin-top: 44px; padding-top: 32px; border-top: 1px solid var(--border); }
+p, li { max-width: 72ch; }
+ul { padding-left: 1.25em; }
+li + li { margin-top: 8px; }
+.notice {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--accent) 32%, var(--border));
+  border-radius: 10px;
+  background: var(--accent-soft);
+}
+.notice p { margin: 0; }
+.action {
+  display: inline-flex;
+  min-height: 42px;
+  margin-top: 12px;
+  padding: 8px 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--accent) 55%, var(--border));
+  border-radius: 8px;
+  background: var(--accent);
+  color: oklch(0.985 0.006 151);
+  font-weight: 700;
+  text-decoration: none;
+}
+.action:hover { filter: brightness(1.06); }
+.page-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-footer-inner {
+  width: min(100% - 32px, 980px);
+  margin: 0 auto;
+  padding: 28px 0 34px;
+}
+.page-footer nav { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.page-footer p { max-width: 90ch; margin: 18px 0 0; }
+@media (max-width: 640px) {
+  .topbar-inner { min-height: auto; padding: 14px 0; align-items: flex-start; flex-direction: column; gap: 10px; }
+  .topnav { width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; }
+  main { padding: 48px 0 64px; }
+  h1 { font-size: 31px; }
+  .lede { font-size: 17px; }
+}
+
+.art-body h2 { margin: 40px 0 14px; }
+.art-body p { margin: 14px 0; }
+.art-body code { font-size: 0.92em; padding: 1px 5px; border: 1px solid var(--border); border-radius: 5px; }
+.art-rank { display: grid; grid-template-columns: 26px 40px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border); }
+.art-rank .rk { color: var(--muted); font-size: 13px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.art-face { width: 40px; height: 40px; border-radius: 8px; background: var(--border); }
+.art-meta { min-width: 0; }
+.art-meta .nm { font-weight: 700; line-height: 1.3; }
+.art-meta .sb { color: var(--muted); font-size: 13px; line-height: 1.45; }
+.art-rank .lf { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.art-rank .lf small { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.art-build { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.art-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.art-item img { width: 32px; height: 32px; border-radius: 6px; }
+.art-item .it-nm { font-size: 13px; font-weight: 650; line-height: 1.25; }
+.art-item .it-tag { color: var(--muted); font-size: 11px; }
+.scatter-wrap { margin: 22px 0; }
+.scatter-chart svg { display: block; width: 100%; height: auto; }
+.scatter-chart text { font-family: inherit; }
+.scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+.scatter-legend .dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; }
+.art-cards { display: grid; gap: 14px; margin: 36px 0 0; padding: 0; list-style: none; }
+.art-cards li { max-width: none; margin: 0; }
+.art-card { display: block; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); text-decoration: none; }
+.art-card:hover { border-color: var(--accent); }
+.art-card .kk { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+.art-card h2 { margin: 6px 0 8px; font-size: 20px; }
+.art-card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.65; }
+.art-card time { display: block; margin-top: 10px; color: var(--muted); font-size: 12px; }
+.art-links { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 0; list-style: none; }
+.art-links li { margin: 0; }
+@media (max-width: 640px) {
+  .art-rank { grid-template-columns: 20px 34px minmax(0, 1fr) auto; gap: 9px; }
+  .art-face { width: 34px; height: 34px; }
+}
+</style></head><body class=''><header class='topbar'><div class='topbar-inner'><a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a><nav class='topnav' aria-label='站務導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav></div></header><main><p class='eyebrow'>Augment deep-dive</p><h1>Draw Your Sword: who abuses it, and how to build</h1><p class='lede'>Ranked by lift (champion strength removed): Samira tops at +20.7pp, plus the data-backed core build.</p><p class='updated'>Published: 2026-06-28</p><article class='art-body'><p><b>Draw Your Sword</b>: when no enemy is nearby you charge up, and your next attack dashes forward with a slash for bonus damage. It is fundamentally an engage-and-cleanup burst augment.</p>
+<p>The ranking below is by <b>lift</b> — how much higher a champion's win rate is with this augment than their usual baseline, with the champion's own strength removed. So it measures who the augment <b>elevates</b>, not who was already strong.</p>
+<h2>Top users (by lift)</h2>
+<div class="art-rank"><span class="rk">1</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Samira.png" alt="Samira"><div class="art-meta"><div class="nm">Samira</div><div class="sb">46.4% → 67.1% · 2,171 games</div></div><span class="lf">+20.7<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">2</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Aphelios.png" alt="Aphelios"><div class="art-meta"><div class="nm">Aphelios</div><div class="sb">52.3% → 67.9% · 589 games</div></div><span class="lf">+15.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">3</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Graves.png" alt="Graves"><div class="art-meta"><div class="nm">Graves</div><div class="sb">50.7% → 65.2% · 5,283 games</div></div><span class="lf">+14.6<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">4</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Caitlyn.png" alt="Caitlyn"><div class="art-meta"><div class="nm">Caitlyn</div><div class="sb">52.5% → 67.1% · 1,330 games</div></div><span class="lf">+14.5<small>pp</small></span></div>
+<div class="art-rank"><span class="rk">5</span><img class="art-face" src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/champion/Varus.png" alt="Varus"><div class="art-meta"><div class="nm">Varus</div><div class="sb">48.6% → 62.0% · 1,044 games</div></div><span class="lf">+13.3<small>pp</small></span></div>
+<p>Samira tops the list for an intuitive reason: her baseline is only 46% — on the weak side — and her core problem is reaching the fight. The dash fixes exactly that, and her win rate jumps to 67%. The augment patches her weakness rather than padding a strength.</p>
+<h2>Recommended core build</h2>
+<p>Every item below tests positive; in suggested order:</p>
+<div class="art-build"><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6676.png" alt="The Collector"><div class="it-nm">Collector</div><div class="it-tag">① core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3031.png" alt="Infinity Edge"><div class="it-nm">Infinity Edge</div><div class="it-tag">② core</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3008.png" alt="Gluttonous Greaves"><div class="it-nm">Greaves</div><div class="it-tag">③ boots</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6697.png" alt="Hubris"><div class="it-nm">Hubris</div><div class="it-tag">④ snowball</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/3036.png" alt="Lord Dominik's Regards"><div class="it-nm">Dominik's</div><div class="it-tag">⑤ armor pen</div></div><div class="art-item"><img src="https://ddragon.leagueoflegends.com/cdn/16.13.1/img/item/6333.png" alt="Death's Dance"><div class="it-nm">Death's Dance</div><div class="it-tag">⑥ anti-burst</div></div></div>
+<ul><li><b>① The Collector</b> — cheapest, execute + crit, fastest power spike</li>
+<li><b>② Infinity Edge</b> — the crit-multiplier core</li>
+<li><b>③ Gluttonous Greaves</b> — movement + kill-stacked omnivamp (rush earlier if kited hard)</li>
+<li><b>④ Hubris</b> — stacks AD off kills; the earlier the better</li>
+<li><b>⑤ Lord Dominik's Regards</b> — pull earlier vs tanks / heavy armor</li>
+<li><b>⑥ Death's Dance</b> — late-game anti-burst to close it out</li></ul>
+<h2>Three key takeaways</h2>
+<ul><li><b>Collector + Hubris together does not slow you down.</b> In the four-quadrant test, running both is the highest at 67.4%, and games are only ~30s longer than running one — both are mid-cost, immediately useful items, so the power curve climbs without a gap.</li>
+<li><b>Do not stack two lifesteal items.</b> Bloodthirster (61.9%) and the omnivamp lifesteal option (60.9%) both sit clearly below baseline on the skeleton; a burst build wants damage, not sustain.</li>
+<li><b>Buy boots — Gluttonous Greaves first (67.2%).</b> "No boots wins more" is reverse causation (you snowball too fast to afford a sixth item), not a strategy; swap to Mercury's Treads vs heavy AP / CC.</li></ul>
+<p><b>lift</b> = win rate with this augment − the champion's win rate without it (pp). Data: matches collected by arammeta · queue 2400 (Mayhem) · patch 16.12 · ≥150 games per champion with this augment.</p></article><section><h2>More articles</h2><ul><li><a href='/en/column/sprees-not-snowball/'>Kill sprees do not equal snowballing</a></li><li><a href='/en/column/skill-scaling/'>Skill-scaling: who rewards skill, who farms low elo</a></li><li><a href='/en/column/scaling-snowball/'>Late game × snowball: a champion map</a></li><li><a href='/en/column/how-to-read/'>How to read this tier list</a></li></ul><p><a href='/en/column/'>All articles</a></p></section><section><h2>Check the live data</h2><ul class='art-links'><li><a href='/en/'>Champion tier list</a></li><li><a href='/en/augments/'>Augment win rates</a></li><li><a href='/en/draft/'>Draft analysis</a></li><li><a href='/en/changes/'>Patch changes</a></li></ul></section></main><footer class='page-footer'><div class='page-footer-inner'><nav aria-label='頁尾導覽'><a href='/en/'>Home</a><a href='/en/column/' aria-current='page'>Articles</a><a href='/about/'>About</a><a href='/en/feedback/'>Feedback</a></nav><p>arammeta isn&#x27;t endorsed by Riot Games and doesn&#x27;t reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</p></div></footer></body></html>
