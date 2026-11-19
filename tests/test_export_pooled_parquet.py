@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import polars as pl
+import pytest
 from click.testing import CliRunner
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -167,3 +168,111 @@ def test_cap_larger_than_the_patch_keeps_everything(tmp_path: Path) -> None:
     ])
     assert result.exit_code == 0, result.output
     assert pl.read_parquet(out).height == 3
+
+
+def _pool_rows() -> list[tuple]:
+    rows = [_game(i, "16.15.1", 1000 + i) for i in range(40)]
+    rows += [_game(100 + i, "16.16.1", 5000 + i) for i in range(33)]
+    rows.append(_game(900, "16.16.1", 5010, blue="not json"))
+    rows += [_game(200 + i, "16.16.2", 4000 + i) for i in range(21)]
+    return rows
+
+
+def _export(db: Path, out: Path, *extra: str, patches: str = "16.15,16.16"):
+    return CliRunner().invoke(EXPORT.main, [
+        "--db", str(db), "--out", str(out), "--patches", patches,
+        "--cap-oldest", "25", "--batch-rows", "4", "--part-rows", "8", *extra,
+    ])
+
+
+def _stop_after(monkeypatch, n: int) -> dict:
+    real = EXPORT._record
+    calls = {"n": 0}
+
+    def record(row):
+        calls["n"] += 1
+        if calls["n"] > n:
+            raise MemoryError("stopped by the memory guard")
+        return real(row)
+
+    monkeypatch.setattr(EXPORT, "_record", record)
+    return calls
+
+
+def test_a_stopped_export_continues_where_it_stopped(tmp_path: Path, monkeypatch) -> None:
+    db = tmp_path / "games.db"
+    _make_db(db, _pool_rows())
+    whole = tmp_path / "whole.parquet"
+    assert _export(db, whole).exit_code == 0
+    expected = pl.read_parquet(whole)
+    assert expected.height == 25 + 33 + 21
+
+    out = tmp_path / "pooled.parquet"
+    for stop in (30, 20):  # stopped twice, in two different patches
+        _stop_after(monkeypatch, stop)
+        assert _export(db, out).exit_code != 0
+        assert not out.exists()
+        monkeypatch.undo()
+
+    calls = _stop_after(monkeypatch, 10_000)
+    result = _export(db, out)
+    assert result.exit_code == 0, result.output
+    assert "resuming" in result.output
+    assert f"rows={expected.height}" in result.output
+    assert pl.read_parquet(out).equals(expected)
+    # Only what the stopped runs had not yet made durable is read again.
+    assert calls["n"] < expected.height - 30
+    assert not (tmp_path / "pooled.parquet.parts").exists()
+
+
+def test_cap_boundary_does_not_move_when_a_stopped_export_continues(
+    tmp_path: Path, monkeypatch
+) -> None:
+    db = tmp_path / "games.db"
+    out = tmp_path / "pooled.parquet"
+    _make_db(db, _pool_rows())
+    _stop_after(monkeypatch, 12)
+    assert _export(db, out).exit_code != 0
+    monkeypatch.undo()
+
+    con = sqlite3.connect(db)
+    con.executemany("INSERT INTO games VALUES (?,?,?,?,?,?,?,?,?)",
+                    [_game(700 + i, "16.15.1", 2000 + i) for i in range(10)])
+    con.commit()
+    con.close()
+
+    assert _export(db, out).exit_code == 0
+    oldest = pl.read_parquet(out).filter(pl.col("patch") == "16.15.1")
+    # The 25 kept before the stop's cap, plus the 10 that arrived after it.
+    assert oldest.height == 35
+    assert oldest["match_id"].n_unique() == 35
+
+
+@pytest.mark.parametrize("change", ["other_pool", "too_old", "part_damaged"])
+def test_parts_that_cannot_be_trusted_are_thrown_away(
+    tmp_path: Path, monkeypatch, change: str
+) -> None:
+    db = tmp_path / "games.db"
+    out = tmp_path / "pooled.parquet"
+    _make_db(db, _pool_rows())
+    _stop_after(monkeypatch, 30)
+    assert _export(db, out).exit_code != 0
+    monkeypatch.undo()
+
+    parts = tmp_path / "pooled.parquet.parts"
+    patches, extra = "16.15,16.16", ()
+    if change == "other_pool":
+        patches = "16.16"
+    elif change == "too_old":
+        extra = ("--resume-max-age-hours", "0")
+    else:
+        first = sorted(parts.glob("part-*.parquet"))[0]
+        first.write_bytes(first.read_bytes()[:-1])
+
+    result = _export(db, out, *extra, patches=patches)
+    assert result.exit_code == 0, result.output
+    assert "resuming" not in result.output
+    whole = tmp_path / "whole.parquet"
+    assert _export(db, whole, patches=patches).exit_code == 0
+    assert pl.read_parquet(out).equals(pl.read_parquet(whole))
+    assert not parts.exists()

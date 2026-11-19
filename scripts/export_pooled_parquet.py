@@ -13,7 +13,6 @@ Uses the PUBLIC participants_json only (championId/teamId/augments/items/stats)
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from pathlib import Path
 
@@ -21,6 +20,8 @@ import click
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+from aram_nn.parquet_parts import PartStore
 
 SCHEMA = {
     "match_id": pl.String, "patch": pl.String, "queue_id": pl.Int64,
@@ -55,19 +56,32 @@ def _cap_cutoff(con, prefix, cap):
     return row[0] if row else None
 
 
-def _iter_rows(con, where, params=(), *, chunk=2000):
-    """Stream rows instead of materializing the pool.
+def _iter_rows(con, prefix, *, cutoff=None, after=None, chunk=2000):
+    """Stream one patch's rows in (patch, created_ms, rowid) order.
 
     participants_json averages ~11KB, so a three-patch pool is ~8GB of JSON
     before any Python object overhead.  fetchall() held that once as rows,
     again as dicts, and a third time while polars built the frame; the 16.17
     refresh died on `memory allocation of 16777216 bytes failed` after seven
     consecutive attempts.  Reading in chunks keeps only one batch live.
+
+    The order is the one idx_games_queue_patch_created already yields, spelled
+    out so that `after` -- the key of the last row a previous run kept -- can
+    seek straight to where that run stopped.  The patch range is `LIKE
+    'prefix.%'` written as bounds the index can use.
     """
+    where = "patch >= ? AND patch < ?"
+    params = [prefix + ".", prefix + "/"]
+    if cutoff is not None:
+        where += " AND created_ms >= ?"
+        params.append(cutoff)
+    if after is not None:
+        where += " AND (patch, created_ms, rowid) > (?, ?, ?)"
+        params.extend(after)
     cur = con.execute(
         "SELECT game_id, patch, queue_id, duration_sec, blue_champs, red_champs, "
-        "blue_wins, created_ms, participants_json FROM games "
-        f"WHERE {_BASE_WHERE} AND {where}",
+        "blue_wins, created_ms, participants_json, rowid FROM games "
+        f"WHERE {_BASE_WHERE} AND {where} ORDER BY patch, created_ms, rowid",
         params,
     )
     cur.arraysize = chunk
@@ -116,48 +130,78 @@ def _record(row):
               help="keep only the most-recent N games of the OLDEST patch (0 = all)")
 @click.option("--batch-rows", default=25000, show_default=True,
               help="games buffered per parquet row group; lower it if memory is tight")
-def main(db, out, patches, cap_oldest, batch_rows):
+@click.option("--part-rows", default=100000, show_default=True,
+              help="games per durable part; a stopped export loses at most one part")
+@click.option("--resume-max-age-hours", default=24.0, show_default=True,
+              help="continue a stopped export of the same pool if it began within this long")
+def main(db, out, patches, cap_oldest, batch_rows, part_rows, resume_max_age_hours):
     prefixes = [p.strip() for p in patches.split(",") if p.strip()]
     con = sqlite3.connect(str(db))
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Write beside the target and rename on success.  A row-group writer that
-    # dies partway still closes out a valid footer, so publishing in place would
-    # hand the training steps a parquet that reads cleanly and is quietly short
-    # of games -- worse than the zero-byte file the old whole-frame write left.
-    tmp = out.with_name(out.name + ".partial")
-    tmp.unlink(missing_ok=True)
-
     arrow_schema = pl.DataFrame([], schema=SCHEMA).to_arrow().schema
+    # Finished parts live beside the target and are stitched into it only once
+    # the whole pool is in: a run stopped partway (the heavy-job guard kills the
+    # process when other programs take the machine's memory) keeps what it
+    # wrote, and never publishes a parquet that reads cleanly and is quietly
+    # short of games.
+    store = PartStore(
+        out.with_name(out.name + ".parts"),
+        {"db": str(Path(db).resolve()), "patches": prefixes, "cap_oldest": cap_oldest},
+        max_age_sec=resume_max_age_hours * 3600,
+    )
+    cursor = store.cursor or {"prefix": 0, "after": None, "kept": 0, "done": []}
+    if store.resumed:
+        click.echo(f"  resuming: {store.rows} games already exported")
+
     writer = None
+    tmp = None
+    part_count = 0
     batch: list[dict] = []
-    total = 0
 
     def flush():
-        nonlocal writer, total
+        nonlocal writer, tmp, part_count
         if not batch:
             return
         # Build Arrow buffers directly. Repeated Polars -> Arrow conversion
         # retained multi-GiB allocator arenas during a full production export.
         table = pa.Table.from_pylist(batch, schema=arrow_schema)
         if writer is None:
-            writer = pq.ParquetWriter(tmp, table.schema, compression="zstd")
+            tmp = store.new_part_path()
+            writer = pq.ParquetWriter(tmp, arrow_schema, compression="zstd")
         writer.write_table(table)
-        total += len(batch)
+        part_count += len(batch)
         batch.clear()
 
+    def close_part(next_cursor):
+        nonlocal writer, tmp, part_count
+        flush()
+        if writer is not None:
+            writer.close()
+            writer = None
+        store.commit(tmp, part_count, next_cursor)
+        tmp = None
+        part_count = 0
+
     try:
-        for i, pre in enumerate(prefixes):
-            cutoff = _cap_cutoff(con, pre, cap_oldest) if i == 0 and cap_oldest else None
-            if cutoff is not None:
-                # Games sharing the cutoff timestamp all stay.  A LIMIT would
-                # have broken that tie arbitrarily; keeping them makes the cap
-                # deterministic across runs, at the cost of a few extra games.
-                rows = _iter_rows(
-                    con, "patch LIKE ? AND created_ms >= ?", (pre + ".%", cutoff),
-                )
-            else:
-                rows = _iter_rows(con, "patch LIKE ?", (pre + ".%",))
-            kept = 0
+        if "cutoff" not in store.extra:
+            # Fixed for the life of the parts: a resumed run must not move the
+            # boundary the earlier parts were cut at.
+            store.extra["cutoff"] = (
+                _cap_cutoff(con, prefixes[0], cap_oldest) if prefixes and cap_oldest else None)
+            store.save()
+        cutoff = store.extra["cutoff"]
+        start = cursor["prefix"]
+        done = list(cursor["done"])
+        for i in range(start, len(prefixes)):
+            pre = prefixes[i]
+            kept = cursor["kept"] if i == start else 0
+            # Games sharing the cutoff timestamp all stay.  A LIMIT would have
+            # broken that tie arbitrarily; keeping them makes the cap
+            # deterministic across runs, at the cost of a few extra games.
+            rows = _iter_rows(
+                con, pre, cutoff=cutoff if i == 0 else None,
+                after=cursor["after"] if i == start else None,
+            )
             # Close the generator on the way out rather than leaving it to the
             # collector: on an error path its cursor would otherwise be closed
             # after the connection is, and the ResourceWarning that produces
@@ -165,32 +209,28 @@ def main(db, out, patches, cap_oldest, batch_rows):
             # as the failure reason.
             try:
                 for row in rows:
-                    record = _record(row)
+                    record = _record(row[:9])
                     if record is None:
                         continue
                     batch.append(record)
                     kept += 1
                     if len(batch) >= batch_rows:
                         flush()
+                        if part_count >= part_rows:
+                            close_part({"prefix": i, "after": [row[1], row[7], row[9]],
+                                        "kept": kept, "done": done})
             finally:
                 rows.close()
+            done = [*done, kept]
+            close_part({"prefix": i + 1, "after": None, "kept": 0, "done": done})
             click.echo(f"  {pre}: {kept} games")
-        flush()
-        if writer is None:
-            # Downstream steps open this path unconditionally, so an empty pool
-            # still has to leave a readable file with the right schema.
-            empty = pl.DataFrame([], schema=SCHEMA).to_arrow()
-            writer = pq.ParquetWriter(tmp, empty.schema, compression="zstd")
-            writer.write_table(empty)
-        if writer is not None:
-            writer.close()
-            writer = None
-        os.replace(tmp, out)
+        total = store.assemble(out, arrow_schema)
     finally:
         if writer is not None:
             writer.close()
         con.close()
-        tmp.unlink(missing_ok=True)
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
     click.echo(f"wrote {out}  rows={total}  size={out.stat().st_size/1e6:.0f}MB")
 
