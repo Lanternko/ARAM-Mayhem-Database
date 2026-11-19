@@ -911,7 +911,7 @@ def _feedback_page_html(*, title: str, description: str, body_html: str,
         "<link rel='icon' href='/favicon.svg' type='image/svg+xml'>"
         f"<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;family=Noto+Sans+{font_region}:wght@400;500;600;700&amp;display=swap'>"
         "<script>try{document.documentElement.dataset.theme=localStorage.getItem('aram-mayhem-site-theme')==='light'?'light':'dark'}catch{}</script>"
-        f"{render_adsense_verification_tag(site_url=site_url)}<style>{css}</style></head><body class='feedback-page'>{header}"
+        f"<style>{css}</style></head><body class='feedback-page'>{header}"
         f"<main class='site-main feedback-main'><h1>{esc(title)}</h1>"
         f"{body_html}</main>"
         f"<script>{page_js}</script></body></html>\n")
@@ -934,8 +934,14 @@ def _info_page_html(
     updated_separator: str = "：",
     footer_disclaimer: str = "arammeta 並未獲 Riot Games 認可，也不代表 Riot Games 或任何正式參與管理 Riot Games 相關資產者的觀點。Riot Games 與其相關資產為 Riot Games, Inc. 的商標或註冊商標。",
     body_class: str = "",
+    include_adsense: bool = True,
+    extra_css: str = "",
 ) -> str:
-    """Render a lightweight, crawlable station-information page."""
+    """Render a lightweight, crawlable station-information page.
+
+    ``include_adsense`` is for editorial pages only.  Utility pages (privacy,
+    forms) carry no ad code: ads belong next to publisher content.
+    """
     esc = html.escape
     base = _site_base_href(site_url) or "/"
     origin = base.rstrip("/")
@@ -943,6 +949,7 @@ def _info_page_html(
     canonical = (origin + canonical_path) if origin.startswith("http") else canonical_path
     nav_items = nav_items or (
         ("/", "首頁", "home"),
+        ("/column/", "專欄", "column"),
         ("/about/", "關於", "about"),
         ("/privacy/", "隱私權", "privacy"),
         ("/feedback/", "回饋與聯絡", "feedback"),
@@ -953,7 +960,7 @@ def _info_page_html(
         + f">{label}</a>"
         for href, label, key in nav_items
     )
-    adsense = render_adsense_verification_tag(site_url=site_url)
+    adsense = render_adsense_verification_tag(site_url=site_url) if include_adsense else ""
     return (
         f"<!doctype html><html lang='{esc(html_lang, quote=True)}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -962,7 +969,7 @@ def _info_page_html(
         f"<link rel='canonical' href='{esc(canonical, quote=True)}'>"
         f"<link rel='icon' href='/favicon.svg?v={favicon_asset_version()}' type='image/svg+xml'>"
         f"{head_extra_html}"
-        f"{adsense}<style>{_INFO_PAGE_CSS}</style></head>"
+        f"{adsense}<style>{_INFO_PAGE_CSS}{extra_css}</style></head>"
         f"<body class='{esc(body_class, quote=True)}'>"
         "<header class='topbar'><div class='topbar-inner'>"
         "<a class='brand' href='/' aria-label='arammeta 首頁'>aram<span>meta</span></a>"
@@ -1241,11 +1248,11 @@ def _feedback_body_html(
 
 
 def _retire_public_column_code(site_js: str) -> str:
-    """Keep draft column code private while removing it from shipped JS.
+    """Drop the legacy in-app article array from shipped JS.
 
-    The article source remains in the template for later editorial work, but
-    unpublished articles must not be downloadable as part of the public site
-    bundle.  Routing is disabled separately in the template's VIEWS list.
+    Published articles are static pages built from scripts/templates/column/
+    (aram_nn.site.column); the app has no column view, so the old array would
+    only add dead weight to the bundle.  Routing stays off in VIEWS.
     """
     stripped, count = re.subn(
         r"const ARTICLES\s*=\s*\[.*?\n\s*\];",
@@ -1334,6 +1341,38 @@ def write_site_info_pages(
                 body_html=body,
                 site_url=site_url,
                 updated=updated,
+                include_adsense=slug != "privacy",
+            ),
+            encoding="utf-8",
+        )
+        written.append(dest)
+
+    # Articles: one static page per article and locale, so the full text is in
+    # the first response and each page enters the sitemap.
+    from aram_nn.site.column import COLUMN_CSS, column_pages
+    api_dir = root / "api"
+    for page in column_pages(
+        site_url=site_url, api_dir=api_dir if api_dir.is_dir() else None,
+    ):
+        dest = root / page.relative_dir / "index.html"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(
+            _info_page_html(
+                slug="column",
+                title=page.title,
+                eyebrow=page.eyebrow,
+                description=page.description,
+                body_html=page.body_html,
+                site_url=site_url,
+                updated=page.updated,
+                html_lang=page.html_lang,
+                canonical_path=page.canonical_path,
+                nav_items=page.nav_items,
+                head_extra_html=page.head_extra_html,
+                updated_label=page.updated_label,
+                updated_separator=page.updated_separator,
+                footer_disclaimer=page.footer_disclaimer,
+                extra_css=COLUMN_CSS,
             ),
             encoding="utf-8",
         )
@@ -1396,7 +1435,8 @@ def write_site_info_pages(
 
 
 # High-traffic History routes get a full copy of index.html (no bounce).
-# Retired /column routes are deliberately not emitted into the public site.
+# /column is not an app route: articles are static pages written by
+# write_site_info_pages (aram_nn.site.column).
 SPA_FULL_SHELL_PATHS = frozenset({
     "/champions",
     "/en/champions",
@@ -2117,6 +2157,8 @@ def _localize_full_shell_html(
             f"<meta name='twitter:image:alt' content='{html.escape(title, quote=True)}'>"
         )
         out = out.replace("</head>", image_tags + "</head>", 1)
+    from aram_nn.site.route_intro import localize_route_intro
+    out = localize_route_intro(out, canonical_path=path, html_lang=html_lang)
     return _inject_locale_alternates(out, site_url=site_url, canonical_path=path)
 
 
@@ -2374,8 +2416,8 @@ def write_spa_path_shells(
 
     High-traffic routes (locale homes, main tabs) get a *full* copy of
     index.html so the browser never pays a bounce-to-/ double load.
-    Retired column routes are not generated; unknown paths use the noindex
-    404 shell instead of leaving thin article pages online.
+    Articles are not app routes (write_site_info_pages writes them as static
+    pages); unknown paths use the noindex 404 shell.
     """
     index_path = Path(index_path)
     if not index_path.is_file():
@@ -4210,6 +4252,8 @@ def render_html(
         "<nav class='site-links' aria-label='站務連結'>"
         "<a href='/about/#desktop-download' data-i18n-zh='Windows 下載' data-i18n-zh-cn='Windows 下载' "
         "data-i18n-en='Windows download'>Windows 下載</a>"
+        "<a href='/column/' data-i18n-zh='專欄' data-i18n-zh-cn='专栏' "
+        "data-i18n-en='Articles'>專欄</a>"
         "<a href='/about/' data-i18n-zh='關於' data-i18n-zh-cn='关于' "
         "data-i18n-en='About'>關於</a>"
         "<a href='/privacy/' data-i18n-zh='隱私權' data-i18n-zh-cn='隐私权' "
@@ -4484,6 +4528,9 @@ def render_html(
     )
 
     # Theme + language live in the header; about / source sit in the home footer.
+    # Each route's own explanation sits under the active view.
+    from aram_nn.site.route_intro import route_intro_html
+    parts.append(route_intro_html())
     parts.append("</main>")
 
     js = _read_site_template("site.js")

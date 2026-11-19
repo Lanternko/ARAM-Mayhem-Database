@@ -4051,6 +4051,16 @@
             panel.hidden = panel.getAttribute('data-aug-mode') !== augMode;
         });
         syncAugModeHrefs();
+        syncRouteIntro();
+    }
+    // The static per-route explanation: show the one for the active view.
+    function syncRouteIntro() {
+        const active = document.querySelector('.view.is-active');
+        let key = active ? active.getAttribute('data-view') : '';
+        if (key === 'augments' && augMode === 'pools') key = 'pools';
+        document.querySelectorAll('[data-route-intro]').forEach(el => {
+            el.hidden = el.getAttribute('data-route-intro') !== key;
+        });
     }
     function syncChampCardHrefs() {
         document.querySelectorAll('a.champ[href][data-cid]').forEach(card => {
@@ -11357,6 +11367,7 @@
             } else if (name !== 'champ') {
                 document.title = BASE_TITLE;
             }
+            syncRouteIntro();
             if (name === 'draft') {
                 renderDraft();
             }

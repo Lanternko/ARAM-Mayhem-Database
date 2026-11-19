@@ -1,0 +1,18 @@
+<p>In Mayhem every champion leans two ways to win: how well they <b>snowball</b> (turn kills into a lead) and how well they <b>scale into the late game</b>. This chart plots all champions on both axes at once.</p>
+<div class="scatter-wrap"><div class="scatter-chart" id="scatter-host"></div>
+<div class="scatter-legend"><span><span class="dot" style="background:#d64545"></span>Low WR</span><span><span class="dot" style="background:#d0b23a"></span>Mid</span><span><span class="dot" style="background:#48b868"></span>High WR</span><span>· hover a dot for details</span></div></div>
+<h2>How to read it</h2>
+<ul><li><b>X axis — snowball</b> = 0.6×avg largest killing spree + 0.4×avg largest multi-kill. Further right = bigger kill streaks, snowballs into a fed carry.</li>
+<li><b>Y axis — late game</b> = WR(games ≥22 min) − WR(games ≤16 min). Higher = stronger the longer the game runs.</li>
+<li><b>Dot color</b> = the champion's average win rate (red → yellow → green).</li>
+<li>The dashed lines are the all-champion <b>medians</b>, splitting the map into four quadrants.</li></ul>
+<h2>The four quadrants</h2>
+<ul><li><b>Top-right (snowball + late)</b>: all-rounders, strong at every stage.</li>
+<li><b>Top-left (late)</b>: scalers, quiet early and stronger the longer it goes.</li>
+<li><b>Bottom-right (snowball, weak late)</b>: rushers — close it out early on kills, fade if it drags.</li>
+<li><b>Bottom-left (neither)</b>: tempo-dependent, lean on teammates or specific augments.</li></ul>
+<p>One common misread: snowball measures kill burst / cleanup potential, it does <b>not</b> directly mean ending the game early — it only reflects kill-side expansion, which is separate from game length. The median game here is about 17.9 minutes.</p>
+<h2>Using the map</h2>
+<p>In champion select, count how many of your champions sit in the bottom half. A full early-game team has to turn kills into towers before the 16-minute mark; with two or three champions from the top half, dying less and holding the wave is enough, because time is on your side. Champions on the right grow fastest once they get kills, so feeding them resources pays off; champions on the left depend less on kills and still do their job from behind.</p>
+<p>The two axes are independent: a snowball champion is not necessarily weak late, and a late-game champion can still collect kills. A position on the map describes the average tendency across all players; augments and builds still shift an individual game.</p>
+<p>Data: ARAM Mayhem matches (queue 2400) collected by arammeta · champions need at least 400 games, with at least 200 each among early-ending and late-ending games.</p>
