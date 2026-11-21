@@ -41,14 +41,13 @@ import click
 import numpy as np
 import polars as pl
 from aram_nn.lr_matrix import (
-    RowMask, champion_vocab, chunked_csr, masked_weights, patch_rows, time_split,
+    RowMask, TeamRows, chunked_csr, masked_weights, patch_rows, time_split,
 )
-from aram_nn.parquet_batches import SOURCE_ROW, iter_parquet_rows, read_team_frame
+from aram_nn.parquet_batches import iter_parquet_rows, read_team_arrays
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import log_loss
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from train_ability_nn import TeamDataset  # noqa: E402
 from analyze_composition_signals import build_champion_profiles, champion_matrix  # noqa: E402
 from train_composition_lr import (  # noqa: E402
     C_GRID, build_feature_blocks, build_team_profiles, metrics, select_blocks,
@@ -72,29 +71,26 @@ def filter_known(d: pl.DataFrame, known: set[int]) -> pl.DataFrame:
     return d.filter(mask)
 
 
-def raw_wr(sub: pl.DataFrame) -> dict[int, tuple[float, int]]:
-    sub = sub.select(
-        "blue_champions", "red_champions", pl.col("blue_wins").cast(pl.Boolean).alias("bw"))
-    sides = pl.concat([
-        sub.select(pl.col("blue_champions").alias("c"), pl.col("bw").cast(pl.Int64).alias("w")),
-        sub.select(pl.col("red_champions").alias("c"), (~pl.col("bw")).cast(pl.Int64).alias("w")),
-    ]).explode("c").drop_nulls("c")
-    g = sides.group_by("c").agg(pl.len().alias("n"), pl.col("w").sum())
-    return {int(c): (int(w) / int(n), int(n)) for c, n, w in g.iter_rows()}
+def raw_wr(blue: np.ndarray, red: np.ndarray, blue_wins: np.ndarray) -> dict[int, tuple[float, int]]:
+    """Champion id -> (win rate, games) over the given games, either side."""
+    games = np.bincount(np.concatenate([blue.ravel(), red.ravel()]))
+    wins = (np.bincount(blue.ravel(), weights=np.repeat(blue_wins, 5), minlength=len(games))
+            + np.bincount(red.ravel(), weights=np.repeat(~blue_wins, 5), minlength=len(games)))
+    return {int(c): (int(wins[c]) / int(games[c]), int(games[c])) for c in np.flatnonzero(games)}
 
 
-def feature_chunk(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs):
+def feature_chunk(teams: TeamRows, idx_to_cid, profiles, feature_set, n_champs):
     """Dense features for one slice of games: champion identity + composition blocks."""
-    ds = TeamDataset(df, champ_to_idx)
-    champ = champion_matrix(ds, n_champs)
-    blue, red = build_team_profiles(ds, idx_to_cid, profiles)
+    champ = champion_matrix(teams, n_champs)
+    blue, red = build_team_profiles(teams, idx_to_cid, profiles)
     blocks = build_feature_blocks(blue, red)
     comp_blocks, names = select_blocks(blocks, feature_set)
     return np.concatenate([champ, *comp_blocks], axis=1), names
 
 
-def build_x(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs):
-    """CSR features for every game in *df*, built a slice at a time.
+def build_x(blue: np.ndarray, red: np.ndarray, idx_to_cid, profiles, feature_set, n_champs):
+    """CSR features for every game, built a slice at a time.  *blue*/*red* are
+    ``(games, 5)`` champion columns.
 
     The dense matrix and the per-team profile objects only ever exist for one
     slice, so peak memory follows the sparse result, not the pool size.
@@ -102,12 +98,13 @@ def build_x(df: pl.DataFrame, champ_to_idx, idx_to_cid, profiles, feature_set, n
     names: list[str] = []
 
     def chunk(start: int, stop: int) -> np.ndarray:
-        x, chunk_names = feature_chunk(df.slice(start, stop - start), champ_to_idx,
-                                       idx_to_cid, profiles, feature_set, n_champs)
+        x, chunk_names = feature_chunk(
+            TeamRows(blue[start:stop].tolist(), red[start:stop].tolist()),
+            idx_to_cid, profiles, feature_set, n_champs)
         names[:] = chunk_names
         return x
 
-    return chunked_csr(df.height, chunk), names
+    return chunked_csr(len(blue), chunk), names
 
 
 def fit_c(x_tr, y_tr, x_va, y_va, w_tr=None):
@@ -152,14 +149,14 @@ def ev(model, x, y, mask=None):
 def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, val_size,
          half_life_days, feature_set, empirical_min_games, mover_min_drift, out, seed):
     np.random.seed(seed)
-    # One frame, in file order.  The splits below are row-index arrays over it
-    # and only the feature columns are ever gathered -- once.  Filtering and
-    # re-sorting whole frames per split copied every champion list five times
-    # over (most of this step's 8GB at 4.4M games on the refresher's polars).
-    df = read_team_frame(data).filter(pl.col("duration_sec") >= 300)
-    created = df["game_creation_ms"].to_numpy()
-    is_cur = patch_rows(df["patch"], current_patch)
-    is_non_cur = df["patch"].is_not_null().to_numpy() & ~is_cur
+    # The pool as arrays in file order; the splits are row-index arrays over
+    # them.  As polars frames, every sort/filter/gather copied all champion
+    # lists and the freed copies stayed committed (most of this step's 8GB at
+    # 4.4M games on the refresher's polars).
+    teams = read_team_arrays(data, min_duration_sec=300)
+    created = teams.created
+    is_cur = patch_rows(teams.patch, current_patch)
+    is_non_cur = teams.patch.is_not_null().to_numpy() & ~is_cur
     n_cur, n_non_cur = int(is_cur.sum()), int(is_non_cur.sum())
     if n_cur <= holdout + 100:
         raise click.ClickException(f"{current_patch} has {n_cur} games (<= holdout)")
@@ -167,42 +164,44 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
                                               holdout=holdout, val_size=val_size)
     del is_non_cur
 
-    feature_cols = ["blue_champions", "red_champions", "blue_wins"]
-    train_df = df.select(feature_cols)[train_idx]
-    champ_to_idx = champion_vocab(train_df)
-    known = set(champ_to_idx)
+    # Champion id -> column, ids ascending; val/test keep only games whose
+    # champions all appear in train.
+    vocab = np.union1d(np.unique(teams.blue[train_idx]), np.unique(teams.red[train_idx]))
+    champ_to_idx = {int(cid): i for i, cid in enumerate(vocab)}
     idx_to_cid = {i: c for c, i in champ_to_idx.items()}
     n_champs = len(champ_to_idx)
-    val_df = filter_known(df[val_idx], known)
-    test_df = filter_known(df[test_idx], known)
-    n_tr, n_va, n_te = train_df.height, val_df.height, test_df.height
+
+    def all_known(rows: np.ndarray) -> np.ndarray:
+        return rows[np.isin(teams.blue[rows], vocab).all(axis=1)
+                    & np.isin(teams.red[rows], vocab).all(axis=1)]
+
+    val_idx, test_idx = all_known(val_idx), all_known(test_idx)
+    n_tr, n_va, n_te = len(train_idx), len(val_idx), len(test_idx)
 
     click.echo(f"train={n_tr} (pool {n_non_cur - val_size} + early-{current_patch} {n_cur - holdout})  "
                f"val={n_va}  test={n_te}  champs={n_champs}")
 
     # movers (raw WR drift prev->current) for the diagnostic subset
-    teams = df.select(feature_cols)
-    wr0 = raw_wr(teams.filter(pl.Series(patch_rows(df["patch"], prev_patch))))
-    wr1 = raw_wr(teams.filter(pl.Series(is_cur)))
+    wr0, wr1 = (raw_wr(teams.blue[rows], teams.red[rows], teams.blue_wins[rows])
+                for rows in (patch_rows(teams.patch, prev_patch), is_cur))
     movers = {c for c in wr1 if c in wr0 and wr0[c][1] >= 300 and wr1[c][1] >= 300
               and abs((wr1[c][0] - wr0[c][0]) * 100) >= mover_min_drift}
-    test_mask = np.array([any(int(c) in movers for c in (b + r))
-                          for b, r in zip(test_df["blue_champions"].to_list(),
-                                          test_df["red_champions"].to_list())])
+    mover_ids = np.fromiter(movers, dtype=np.int64, count=len(movers))
+    test_mask = (np.isin(teams.blue[test_idx], mover_ids).any(axis=1)
+                 | np.isin(teams.red[test_idx], mover_ids).any(axis=1))
     click.echo(f"movers(|dWR|>={mover_min_drift}pp)={len(movers)}  test mover-game coverage={test_mask.mean()*100:.0f}%\n")
 
-    # Everything the fits need from the frames, as arrays -- the frames are
-    # then released so the long participant pass and the fits run without them.
-    # Rows are kept in one [train, val, test] block: the fits pick their rows
-    # with zero sample weights instead of holding a copy per split.
-    all_df = pl.concat([train_df, val_df.select(feature_cols), test_df.select(feature_cols)])
-    y_all = all_df["blue_wins"].cast(pl.Float32).to_numpy().astype(np.float64)
+    # Everything the fits need, in one [train, val, test] block: the fits pick
+    # their rows with zero sample weights instead of holding a copy per split.
+    order = np.concatenate([train_idx, val_idx, test_idx])
+    blue_cols = np.searchsorted(vocab, teams.blue[order]).astype(np.int32)
+    red_cols = np.searchsorted(vocab, teams.red[order]).astype(np.int32)
+    y_all = teams.blue_wins[order].astype(np.float64)
     t = created[train_idx].astype(np.float64)
-    t_all = np.concatenate([t, *(d["game_creation_ms"].to_numpy().astype(np.float64)
-                                 for d in (val_df, test_df))])
-    base_rows = np.flatnonzero(patch_rows(df["patch"], baseline_patch)[train_idx])
-    train_rows = RowMask(df[SOURCE_ROW].to_numpy()[train_idx])
-    del df, teams, created, is_cur, train_idx, val_idx, test_idx, train_df, val_df, test_df
+    t_all = created[order].astype(np.float64)
+    base_rows = np.flatnonzero(patch_rows(teams.patch, baseline_patch)[train_idx])
+    train_rows = RowMask(teams.source_row[train_idx])
+    del teams, created, is_cur, order, train_idx, val_idx, test_idx
 
     # Empirical champion profiles from TRAIN ONLY (no leakage; includes early current patch).
     profiles = build_champion_profiles(score_csv=score_csv, train_df=None,
@@ -212,8 +211,8 @@ def main(data, score_csv, current_patch, prev_patch, baseline_patch, holdout, va
                                            selected_rows=train_rows,
                                        ))
 
-    x_all, feat_names = build_x(all_df, champ_to_idx, idx_to_cid, profiles, feature_set, n_champs)
-    del all_df
+    x_all, feat_names = build_x(blue_cols, red_cols, idx_to_cid, profiles, feature_set, n_champs)
+    del blue_cols, red_cols
     feature_names = [f"champion:{idx_to_cid[i]}" for i in range(n_champs)] + feat_names
     y_tr = y_all[:n_tr]
     x_va, y_va = x_all[n_tr:n_tr + n_va], y_all[n_tr:n_tr + n_va]

@@ -1,8 +1,11 @@
 """Bounded participant reads; row offsets refer to the original parquet file."""
-from pathlib import Path
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
+from pathlib import Path
 
+import numpy as np
 import polars as pl
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 TEAM_COLUMNS = ["patch", "duration_sec", "game_creation_ms", "blue_champions",
@@ -18,6 +21,64 @@ def read_team_frame(path: Path) -> pl.DataFrame:
     ``iter_parquet_rows`` because both walk the file in order.
     """
     return pl.read_parquet(path, columns=TEAM_COLUMNS).with_row_index(SOURCE_ROW)
+
+
+@dataclass
+class TeamArrays:
+    """Team columns of a pooled parquet as arrays, one entry per kept game in
+    file order.  ``blue``/``red`` are ``(games, 5)`` champion ids."""
+    source_row: np.ndarray
+    patch: pl.Series
+    created: np.ndarray
+    blue: np.ndarray
+    red: np.ndarray
+    blue_wins: np.ndarray
+
+
+def read_team_arrays(path: Path, *, min_duration_sec: int = 0) -> TeamArrays:
+    """Team columns of games lasting at least *min_duration_sec*.
+
+    Read a row group at a time straight into numpy: the champion lists are 20
+    bytes a team here, and nothing is left behind by the reader.  Loading them
+    as a polars frame kept ~1.2GB committed beyond the data at 4.4M games.
+    """
+    rows, created, blue, red, wins, codes = [], [], [], [], [], []
+    names: dict[str, int] = {}
+    offset = 0
+    with pq.ParquetFile(path) as parquet:
+        for group in range(parquet.metadata.num_row_groups):
+            table = parquet.read_row_group(group, columns=TEAM_COLUMNS, use_threads=False)
+            keep = np.flatnonzero(
+                pc.fill_null(table.column("duration_sec"), 0).to_numpy() >= min_duration_sec)
+            rows.append(offset + keep)
+            created.append(table.column("game_creation_ms").to_numpy()[keep])
+            wins.append(table.column("blue_wins").to_numpy()[keep])
+            for side, out in (("blue_champions", blue), ("red_champions", red)):
+                teams = table.column(side).combine_chunks()
+                ids = teams.flatten()
+                if ids.null_count or len(ids) != 5 * len(teams) or not pc.all(
+                        pc.equal(pc.list_value_length(teams), 5)).as_py():
+                    raise ValueError(f"{path}: {side} must hold 5 champions in every game")
+                out.append(ids.to_numpy().reshape(-1, 5)[keep].astype(np.int32))
+            patch = table.column("patch").combine_chunks().dictionary_encode()
+            local = np.array([names.setdefault(name, len(names))
+                              for name in patch.dictionary.to_pylist()], dtype=np.int32)
+            index = pc.fill_null(patch.indices, -1).to_numpy()
+            codes.append(np.where(index >= 0, local[index], -1)[keep] if len(local)
+                         else np.full(len(keep), -1, dtype=np.int32))
+            offset += table.num_rows
+    if not rows:
+        raise ValueError(f"{path}: no row groups")
+    code = np.concatenate(codes)
+    return TeamArrays(
+        source_row=np.concatenate(rows),
+        patch=pl.Series("patch", [*names, None], dtype=pl.String)[
+            np.where(code < 0, len(names), code)],
+        created=np.concatenate(created),
+        blue=np.concatenate(blue),
+        red=np.concatenate(red),
+        blue_wins=np.concatenate(wins),
+    )
 
 
 def _batches(parquet: pq.ParquetFile, batch_size: int, columns: list[str]):

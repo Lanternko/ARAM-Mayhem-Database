@@ -9,6 +9,7 @@ they are built a slice of games at a time and kept as CSR.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
@@ -25,6 +26,17 @@ def champion_vocab(df: pl.DataFrame) -> dict[int, int]:
     ids = pl.concat([df[side].explode().unique()
                      for side in ("blue_champions", "red_champions")])
     return {int(cid): i for i, cid in enumerate(ids.drop_nulls().unique().sort().to_list())}
+
+
+@dataclass
+class TeamRows:
+    """The part of ``train_ability_nn.TeamDataset`` the feature builders read:
+    each side's champion columns, one list per game."""
+    blue: list[list[int]]
+    red: list[list[int]]
+
+    def __len__(self) -> int:
+        return len(self.blue)
 
 
 def patch_rows(patch: pl.Series, prefix: str) -> np.ndarray:
