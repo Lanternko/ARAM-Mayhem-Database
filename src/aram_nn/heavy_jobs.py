@@ -64,14 +64,16 @@ SITE_BUILD_LIMITS = Limits(
     stop_available_mb=2048,
     stop_commit_percent=98,
 )
-# The current refresh projects team columns and streams participant batches.
-# Keep 6 GiB admission headroom and stop with 2 GiB still free; validate peak
-# usage from child_sample events rather than assuming the old 24 GiB loader.
+# The refresh steps peak at ~3.4 GiB private (composition training, 4.47M
+# games, 2026-11-21), so 7 GiB at admission leaves ~1.6 GiB above the stop
+# line.  At 8 GiB / 3 GiB the refresher queued 5-6 hours at a time: 93% of its
+# admission samples failed on available memory alone.  Re-check peak_private_mb
+# in child_exit events before lowering further.
 MODEL_REFRESH_LIMITS = Limits(
-    start_available_mb=8192,
+    start_available_mb=7168,
     start_commit_percent=90,
     start_commit_free_mb=6144,
-    stop_available_mb=3072,
+    stop_available_mb=2048,
     stop_commit_percent=96,
     stop_commit_free_mb=2048,
 )

@@ -236,6 +236,14 @@ def test_model_refresh_floor_keeps_commit_reserve():
     assert not jobs.must_stop(ResourceSample(10000, 46000, 50308, 91.4), limits)
 
 
+def test_model_refresh_admits_at_7gib_and_stops_at_2gib():
+    limits = jobs.MODEL_REFRESH_LIMITS
+    assert jobs.can_start(ResourceSample(7200, 43000, 50308, 85.5), limits)
+    assert not jobs.can_start(ResourceSample(7100, 43000, 50308, 85.5), limits)
+    assert not jobs.must_stop(ResourceSample(2100, 43000, 50308, 85.5), limits)
+    assert jobs.must_stop(ResourceSample(2000, 43000, 50308, 85.5), limits)
+
+
 def test_redact_command_masks_secret_flag_values():
     command = ['py', 'build.py', '--cloudflare-analytics-token', 'abc123', '--db', 'x.db',
                '--api-key=k1', '--password', 'p', '--patch-prefix', '16.22']
