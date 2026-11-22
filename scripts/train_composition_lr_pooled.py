@@ -30,6 +30,10 @@ import os
 # Before polars loads: its allocator otherwise keeps freed frame memory
 # committed (1.4GB at 4.4M games) while the matrices are built beside it.
 os.environ.setdefault("MIMALLOC_PURGE_DELAY", "0")
+# Before numpy/scipy load: each of their two OpenBLAS copies commits a ~30MB
+# buffer per thread (710MB on 12 cores).  Nothing here is BLAS-bound -- the
+# fits are sparse products and dot products of a few hundred coefficients.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import json
 import pickle
