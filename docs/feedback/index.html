@@ -3819,24 +3819,45 @@
         text-align: center;
         line-height: 1.7;
     }
-    /* Per-route explanation under the active view: reading text, not chrome. */
+    /* Per-route explanation under the active view: collapsed to one quiet
+       line; the copy stays in the markup for crawlers. */
     .route-intro {
         max-width: 760px;
-        margin: 48px auto 0;
-        padding: 24px 16px 0;
-        border-top: 1px solid var(--border, #1f2530);
+        margin: 20px auto 0;
+        padding: 0 16px;
         color: var(--text-muted, #8d96a0);
-        font-size: 14px;
-        line-height: 1.8;
+        font-size: 13px;
+        line-height: 1.7;
+        text-align: center;
     }
     .route-intro:not(:has(section:not([hidden]))) { display: none; }
-    .route-intro h2 {
-        margin: 0 0 10px;
-        color: var(--text, #e6e8eb);
-        font-size: 16px;
-        font-weight: 700;
+    .route-intro summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        list-style: none;
+        color: #6b7280;
     }
-    .route-intro p { margin: 0 0 12px; }
+    .route-intro summary::-webkit-details-marker { display: none; }
+    .route-intro summary::after {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-right: 1.5px solid currentColor;
+        border-bottom: 1.5px solid currentColor;
+        transform: translateY(-2px) rotate(45deg);
+    }
+    .route-intro details[open] summary::after { transform: translateY(1px) rotate(-135deg); }
+    .route-intro summary:hover { color: var(--text-muted, #8d96a0); }
+    .route-intro h2 {
+        display: inline;
+        margin: 0;
+        font-size: 13px;
+        font-weight: 500;
+        color: inherit;
+    }
+    .route-intro details p { margin: 10px 0 0; text-align: left; }
     .footer .cutoffs {
         font-variant-numeric: tabular-nums;
         letter-spacing: 0.02em;
