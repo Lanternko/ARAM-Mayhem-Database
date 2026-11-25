@@ -77,4 +77,19 @@ Mayhem（queue `2400`）的完整對局不由 Riot 公開 API 提供，因此本
 
 This project isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing League of Legends. League of Legends and Riot Games are trademarks or registered trademarks of Riot Games, Inc. League of Legends © Riot Games, Inc.
 
-License: MIT.
+## License
+
+Code: MIT (see [LICENSE](LICENSE)).
+
+### Data use terms
+
+The aggregate statistics published on arammeta.com (champion, champion + augment and champion + item games/wins, plus tiers) may be used as an input to your own tools on these terms:
+
+1. **Attribution:** show "Data: AramMeta" with a clickable link wherever our numbers appear, not only in a settings or About page. When possible, link to the matching champion page (for example `https://arammeta.com/en/champions/ahri/?ref=<your-project>`) and add `?ref=<your-project>` to all links. Also credit AramMeta in your README.
+2. Don't republish the raw tables or offer them as an export.
+3. Don't imply that AramMeta endorses your project.
+4. Keep access light: a few requests per patch.
+
+The site's JSON files (`https://arammeta.com/api/tier-list.json` and `https://arammeta.com/api/champions/<championId>.json`) are not a stable API; fields may change without notice, and only the current patch is published. The numbers come from a sample of games collected through the League client, not from Riot's full population.
+
+Changes to these terms will be posted here.
