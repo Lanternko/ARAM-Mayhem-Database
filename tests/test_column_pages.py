@@ -167,7 +167,8 @@ class RouteIntroTest(unittest.TestCase):
         shell = "<main>" + route_intro_html() + "</main>"
         self.assertEqual(shell.count(" hidden>"), len(ROUTE_INTROS) - 1)
         en = localize_route_intro(shell, canonical_path="/en/draft/", html_lang="en")
-        self.assertIn("<section data-route-intro='draft'><h2", en)
+        self.assertIn("<section data-route-intro='draft'><details><summary><h2", en)
+        self.assertNotIn("<details open", en)
         self.assertIn(">About draft analysis</h2>", en)
         self.assertIn("<section data-route-intro='home' hidden>", en)
         self.assertNotIn(">關於選角分析</h2>", en)

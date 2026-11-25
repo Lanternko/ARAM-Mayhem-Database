@@ -153,8 +153,12 @@ def route_intro_html(*, active: str = "home", html_lang: str = "zh-Hant") -> str
 
     sections = []
     for key, copy in ROUTE_INTROS.items():
-        body = node("h2", key, -1) + "".join(
-            node("p", key, index) for index in range(len(copy["zh"][1]))
+        # Collapsed by default: the copy stays in the markup for crawlers but
+        # only the heading line takes space under the page.
+        body = (
+            "<details><summary>" + node("h2", key, -1) + "</summary>"
+            + "".join(node("p", key, index) for index in range(len(copy["zh"][1])))
+            + "</details>"
         )
         hidden = "" if key == active else " hidden"
         sections.append(f"<section data-route-intro='{key}'{hidden}>{body}</section>")
