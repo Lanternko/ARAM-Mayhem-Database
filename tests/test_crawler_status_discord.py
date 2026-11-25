@@ -641,3 +641,73 @@ def test_stall_alert_is_quiet_during_maintenance_then_resumes(monkeypatch, tmp_p
     STATUS.run_stall_alert(**kwargs)
     assert len(posted) == 1
     assert posted[0][1]["embeds"][0]["title"] == "🔴 爬蟲停擺"
+
+
+def _write_events(path: Path, rows: list[tuple[float, str, str, int]]) -> None:
+    need = {"start_available_mb": 6144, "start_commit_percent": 95}
+    sample = {"available_mb": 2661.1, "commit_percent": 94.1}
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write('{"time": 1, "action": "admission_sam\n')  # torn row must be skipped
+        for when, action, job, pid in rows:
+            row = {"time": when, "action": action, "job": job, "pid": pid, "thresholds": need}
+            if action == "admission_sample":
+                row["sample"] = sample
+            handle.write(json.dumps(row) + "\n")
+
+
+def test_heavy_job_wait_starts_after_the_last_admission(tmp_path) -> None:
+    now = 1_000_000.0
+    job = "publish_static_site_once"
+    events = tmp_path / "events.jsonl"
+    rows = [(now - 9000, "admission_sample", job, 7), (now - 8000, "admitted", job, 7), (now - 7900, "released", job, 7)]
+    rows += [(now - 7200 + i * 30, "admission_sample", job, 7) for i in range(240)]
+    _write_events(events, rows)
+    (wait,) = STATUS.heavy_job_waits(events, now)
+    assert wait["job"] == job
+    assert wait["waited_min"] == 120.0
+    assert wait["sample"]["available_mb"] == 2661.1
+
+
+def test_heavy_job_wait_ignores_a_waiter_that_died(tmp_path) -> None:
+    now = 1_000_000.0
+    events = tmp_path / "events.jsonl"
+    # Samples stop 20 minutes ago (reboot mid-wait): nothing is waiting now.
+    _write_events(events, [(now - 9000 + i * 30, "admission_sample", "refresh_models_once", 3) for i in range(260)])
+    assert STATUS.heavy_job_waits(events, now) == []
+    assert STATUS.heavy_job_waits(tmp_path / "missing.jsonl", now) == []
+
+
+def test_memory_alert_fires_once_reminds_later_and_reports_recovery(monkeypatch, tmp_path) -> None:
+    start = dt.datetime(2026, 11, 23, 4, 0, tzinfo=dt.timezone.utc)
+    base = start.timestamp()
+    job = "publish_static_site_once"
+    events = tmp_path / "events.jsonl"
+    state = tmp_path / "memory.json"
+    posted = []
+    monkeypatch.setattr(STATUS, "post_webhook", lambda *a: posted.append(a))
+    monkeypatch.setattr(STATUS, "top_memory_groups", lambda: [("PathOfExile", 1, 11269)])
+
+    def tick(minutes: float, rows) -> None:
+        _write_events(events, rows)
+        STATUS.run_memory_alert(
+            events_path=events, webhook="unused", state_path=state, wait_minutes=180,
+            renotify_minutes=360, dry_run=False, now=start + dt.timedelta(minutes=minutes),
+        )
+
+    waiting = lambda minutes: [(base + i * 30, "admission_sample", job, 7) for i in range(int(minutes * 2) + 1)]
+    tick(170, waiting(170))
+    assert posted == []
+    tick(185, waiting(185))
+    assert len(posted) == 1
+    text = posted[0][1]["embeds"][0]["description"]
+    assert "網站發布" in text and "3 小時 5 分" in text
+    assert "可用記憶體 2.6GB（要 ≥6.0GB）" in text and "PathOfExile ×1：11.0GB" in text
+    tick(300, waiting(300))
+    assert len(posted) == 1  # inside the reminder window
+    tick(550, waiting(550))
+    assert len(posted) == 2
+    tick(560, waiting(555) + [(base + 555 * 60 + 40, "admitted", job, 7)])
+    assert len(posted) == 3
+    assert "✅" in posted[2][1]["embeds"][0]["title"]
+    tick(565, waiting(555) + [(base + 555 * 60 + 40, "admitted", job, 7)])
+    assert len(posted) == 3

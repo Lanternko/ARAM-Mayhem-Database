@@ -828,6 +828,194 @@ def run_stall_alert(
     return 0
 
 
+def default_heavy_job_events() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    return Path(base) / "AramMeta" / "heavy-jobs" / "events.jsonl"
+
+
+DEFAULT_MEMORY_STATE_FILE = ROOT / "data" / "monitor" / "memory_alert_state.json"
+HEAVY_JOB_TAIL_BYTES = 16 * 1024 * 1024
+# A waiter samples every 30s.  One that has been silent this long is not
+# waiting any more (it was killed, or the machine rebooted mid-wait).
+HEAVY_JOB_LIVE_SEC = 300.0
+HEAVY_JOB_LABELS = {
+    "publish_static_site_once": "網站發布",
+    "refresh_models_once": "模型重訓",
+}
+
+
+def heavy_job_waits(
+    events_path: Path,
+    now_unix: float,
+    *,
+    tail_bytes: int = HEAVY_JOB_TAIL_BYTES,
+    live_sec: float = HEAVY_JOB_LIVE_SEC,
+) -> list[dict[str, Any]]:
+    """Heavy jobs that are waiting at the memory gate right now, and for how long.
+
+    ``heavy_jobs.HeavyJob.admitted`` writes one ``admission_sample`` every 30s
+    while it waits for headroom and an ``admitted`` once it gets in.  A job is
+    waiting when its newest event is a fresh ``admission_sample``; the wait began
+    at the first sample after its last ``admitted``/``released``.  Only the file
+    tail is read, so a wait older than the tail is reported as a lower bound.
+    """
+    try:
+        with events_path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - tail_bytes))
+            raw = handle.read()
+    except OSError:
+        return []
+    streak: dict[str, dict[str, Any]] = {}
+    for line in raw.splitlines():
+        try:
+            row = json.loads(line)
+            job, action, when = row["job"], row["action"], float(row["time"])
+        except (ValueError, KeyError, TypeError):
+            continue  # torn first line of the tail, or a corrupt row
+        current = streak.get(job)
+        if action == "admission_sample":
+            if current and (current["pid"] != row.get("pid") or when - current["last"] > live_sec):
+                current = None
+            if current is None:
+                current = streak[job] = {"pid": row.get("pid"), "since": when}
+            current["last"] = when
+            current["sample"] = row.get("sample") or {}
+            current["thresholds"] = row.get("thresholds") or {}
+        elif action in ("admitted", "released"):
+            streak.pop(job, None)
+    waits = []
+    for job, current in streak.items():
+        if now_unix - current["last"] > live_sec:
+            continue
+        waits.append(
+            {
+                "job": job,
+                "waited_min": round((now_unix - current["since"]) / 60.0, 1),
+                "sample": current["sample"],
+                "thresholds": current["thresholds"],
+            }
+        )
+    return sorted(waits, key=lambda w: -w["waited_min"])
+
+
+def top_memory_groups(limit: int = 5) -> list[tuple[str, int, float]]:
+    """(name, process count, private MB) for the biggest program groups."""
+    groups: dict[str, list[float]] = {}
+    for proc in psutil.process_iter(["name", "memory_info"]):
+        info = proc.info.get("memory_info")
+        if info is None:
+            continue
+        name = (proc.info.get("name") or "?").removesuffix(".exe")
+        entry = groups.setdefault(name, [0, 0.0])
+        entry[0] += 1
+        entry[1] += getattr(info, "private", info.rss) / (1024 * 1024)
+    ranked = sorted(groups.items(), key=lambda kv: -kv[1][1])[:limit]
+    return [(name, int(count), round(mb)) for name, (count, mb) in ranked]
+
+
+def _fmt_shortfall(wait: dict[str, Any]) -> str:
+    sample, need = wait["sample"], wait["thresholds"]
+    bits = []
+    available = sample.get("available_mb")
+    if available is not None and need.get("start_available_mb") is not None:
+        bits.append(f"可用記憶體 {available / 1024:.1f}GB（要 ≥{need['start_available_mb'] / 1024:.1f}GB）")
+    commit = sample.get("commit_percent")
+    if commit is not None and need.get("start_commit_percent") is not None:
+        bits.append(f"承諾量 {commit:.0f}%（要 ≤{need['start_commit_percent']:g}%）")
+    return "、".join(bits)
+
+
+def run_memory_alert(
+    *,
+    events_path: Path,
+    webhook: str,
+    state_path: Path,
+    wait_minutes: float,
+    renotify_minutes: float,
+    dry_run: bool,
+    now: dt.datetime | None = None,
+) -> int:
+    """Ping when the site build or model refresh has been starved of memory.
+
+    The heavy-job gate refuses to start those jobs while the machine is short on
+    memory, and waits silently: the processes stay alive and nothing errors, so
+    the site simply stops updating (2026-11-23: 800+ minutes unnoticed).  Same
+    contract as the stall watch -- silent while healthy, one alert when a wait
+    crosses ``wait_minutes``, a reminder every ``renotify_minutes``, and one
+    message when the jobs get back in.
+    """
+    now = now or utc_now()
+    state = load_stall_state(state_path)
+    was_alerting = bool(state.get("alerting"))
+    starved = [
+        w for w in heavy_job_waits(events_path, now.timestamp()) if w["waited_min"] >= wait_minutes
+    ]
+
+    if not starved:
+        if was_alerting:
+            recovered_msg = {
+                "username": "arammeta 爬蟲",
+                "embeds": [
+                    {
+                        "title": "記憶體已夠用，發布與重訓恢復排程 ✅",
+                        "color": 0x57F287,
+                        "description": "網站發布／模型重訓不再卡在記憶體門檻。",
+                        "timestamp": now.isoformat(),
+                    }
+                ],
+            }
+            if dry_run:
+                print(json.dumps(recovered_msg, ensure_ascii=False, indent=2))
+            else:
+                post_webhook(webhook, recovered_msg)
+            print("ok memory-alert recovered")
+            if not dry_run:
+                save_stall_state(state_path, {"alerting": False})
+        return 0
+
+    last_notified = parse_iso(state.get("last_notified_at"))
+    should_notify = (
+        not was_alerting
+        or last_notified is None
+        or (now - last_notified).total_seconds() / 60.0 >= renotify_minutes
+    )
+    if not should_notify:
+        return 0
+
+    lines = []
+    for wait in starved:
+        label = HEAVY_JOB_LABELS.get(wait["job"], wait["job"])
+        lines.append(f"**{label}** 已等 **{fmt_minutes(wait['waited_min'])}**：{_fmt_shortfall(wait)}")
+    hogs = "\n".join(
+        f"- {name} ×{count}：{mb / 1024:.1f}GB" for name, count, mb in top_memory_groups()
+    )
+    alert_msg = {
+        "username": "arammeta 爬蟲",
+        "embeds": [
+            {
+                "title": "🟠 記憶體不夠，網站發布／模型重訓排不進去",
+                "color": 0xE67E22,
+                "description": (
+                    "\n".join(lines)
+                    + "\n\n目前最佔記憶體的程式：\n"
+                    + hogs
+                    + "\n\n關掉用不到的程式就會自己恢復，不用重開爬蟲。"
+                ),
+                "timestamp": now.isoformat(),
+            }
+        ],
+    }
+    if dry_run:
+        print(json.dumps(alert_msg, ensure_ascii=False, indent=2))
+    else:
+        post_webhook(webhook, alert_msg)
+        save_stall_state(state_path, {"alerting": True, "last_notified_at": now.isoformat()})
+    print(f"ok memory-alert fired jobs={[w['job'] for w in starved]} waited_min={starved[0]['waited_min']}")
+    return 0
+
+
 def publish_status(
     repo_root: Path,
     state_file: Path,
@@ -1429,6 +1617,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Minutes since the last capture before --stall-alert fires",
     )
     parser.add_argument(
+        "--heavy-job-events", type=Path, default=None,
+        help="heavy_jobs events.jsonl read by the memory watch inside --stall-alert",
+    )
+    parser.add_argument("--memory-state-file", type=Path, default=DEFAULT_MEMORY_STATE_FILE)
+    parser.add_argument(
+        "--memory-wait-minutes", type=float, default=180.0,
+        help="Minutes a site build / model refresh may wait for memory before alerting",
+    )
+    parser.add_argument(
+        "--memory-renotify-minutes", type=float, default=360.0,
+        help="Minutes between repeat memory alerts while still starved",
+    )
+    parser.add_argument(
         "--stall-renotify-minutes", type=float, default=45.0,
         help="Minutes between repeat --stall-alert reminders while still down",
     )
@@ -1450,6 +1651,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.stall_alert:
         webhook = "" if args.dry_run else resolve_webhook(args.webhook)
+        # Runs first and never raises: run_stall_alert has early returns, and a
+        # broken memory probe must not take the stall watch down with it.
+        try:
+            run_memory_alert(
+                events_path=args.heavy_job_events or default_heavy_job_events(),
+                webhook=webhook,
+                state_path=args.memory_state_file,
+                wait_minutes=args.memory_wait_minutes,
+                renotify_minutes=args.memory_renotify_minutes,
+                dry_run=args.dry_run,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"memory-alert error: {exc!r}")
         return run_stall_alert(
             db=args.db,
             webhook=webhook,
