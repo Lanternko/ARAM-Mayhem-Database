@@ -4076,13 +4076,13 @@
     }
     function poolsPageTitle() {
         if (currentLang === 'en') return 'ARAM Mayhem Augment Pools & Roll Weights · arammeta';
-        if (currentLang === 'zh-CN') return '海克斯大乱斗海克斯池与抽卡权重 · arammeta';
+        if (currentLang === 'zh-CN') return '大乱斗海克斯池与抽卡权重 · arammeta';
         return 'ARAM 大亂鬥增幅池與抽卡權重 · arammeta';
     }
     function augmentsPageTitle() {
         if (augMode === 'pools') return poolsPageTitle();
         if (currentLang === 'en') return 'ARAM Mayhem Augment Tier List & Win Rates · arammeta';
-        if (currentLang === 'zh-CN') return '海克斯大乱斗海克斯排行与胜率 · arammeta';
+        if (currentLang === 'zh-CN') return '大乱斗海克斯排行与胜率 · arammeta';
         return 'ARAM 大亂鬥增幅排行與勝率 · arammeta';
     }
     function setAugMode(next, historyMode) {
@@ -11686,7 +11686,10 @@
         if (home) list.removeAttribute('aria-labelledby');
         else list.setAttribute('aria-labelledby', 'tab-champions');
         const titleEl = document.getElementById('champion-list-title');
-        titleEl.textContent = title;
+        // Keep the static SEO heading on home; the region label above stays short.
+        titleEl.textContent = !home ? title
+            : currentLang === 'zh-CN' ? '海克斯大乱斗英雄胜率排行'
+            : pickLang('ARAM 大亂鬥英雄勝率排行', 'ARAM Mayhem Champion Tier List');
         // Visible heading and hint were retired; the h1 stays for screen readers and SEO.
         titleEl.classList.add('sr-only');
         const hintEl = document.getElementById('champion-list-hint');
@@ -11941,7 +11944,7 @@
         document.title = currentLang === 'en'
             ? `${champName(info, cid)} ARAM Mayhem Augments & Build · arammeta`
             : (currentLang === 'zh-CN'
-                ? `${champName(info, cid)} 海克斯大乱斗海克斯与出装 · arammeta`
+                ? `${champName(info, cid)} 大乱斗海克斯与出装 · arammeta`
                 : `${champName(info, cid)} ARAM 大亂鬥增幅與出裝 · arammeta`);
         host.innerHTML = `<div class="detail detail-page detail-loading"><div class="detail-skeleton" aria-hidden="true"></div></div>`;
         if (!force) {

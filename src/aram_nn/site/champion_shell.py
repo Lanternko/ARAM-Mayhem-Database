@@ -408,7 +408,7 @@ def champion_shell_html(
             stats += f"<p class='section-sub'>{copy[6]}: {previous * 100:.0f}%</p>"
     h1_suffix = {
         "zh-Hant": " ARAM 大亂鬥增幅與出裝",
-        "zh-Hans": " 海克斯大乱斗海克斯与出装",
+        "zh-Hans": " 大乱斗海克斯与出装",
         "en": " ARAM Mayhem Augments &amp; Build",
     }[language]
     fallback = (

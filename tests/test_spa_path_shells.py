@@ -223,7 +223,7 @@ class SpaPathShellTests(unittest.TestCase):
                 pools_body,
             )
             self.assertIn("<title>ARAM 大亂鬥增幅池與抽卡權重 · arammeta</title>", pools_body)
-            self.assertIn('name=\'description\' content="查詢 LOL ARAM 海克斯大亂鬥每位英雄的增幅池分類、可抽到的增幅清單與各池抽卡權重。"', pools_body)
+            self.assertIn('name=\'description\' content="ARAM 大亂鬥每位英雄會從哪些增幅池抽卡、各池有哪些增幅，以及抽中的權重。"', pools_body)
             en_pools = (root / "en" / "augments" / "pools" / "index.html").read_text(
                 encoding="utf-8"
             )
@@ -235,7 +235,7 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn_pools = (
                 root / "zh-cn" / "augments" / "pools" / "index.html"
             ).read_text(encoding="utf-8")
-            self.assertIn("<title>海克斯大乱斗海克斯池与抽卡权重 · arammeta</title>", zh_cn_pools)
+            self.assertIn("<title>大乱斗海克斯池与抽卡权重 · arammeta</title>", zh_cn_pools)
             for pool_html in (pools_body, en_pools, zh_cn_pools):
                 self.assertNotIn("/og-image.png", pool_html)
                 self.assertIn("property='og:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
@@ -303,8 +303,10 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("Jinx ARAM Mayhem Augments &amp; Build", en)
             self.assertIn('"inLanguage": "en"', en)
             self.assertIn('"@type": "BreadcrumbList"', en)
+            self.assertIn('"name": "Jinx", "item": "https://arammeta.com/en/champions/jinx/"', en)
             self.assertIn("lang='zh-Hans'", cn)
-            self.assertIn("金克丝 海克斯大乱斗海克斯与出装", cn)
+            self.assertIn("金克丝 大乱斗海克斯与出装", cn)
+            self.assertIn('"name": "金克丝", "item": "https://arammeta.com/zh-cn/champions/jinx/"', cn)
             self.assertIn('"inLanguage": "zh-Hans"', cn)
             self.assertIn("FULL_SPA_SHELL", (root / "assets/app-shell.html").read_text())
             # The analysis JSON is data: only written when the build asks for it.
@@ -564,10 +566,11 @@ class SpaPathShellTests(unittest.TestCase):
         source = (
             "<!doctype html><html lang='zh-Hant'><head><title>app</title>"
             "<meta name='description' content='old'>"
+            "<meta property='og:title' content=\"arammeta\"><meta name='twitter:title' content=\"arammeta\">"
             "<script type='application/ld+json'>{\"inLanguage\":\"zh-Hant\"}</script>"
             "</head><body>"
             "<section class='view view-home is-active' id='view-home'>"
-            "<h1 id='champion-list-title' class='sr-only'>英雄快速查詢</h1>"
+            "<h1 id='champion-list-title' class='sr-only'>ARAM 大亂鬥英雄勝率排行</h1>"
             "<a class='champ' href='/champions/kayle/' data-name-zh=\"凱爾\" data-name-en=\"Kayle\">"
             "<span class='name'>凱爾</span></a></section>"
             "<section class='view view-augments' id='view-augments'>"
@@ -582,7 +585,11 @@ class SpaPathShellTests(unittest.TestCase):
             html_lang="en", title="arammeta — ARAM Mayhem", description="EN desc",
         )
         self.assertIn("<span class='name'>Kayle</span>", en_home)
-        self.assertIn("ARAM Mayhem Champion Tier List", en_home)
+        self.assertIn("<h1 id='champion-list-title' class='sr-only'>ARAM Mayhem Champion Tier List</h1>", en_home)
+        # Search title is long; the share card keeps the bare wordmark on home pages.
+        self.assertIn("<title>arammeta — ARAM Mayhem</title>", en_home)
+        self.assertIn("property='og:title' content=\"arammeta\"", en_home)
+        self.assertIn("name='twitter:title' content=\"arammeta\"", en_home)
         self.assertIn('"inLanguage": "en"', en_home)
         self.assertIn("href='/en/augments/'", en_home)
         self.assertIn("href='/en/augments/pools/'", en_home)
@@ -596,6 +603,11 @@ class SpaPathShellTests(unittest.TestCase):
         self.assertIn("class='aug-mode-tab is-active' id='aug-mode-pools'", pools)
         self.assertIn("id='aug-pools-host' data-aug-mode='pools' role='tabpanel' aria-labelledby='aug-mode-pools'>", pools)
         self.assertIn('"@type": "BreadcrumbList"', pools)
+        # One h1 per page, naming the route; the inactive champion list drops to h2.
+        self.assertEqual(pools.count("<h1"), 1)
+        self.assertIn("id='view-augments'><h1 class='sr-only'>ARAM 大亂鬥增幅池與抽卡權重</h1>", pools)
+        self.assertIn("<h2 id='champion-list-title' class='sr-only'>ARAM 大亂鬥英雄勝率排行</h2>", pools)
+        self.assertIn("property='og:title' content=\"ARAM 大亂鬥增幅池與抽卡權重 · arammeta\"", pools)
 
     def test_css_loader_has_no_trailing_angle_bracket_in_url_literal(self) -> None:
         source = (SCRIPTS / "tierlist_render.py").read_text(encoding="utf-8")
