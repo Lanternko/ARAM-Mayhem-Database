@@ -1431,6 +1431,8 @@ def write_site_info_pages(
         written.append(ads_txt)
     from aram_nn.site.classic_status import write_classic_status_pages
     written.extend(write_classic_status_pages(root, site_url=site_url))
+    from aram_nn.site.destiny_page import write_destiny_pages
+    written.extend(write_destiny_pages(root, site_url=site_url))
     return written
 
 
@@ -4461,6 +4463,8 @@ def render_html(
         "<nav class='site-links' aria-label='站務連結'>"
         "<a href='/about/#desktop-download' data-i18n-zh='Windows 下載' data-i18n-zh-cn='Windows 下载' "
         "data-i18n-en='Windows download'>Windows 下載</a>"
+        "<a href='/augments/weapon-of-destiny/' data-i18n-zh='命定武器' data-i18n-zh-cn='命定武器' "
+        "data-i18n-en='Weapon of Destiny'>命定武器</a>"
         "<a href='/column/' data-i18n-zh='專欄' data-i18n-zh-cn='专栏' "
         "data-i18n-en='Articles'>專欄</a>"
         "<a href='/about/' data-i18n-zh='關於' data-i18n-zh-cn='关于' "

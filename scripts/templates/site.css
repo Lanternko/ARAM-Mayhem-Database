@@ -38,6 +38,51 @@
         .classic-status-languages a { font-size: 11px; white-space: nowrap; }
     }
 
+    /* 命定武器 page (aram_nn.site.destiny_page): reuses the classic-status header chrome. */
+    .dw-main { max-width: 960px; margin: 0 auto; padding: 104px 24px 72px; }
+    .dw-crumb { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; color: var(--text-muted); font-size: 12px; }
+    .dw-crumb a { color: var(--text-muted); text-decoration: none; }
+    .dw-crumb a:hover { color: var(--text); }
+    .dw-head { display: flex; align-items: center; gap: 16px; }
+    .dw-head h1 { margin: 0; font-size: 30px; font-weight: 700; line-height: 1.25; }
+    .dw-aug { width: 56px; height: 56px; flex: none; border-radius: var(--r-sm); }
+    .dw-lede { max-width: 62ch; margin: 16px 0 0; color: var(--text-muted); font-size: 15px; line-height: 1.85; }
+    .dw-common { margin-top: 36px; }
+    .dw-common h2 { margin: 0 0 12px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+    .dw-common ul { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+    .dw-common li { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+    .dw-common img { grid-row: span 2; border-radius: 6px; }
+    .dw-common-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .dw-common-n { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .dw-search { display: block; width: 100%; max-width: 320px; height: 40px; margin: 36px 0 12px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; }
+    .dw-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .dw-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 40px; margin: 0; padding: 0; list-style: none; }
+    .dw-row { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); align-items: center; gap: 12px; min-height: 64px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .dw-row[hidden] { display: none; }
+    .dw-champ { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--text); font-weight: 600; text-decoration: none; }
+    a.dw-champ:hover .dw-champ-name { color: var(--accent-soft); }
+    .dw-champ img { flex: none; border-radius: 6px; }
+    .dw-champ-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dw-picks { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 4px; min-width: 0; }
+    .dw-item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 52px; align-items: center; column-gap: 10px; }
+    .dw-item img { border-radius: 5px; }
+    .dw-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dw-lift { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+    .dw-or { display: none; }
+    .dw-alt { color: var(--text-muted); font-size: 12px; }
+    .dw-alt img { width: 20px; height: 20px; margin-left: 8px; }
+    .dw-alt .dw-lift { font-weight: 500; }
+    .dw-prev { padding-left: 38px; color: var(--text-muted); font-size: 11px; }
+    .dw-empty { margin: 24px 0 0; color: var(--text-muted); }
+    @media (max-width: 760px) {
+        .dw-main { padding: 84px 20px 48px; }
+        .dw-head h1 { font-size: 24px; }
+        .dw-aug { width: 44px; height: 44px; }
+        .dw-common ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dw-search { max-width: none; }
+        .dw-list { grid-template-columns: minmax(0, 1fr); }
+    }
+
     /* ===== Theme tokens.  Dark is the default; [data-theme="light"] flips
        the palette.  New chrome (header, nav, views, settings, column) is
        authored entirely against these vars so both themes are correct.  The
@@ -10651,6 +10696,13 @@
     }
     /* "上版資料" on a carried-over 命定武器 item pick: present but quiet, so it
        never reads as part of the recommendation itself. */
+    .destiny-all {
+        margin-left: 8px;
+        color: var(--text-muted);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    .destiny-all:hover { color: var(--text); }
     .destiny-prev {
         color: var(--text-muted);
         font-size: 0.85em;

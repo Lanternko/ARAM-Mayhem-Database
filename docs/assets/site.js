@@ -3203,9 +3203,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
             (destiny && destiny.prev ? `${destinyLine()} ${destinyPrevLabel()}` : destinyLine());
         const destinyTextHtml = () => {
             const line = escHtml(destinyLine());
-            return destiny && destiny.prev
+            const prefix = currentLang === 'en' ? '/en' : currentLang === 'zh-CN' ? '/zh-cn' : '';
+            const all = ` <a class="destiny-all" href="${prefix}/augments/weapon-of-destiny/">${escHtml(pickLang('全部英雄', 'All champions'))}</a>`;
+            return (destiny && destiny.prev
                 ? `${line} <span class="destiny-prev">${escHtml(destinyPrevLabel())}</span>`
-                : line;
+                : line) + all;
         };
         const destinyIcon = (v) => {
             const src = destiny ? itemIconUrl({ id: destiny.id }) : '';

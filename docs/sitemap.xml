@@ -28,6 +28,13 @@
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
   </url>
   <url>
+    <loc>https://arammeta.com/augments/weapon-of-destiny/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/weapon-of-destiny/" />
+  </url>
+  <url>
     <loc>https://arammeta.com/champions/</loc>
     <lastmod>2026-11-27</lastmod>
     <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/champions/" />
@@ -1500,6 +1507,13 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/en/augments/weapon-of-destiny/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/weapon-of-destiny/" />
   </url>
   <url>
     <loc>https://arammeta.com/en/champions/</loc>
@@ -3007,6 +3021,13 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/pools/" />
     <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/pools/" />
+  </url>
+  <url>
+    <loc>https://arammeta.com/zh-cn/augments/weapon-of-destiny/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://arammeta.com/en/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://arammeta.com/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://arammeta.com/zh-cn/augments/weapon-of-destiny/" />
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://arammeta.com/augments/weapon-of-destiny/" />
   </url>
   <url>
     <loc>https://arammeta.com/zh-cn/champions/</loc>
