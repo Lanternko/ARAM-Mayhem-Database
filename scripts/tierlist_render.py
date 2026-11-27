@@ -2066,6 +2066,187 @@ def payload_content_version(payload: dict) -> str:
     return hashlib.sha256(canonical).hexdigest()[:16]
 
 
+def _route_breadcrumb_items(
+    *,
+    origin: str,
+    path: str,
+    html_lang: str,
+    title: str,
+) -> list[dict]:
+    """Build localized Schema.org BreadcrumbList items for non-home routes."""
+    if not origin.startswith("http"):
+        return []
+    parts = [p for p in path.strip("/").split("/") if p]
+    prefix = ""
+    if parts and parts[0] in {"en", "zh-cn"}:
+        prefix = "/" + parts[0]
+        parts = parts[1:]
+    if not parts:
+        return []
+    labels = {
+        "zh-Hant": {
+            "home": "arammeta",
+            "champions": "英雄排行",
+            "augments": "增幅排行",
+            "pools": "增幅池",
+            "draft": "選角分析",
+            "changes": "版本變動",
+            "game": "Meta Pick",
+        },
+        "en": {
+            "home": "arammeta",
+            "champions": "Champions",
+            "augments": "Augments",
+            "pools": "Augment Pools",
+            "draft": "Draft",
+            "changes": "Patch Changes",
+            "game": "Meta Pick",
+        },
+        "zh-Hans": {
+            "home": "arammeta",
+            "champions": "英雄排行",
+            "augments": "海克斯排行",
+            "pools": "海克斯池",
+            "draft": "选角分析",
+            "changes": "版本变动",
+            "game": "Meta Pick",
+        },
+    }.get(html_lang, {})
+    home_url = origin + (prefix + "/" if prefix else "/")
+    crumbs: list[tuple[str, str]] = [(labels.get("home", "arammeta"), home_url)]
+    if parts[0] in labels:
+        crumbs.append((labels[parts[0]], origin + prefix + "/" + parts[0] + "/"))
+        if len(parts) >= 2:
+            if parts[0] == "augments" and parts[1] == "pools":
+                crumbs.append((labels["pools"], origin + path))
+            elif parts[0] == "champions":
+                leaf = title.split("·")[0].strip() if title else parts[1]
+                leaf = leaf.removesuffix(_CHAMP_TITLE_SUFFIX.get(html_lang, "")).strip() or parts[1]
+                crumbs.append((leaf, origin + path))
+    else:
+        return []
+    return [
+        {
+            "@type": "ListItem",
+            "position": idx,
+            "name": name,
+            "item": item_url,
+        }
+        for idx, (name, item_url) in enumerate(crumbs, start=1)
+    ]
+
+
+def _localized_json_ld(
+    *,
+    origin: str,
+    path: str,
+    html_lang: str,
+    title: str,
+    description: str,
+) -> str:
+    """Localized WebSite (+ BreadcrumbList on subpages) JSON-LD script."""
+    if not origin.startswith("http"):
+        return ""
+    locale_prefix = next((p for p in ("/en", "/zh-cn") if path == p + "/" or path.startswith(p + "/")), "")
+    home_url = origin + (locale_prefix + "/" if locale_prefix else "/")
+    website_ld = {
+        "@type": "WebSite",
+        "name": "arammeta",
+        "alternateName": ["AramMeta", "ARAM Meta"],
+        "url": home_url,
+        "description": description or title,
+        "inLanguage": html_lang,
+    }
+    crumbs = _route_breadcrumb_items(
+        origin=origin, path=path, html_lang=html_lang, title=title,
+    )
+    if crumbs:
+        payload: dict = {
+            "@context": "https://schema.org",
+            "@graph": [
+                website_ld,
+                {
+                    "@type": "BreadcrumbList",
+                    "itemListElement": crumbs,
+                },
+            ],
+        }
+    else:
+        payload = {"@context": "https://schema.org", **website_ld}
+    return "<script type='application/ld+json'>" + json.dumps(payload, ensure_ascii=False) + "</script>"
+
+
+_CHAMP_CARD_EN_NAME_RE = re.compile(
+    r"(<a class='champ'\s[^>]*\bdata-name-en=\"([^\"]+)\"[^>]*>.*?<span class='name'>)([^<]*)(</span>)",
+    flags=re.S,
+)
+
+
+def _home_h1_html(text: str, tag: str = "h1") -> str:
+    return f"<{tag} id='champion-list-title' class='sr-only'>{text}</{tag}>"
+
+
+_HOME_H1_HTML = _home_h1_html("ARAM 大亂鬥英雄勝率排行")
+_HOME_H1_RE = re.compile(r"<h1 (id='champion-list-title' class='sr-only'>[^<]*)</h1>")
+
+# Champion page titles are "<name><suffix> · arammeta"; breadcrumbs want the name alone.
+_CHAMP_TITLE_SUFFIX = {
+    "zh-Hant": " ARAM 大亂鬥增幅與出裝",
+    "en": " ARAM Mayhem Augments & Build",
+    "zh-Hans": " 大乱斗海克斯与出装",
+}
+
+
+def _activate_static_route_view(html_src: str, *, path: str, heading: str = "") -> str:
+    """Make the route's own view active in static HTML (reduces CLS & duplicate snippet)."""
+    parts = [p for p in path.strip("/").split("/") if p]
+    if parts and parts[0] in {"en", "zh-cn"}:
+        parts = parts[1:]
+    if not parts or parts[0] == "champions":
+        return html_src
+    view_name = parts[0]
+    if view_name not in {"augments", "draft", "changes", "game"}:
+        return html_src
+    out = html_src.replace(
+        "<section class='view view-home is-active' id='view-home'",
+        "<section class='view view-home' id='view-home'",
+        1,
+    )
+    out = out.replace(
+        f"<section class='view view-{view_name}' id='view-{view_name}'",
+        f"<section class='view view-{view_name} is-active' id='view-{view_name}'",
+        1,
+    )
+    section_open = re.search(rf"<section class='view view-{view_name} is-active'[^>]*>", out)
+    if heading and section_open and _HOME_H1_RE.search(out):
+        # The page's one h1 names this route, not the (now inactive) champion list.
+        out = (out[:section_open.end()] + f"<h1 class='sr-only'>{html.escape(heading)}</h1>"
+               + out[section_open.end():])
+        out = _HOME_H1_RE.sub(r"<h2 \1</h2>", out, count=1)
+    if view_name == "augments" and len(parts) >= 2 and parts[1] == "pools":
+        out = out.replace(
+            "class='aug-mode-tab is-active' id='aug-mode-tier'",
+            "class='aug-mode-tab' id='aug-mode-tier'",
+            1,
+        )
+        out = out.replace(
+            "class='aug-mode-tab' id='aug-mode-pools'",
+            "class='aug-mode-tab is-active' id='aug-mode-pools'",
+            1,
+        )
+        out = out.replace(
+            "id='aug-mode-panel-tier' data-aug-mode='tier' role='tabpanel' aria-labelledby='aug-mode-tier'>",
+            "id='aug-mode-panel-tier' data-aug-mode='tier' role='tabpanel' aria-labelledby='aug-mode-tier' hidden>",
+            1,
+        )
+        out = out.replace(
+            "id='aug-pools-host' data-aug-mode='pools' role='tabpanel' aria-labelledby='aug-mode-pools' hidden>",
+            "id='aug-pools-host' data-aug-mode='pools' role='tabpanel' aria-labelledby='aug-mode-pools'>",
+            1,
+        )
+    return out
+
+
 def _localize_full_shell_html(
     html_src: str,
     *,
@@ -2090,6 +2271,16 @@ def _localize_full_shell_html(
         out = out.replace(
             f"{CHAMP_CARD_OPEN}/champions/", f"{CHAMP_CARD_OPEN}{locale_prefix}/champions/"
         )
+        # Mode sub-tabs inside /augments/ also point to the localized path.
+        out = out.replace("href='/augments/'", f"href='{locale_prefix}/augments/'")
+        out = out.replace("href='/augments/pools/'", f"href='{locale_prefix}/augments/pools/'")
+    if html_lang == "en":
+        # Localize static tier-list champion labels + heading so crawlers see English body copy.
+        out = _CHAMP_CARD_EN_NAME_RE.sub(r"\1\2\4", out)
+        out = out.replace(_HOME_H1_HTML, _home_h1_html("ARAM Mayhem Champion Tier List"), 1)
+    elif html_lang == "zh-Hans":
+        out = out.replace(_HOME_H1_HTML, _home_h1_html("海克斯大乱斗英雄胜率排行"), 1)
+    out = _activate_static_route_view(out, path=path, heading=title.split("·")[0].strip())
     out = re.sub(
         r"(<link\s+rel=['\"]canonical['\"]\s+href=)['\"][^'\"]*['\"]",
         rf"\1'{html.escape(canonical, quote=True)}'",
@@ -2106,16 +2297,18 @@ def _localize_full_shell_html(
     )
     if title:
         out = re.sub(r"<title>[^<]*</title>", f"<title>{html.escape(title)}</title>", out, count=1, flags=re.I)
+        # Search results get the long home title; share cards keep the bare wordmark.
+        share_title = "arammeta" if path in {"/", "/en/", "/zh-cn/"} else title
         out = re.sub(
             r"(property=['\"]og:title['\"]\s+content=)[\"'][^\"']*[\"']",
-            rf'\1"{html.escape(title, quote=True)}"',
+            rf'\1"{html.escape(share_title, quote=True)}"',
             out,
             count=1,
             flags=re.I,
         )
         out = re.sub(
             r"(name=['\"]twitter:title['\"]\s+content=)[\"'][^\"']*[\"']",
-            rf'\1"{html.escape(title, quote=True)}"',
+            rf'\1"{html.escape(share_title, quote=True)}"',
             out,
             count=1,
             flags=re.I,
@@ -2140,6 +2333,19 @@ def _localize_full_shell_html(
             count=1,
             flags=re.I,
         )
+    localized_ld = _localized_json_ld(
+        origin=origin, path=path, html_lang=html_lang, title=title, description=description,
+    )
+    if localized_ld:
+        out, ld_replaced = re.subn(
+            r"<script\s+type=['\"]application/ld\+json['\"]>.*?</script>",
+            lambda _m: localized_ld,
+            out,
+            count=1,
+            flags=re.S | re.I,
+        )
+        if not ld_replaced:
+            out = out.replace("</head>", localized_ld + "</head>", 1)
     if path in {"/augments/pools/", "/en/augments/pools/", "/zh-cn/augments/pools/"}:
         # Pools describe draw rules, so the home page's top champion is misleading.
         # Reuse the published brand asset and discard inherited image metadata.
@@ -2380,21 +2586,21 @@ def _champion_route_specs(root: Path, routes) -> list[tuple[Path, str, str, str,
         specs.append((
             root / "champions" / slug / "index.html",
             f"/champions/{slug}/",
-            f"{zh} 增幅與出裝 · arammeta",
+            f"{zh}{_CHAMP_TITLE_SUFFIX['zh-Hant']} · arammeta",
             f"{zh}（{en}）ARAM 大亂鬥增幅排行、出裝與召喚師技能",
             "zh-Hant",
         ))
         specs.append((
             root / "en" / "champions" / slug / "index.html",
             f"/en/champions/{slug}/",
-            f"{en} augments & build · arammeta",
+            f"{en}{_CHAMP_TITLE_SUFFIX['en']} · arammeta",
             f"{en} ARAM Mayhem augment ranking, item build and summoner spells",
             "en",
         ))
         specs.append((
             root / "zh-cn" / "champions" / slug / "index.html",
             f"/zh-cn/champions/{slug}/",
-            f"{cn} 海克斯与出装 · arammeta",
+            f"{cn}{_CHAMP_TITLE_SUFFIX['zh-Hans']} · arammeta",
             f"{cn}（{en}）大乱斗海克斯排行、出装与召唤师技能",
             "zh-Hans",
         ))
@@ -2449,132 +2655,132 @@ def write_spa_path_shells(
         (
             root / "augments" / "index.html",
             "/augments",
-            "增幅 · arammeta",
-            "ARAM 大亂鬥增幅勝率",
+            "ARAM 大亂鬥增幅排行與勝率 · arammeta",
+            "ARAM 大亂鬥稜彩、金色、銀色增幅的勝率排行、選用率與適合的英雄。",
             "zh-Hant",
         ),
         (
             root / "augments" / "pools" / "index.html",
             "/augments/pools",
-            "增幅池 · arammeta",
-            "每位英雄從哪些增幅池抽卡，以及各池權重",
+            "ARAM 大亂鬥增幅池與抽卡權重 · arammeta",
+            "ARAM 大亂鬥每位英雄會從哪些增幅池抽卡、各池有哪些增幅，以及抽中的權重。",
             "zh-Hant",
         ),
         (
             root / "draft" / "index.html",
             "/draft",
-            "選角 · arammeta",
-            "選角分析：估計勝率與隊伍特性",
+            "ARAM 大亂鬥選角分析與勝率預測 · arammeta",
+            "輸入雙方五人陣容，估計 ARAM 大亂鬥隊伍勝率，並比較前排、輸出、開戰、清兵、續航與控場。",
             "zh-Hant",
         ),
         (
             root / "game" / "index.html",
             "/game",
-            "Meta Pick · arammeta",
-            "挑選最佳陣容：小遊戲",
+            "Meta Pick 大亂鬥選角小遊戲 · arammeta",
+            "ARAM 大亂鬥選角小遊戲：5 回合，每回合從 10 隻英雄裡挑出最強的 5 人隊。",
             "zh-Hant",
         ),
         (
             root / "changes" / "index.html",
             "/changes",
-            "版本變動 · arammeta",
-            "版本勝率變動",
+            "ARAM 大亂鬥版本變動與勝率漲跌 · arammeta",
+            "ARAM 大亂鬥每個版本的英雄、增幅與裝備改動，以及改動前後的勝率變化。",
             "zh-Hant",
         ),
         # English locale prefix mirrors (shareable /en… links).
         (
             root / "en" / "index.html", "/en",
-            "arammeta",
-            f"Reliable win-rate stats from {en_evidence}. "
+            "arammeta — ARAM Mayhem Tier List, Augments & Builds",
+            f"Reliable win-rate stats from {en_evidence} for ARAM Mayhem. "
             "Compare champion and augment tiers, item win rates and augment pick rates.",
             "en",
         ),
         (
             root / "en" / "augments" / "index.html",
             "/en/augments",
-            "Augments · arammeta",
-            "ARAM Mayhem augment win rates",
+            "ARAM Mayhem Augment Tier List & Win Rates · arammeta",
+            "Compare ARAM Mayhem prismatic, gold, and silver augment win rates, pick rates, and best champion pairings.",
             "en",
         ),
         (
             root / "en" / "augments" / "pools" / "index.html",
             "/en/augments/pools",
-            "Augment pools · arammeta",
-            "Which augment pools each champion draws from, and at what weight",
+            "ARAM Mayhem Augment Pools & Roll Weights · arammeta",
+            "See which ARAM Mayhem augment pools each champion draws from, full pool contents, and relative roll weights.",
             "en",
         ),
         (
             root / "en" / "draft" / "index.html",
             "/en/draft",
-            "Draft · arammeta",
-            "Team draft: estimated WR and composition traits",
+            "ARAM Mayhem Team Draft Analyzer · arammeta",
+            "Enter both five-champion teams to estimate ARAM Mayhem win rates and compare frontline, damage, engage, waveclear, sustain and CC.",
             "en",
         ),
         (
             root / "en" / "game" / "index.html",
             "/en/game",
-            "Meta Pick · arammeta",
-            "Pick the best lineup: mini-game",
+            "Meta Pick ARAM Mayhem Draft Game · arammeta",
+            "An ARAM Mayhem draft game: five rounds, each time picking the strongest five-champion team from a pool of ten.",
             "en",
         ),
         (
             root / "en" / "changes" / "index.html",
             "/en/changes",
-            "Patch Changes · arammeta",
-            "Patch-over-patch win-rate shifts",
+            "ARAM Mayhem Patch Changes & Win-Rate Shifts · arammeta",
+            "Track ARAM Mayhem patch-over-patch win-rate shifts across champions, augments, and items.",
             "en",
         ),
         # Simplified Chinese locale prefix mirrors (shareable /zh-CN… links).
         (
             root / "zh-cn" / "index.html", "/zh-cn",
-            "arammeta",
-            f"基于 {cn_evidence}，查询英雄与海克斯强度排行、装备胜率及海克斯出现频率，完整胜率数据一站掌握。",
+            "arammeta — 海克斯大乱斗英雄胜率、海克斯与出装排行",
+            f"基于 {cn_evidence}，查询海克斯大乱斗英雄与海克斯强度排行、装备胜率及出现频率，完整胜率数据一站掌握。",
             "zh-Hans",
         ),
         (
             root / "zh-cn" / "augments" / "index.html",
             "/zh-cn/augments",
-            "海克斯 · arammeta",
-            "大乱斗海克斯胜率",
+            "大乱斗海克斯排行与胜率 · arammeta",
+            "大乱斗棱彩、金色、银色海克斯的胜率排行、选用率与适合的英雄。",
             "zh-Hans",
         ),
         (
             root / "zh-cn" / "augments" / "pools" / "index.html",
             "/zh-cn/augments/pools",
-            "海克斯池 · arammeta",
-            "每位英雄从哪些海克斯池抽卡，以及各池权重",
+            "大乱斗海克斯池与抽卡权重 · arammeta",
+            "大乱斗每位英雄会从哪些海克斯池抽卡、各池有哪些海克斯，以及抽中的权重。",
             "zh-Hans",
         ),
         (
             root / "zh-cn" / "draft" / "index.html",
             "/zh-cn/draft",
-            "选角 · arammeta",
-            "选角分析：估计胜率与队伍特性",
+            "海克斯大乱斗选角分析与胜率预测 · arammeta",
+            "输入双方五人阵容，估计海克斯大乱斗队伍胜率，并比较前排、输出、开团、清兵、续航与控制。",
             "zh-Hans",
         ),
         (
             root / "zh-cn" / "game" / "index.html",
             "/zh-cn/game",
-            "Meta Pick · arammeta",
-            "挑选最佳阵容：小游戏",
+            "Meta Pick 海克斯大乱斗选角小游戏 · arammeta",
+            "海克斯大乱斗选角小游戏：5 回合，每回合从 10 个英雄里挑出最强的 5 人队。",
             "zh-Hans",
         ),
         (
             root / "zh-cn" / "changes" / "index.html",
             "/zh-cn/changes",
-            "版本变动 · arammeta",
-            "版本胜率变动",
+            "海克斯大乱斗版本变动与胜率涨跌 · arammeta",
+            "海克斯大乱斗每个版本的英雄、海克斯与装备改动，以及改动前后的胜率变化。",
             "zh-Hans",
         ),
     ]
-    for prefix, language, label, description in (
-        ("", "zh-Hant", "英雄", "英雄列表、勝率與完整英雄分析"),
-        ("en", "en", "Champions", "Champion rankings, win rates and detailed analysis"),
-        ("zh-cn", "zh-Hans", "英雄", "英雄列表、胜率与完整英雄分析"),
+    for prefix, language, title_text, description in (
+        ("", "zh-Hant", "ARAM 大亂鬥英雄勝率排行 · arammeta", "ARAM 大亂鬥所有英雄的勝率、強度分級（OP–T5）、出裝與增幅。"),
+        ("en", "en", "ARAM Mayhem Champion Tier List & Win Rates · arammeta", "Every ARAM Mayhem champion ranked by win rate, with tiers (OP–T5), builds and augments."),
+        ("zh-cn", "zh-Hans", "海克斯大乱斗英雄胜率排行 · arammeta", "海克斯大乱斗所有英雄的胜率、强度分级（OP–T5）、出装与海克斯。"),
     ):
         route_specs.append((root / prefix / "champions" / "index.html",
                             f"/{prefix + '/' if prefix else ''}champions",
-                            f"{label} · arammeta", description, language))
+                            title_text, description, language))
     # Champion pages keep their URL and snapshot text, while loading one shared
     # app body. Avoid both index-blocking redirects and hundreds of full copies.
     route_specs.extend(_champion_route_specs(root, champion_routes))
@@ -3821,13 +4027,13 @@ def render_html(
             encoding="utf-8",
         )
 
-    # Keep the Home tab and share title short; descriptions carry the detail.
-    page_title = "arammeta"
+    page_title = "arammeta — ARAM 大亂鬥英雄勝率、海克斯增幅與出裝排行"
     seo_desc = (
         f"基於 {total_games:,} 場台服實戰對局，"
-        "提供英雄與增幅強度排行、裝備勝率及增幅出現頻率。"
+        "提供 LOL ARAM 大亂鬥英雄強度排行、增幅勝率、出裝與選角分析。"
     )
-    og_title = page_title
+    # Search results get the long title; share cards keep the bare wordmark.
+    og_title = "arammeta"
     og_desc = seo_desc
 
     meta_lines: list[str] = []
@@ -3971,9 +4177,12 @@ def render_html(
         # preview of a production build silently style itself with LIVE css.
         # document.write keeps it a parser-inserted, render-blocking sheet (no
         # flash of unstyled content); same-origin writes are not intervened.
+        # Keep the URL in its own JS string literal without trailing HTML quotes
+        # so crawler regex extractors never invent bogus `/assets/site.css?v=...'>` URLs.
         css_tag = (
-            "<script>document.write(\"<link rel='stylesheet' href='\"+location.origin+"
-            f"\"{css_href}'>\")</script>"
+            "<script>(function(){var h=location.origin+"
+            f"'{css_href}';"
+            "document.write('<link rel=\"stylesheet\" href=\"'+h+'\">');})()</script>"
             f"<noscript><link rel='stylesheet' href='{css_href}'></noscript>"
         )
     else:
@@ -4011,7 +4220,7 @@ def render_html(
     parts.append("<div class='main-col'>")
     parts.append("<div class='champion-list-intro' data-nosnippet>"
                  "<div class='champion-list-heading'>"
-                 "<h1 id='champion-list-title' class='sr-only'>英雄快速查詢</h1>"
+                 "<h1 id='champion-list-title' class='sr-only'>ARAM 大亂鬥英雄勝率排行</h1>"
                  # Home only: how a champion click opens — inline expand or the champion page.
                  "<div class='champion-open-toggle' id='champion-open-toggle' role='group' aria-label='點選英雄時'>"
                  "<button type='button' data-champion-open='expand' aria-pressed='true' aria-label='展開式：向下展開面板'>"
