@@ -170,8 +170,9 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertNotIn("location.replace('/')", en_body)
             self.assertIn("lang='en'", en_body)
             self.assertIn("1,234,567 real matches", en_body)
-            self.assertIn("<title>arammeta</title>", en_body)
+            self.assertIn("<title>arammeta — ARAM Mayhem Tier List, Augments &amp; Builds</title>", en_body)
             self.assertIn("Reliable win-rate stats", en_body)
+            self.assertIn('"inLanguage": "en"', en_body)
             self.assertNotIn("Taiwan server", en_body)
             self.assertNotIn("sample-adjusted win rates", en_body)
             self.assertNotIn("original summary", en_body)
@@ -189,7 +190,8 @@ class SpaPathShellTests(unittest.TestCase):
             self.assertIn("FULL_SPA_SHELL", zh_cn_body)
             self.assertIn("1,234,567 场实战对局", zh_cn_body)
             self.assertNotIn("台服实战对局", zh_cn_body)
-            self.assertIn("<title>arammeta</title>", zh_cn_body)
+            self.assertIn("<title>arammeta — 海克斯大乱斗英雄胜率、海克斯与出装排行</title>", zh_cn_body)
+            self.assertIn('"inLanguage": "zh-Hans"', zh_cn_body)
             self.assertIn("装备胜率", zh_cn_body)
             self.assertNotIn("original summary", zh_cn_body)
             self.assertIn(
@@ -220,12 +222,12 @@ class SpaPathShellTests(unittest.TestCase):
                 "rel='canonical' href='https://arammeta.com/augments/pools/'",
                 pools_body,
             )
-            self.assertIn("<title>增幅池 · arammeta</title>", pools_body)
-            self.assertIn('name=\'description\' content="每位英雄從哪些增幅池抽卡，以及各池權重"', pools_body)
+            self.assertIn("<title>ARAM 大亂鬥增幅池與抽卡權重 · arammeta</title>", pools_body)
+            self.assertIn('name=\'description\' content="查詢 LOL ARAM 海克斯大亂鬥每位英雄的增幅池分類、可抽到的增幅清單與各池抽卡權重。"', pools_body)
             en_pools = (root / "en" / "augments" / "pools" / "index.html").read_text(
                 encoding="utf-8"
             )
-            self.assertIn("<title>Augment pools · arammeta</title>", en_pools)
+            self.assertIn("<title>ARAM Mayhem Augment Pools &amp; Roll Weights · arammeta</title>", en_pools)
             self.assertIn(
                 "rel='canonical' href='https://arammeta.com/en/augments/pools/'",
                 en_pools,
@@ -233,7 +235,7 @@ class SpaPathShellTests(unittest.TestCase):
             zh_cn_pools = (
                 root / "zh-cn" / "augments" / "pools" / "index.html"
             ).read_text(encoding="utf-8")
-            self.assertIn("<title>海克斯池 · arammeta</title>", zh_cn_pools)
+            self.assertIn("<title>海克斯大乱斗海克斯池与抽卡权重 · arammeta</title>", zh_cn_pools)
             for pool_html in (pools_body, en_pools, zh_cn_pools):
                 self.assertNotIn("/og-image.png", pool_html)
                 self.assertIn("property='og:image' content='https://arammeta.com/mayhem-single-die-icon.png'", pool_html)
@@ -296,11 +298,14 @@ class SpaPathShellTests(unittest.TestCase):
                 self.assertIn("20%", body)
                 self.assertIn("hreflang='en'", body)
             self.assertIn("href='https://arammeta.com/champions/jinx/'", zh)
-            self.assertIn("吉孃 增幅與出裝", zh)
+            self.assertIn("吉孃 ARAM 大亂鬥增幅與出裝", zh)
             self.assertIn("lang='en'", en)
-            self.assertIn("Jinx augments &amp; build", en)
+            self.assertIn("Jinx ARAM Mayhem Augments &amp; Build", en)
+            self.assertIn('"inLanguage": "en"', en)
+            self.assertIn('"@type": "BreadcrumbList"', en)
             self.assertIn("lang='zh-Hans'", cn)
-            self.assertIn("金克丝", cn)
+            self.assertIn("金克丝 海克斯大乱斗海克斯与出装", cn)
+            self.assertIn('"inLanguage": "zh-Hans"', cn)
             self.assertIn("FULL_SPA_SHELL", (root / "assets/app-shell.html").read_text())
             # The analysis JSON is data: only written when the build asks for it.
             self.assertFalse((root / "api/champions/analysis").exists())
@@ -554,6 +559,48 @@ class SpaPathShellTests(unittest.TestCase):
         self.assertNotIn("name", item)
         self.assertNotIn("peerGroup", item)
         self.assertEqual(len(champ["items"]["top"]), 16)
+
+    def test_seo_localization_activates_route_view_and_english_cards(self) -> None:
+        source = (
+            "<!doctype html><html lang='zh-Hant'><head><title>app</title>"
+            "<meta name='description' content='old'>"
+            "<script type='application/ld+json'>{\"inLanguage\":\"zh-Hant\"}</script>"
+            "</head><body>"
+            "<section class='view view-home is-active' id='view-home'>"
+            "<h1 id='champion-list-title' class='sr-only'>英雄快速查詢</h1>"
+            "<a class='champ' href='/champions/kayle/' data-name-zh=\"凱爾\" data-name-en=\"Kayle\">"
+            "<span class='name'>凱爾</span></a></section>"
+            "<section class='view view-augments' id='view-augments'>"
+            "<a href='/augments/' class='aug-mode-tab is-active' id='aug-mode-tier'>增幅榜</a>"
+            "<a href='/augments/pools/' class='aug-mode-tab' id='aug-mode-pools'>增幅池</a>"
+            "<div class='aug-mode-panel' id='aug-mode-panel-tier' data-aug-mode='tier' role='tabpanel' aria-labelledby='aug-mode-tier'></div>"
+            "<div class='aug-mode-panel' id='aug-pools-host' data-aug-mode='pools' role='tabpanel' aria-labelledby='aug-mode-pools' hidden></div>"
+            "</section></body></html>"
+        )
+        en_home = _localize_full_shell_html(
+            source, site_url="https://arammeta.com/", canonical_path="/en/",
+            html_lang="en", title="arammeta — ARAM Mayhem", description="EN desc",
+        )
+        self.assertIn("<span class='name'>Kayle</span>", en_home)
+        self.assertIn("ARAM Mayhem Champion Tier List", en_home)
+        self.assertIn('"inLanguage": "en"', en_home)
+        self.assertIn("href='/en/augments/'", en_home)
+        self.assertIn("href='/en/augments/pools/'", en_home)
+
+        pools = _localize_full_shell_html(
+            source, site_url="https://arammeta.com/", canonical_path="/augments/pools/",
+            html_lang="zh-Hant", title="ARAM 大亂鬥增幅池與抽卡權重 · arammeta", description="Pools desc",
+        )
+        self.assertIn("<section class='view view-home' id='view-home'", pools)
+        self.assertIn("<section class='view view-augments is-active' id='view-augments'", pools)
+        self.assertIn("class='aug-mode-tab is-active' id='aug-mode-pools'", pools)
+        self.assertIn("id='aug-pools-host' data-aug-mode='pools' role='tabpanel' aria-labelledby='aug-mode-pools'>", pools)
+        self.assertIn('"@type": "BreadcrumbList"', pools)
+
+    def test_css_loader_has_no_trailing_angle_bracket_in_url_literal(self) -> None:
+        source = (SCRIPTS / "tierlist_render.py").read_text(encoding="utf-8")
+        self.assertNotIn('"{css_href}\'>"', source)
+        self.assertIn("var h=location.origin+", source)
 
 
 if __name__ == "__main__":

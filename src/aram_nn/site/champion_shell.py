@@ -406,9 +406,14 @@ def champion_shell_html(
         previous = float(record.get("prev_mix") or 0)
         if previous >= .1:
             stats += f"<p class='section-sub'>{copy[6]}: {previous * 100:.0f}%</p>"
+    h1_suffix = {
+        "zh-Hant": " ARAM 大亂鬥增幅與出裝",
+        "zh-Hans": " 海克斯大乱斗海克斯与出装",
+        "en": " ARAM Mayhem Augments &amp; Build",
+    }[language]
     fallback = (
         f"<main class='site-main' id='champion-fallback'><div class='view-narrow'>"
-        f"<h1 class='section-head'>{name}</h1>{stats}"
+        f"<h1 class='section-head'>{name}{h1_suffix}</h1>{stats}"
         f"<p class='section-sub'>{copy[3]} · {copy[2]}: {html.escape(patch_label)}</p>"
         f"<p class='section-sub'>{html.escape(snapshot.get('buildDate', ''))} · {copy[7]}</p>"
         f"<p class='section-sub' id='champion-load-status' role='status'>{copy[4]}</p>"
