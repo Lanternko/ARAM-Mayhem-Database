@@ -3809,15 +3809,15 @@ const feedbackFab = document.querySelector('.feedback-fab');
         });
     }
     function poolsPageTitle() {
-        if (currentLang === 'en') return 'Augment pools · arammeta';
-        if (currentLang === 'zh-CN') return '海克斯池 · arammeta';
-        return '增幅池 · arammeta';
+        if (currentLang === 'en') return 'ARAM Mayhem Augment Pools & Roll Weights · arammeta';
+        if (currentLang === 'zh-CN') return '大乱斗海克斯池与抽卡权重 · arammeta';
+        return 'ARAM 大亂鬥增幅池與抽卡權重 · arammeta';
     }
     function augmentsPageTitle() {
         if (augMode === 'pools') return poolsPageTitle();
-        if (currentLang === 'en') return 'Augments · arammeta';
-        if (currentLang === 'zh-CN') return '海克斯 · arammeta';
-        return '增幅 · arammeta';
+        if (currentLang === 'en') return 'ARAM Mayhem Augment Tier List & Win Rates · arammeta';
+        if (currentLang === 'zh-CN') return '大乱斗海克斯排行与胜率 · arammeta';
+        return 'ARAM 大亂鬥增幅排行與勝率 · arammeta';
     }
     function setAugMode(next, historyMode) {
         const mode = next === 'pools' ? 'pools' : 'tier';
@@ -11420,7 +11420,10 @@ const feedbackFab = document.querySelector('.feedback-fab');
         if (home) list.removeAttribute('aria-labelledby');
         else list.setAttribute('aria-labelledby', 'tab-champions');
         const titleEl = document.getElementById('champion-list-title');
-        titleEl.textContent = title;
+        // Keep the static SEO heading on home; the region label above stays short.
+        titleEl.textContent = !home ? title
+            : currentLang === 'zh-CN' ? '海克斯大乱斗英雄胜率排行'
+            : pickLang('ARAM 大亂鬥英雄勝率排行', 'ARAM Mayhem Champion Tier List');
         // Visible heading and hint were retired; the h1 stays for screen readers and SEO.
         titleEl.classList.add('sr-only');
         const hintEl = document.getElementById('champion-list-hint');
@@ -11660,7 +11663,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
         renderChampRecent(cid);
         if (!cid) {
             // Bare /champions/ or an unknown slug: search-first landing, not an error wall.
-            document.title = pickLang('英雄查詢', 'Champion lookup') + ' · arammeta';
+            document.title = currentLang === 'en'
+                ? 'ARAM Mayhem Champion Tier List & Win Rates · arammeta'
+                : (currentLang === 'zh-CN'
+                    ? '海克斯大乱斗英雄胜率排行 · arammeta'
+                    : 'ARAM 大亂鬥英雄勝率排行 · arammeta');
             const msg = slug
                 ? pickLang('找不到這位英雄，請用上方搜尋。', 'Champion not found — use the search above.')
                 : pickLang('輸入英雄名稱，直接看增幅與出裝。', 'Search a champion to see its augments and build.');
@@ -11668,7 +11675,11 @@ const feedbackFab = document.querySelector('.feedback-fab');
             return;
         }
         const info = DATA.champs[cid];
-        document.title = `${champName(info, cid)} · arammeta`;
+        document.title = currentLang === 'en'
+            ? `${champName(info, cid)} ARAM Mayhem Augments & Build · arammeta`
+            : (currentLang === 'zh-CN'
+                ? `${champName(info, cid)} 大乱斗海克斯与出装 · arammeta`
+                : `${champName(info, cid)} ARAM 大亂鬥增幅與出裝 · arammeta`);
         host.innerHTML = `<div class="detail detail-page detail-loading"><div class="detail-skeleton" aria-hidden="true"></div></div>`;
         if (!force) {
             pushRecentChamp(cid);
